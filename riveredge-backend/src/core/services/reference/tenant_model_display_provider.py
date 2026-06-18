@@ -8,6 +8,7 @@ from tortoise.expressions import Q
 from tortoise.models import Model
 
 from core.services.authorization.data_scope_service import DataScopeService
+from core.models.model_fields import model_has_field
 from infra.models.user import User
 
 
@@ -66,7 +67,7 @@ def make_tenant_model_display_provider(
             extra: dict[str, Any] | None,
         ) -> dict[str, Any]:
             query = self._base_query(tenant_id)
-            if is_active is not None and hasattr(_model, "is_active"):
+            if is_active is not None and model_has_field(_model, "is_active"):
                 query = query.filter(is_active=is_active)
             if keyword and keyword.strip():
                 kw = keyword.strip()

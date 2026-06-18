@@ -19,6 +19,7 @@ import {
   resolveOperationPrepScheduleDates,
 } from '../schedulingDropUtils';
 import '../scheduling-prep-modal.less';
+import { buildFutureDateShortcutFieldProps } from '../../../../../../utils/futureDatePickerShortcuts';
 
 export interface SchedulingWorkOrderPrepValues {
   planned_start_date?: string;
@@ -351,7 +352,13 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
           name="planned_end_date"
           label={t('app.kuaizhizao.scheduling.prep.plannedEnd')}
           rules={[{ required: true, message: t('app.kuaizhizao.scheduling.prep.selectEndRequired') }]}
-          fieldProps={{ style: { width: '100%' } }}
+          fieldProps={buildFutureDateShortcutFieldProps({
+            getForm: () => formRef.current,
+            fieldName: 'planned_end_date',
+            baseFieldName: 'planned_start_date',
+            t,
+            fieldProps: { style: { width: '100%' } },
+          })}
         />
       ) : null}
     </FormModalTemplate>

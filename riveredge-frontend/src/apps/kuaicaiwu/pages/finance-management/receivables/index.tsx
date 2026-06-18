@@ -6,11 +6,13 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Typography } from 'antd';
 import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
+import type { ProFormInstance } from '@ant-design/pro-components';
 import { EyeOutlined, DollarOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { receivableService } from '../../../services/finance/receivable';
 import { Receivable, ReceivableCreateData, ReceivableListParams } from '../../../types/finance/receivable';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { useTranslation } from 'react-i18next';
 import {
   buildFactoryImportTemplate,
@@ -32,6 +34,7 @@ const P = 'app.kuaicaiwu.receivable';
 
 const ReceivableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
+    const createFormRef = useRef<ProFormInstance>(null);
     const [createModalVisible, setCreateModalVisible] = useState(false);
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
     const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
@@ -435,6 +438,7 @@ const ReceivableList: React.FC = () => {
                 open={createModalVisible}
                 onOpenChange={setCreateModalVisible}
                 onFinish={handleCreate}
+                formRef={createFormRef}
                 width={480}
             >
                 <ProFormSelect
@@ -445,7 +449,17 @@ const ReceivableList: React.FC = () => {
                     placeholder={t('app.kuaicaiwu.common.selectCustomer')}
                 />
                 <ProFormMoney name="total_amount" label={t(`${P}.col.amount`)} min={0.01} rules={[{ required: true }]} />
-                <ProFormDatePicker name="due_date" label={t('app.kuaicaiwu.common.dueDate')} rules={[{ required: true }]} />
+                <ProFormDatePicker
+                    name="due_date"
+                    label={t('app.kuaicaiwu.common.dueDate')}
+                    rules={[{ required: true }]}
+                    fieldProps={buildFutureDateShortcutFieldProps({
+                        getForm: () => createFormRef.current,
+                        fieldName: 'due_date',
+                        baseFieldName: 'business_date',
+                        t,
+                    })}
+                />
                 <ProFormDatePicker name="business_date" label={t('app.kuaicaiwu.common.businessDate')} />
                 <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
                 <DocumentAttachmentsField category="receivable_attachments" />

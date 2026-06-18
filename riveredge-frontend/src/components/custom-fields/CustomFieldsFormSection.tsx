@@ -2,10 +2,14 @@
  * 自定义字段表单区块
  *
  * 在 ProForm 内渲染自定义字段，与 useCustomFields hook 配合使用。
- * 支持 text、number、date、select、textarea、json、image、file、associated_object、associated_attribute、formula 等类型。
+ * 布局与栏宽由 customFieldFormLayout（.ts + .less）唯一控制。
+ *
+ * ProForm grid={true}：字段带 colProps，直接参与父级 Row（与页面其它字段同一栅格）。
+ * embedInParentRow：仅输出 Col，嵌在页面已有 Row 内。
+ * 默认（独立一行）：与页面其它 Row 同级，输出单个 Row gutter={16}。
  */
 
-import React from 'react';
+import React, { useContext } from 'react';
 import {
   ProFormText,
   ProFormTextArea,
@@ -16,6 +20,7 @@ import {
   ProFormUploadButton,
   ProFormField,
 } from '@ant-design/pro-components';
+import { GridContext } from '@ant-design/pro-form';
 import { App, Col, Row, Upload } from 'antd';
 import SafeProFormSelect from '../safe-pro-form-select';
 import { AssociatedObjectField } from './AssociatedObjectField';
@@ -30,63 +35,21 @@ import {
 import { CustomFieldJsonFormItem } from './CustomFieldJsonFormItem';
 import { CustomFieldFormulaFormItem } from './CustomFieldFormulaFormItem';
 import { CustomFieldFormLabel } from './CustomFieldFormLabel';
+import {
+  CUSTOM_FIELD_FORM_CLASS_NAMES,
+  customFieldControlLayout,
+  customFieldFieldProps,
+  inferCustomFieldGridColumns,
+  resolveCustomFieldColSpan,
+  type CustomFieldGridColumns,
+} from './customFieldFormLayout';
 import { FORM_LAYOUT } from '../layout-templates/constants';
+import './customFieldFormLayout.less';
 
 const CUSTOM_PREFIX = 'custom_';
 
-/** 与 Ant Design 24 栅格对齐：4 栏 → span 6，2 栏 → span 12 */
-export type CustomFieldGridColumns = 1 | 2 | 3 | 4;
-
-const GRID_COL_SPAN: Record<CustomFieldGridColumns, number> = {
-  1: 24,
-  2: 12,
-  3: 8,
-  4: 6,
-};
-
-const FULL_ROW_COL_SPAN = 24;
-
-const isFullRowFieldType = (fieldType: CustomField['field_type']) =>
-  fieldType === 'textarea' || fieldType === 'image' || fieldType === 'file' || fieldType === 'json';
-
-/** 从表单 schema 推断栏位数（24 栅格：colSpan 12 → 2 栏，6 → 4 栏） */
-export function inferFormGridColumns(
-  schema: Array<{ type?: string; colSpan?: number }>,
-): CustomFieldGridColumns {
-  const spans = schema
-    .filter((field) => field.type !== 'slot' && (field.colSpan ?? 12) < FULL_ROW_COL_SPAN)
-    .map((field) => field.colSpan ?? 12);
-  if (spans.length === 0) return 2;
-
-  const counts = new Map<number, number>();
-  for (const span of spans) {
-    counts.set(span, (counts.get(span) ?? 0) + 1);
-  }
-  let dominantSpan = 12;
-  let dominantCount = 0;
-  for (const [span, count] of counts) {
-    if (count > dominantCount) {
-      dominantSpan = span;
-      dominantCount = count;
-    }
-  }
-
-  const columns = FULL_ROW_COL_SPAN / dominantSpan;
-  if (columns === 1 || columns === 2 || columns === 3 || columns === 4) {
-    return columns as CustomFieldGridColumns;
-  }
-  return 2;
-}
-
-const resolveFieldColSpan = (
-  fieldType: CustomField['field_type'],
-  gridColumns: CustomFieldGridColumns,
-) => {
-  if (isFullRowFieldType(fieldType)) {
-    return FULL_ROW_COL_SPAN;
-  }
-  return GRID_COL_SPAN[gridColumns];
-};
+export type { CustomFieldGridColumns };
+export { inferCustomFieldGridColumns as inferFormGridColumns };
 
 const safeOptions = (options: any): Array<{ label: string; value: any }> => {
   if (!Array.isArray(options)) return [];
@@ -97,37 +60,23 @@ const safeOptions = (options: any): Array<{ label: string; value: any }> => {
 };
 
 export interface CustomFieldsFormSectionProps {
-  /** 自定义字段列表（来自 useCustomFields） */
   customFields: CustomField[];
-  /** 当前字段值（编辑时回填，key 为 field.code） */
   customFieldValues: Record<string, any>;
-  /**
-   * 与父表单栏位数对齐（默认 2 栏半宽）。
-   * 例如父表单 Row 使用 Col span={6} 时为 4 栏，传 gridColumns={4}。
-   */
+  /** 与父表单栏位数对齐（默认 2 栏半宽） */
   gridColumns?: CustomFieldGridColumns;
-  /**
-   * proform：ProForm grid 子项，字段带 colProps（FormModalTemplate grid=true / SchemaFormRenderer）
-   * col：父级 Row 内的 Col 片段，与手动 Col span 布局一致（如销售订单头字段）
-   * nested：自带 Row+Col，独立成段（默认，用于 Row 外的区块）
-   */
-  gridMode?: 'proform' | 'col' | 'nested';
-  /**
-   * proform 模式下是否自带 Row 包裹。
-   * col / nested 模式忽略此属性。
-   */
-  wrapInRow?: boolean;
+  /** 嵌在父级 Row 内时设为 true，仅输出 Col 片段 */
+  embedInParentRow?: boolean;
 }
 
 export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = ({
   customFields,
   customFieldValues,
   gridColumns = 2,
-  gridMode = 'nested',
-  wrapInRow = true,
+  embedInParentRow = false,
 }) => {
   const { message: messageApi } = App.useApp();
-  const useColProps = gridMode === 'proform';
+  const gridContext = useContext(GridContext);
+  const useParentProFormGrid = !!gridContext?.grid;
 
   if (customFields.length === 0) return null;
 
@@ -135,18 +84,16 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
     .filter((f) => f.is_active)
     .sort((a, b) => a.sort_order - b.sort_order);
 
-  const renderLabel = (text: string) => <CustomFieldFormLabel text={text} />;
-
   const renderFieldControl = (field: CustomField, colSpan: number) => {
-    const effectiveColSpan = isFullRowFieldType(field.field_type) ? FULL_ROW_COL_SPAN : colSpan;
-    const colProps = useColProps ? { span: effectiveColSpan } : undefined;
     const fieldName = `${CUSTOM_PREFIX}${field.code}`;
     const label = field.label || field.name;
-    const labelNode = renderLabel(label);
+    const labelNode = <CustomFieldFormLabel text={label} />;
     const placeholder = field.placeholder || `请输入${label}`;
     const initialVal = customFieldValues[field.code] ?? field.config?.default;
     const uploadInitialVal = normalizeUploadFileList(initialVal);
     const rules = field.is_required ? [{ required: true, message: `请输入${label}` }] : [];
+    const layout = customFieldControlLayout(useParentProFormGrid ? { span: colSpan } : undefined);
+    const colProps = useParentProFormGrid ? { span: colSpan } : undefined;
 
     switch (field.field_type) {
       case 'text':
@@ -156,8 +103,8 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             label={labelNode}
             placeholder={placeholder}
             rules={rules}
-            colProps={colProps}
-            fieldProps={{ maxLength: field.config?.maxLength, style: { width: '100%' } }}
+            {...layout}
+            fieldProps={customFieldFieldProps({ maxLength: field.config?.maxLength })}
             initialValue={initialVal}
           />
         );
@@ -168,8 +115,8 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             label={labelNode}
             placeholder={placeholder}
             rules={rules}
-            colProps={colProps}
-            fieldProps={{ min: field.config?.min, max: field.config?.max, style: { width: '100%' } }}
+            {...layout}
+            fieldProps={customFieldFieldProps({ min: field.config?.min, max: field.config?.max })}
             initialValue={initialVal}
           />
         );
@@ -179,9 +126,9 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             name={fieldName}
             label={labelNode}
             placeholder={placeholder}
-            colProps={colProps}
+            {...layout}
             rules={field.is_required ? [{ required: true, message: `请选择${label}` }] : []}
-            fieldProps={{ format: field.config?.format || 'YYYY-MM-DD', style: { width: '100%' } }}
+            fieldProps={customFieldFieldProps({ format: field.config?.format || 'YYYY-MM-DD' })}
             initialValue={initialVal}
           />
         );
@@ -191,9 +138,9 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             name={fieldName}
             label={labelNode}
             placeholder={placeholder}
-            colProps={colProps}
+            {...layout}
             rules={field.is_required ? [{ required: true, message: `请选择${label}` }] : []}
-            fieldProps={{ format: field.config?.format || 'HH:mm:ss', style: { width: '100%' } }}
+            fieldProps={customFieldFieldProps({ format: field.config?.format || 'HH:mm:ss' })}
             initialValue={initialVal}
           />
         );
@@ -203,9 +150,9 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             name={fieldName}
             label={labelNode}
             placeholder={placeholder}
-            colProps={colProps}
+            {...layout}
             rules={field.is_required ? [{ required: true, message: `请选择${label}` }] : []}
-            fieldProps={{ format: field.config?.format || 'YYYY-MM-DD HH:mm:ss', style: { width: '100%' } }}
+            fieldProps={customFieldFieldProps({ format: field.config?.format || 'YYYY-MM-DD HH:mm:ss' })}
             initialValue={initialVal}
           />
         );
@@ -216,10 +163,10 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             label={labelNode}
             placeholder={placeholder}
             rules={rules}
-            colProps={colProps}
+            {...layout}
             options={safeOptions(field.config?.options)}
             initialValue={initialVal}
-            fieldProps={{ style: { width: '100%' } }}
+            fieldProps={customFieldFieldProps()}
           />
         );
       case 'multiselect':
@@ -233,12 +180,12 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
                 ? [{ required: true, type: 'array', min: 1, message: `请选择${label}` }]
                 : []
             }
-            colProps={colProps}
+            {...layout}
             options={safeOptions(field.config?.options)}
             initialValue={
               Array.isArray(initialVal) ? initialVal : initialVal != null && initialVal !== '' ? [initialVal] : undefined
             }
-            fieldProps={{ mode: 'multiple', style: { width: '100%' } }}
+            fieldProps={customFieldFieldProps({ mode: 'multiple' })}
           />
         );
       case 'textarea':
@@ -248,8 +195,8 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             label={labelNode}
             placeholder={placeholder}
             rules={rules}
-            colProps={colProps}
-            fieldProps={{ rows: field.config?.rows || 4, style: { width: '100%' } }}
+            {...layout}
+            fieldProps={customFieldFieldProps({ rows: field.config?.rows || 4 })}
             initialValue={initialVal}
           />
         );
@@ -263,7 +210,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             placeholder={placeholder}
             required={field.is_required}
             initialValue={initialVal}
-            colProps={colProps ?? { span: colSpan }}
+            colProps={colProps}
           />
         );
       case 'associated_attribute':
@@ -273,7 +220,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             name={fieldName}
             label={labelNode}
             initialValue={initialVal}
-            colProps={colProps ?? { span: colSpan }}
+            colProps={colProps}
           />
         );
       case 'image':
@@ -353,12 +300,12 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             required={field.is_required}
           />
         );
-        if (useColProps) {
+        if (useParentProFormGrid) {
           return (
             <ProFormField
-              colProps={{ span: FULL_ROW_COL_SPAN }}
+              colProps={{ span: colSpan }}
               formItemProps={{ style: { marginBottom: 0 } }}
-              renderFormItem={() => <div style={{ width: '100%' }}>{jsonItem}</div>}
+              renderFormItem={() => jsonItem}
             />
           );
         }
@@ -371,7 +318,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             label={labelNode}
             expression={field.config?.expression}
             initialValue={typeof initialVal === 'number' ? initialVal : Number(initialVal) || undefined}
-            colProps={colProps ?? { span: colSpan }}
+            colProps={colProps}
           />
         );
       default:
@@ -381,53 +328,41 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             label={labelNode}
             placeholder={placeholder}
             rules={rules}
-            colProps={colProps}
-            fieldProps={{ style: { width: '100%' } }}
+            {...layout}
+            fieldProps={customFieldFieldProps()}
             initialValue={initialVal}
           />
         );
     }
   };
 
-  const renderColFields = () =>
-    sortedFields.map((field) => {
-      const colSpan = resolveFieldColSpan(field.field_type, gridColumns);
-      const effectiveColSpan = isFullRowFieldType(field.field_type) ? FULL_ROW_COL_SPAN : colSpan;
-      return (
-        <Col key={field.uuid} span={effectiveColSpan}>
-          {renderFieldControl(field, effectiveColSpan)}
-        </Col>
-      );
-    });
+  const fieldCols = sortedFields.map((field) => {
+    const colSpan = resolveCustomFieldColSpan(field.field_type, gridColumns);
+    return (
+      <Col key={field.uuid} span={colSpan} className={CUSTOM_FIELD_FORM_CLASS_NAMES.fieldCol}>
+        {renderFieldControl(field, colSpan)}
+      </Col>
+    );
+  });
 
-  if (gridMode === 'col') {
-    return <>{renderColFields()}</>;
+  if (useParentProFormGrid) {
+    return (
+      <>
+        {sortedFields.map((field) => {
+          const colSpan = resolveCustomFieldColSpan(field.field_type, gridColumns);
+          return (
+            <React.Fragment key={field.uuid}>
+              {renderFieldControl(field, colSpan)}
+            </React.Fragment>
+          );
+        })}
+      </>
+    );
   }
 
-  if (gridMode === 'proform') {
-    const fieldNodes = sortedFields.map((field) => {
-      const colSpan = resolveFieldColSpan(field.field_type, gridColumns);
-      return (
-        <React.Fragment key={field.uuid}>
-          {renderFieldControl(field, colSpan)}
-        </React.Fragment>
-      );
-    });
-
-    if (wrapInRow) {
-      return (
-        <Row gutter={FORM_LAYOUT.GRID_GUTTER} style={{ width: '100%' }}>
-          {fieldNodes}
-        </Row>
-      );
-    }
-
-    return <>{fieldNodes}</>;
+  if (embedInParentRow) {
+    return <>{fieldCols}</>;
   }
 
-  return (
-    <Row gutter={FORM_LAYOUT.GRID_GUTTER} style={{ width: '100%' }}>
-      {renderColFields()}
-    </Row>
-  );
+  return <Row gutter={FORM_LAYOUT.GRID_GUTTER}>{fieldCols}</Row>;
 };

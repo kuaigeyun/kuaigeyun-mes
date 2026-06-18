@@ -17,6 +17,10 @@ from apps.master_data.models.supplier import Supplier
 from apps.master_data.models.customer import Customer
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+from apps.master_data.constants.material_source_type import (
+    is_canonical_material_source_type,
+    normalize_material_source_type,
+)
 from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_MAKE, SOURCE_TYPE_BUY, SOURCE_TYPE_PHANTOM,
     SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE, SOURCE_TYPE_SERVICE,
@@ -251,7 +255,8 @@ class MaterialSourceChangeService:
         if not material:
             raise NotFoundError("物料", material_uuid)
         
-        if new_source_type not in VALID_SOURCE_TYPES:
+        new_source_type = normalize_material_source_type(new_source_type)
+        if not new_source_type or not is_canonical_material_source_type(new_source_type):
             raise ValidationError(f"无效的物料来源类型: {new_source_type}")
         
         # 检查变更影响

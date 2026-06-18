@@ -29,6 +29,13 @@ const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
+import {
+  DOCUMENT_DETAIL_COL_WIDTH,
+  DOCUMENT_DETAIL_NUM_COL,
+  DOCUMENT_DETAIL_TABLE_PROPS,
+  DOCUMENT_DETAIL_TEXT_COL,
+  DocumentDetailTableStyles,
+} from '../../../components/document-detail-table/documentDetailTable';
 import { getDictionaryOptions } from '../../../../master-data/services/supply-chain';
 import { initializeSystemDictionaries } from '../../../../../services/dataDictionary';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -1062,10 +1069,11 @@ const SalesReturnsPage: React.FC = () => {
             customFields={salesReturnFormCustomFields}
             customFieldValues={salesReturnFormCustomFieldValues}
             gridColumns={3}
-            gridMode="col"
+            embedInParentRow
           />
         </Row>
 
+        <DocumentDetailTableStyles />
         <UniTableDetail
           name="items"
           title={t('app.kuaizhizao.salesReturn.itemsTitle')}
@@ -1081,7 +1089,7 @@ const SalesReturnsPage: React.FC = () => {
                 {t('app.kuaizhizao.salesReturn.importItems')}
               </Button>
               <Button
-                type="dashed"
+                type="default"
                 icon={<PlusOutlined />}
                 onClick={() => {
                   const items = [...(formRef.current?.getFieldValue('items') ?? [])];
@@ -1104,7 +1112,8 @@ const SalesReturnsPage: React.FC = () => {
                     {
                       title: t('app.kuaizhizao.salesOrder.material'),
                       dataIndex: 'material_id',
-                      width: 260,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.material,
+                      ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: unknown, __: unknown, index: number) => (
                         <UniMaterialSelect
                           name={[index, 'material_id']}
@@ -1128,6 +1137,7 @@ const SalesReturnsPage: React.FC = () => {
                       title: t('app.kuaizhizao.salesReturn.batchNumber'),
                       dataIndex: 'batch_number',
                       width: 150,
+                      ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: unknown, __: unknown, index: number) => (
                         <AntForm.Item name={[index, 'batch_number']} noStyle>
                           <Input size="small" placeholder={t('app.kuaizhizao.salesReturn.batchNumberPlaceholder')} />
@@ -1138,6 +1148,7 @@ const SalesReturnsPage: React.FC = () => {
                       title: t('app.kuaizhizao.salesReturn.location'),
                       dataIndex: 'location_code',
                       width: 180,
+                      ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: unknown, __: unknown, index: number) => (
                         <AntForm.Item name={[index, 'location_code']} noStyle>
                           <Select
@@ -1156,8 +1167,8 @@ const SalesReturnsPage: React.FC = () => {
                     {
                       title: t('app.kuaizhizao.salesReturn.returnQuantity'),
                       dataIndex: 'return_quantity',
-                      width: 120,
-                      align: 'right' as const,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.quantity,
+                      ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: unknown, __: unknown, index: number) => (
                         <AntForm.Item name={[index, 'return_quantity']} noStyle>
                           <InputNumber size="small" style={{ width: '100%' }} min={1} />
@@ -1167,8 +1178,8 @@ const SalesReturnsPage: React.FC = () => {
                     {
                       title: t('app.kuaizhizao.salesOrder.unitPrice'),
                       dataIndex: 'unit_price',
-                      width: 120,
-                      align: 'right' as const,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice,
+                      ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: unknown, __: unknown, index: number) => (
                         <AntForm.Item name={[index, 'unit_price']} noStyle>
                           <InputNumber size="small" style={{ width: '100%' }} min={0} prefix="¥" />
@@ -1178,10 +1189,7 @@ const SalesReturnsPage: React.FC = () => {
                   ]}
           disabledAdd
           initialValue={{ return_quantity: 1, unit_price: 0 }}
-          tableProps={{
-            size: 'small',
-            style: { width: '100%', margin: 0 },
-          }}
+          tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
         />
 
         <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes')} placeholder={t('app.kuaizhizao.salesReturn.notesPlaceholder')} fieldProps={{ rows: 3 }} />

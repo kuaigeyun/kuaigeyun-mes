@@ -64,6 +64,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
+import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
@@ -1121,7 +1122,7 @@ const EquipmentPage: React.FC = () => {
             customFields={equipmentFormCustomFields}
             customFieldValues={equipmentFormCustomFieldValues}
             gridColumns={2}
-            gridMode="col"
+            embedInParentRow
           />
           <Col span={24}>
             <DocumentAttachmentsField category="equipment_attachments" />
@@ -1271,7 +1272,12 @@ const EquipmentPage: React.FC = () => {
             <Input placeholder={t('app.kuaizhizao.equipment.phCertificateNo')} />
           </Form.Item>
           <Form.Item name="expiry_date" label={t('app.kuaizhizao.equipment.expiryDate')}>
-            <DatePicker style={{ width: '100%' }} />
+            <FutureDatePicker
+              getForm={() => calibForm}
+              baseFieldName="calibration_date"
+              t={t}
+              style={{ width: '100%' }}
+            />
           </Form.Item>
           <Form.Item
             name="attachments"

@@ -4349,6 +4349,7 @@ export default {
   'app.kuaizhizao.quotation.summary.totalExcl': '除く合計',
   'app.kuaizhizao.quotation.summary.totalInclWithTax': '含む合計(税)',
   'app.kuaizhizao.quotation.summary.totalIncl': '含む合計',
+  'app.kuaizhizao.quotation.summary.grandTotal': '合計',
   'app.kuaizhizao.quotation.dateShortcut.7days': '7日間',
   'app.kuaizhizao.quotation.dateShortcut.15days': '15日',
   'app.kuaizhizao.quotation.dateShortcut.1month': '1ヶ月',

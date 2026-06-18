@@ -55,9 +55,12 @@ import { testGenerateCode } from '../../../services/codeRule';
 
 import DictionarySelect from '../../../components/dictionary-select';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../services/dataDictionary';
+import PriceTypeSwitch, { type PriceTypeValue } from '../../../components/price-type-switch/PriceTypeSwitch';
+import { convertUnitPriceByPriceType } from '../utils/resolve-partner-material-price';
 import { buildImageUploadFileUrls, getFileByUuid, uploadMultipleFiles } from '../../../services/file';
 import { batchRuleApi, serialRuleApi } from '../services/batchSerialRules';
 import { saveSuspendedModal } from '../utils/suspendedModal';
+import { buildMaterialSourceTypeOptions } from '../utils/materialSourceType';
 import { QualityMasterDataHint } from '../../kuaizhizao/pages/quality-management/components/QualityMasterDataHint';
 import {
   InspectionStagesEditor,
@@ -166,13 +169,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     resetFieldValues,
   } = useCustomFields({ tableName: 'master_data_materials', loadWhenOpen: true, open });
 
-  const sourceTypeOptions = useMemo(() => [
-    { label: t('app.master-data.materialForm.sourceMake'), value: 'Make' },
-    { label: t('app.master-data.materialForm.sourceBuy'), value: 'Buy' },
-    { label: t('app.master-data.materialForm.sourceOutsource'), value: 'Outsource' },
-    { label: t('app.master-data.materialForm.sourcePhantom'), value: 'Phantom' },
-    { label: t('app.master-data.materialForm.sourceService'), value: 'Service' },
-  ], [t]);
+  const sourceTypeOptions = useMemo(() => buildMaterialSourceTypeOptions(t), [t]);
   const [activeTab, setActiveTab] = useState<string>('basic');
   const [variantManaged, setVariantManaged] = useState<boolean>(false);
   const [pendingVariantRows, setPendingVariantRows] = useState<PendingVariantCombination[]>([]);
@@ -579,6 +576,20 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           delete formDefaults.defaultCustomers;
           delete formDefaults.defaultWarehouses;
           delete formDefaults.defaultProcessRoute;
+          if (
+            formDefaults.defaultSalePrice != null &&
+            formDefaults.defaultSalePrice !== '' &&
+            (formDefaults.defaultSalePriceType == null || formDefaults.defaultSalePriceType === '')
+          ) {
+            formDefaults.defaultSalePriceType = 'tax_inclusive';
+          }
+          if (
+            formDefaults.defaultPurchasePrice != null &&
+            formDefaults.defaultPurchasePrice !== '' &&
+            (formDefaults.defaultPurchasePriceType == null || formDefaults.defaultPurchasePriceType === '')
+          ) {
+            formDefaults.defaultPurchasePriceType = 'tax_inclusive';
+          }
         }
         
         // 工艺路线回填由下方独立 useEffect（150ms 延后）在 processRoutes 加载完成后写入 defaultProcessRouteUuid，
@@ -2027,16 +2038,11 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
           />
         </div>
       </div>
-      {customFields.length > 0 ? (
-        <Row gutter={[16, 8]} style={{ width: '100%', marginTop: 8 }}>
-          <CustomFieldsFormSection
-            customFields={customFields}
-            customFieldValues={customFieldValues}
-            gridColumns={4}
-            gridMode="col"
-          />
-        </Row>
-      ) : null}
+      <CustomFieldsFormSection
+        customFields={customFields}
+        customFieldValues={customFieldValues}
+        gridColumns={4}
+      />
       <Collapse
         bordered={false}
         defaultActiveKey={[]}
@@ -2859,14 +2865,66 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
 
         {/* 销售默认值：单位已在【多单位管理】标签配置 */}
         <Panel header={t('app.master-data.defaults.sale')} key="sale">
+          <ProFormText name="defaults.defaultSalePriceType" hidden initialValue="tax_inclusive" />
           <Row gutter={16}>
             <Col span={12}>
-              <ProFormDigit
-                name="defaults.defaultSalePrice"
+              <Form.Item
                 label={t('app.master-data.defaults.defaultSalePrice')}
-                placeholder={t('app.master-data.defaults.defaultSalePricePlaceholder')}
-                min={0}
-              />
+                tooltip={t('app.master-data.defaults.defaultSalePriceTypeHint')}
+              >
+                <Row gutter={8} align="middle" wrap={false}>
+                  <Col flex="auto">
+                    <ProFormDigit
+                      name="defaults.defaultSalePrice"
+                      placeholder={t('app.master-data.defaults.defaultSalePricePlaceholder')}
+                      min={0}
+                      fieldProps={{ style: { width: '100%' } }}
+                      noStyle
+                    />
+                  </Col>
+                  <Col flex="none">
+                    <Form.Item
+                      noStyle
+                      shouldUpdate={(prev, cur) =>
+                        prev?.defaults?.defaultSalePriceType !== cur?.defaults?.defaultSalePriceType ||
+                        prev?.['defaults.defaultSalePriceType'] !== cur?.['defaults.defaultSalePriceType'] ||
+                        prev?.defaults?.defaultSalePrice !== cur?.defaults?.defaultSalePrice ||
+                        prev?.['defaults.defaultSalePrice'] !== cur?.['defaults.defaultSalePrice'] ||
+                        prev?.defaults?.defaultTaxRate !== cur?.defaults?.defaultTaxRate ||
+                        prev?.['defaults.defaultTaxRate'] !== cur?.['defaults.defaultTaxRate']
+                      }
+                    >
+                      {({ getFieldValue, setFieldValue }) => {
+                        const priceType = (getFieldValue('defaults.defaultSalePriceType') ??
+                          getFieldValue(['defaults', 'defaultSalePriceType']) ??
+                          'tax_inclusive') as PriceTypeValue;
+                        return (
+                          <PriceTypeSwitch
+                            checked={priceType === 'tax_inclusive'}
+                            onChange={(checked) => {
+                              const nextType: PriceTypeValue = checked ? 'tax_inclusive' : 'tax_exclusive';
+                              const fromType: PriceTypeValue = checked ? 'tax_exclusive' : 'tax_inclusive';
+                              const raw =
+                                Number(getFieldValue('defaults.defaultSalePrice')) ||
+                                Number(getFieldValue(['defaults', 'defaultSalePrice'])) ||
+                                0;
+                              const taxR =
+                                Number(getFieldValue('defaults.defaultTaxRate')) ||
+                                Number(getFieldValue(['defaults', 'defaultTaxRate'])) ||
+                                0;
+                              if (raw > 0) {
+                                const converted = convertUnitPriceByPriceType(raw, taxR, fromType, nextType);
+                                setFieldValue('defaults.defaultSalePrice', converted);
+                              }
+                              setFieldValue('defaults.defaultSalePriceType', nextType);
+                            }}
+                          />
+                        );
+                      }}
+                    </Form.Item>
+                  </Col>
+                </Row>
+              </Form.Item>
             </Col>
             <Col span={12}>
               <ProFormSelect
@@ -2887,7 +2945,67 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
         </Panel>
 
         <Panel header={t('app.master-data.defaults.purchase')} key="purchase">
+          <ProFormText name="defaults.defaultPurchasePriceType" hidden initialValue="tax_inclusive" />
           <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label={t('app.master-data.defaults.defaultPurchasePrice')}
+                tooltip={t('app.master-data.defaults.defaultPurchasePriceTypeHint')}
+              >
+                <Row gutter={8} align="middle" wrap={false}>
+                  <Col flex="auto">
+                    <ProFormDigit
+                      name="defaults.defaultPurchasePrice"
+                      placeholder={t('app.master-data.defaults.defaultPurchasePricePlaceholder')}
+                      min={0}
+                      fieldProps={{ style: { width: '100%' } }}
+                      noStyle
+                    />
+                  </Col>
+                  <Col flex="none">
+                    <Form.Item
+                      noStyle
+                      shouldUpdate={(prev, cur) =>
+                        prev?.defaults?.defaultPurchasePriceType !== cur?.defaults?.defaultPurchasePriceType ||
+                        prev?.['defaults.defaultPurchasePriceType'] !== cur?.['defaults.defaultPurchasePriceType'] ||
+                        prev?.defaults?.defaultPurchasePrice !== cur?.defaults?.defaultPurchasePrice ||
+                        prev?.['defaults.defaultPurchasePrice'] !== cur?.['defaults.defaultPurchasePrice'] ||
+                        prev?.defaults?.defaultTaxRate !== cur?.defaults?.defaultTaxRate ||
+                        prev?.['defaults.defaultTaxRate'] !== cur?.['defaults.defaultTaxRate']
+                      }
+                    >
+                      {({ getFieldValue, setFieldValue }) => {
+                        const priceType = (getFieldValue('defaults.defaultPurchasePriceType') ??
+                          getFieldValue(['defaults', 'defaultPurchasePriceType']) ??
+                          'tax_inclusive') as PriceTypeValue;
+                        return (
+                          <PriceTypeSwitch
+                            checked={priceType === 'tax_inclusive'}
+                            onChange={(checked) => {
+                              const nextType: PriceTypeValue = checked ? 'tax_inclusive' : 'tax_exclusive';
+                              const fromType: PriceTypeValue = checked ? 'tax_exclusive' : 'tax_inclusive';
+                              const raw =
+                                Number(getFieldValue('defaults.defaultPurchasePrice')) ||
+                                Number(getFieldValue(['defaults', 'defaultPurchasePrice'])) ||
+                                0;
+                              const taxR =
+                                Number(getFieldValue('defaults.defaultTaxRate')) ||
+                                Number(getFieldValue(['defaults', 'defaultTaxRate'])) ||
+                                0;
+                              if (raw > 0) {
+                                const converted = convertUnitPriceByPriceType(raw, taxR, fromType, nextType);
+                                setFieldValue('defaults.defaultPurchasePrice', converted);
+                              }
+                              setFieldValue('defaults.defaultPurchasePriceType', nextType);
+                            }}
+                          />
+                        );
+                      }}
+                    </Form.Item>
+                  </Col>
+                </Row>
+              </Form.Item>
+            </Col>
             <Col span={12}>
               <ProFormSelect
                 name="defaults.defaultSupplierIds"
@@ -2901,14 +3019,6 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
                   filterOption: (input: string, option: any) =>
                     (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
                 }}
-              />
-            </Col>
-            <Col span={12}>
-              <ProFormDigit
-                name="defaults.defaultPurchasePrice"
-                label={t('app.master-data.defaults.defaultPurchasePrice')}
-                placeholder={t('app.master-data.defaults.defaultPurchasePricePlaceholder')}
-                min={0}
               />
             </Col>
             <Col span={12}>

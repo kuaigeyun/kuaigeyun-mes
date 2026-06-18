@@ -64,6 +64,17 @@ import {
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
+import {
+  DOCUMENT_DETAIL_COL_WIDTH,
+  DOCUMENT_DETAIL_DATE_PICKER_STYLE,
+  DOCUMENT_DETAIL_NUM_COL,
+  DOCUMENT_DETAIL_TABLE_PROPS,
+  DOCUMENT_DETAIL_TEXT_COL,
+  DocumentDetailTableStyles,
+  TaxRateBatchColumnTitle,
+  TaxRateDetailCell,
+} from '../../../components/document-detail-table/documentDetailTable';
+import { DocumentAmountSummary } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import { SimpleSparkline } from '../../../../../components';
 import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -128,6 +139,7 @@ import { batchImport } from '../../../../../utils/batchOperations';
 import { ROUTES } from '../../../constants/routes';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
+import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 
 /** 与后端 DocumentStatus / ReviewStatus 及中文存量值对齐，供 UniWorkflowActions 识别 */
 const PO_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft', 'DRAFT', DocumentStatus.DRAFT];
@@ -260,166 +272,6 @@ function formatAmount(val: unknown): string {
         : parseFloat(String(val ?? 0));
   return (isNaN(num) ? 0 : num).toLocaleString();
 }
-
-function formatMoneyYuan(n: number): string {
-  const v = Number.isFinite(n) ? n : 0;
-  return `¥${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-/** 数值输入框宽度自适应：按内容长度估算，并限制在合理区间 */
-function adaptiveNumberInputStyle(
-  value: unknown,
-  options?: { minCh?: number; maxCh?: number; extraCh?: number; reservePx?: number }
-): React.CSSProperties {
-  const minCh = options?.minCh ?? 8;
-  const maxCh = options?.maxCh ?? 14;
-  const extraCh = options?.extraCh ?? 3;
-  const reservePx = options?.reservePx ?? 0;
-  const text = String(value ?? '');
-  const ch = Math.max(minCh, Math.min(maxCh, text.length + extraCh));
-  return {
-    width: reservePx > 0 ? `calc(${ch}ch + ${reservePx}px)` : `${ch}ch`,
-    maxWidth: '100%',
-  };
-}
-
-/** 与采购明细表格中价税逻辑一致，用于表单内实时汇总 */
-function computePurchaseOrderFormTotals(
-  items: any[] | undefined,
-  feeDetails: any[] | undefined,
-  priceType: string | undefined,
-) {
-  const pt = priceType ?? 'tax_exclusive';
-  const rows = normalizeFormListItems<any>(items);
-  let goodsExcl = 0;
-  let taxAmount = 0;
-  let goodsIncl = 0;
-
-  for (const row of rows) {
-    const qty = Number(row?.ordered_quantity) || 0;
-    const price = Number(row?.unit_price) || 0;
-    const taxRate = Number(row?.tax_rate) || 0;
-    if (pt === 'tax_inclusive' && price > 0) {
-      const exclAmt = (qty * price) / (1 + taxRate / 100);
-      const taxAmt = exclAmt * (taxRate / 100);
-      goodsExcl += exclAmt;
-      taxAmount += taxAmt;
-      goodsIncl += exclAmt + taxAmt;
-    } else {
-      const exclAmt = qty * price;
-      goodsExcl += exclAmt;
-      goodsIncl += exclAmt;
-    }
-  }
-
-  let otherSideFees = 0;
-  let ourSideFees = 0;
-  for (const fee of normalizeFormListItems<any>(feeDetails)) {
-    const amt = Number(fee?.amount) || 0;
-    if (fee?.bearer === 'other_side') otherSideFees += amt;
-    else ourSideFees += amt;
-  }
-
-  const estimatedPayable = goodsIncl + otherSideFees;
-  // 对方承担费用不计入我方总成本
-  const estimatedTotalCost = goodsIncl + ourSideFees;
-
-  return {
-    goodsExcl,
-    taxAmount,
-    goodsIncl,
-    otherSideFees,
-    ourSideFees,
-    estimatedPayable,
-    estimatedTotalCost,
-  };
-}
-
-/** 费用明细下方：货值 / 税额 / 含税货值 / 对方费用 / 我方成本 / 预计应付 / 预计总成本 */
-const PurchaseOrderFeeTotalsSummary: React.FC<{
-  getFieldValue: (name: string) => any;
-}> = ({ getFieldValue }) => {
-  const { t } = useTranslation();
-  const { token } = theme.useToken();
-  const sums = computePurchaseOrderFormTotals(
-    getFieldValue('items'),
-    getFieldValue('fee_details'),
-    getFieldValue('price_type'),
-  );
-
-  const cells: { label: string; hint?: string; value: number; tone?: 'neutral' | 'our' | 'other' }[] = [
-    { label: t('app.kuaizhizao.salesOrder.amountGoodsValue'), hint: t('app.kuaizhizao.salesOrder.amountGoodsValueHint'), value: sums.goodsExcl, tone: 'neutral' },
-    { label: t('app.kuaizhizao.salesOrder.amountTax'), value: sums.taxAmount, tone: 'neutral' },
-    { label: t('app.kuaizhizao.salesOrder.amountGoodsInclTax'), value: sums.goodsIncl, tone: 'neutral' },
-    { label: t('app.kuaizhizao.purchaseOrder.amountOtherFees'), value: sums.otherSideFees, tone: 'other' },
-    { label: t('app.kuaizhizao.purchaseOrder.amountOurCost'), value: sums.ourSideFees, tone: 'our' },
-    { label: t('app.kuaizhizao.purchaseOrder.amountEstimatedPayable'), hint: t('app.kuaizhizao.purchaseOrder.amountEstimatedPayableHint'), value: sums.estimatedPayable, tone: 'other' },
-    { label: t('app.kuaizhizao.purchaseOrder.amountEstimatedTotalCost'), hint: t('app.kuaizhizao.purchaseOrder.amountEstimatedTotalCostHint'), value: sums.estimatedTotalCost, tone: 'our' },
-  ];
-
-  return (
-    <div
-      style={{
-        marginBottom: 24,
-        padding: '12px 16px',
-        background: token.colorFillAlter,
-        borderRadius: token.borderRadiusLG,
-        border: `1px solid ${token.colorBorderSecondary}`,
-      }}
-    >
-      <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 10 }}>
-        {t('app.kuaizhizao.salesOrder.amountSummaryTitle')}
-      </Typography.Text>
-      <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-        <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 8, alignItems: 'stretch', minWidth: 'max-content' }}>
-        {cells.map((c) => (
-          <div
-            key={c.label}
-            style={{
-              minWidth: 104,
-              flex: '0 0 auto',
-              padding: '6px 8px',
-              background:
-                c.tone === 'our'
-                  ? token.colorSuccessBg
-                  : c.tone === 'other'
-                    ? token.colorWarningBg
-                    : token.colorBgContainer,
-              borderRadius: token.borderRadius,
-              border:
-                c.tone === 'our'
-                  ? `1px solid ${token.colorSuccessBorder}`
-                  : c.tone === 'other'
-                    ? `1px solid ${token.colorWarningBorder}`
-                    : `1px solid ${token.colorBorderSecondary}`,
-            }}
-            title={c.hint}
-          >
-            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', lineHeight: 1.3 }}>
-              {c.label}
-            </Typography.Text>
-            <div
-              style={{
-                fontSize: 14,
-                fontWeight: 600,
-                marginTop: 3,
-                color:
-                  c.tone === 'our'
-                    ? token.colorSuccessText
-                    : c.tone === 'other'
-                      ? token.colorWarningText
-                      : token.colorText,
-              }}
-            >
-              {formatMoneyYuan(c.value)}
-            </div>
-          </div>
-        ))}
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const ORDER_TYPE_FALLBACK_ITEMS: Pick<DictionaryItem, 'value' | 'label' | 'is_system_managed' | 'sort_order'>[] = [
   { value: '标准采购', label: '标准采购', is_system_managed: true, sort_order: 0 },
@@ -2200,7 +2052,12 @@ const PurchaseOrdersPage: React.FC = () => {
               label={t('app.kuaizhizao.purchaseOrder.form.requiredDate')}
               placeholder={t('app.kuaizhizao.purchaseOrder.form.requiredDateRequired')}
               rules={[{ required: true, message: t('app.kuaizhizao.purchaseOrder.form.requiredDateRequired') }]}
-              fieldProps={{ style: { width: '100%' } }}
+              fieldProps={buildFutureDateShortcutFieldProps({
+                getForm: () => formRef.current,
+                fieldName: 'delivery_date',
+                baseFieldName: 'order_date',
+                t,
+              })}
             />
           </Col>
         </Row>
@@ -2293,9 +2150,11 @@ const PurchaseOrdersPage: React.FC = () => {
             customFields={purchaseOrderFormCustomFields}
             customFieldValues={purchaseOrderFormCustomFieldValues}
             gridColumns={4}
-            gridMode="col"
+            embedInParentRow
           />
         </Row>
+
+        <ProFormText name="price_type" hidden initialValue="tax_exclusive" />
 
         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
           {({ getFieldValue: getFormValue }: any) => {
@@ -2303,6 +2162,8 @@ const PurchaseOrdersPage: React.FC = () => {
             const priceType = rawPriceType === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive';
             const showTaxColumns = priceType === 'tax_inclusive';
             return (
+              <>
+              <DocumentDetailTableStyles />
               <UniTableDetail
                 name="items"
                 title={t('app.kuaizhizao.purchaseOrder.form.itemsTitle')}
@@ -2328,7 +2189,7 @@ const PurchaseOrdersPage: React.FC = () => {
                       {t('app.kuaizhizao.purchaseOrder.form.importItems')}
                     </Button>
                     <Button
-                      type="dashed"
+                      type="default"
                       icon={<PlusOutlined />}
                       onClick={() => {
                         const mainDelivery = formRef.current?.getFieldValue('delivery_date');
@@ -2362,7 +2223,8 @@ const PurchaseOrdersPage: React.FC = () => {
                 {
                   title: t('app.kuaizhizao.purchaseOrder.form.material'),
                   dataIndex: 'material_id',
-                  width: 250,
+                  width: DOCUMENT_DETAIL_COL_WIDTH.material,
+                  ...DOCUMENT_DETAIL_TEXT_COL,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
                         {({ getFieldValue }: any) => {
@@ -2399,7 +2261,8 @@ const PurchaseOrdersPage: React.FC = () => {
                   {
                     title: t('app.kuaizhizao.purchaseOrder.form.spec'),
                     dataIndex: 'material_spec',
-                    width: 120,
+                    width: DOCUMENT_DETAIL_COL_WIDTH.spec,
+                    ...DOCUMENT_DETAIL_TEXT_COL,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
                         <Input placeholder={t('app.kuaizhizao.purchaseOrder.form.spec')} size="small" />
@@ -2409,7 +2272,8 @@ const PurchaseOrdersPage: React.FC = () => {
                   {
                     title: t('app.kuaizhizao.purchaseOrder.form.unit'),
                     dataIndex: 'unit',
-                    width: 100,
+                    width: DOCUMENT_DETAIL_COL_WIDTH.unit,
+                    ...DOCUMENT_DETAIL_TEXT_COL,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
                         {({ getFieldValue }) => {
@@ -2430,8 +2294,8 @@ const PurchaseOrdersPage: React.FC = () => {
                   {
                     title: t('app.kuaizhizao.purchaseOrder.form.quantity'),
                     dataIndex: 'ordered_quantity',
-                    width: 100,
-                    align: 'right' as const,
+                    width: DOCUMENT_DETAIL_COL_WIDTH.quantity,
+                    ...DOCUMENT_DETAIL_NUM_COL,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'ordered_quantity']} rules={[{ required: true, message: t('common.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.salesOrder.quantityMinHint') }]} style={{ margin: 0 }}>
                         <InputNumber placeholder={t('app.kuaizhizao.purchaseOrder.form.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
@@ -2441,7 +2305,8 @@ const PurchaseOrdersPage: React.FC = () => {
                   {
                     title: showTaxColumns ? t('app.kuaizhizao.purchaseOrder.col.taxUnitPrice') : t('app.kuaizhizao.purchaseOrder.col.unitPrice'),
                     dataIndex: 'unit_price',
-                    align: 'right' as const,
+                    width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice,
+                    ...DOCUMENT_DETAIL_NUM_COL,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item
                         noStyle
@@ -2450,21 +2315,18 @@ const PurchaseOrdersPage: React.FC = () => {
                           prev?.items?.[index]?.unit_price !== curr?.items?.[index]?.unit_price
                         }
                       >
-                        {({ getFieldValue }: any) => {
-                          const row = normalizeFormListItems<any>(getFieldValue('items'))[index];
-                          return (
-                            <AntForm.Item name={[index, 'unit_price']} rules={[{ required: true, message: t('common.required') }, { type: 'number', min: 0, message: t('app.kuaizhizao.purchaseOrder.form.gteZero') }]} style={{ margin: 0 }}>
-                              <InputNumber
-                                placeholder={showTaxColumns ? t('app.kuaizhizao.purchaseOrder.col.taxUnitPrice') : t('app.kuaizhizao.purchaseOrder.col.unitPrice')}
-                                min={0}
-                                precision={2}
-                                prefix="¥"
-                                style={adaptiveNumberInputStyle(row?.unit_price, { minCh: 9, maxCh: 16, extraCh: 5, reservePx: 28 })}
-                                size="small"
-                              />
-                            </AntForm.Item>
-                          );
-                        }}
+                        {() => (
+                          <AntForm.Item name={[index, 'unit_price']} rules={[{ required: true, message: t('common.required') }, { type: 'number', min: 0, message: t('app.kuaizhizao.purchaseOrder.form.gteZero') }]} style={{ margin: 0 }}>
+                            <InputNumber
+                              placeholder={showTaxColumns ? t('app.kuaizhizao.purchaseOrder.col.taxUnitPrice') : t('app.kuaizhizao.purchaseOrder.col.unitPrice')}
+                              min={0}
+                              precision={2}
+                              prefix="¥"
+                              style={{ width: '100%' }}
+                              size="small"
+                            />
+                          </AntForm.Item>
+                        )}
                       </AntForm.Item>
                     ),
                   },
@@ -2472,7 +2334,8 @@ const PurchaseOrdersPage: React.FC = () => {
                     ? [
                         {
                           title: t('app.kuaizhizao.purchaseOrder.col.exclAmount'),
-                          align: 'right' as const,
+                          width: DOCUMENT_DETAIL_COL_WIDTH.exclAmount,
+                          ...DOCUMENT_DETAIL_NUM_COL,
                           render: (_: any, __: any, index: number) => (
                             <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                               {({ getFieldValue }: any) => {
@@ -2488,55 +2351,31 @@ const PurchaseOrdersPage: React.FC = () => {
                         },
                         {
                           title: (
-                            <span>
-                              {t('app.kuaizhizao.purchaseOrder.form.taxRatePercent')}
-                              <Button
-                                type="link"
-                                size="small"
-                                style={{ padding: '0 4px', height: 'auto' }}
-                                onClick={() => {
-                                  const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
-                                  if (items.length === 0) return;
-                                  const rate = prompt(t('app.kuaizhizao.purchaseOrder.form.batchTaxRatePrompt'), '13');
-                                  if (rate != null && rate !== '') {
-                                    const num = parseFloat(rate);
-                                    if (!isNaN(num) && num >= 0 && num <= 100) {
-                                      const next = items.map((it: any) => ({ ...it, tax_rate: num }));
-                                      formRef.current?.setFieldsValue({ items: next });
-                                    }
+                            <TaxRateBatchColumnTitle
+                              onBatch={() => {
+                                const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+                                if (items.length === 0) return;
+                                const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
+                                if (rate != null && rate !== '') {
+                                  const num = Math.round(parseFloat(rate));
+                                  if (!Number.isNaN(num) && num >= 0 && num <= 100) {
+                                    const next = items.map((it: any) => ({ ...it, tax_rate: num }));
+                                    formRef.current?.setFieldsValue({ items: next });
                                   }
-                                }}
-                              >
-                                {t('app.kuaizhizao.purchaseOrder.form.batchTaxRate')}
-                              </Button>
-                            </span>
+                                }
+                              }}
+                            />
                           ),
                           dataIndex: 'tax_rate',
-                          align: 'right' as const,
-                          render: (_: any, __: any, index: number) => (
-                            <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.tax_rate !== curr?.items?.[index]?.tax_rate}>
-                              {({ getFieldValue }: any) => {
-                                const row = normalizeFormListItems<any>(getFieldValue('items'))[index];
-                                return (
-                                  <AntForm.Item name={[index, 'tax_rate']} initialValue={0} style={{ margin: 0 }}>
-                                    <InputNumber
-                                      placeholder="0"
-                                      min={0}
-                                      max={100}
-                                      precision={2}
-                                      addonAfter="%"
-                                      style={adaptiveNumberInputStyle(row?.tax_rate, { minCh: 7, maxCh: 11, extraCh: 3 })}
-                                      size="small"
-                                    />
-                                  </AntForm.Item>
-                                );
-                              }}
-                            </AntForm.Item>
-                          ),
+                          width: DOCUMENT_DETAIL_COL_WIDTH.taxRate,
+                          ...DOCUMENT_DETAIL_NUM_COL,
+                          onCell: () => ({ className: 'quotation-tax-rate-col' }),
+                          render: (_: any, __: any, index: number) => <TaxRateDetailCell index={index} />,
                         },
                         {
                           title: t('app.kuaizhizao.purchaseOrder.col.taxAmount'),
-                          align: 'right' as const,
+                          width: DOCUMENT_DETAIL_COL_WIDTH.taxAmount,
+                          ...DOCUMENT_DETAIL_NUM_COL,
                           render: (_: any, __: any, index: number) => (
                             <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                               {({ getFieldValue }: any) => {
@@ -2555,7 +2394,8 @@ const PurchaseOrdersPage: React.FC = () => {
                     : []),
                   {
                     title: showTaxColumns ? t('app.kuaizhizao.purchaseOrder.col.inclTotal') : t('app.kuaizhizao.purchaseOrder.col.totalPrice'),
-                    align: 'right' as const,
+                    width: DOCUMENT_DETAIL_COL_WIDTH.lineAmount,
+                    ...DOCUMENT_DETAIL_NUM_COL,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                         {({ getFieldValue }: any) => {
@@ -2574,10 +2414,21 @@ const PurchaseOrdersPage: React.FC = () => {
                   {
                     title: t('app.kuaizhizao.purchaseOrder.col.requiredDelivery'),
                     dataIndex: 'required_date',
-                    width: 120,
+                    width: DOCUMENT_DETAIL_COL_WIDTH.deliveryDate,
+                    ...DOCUMENT_DETAIL_TEXT_COL,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'required_date']} rules={[{ required: true, message: t('common.required') }]} style={{ margin: 0 }}>
-                        <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
+                        <FutureDatePicker
+                          size="small"
+                          style={DOCUMENT_DETAIL_DATE_PICKER_STYLE}
+                          format="YYYY-MM-DD"
+                          getForm={() => formRef.current}
+                          baseFieldName="order_date"
+                          t={t}
+                          onApply={(date) =>
+                            formRef.current?.setFieldValue?.(['items', index, 'required_date'], date)
+                          }
+                        />
                       </AntForm.Item>
                     ),
                   },
@@ -2585,12 +2436,9 @@ const PurchaseOrdersPage: React.FC = () => {
                 disabledAdd
                 minRows={1}
                 initialValue={{ ...defaultOrderItem, tax_rate: 0, required_date: dayjs() }}
-                tableProps={{
-                  size: 'small',
-                  tableLayout: 'auto',
-                  scroll: { x: 'max-content' },
-                }}
+                tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
               />
+              </>
             );
           }}
         </AntForm.Item>
@@ -2606,7 +2454,7 @@ const PurchaseOrdersPage: React.FC = () => {
           }
         >
           {({ getFieldValue }: { getFieldValue: (n: string) => any }) => (
-            <PurchaseOrderFeeTotalsSummary getFieldValue={getFieldValue} />
+            <DocumentAmountSummary variant="purchase" getFieldValue={getFieldValue} quantityField="ordered_quantity" />
           )}
         </AntForm.Item>
 

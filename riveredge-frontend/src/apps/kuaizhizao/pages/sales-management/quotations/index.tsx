@@ -41,8 +41,10 @@ import { CustomerSelectDropdown } from '../../../../master-data/components/Custo
 import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import {
   getMaterialDefaultTaxRate,
+  pickResolvedTaxRate,
   pickSaleUnitPrice,
   resolveCustomerSalePricesBatch,
+  resolveMaterialForPricing,
   resolveOrderLineSalePrice,
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
@@ -51,6 +53,7 @@ import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DR
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { AmountDisplay } from '../../../../../components/permission';
+import { DocumentAmountSummaryWatch } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import {
   listQuotations,
@@ -88,6 +91,7 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/cod
 import { batchImport } from '../../../../../utils/batchOperations';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
+import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { useTranslation } from 'react-i18next';
 import {
   buildFactoryImportTemplate,
@@ -262,54 +266,6 @@ function toApiDateString(v: unknown): string | undefined {
   return d.isValid() ? d.format('YYYY-MM-DD') : undefined;
 }
 
-/** 有效期快捷选项：以报价日期为基准（未填则取今天） */
-function resolveQuotationDateBase(formRef: React.RefObject<{ getFieldValue?: (name: string) => unknown } | null>) {
-  const qd = formRef.current?.getFieldValue?.('quotation_date');
-  if (dayjs.isDayjs(qd) && qd.isValid()) return qd.startOf('day');
-  if (qd != null && qd !== '') {
-    const d = dayjs(qd as string | Date | number);
-    if (d.isValid()) return d.startOf('day');
-  }
-  return dayjs().startOf('day');
-}
-
-function getQuotationDateShortcuts(t: (key: string) => string): { label: string; resolve: (base: dayjs.Dayjs) => dayjs.Dayjs }[] {
-  return [
-    { label: t('app.kuaizhizao.quotation.dateShortcut.7days'), resolve: (base) => base.add(7, 'day') },
-    { label: t('app.kuaizhizao.quotation.dateShortcut.15days'), resolve: (base) => base.add(15, 'day') },
-    { label: t('app.kuaizhizao.quotation.dateShortcut.1month'), resolve: (base) => base.add(1, 'month') },
-    { label: t('app.kuaizhizao.quotation.dateShortcut.monthEnd'), resolve: (base) => base.endOf('month') },
-  ];
-}
-
-function buildQuotationDateShortcutPickerProps(
-  formRef: React.RefObject<{ setFieldsValue?: (v: Record<string, unknown>) => void; getFieldValue?: (name: string) => unknown } | null>,
-  fieldName: 'valid_until' | 'delivery_date',
-  t: (key: string) => string,
-) {
-  return {
-    style: { width: '100%' },
-    showToday: false,
-    renderExtraFooter: () => (
-      <Space wrap size={[0, 0]} style={{ padding: '6px 4px', width: '100%', justifyContent: 'center' }}>
-        {getQuotationDateShortcuts(t).map(({ label, resolve }) => (
-          <Button
-            key={label}
-            type="link"
-            size="small"
-            onClick={() => {
-              const base = resolveQuotationDateBase(formRef);
-              formRef.current?.setFieldsValue?.({ [fieldName]: resolve(base) });
-            }}
-          >
-            {label}
-          </Button>
-        ))}
-      </Space>
-    ),
-  };
-}
-
 /** 将 ProDescriptions 列配置转为 Ant Design Descriptions items（与 detailDrawerDescriptionItems 一致） */
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -481,6 +437,48 @@ const convertUnitPriceByPriceType = (
   return fromCents(unitPriceCents);
 };
 
+/** 报价明细表：表头左对齐，表身文字左 / 数字右 */
+const QUOTATION_DETAIL_TEXT_COL = { align: 'left' as const };
+const QUOTATION_DETAIL_NUM_COL = {
+  align: 'right' as const,
+  onHeaderCell: () => ({ style: { textAlign: 'left' as const } }),
+};
+const QUOTATION_DETAIL_AMOUNT_STYLE: React.CSSProperties = { display: 'block', textAlign: 'right' };
+
+async function applyQuotationLineMaterialPricing(
+  form: ReturnType<typeof Form.useFormInstance>,
+  index: number,
+  material: Material,
+  materialList: Material[],
+): Promise<void> {
+  const full = await resolveMaterialForPricing(material, materialList);
+  const customerId = form.getFieldValue('customer_id');
+  const quotationDate = form.getFieldValue('quotation_date');
+  const asOf =
+    quotationDate != null
+      ? dayjs.isDayjs(quotationDate)
+        ? quotationDate
+        : dayjs(quotationDate)
+      : dayjs();
+  const pt = form.getFieldValue('price_type') ?? 'tax_exclusive';
+  const materialId = Number((full as Material).id ?? material.id);
+  const { unitPrice, taxRate } = await resolveOrderLineSalePrice(
+    customerId ? Number(customerId) : undefined,
+    Number.isFinite(materialId) ? materialId : undefined,
+    undefined,
+    full,
+    asOf,
+  );
+  let up = unitPrice;
+  if (pt === 'tax_inclusive' && up > 0) {
+    up = convertUnitPriceByPriceType(up, taxRate, 'tax_exclusive', 'tax_inclusive');
+  }
+  const items = [...normalizeFormListItems<any>(form.getFieldValue('items'))];
+  if (!items[index]) return;
+  items[index] = { ...items[index], unit_price: up, tax_rate: taxRate };
+  form.setFieldsValue({ items });
+}
+
 /** 归属业务员：与销售订单一致，用 display API 选项并在无匹配时用 salesman_name 回显 */
 const QuotationSalesmanField: React.FC<{ userList: User[]; loading: boolean }> = ({ userList, loading }) => {
   const { t } = useTranslation();
@@ -532,7 +530,10 @@ const QuotationSalesmanField: React.FC<{ userList: User[]; loading: boolean }> =
   );
 };
 
-const QuotationMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => {
+const QuotationMaterialSelectCell: React.FC<{ index: number; materialList: Material[] }> = ({
+  index,
+  materialList,
+}) => {
   const { t } = useTranslation();
   const form = Form.useFormInstance();
   const row = Form.useWatch(['items', index]);
@@ -549,7 +550,6 @@ const QuotationMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => 
           label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid),
         }
       : undefined;
-  /** 主数据默认售价为不含税；表单为含税单价时需换算，与切换价类时的 convert 一致 */
   const onMaterialPicked = useCallback(
     (_val: number | undefined, material: Material | undefined) => {
       if (!material) return;
@@ -559,16 +559,9 @@ const QuotationMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => 
       );
       form.setFieldValue(['items', index, '_masterMaterialUuid'], material.uuid);
       form.setFieldValue(['items', index, 'variant_attributes'], undefined);
-      const pt = form.getFieldValue('price_type') ?? 'tax_exclusive';
-      if (pt !== 'tax_inclusive') return;
-      const raw = Number(form.getFieldValue(['items', index, 'unit_price'])) || 0;
-      const taxR = Number(form.getFieldValue(['items', index, 'tax_rate'])) || 0;
-      form.setFieldValue(
-        ['items', index, 'unit_price'],
-        convertUnitPriceByPriceType(raw, taxR, 'tax_exclusive', 'tax_inclusive'),
-      );
+      void applyQuotationLineMaterialPricing(form, index, material, materialList);
     },
-    [form, index],
+    [form, index, materialList],
   );
   return (
     <div
@@ -589,8 +582,6 @@ const QuotationMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => 
             material_name: 'name',
             material_spec: 'specification',
             material_unit: 'baseUnit',
-            unit_price: 'defaults.defaultSalePrice' as any,
-            tax_rate: 'defaults.defaultTaxRate' as any,
           }}
           fallbackOption={fallback}
           formItemProps={{ style: { margin: 0 } }}
@@ -619,6 +610,7 @@ const QuotationAmountCell: React.FC<{ index: number }> = ({ index }) => {
       resource={QUOTATION_FIELD_RESOURCE}
       fieldName="amount_without_tax"
       value={line.excl}
+      style={QUOTATION_DETAIL_AMOUNT_STYLE}
     />
   );
 };
@@ -657,64 +649,9 @@ function mapQuotationSubmitItem(it: any, materialList: any[]) {
   };
 }
 
-const QuotationFormSummary: React.FC = () => {
-  const { t } = useTranslation();
-  const rawItems = Form.useWatch('items');
-  const items = normalizeFormListItems<any>(rawItems);
-  const priceType = Form.useWatch('price_type') ?? 'tax_exclusive';
-  const { token } = AntdTheme.useToken();
-  const totalQuantity = items.reduce((sum: number, it: any) => sum + (Number(it?.quote_quantity) || 0), 0);
-  let totalExcl = 0;
-  let totalIncl = 0;
-  for (const it of items) {
-    const line = calcQuotationLineAmounts(it?.quote_quantity, it?.unit_price, it?.tax_rate, priceType);
-    totalExcl += line.excl;
-    totalIncl += line.incl;
-  }
-
-  return (
-    <div
-      style={{
-        marginTop: 12,
-        marginBottom: 24,
-        padding: '12px 12px 16px',
-        background: token.colorFillAlter,
-        borderRadius: '4px',
-        display: 'flex',
-        justifyContent: 'flex-end',
-        flexWrap: 'wrap',
-        gap: 24,
-      }}
-    >
-      <span>{t('app.kuaizhizao.quotation.summary.totalQuantity')}: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
-      {priceType === 'tax_exclusive' ? (
-        <>
-          <span>
-            {t('app.kuaizhizao.quotation.summary.totalExcl')}:{' '}
-            <Typography.Text strong>
-              <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="amount_without_tax" value={totalExcl} />
-            </Typography.Text>
-          </span>
-          {Math.abs(totalIncl - totalExcl) > 0.005 && (
-            <span>
-              {t('app.kuaizhizao.quotation.summary.totalInclWithTax')}:{' '}
-              <Typography.Text strong type="danger">
-                <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="amount_with_tax" value={totalIncl} />
-              </Typography.Text>
-            </span>
-          )}
-        </>
-      ) : (
-        <span>
-          {t('app.kuaizhizao.quotation.summary.totalIncl')}:{' '}
-          <Typography.Text strong type="danger">
-            <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="amount_with_tax" value={totalIncl} />
-          </Typography.Text>
-        </span>
-      )}
-    </div>
-  );
-};
+const QuotationFormSummary: React.FC = () => (
+  <DocumentAmountSummaryWatch variant="lines" quantityField="quote_quantity" />
+);
 
 const QUOTATION_RESOURCE = 'kuaizhizao:quotation';
 
@@ -2250,6 +2187,9 @@ const QuotationsPage: React.FC = () => {
       const customerId = formRef.current?.getFieldValue('customer_id');
       const materialId = formRef.current?.getFieldValue(['items', index, 'material_id']);
       const material = materialList.find((m: any) => m.id === Number(materialId));
+      const full = material
+        ? await resolveMaterialForPricing(material as Material, materialList as Material[])
+        : undefined;
       const quotationDate = formRef.current?.getFieldValue('quotation_date');
       const asOf =
         quotationDate != null ? (dayjs.isDayjs(quotationDate) ? quotationDate : dayjs(quotationDate)) : dayjs();
@@ -2258,7 +2198,7 @@ const QuotationsPage: React.FC = () => {
         customerId ? Number(customerId) : undefined,
         materialId ? Number(materialId) : undefined,
         attrs,
-        material,
+        full,
         asOf,
       );
       let up = unitPrice;
@@ -2285,32 +2225,38 @@ const QuotationsPage: React.FC = () => {
       const asOf =
         quotationDate != null ? (dayjs.isDayjs(quotationDate) ? quotationDate : dayjs(quotationDate)) : dayjs();
 
+      const enriched = await Promise.all(
+        selected.map((m) => resolveMaterialForPricing(m, materialList as Material[])),
+      );
+
       const resolveMap = new Map<number, Awaited<ReturnType<typeof resolveCustomerSalePricesBatch>>[number]>();
-      if (customerId && selected.length) {
+      if (customerId && enriched.length) {
         try {
           const items = await resolveCustomerSalePricesBatch(
             Number(customerId),
-            selected.map((m) => ({
-              materialId: m.id,
+            enriched.map((m) => ({
+              materialId: Number((m as Material).id),
               variantAttributes: parseVariantAttributesValue(
-                m.variantAttributes ?? (m as any).variant_attributes,
+                (m as Material).variantAttributes ?? (m as any).variant_attributes,
               ),
             })),
             asOf,
-            selected,
+            enriched,
           );
-          selected.forEach((m, i) => {
-            if (items[i]) resolveMap.set(m.id, items[i]);
+          enriched.forEach((m, i) => {
+            const id = Number((m as Material).id);
+            if (items[i]) resolveMap.set(id, items[i]);
           });
         } catch {
           /* 回退物料默认价 */
         }
       }
 
-      const rowFromMaterial = (m: Material) => {
-        const resolved = resolveMap.get(m.id);
-        const taxR = resolved?.taxRate != null ? Number(resolved.taxRate) : getMaterialDefaultTaxRate(m);
-        let up = pickSaleUnitPrice(m, resolved);
+      const rowFromMaterial = (m: Material | Record<string, unknown>, idx: number) => {
+        const full = enriched[idx] ?? m;
+        const resolved = resolveMap.get(Number((m as Material).id));
+        const taxR = pickResolvedTaxRate(resolved) ?? getMaterialDefaultTaxRate(full);
+        let up = pickSaleUnitPrice(full, resolved);
         if (pt === 'tax_inclusive' && up > 0) {
           up = convertUnitPriceByPriceType(up, taxR, 'tax_exclusive', 'tax_inclusive');
         }
@@ -2336,7 +2282,7 @@ const QuotationsPage: React.FC = () => {
         const code = row.material_code;
         return code == null || String(code).trim() === '';
       };
-      const queue = selected.map(rowFromMaterial);
+      const queue = selected.map((m, idx) => rowFromMaterial(m, idx));
       const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))].map((row: any) => ({ ...row }));
       for (let i = 0; i < items.length && queue.length > 0; i++) {
         if (isEmptyItemRow(items[i])) {
@@ -2349,7 +2295,7 @@ const QuotationsPage: React.FC = () => {
       formRef.current?.setFieldsValue({ items });
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
     },
-    [messageApi, t]
+    [materialList, messageApi, t]
   );
 
   useEffect(() => {
@@ -2457,12 +2403,12 @@ const QuotationsPage: React.FC = () => {
           </ProForm.Item>
         </Col>
       </Row>
-      {/* 归属业务员 + 日期 + 发货方式：五列等分（各约 20%） */}
+      {/* 归属业务员 + 日期 + 发货方式：五列等分（24 栅格 5+5+5+5+4） */}
       <Row gutter={16}>
-        <Col flex={1} style={{ minWidth: 0 }}>
+        <Col span={5}>
           <QuotationSalesmanField userList={userList} loading={usersLoading} />
         </Col>
-        <Col flex={1} style={{ minWidth: 0 }}>
+        <Col span={5}>
           <ProFormDatePicker
             name="quotation_date"
             label={t('app.kuaizhizao.quotation.colQuotationDate')}
@@ -2470,21 +2416,31 @@ const QuotationsPage: React.FC = () => {
             fieldProps={{ style: { width: '100%' } }}
           />
         </Col>
-        <Col flex={1} style={{ minWidth: 0 }}>
+        <Col span={5}>
           <ProFormDatePicker
             name="valid_until"
             label={t('app.kuaizhizao.quotation.form.validUntil')}
-            fieldProps={buildQuotationDateShortcutPickerProps(formRef, 'valid_until', t)}
+            fieldProps={buildFutureDateShortcutFieldProps({
+              getForm: () => formRef.current,
+              fieldName: 'valid_until',
+              baseFieldName: 'quotation_date',
+              t,
+            })}
           />
         </Col>
-        <Col flex={1} style={{ minWidth: 0 }}>
+        <Col span={5}>
           <ProFormDatePicker
             name="delivery_date"
             label={t('app.kuaizhizao.quotation.form.expectedDeliveryDate')}
-            fieldProps={buildQuotationDateShortcutPickerProps(formRef, 'delivery_date', t)}
+            fieldProps={buildFutureDateShortcutFieldProps({
+              getForm: () => formRef.current,
+              fieldName: 'delivery_date',
+              baseFieldName: 'quotation_date',
+              t,
+            })}
           />
         </Col>
-        <Col flex={1} style={{ minWidth: 0 }}>
+        <Col span={4}>
           <DictionarySelect
             dictionaryCode="SHIPPING_METHOD"
             name="shipping_method"
@@ -2532,6 +2488,7 @@ const QuotationsPage: React.FC = () => {
         </Col>
       </Row>
       <ProFormText name="customer_name" hidden />
+      <ProFormText name="price_type" hidden initialValue="tax_exclusive" />
 
       <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
         {({ getFieldValue }: any) => {
@@ -2541,15 +2498,17 @@ const QuotationsPage: React.FC = () => {
                       {
                         title: t('app.kuaizhizao.salesOrder.material'),
                         dataIndex: 'material_id',
-                        width: 260,
+                        width: 280,
+                        ...QUOTATION_DETAIL_TEXT_COL,
                         render: (_: unknown, __: unknown, index: number) => (
-                          <QuotationMaterialSelectCell index={index} />
+                          <QuotationMaterialSelectCell index={index} materialList={materialList as Material[]} />
                         ),
                       },
                       {
                         title: t('app.kuaizhizao.salesOrder.variantAttributes'),
                         dataIndex: 'variant_attributes',
-                        width: 220,
+                        width: 240,
+                        ...QUOTATION_DETAIL_TEXT_COL,
                         render: (_: unknown, __: unknown, index: number) =>
                           formRef.current ? (
                             <OrderLineVariantAttributesCell
@@ -2565,7 +2524,8 @@ const QuotationsPage: React.FC = () => {
                       {
                         title: t('app.kuaizhizao.salesOrder.spec'),
                         dataIndex: 'material_spec',
-                        width: 120,
+                        width: 140,
+                        ...QUOTATION_DETAIL_TEXT_COL,
                         render: (_: unknown, __: unknown, index: number) => (
                           <Form.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
                             <Input placeholder={t('app.kuaizhizao.salesOrder.spec')} size="small" />
@@ -2575,7 +2535,8 @@ const QuotationsPage: React.FC = () => {
                       {
                         title: t('app.kuaizhizao.salesOrder.unit'),
                         dataIndex: 'material_unit',
-                        width: 100,
+                        width: 108,
+                        ...QUOTATION_DETAIL_TEXT_COL,
                         render: (_: unknown, __: unknown, index: number) => (
                           <Form.Item
                             noStyle
@@ -2597,8 +2558,8 @@ const QuotationsPage: React.FC = () => {
                       {
                         title: t('app.kuaizhizao.salesOrder.quantity'),
                         dataIndex: 'quote_quantity',
-                        width: 100,
-                        align: 'right' as const,
+                        width: 112,
+                        ...QUOTATION_DETAIL_NUM_COL,
                         render: (_: unknown, __: unknown, index: number) => (
                           <Form.Item
                             name={[index, 'quote_quantity']}
@@ -2621,8 +2582,8 @@ const QuotationsPage: React.FC = () => {
                             ? t('app.kuaizhizao.salesOrder.unitPriceColumnTaxInclusive')
                             : t('app.kuaizhizao.salesOrder.unitPriceColumnTaxExclusive'),
                         dataIndex: 'unit_price',
-                        width: 100,
-                        align: 'right' as const,
+                        width: 132,
+                        ...QUOTATION_DETAIL_NUM_COL,
                         render: (_: unknown, __: unknown, index: number) => (
                           <Form.Item
                             name={[index, 'unit_price']}
@@ -2662,8 +2623,8 @@ const QuotationsPage: React.FC = () => {
                         ? [
                             {
                               title: t('app.kuaizhizao.salesOrder.exclAmount'),
-                              width: 110,
-                              align: 'right' as const,
+                              width: 120,
+                              ...QUOTATION_DETAIL_NUM_COL,
                               render: (_: unknown, __: unknown, index: number) => (
                                 <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                                   {({ getFieldValue: gf2 }: any) => {
@@ -2680,6 +2641,7 @@ const QuotationsPage: React.FC = () => {
                                         resource={QUOTATION_FIELD_RESOURCE}
                                         fieldName="amount_without_tax"
                                         value={line.excl}
+                                        style={QUOTATION_DETAIL_AMOUNT_STYLE}
                                       />
                                     );
                                   }}
@@ -2692,7 +2654,7 @@ const QuotationsPage: React.FC = () => {
                         ? [
                             {
                               title: (
-                                <span>
+                                <span style={{ whiteSpace: 'nowrap' }}>
                                   {t('app.kuaizhizao.salesOrder.taxRate')}
                                   <Button
                                     type="link"
@@ -2703,7 +2665,7 @@ const QuotationsPage: React.FC = () => {
                                       if (itemsVal.length === 0) return;
                                       const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
                                       if (rate != null && rate !== '') {
-                                        const num = parseFloat(rate);
+                                        const num = Math.round(parseFloat(rate));
                                         if (!Number.isNaN(num) && num >= 0 && num <= 100) {
                                           const next = itemsVal.map((it: any) => ({ ...it, tax_rate: num }));
                                           formRef.current?.setFieldsValue({ items: next });
@@ -2716,26 +2678,29 @@ const QuotationsPage: React.FC = () => {
                                 </span>
                               ),
                               dataIndex: 'tax_rate',
-                              width: 120,
-                              align: 'right' as const,
+                              width: 108,
+                              ...QUOTATION_DETAIL_NUM_COL,
+                              onCell: () => ({ className: 'quotation-tax-rate-col' }),
                               render: (_: unknown, __: unknown, index: number) => (
-                                <Form.Item name={[index, 'tax_rate']} initialValue={0} style={{ margin: 0 }}>
-                                  <InputNumber
-                                    placeholder="0"
-                                    min={0}
-                                    max={100}
-                                    precision={2}
-                                    addonAfter="%"
-                                    style={{ width: '100%' }}
-                                    size="small"
-                                  />
-                                </Form.Item>
+                                <div className="quotation-tax-rate-cell">
+                                  <Form.Item name={[index, 'tax_rate']} initialValue={0} style={{ margin: 0 }}>
+                                    <InputNumber
+                                      placeholder="0"
+                                      min={0}
+                                      max={100}
+                                      precision={0}
+                                      addonAfter="%"
+                                      controls={false}
+                                      size="small"
+                                    />
+                                  </Form.Item>
+                                </div>
                               ),
                             },
                             {
                               title: t('app.kuaizhizao.salesOrder.taxAmount'),
-                              width: 100,
-                              align: 'right' as const,
+                              width: 112,
+                              ...QUOTATION_DETAIL_NUM_COL,
                               render: (_: unknown, __: unknown, index: number) => (
                                 <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                                   {({ getFieldValue: gf2 }: any) => {
@@ -2752,6 +2717,7 @@ const QuotationsPage: React.FC = () => {
                                         resource={QUOTATION_FIELD_RESOURCE}
                                         fieldName="tax_amount"
                                         value={line.tax}
+                                        style={QUOTATION_DETAIL_AMOUNT_STYLE}
                                       />
                                     );
                                   }}
@@ -2764,8 +2730,8 @@ const QuotationsPage: React.FC = () => {
                         title: showTaxColumns
                           ? t('app.kuaizhizao.salesOrder.inclAmount')
                           : t('app.kuaizhizao.salesOrder.exclAmount'),
-                        width: 120,
-                        align: 'right' as const,
+                        width: 132,
+                        ...QUOTATION_DETAIL_NUM_COL,
                         render: (_: unknown, __: unknown, index: number) =>
                           showTaxColumns ? (
                             <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
@@ -2828,17 +2794,29 @@ const QuotationsPage: React.FC = () => {
                       {
                         title: t('app.kuaizhizao.salesOrder.deliveryDate'),
                         dataIndex: 'delivery_date',
-                        width: 130,
+                        width: 152,
+                        ...QUOTATION_DETAIL_TEXT_COL,
                         render: (_: unknown, __: unknown, index: number) => (
                           <Form.Item name={[index, 'delivery_date']} style={{ margin: 0 }}>
-                            <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
+                            <FutureDatePicker
+                              size="small"
+                              style={{ width: '100%', minWidth: 140 }}
+                              format="YYYY-MM-DD"
+                              getForm={() => formRef.current}
+                              baseFieldName="quotation_date"
+                              t={t}
+                              onApply={(date) =>
+                                formRef.current?.setFieldValue?.(['items', index, 'delivery_date'], date)
+                              }
+                            />
                           </Form.Item>
                         ),
                       },
                       {
                         title: t('app.kuaizhizao.salesOrder.notes'),
                         dataIndex: 'notes',
-                        width: 120,
+                        width: 140,
+                        ...QUOTATION_DETAIL_TEXT_COL,
                         render: (_: unknown, __: unknown, index: number) => (
                           <Form.Item name={[index, 'notes']} style={{ margin: 0 }}>
                             <Input placeholder={t('app.kuaizhizao.salesOrder.notes')} size="small" />
@@ -2862,6 +2840,32 @@ const QuotationsPage: React.FC = () => {
                       background-color: var(--ant-color-primary, #1677ff);
                       color: #fff;
                       border-radius: 0;
+                    }
+                    .quotation-detail-table td.ant-table-cell-align-right .ant-input-number-input {
+                      text-align: right;
+                    }
+                    .quotation-detail-table td.quotation-tax-rate-col {
+                      overflow: hidden;
+                    }
+                    .quotation-detail-table .quotation-tax-rate-cell,
+                    .quotation-detail-table .quotation-tax-rate-cell .ant-form-item,
+                    .quotation-detail-table .quotation-tax-rate-cell .ant-form-item-control-input {
+                      max-width: 100%;
+                      min-width: 0;
+                    }
+                    .quotation-detail-table .quotation-tax-rate-cell .ant-input-number-group-wrapper {
+                      display: flex;
+                      width: 100%;
+                      max-width: 100%;
+                    }
+                    .quotation-detail-table .quotation-tax-rate-cell .ant-input-number {
+                      flex: 1 1 auto;
+                      min-width: 0;
+                      width: auto !important;
+                    }
+                    .quotation-detail-table .quotation-tax-rate-cell .ant-input-number-group-addon {
+                      flex: 0 0 auto;
+                      padding-inline: 6px;
                     }
                   `}</style>
               <UniTableDetail
@@ -3006,7 +3010,13 @@ const QuotationsPage: React.FC = () => {
                 }}
                 onValuesChange={quotationFormOnValuesChange}
                 initialValues={
-                  isCreatePage ? { quotation_date: dayjs(), currency_code: defaultQuotationCurrency } : undefined
+                  isCreatePage
+                    ? {
+                        quotation_date: dayjs(),
+                        currency_code: defaultQuotationCurrency,
+                        price_type: 'tax_exclusive',
+                      }
+                    : undefined
                 }
               >
                 {formItemContent}
@@ -3331,27 +3341,29 @@ const QuotationsPage: React.FC = () => {
                       const showTax = pt === 'tax_inclusive';
                       type LineIt = NonNullable<Quotation['items']>[number];
                       return [
-                        { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-                        { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                        { title: t('app.kuaizhizao.salesOrder.spec'), dataIndex: 'material_spec', width: 120, ellipsis: true },
+                        { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
+                        { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
+                        { title: t('app.kuaizhizao.salesOrder.spec'), dataIndex: 'material_spec', width: 120, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
                         {
                           title: t('app.kuaizhizao.salesOrder.unit'),
                           dataIndex: 'material_unit',
                           width: 72,
                           ellipsis: true,
+                          ...QUOTATION_DETAIL_TEXT_COL,
                           render: (v: string) => <DictionaryLabel dictionaryCode="MATERIAL_UNIT" value={v} />,
                         },
-                        { title: t('app.kuaizhizao.quotation.form.quoteQuantity'), dataIndex: 'quote_quantity', width: 100, align: 'right' as const },
+                        { title: t('app.kuaizhizao.quotation.form.quoteQuantity'), dataIndex: 'quote_quantity', width: 100, ...QUOTATION_DETAIL_NUM_COL },
                         {
                           title: t('app.kuaizhizao.salesOrder.unitPrice'),
                           dataIndex: 'unit_price',
                           width: 100,
-                          align: 'right' as const,
+                          ...QUOTATION_DETAIL_NUM_COL,
                           render: (v: number) => (
                             <AmountDisplay
                               resource={QUOTATION_FIELD_RESOURCE}
                               fieldName="unit_price"
                               value={v}
+                              style={QUOTATION_DETAIL_AMOUNT_STYLE}
                             />
                           ),
                         },
@@ -3361,7 +3373,7 @@ const QuotationsPage: React.FC = () => {
                                 title: t('app.kuaizhizao.salesOrder.exclAmount'),
                                 key: 'line_excl',
                                 width: 100,
-                                align: 'right' as const,
+                                ...QUOTATION_DETAIL_NUM_COL,
                                 render: (_: unknown, it: LineIt) => {
                                   const line = calcQuotationLineAmounts(
                                     it.quote_quantity,
@@ -3374,6 +3386,7 @@ const QuotationsPage: React.FC = () => {
                                       resource={QUOTATION_FIELD_RESOURCE}
                                       fieldName="amount_without_tax"
                                       value={line.excl}
+                                      style={QUOTATION_DETAIL_AMOUNT_STYLE}
                                     />
                                   );
                                 },
@@ -3381,14 +3394,14 @@ const QuotationsPage: React.FC = () => {
                               {
                                 title: t('app.kuaizhizao.salesOrder.taxRate'),
                                 dataIndex: 'tax_rate',
-                                width: 72,
-                                align: 'right' as const,
+                                width: 108,
+                                ...QUOTATION_DETAIL_NUM_COL,
                               },
                               {
                                 title: t('app.kuaizhizao.salesOrder.taxAmount'),
                                 key: 'line_tax',
                                 width: 90,
-                                align: 'right' as const,
+                                ...QUOTATION_DETAIL_NUM_COL,
                                 render: (_: unknown, it: LineIt) => {
                                   const line = calcQuotationLineAmounts(
                                     it.quote_quantity,
@@ -3401,6 +3414,7 @@ const QuotationsPage: React.FC = () => {
                                       resource={QUOTATION_FIELD_RESOURCE}
                                       fieldName="tax_amount"
                                       value={line.tax}
+                                      style={QUOTATION_DETAIL_AMOUNT_STYLE}
                                     />
                                   );
                                 },
@@ -3411,7 +3425,7 @@ const QuotationsPage: React.FC = () => {
                           title: showTax ? t('app.kuaizhizao.salesOrder.inclAmount') : t('app.kuaizhizao.salesOrder.exclAmount'),
                           key: 'line_amount_display',
                           width: 100,
-                          align: 'right' as const,
+                          ...QUOTATION_DETAIL_NUM_COL,
                           render: (_: unknown, it: LineIt) => {
                             const line = calcQuotationLineAmounts(
                               it.quote_quantity,
@@ -3424,12 +3438,13 @@ const QuotationsPage: React.FC = () => {
                                 resource={QUOTATION_FIELD_RESOURCE}
                                 fieldName={showTax ? 'amount_with_tax' : 'amount_without_tax'}
                                 value={showTax ? line.incl : line.excl}
+                                style={QUOTATION_DETAIL_AMOUNT_STYLE}
                               />
                             );
                           },
                         },
-                        { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 120, ellipsis: true },
-                        { title: t('app.kuaizhizao.salesOrder.notes'), dataIndex: 'notes', width: 160, ellipsis: true },
+                        { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 120, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
+                        { title: t('app.kuaizhizao.salesOrder.notes'), dataIndex: 'notes', width: 160, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
                       ];
                     })()}
                     dataSource={quotationDetail.items}

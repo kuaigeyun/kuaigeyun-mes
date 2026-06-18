@@ -10,6 +10,7 @@ import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { ProFormText, ProFormSelect, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { materialBatchApi, materialApi } from '../../../services/material';
 import type { MaterialBatch, MaterialBatchCreate, MaterialBatchUpdate } from '../../../types/material';
@@ -299,6 +300,12 @@ const BatchesPage: React.FC = () => {
           name="expiryDate"
           label={t('app.master-data.batches.expiryDate') || '有效期'}
           colProps={{ span: 12 }}
+          fieldProps={buildFutureDateShortcutFieldProps({
+            getForm: () => formRef.current,
+            fieldName: 'expiryDate',
+            baseFieldName: 'productionDate',
+            t,
+          })}
         />
         <ProFormText
           name="supplierBatchNo"

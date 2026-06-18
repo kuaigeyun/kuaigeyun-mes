@@ -806,7 +806,7 @@ const OtherInboundPage: React.FC = () => {
             customFields={otherInboundFormCustomFields}
             customFieldValues={otherInboundFormCustomFieldValues}
             gridColumns={2}
-            gridMode="col"
+            embedInParentRow
           />
         </Row>
         <div className="uni-table-detail" style={{ width: '100%' }}>

@@ -14,6 +14,7 @@ import {
   normalizeAssociatedMultiselectValue,
   resolveAssociatedDisplayMode,
 } from './customFieldAssociatedDisplayMode';
+import { customFieldControlLayout, customFieldFieldProps } from './customFieldFormLayout';
 
 function LookupValueSync({
   name,
@@ -82,7 +83,7 @@ const AssociatedObjectPicker: React.FC<
   labelText,
   placeholder,
   required = false,
-  colProps = { span: 12 },
+  colProps,
   initialValue,
   multiple = false,
   radio = false,
@@ -100,7 +101,6 @@ const AssociatedObjectPicker: React.FC<
       <ProFormRadio.Group
         name={name}
         label={label}
-        colProps={colProps}
         initialValue={normalizedInitial}
         rules={required ? [{ required: true, message: `请选择${textForMessage}` }] : []}
         options={options.map((option) => ({
@@ -113,6 +113,7 @@ const AssociatedObjectPicker: React.FC<
           disabled: loading,
           style: { display: 'flex', flexWrap: 'wrap', gap: 8 },
         }}
+        {...customFieldControlLayout(colProps)}
       />
     );
   }
@@ -123,7 +124,6 @@ const AssociatedObjectPicker: React.FC<
       label={label}
       placeholder={placeholder || `请选择${textForMessage}`}
       options={options}
-      colProps={colProps}
       initialValue={normalizedInitial}
       rules={required ? [{ required: true, message: `请选择${textForMessage}` }] : []}
       fieldProps={{
@@ -133,8 +133,9 @@ const AssociatedObjectPicker: React.FC<
         allowClear: true,
         filterOption: (input: string, option: any) =>
           (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()),
-        style: { width: '100%' },
+        ...customFieldFieldProps(),
       }}
+      {...customFieldControlLayout(colProps)}
     />
   );
 };
@@ -203,17 +204,17 @@ function AssociatedObjectLookupControl({
       <ProFormDigit
         name={name}
         label={label}
-        colProps={colProps}
         initialValue={initialValue ?? undefined}
-        fieldProps={{ readOnly: true, style: { width: '100%' } }}
+        fieldProps={{ readOnly: true, ...customFieldFieldProps() }}
+        {...customFieldControlLayout(colProps)}
       />
     ) : (
       <ProFormText
         name={name}
         label={label}
-        colProps={colProps}
         initialValue={initialValue ?? undefined}
-        fieldProps={{ readOnly: true, style: { width: '100%' } }}
+        fieldProps={{ readOnly: true, ...customFieldFieldProps() }}
+        {...customFieldControlLayout(colProps)}
       />
     );
 
@@ -229,27 +230,27 @@ function AssociatedObjectLookupControl({
     <ProFormDigit
       name={name}
       label={label}
-      colProps={colProps}
       initialValue={initialValue ?? undefined}
       fieldProps={{
-        style: { width: '100%' },
+        ...customFieldFieldProps(),
         onChange: () => {
           isManualOverrideRef.current = true;
         },
       }}
+      {...customFieldControlLayout(colProps)}
     />
   ) : (
     <ProFormText
       name={name}
       label={label}
-      colProps={colProps}
       initialValue={initialValue ?? undefined}
       fieldProps={{
-        style: { width: '100%' },
+        ...customFieldFieldProps(),
         onChange: () => {
           isManualOverrideRef.current = true;
         },
       }}
+      {...customFieldControlLayout(colProps)}
     />
   );
 

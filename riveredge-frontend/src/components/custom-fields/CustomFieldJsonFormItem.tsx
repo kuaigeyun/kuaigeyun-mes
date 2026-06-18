@@ -11,6 +11,7 @@ import {
   type CustomFieldJsonEditorMode,
 } from './CustomFieldJsonEditor';
 import { isEmptyJsonValue, normalizeJsonFieldValue, parseJsonText } from './customFieldJsonUtils';
+import { CUSTOM_FIELD_FORM_CLASS_NAMES } from './customFieldFormLayout';
 import { FORM_LAYOUT } from '../layout-templates/constants';
 
 export interface CustomFieldJsonFormItemProps {
@@ -34,12 +35,10 @@ export const CustomFieldJsonFormItem: React.FC<CustomFieldJsonFormItemProps> = (
 
   return (
     <div
-      className="ant-form-item"
+      className={`ant-form-item ${CUSTOM_FIELD_FORM_CLASS_NAMES.jsonItem}`}
       style={{
-        width: '100%',
         marginBottom: FORM_LAYOUT.ITEM_MARGIN_BOTTOM,
         marginTop: 0,
-        display: 'flow-root',
       }}
     >
       <Row align="middle" gutter={16} style={{ width: '100%', marginBottom: 8 }}>

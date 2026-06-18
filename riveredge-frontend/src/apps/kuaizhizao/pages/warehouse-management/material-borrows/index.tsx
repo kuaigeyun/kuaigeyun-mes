@@ -35,6 +35,7 @@ import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
 import { useTranslation } from 'react-i18next';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import { getDepartmentTree } from '../../../../../services/department';
+import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 
 interface MaterialBorrow {
   id?: number;
@@ -636,7 +637,7 @@ const MaterialBorrowsPage: React.FC = () => {
         <Row gutter={16}>
           <Col span={12}>
             <ProFormItem name="expected_return_date" label={t('app.kuaizhizao.materialBorrow.field.expectedReturnDate')}>
-              <DatePicker style={{ width: '100%' }} />
+              <FutureDatePicker getForm={() => formRef.current} t={t} style={{ width: '100%' }} />
             </ProFormItem>
           </Col>
           <Col span={12} />

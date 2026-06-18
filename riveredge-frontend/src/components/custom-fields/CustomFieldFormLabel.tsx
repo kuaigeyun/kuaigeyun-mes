@@ -6,6 +6,8 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tag } from 'antd';
 
+import { CUSTOM_FIELD_FORM_CLASS_NAMES } from './customFieldFormLayout';
+
 export interface CustomFieldFormLabelProps {
   text: string;
 }
@@ -16,7 +18,7 @@ export const CustomFieldFormLabel: React.FC<CustomFieldFormLabelProps> = ({ text
   return (
     <span>
       {text}
-      <Tag color="blue" style={{ marginLeft: 6, fontSize: 11 }}>
+      <Tag color="blue" className={CUSTOM_FIELD_FORM_CLASS_NAMES.labelTag}>
         {t('app.master-data.customFields')}
       </Tag>
     </span>

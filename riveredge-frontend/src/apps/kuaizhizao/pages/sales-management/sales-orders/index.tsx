@@ -81,6 +81,19 @@ import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
+import {
+  DOCUMENT_DETAIL_AMOUNT_STYLE,
+  DOCUMENT_DETAIL_COL_WIDTH,
+  DOCUMENT_DETAIL_DATE_PICKER_STYLE,
+  DOCUMENT_DETAIL_NUM_COL,
+  DOCUMENT_DETAIL_TABLE_PROPS,
+  DOCUMENT_DETAIL_TEXT_COL,
+  DocumentDetailTableStyles,
+  TaxRateBatchColumnTitle,
+  TaxRateDetailCell,
+} from '../../../components/document-detail-table/documentDetailTable';
+import { DocumentAmountSummary } from '../../../components/document-amount-summary/DocumentAmountSummary';
+import { computeSalesDocumentTotals } from '../../../utils/documentLineAmounts';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO } from '../../../constants/fieldPermissionResources';
 import { Area } from '@ant-design/charts';
@@ -133,9 +146,11 @@ import { customerApi } from '../../../../master-data/services/supply-chain';
 import { workCenterApi, factoryListItems } from '../../../../master-data/services/factory';
 import type { Customer } from '../../../../master-data/types/supply-chain';
 import {
+  applySalesDocumentLineMaterialPricing,
   getMaterialDefaultTaxRate,
   pickSaleUnitPrice,
   resolveCustomerSalePricesBatch,
+  resolveMaterialForPricing,
   resolveOrderLineSalePrice,
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
@@ -143,6 +158,7 @@ import { parseVariantAttributesValue } from '../../../../master-data/components/
 import dayjs from 'dayjs';
 import { formatApiErrorDetail } from '../../../../../services/api';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
+import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { coerceFormDate, toApiDateString } from '../../../../../utils/formDate';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
@@ -151,7 +167,8 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 /** 用户列表：对接系统管理-用户管理-帐户管理（/core/users） */
 import { searchUserDisplay, type User } from '../../../../../services/user';
 import { useGlobalStore } from '../../../../../stores';
-import { displayItemsToUsers } from '../../../../../utils/userDisplay';
+import { displayItemsToUsers, formatUserDisplayLabel } from '../../../../../utils/userDisplay';
+import { useConfigStore } from '../../../../../stores/configStore';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -224,10 +241,6 @@ type PullQuotationCandidate = {
 /** 明细行是否已挂工单（直推工单路径与需求计算路径互斥） */
 function orderHasLineWorkOrders(order: SalesOrder | null | undefined): boolean {
   return !!(order?.items?.some((it) => it?.work_order_id != null && Number(it.work_order_id) > 0));
-}
-
-function formatMoneyYuan(n: number): string {
-  return `¥${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 const toSafeNumber = (value: unknown): number => {
@@ -307,135 +320,6 @@ const convertUnitPriceByPriceType = (
   return fromCents(unitPriceCents);
 };
 
-/** 与销售明细表格中价税逻辑一致，用于表单内实时汇总 */
-function computeSalesOrderFormTotals(
-  items: any[] | undefined,
-  feeDetails: any[] | undefined,
-  priceType: string | undefined,
-) {
-  const pt = priceType ?? 'tax_exclusive';
-  const rows = normalizeFormListItems<any>(items);
-  let goodsExclCents = 0;
-  let taxAmountCents = 0;
-  let goodsInclCents = 0;
-
-  for (const row of rows) {
-    const line = calcSalesLineAmounts(row?.required_quantity, row?.unit_price, row?.tax_rate, pt);
-    goodsExclCents += toCents(line.excl);
-    taxAmountCents += toCents(line.tax);
-    goodsInclCents += toCents(line.incl);
-  }
-
-  let customerFeesCents = 0; // other_side
-  let ourFeesCents = 0;      // our_side
-  for (const fee of feeDetails || []) {
-    const feeCents = toCents(fee?.amount);
-    if (fee?.bearer === 'other_side') customerFeesCents += feeCents;
-    else ourFeesCents += feeCents;
-  }
-
-  // 预计应收 = 含税货值 + 我方垫付 (假设我方垫付的费用最终由客户结算)
-  // 如果业务逻辑是我方承担则不计入应收，则此处需调整。参考采购订单逻辑：应付 = 货值 + 对方(供应商)费用
-  // 对应到销售：应收 = 货值 + 我方(销售方)垫付费用
-  const estimatedReceivableCents = goodsInclCents + ourFeesCents;
-  const estimatedNetIncomeCents = goodsInclCents; // 纯货值部分（含税）
-
-  return {
-    goodsExcl: fromCents(goodsExclCents),
-    taxAmount: fromCents(taxAmountCents),
-    goodsIncl: fromCents(goodsInclCents),
-    customerFees: fromCents(customerFeesCents),
-    ourFees: fromCents(ourFeesCents),
-    estimatedReceivable: fromCents(estimatedReceivableCents),
-    estimatedNetIncome: fromCents(estimatedNetIncomeCents),
-  };
-}
-
-/** 费用明细下方：货值 / 税额 / 含税货值 / 客户直付 / 我方垫付 / 预计应收 */
-const SalesOrderFeeTotalsSummary: React.FC<{
-  getFieldValue: (name: string) => any;
-}> = ({ getFieldValue }) => {
-  const { t } = useTranslation();
-  const { token } = AntdTheme.useToken();
-  const sums = computeSalesOrderFormTotals(
-    getFieldValue('items'),
-    getFieldValue('fee_details'),
-    getFieldValue('price_type'),
-  );
-
-  const cells: { label: string; hint?: string; value: number; tone?: 'neutral' | 'our' | 'other' }[] = [
-    { label: t('app.kuaizhizao.salesOrder.amountGoodsValue'), hint: t('app.kuaizhizao.salesOrder.amountGoodsValueHint'), value: sums.goodsExcl, tone: 'neutral' },
-    { label: t('app.kuaizhizao.salesOrder.amountTax'), value: sums.taxAmount, tone: 'neutral' },
-    { label: t('app.kuaizhizao.salesOrder.amountGoodsInclTax'), value: sums.goodsIncl, tone: 'neutral' },
-    { label: t('app.kuaizhizao.salesOrder.amountCustomerDirectPay'), hint: t('app.kuaizhizao.salesOrder.amountCustomerDirectPayHint'), value: sums.customerFees, tone: 'other' },
-    { label: t('app.kuaizhizao.salesOrder.amountOurAdvance'), hint: t('app.kuaizhizao.salesOrder.amountOurAdvanceHint'), value: sums.ourFees, tone: 'our' },
-    { label: t('app.kuaizhizao.salesOrder.amountEstimatedReceivable'), hint: t('app.kuaizhizao.salesOrder.amountEstimatedReceivableHint'), value: sums.estimatedReceivable, tone: 'our' },
-  ];
-
-  return (
-    <div
-      style={{
-        marginBottom: 24,
-        padding: '12px 16px',
-        background: token.colorFillAlter,
-        borderRadius: token.borderRadiusLG,
-        border: `1px solid ${token.colorBorderSecondary}`,
-      }}
-    >
-      <div style={{ color: token.colorTextSecondary, fontSize: 12, display: 'block', marginBottom: 10 }}>
-        {t('app.kuaizhizao.salesOrder.amountSummaryTitle')}
-      </div>
-      <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-        <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 8, alignItems: 'stretch', minWidth: 'max-content' }}>
-        {cells.map((c) => (
-          <div
-            key={c.label}
-            style={{
-              minWidth: 104,
-              flex: '0 0 auto',
-              padding: '6px 8px',
-              background:
-                c.tone === 'our'
-                  ? token.colorSuccessBg
-                  : c.tone === 'other'
-                    ? token.colorWarningBg
-                    : token.colorBgContainer,
-              borderRadius: token.borderRadius,
-              border:
-                c.tone === 'our'
-                  ? `1px solid ${token.colorSuccessBorder}`
-                  : c.tone === 'other'
-                    ? `1px solid ${token.colorWarningBorder}`
-                    : `1px solid ${token.colorBorderSecondary}`,
-            }}
-            title={c.hint}
-          >
-            <div style={{ color: token.colorTextSecondary, fontSize: 12, display: 'block', lineHeight: 1.3 }}>
-              {c.label}
-            </div>
-            <div
-              style={{
-                fontSize: 14,
-                fontWeight: 600,
-                marginTop: 3,
-                color:
-                  c.tone === 'our'
-                    ? token.colorSuccessText
-                    : c.tone === 'other'
-                      ? token.colorWarningText
-                      : token.colorText,
-              }}
-            >
-              {formatMoneyYuan(c.value)}
-            </div>
-          </div>
-        ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 /** 数据字典未配置时的下拉兜底（与常见 SHIPPING_METHOD / PAYMENT_TERMS 取值兼容） */
 function getDefaultShippingMethodOptions(t: (key: string) => string) {
   return [
@@ -460,10 +344,63 @@ const SALES_ORDER_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-orders';
 const SALES_ORDER_CREATE_PATH = `${SALES_ORDER_LIST_PATH}/new`;
 const salesOrderEditPath = (id: number) => `${SALES_ORDER_LIST_PATH}/${id}/edit`;
 
+/** 归属业务员：与报价单一致，无匹配选项时用 salesman_name 回显 */
+const SalesOrderSalesmanField: React.FC<{ userList: User[]; loading: boolean }> = ({ userList, loading }) => {
+  const { t } = useTranslation();
+  const form = AntForm.useFormInstance();
+  const salesmanId = AntForm.useWatch('salesman_id', form);
+  const salesmanName = AntForm.useWatch('salesman_name', form);
+
+  const options = useMemo(() => {
+    const base = userList.map((u) => ({
+      value: Number(u.id),
+      label: formatUserDisplayLabel(u),
+    }));
+    const sid =
+      salesmanId != null && salesmanId !== '' && Number.isFinite(Number(salesmanId))
+        ? Number(salesmanId)
+        : NaN;
+    if (Number.isFinite(sid) && !base.some((o) => o.value === sid)) {
+      const label = String(salesmanName || '').trim() || t('app.kuaizhizao.quotation.userFallback', { id: sid });
+      return [{ value: sid, label }, ...base];
+    }
+    return base;
+  }, [userList, salesmanId, salesmanName, t]);
+
+  return (
+    <>
+      <ProForm.Item
+        name="salesman_id"
+        label={t('field.customer.salesman')}
+        normalize={(v) =>
+          v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : undefined
+        }
+      >
+        <UniDropdown
+          placeholder={t('field.customer.salesmanPlaceholder')}
+          showSearch
+          allowClear
+          loading={loading}
+          style={{ width: '100%' }}
+          options={options}
+          onChange={(_val, opt: any) => {
+            form.setFieldsValue({ salesman_name: opt?.label });
+          }}
+        />
+      </ProForm.Item>
+      <AntForm.Item name="salesman_name" hidden><Input /></AntForm.Item>
+    </>
+  );
+};
+
 const SalesOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const salesCommonFormLabels = useMemo(() => getSalesCommonFormLabels(t), [t]);
+  const defaultSalesOrderCurrency = useConfigStore((s) => {
+    const c = s.configs.default_currency;
+    return typeof c === 'string' && c.trim() !== '' ? c.trim() : 'CNY';
+  });
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const pullFromQuotationAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_quotation');
   const navigate = useNavigate();
@@ -1232,13 +1169,14 @@ const SalesOrdersPage: React.FC = () => {
       // 计算金额汇总（对齐采购订单逻辑）
       values.price_type = values.price_type || 'tax_exclusive';
       const feeDetails = values.fee_details ?? [];
-      const sums = computeSalesOrderFormTotals(validItems, feeDetails, values.price_type);
+      const sums = computeSalesDocumentTotals(validItems, feeDetails, values.price_type, 'required_quantity');
       values.total_amount = sums.estimatedReceivable;
       values.total_fee_amount = sums.ourFees + sums.customerFees;
 
       // 格式化主表日期字段，避免后端报错
       values.order_date = toApiDateString(values.order_date);
       values.delivery_date = toApiDateString(values.delivery_date);
+      values.currency_code = values.currency_code ?? defaultSalesOrderCurrency;
 
       const mainDeliveryStr = toApiDateString(values.delivery_date);
       values.items = validItems.map((it: SalesOrderItem) => {
@@ -2087,11 +2025,14 @@ const SalesOrdersPage: React.FC = () => {
       const orderDate = formRef.current?.getFieldValue('order_date');
       const asOf = orderDate != null ? (dayjs.isDayjs(orderDate) ? orderDate : dayjs(orderDate)) : dayjs();
       const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
+      const full = material
+        ? await resolveMaterialForPricing(material, materials)
+        : undefined;
       const { unitPrice, taxRate } = await resolveOrderLineSalePrice(
         customerId ? Number(customerId) : undefined,
         materialId ? Number(materialId) : undefined,
         attrs,
-        material,
+        full,
         asOf,
       );
       let up = unitPrice;
@@ -2874,152 +2815,167 @@ const SalesOrdersPage: React.FC = () => {
 
   const salesOrderFormItemContent = (
     <>
-        <Row gutter={16}>
-            <Col span={12}>
-              <ProFormText
-                name="order_code"
-                label={t('app.kuaizhizao.salesOrder.orderCode')}
-                placeholder={isAutoGenerateEnabled('kuaizhizao-sales-order') ? t('app.kuaizhizao.salesOrder.orderCodeAutoPlaceholder') : t('app.kuaizhizao.salesOrder.orderCodePlaceholder')}
-                rules={[{ required: true, message: t('app.kuaizhizao.salesOrder.orderCodeRequired') }]}
-                fieldProps={{ disabled: isEditPage }}
-              />
-            </Col>
-            <Col span={6}>
-              <ProFormDatePicker
-                name="order_date"
-                label={t('app.kuaizhizao.salesOrder.orderDate')}
-                rules={[{ required: true, message: t('app.kuaizhizao.salesOrder.orderDateRequired') }]}
-                fieldProps={{ style: { width: '100%' } }}
-              />
-            </Col>
-            <Col span={6}>
-              <ProFormDatePicker
-                name="delivery_date"
-                label={t('app.kuaizhizao.salesOrder.deliveryDate')}
-                rules={[{ required: true, message: t('app.kuaizhizao.salesOrder.deliveryDateRequired') }]}
-                fieldProps={{
-                  style: { width: '100%' },
-                  onChange: (val: unknown) => {
-                    const coerced = coerceFormDate(val);
-                    if (coerced == null) return;
-                    const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
-                    if (items.length) {
-                      const next = items.map((it: any) => ({ ...it, delivery_date: coerced }));
-                      formRef.current?.setFieldsValue({ items: next });
-                    }
-                  },
-                }}
-              />
-            </Col>
-            <Col span={6}>
-              <ProForm.Item
-                name="customer_id"
-                label={t('app.kuaizhizao.salesOrder.customerName')}
-                rules={[{ required: true, message: t('app.kuaizhizao.salesOrder.selectCustomerRequired') }]}
-              >
-                <CustomerSelectDropdown
-                  hostResource="kuaizhizao:sales-order"
-                  placeholder={t('app.kuaizhizao.salesOrder.selectCustomer')}
-                  style={{ width: '100%' }}
-                  customers={customers}
-                  loading={customersLoading}
-                  onCustomersChange={setCustomers}
-                  autoLoad={false}
-                  modalZIndex={nestedElevatedPopupZIndex}
-                  onCustomerPick={(c) => {
-                    if (c) {
-                      const sId = (c as any).salesmanId ?? (c as any).salesman_id;
-                      const salesman = users.find((u) => u.id === sId);
-                      const sName = (c as any).salesmanName ?? (c as any).salesman_name ?? (salesman ? (salesman.full_name || salesman.username) : '');
-                      formRef.current?.setFieldsValue({
-                        customer_name: c.name ?? (c as any).customer_name,
-                        customer_contact: (c as any).contactPerson ?? (c as any).contact_person ?? (c as any).contact,
-                        customer_phone: (c as any).phone ?? (c as any).customer_phone,
-                        salesman_id: sId,
-                        salesman_name: sName,
-                        shipping_address: (c as any).address ?? (c as any).shipping_address,
-                      });
-                    } else {
-                      formRef.current?.setFieldsValue({
-                        customer_name: undefined,
-                        customer_contact: undefined,
-                        customer_phone: undefined,
-                        salesman_id: undefined,
-                        salesman_name: undefined,
-                        shipping_address: undefined,
-                      });
-                    }
-                  }}
-                />
-              </ProForm.Item>
-            </Col>
-            <Col span={6}>
-              <ProFormText
-                name="customer_contact"
-                label={salesCommonFormLabels.contact}
-                placeholder={t('app.kuaizhizao.salesOrder.contactPlaceholder')}
-              />
-            </Col>
-            <Col span={6}>
-              <ProFormText
-                name="customer_phone"
-                label={salesCommonFormLabels.phone}
-                placeholder={t('app.kuaizhizao.salesOrder.phonePlaceholder')}
-              />
-            </Col>
-            <Col span={6}>
-              <ProForm.Item name="salesman_id" label={t('app.kuaizhizao.salesOrder.salesman')}>
-                <UniDropdown
-                  placeholder={t('app.kuaizhizao.salesOrder.selectSalesman')}
-                  showSearch
-                  allowClear
-                  loading={usersLoading}
-                  style={{ width: '100%' }}
-                  options={users.map((u) => ({
-                    label: u.full_name ? `${u.full_name} (${u.username})` : u.username,
-                    value: u.id,
-                  }))}
-                  onChange={(_val, opt: any) => {
-                    formRef.current?.setFieldsValue({ salesman_name: opt?.label });
-                  }}
-                />
-              </ProForm.Item>
-              <AntForm.Item name="salesman_name" hidden><Input /></AntForm.Item>
-            </Col>
-            <Col span={12}>
-              <ProFormText
-                name="shipping_address"
-                label={t('app.kuaizhizao.salesOrder.shippingAddress')}
-                placeholder={t('app.kuaizhizao.salesOrder.shippingAddressPlaceholder')}
-              />
-            </Col>
-            <Col span={6}>
-              <DictionarySelect
-                dictionaryCode="SHIPPING_METHOD"
-                name="shipping_method"
-                label={t('app.kuaizhizao.salesOrder.shippingMethod')}
-                placeholder={t('app.kuaizhizao.salesOrder.selectShippingMethod')}
-                formRef={formRef}
-                valueEqualsLabel={false}
-              />
-            </Col>
-            <Col span={6}>
-              <DictionarySelect
-                dictionaryCode="PAYMENT_TERMS"
-                name="payment_terms"
-                label={t('app.kuaizhizao.salesOrder.paymentTerms')}
-                placeholder={t('app.kuaizhizao.salesOrder.selectPaymentTerms')}
-                formRef={formRef}
-                valueEqualsLabel={false}
-              />
-            </Col>
-            <CustomFieldsFormSection
-              customFields={salesOrderFormCustomFields}
-              customFieldValues={salesOrderFormCustomFieldValues}
-              gridColumns={4}
-              gridMode="col"
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormText
+            name="order_code"
+            label={t('app.kuaizhizao.salesOrder.orderCode')}
+            placeholder={isAutoGenerateEnabled('kuaizhizao-sales-order') ? t('app.kuaizhizao.salesOrder.orderCodeAutoPlaceholder') : t('app.kuaizhizao.salesOrder.orderCodePlaceholder')}
+            rules={[{ required: true, message: t('app.kuaizhizao.salesOrder.orderCodeRequired') }]}
+            fieldProps={{ disabled: isEditPage }}
+          />
+        </Col>
+        <Col span={12}>
+          <ProForm.Item
+            name="customer_id"
+            label={t('app.kuaizhizao.salesOrder.customerName')}
+            rules={[{ required: true, message: t('app.kuaizhizao.salesOrder.selectCustomerRequired') }]}
+          >
+            <CustomerSelectDropdown
+              hostResource="kuaizhizao:sales-order"
+              placeholder={t('app.kuaizhizao.salesOrder.selectCustomer')}
+              style={{ width: '100%' }}
+              customers={customers}
+              loading={customersLoading}
+              onCustomersChange={setCustomers}
+              autoLoad={false}
+              modalZIndex={nestedElevatedPopupZIndex}
+              onCustomerPick={(c) => {
+                if (c) {
+                  const sIdRaw = (c as any).salesmanId ?? (c as any).salesman_id;
+                  const sId =
+                    sIdRaw != null && sIdRaw !== '' && Number.isFinite(Number(sIdRaw)) ? Number(sIdRaw) : undefined;
+                  const salesman = sId != null ? users.find((u) => Number(u.id) === sId) : undefined;
+                  const sName =
+                    (c as any).salesmanName ??
+                    (c as any).salesman_name ??
+                    (salesman ? formatUserDisplayLabel(salesman) : '');
+                  formRef.current?.setFieldsValue({
+                    customer_name: c.name ?? (c as any).customer_name,
+                    customer_contact: (c as any).contactPerson ?? (c as any).contact_person ?? (c as any).contact,
+                    customer_phone: (c as any).phone ?? (c as any).customer_phone,
+                    salesman_id: sId,
+                    salesman_name: sName,
+                    shipping_address:
+                      (c as any).deliveryAddress ??
+                      (c as any).delivery_address ??
+                      (c as any).address ??
+                      (c as any).shipping_address ??
+                      '',
+                  });
+                } else {
+                  formRef.current?.setFieldsValue({
+                    customer_name: undefined,
+                    customer_contact: undefined,
+                    customer_phone: undefined,
+                    salesman_id: undefined,
+                    salesman_name: undefined,
+                    shipping_address: undefined,
+                  });
+                }
+              }}
             />
-          </Row>
+          </ProForm.Item>
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col span={6}>
+          <SalesOrderSalesmanField userList={users} loading={usersLoading} />
+        </Col>
+        <Col span={6}>
+          <ProFormDatePicker
+            name="order_date"
+            label={t('app.kuaizhizao.salesOrder.orderDate')}
+            rules={[{ required: true, message: t('app.kuaizhizao.salesOrder.orderDateRequired') }]}
+            fieldProps={{ style: { width: '100%' } }}
+          />
+        </Col>
+        <Col span={6}>
+          <ProFormDatePicker
+            name="delivery_date"
+            label={t('app.kuaizhizao.salesOrder.deliveryDate')}
+            rules={[{ required: true, message: t('app.kuaizhizao.salesOrder.deliveryDateRequired') }]}
+            fieldProps={buildFutureDateShortcutFieldProps({
+              getForm: () => formRef.current,
+              fieldName: 'delivery_date',
+              baseFieldName: 'order_date',
+              t,
+              fieldProps: {
+                onChange: (val: unknown) => {
+                  const coerced = coerceFormDate(val);
+                  if (coerced == null) return;
+                  const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+                  if (items.length) {
+                    const next = items.map((it: any) => ({ ...it, delivery_date: coerced }));
+                    formRef.current?.setFieldsValue({ items: next });
+                  }
+                },
+              },
+            })}
+          />
+        </Col>
+        <Col span={6}>
+          <DictionarySelect
+            dictionaryCode="SHIPPING_METHOD"
+            name="shipping_method"
+            label={t('app.kuaizhizao.salesOrder.shippingMethod')}
+            placeholder={t('app.kuaizhizao.salesOrder.selectShippingMethod')}
+            formRef={formRef}
+            valueEqualsLabel={false}
+          />
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col span={4}>
+          <ProFormText
+            name="customer_contact"
+            label={salesCommonFormLabels.contact}
+            placeholder={t('app.kuaizhizao.salesOrder.contactPlaceholder')}
+          />
+        </Col>
+        <Col span={4}>
+          <ProFormText
+            name="customer_phone"
+            label={salesCommonFormLabels.phone}
+            placeholder={t('app.kuaizhizao.salesOrder.phonePlaceholder')}
+          />
+        </Col>
+        <Col span={8}>
+          <ProFormText
+            name="shipping_address"
+            label={t('app.kuaizhizao.salesOrder.shippingAddress')}
+            placeholder={t('app.kuaizhizao.salesOrder.shippingAddressPlaceholder')}
+          />
+        </Col>
+        <Col span={4}>
+          <DictionarySelect
+            dictionaryCode="PAYMENT_TERMS"
+            name="payment_terms"
+            label={t('app.kuaizhizao.salesOrder.paymentTerms')}
+            placeholder={t('app.kuaizhizao.salesOrder.selectPaymentTerms')}
+            formRef={formRef}
+            valueEqualsLabel={false}
+          />
+        </Col>
+        <Col span={4}>
+          <DictionarySelect
+            dictionaryCode="CURRENCY"
+            name="currency_code"
+            label={t('app.kuaizhizao.quotation.form.currency')}
+            placeholder={t('app.kuaizhizao.quotation.form.selectCurrency')}
+            formRef={formRef}
+            initialValue={defaultSalesOrderCurrency}
+            valueEqualsLabel={false}
+          />
+        </Col>
+      </Row>
+      <ProFormText name="customer_name" hidden />
+      <ProFormText name="price_type" hidden initialValue="tax_exclusive" />
+      <CustomFieldsFormSection
+        customFields={salesOrderFormCustomFields}
+        customFieldValues={salesOrderFormCustomFieldValues}
+        gridColumns={4}
+      />
 
           <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
             {({ getFieldValue: getFormValue }: any) => {
@@ -3029,7 +2985,8 @@ const SalesOrdersPage: React.FC = () => {
                     {
                       title: t('app.kuaizhizao.salesOrder.material'),
                       dataIndex: 'material_id',
-                      width: 260,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.material,
+                      ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
                           {({ getFieldValue }: any) => {
@@ -3039,7 +2996,7 @@ const SalesOrdersPage: React.FC = () => {
                               ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
                               : undefined;
                             return (
-                              <div className="uni-detail-material-cell" style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 8 }}>
+                              <div className="uni-detail-material-cell quotation-material-cell" style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 8 }}>
                                 <MaterialInventoryIndicator
                                   materialId={mid}
                                   requiredQuantity={Number(row?.required_quantity) || 0}
@@ -3058,8 +3015,6 @@ const SalesOrdersPage: React.FC = () => {
                                       material_name: 'name',
                                       material_spec: 'specification',
                                       material_unit: 'baseUnit',
-                                      unit_price: 'defaults.defaultSalePrice' as any,
-                                      tax_rate: 'defaults.defaultTaxRate' as any,
                                     }}
                                     fallbackOption={fallback}
                                     formItemProps={{ style: { margin: 0 } }}
@@ -3079,13 +3034,11 @@ const SalesOrdersPage: React.FC = () => {
                                         ['items', index, 'variant_attributes'],
                                         undefined,
                                       );
-                                      const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
-                                      if (pt !== 'tax_inclusive') return;
-                                      const raw = Number(formRef.current?.getFieldValue(['items', index, 'unit_price'])) || 0;
-                                      const taxR = Number(formRef.current?.getFieldValue(['items', index, 'tax_rate'])) || 0;
-                                      formRef.current?.setFieldValue(
-                                        ['items', index, 'unit_price'],
-                                        convertUnitPriceByPriceType(raw, taxR, 'tax_exclusive', 'tax_inclusive'),
+                                      void applySalesDocumentLineMaterialPricing(
+                                        formRef.current,
+                                        index,
+                                        material,
+                                        { materialList: materials, asOfField: 'order_date' },
                                       );
                                     }}
                                   />
@@ -3099,7 +3052,8 @@ const SalesOrdersPage: React.FC = () => {
                     {
                       title: t('app.kuaizhizao.salesOrder.variantAttributes'),
                       dataIndex: 'variant_attributes',
-                      width: 220,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.variantAttributes,
+                      ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: any, __: any, index: number) =>
                         formRef.current ? (
                           <OrderLineVariantAttributesCell
@@ -3113,7 +3067,8 @@ const SalesOrdersPage: React.FC = () => {
                     {
                       title: t('app.kuaizhizao.salesOrder.spec'),
                       dataIndex: 'material_spec',
-                      width: 120,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.spec,
+                      ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
                           <Input placeholder={t('app.kuaizhizao.salesOrder.spec')} size="small" />
@@ -3123,7 +3078,8 @@ const SalesOrdersPage: React.FC = () => {
                     {
                       title: t('app.kuaizhizao.salesOrder.unit'),
                       dataIndex: 'material_unit',
-                      width: 100,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.unit,
+                      ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
                           {({ getFieldValue }) => {
@@ -3144,8 +3100,8 @@ const SalesOrdersPage: React.FC = () => {
                     {
                       title: t('app.kuaizhizao.salesOrder.quantity'),
                       dataIndex: 'required_quantity',
-                      width: 100,
-                      align: 'right' as const,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.quantity,
+                      ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: t('common.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.salesOrder.quantityMinHint') }]} style={{ margin: 0 }}>
                           <InputNumber placeholder={t('app.kuaizhizao.salesOrder.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
@@ -3158,8 +3114,8 @@ const SalesOrdersPage: React.FC = () => {
                           ? t('app.kuaizhizao.salesOrder.unitPriceColumnTaxInclusive')
                           : t('app.kuaizhizao.salesOrder.unitPriceColumnTaxExclusive'),
                       dataIndex: 'unit_price',
-                      width: 140,
-                      align: 'right' as const,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice,
+                      ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
                           {() => (
@@ -3185,8 +3141,8 @@ const SalesOrdersPage: React.FC = () => {
                       ? [
                           {
                             title: t('app.kuaizhizao.salesOrder.exclAmount'),
-                            width: 110,
-                            align: 'right' as const,
+                            width: DOCUMENT_DETAIL_COL_WIDTH.exclAmount,
+                            ...DOCUMENT_DETAIL_NUM_COL,
                             render: (_: any, __: any, index: number) => (
                               <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                                 {({ getFieldValue }: any) => {
@@ -3198,7 +3154,14 @@ const SalesOrdersPage: React.FC = () => {
                                     row?.tax_rate,
                                     priceType,
                                   );
-                                  return <AmountDisplay resource={SO} fieldName="amount_without_tax" value={line.excl} />;
+                                  return (
+                                    <AmountDisplay
+                                      resource={SO}
+                                      fieldName="amount_without_tax"
+                                      value={line.excl}
+                                      style={DOCUMENT_DETAIL_AMOUNT_STYLE}
+                                    />
+                                  );
                                 }}
                               </AntForm.Item>
                             ),
@@ -3209,37 +3172,31 @@ const SalesOrdersPage: React.FC = () => {
                       ? [
                           {
                             title: (
-                              <span>
-                                {t('app.kuaizhizao.salesOrder.taxRate')}
-                                <Button type="link" size="small" style={{ padding: '0 4px', height: 'auto' }} onClick={() => {
+                              <TaxRateBatchColumnTitle
+                                onBatch={() => {
                                   const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
                                   if (items.length === 0) return;
                                   const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
                                   if (rate != null && rate !== '') {
-                                    const num = parseFloat(rate);
-                                    if (!isNaN(num) && num >= 0 && num <= 100) {
+                                    const num = Math.round(parseFloat(rate));
+                                    if (!Number.isNaN(num) && num >= 0 && num <= 100) {
                                       const next = items.map((it: any) => ({ ...it, tax_rate: num }));
                                       formRef.current?.setFieldsValue({ items: next });
                                     }
                                   }
-                                }}>
-                                  {t('app.kuaizhizao.salesOrder.batch')}
-                                </Button>
-                              </span>
+                                }}
+                              />
                             ),
                             dataIndex: 'tax_rate',
-                            width: 100,
-                            align: 'right' as const,
-                            render: (_: any, __: any, index: number) => (
-                              <AntForm.Item name={[index, 'tax_rate']} initialValue={0} style={{ margin: 0 }}>
-                                <InputNumber placeholder="0" min={0} max={100} precision={2} addonAfter="%" style={{ width: '100%' }} size="small" />
-                              </AntForm.Item>
-                            ),
+                            width: DOCUMENT_DETAIL_COL_WIDTH.taxRate,
+                            ...DOCUMENT_DETAIL_NUM_COL,
+                            onCell: () => ({ className: 'quotation-tax-rate-col' }),
+                            render: (_: any, __: any, index: number) => <TaxRateDetailCell index={index} />,
                           },
                           {
                             title: t('app.kuaizhizao.salesOrder.taxAmount'),
-                            width: 100,
-                            align: 'right' as const,
+                            width: DOCUMENT_DETAIL_COL_WIDTH.taxAmount,
+                            ...DOCUMENT_DETAIL_NUM_COL,
                             render: (_: any, __: any, index: number) => (
                               <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                                 {({ getFieldValue }: any) => {
@@ -3251,7 +3208,12 @@ const SalesOrdersPage: React.FC = () => {
                                     row?.tax_rate,
                                     priceType,
                                   );
-                                  return <AmountDisplay resource={SO} fieldName="tax_amount" value={line.tax} />;
+                                  return (
+                                    <AmountDisplay
+                                      resource={SO} fieldName="tax_amount" value={line.tax}
+                                      style={DOCUMENT_DETAIL_AMOUNT_STYLE}
+                                    />
+                                  );
                                 }}
                               </AntForm.Item>
                             ),
@@ -3262,8 +3224,8 @@ const SalesOrdersPage: React.FC = () => {
                       title: showTaxColumns
                         ? t('app.kuaizhizao.salesOrder.inclAmount')
                         : t('app.kuaizhizao.salesOrder.exclAmount'),
-                      width: 120,
-                      align: 'right' as const,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.lineAmount,
+                      ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                           {({ getFieldValue }: any) => {
@@ -3278,7 +3240,14 @@ const SalesOrdersPage: React.FC = () => {
                               priceType,
                             );
                             if (!showTaxColumns) {
-                              return <AmountDisplay resource={SO} fieldName="amount_without_tax" value={line.excl} />;
+                              return (
+                                <AmountDisplay
+                                  resource={SO}
+                                  fieldName="amount_without_tax"
+                                  value={line.excl}
+                                  style={DOCUMENT_DETAIL_AMOUNT_STYLE}
+                                />
+                              );
                             }
                             const totalIncl = line.incl;
                             const isEditing = editingIncl?.index === index;
@@ -3323,7 +3292,8 @@ const SalesOrdersPage: React.FC = () => {
                     {
                       title: t('app.kuaizhizao.salesOrder.deliveryDate'),
                       dataIndex: 'delivery_date',
-                      width: 130,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.deliveryDate,
+                      ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item
                           name={[index, 'delivery_date']}
@@ -3332,14 +3302,25 @@ const SalesOrdersPage: React.FC = () => {
                           getValueProps={(value) => ({ value: coerceFormDate(value) ?? undefined })}
                           normalize={(value) => coerceFormDate(value) ?? undefined}
                         >
-                          <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
+                          <FutureDatePicker
+                            size="small"
+                            style={DOCUMENT_DETAIL_DATE_PICKER_STYLE}
+                            format="YYYY-MM-DD"
+                            getForm={() => formRef.current}
+                            baseFieldName="order_date"
+                            t={t}
+                            onApply={(date) =>
+                              formRef.current?.setFieldValue?.(['items', index, 'delivery_date'], date)
+                            }
+                          />
                         </AntForm.Item>
                       ),
                     },
                     {
                       title: t('app.kuaizhizao.salesOrder.notes'),
                       dataIndex: 'notes',
-                      width: 120,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.notes,
+                      ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item name={[index, 'notes']} style={{ margin: 0 }}>
                           <Input placeholder={t('app.kuaizhizao.salesOrder.notes')} size="small" />
@@ -3348,6 +3329,8 @@ const SalesOrdersPage: React.FC = () => {
                     },
                   ];
               return (
+                <>
+                <DocumentDetailTableStyles />
                 <UniTableDetail
                   name="items"
                   title={t('app.kuaizhizao.salesOrder.orderItems')}
@@ -3369,7 +3352,7 @@ const SalesOrdersPage: React.FC = () => {
                         {t('app.kuaizhizao.salesOrder.importItems')}
                       </Button>
                       <Button
-                        type="dashed"
+                        type="default"
                         icon={<PlusOutlined />}
                         onClick={appendEmptyOrderItem}
                       >
@@ -3402,7 +3385,9 @@ const SalesOrdersPage: React.FC = () => {
                       variant_attributes: '',
                     };
                   }}
+                  tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
                 />
+                </>
               );
             }}
           </AntForm.Item>
@@ -3418,7 +3403,7 @@ const SalesOrdersPage: React.FC = () => {
           }
         >
           {({ getFieldValue }: { getFieldValue: (n: string) => any }) => (
-            <SalesOrderFeeTotalsSummary getFieldValue={getFieldValue} />
+            <DocumentAmountSummary variant="sales" getFieldValue={getFieldValue} quantityField="required_quantity" />
           )}
         </AntForm.Item>
 
@@ -3534,6 +3519,7 @@ const SalesOrdersPage: React.FC = () => {
                     ? {
                         price_type: 'tax_exclusive',
                         order_date: dayjs(),
+                        currency_code: defaultSalesOrderCurrency,
                         items: [{ ...defaultOrderItem }],
                       }
                     : undefined

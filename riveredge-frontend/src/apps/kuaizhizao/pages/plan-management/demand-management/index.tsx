@@ -69,6 +69,7 @@ import { getDemandLifecycle } from '../../../utils/demandLifecycle';
 import { getDemandBusinessModeTagColor } from '../../../utils/businessMode';
 import { getDemandTypeTagProps, normalizeDemandTypeKey } from '../../../utils/demandType';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
+import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import dayjs from 'dayjs';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
@@ -794,7 +795,14 @@ const DemandManagementPage: React.FC = () => {
             rules={[{ required: true, message: t('common.required') }]}
             style={{ margin: 0 }}
           >
-            <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
+            <FutureDatePicker
+              size="small"
+              style={{ width: '100%' }}
+              format="YYYY-MM-DD"
+              getForm={() => createPlanFormRef.current}
+              baseFieldName="start_date"
+              t={t}
+            />
           </AntForm.Item>
         ),
       },
@@ -1066,7 +1074,13 @@ const DemandManagementPage: React.FC = () => {
             <ProFormDatePicker
               name="end_date"
               label={t('app.kuaizhizao.demandManagement.endDateOptional')}
-              fieldProps={{ style: { width: '100%' } }}
+              fieldProps={buildFutureDateShortcutFieldProps({
+                getForm: () => createPlanFormRef.current,
+                fieldName: 'end_date',
+                baseFieldName: 'start_date',
+                t,
+                fieldProps: { style: { width: '100%' } },
+              })}
             />
           </Col>
           <Col span={12}>
@@ -1248,6 +1262,12 @@ const DemandManagementPage: React.FC = () => {
                   name="end_date"
                   label={t('app.kuaizhizao.salesForecast.endDate')}
                   width="100%"
+                  fieldProps={buildFutureDateShortcutFieldProps({
+                    getForm: () => formRef.current,
+                    fieldName: 'end_date',
+                    baseFieldName: 'start_date',
+                    t,
+                  })}
                 />
               </Col>
               <Col span={24}>

@@ -3,7 +3,6 @@ import {
   Alert,
   Button,
   Col,
-  DatePicker,
   Form,
   Input,
   Row,
@@ -22,6 +21,7 @@ import {
   EIGHT_D_STAGE_FIELDS,
   getEightDStatusText,
 } from './eightDMeta';
+import { FutureDatePicker } from '../../../../../../utils/futureDatePickerShortcuts';
 
 const { TextArea } = Input;
 
@@ -62,7 +62,12 @@ export const EightDStageEditor: React.FC<EightDStageEditorProps> = ({ form, repo
         </Col>
         <Col span={8}>
           <Form.Item name="due_date" label={t('app.kuaizhizao.eightD.columns.dueDate')}>
-            <DatePicker showTime style={{ width: '100%' }} />
+            <FutureDatePicker
+              getForm={() => form}
+              t={t}
+              showTime
+              style={{ width: '100%' }}
+            />
           </Form.Item>
         </Col>
       </Row>

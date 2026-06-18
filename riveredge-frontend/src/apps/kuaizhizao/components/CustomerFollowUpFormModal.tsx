@@ -3,11 +3,12 @@
  */
 
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { App, Button, Col, DatePicker, Form, Input, Row, Space, List, Typography, Tag, Empty, Spin, Modal } from 'antd';
+import { App, Button, Col, DatePicker, Form, Input, Row, Space, List, Typography, Tag, Empty, Spin, Modal, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
+import { buildFutureDateShortcutPickerProps } from '../../../utils/futureDatePickerShortcuts';
 import { DictionarySelect } from '../../../components/dictionary-select';
 import { UniDropdown } from '../../../components/uni-dropdown';
 import { ThemedSegmented } from '../../../components/themed-segmented';
@@ -67,6 +68,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
   zIndex,
 }) => {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const { message } = App.useApp();
   const [form] = Form.useForm();
   const modalCustomerId = Form.useWatch('customer_id', form);
@@ -514,22 +516,13 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
               <Col xs={24} md={12}>
                 <Form.Item name="next_follow_up_at" label={t('app.kuaizhizao.customerFollowUp.fieldNextFollowUp')}>
                   <DatePicker
-                    showTime
-                    style={{ width: '100%' }}
-                    format="YYYY-MM-DD HH:mm"
-                    renderExtraFooter={() => (
-                      <Space style={{ padding: '8px 12px' }}>
-                        <Button size="small" type="link" onClick={() => form.setFieldValue('next_follow_up_at', dayjs().add(1, 'day'))}>
-                          {t('app.kuaizhizao.customerFollowUp.nextFollowUpTomorrow')}
-                        </Button>
-                        <Button size="small" type="link" onClick={() => form.setFieldValue('next_follow_up_at', dayjs().add(3, 'day'))}>
-                          {t('app.kuaizhizao.customerFollowUp.nextFollowUp3Days')}
-                        </Button>
-                        <Button size="small" type="link" onClick={() => form.setFieldValue('next_follow_up_at', dayjs().add(7, 'day'))}>
-                          {t('app.kuaizhizao.customerFollowUp.nextFollowUp1Week')}
-                        </Button>
-                      </Space>
-                    )}
+                    {...buildFutureDateShortcutPickerProps({
+                      getForm: () => form,
+                      baseFieldName: 'occurred_at',
+                      t,
+                      onApply: (date) => form.setFieldValue('next_follow_up_at', date),
+                      fieldProps: { showTime: true, format: 'YYYY-MM-DD HH:mm', style: { width: '100%' } },
+                    })}
                   />
                 </Form.Item>
               </Col>
@@ -624,13 +617,13 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
             </div>
             <div
               style={{
-                border: '1px solid var(--ant-color-border-secondary)',
-                borderRadius: 8,
+                border: `1px solid ${token.colorBorderSecondary}`,
+                borderRadius: token.borderRadius,
                 padding: 12,
                 minHeight: 392,
                 maxHeight: 460,
                 overflowY: 'auto',
-                background: 'var(--ant-color-bg-container)',
+                background: token.colorFillAlter,
               }}
             >
               {relatedFollowUpsLoading ? (

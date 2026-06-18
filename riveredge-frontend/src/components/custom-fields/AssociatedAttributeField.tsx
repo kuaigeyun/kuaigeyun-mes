@@ -19,6 +19,7 @@ import {
   normalizeAssociatedMultiselectValue,
   resolveAssociatedDisplayMode,
 } from './customFieldAssociatedDisplayMode';
+import { customFieldControlLayout, customFieldFieldProps } from './customFieldFormLayout';
 
 function AttributeValueSync({
   name,
@@ -87,7 +88,6 @@ const AssociatedAttributeDictionary: React.FC<
       <ProFormRadio.Group
         name={name}
         label={label}
-        colProps={colProps}
         initialValue={normalizedInitial}
         options={options.map((option) => ({
           label: option.label,
@@ -99,6 +99,7 @@ const AssociatedAttributeDictionary: React.FC<
           disabled: loading,
           style: { display: 'flex', flexWrap: 'wrap', gap: 8 },
         }}
+        {...customFieldControlLayout(colProps)}
       />
     );
   }
@@ -108,7 +109,6 @@ const AssociatedAttributeDictionary: React.FC<
       name={name}
       label={label}
       options={options}
-      colProps={colProps}
       initialValue={normalizedInitial}
       fieldProps={{
         mode: multiple ? 'multiple' : undefined,
@@ -117,8 +117,9 @@ const AssociatedAttributeDictionary: React.FC<
         allowClear: true,
         filterOption: (input: string, option: any) =>
           (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()),
-        style: { width: '100%' },
+        ...customFieldFieldProps(),
       }}
+      {...customFieldControlLayout(colProps)}
     />
   );
 };
@@ -204,17 +205,17 @@ function AssociatedAttributeLegacyLink({
       <ProFormDigit
         name={name}
         label={label}
-        colProps={colProps}
         initialValue={initialValue ?? undefined}
-        fieldProps={{ readOnly: true, style: { width: '100%' } }}
+        fieldProps={{ readOnly: true, ...customFieldFieldProps() }}
+        {...customFieldControlLayout(colProps)}
       />
     ) : (
       <ProFormText
         name={name}
         label={label}
-        colProps={colProps}
         initialValue={initialValue ?? undefined}
-        fieldProps={{ readOnly: true, style: { width: '100%' } }}
+        fieldProps={{ readOnly: true, ...customFieldFieldProps() }}
+        {...customFieldControlLayout(colProps)}
       />
     );
     return (
@@ -229,27 +230,27 @@ function AssociatedAttributeLegacyLink({
     <ProFormDigit
       name={name}
       label={label}
-      colProps={colProps}
       initialValue={initialValue ?? undefined}
       fieldProps={{
-        style: { width: '100%' },
+        ...customFieldFieldProps(),
         onChange: () => {
           isManualOverrideRef.current = true;
         },
       }}
+      {...customFieldControlLayout(colProps)}
     />
   ) : (
     <ProFormText
       name={name}
       label={label}
-      colProps={colProps}
       initialValue={initialValue ?? undefined}
       fieldProps={{
-        style: { width: '100%' },
+        ...customFieldFieldProps(),
         onChange: () => {
           isManualOverrideRef.current = true;
         },
       }}
+      {...customFieldControlLayout(colProps)}
     />
   );
 
@@ -279,9 +280,9 @@ export const AssociatedAttributeField: React.FC<AssociatedAttributeFieldProps> =
       <ProFormText
         name={props.name}
         label={props.label}
-        colProps={props.colProps}
         initialValue={props.initialValue ?? undefined}
-        fieldProps={{ disabled: true, style: { width: '100%' }, placeholder: '-' }}
+        fieldProps={{ disabled: true, ...customFieldFieldProps(), placeholder: '-' }}
+        {...customFieldControlLayout(colProps)}
       />
     );
   }

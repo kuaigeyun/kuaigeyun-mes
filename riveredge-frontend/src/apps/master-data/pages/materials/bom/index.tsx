@@ -30,6 +30,7 @@ const BOM_ISSUE_METHOD_VALUES = ['pick', 'backflush', 'none'] as const;
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { downloadFile } from '../../../../../utils';
+import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import type { User } from '../../../../../services/user';
 import { searchUserDisplay } from '../../../../../services/user';
 import { useGlobalStore } from '../../../../../stores';
@@ -2884,7 +2885,13 @@ const BOMPage: React.FC = () => {
           name="expiryDate"
           label={t('app.master-data.bom.expiryDateLabel')}
           colProps={{ span: 12 }}
-          fieldProps={{ style: { width: '100%' } }}
+          fieldProps={buildFutureDateShortcutFieldProps({
+            getForm: () => formRef.current,
+            fieldName: 'expiryDate',
+            baseFieldName: 'effectiveDate',
+            t,
+            fieldProps: { style: { width: '100%' } },
+          })}
         />
         <CustomFieldsFormSection
           customFields={bomFormCustomFields}

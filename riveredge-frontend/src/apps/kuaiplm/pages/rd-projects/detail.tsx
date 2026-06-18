@@ -41,6 +41,7 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
+import { buildFutureDateShortcutFieldProps } from '../../../../utils/futureDatePickerShortcuts';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, FormModalTemplate } from '../../../../components/layout-templates';
@@ -983,7 +984,15 @@ const RdProjectDetailPage: React.FC = () => {
           initialValue="TODO"
           options={taskStatusOptions}
         />
-        <ProFormDatePicker name="due_date" label={t('app.kuaiplm.common.columns.dueDate')} />
+        <ProFormDatePicker
+          name="due_date"
+          label={t('app.kuaiplm.common.columns.dueDate')}
+          fieldProps={buildFutureDateShortcutFieldProps({
+            getForm: () => taskFormRef.current,
+            fieldName: 'due_date',
+            t,
+          })}
+        />
         <ProFormTextArea name="description" label={t('app.kuaiplm.rdProjects.detail.task.description')} />
       </FormModalTemplate>
 

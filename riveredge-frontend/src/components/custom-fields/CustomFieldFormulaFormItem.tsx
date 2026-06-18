@@ -11,6 +11,7 @@ import {
   evaluateCustomFieldFormula,
   extractFormulaFieldCodes,
 } from './customFieldFormulaUtils';
+import { customFieldControlLayout, customFieldFieldProps } from './customFieldFormLayout';
 
 const CUSTOM_PREFIX = 'custom_';
 
@@ -21,7 +22,7 @@ function buildOperandSnapshot(operandValues: Record<string, unknown>): string {
 interface FormulaFieldControlProps {
   name: string;
   label: React.ReactNode;
-  colProps?: { span: number };
+  colProps?: { span?: number };
   initialValue?: number | null;
   computedValue: number | undefined;
   operandSnapshot: string;
@@ -59,14 +60,14 @@ function FormulaFieldControl({
     <ProFormDigit
       name={name}
       label={label}
-      colProps={colProps}
       initialValue={initialValue ?? undefined}
       fieldProps={{
-        style: { width: '100%' },
+        ...customFieldFieldProps(),
         onChange: () => {
           isManualOverrideRef.current = true;
         },
       }}
+      {...customFieldControlLayout(colProps)}
     />
   );
 }
@@ -76,7 +77,7 @@ export interface CustomFieldFormulaFormItemProps {
   label: React.ReactNode;
   expression?: string;
   initialValue?: number | null;
-  colProps?: { span: number };
+  colProps?: { span?: number };
 }
 
 export const CustomFieldFormulaFormItem: React.FC<CustomFieldFormulaFormItemProps> = ({

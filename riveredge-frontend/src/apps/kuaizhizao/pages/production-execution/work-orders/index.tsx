@@ -217,6 +217,7 @@ const WORK_ORDER_ROW_EXPAND_STALE_MS = 0
 import { getFileDownloadUrl } from '../../../../../services/file'
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField'
 import { batchImport } from '../../../../../utils/batchOperations'
+import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts'
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
@@ -6984,7 +6985,13 @@ const WorkOrdersPage: React.FC = () => {
           required
           rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedEndRequired') }]}
           colProps={{ span: 6 }}
-          fieldProps={{ style: { width: '100%' } }}
+          fieldProps={buildFutureDateShortcutFieldProps({
+            getForm: () => formRef.current,
+            fieldName: 'planned_end_date',
+            baseFieldName: 'planned_start_date',
+            t,
+            fieldProps: { style: { width: '100%' } },
+          })}
         />
 
         <Col span={24}>
@@ -7179,8 +7186,6 @@ const WorkOrdersPage: React.FC = () => {
           customFields={workOrderFormCustomFields}
           customFieldValues={workOrderFormCustomFieldValues}
           gridColumns={4}
-          gridMode="proform"
-          wrapInRow={false}
         />
         <DocumentAttachmentsField
           category="work_order_attachments"
@@ -7214,7 +7219,13 @@ const WorkOrdersPage: React.FC = () => {
               required
               rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedEndRequired') }]}
               colProps={{ span: 12 }}
-              fieldProps={{ style: { width: '100%' } }}
+              fieldProps={buildFutureDateShortcutFieldProps({
+                getForm: () => formRef.current,
+                fieldName: 'planned_end_date',
+                baseFieldName: 'planned_start_date',
+                t,
+                fieldProps: { style: { width: '100%' } },
+              })}
             />
           </>
         )}
@@ -7692,7 +7703,13 @@ const WorkOrdersPage: React.FC = () => {
               name="planned_end_date"
               label="计划结束时间"
               placeholder="请选择计划结束时间"
-              fieldProps={{ showTime: true }}
+              fieldProps={buildFutureDateShortcutFieldProps({
+                getForm: () => reworkFormRef.current,
+                fieldName: 'planned_end_date',
+                baseFieldName: 'planned_start_date',
+                t,
+                fieldProps: { showTime: true },
+              })}
             />
             <ProFormTextArea
               name="remarks"
@@ -7845,7 +7862,13 @@ const WorkOrdersPage: React.FC = () => {
               name="planned_end_date"
               label="计划结束时间"
               placeholder="请选择计划结束时间"
-              fieldProps={{ showTime: true }}
+              fieldProps={buildFutureDateShortcutFieldProps({
+                getForm: () => outsourceFormRef.current,
+                fieldName: 'planned_end_date',
+                baseFieldName: 'planned_start_date',
+                t,
+                fieldProps: { showTime: true },
+              })}
             />
             <ProFormTextArea
               name="remarks"
@@ -8447,7 +8470,13 @@ const WorkOrdersPage: React.FC = () => {
           name="planned_end_date"
           label="计划结束时间"
           placeholder="请选择计划结束时间"
-          fieldProps={{ showTime: true }}
+          fieldProps={buildFutureDateShortcutFieldProps({
+            getForm: () => operationFormRef.current,
+            fieldName: 'planned_end_date',
+            baseFieldName: 'planned_start_date',
+            t,
+            fieldProps: { showTime: true },
+          })}
         />
         <ProFormTextArea
           name="remarks"

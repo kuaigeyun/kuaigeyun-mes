@@ -213,11 +213,15 @@ export interface MaterialDefaults {
     priority?: number; // 优先级（1为最高）
   }>;
   defaultPurchasePrice?: number; // 默认采购价格
+  /** 默认采购价格价类：tax_inclusive 含税 / tax_exclusive 不含税，新建默认含税 */
+  defaultPurchasePriceType?: 'tax_inclusive' | 'tax_exclusive';
   defaultPurchaseUnit?: string; // 默认采购单位
   defaultPurchaseLeadTime?: number; // 默认采购周期（天数）
   
   // 销售默认值
   defaultSalePrice?: number; // 默认销售价格
+  /** 默认销售价格价类：tax_inclusive 含税 / tax_exclusive 不含税，新建默认含税 */
+  defaultSalePriceType?: 'tax_inclusive' | 'tax_exclusive';
   defaultSaleUnit?: string; // 默认销售单位
   defaultCustomers?: Array<{
     customerId: number;

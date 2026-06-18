@@ -34,6 +34,7 @@ import { UniTableDetailHeader } from '../../../../../components/uni-table-detail
 import { deliveryNoticeApi } from '../../../services/delivery-notice';
 import { getDeliveryNoticeLifecycle } from '../../../utils/deliveryNoticeLifecycle';
 import { useTranslation } from 'react-i18next';
+import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { warehouseApi } from '../../../services/production';
 import { listSalesOrders, getSalesOrder } from '../../../services/sales-order';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -811,7 +812,7 @@ const DeliveryNotesPage: React.FC = () => {
       <Row gutter={16}>
         <Col span={12}>
           <ProFormItem name="planned_delivery_date" label={t('app.kuaizhizao.deliveryNote.field.plannedDeliveryDate')}>
-            <DatePicker style={{ width: '100%' }} />
+            <FutureDatePicker getForm={() => formRef.current} t={t} style={{ width: '100%' }} />
           </ProFormItem>
         </Col>
         <Col span={12}>

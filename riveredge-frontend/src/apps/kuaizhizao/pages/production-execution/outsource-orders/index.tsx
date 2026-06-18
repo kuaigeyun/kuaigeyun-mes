@@ -60,6 +60,7 @@ import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/serv
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { useTranslation } from 'react-i18next';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
@@ -822,7 +823,13 @@ export const OutsourceOrdersTable: React.FC = () => {
             name="planned_end_date"
             label={t('app.kuaizhizao.outsourceOrder.fieldPlannedEnd')}
             placeholder={t('app.kuaizhizao.outsourceOrder.placeholderPlannedEnd')}
-            fieldProps={{ showTime: true }}
+            fieldProps={buildFutureDateShortcutFieldProps({
+              getForm: () => formRef.current,
+              fieldName: 'planned_end_date',
+              baseFieldName: 'planned_start_date',
+              t,
+              fieldProps: { showTime: true },
+            })}
           />
           <ProFormDigit
             name="received_quantity"

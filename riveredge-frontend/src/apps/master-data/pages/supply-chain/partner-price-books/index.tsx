@@ -52,6 +52,8 @@ import type {
 } from '../../../types/partner-price-book';
 import type { Material } from '../../../types/material';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
+import { convertUnitPriceByPriceType } from '../../../utils/resolve-partner-material-price';
 
 function getMaterialAllowedUnits(material?: Material | null): string[] {
   if (!material) return [];
@@ -79,6 +81,33 @@ function normalizeVariantPricesForSubmit(rows: unknown): PartnerPriceVariantLine
     result.push({ variantAttributes, unitPrice });
   }
   return result.length > 0 ? result : undefined;
+}
+
+function applyPriceBookPriceTypeChange(
+  form: ReturnType<typeof Form.useForm>[0],
+  checked: boolean,
+) {
+  const nextType: PriceTypeValue = checked ? 'tax_inclusive' : 'tax_exclusive';
+  const fromType: PriceTypeValue = checked ? 'tax_exclusive' : 'tax_inclusive';
+  const taxR = Number(form.getFieldValue('taxRate')) || 0;
+  const unitPrice = Number(form.getFieldValue('unitPrice')) || 0;
+  if (unitPrice > 0) {
+    form.setFieldValue('unitPrice', convertUnitPriceByPriceType(unitPrice, taxR, fromType, nextType));
+  }
+  const variantPrices = form.getFieldValue('variantPrices') as
+    | Array<{ unitPrice?: number; variantAttributes?: Record<string, unknown>; _rowMode?: string }>
+    | undefined;
+  if (Array.isArray(variantPrices) && variantPrices.length > 0) {
+    form.setFieldValue(
+      'variantPrices',
+      variantPrices.map((row) => {
+        const up = Number(row?.unitPrice);
+        if (!Number.isFinite(up) || up <= 0) return row;
+        return { ...row, unitPrice: convertUnitPriceByPriceType(up, taxR, fromType, nextType) };
+      }),
+    );
+  }
+  form.setFieldValue('priceType', nextType);
 }
 
 export interface PartnerPriceBooksPageProps {
@@ -175,7 +204,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
   const handleCreate = () => {
     setEditUuid(null);
     form.resetFields();
-    form.setFieldsValue({ isActive: true, syncPartnerAlias: true, variantPrices: [], _masterMaterialUuid: undefined });
+    form.setFieldsValue({ isActive: true, syncPartnerAlias: true, variantPrices: [], priceType: 'tax_inclusive', _masterMaterialUuid: undefined });
     setAliasPreview({});
     setAliasLocked(false);
     setMaterialAllowedUnits([]);
@@ -190,6 +219,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
       partnerId: record.partnerId,
       materialId: record.materialId,
       unitPrice: record.unitPrice != null ? Number(record.unitPrice) : undefined,
+      priceType: record.priceType === 'tax_exclusive' ? 'tax_exclusive' : 'tax_inclusive',
       variantPrices: (record.variantPrices ?? []).map((line) => ({
         unitPrice: Number(line.unitPrice),
         variantAttributes: { ...line.variantAttributes },
@@ -271,6 +301,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         partnerId: values.partnerId,
         materialId: values.materialId,
         unitPrice: values.unitPrice > 0 ? values.unitPrice : undefined,
+        priceType: values.priceType === 'tax_exclusive' ? 'tax_exclusive' : 'tax_inclusive',
         variantPrices,
         taxRate: values.taxRate,
         unit: values.unit,
@@ -401,6 +432,14 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
       { title: t('app.master-data.codeMapping.customerCode', '伙伴料号'), dataIndex: 'partnerMaterialCode' },
       { title: t('app.master-data.codeMapping.name', '伙伴品名'), dataIndex: 'partnerMaterialName' },
       { title: t('app.master-data.priceBook.standardUnitPrice', '标准价'), dataIndex: 'unitPrice' },
+      {
+        title: t('app.kuaizhizao.salesOrder.priceType', '价类'),
+        dataIndex: 'priceType',
+        render: (_, r) =>
+          r?.priceType === 'tax_exclusive'
+            ? t('app.kuaizhizao.salesOrder.taxExclusive')
+            : t('app.kuaizhizao.salesOrder.taxInclusive'),
+      },
       { title: t('app.master-data.defaults.defaultTaxRate', '税率'), dataIndex: 'taxRate' },
       { title: t('app.master-data.materialForm.baseUnit', '单位'), dataIndex: 'unit' },
       { title: t('app.master-data.priceBook.effectiveFrom', '生效起始'), dataIndex: 'effectiveFrom' },
@@ -740,12 +779,41 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
               width: '100%',
             }}
           >
+            <Form.Item name="priceType" hidden initialValue="tax_inclusive">
+              <Input />
+            </Form.Item>
             <Form.Item
-              name="unitPrice"
               label={t('app.master-data.priceBook.standardUnitPrice', '标准价')}
-              tooltip={t('app.master-data.priceBook.standardUnitPriceHint')}
+              tooltip={t('app.master-data.priceBook.standardUnitPriceTypeHint')}
             >
-              <InputNumber min={0.0001} precision={4} style={{ width: '100%' }} />
+              <Row gutter={8} align="middle" wrap={false}>
+                <Col flex="auto">
+                  <Form.Item name="unitPrice" noStyle>
+                    <InputNumber min={0.0001} precision={4} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+                <Col flex="none">
+                  <Form.Item
+                    noStyle
+                    shouldUpdate={(prev, cur) =>
+                      prev.priceType !== cur.priceType ||
+                      prev.unitPrice !== cur.unitPrice ||
+                      prev.taxRate !== cur.taxRate ||
+                      prev.variantPrices !== cur.variantPrices
+                    }
+                  >
+                    {() => {
+                      const priceType = (form.getFieldValue('priceType') ?? 'tax_inclusive') as PriceTypeValue;
+                      return (
+                        <PriceTypeSwitch
+                          checked={priceType === 'tax_inclusive'}
+                          onChange={(checked) => applyPriceBookPriceTypeChange(form, checked)}
+                        />
+                      );
+                    }}
+                  </Form.Item>
+                </Col>
+              </Row>
             </Form.Item>
             <Form.Item name="taxRate" label={t('app.master-data.defaults.defaultTaxRate', '默认税率')}>
               <InputNumber min={0} max={100} precision={2} style={{ width: '100%' }} />

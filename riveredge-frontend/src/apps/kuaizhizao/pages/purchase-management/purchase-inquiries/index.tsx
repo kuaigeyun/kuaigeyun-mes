@@ -23,6 +23,7 @@ import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } f
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
+import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -763,10 +764,18 @@ const PurchaseInquiriesPage: React.FC = () => {
         title: t('app.kuaizhizao.purchaseInquiry.requiredDate'),
         width: 160,
         render: (_: unknown, r: PurchaseInquiryItem, idx: number) => (
-          <DatePicker
+          <FutureDatePicker
             size="small"
             style={{ width: '100%' }}
             value={r.required_date ? dayjs(r.required_date) : undefined}
+            getForm={() => editForm}
+            baseFieldName="inquiry_date"
+            t={t}
+            onApply={(d) => setEditItems((prev) => {
+              const next = [...prev];
+              next[idx] = { ...next[idx], required_date: d.format('YYYY-MM-DD') };
+              return next;
+            })}
             onChange={(d) => setEditItems((prev) => {
               const next = [...prev];
               next[idx] = { ...next[idx], required_date: d?.format('YYYY-MM-DD') };
@@ -1041,7 +1050,13 @@ const PurchaseInquiriesPage: React.FC = () => {
             </Col>
             <Col span={7}>
               <Form.Item name="quote_deadline" label={t('app.kuaizhizao.purchaseInquiry.quoteDeadline')}>
-                <DatePicker style={{ width: '100%' }} />
+                <FutureDatePicker
+                  style={{ width: '100%' }}
+                  getForm={() => createForm}
+                  baseFieldName="inquiry_date"
+                  fieldName="quote_deadline"
+                  t={t}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -1085,7 +1100,12 @@ const PurchaseInquiriesPage: React.FC = () => {
             <ProFormDatePicker
               name="quote_deadline"
               label={t('app.kuaizhizao.purchaseInquiry.quoteDeadline')}
-              fieldProps={{ style: { width: '100%' } }}
+              fieldProps={buildFutureDateShortcutFieldProps({
+                getForm: () => editForm,
+                fieldName: 'quote_deadline',
+                baseFieldName: 'inquiry_date',
+                t,
+              })}
             />
           </Col>
         </Row>
@@ -1321,7 +1341,14 @@ const PurchaseInquiriesPage: React.FC = () => {
             </Col>
             <Col span={12}>
               <Form.Item name="valid_until" label={t('app.kuaizhizao.purchaseInquiry.validUntil')}>
-                <DatePicker style={{ width: '100%' }} placeholder={t('app.kuaizhizao.purchaseInquiry.selectDatePlaceholder')} />
+                <FutureDatePicker
+                  style={{ width: '100%' }}
+                  placeholder={t('app.kuaizhizao.purchaseInquiry.selectDatePlaceholder')}
+                  getForm={() => quoteForm}
+                  baseFieldName="quote_date"
+                  fieldName="valid_until"
+                  t={t}
+                />
               </Form.Item>
             </Col>
           </Row>

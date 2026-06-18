@@ -34,6 +34,11 @@ class PartnerPriceBook(BaseModel):
         description="内部物料",
     )
     unit_price = fields.DecimalField(max_digits=18, decimal_places=4, null=True, description="标准价（统一价）")
+    price_type = fields.CharField(
+        max_length=20,
+        default="tax_inclusive",
+        description="价类：tax_inclusive 含税 / tax_exclusive 不含税",
+    )
     variant_prices = fields.JSONField(
         null=True,
         description='属性 SKU 单价列表 JSON：[{"variant_attributes": {...}, "unit_price": 9.5}]',

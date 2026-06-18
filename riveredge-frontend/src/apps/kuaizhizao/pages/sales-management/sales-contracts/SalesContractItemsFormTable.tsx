@@ -9,6 +9,17 @@ import { Button, DatePicker, Form, Input, InputNumber, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 import PriceTypeSwitch from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
+import {
+  DOCUMENT_DETAIL_AMOUNT_STYLE,
+  DOCUMENT_DETAIL_COL_WIDTH,
+  DOCUMENT_DETAIL_DATE_PICKER_STYLE,
+  DOCUMENT_DETAIL_NUM_COL,
+  DOCUMENT_DETAIL_TABLE_PROPS,
+  DOCUMENT_DETAIL_TEXT_COL,
+  DocumentDetailTableStyles,
+  TaxRateBatchColumnTitle,
+  TaxRateDetailCell,
+} from '../../../components/document-detail-table/documentDetailTable';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
 import { AmountDisplay } from '../../../../../components/permission';
@@ -22,6 +33,7 @@ import {
   defaultContractItem,
 } from './contract-line-items-shared';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
+import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 
 export type ContractItemsFormTableProps = {
   formRef: React.RefObject<ProFormInstance | undefined>;
@@ -60,7 +72,8 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                     {
                       title: t('app.kuaizhizao.salesOrder.material'),
                       dataIndex: 'material_id',
-                      width: 260,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.material,
+                      ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: unknown, __: unknown, index: number) => (
                         <ContractMaterialSelectCell index={index} />
                       ),
@@ -68,7 +81,8 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                     {
                       title: t('app.kuaizhizao.salesOrder.variantAttributes'),
                       dataIndex: 'variant_attributes',
-                      width: 220,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.variantAttributes,
+                      ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: unknown, __: unknown, index: number) =>
                         formRef.current ? (
                           <OrderLineVariantAttributesCell
@@ -82,7 +96,8 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                     {
                       title: t('app.kuaizhizao.salesOrder.spec'),
                       dataIndex: 'material_spec',
-                      width: 120,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.spec,
+                      ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: unknown, __: unknown, index: number) => (
                         <Form.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
                           <Input placeholder={t('app.kuaizhizao.salesOrder.spec')} size="small" />
@@ -92,7 +107,8 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                     {
                       title: t('app.kuaizhizao.salesOrder.unit'),
                       dataIndex: 'material_unit',
-                      width: 100,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.unit,
+                      ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: unknown, __: unknown, index: number) => (
                         <Form.Item
                           noStyle
@@ -114,8 +130,8 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                     {
                       title: t('app.kuaizhizao.salesOrder.quantity'),
                       dataIndex: 'contract_quantity',
-                      width: 100,
-                      align: 'right' as const,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.quantity,
+                      ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: unknown, __: unknown, index: number) => (
                         <Form.Item
                           name={[index, 'contract_quantity']}
@@ -138,8 +154,8 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                           ? t('app.kuaizhizao.salesOrder.unitPriceColumnTaxInclusive')
                           : t('app.kuaizhizao.salesOrder.unitPriceColumnTaxExclusive'),
                       dataIndex: 'unit_price',
-                      width: 100,
-                      align: 'right' as const,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice,
+                      ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: unknown, __: unknown, index: number) => (
                         <Form.Item
                           name={[index, 'unit_price']}
@@ -177,8 +193,8 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       ? [
                           {
                             title: t('app.kuaizhizao.salesOrder.exclAmount'),
-                            width: 110,
-                            align: 'right' as const,
+                            width: DOCUMENT_DETAIL_COL_WIDTH.exclAmount,
+                            ...DOCUMENT_DETAIL_NUM_COL,
                             render: (_: unknown, __: unknown, index: number) => (
                               <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                                 {({ getFieldValue: gf2 }: any) => {
@@ -190,7 +206,14 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                                     row?.tax_rate,
                                     priceType,
                                   );
-                                  return <AmountDisplay resource={SC} fieldName="amount_without_tax" value={line.excl} />;
+                                  return (
+                                    <AmountDisplay
+                                      resource={SC}
+                                      fieldName="amount_without_tax"
+                                      value={line.excl}
+                                      style={DOCUMENT_DETAIL_AMOUNT_STYLE}
+                                    />
+                                  );
                                 }}
                               </Form.Item>
                             ),
@@ -201,50 +224,31 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       ? [
                           {
                             title: (
-                              <span>
-                                {t('app.kuaizhizao.salesOrder.taxRate')}
-                                <Button
-                                  type="link"
-                                  size="small"
-                                  style={{ padding: '0 4px', height: 'auto' }}
-                                  onClick={() => {
-                                    const itemsVal = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
-                                    if (itemsVal.length === 0) return;
-                                    const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
-                                    if (rate != null && rate !== '') {
-                                      const num = parseFloat(rate);
-                                      if (!Number.isNaN(num) && num >= 0 && num <= 100) {
-                                        const next = itemsVal.map((it: any) => ({ ...it, tax_rate: num }));
-                                        formRef.current?.setFieldsValue({ items: next });
-                                      }
+                              <TaxRateBatchColumnTitle
+                                onBatch={() => {
+                                  const itemsVal = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+                                  if (itemsVal.length === 0) return;
+                                  const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
+                                  if (rate != null && rate !== '') {
+                                    const num = Math.round(parseFloat(rate));
+                                    if (!Number.isNaN(num) && num >= 0 && num <= 100) {
+                                      const next = itemsVal.map((it: any) => ({ ...it, tax_rate: num }));
+                                      formRef.current?.setFieldsValue({ items: next });
                                     }
-                                  }}
-                                >
-                                  {t('app.kuaizhizao.salesOrder.batch')}
-                                </Button>
-                              </span>
+                                  }
+                                }}
+                              />
                             ),
                             dataIndex: 'tax_rate',
-                            width: 120,
-                            align: 'right' as const,
-                            render: (_: unknown, __: unknown, index: number) => (
-                              <Form.Item name={[index, 'tax_rate']} initialValue={0} style={{ margin: 0 }}>
-                                <InputNumber
-                                  placeholder="0"
-                                  min={0}
-                                  max={100}
-                                  precision={2}
-                                  addonAfter="%"
-                                  style={{ width: '100%' }}
-                                  size="small"
-                                />
-                              </Form.Item>
-                            ),
+                            width: DOCUMENT_DETAIL_COL_WIDTH.taxRate,
+                            ...DOCUMENT_DETAIL_NUM_COL,
+                            onCell: () => ({ className: 'quotation-tax-rate-col' }),
+                            render: (_: unknown, __: unknown, index: number) => <TaxRateDetailCell index={index} />,
                           },
                           {
                             title: t('app.kuaizhizao.salesOrder.taxAmount'),
-                            width: 100,
-                            align: 'right' as const,
+                            width: DOCUMENT_DETAIL_COL_WIDTH.taxAmount,
+                            ...DOCUMENT_DETAIL_NUM_COL,
                             render: (_: unknown, __: unknown, index: number) => (
                               <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                                 {({ getFieldValue: gf2 }: any) => {
@@ -256,7 +260,14 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                                     row?.tax_rate,
                                     priceType,
                                   );
-                                  return <AmountDisplay resource={SC} fieldName="tax_amount" value={line.tax} />;
+                                  return (
+                                    <AmountDisplay
+                                      resource={SC}
+                                      fieldName="tax_amount"
+                                      value={line.tax}
+                                      style={DOCUMENT_DETAIL_AMOUNT_STYLE}
+                                    />
+                                  );
                                 }}
                               </Form.Item>
                             ),
@@ -267,8 +278,8 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       title: showTaxColumns
                         ? t('app.kuaizhizao.salesOrder.inclAmount')
                         : t('app.kuaizhizao.salesOrder.exclAmount'),
-                      width: 120,
-                      align: 'right' as const,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.lineAmount,
+                      ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: unknown, __: unknown, index: number) =>
                         showTaxColumns ? (
                           <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
@@ -331,17 +342,29 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                     {
                       title: t('app.kuaizhizao.salesOrder.deliveryDate'),
                       dataIndex: 'delivery_date',
-                      width: 130,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.deliveryDate,
+                      ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: unknown, __: unknown, index: number) => (
                         <Form.Item name={[index, 'delivery_date']} style={{ margin: 0 }}>
-                          <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
+                          <FutureDatePicker
+                            size="small"
+                            style={DOCUMENT_DETAIL_DATE_PICKER_STYLE}
+                            format="YYYY-MM-DD"
+                            getForm={() => formRef.current}
+                            baseFieldName="contract_date"
+                            t={t}
+                            onApply={(date) =>
+                              formRef.current?.setFieldValue?.(['items', index, 'delivery_date'], date)
+                            }
+                          />
                         </Form.Item>
                       ),
                     },
                     {
                       title: t('app.kuaizhizao.salesOrder.notes'),
                       dataIndex: 'notes',
-                      width: 120,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.notes,
+                      ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: unknown, __: unknown, index: number) => (
                         <Form.Item name={[index, 'notes']} style={{ margin: 0 }}>
                           <Input placeholder={t('app.kuaizhizao.salesOrder.notes')} size="small" />
@@ -351,21 +374,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                     ];
           return (
             <>
-              <style>{`
-                    .quotation-detail-table .quotation-material-cell .ant-form-item,
-                    .quotation-detail-table .quotation-material-cell .ant-form-item-control,
-                    .quotation-detail-table .quotation-material-cell .ant-form-item-control-input,
-                    .quotation-detail-table .quotation-material-cell .ant-select {
-                      width: 100% !important;
-                      min-width: 0;
-                    }
-                    .quotation-detail-table .ant-input-number-input::selection,
-                    .quotation-detail-table .ant-input::selection {
-                      background-color: var(--ant-color-primary, #1677ff);
-                      color: #fff;
-                      border-radius: 0;
-                    }
-                  `}</style>
+              <DocumentDetailTableStyles />
               <UniTableDetail
                 name="items"
                 title={t('app.kuaizhizao.salesContract.contractItems')}
@@ -389,7 +398,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       </Button>
                     ) : null}
                     <Button
-                      type="dashed"
+                      type="default"
                       icon={<PlusOutlined />}
                       onClick={() => {
                         const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))];
@@ -411,11 +420,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                 columns={detailColumns}
                 disabledAdd
                 initialValue={{ ...defaultContractItem }}
-                tableProps={{
-                  className: 'quotation-detail-table',
-                  size: 'small',
-                  style: { width: '100%', margin: 0 },
-                }}
+                tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
               />
             </>
           );

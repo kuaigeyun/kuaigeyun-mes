@@ -21,6 +21,7 @@ export interface PartnerPriceBook {
   partnerMaterialCode?: string;
   partnerMaterialName?: string;
   unitPrice?: number;
+  priceType?: 'tax_inclusive' | 'tax_exclusive';
   variantPrices?: PartnerPriceVariantLine[];
   currencyCode?: string;
   taxRate?: number;
@@ -37,6 +38,7 @@ export interface PartnerPriceBookCreate {
   partnerId: number;
   materialId: number;
   unitPrice?: number;
+  priceType?: 'tax_inclusive' | 'tax_exclusive';
   variantPrices?: PartnerPriceVariantLine[];
   currencyCode?: string;
   taxRate?: number;

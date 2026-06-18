@@ -1,9 +1,7 @@
-/**
- * 快财务成本管理：后端枚举/键值 → 界面文案
- */
 import type { TFunction } from 'i18next';
 import React from 'react';
 import { Tag } from 'antd';
+import { normalizeMaterialSourceType } from '../../apps/master-data/utils/materialSourceType';
 
 const P = 'app.kuaicaiwu.costCommon';
 
@@ -12,7 +10,7 @@ const SOURCE_TYPE_COLOR: Record<string, string> = {
   Buy: 'green',
   Outsource: 'orange',
   Phantom: 'purple',
-  Configure: 'cyan',
+  Service: 'cyan',
 };
 
 const SOURCE_TYPE_I18N_KEY: Record<string, string> = {
@@ -20,17 +18,19 @@ const SOURCE_TYPE_I18N_KEY: Record<string, string> = {
   Buy: `${P}.sourceType.buy`,
   Outsource: `${P}.sourceType.outsource`,
   Phantom: `${P}.sourceType.phantom`,
-  Configure: `${P}.sourceType.configure`,
+  Service: `${P}.sourceType.service`,
 };
 
 export function formatSourceType(value: string | null | undefined, t: TFunction): string {
   if (!value) return '—';
-  const key = SOURCE_TYPE_I18N_KEY[value];
-  return key ? t(key) : value;
+  const normalized = normalizeMaterialSourceType(value);
+  const key = SOURCE_TYPE_I18N_KEY[normalized];
+  return key ? t(key) : normalized;
 }
 
 export function getSourceTypeTag(sourceType: string, t: TFunction): React.ReactElement {
-  const color = SOURCE_TYPE_COLOR[sourceType] || 'default';
+  const normalized = normalizeMaterialSourceType(sourceType);
+  const color = SOURCE_TYPE_COLOR[normalized] || 'default';
   return React.createElement(Tag, { color }, formatSourceType(sourceType, t));
 }
 

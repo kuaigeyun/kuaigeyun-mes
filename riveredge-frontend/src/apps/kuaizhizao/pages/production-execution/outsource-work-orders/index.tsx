@@ -46,6 +46,7 @@ import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-sele
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../services/dataDictionary';
 import { mapSystemDictionaryItemOptions } from '../../../../../utils/systemDictionaryI18n';
+import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import {
   ListPageTemplate,
   FormModalTemplate,
@@ -1530,7 +1531,13 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           name="plannedEndDate"
           label={t('app.kuaizhizao.outsourceWorkOrder.fieldPlannedEnd')}
           placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderPlannedEnd')}
-          fieldProps={{ style: { width: '100%' } }}
+          fieldProps={buildFutureDateShortcutFieldProps({
+            getForm: () => formRef.current,
+            fieldName: 'plannedEndDate',
+            baseFieldName: 'plannedStartDate',
+            t,
+            fieldProps: { style: { width: '100%' } },
+          })}
           colProps={{ span: 12 }}
         />
 

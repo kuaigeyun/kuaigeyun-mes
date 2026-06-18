@@ -4,9 +4,16 @@ import { useTranslation } from 'react-i18next';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { getMaterialField } from '../../../../../components/uni-material-batch-picker/utils';
 import { AmountDisplay } from '../../../../../components/permission';
+import { DocumentAmountSummaryWatch } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import { KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE as SC } from '../../../constants/fieldPermissionResources';
 import type { Material } from '../../../../master-data/types/material';
+import {
+  applySalesDocumentLineMaterialPricing,
+  convertUnitPriceByPriceType,
+} from '../../../../master-data/utils/resolve-partner-material-price';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
+
+export { convertUnitPriceByPriceType };
 
 export const defaultContractItem = {
   material_id: undefined as number | undefined,
@@ -58,28 +65,6 @@ export const calcContractLineAmounts = (
     tax: fromCents(taxCents),
     incl: fromCents(exclCents + taxCents),
   };
-};
-
-export const convertUnitPriceByPriceType = (
-  unitPriceInput: unknown,
-  taxRateInput: unknown,
-  fromPriceType: string,
-  toPriceType: string,
-): number => {
-  const unitPriceCents = toCents(unitPriceInput);
-  if (fromPriceType === toPriceType) return fromCents(unitPriceCents);
-
-  const taxRate = toSafeNumber(taxRateInput);
-  const factor = 1 + taxRate / 100;
-  if (factor <= 0) return fromCents(unitPriceCents);
-
-  if (fromPriceType === 'tax_exclusive' && toPriceType === 'tax_inclusive') {
-    return fromCents(Math.round(unitPriceCents * factor));
-  }
-  if (fromPriceType === 'tax_inclusive' && toPriceType === 'tax_exclusive') {
-    return fromCents(Math.round(unitPriceCents / factor));
-  }
-  return fromCents(unitPriceCents);
 };
 
 export function resolveContractLineMaterialFields(
@@ -141,14 +126,7 @@ export const ContractMaterialSelectCell: React.FC<{ index: number }> = ({ index 
       );
       form.setFieldValue(['items', index, '_masterMaterialUuid'], material.uuid);
       form.setFieldValue(['items', index, 'variant_attributes'], undefined);
-      const pt = form.getFieldValue('price_type') ?? 'tax_exclusive';
-      if (pt !== 'tax_inclusive') return;
-      const raw = Number(form.getFieldValue(['items', index, 'unit_price'])) || 0;
-      const taxR = Number(form.getFieldValue(['items', index, 'tax_rate'])) || 0;
-      form.setFieldValue(
-        ['items', index, 'unit_price'],
-        convertUnitPriceByPriceType(raw, taxR, 'tax_exclusive', 'tax_inclusive'),
-      );
+      void applySalesDocumentLineMaterialPricing(form, index, material, { asOfField: 'contract_date' });
     },
     [form, index],
   );
@@ -171,8 +149,6 @@ export const ContractMaterialSelectCell: React.FC<{ index: number }> = ({ index 
             material_name: 'name',
             material_spec: 'specification',
             material_unit: 'baseUnit',
-            unit_price: 'defaults.defaultSalePrice' as any,
-            tax_rate: 'defaults.defaultTaxRate' as any,
           }}
           fallbackOption={fallback}
           formItemProps={{ style: { margin: 0 } }}
@@ -198,66 +174,6 @@ export const ContractAmountCell: React.FC<{ index: number }> = ({ index }) => {
   return <AmountDisplay resource={SC} fieldName="amount_without_tax" value={line.excl} />;
 };
 
-export const ContractFormSummary: React.FC = () => {
-  const { t } = useTranslation();
-  const items = Form.useWatch('items');
-  const normalizedItems = normalizeFormListItems<any>(items);
-  const priceType = Form.useWatch('price_type') ?? 'tax_exclusive';
-  const { token } = AntdTheme.useToken();
-  const totalQuantity = normalizedItems.reduce(
-    (sum: number, it: any) => sum + (Number(it?.contract_quantity) || 0),
-    0,
-  );
-  let totalExcl = 0;
-  let totalIncl = 0;
-  for (const it of normalizedItems) {
-    const line = calcContractLineAmounts(it?.contract_quantity, it?.unit_price, it?.tax_rate, priceType);
-    totalExcl += line.excl;
-    totalIncl += line.incl;
-  }
-
-  return (
-    <div
-      style={{
-        marginTop: 12,
-        marginBottom: 24,
-        padding: '12px 12px 16px',
-        background: token.colorFillAlter,
-        borderRadius: '4px',
-        display: 'flex',
-        justifyContent: 'flex-end',
-        flexWrap: 'wrap',
-        gap: 24,
-      }}
-    >
-      <span>
-        {t('app.kuaizhizao.salesOrder.totalQuantity')}: <Typography.Text strong>{totalQuantity}</Typography.Text>
-      </span>
-      {priceType === 'tax_exclusive' ? (
-        <>
-          <span>
-            {t('app.kuaizhizao.salesContract.exclTotal')}:{' '}
-            <Typography.Text strong>
-              <AmountDisplay resource={SC} fieldName="amount_without_tax" value={totalExcl} />
-            </Typography.Text>
-          </span>
-          {Math.abs(totalIncl - totalExcl) > 0.005 && (
-            <span>
-              {t('app.kuaizhizao.salesContract.inclTotalWithTax')}:{' '}
-              <Typography.Text strong type="danger">
-                <AmountDisplay resource={SC} fieldName="amount_with_tax" value={totalIncl} />
-              </Typography.Text>
-            </span>
-          )}
-        </>
-      ) : (
-        <span>
-          {t('app.kuaizhizao.salesOrder.inclAmount')}:{' '}
-          <Typography.Text strong type="danger">
-            <AmountDisplay resource={SC} fieldName="amount_with_tax" value={totalIncl} />
-          </Typography.Text>
-        </span>
-      )}
-    </div>
-  );
-};
+export const ContractFormSummary: React.FC = () => (
+  <DocumentAmountSummaryWatch variant="lines" quantityField="contract_quantity" />
+);

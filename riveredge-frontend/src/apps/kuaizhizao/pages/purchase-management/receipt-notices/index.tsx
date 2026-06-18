@@ -67,6 +67,7 @@ import { getReceiptNoticeLifecycle } from '../../../utils/receiptNoticeLifecycle
 import { listPurchaseOrders, getPurchaseOrder } from '../../../services/purchase';
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { useTranslation } from 'react-i18next';
 import { ROUTES } from '../../../constants/routes';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
@@ -1102,7 +1103,7 @@ const ReceiptNoticesPage: React.FC = () => {
       <ProFormText name="warehouse_name" hidden />
       <Row gutter={16}>
         <Col span={8}>
-          <ProFormDatePicker name="planned_receipt_date" label={t('app.kuaizhizao.receiptNotice.plannedReceiptDate')} fieldProps={{ style: { width: '100%' } }} />
+          <ProFormDatePicker name="planned_receipt_date" label={t('app.kuaizhizao.receiptNotice.plannedReceiptDate')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => createFormRef.current, fieldName: 'planned_receipt_date', t })} />
         </Col>
         <Col span={8} />
         <Col span={8} />
@@ -1122,7 +1123,7 @@ const ReceiptNoticesPage: React.FC = () => {
               {t('common.importDetail')}
             </Button>
             <Button
-              type="dashed"
+              type="default"
               icon={<PlusOutlined />}
               onClick={() => {
                 const items = [...(createFormRef.current?.getFieldValue('items') ?? [])];
@@ -1181,7 +1182,7 @@ const ReceiptNoticesPage: React.FC = () => {
           />
         </Col>
         <Col span={8}>
-          <ProFormDatePicker name="planned_receipt_date" label={t('app.kuaizhizao.receiptNotice.plannedReceiptDate')} fieldProps={{ style: { width: '100%' } }} />
+          <ProFormDatePicker name="planned_receipt_date" label={t('app.kuaizhizao.receiptNotice.plannedReceiptDate')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => editFormRef.current, fieldName: 'planned_receipt_date', t })} />
         </Col>
       </Row>
       <ProFormText name="warehouse_name" hidden />

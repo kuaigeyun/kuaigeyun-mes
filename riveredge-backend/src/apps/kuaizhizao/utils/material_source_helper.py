@@ -10,7 +10,9 @@
 - Buy（采购件）：外部采购获得
 - Phantom（虚拟件）：不实际存在，仅用于BOM展开
 - Outsource（委外件）：委托外部加工
-- Configure（配置件）：按需配置，属性管理
+- Service（服务）：服务类物料
+
+可配置能力由 variant_managed / BOM 配置位表达，不再使用 Configure 来源类型。
 
 Author: Auto (AI Assistant)
 Date: 2026-01-16
@@ -22,6 +24,10 @@ from decimal import Decimal
 from loguru import logger
 
 from apps.master_data.models.material import Material, BOM
+from apps.master_data.constants.material_source_type import (
+    CANONICAL_SOURCE_TYPES,
+    normalize_material_source_type,
+)
 from apps.kuaizhizao.utils.bom_helper import _select_alternatives, _select_configurable, _bom_effective_filter
 
 
@@ -139,17 +145,10 @@ SOURCE_TYPE_MAKE = "Make"  # 自制件
 SOURCE_TYPE_BUY = "Buy"  # 采购件
 SOURCE_TYPE_PHANTOM = "Phantom"  # 虚拟件
 SOURCE_TYPE_OUTSOURCE = "Outsource"  # 委外件
-SOURCE_TYPE_CONFIGURE = "Configure"  # 配置件
+SOURCE_TYPE_CONFIGURE = "Configure"  # 已废弃，仅兼容历史 BOM 展开逻辑
 SOURCE_TYPE_SERVICE = "Service"  # 服务
 
-VALID_SOURCE_TYPES = [
-    SOURCE_TYPE_MAKE,
-    SOURCE_TYPE_BUY,
-    SOURCE_TYPE_PHANTOM,
-    SOURCE_TYPE_OUTSOURCE,
-    SOURCE_TYPE_CONFIGURE,
-    SOURCE_TYPE_SERVICE,
-]
+VALID_SOURCE_TYPES = list(CANONICAL_SOURCE_TYPES)
 
 # 自制件制造模式（存于 source_config.manufacturing_mode）
 MANUFACTURING_MODE_FABRICATION = "fabrication"  # 工艺型：材料+工艺→零件

@@ -23,6 +23,7 @@ import {
   setDocumentFormDraft,
 } from '../../../../../utils/documentFormDraftCache';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
+import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { toApiDateString } from '../../../../../utils/formDate';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { deferConvertLineItemsByPriceType, setFormPriceType } from '../../../../../utils/priceTypeSwitch';
@@ -1346,16 +1347,17 @@ const SalesContractsPage: React.FC = () => {
       </Row>
 
       <ProFormText name="customer_name" hidden />
+      <ProFormText name="price_type" hidden initialValue="tax_exclusive" />
 
       <Row gutter={16}>
 
-        <Col flex={1} style={{ minWidth: 0 }}>
+        <Col span={5}>
 
-          <ProFormText name="salesman_name" label={salesCommonLabels.salesman} placeholder={t('app.kuaizhizao.salesContract.salesmanPlaceholder')} />
+          <ProFormText name="salesman_name" label={salesCommonLabels.salesman} placeholder={t('app.kuaizhizao.salesContract.salesmanPlaceholder')} fieldProps={{ style: { width: '100%' } }} />
 
         </Col>
 
-        <Col flex={1} style={{ minWidth: 0 }}>
+        <Col span={5}>
 
           <ProFormDatePicker
 
@@ -1371,19 +1373,19 @@ const SalesContractsPage: React.FC = () => {
 
         </Col>
 
-        <Col flex={1} style={{ minWidth: 0 }}>
+        <Col span={5}>
 
           <ProFormDatePicker name="valid_from" label={t('app.kuaizhizao.salesContract.validFrom')} fieldProps={{ style: { width: '100%' } }} />
 
         </Col>
 
-        <Col flex={1} style={{ minWidth: 0 }}>
+        <Col span={5}>
 
-          <ProFormDatePicker name="valid_to" label={t('app.kuaizhizao.salesContract.validTo')} fieldProps={{ style: { width: '100%' } }} />
+          <ProFormDatePicker name="valid_to" label={t('app.kuaizhizao.salesContract.validTo')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => formRef.current, fieldName: 'valid_to', baseFieldName: 'contract_date', t })} />
 
         </Col>
 
-        <Col flex={1} style={{ minWidth: 0 }}>
+        <Col span={4}>
 
           <DictionarySelect
 
@@ -1542,7 +1544,14 @@ const SalesContractsPage: React.FC = () => {
 
                       name={[index, 'planned_date']}
 
-                      fieldProps={{ style: { width: '100%' } }}
+                      fieldProps={buildFutureDateShortcutFieldProps({
+                        getForm: () => formRef.current,
+                        fieldName: 'planned_date',
+                        baseFieldName: 'contract_date',
+                        t,
+                        onApply: (date) =>
+                          formRef.current?.setFieldValue?.(['milestones', index, 'planned_date'], date),
+                      })}
 
                       formItemProps={{ style: { margin: 0 } }}
 
@@ -3255,7 +3264,7 @@ const SalesContractsPage: React.FC = () => {
             <InputNumber style={{ width: '100%' }} precision={2} />
           </ProForm.Item>
 
-          <ProFormDatePicker name="new_valid_to" label={t('app.kuaizhizao.salesContract.newValidTo')} fieldProps={{ style: { width: '100%' } }} />
+          <ProFormDatePicker name="new_valid_to" label={t('app.kuaizhizao.salesContract.newValidTo')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => formRef.current, fieldName: 'new_valid_to', baseFieldName: 'contract_date', t })} />
 
           <ProFormTextArea name="reason" label={t('app.kuaizhizao.salesContract.changeReason')} fieldProps={{ rows: 3 }} />
 

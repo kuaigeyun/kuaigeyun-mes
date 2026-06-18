@@ -61,6 +61,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
+import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
@@ -1046,7 +1047,9 @@ const ProductionPlansPage: React.FC = () => {
               <ProFormText name="material_code" label={t('app.kuaizhizao.productionPlan.import.materialCode')} width="sm" rules={[{ required: true }]} />
               <ProFormText name="material_name" label={t('app.kuaizhizao.productionPlan.import.materialName')} width="sm" rules={[{ required: true }]} />
               <ProFormDigit name="planned_quantity" label={t('app.kuaizhizao.productionPlan.plannedQuantity')} width="xs" rules={[{ required: true }]} />
-              <ProFormDatePicker name="planned_date" label={t('app.kuaizhizao.productionPlan.plannedDate')} width="xs" rules={[{ required: true }]} />
+              <ProFormItem name="planned_date" label={t('app.kuaizhizao.productionPlan.plannedDate')} rules={[{ required: true }]}>
+                <FutureDatePicker getForm={() => createPlanFormRef.current} t={t} format="YYYY-MM-DD" />
+              </ProFormItem>
             </ProFormGroup>
           </ProFormList>
         </div>

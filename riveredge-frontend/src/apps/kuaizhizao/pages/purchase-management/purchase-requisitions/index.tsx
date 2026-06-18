@@ -35,6 +35,7 @@ import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDraw
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
+import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import {
   buildDocumentCreateDraftKey,
   clearDocumentFormDraft,
@@ -1308,7 +1309,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
             <ProFormDatePicker
               name="required_date"
               label={t('app.kuaizhizao.purchaseRequisition.form.requiredDate')}
-              fieldProps={{ style: { width: '100%' } }}
+              fieldProps={buildFutureDateShortcutFieldProps({
+                getForm: () => formRef.current,
+                fieldName: 'required_date',
+                baseFieldName: 'requisition_date',
+                t,
+              })}
             />
           </Col>
         </Row>
@@ -1345,7 +1351,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 {t('app.kuaizhizao.purchaseRequisition.form.importItems')}
               </Button>
               <Button
-                type="dashed"
+                type="default"
                 icon={<PlusOutlined />}
                 onClick={() => {
                   const items = [...(createFormRef.current?.getFieldValue('items') ?? [])];
@@ -1516,7 +1522,17 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     width: 118,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'required_date']} style={{ margin: 0 }}>
-                        <DatePicker size="small" style={{ width: '100%' }} placeholder={t('app.kuaizhizao.purchaseRequisition.form.optional')} />
+                        <FutureDatePicker
+                          size="small"
+                          style={{ width: '100%' }}
+                          placeholder={t('app.kuaizhizao.purchaseRequisition.form.optional')}
+                          getForm={() => formRef.current}
+                          baseFieldName="requisition_date"
+                          t={t}
+                          onApply={(date) =>
+                            formRef.current?.setFieldValue?.(['items', index, 'required_date'], date)
+                          }
+                        />
                       </AntForm.Item>
                     ),
                   },

@@ -4334,6 +4334,7 @@ export default {
   'app.kuaizhizao.quotation.summary.totalExcl': 'Loại trừ. tổng cộng',
   'app.kuaizhizao.quotation.summary.totalInclWithTax': 'Bao gồm. tổng cộng (thuế)',
   'app.kuaizhizao.quotation.summary.totalIncl': 'Bao gồm. tổng cộng',
+  'app.kuaizhizao.quotation.summary.grandTotal': 'Tổng cộng',
   'app.kuaizhizao.quotation.dateShortcut.7days': '7 ngày',
   'app.kuaizhizao.quotation.dateShortcut.15days': '15 ngày',
   'app.kuaizhizao.quotation.dateShortcut.1month': '1 tháng',

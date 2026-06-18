@@ -108,6 +108,29 @@ class PartnerPriceBookService:
             lines.append({"variantAttributes": attrs, "unitPrice": Decimal(str(price))})
         return lines or None
 
+    @staticmethod
+    def _normalize_stored_unit_price_to_exclusive(
+        unit_price: Optional[Decimal],
+        tax_rate: Optional[Decimal],
+        price_type: Optional[str],
+    ) -> Optional[Decimal]:
+        """询价返回不含税单价，与单据行价税口径一致。"""
+        if unit_price is None:
+            return None
+        price = Decimal(str(unit_price))
+        if price <= 0:
+            return None
+        pt = (price_type or "tax_inclusive").strip()
+        if pt == "tax_exclusive":
+            return price
+        rate = Decimal(str(tax_rate or 0))
+        if rate > Decimal("1"):
+            rate = rate / Decimal("100")
+        factor = Decimal("1") + rate
+        if factor <= 0:
+            return price
+        return (price / factor).quantize(Decimal("0.0001"))
+
     @classmethod
     def _resolve_price_from_row(
         cls,
@@ -128,9 +151,19 @@ class PartnerPriceBookService:
                         best_score = score
                         best_price = line.get("unitPrice")
             if best_price is not None:
-                return best_price, True
+                return (
+                    cls._normalize_stored_unit_price_to_exclusive(
+                        best_price, row.tax_rate, row.price_type
+                    ),
+                    True,
+                )
         if row.unit_price is not None:
-            return row.unit_price, False
+            return (
+                cls._normalize_stored_unit_price_to_exclusive(
+                    row.unit_price, row.tax_rate, row.price_type
+                ),
+                False,
+            )
         return None, False
 
     @staticmethod
@@ -352,6 +385,7 @@ class PartnerPriceBookService:
             "partner_material_code": alias.code if alias else None,
             "partner_material_name": alias.name if alias else None,
             "unit_price": row.unit_price,
+            "price_type": row.price_type or "tax_inclusive",
             "variant_prices": cls._deserialize_variant_prices(row.variant_prices),
             "currency_code": row.currency_code,
             "tax_rate": row.tax_rate,
@@ -392,6 +426,8 @@ class PartnerPriceBookService:
 
         if payload.get("is_active") is None:
             payload["is_active"] = True
+        if not payload.get("price_type"):
+            payload["price_type"] = "tax_inclusive"
         if not payload.get("unit") and material.base_unit:
             payload["unit"] = material.base_unit
         payload["variant_prices"] = cls._serialize_variant_prices_for_storage(payload.get("variant_prices"))

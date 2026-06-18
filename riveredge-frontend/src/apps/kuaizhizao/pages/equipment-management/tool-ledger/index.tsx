@@ -40,6 +40,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
+import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
@@ -866,7 +867,13 @@ const ToolLedgerPage: React.FC = () => {
             <ProFormDatePicker
               name="warranty_expiry"
               label={t('app.kuaizhizao.toolLedger.fieldWarrantyExpiry')}
-              fieldProps={{ style: { width: '100%' } }}
+              fieldProps={buildFutureDateShortcutFieldProps({
+                getForm: () => formRef.current,
+                fieldName: 'warranty_expiry',
+                baseFieldName: 'purchase_date',
+                t,
+                fieldProps: { style: { width: '100%' } },
+              })}
             />
           </Col>
           <Col span={12}>
@@ -1119,7 +1126,12 @@ const ToolLedgerPage: React.FC = () => {
             <Select options={toolCalibrationResultOptions} />
           </Form.Item>
           <Form.Item name="expiry_date" label={t('app.kuaizhizao.toolLedger.colExpiryDate')}>
-            <DatePicker style={{ width: '100%' }} />
+            <FutureDatePicker
+              getForm={() => calibForm}
+              baseFieldName="calibration_date"
+              t={t}
+              style={{ width: '100%' }}
+            />
           </Form.Item>
           <Form.Item
             name="attachments"

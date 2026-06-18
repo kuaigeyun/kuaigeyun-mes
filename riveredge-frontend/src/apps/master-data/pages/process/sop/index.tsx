@@ -1170,7 +1170,7 @@ const SOPPage: React.FC = () => {
               customFields={sopFormCustomFields}
               customFieldValues={sopFormCustomFieldValues}
               gridColumns={2}
-              gridMode="col"
+              embedInParentRow
             />
           </Row>
           <ProFormTextArea

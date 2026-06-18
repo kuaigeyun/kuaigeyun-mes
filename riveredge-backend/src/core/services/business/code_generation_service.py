@@ -18,6 +18,7 @@ from loguru import logger
 
 from core.models.code_rule import CodeRule
 from core.models.code_sequence import CodeSequence
+from core.models.model_fields import model_has_field
 from core.services.business.code_rule_service import CodeRuleService
 from core.services.code_rule.code_rule_component_service import CodeRuleComponentService
 from core.config.code_rule_pages import RULE_CODE_ENTITY_FOR_SEQ_SYNC
@@ -696,14 +697,14 @@ class CodeGenerationService:
                 if class_name != "Material" or attr_name != "main_code":
                     return None
                 filter_kw: Dict[str, Any] = {"tenant_id": tenant_id}
-                if hasattr(model_class, "deleted_at"):
+                if model_has_field(model_class, "deleted_at"):
                     filter_kw["deleted_at__isnull"] = True
             else:
                 filter_kw = {
                     "tenant_id": tenant_id,
                     f"{attr_name}__startswith": prefix,
                 }
-                if hasattr(model_class, "deleted_at"):
+                if model_has_field(model_class, "deleted_at"):
                     filter_kw["deleted_at__isnull"] = True
             rows = await model_class.filter(**filter_kw).values_list(attr_name, flat=True)
             max_seq = None

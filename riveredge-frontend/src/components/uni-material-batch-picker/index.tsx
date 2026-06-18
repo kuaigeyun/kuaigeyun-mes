@@ -1,11 +1,11 @@
 /**
  * UniMaterialBatchPicker — 统一多选物料弹窗
  *
- * 标题行集成搜索 / 分类 / 来源筛选；表格跨页多选；请求序号防竞态。
+ * 内容区集成搜索 / 分类 / 来源筛选；表格跨页多选；请求序号防竞态。
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { App, Flex, Input, Modal, Select, Table, Tooltip, TreeSelect } from 'antd';
+import { App, Flex, Input, Modal, Select, Table, Tooltip, TreeSelect, theme } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import {
@@ -25,15 +25,12 @@ import {
   mapMaterialGroupTree,
   type MaterialGroupTreeNode,
 } from './utils';
+import { getMaterialSourceTypeLabel } from '../../apps/master-data/utils/materialSourceType';
 
 export type { UniMaterialBatchPickerProps } from './types';
 
 const PAGE_SIZE = 20;
 const DEFAULT_WIDTH = 1120;
-/** 标题行筛选项宽度（与 common 占位文案匹配，避免省略号截断） */
-const FILTER_SEARCH_WIDTH = 236;
-const FILTER_GROUP_WIDTH = 200;
-const FILTER_SOURCE_WIDTH = 148;
 
 function resolveMaterialImageFileUuid(raw: unknown): string | null {
   if (typeof raw === 'string') {
@@ -59,6 +56,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
 }) => {
   const { t } = useTranslation();
   const { message } = App.useApp();
+  const { token } = theme.useToken();
   const [searchDraft, setSearchDraft] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [groupId, setGroupId] = useState<number | undefined>(undefined);
@@ -219,6 +217,29 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
     [list, selectedRowKeys],
   );
 
+  const toggleMaterialRow = useCallback((record: Material) => {
+    setSelectedMap((prev) => {
+      const next = new Map(prev);
+      if (next.has(record.id)) {
+        next.delete(record.id);
+      } else {
+        next.set(record.id, record);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleMaterialRowClick = useCallback(
+    (record: Material, event: React.MouseEvent<HTMLElement>) => {
+      const target = event.target as HTMLElement;
+      if (target.closest('.ant-checkbox-wrapper, .ant-checkbox, button, a, input, textarea, select')) {
+        return;
+      }
+      toggleMaterialRow(record);
+    },
+    [toggleMaterialRow],
+  );
+
   const columns: ColumnsType<Material> = useMemo(
     () => [
       {
@@ -322,14 +343,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
         render: (_, r) => {
           const rec = r as Record<string, unknown>;
           const val = (getMaterialField(rec, 'sourceType') ?? rec.source_type) as string;
-          const sourceLabels: Record<string, string> = {
-            Make: t('app.master-data.materialForm.sourceMake'),
-            Buy: t('app.master-data.materialForm.sourceBuy'),
-            Outsource: t('app.master-data.materialForm.sourceOutsource'),
-            Phantom: t('app.master-data.materialForm.sourcePhantom'),
-            Service: t('app.master-data.materialForm.sourceService'),
-          };
-          return sourceLabels[val] || val || '-';
+          return getMaterialSourceTypeLabel(val, t);
         },
       },
     ],
@@ -353,21 +367,21 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
 
   const popupContainer = (node: HTMLElement) => node.closest('.ant-modal-wrap') ?? document.body;
 
-  const modalTitle = (
-    <Flex
-      align="center"
-      gap={12}
-      wrap="wrap"
-      style={{ width: '100%', paddingRight: 28, fontWeight: 'normal' }}
+  const filterBar = (
+    <div
+      style={{
+        padding: 12,
+        marginBottom: 12,
+        background: token.colorFillAlter,
+        borderRadius: token.borderRadius,
+        border: `1px solid ${token.colorBorderSecondary}`,
+      }}
     >
-      <span style={{ fontWeight: 600, flexShrink: 0 }}>
-        {t('app.kuaizhizao.salesOrder.materialPickerTitle')}
-      </span>
-      <Flex gap={8} wrap="wrap" align="center" style={{ flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
+      <Flex gap={8} align="center" style={{ width: '100%' }}>
         <Input.Search
           allowClear
           placeholder={t('app.kuaizhizao.common.materialBatchSearchPlaceholder')}
-          style={{ width: FILTER_SEARCH_WIDTH }}
+          style={{ flex: 1, minWidth: 0 }}
           value={searchDraft}
           onChange={(e) => setSearchDraft(e.target.value)}
           onSearch={(v) => {
@@ -386,7 +400,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
           showSearch
           treeLine
           placeholder={t('app.kuaizhizao.common.materialBatchGroupPlaceholder')}
-          style={{ width: FILTER_GROUP_WIDTH }}
+          style={{ flex: 1, minWidth: 0 }}
           treeData={groupTree}
           value={groupId}
           onChange={(v) => {
@@ -399,7 +413,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
         <Select
           allowClear
           placeholder={t('app.kuaizhizao.common.materialBatchSourcePlaceholder')}
-          style={{ width: FILTER_SOURCE_WIDTH }}
+          style={{ flex: 1, minWidth: 0 }}
           value={sourceType}
           onChange={(v) => {
             setSourceType(v);
@@ -415,12 +429,12 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
           ]}
         />
       </Flex>
-    </Flex>
+    </div>
   );
 
   return (
     <Modal
-      title={modalTitle}
+      title={t('app.kuaizhizao.salesOrder.materialPickerTitle')}
       styles={{ header: { marginBottom: 0 }, body: { paddingTop: 12 } }}
       open={open}
       onCancel={handleCancel}
@@ -431,9 +445,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
       okText={t('common.confirm')}
       cancelText={t('common.cancel')}
     >
-      <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: 13, marginBottom: 12 }}>
-        {t('app.kuaizhizao.salesOrder.materialPickerSelectedCount', { count: selectedCount })}
-      </div>
+      {filterBar}
       <Table<Material>
         size="small"
         rowKey="id"
@@ -441,13 +453,26 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
         columns={columns}
         dataSource={list}
         rowSelection={rowSelection}
+        onRow={(record) => ({
+          onClick: (event) => handleMaterialRowClick(record, event),
+          style: { cursor: 'pointer' },
+        })}
         pagination={{
           current: page,
           pageSize: PAGE_SIZE,
           total: totalHint,
           showSizeChanger: false,
           onChange: (p) => setPage(p),
-          showTotal: (tot) => t('app.kuaizhizao.salesOrder.materialPickerPageTotal', { total: tot }),
+          showTotal: (tot) => (
+            <Flex gap={16} align="center">
+              <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
+                {t('app.kuaizhizao.salesOrder.materialPickerSelectedCount', { count: selectedCount })}
+              </span>
+              <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
+                {t('app.kuaizhizao.salesOrder.materialPickerPageTotal', { total: tot })}
+              </span>
+            </Flex>
+          ),
         }}
         scroll={{ x: 900, y: 360 }}
       />

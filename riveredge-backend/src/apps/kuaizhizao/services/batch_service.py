@@ -13,6 +13,7 @@ from tortoise.transactions import in_transaction
 from loguru import logger
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from core.models.model_fields import model_has_field
 
 
 class BatchOperationService:
@@ -302,7 +303,7 @@ class BatchOperationService:
 
         # 批量删除
         async with in_transaction():
-            if soft_delete and hasattr(model_class, 'deleted_at'):
+            if soft_delete and model_has_field(model_class, "deleted_at"):
                 # 批量软删除
                 deleted_count = await model_class.filter(
                     tenant_id=tenant_id,

@@ -29,6 +29,7 @@ const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
 import type { Material } from '../../../../master-data/types/material';
+import { DocumentAmountSummaryWatch } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -47,6 +48,7 @@ import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
+import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -217,18 +219,9 @@ const ShipmentNoticesPage: React.FC = () => {
   /**
    * 发货通知单明细汇总组件
    */
-  const ShipmentNoticeFormSummary: React.FC = () => {
-    const items = AntForm.useWatch('items');
-    const totalQuantity = items?.reduce((sum: number, it: any) => sum + (Number(it?.notice_quantity) || 0), 0) || 0;
-    const totalAmount = items?.reduce((sum: number, it: any) => sum + (Number(it?.notice_quantity) * Number(it?.unit_price || 0) || 0), 0) || 0;
-
-    return (
-      <div style={{ marginTop: 12, padding: '12px', background: '#fafafa', borderRadius: '4px', display: 'flex', justifyContent: 'flex-end', gap: 24 }}>
-        <span>{t('app.kuaizhizao.shipmentNotice.totalQuantity')}: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
-        <span>{t('app.kuaizhizao.shipmentNotice.totalAmount')}: <Typography.Text strong>¥{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Typography.Text></span>
-      </div>
-    );
-  };
+  const ShipmentNoticeFormSummary: React.FC = () => (
+    <DocumentAmountSummaryWatch variant="basic" quantityField="notice_quantity" />
+  );
 
   const renderShipmentNoticeRowActions = (actions: React.ReactNode[]) => {
     return actions;
@@ -861,7 +854,7 @@ const ShipmentNoticesPage: React.FC = () => {
       <ProFormText name="warehouse_name" hidden />
       <Row gutter={16}>
         <Col span={8}>
-          <ProFormDatePicker name="planned_ship_date" label={t('app.kuaizhizao.shipmentNotice.plannedShipDate')} fieldProps={{ style: { width: '100%' } }} />
+          <ProFormDatePicker name="planned_ship_date" label={t('app.kuaizhizao.shipmentNotice.plannedShipDate')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => createFormRef.current, fieldName: 'planned_ship_date', t })} />
         </Col>
       </Row>
       <ProFormTextArea name="shipping_address" label={t('app.kuaizhizao.salesOrder.shippingAddress')} placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')} fieldProps={{ rows: 2 }} />
@@ -880,7 +873,7 @@ const ShipmentNoticesPage: React.FC = () => {
               {t('common.importDetail')}
             </Button>
             <Button
-              type="dashed"
+              type="default"
               icon={<PlusOutlined />}
               onClick={() => {
                 const items = [...(createFormRef.current?.getFieldValue('items') ?? [])];
@@ -1038,7 +1031,7 @@ const ShipmentNoticesPage: React.FC = () => {
           />
         </Col>
         <Col span={8}>
-          <ProFormDatePicker name="planned_ship_date" label={t('app.kuaizhizao.shipmentNotice.plannedShipDate')} fieldProps={{ style: { width: '100%' } }} />
+          <ProFormDatePicker name="planned_ship_date" label={t('app.kuaizhizao.shipmentNotice.plannedShipDate')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => editFormRef.current, fieldName: 'planned_ship_date', t })} />
         </Col>
       </Row>
       <ProFormText name="warehouse_name" hidden />

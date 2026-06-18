@@ -1,0 +1,38 @@
+/**
+ * 自定义字段表单布局样式（唯一真源）
+ *
+ * 禁止在页面/modal 内为自定义字段写额外 layout CSS。
+ */
+
+.custom-fields-form-field-col {
+  min-width: 0;
+
+  .ant-form-item,
+  .ant-form-item-control,
+  .ant-form-item-control-input,
+  .ant-form-item-control-input-content {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .ant-input,
+  .ant-input-affix-wrapper,
+  .ant-input-number,
+  .ant-input-number-group-wrapper,
+  .ant-picker,
+  .ant-select,
+  .ant-select-selector {
+    width: 100% !important;
+  }
+}
+
+.custom-fields-form-json-item {
+  width: 100%;
+  display: flow-root;
+}
+
+.custom-fields-form-label-tag {
+  margin-left: 6px;
+  font-size: 11px;
+}

@@ -9,6 +9,7 @@ import React, { useEffect, useState } from 'react';
 import { ProFormSelect } from '@ant-design/pro-components';
 import { getAssociatedTableOptions } from '../../services/customField';
 import type { CustomField } from '../../services/customField';
+import { customFieldControlLayout, customFieldFieldProps } from './customFieldFormLayout';
 
 export interface AssociatedObjectSelectProps {
   field: CustomField;
@@ -18,7 +19,6 @@ export interface AssociatedObjectSelectProps {
   labelText?: string;
   placeholder?: string;
   required?: boolean;
-  colProps?: { span?: number };
   initialValue?: number | string | null;
 }
 
@@ -29,7 +29,6 @@ export const AssociatedObjectSelect: React.FC<AssociatedObjectSelectProps> = ({
   labelText,
   placeholder,
   required = false,
-  colProps = { span: 12 },
   initialValue,
 }) => {
   const [options, setOptions] = useState<Array<{ value: number | string; label: string }>>([]);
@@ -78,10 +77,11 @@ export const AssociatedObjectSelect: React.FC<AssociatedObjectSelectProps> = ({
         showSearch: true,
         filterOption: (input: string, option: any) =>
           (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()),
+        ...customFieldFieldProps(),
       }}
-      colProps={colProps}
       rules={required ? [{ required: true, message: `请选择${textForMessage}` }] : []}
       initialValue={initialValue}
+      {...customFieldControlLayout()}
     />
   );
 };

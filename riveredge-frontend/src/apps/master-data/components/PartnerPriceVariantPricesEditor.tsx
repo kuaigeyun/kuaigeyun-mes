@@ -271,6 +271,7 @@ export const PartnerPriceVariantPricesEditor: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const form = Form.useFormInstance();
   const masterMaterialUuid = Form.useWatch('_masterMaterialUuid', form) as string | undefined;
+  const priceType = (Form.useWatch('priceType', form) ?? 'tax_inclusive') as 'tax_inclusive' | 'tax_exclusive';
   const [definitions, setDefinitions] = useState<VariantAttributeDefinition[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -306,17 +307,24 @@ export const PartnerPriceVariantPricesEditor: React.FC = () => {
   }
 
   return (
-    <Form.List name="variantPrices">
-      {(fields, { add, remove }) => (
-        <VariantPricesFormListTable
-          fields={fields}
-          add={add}
-          remove={remove}
-          definitions={definitions}
-          loading={loading}
-          masterMaterialUuid={masterMaterialUuid}
-        />
-      )}
-    </Form.List>
+    <>
+      <Typography.Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 12 }}>
+        {priceType === 'tax_inclusive'
+          ? t('app.master-data.priceBook.variantPricesInclHint')
+          : t('app.master-data.priceBook.variantPricesExclHint')}
+      </Typography.Paragraph>
+      <Form.List name="variantPrices">
+        {(fields, { add, remove }) => (
+          <VariantPricesFormListTable
+            fields={fields}
+            add={add}
+            remove={remove}
+            definitions={definitions}
+            loading={loading}
+            masterMaterialUuid={masterMaterialUuid}
+          />
+        )}
+      </Form.List>
+    </>
   );
 };

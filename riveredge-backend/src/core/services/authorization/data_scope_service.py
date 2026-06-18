@@ -15,6 +15,7 @@ from tortoise.expressions import Q
 from tortoise.models import Model
 
 from core.models.data_permission_policy import DataPermissionPolicy, DataScopeType
+from core.models.model_fields import model_has_field
 from core.models.user_role import UserRole
 from core.services.authorization.data_scope_resource_registry import (
     get_resource_profile,
@@ -319,9 +320,9 @@ class DataScopeService:
         if pk is None:
             return False
         qs = model.filter(id=pk)
-        if hasattr(model, "tenant_id"):
+        if model_has_field(model, "tenant_id"):
             qs = qs.filter(tenant_id=tenant_id)
-        if hasattr(model, "deleted_at"):
+        if model_has_field(model, "deleted_at"):
             qs = qs.filter(deleted_at__isnull=True)
         scoped = await cls.apply(qs, tenant_id=tenant_id, user=user, resource=resource)
         return await scoped.exists()
@@ -408,7 +409,7 @@ class DataScopeService:
         if not id_list:
             return []
         qs = model.filter(id__in=id_list, tenant_id=tenant_id)
-        if hasattr(model, "deleted_at"):
+        if model_has_field(model, "deleted_at"):
             qs = qs.filter(deleted_at__isnull=True)
         scoped = await cls.apply(qs, tenant_id=tenant_id, user=user, resource=resource)
         visible = await scoped.values_list("id", flat=True)

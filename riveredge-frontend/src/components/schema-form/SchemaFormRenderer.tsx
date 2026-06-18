@@ -104,13 +104,15 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
           if (!slotContent) return null;
           if (field.slotKey === 'customFields') {
             let content = slotContent;
-            if (React.isValidElement(content)) {
-              const patch: Record<string, unknown> = { gridMode: 'proform', wrapInRow: false };
-              if (content.props.gridColumns == null) {
-                patch.gridColumns = field.slotGridColumns ?? inferFormGridColumns(schema);
-              }
+          if (React.isValidElement(content)) {
+            const patch: Record<string, unknown> = {};
+            if (content.props.gridColumns == null) {
+              patch.gridColumns = field.slotGridColumns ?? inferFormGridColumns(schema);
+            }
+            if (Object.keys(patch).length > 0) {
               content = React.cloneElement(content, patch);
             }
+          }
             return <React.Fragment key={field.name}>{content}</React.Fragment>;
           }
           const colSpan = field.colSpan ?? 24;

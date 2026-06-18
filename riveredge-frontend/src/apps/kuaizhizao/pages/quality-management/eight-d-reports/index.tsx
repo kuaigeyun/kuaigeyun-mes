@@ -25,6 +25,7 @@ import {
 } from './components/eightDMeta';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 
 const EIGHT_D_RESOURCE = 'kuaizhizao:quality-management-eight-d-reports';
 
@@ -391,7 +392,12 @@ const EightDReportsPage: React.FC = () => {
             name="due_date"
             label={t('app.kuaizhizao.eightD.columns.dueDate')}
             colProps={{ span: 8 }}
-            fieldProps={{ style: { width: '100%' } }}
+            fieldProps={buildFutureDateShortcutFieldProps({
+              getForm: () => createFormRef.current,
+              fieldName: 'due_date',
+              t,
+              fieldProps: { style: { width: '100%' } },
+            })}
           />
           <ProFormText name="owner_name" hidden />
           <ProFormText name="owner_id" hidden />

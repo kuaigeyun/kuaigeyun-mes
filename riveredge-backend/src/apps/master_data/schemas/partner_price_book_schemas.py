@@ -21,6 +21,11 @@ class PartnerPriceBookBase(BaseModel):
     partner_id: int = Field(..., alias="partnerId", description="客户或供应商 ID")
     material_id: int = Field(..., alias="materialId", description="内部物料 ID")
     unit_price: Optional[Decimal] = Field(None, alias="unitPrice", gt=0, description="标准价（统一价）")
+    price_type: Optional[str] = Field(
+        "tax_inclusive",
+        alias="priceType",
+        description="价类：tax_inclusive 含税 / tax_exclusive 不含税",
+    )
     variant_prices: Optional[List[PartnerPriceVariantLine]] = Field(
         None,
         alias="variantPrices",
@@ -77,6 +82,7 @@ class PartnerPriceBookUpdate(BaseModel):
     partner_id: Optional[int] = Field(None, alias="partnerId")
     material_id: Optional[int] = Field(None, alias="materialId")
     unit_price: Optional[Decimal] = Field(None, alias="unitPrice", gt=0)
+    price_type: Optional[str] = Field(None, alias="priceType")
     variant_prices: Optional[List[PartnerPriceVariantLine]] = Field(None, alias="variantPrices")
     currency_code: Optional[str] = Field(None, alias="currencyCode")
     tax_rate: Optional[Decimal] = Field(None, alias="taxRate")
@@ -124,6 +130,7 @@ class PartnerPriceBookResponse(BaseModel):
     partner_material_code: Optional[str] = Field(None, alias="partnerMaterialCode")
     partner_material_name: Optional[str] = Field(None, alias="partnerMaterialName")
     unit_price: Optional[Decimal] = Field(None, alias="unitPrice")
+    price_type: Optional[str] = Field("tax_inclusive", alias="priceType")
     variant_prices: Optional[List[PartnerPriceVariantLine]] = Field(None, alias="variantPrices")
     currency_code: Optional[str] = Field(None, alias="currencyCode")
     tax_rate: Optional[Decimal] = Field(None, alias="taxRate")

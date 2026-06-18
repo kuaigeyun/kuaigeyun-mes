@@ -17,6 +17,11 @@ from tortoise.models import Q
 from tortoise.expressions import F
 from tortoise.exceptions import IntegrityError
 from apps.master_data.models.material import MaterialGroup, Material, BOM
+from apps.master_data.constants.material_source_type import (
+    LEGACY_SOURCE_TYPE_CONFIGURE,
+    is_canonical_material_source_type,
+    normalize_material_source_type,
+)
 from apps.master_data.models.process import ProcessRoute
 from apps.master_data.models.material_code_alias import MaterialCodeAlias
 from apps.master_data.services.material_code_service import MaterialCodeService
@@ -58,7 +63,20 @@ def _source_type_to_type_code(source_type: Optional[str]) -> str:
     """将物料来源类型映射为编码规则使用的 type_code（用于回退生成）"""
     if not source_type:
         return "RAW"
-    return _SOURCE_TYPE_TO_TYPE_CODE.get(source_type, "RAW")
+    normalized = normalize_material_source_type(source_type) or source_type
+    return _SOURCE_TYPE_TO_TYPE_CODE.get(normalized, "RAW")
+
+
+def _apply_canonical_material_source_type(data: Dict[str, Any]) -> None:
+    if "source_type" not in data or data.get("source_type") is None:
+        return
+    raw = str(data["source_type"]).strip()
+    if raw == LEGACY_SOURCE_TYPE_CONFIGURE:
+        logger.info("物料来源类型 Configure 已废弃，写入时归并为 Buy")
+    normalized = normalize_material_source_type(raw)
+    if normalized and not is_canonical_material_source_type(normalized):
+        raise ValidationError(f"无效的物料来源类型: {raw}")
+    data["source_type"] = normalized
 
 
 def _material_defaults_as_dict(raw: Any) -> Optional[Dict[str, Any]]:
@@ -1021,6 +1039,7 @@ class MaterialService:
         material_data["main_code"] = main_code_val.strip() if isinstance(main_code_val, str) else main_code_val
 
         _normalize_material_logistics_fields(material_data, for_create=True)
+        _apply_canonical_material_source_type(material_data)
         
         # 同步 code：主物料 code=main_code；属性 SKU 在创建循环内分配唯一编码
         is_variant_sku = bool(material_data.get("variant_attributes"))
@@ -2348,6 +2367,7 @@ class MaterialService:
             update_data["variant_attributes"] = sorted_attrs
 
         _normalize_material_logistics_fields(update_data, for_create=False)
+        _apply_canonical_material_source_type(update_data)
         
         for key, value in update_data.items():
             setattr(material, key, value)
@@ -2711,11 +2731,10 @@ class MaterialService:
     ) -> MaterialBatchFieldUpdateResponse:
         """批量更新物料来源类型（单次 UPDATE）。"""
         from tortoise import timezone
-        from apps.kuaizhizao.utils.material_source_helper import VALID_SOURCE_TYPES
 
-        source_type = (data.source_type or "").strip()
-        if source_type not in VALID_SOURCE_TYPES:
-            raise ValidationError(f"无效的物料来源类型: {source_type}")
+        source_type = normalize_material_source_type((data.source_type or "").strip())
+        if not source_type or not is_canonical_material_source_type(source_type):
+            raise ValidationError(f"无效的物料来源类型: {data.source_type}")
 
         uuids = list(dict.fromkeys(str(u).strip() for u in data.material_uuids if u))
         if not uuids:

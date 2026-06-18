@@ -148,9 +148,9 @@ function getMaterialSourceTypeLabel(
   record: Material,
   sourceTypeOptions: { value: string; label: string }[],
 ): string {
-  const st = (record as any).sourceType ?? (record as any).source_type
-  const option = sourceTypeOptions.find(opt => opt.value === st)
-  return option ? option.label : String(st ?? '').trim() || '-'
+  const st = normalizeMaterialSourceType((record as any).sourceType ?? (record as any).source_type)
+  const option = sourceTypeOptions.find((opt) => opt.value === st)
+  return option ? option.label : st || '-'
 }
 
 /** 列表首列：名称 / 编号·规格；品牌、型号以徽章挂在下方（配置件 SKU 子行：属性摘要 / SKU 编号） */
@@ -209,6 +209,10 @@ function MaterialListStackedCell({
 
 // 导入服务和类型
 import { materialApi, materialGroupApi } from '../../services/material'
+import {
+  buildMaterialSourceTypeOptions,
+  normalizeMaterialSourceType,
+} from '../../utils/materialSourceType';
 import { processRouteApi } from '../../services/process'
 import { warehouseApi } from '../../services/warehouse'
 import type { Warehouse } from '../../types/warehouse'
@@ -961,14 +965,7 @@ const MaterialsManagementPage: React.FC = () => {
   }, [contextMenuVisible, contextMenuGroup, contextMenuPosition.x, contextMenuPosition.y])
 
   // 物料来源类型选项（用于搜索下拉框和列表展示，使用 i18n）
-  const sourceTypeOptions = useMemo(() => [
-    { label: t('app.master-data.materialForm.sourceMake'), value: 'Make' },
-    { label: t('app.master-data.materialForm.sourceBuy'), value: 'Buy' },
-    { label: t('app.master-data.materialForm.sourceOutsource'), value: 'Outsource' },
-    { label: t('app.master-data.materialForm.sourcePhantom'), value: 'Phantom' },
-    { label: t('app.master-data.materialForm.sourceService'), value: 'Service' },
-    { label: t('app.master-data.materialForm.sourceConfigure'), value: 'Configure' },
-  ], [t])
+  const sourceTypeOptions = useMemo(() => buildMaterialSourceTypeOptions(t), [t])
 
   const variantAttrLabelMap = useMemo(
     () => new Map(variantAttrDefinitions.map((d) => [d.attribute_name, d.display_name])),

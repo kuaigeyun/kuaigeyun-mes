@@ -41,6 +41,7 @@ import {
   getDocumentFormDraft,
   setDocumentFormDraft,
 } from '../../../../../utils/documentFormDraftCache'
+import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts'
 import { UniTable } from '../../../../../components/uni-table'
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
@@ -1354,7 +1355,12 @@ export default function SalesForecastsPage() {
               name="end_date"
               label={t('app.kuaizhizao.salesForecast.endDate')}
               required
-              fieldProps={{ style: { width: '100%' } }}
+              fieldProps={buildFutureDateShortcutFieldProps({
+                getForm: () => formRef.current,
+                fieldName: 'end_date',
+                baseFieldName: 'start_date',
+                t,
+              })}
             />
           </Col>
         </Row>
@@ -1374,7 +1380,7 @@ export default function SalesForecastsPage() {
                 {t('app.kuaizhizao.salesForecast.importItems')}
               </Button>
               <Button
-                type="dashed"
+                type="default"
                 icon={<PlusOutlined />}
                 onClick={() => {
                   const items = [...(formRef.current?.getFieldValue('items') ?? [])]
@@ -1496,7 +1502,17 @@ export default function SalesForecastsPage() {
                         rules={[{ required: true, message: t('common.required') }]}
                         style={{ margin: 0 }}
                       >
-                        <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
+                        <FutureDatePicker
+                          size="small"
+                          style={{ width: '100%' }}
+                          format="YYYY-MM-DD"
+                          getForm={() => formRef.current}
+                          baseFieldName="start_date"
+                          t={t}
+                          onApply={(date) =>
+                            formRef.current?.setFieldValue?.(['items', index, 'forecast_date'], date)
+                          }
+                        />
                       </AntForm.Item>
                     ),
                   },

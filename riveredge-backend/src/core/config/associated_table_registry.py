@@ -8,6 +8,8 @@ table_name 来自 custom_field_pages 配置。
 from typing import Optional, Type, Any, List, Dict
 from tortoise import Model
 
+from core.models.model_fields import model_has_field
+
 
 def _get_model(table_name: str) -> Optional[Type[Model]]:
     """根据 table_name 获取 Tortoise 模型类（延迟导入避免循环依赖）"""
@@ -153,11 +155,11 @@ async def get_associated_options(
         return []
 
     try:
-        # 检查模型是否有 tenant_id
-        has_tenant = hasattr(model, "tenant_id")
         query = model.all()
-        if has_tenant:
+        if model_has_field(model, "tenant_id"):
             query = query.filter(tenant_id=tenant_id)
+        if model_has_field(model, "deleted_at"):
+            query = query.filter(deleted_at__isnull=True)
 
         rows = await query.limit(limit).values_list("id", display_field)
 
@@ -188,9 +190,9 @@ async def get_associated_attribute_options(
 
     try:
         query = model.all()
-        if hasattr(model, "tenant_id"):
+        if model_has_field(model, "tenant_id"):
             query = query.filter(tenant_id=tenant_id)
-        if hasattr(model, "deleted_at"):
+        if model_has_field(model, "deleted_at"):
             query = query.filter(deleted_at__isnull=True)
 
         rows = await query.limit(limit).values_list(attribute_field)
@@ -244,9 +246,9 @@ async def lookup_associated_record(
 
     try:
         query = model.all()
-        if hasattr(model, "tenant_id"):
+        if model_has_field(model, "tenant_id"):
             query = query.filter(tenant_id=tenant_id)
-        if hasattr(model, "deleted_at"):
+        if model_has_field(model, "deleted_at"):
             query = query.filter(deleted_at__isnull=True)
 
         row = await query.filter(**{match_field: match_value}).first()
@@ -289,9 +291,9 @@ async def get_associated_attribute_value(
 
     try:
         query = model.all()
-        if hasattr(model, "tenant_id"):
+        if model_has_field(model, "tenant_id"):
             query = query.filter(tenant_id=tenant_id)
-        if hasattr(model, "deleted_at"):
+        if model_has_field(model, "deleted_at"):
             query = query.filter(deleted_at__isnull=True)
 
         row = await query.filter(id=record_id_int).first()

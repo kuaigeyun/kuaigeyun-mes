@@ -140,14 +140,15 @@ const CostReportPage: React.FC = () => {
   );
 
   const getSourceTypeTag = (sourceType: string) => {
+    const normalized = sourceType === 'Configure' ? 'Buy' : sourceType;
     const typeMap: Record<string, { color: string; text: string }> = {
       Make: { color: 'blue', text: '自制件' },
       Buy: { color: 'green', text: '采购件' },
       Outsource: { color: 'orange', text: '委外件' },
       Phantom: { color: 'purple', text: '虚拟件' },
-      Configure: { color: 'cyan', text: '配置件' },
+      Service: { color: 'cyan', text: '服务' },
     };
-    const type = typeMap[sourceType] || { color: 'default', text: sourceType };
+    const type = typeMap[normalized] || { color: 'default', text: normalized || sourceType };
     return <Tag color={type.color}>{type.text}</Tag>;
   };
 
@@ -335,7 +336,7 @@ const CostReportPage: React.FC = () => {
         { label: '采购件', value: 'Buy' },
         { label: '委外件', value: 'Outsource' },
         { label: '虚拟件', value: 'Phantom' },
-        { label: '配置件', value: 'Configure' },
+        { label: '服务', value: 'Service' },
       ]}
     />
   );
