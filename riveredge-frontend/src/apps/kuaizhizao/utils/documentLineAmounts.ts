@@ -47,7 +47,12 @@ export interface DocumentGoodsTotals {
   goodsIncl: number;
 }
 
-export interface SalesDocumentTotals extends DocumentGoodsTotals {
+export interface DocumentTotalsWithDiscount extends DocumentGoodsTotals {
+  discountAmount: number;
+  goodsAfterDiscount: number;
+}
+
+export interface SalesDocumentTotals extends DocumentTotalsWithDiscount {
   customerFees: number;
   ourFees: number;
   estimatedReceivable: number;
@@ -110,23 +115,54 @@ export function computeDocumentGoodsTotals(
   };
 }
 
-/** 销售类单据：含税货值 + 我方垫付 = 预计应收 */
-export function computeSalesDocumentTotals(
+/** 整单优惠：从价税合计扣减，不低于 0（对齐用友/金蝶整单折让） */
+export function applyDocumentHeaderDiscount(
+  goodsIncl: number,
+  discountAmountInput: unknown,
+): Pick<DocumentTotalsWithDiscount, 'discountAmount' | 'goodsAfterDiscount'> {
+  const inclCents = toCents(goodsIncl);
+  const discountCents = Math.min(Math.max(0, toCents(discountAmountInput)), inclCents);
+  return {
+    discountAmount: fromCents(discountCents),
+    goodsAfterDiscount: fromCents(inclCents - discountCents),
+  };
+}
+
+export function computeDocumentTotalsWithDiscount(
   items: unknown[] | undefined,
-  feeDetails: unknown[] | undefined,
   priceType: string | undefined,
   quantityField: string,
-): SalesDocumentTotals {
+  discountAmountInput?: unknown,
+): DocumentTotalsWithDiscount {
   const goods = computeDocumentGoodsTotals(items, priceType, (row) => ({
     qty: row[quantityField],
     price: row.unit_price,
     taxRate: row.tax_rate,
   }));
+  const discount = applyDocumentHeaderDiscount(goods.goodsIncl, discountAmountInput);
+  return { ...goods, ...discount };
+}
+
+/** 销售类单据：优惠后货值 + 对方承担费用 = 预计应收 */
+export function computeSalesDocumentTotals(
+  items: unknown[] | undefined,
+  feeDetails: unknown[] | undefined,
+  priceType: string | undefined,
+  quantityField: string,
+  discountAmountInput?: unknown,
+): SalesDocumentTotals {
+  const withDiscount = computeDocumentTotalsWithDiscount(
+    items,
+    priceType,
+    quantityField,
+    discountAmountInput,
+  );
   const fees = sumFeeAmounts(feeDetails);
-  const estimatedReceivableCents = toCents(goods.goodsIncl) + toCents(fees.ourSide);
+  const estimatedReceivableCents =
+    toCents(withDiscount.goodsAfterDiscount) + toCents(fees.otherSide);
 
   return {
-    ...goods,
+    ...withDiscount,
     customerFees: fees.otherSide,
     ourFees: fees.ourSide,
     estimatedReceivable: fromCents(estimatedReceivableCents),

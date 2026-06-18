@@ -27,6 +27,7 @@ import {
 } from './outboundEntryShared';
 import { getOutboundIssueTypeLabel } from './outboundHubTypes';
 import { OUTBOUND_LIST_PATH, outboundWorkOrderEntryPath } from './outboundPaths';
+import { draftOptionalNumber, usePullEntryFormDraft } from '../shared/pullEntryFormDraft';
 
 const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const { t } = useTranslation();
@@ -44,6 +45,9 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
   const [warehouseId, setWarehouseId] = useState<number | undefined>();
   const [notes, setNotes] = useState('');
+  const { bindSnapshot, persistNow, clearDraft, applyDraftOnce } = usePullEntryFormDraft(
+    'kuaizhizao:outbound-work-order-pull',
+  );
 
   const pagePath = Number.isFinite(woId) && woId > 0 ? outboundWorkOrderEntryPath(woId) : OUTBOUND_LIST_PATH;
   const woCode = String(workOrder?.code ?? workOrder?.work_order_code ?? '');
@@ -52,8 +56,26 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
     : t('app.kuaizhizao.warehouseOutbound.entry.productionPicking');
 
   const leavePage = useCallback(() => {
+    clearDraft();
     navigate(OUTBOUND_LIST_PATH);
-  }, [navigate]);
+  }, [clearDraft, navigate]);
+
+  useEffect(() => {
+    bindSnapshot(() => ({
+      warehouseId,
+      notes,
+      receiverUuid: operatorHook.receiverUuid,
+      receiverName: operatorHook.receiverName,
+    }));
+    persistNow();
+  }, [
+    warehouseId,
+    notes,
+    operatorHook.receiverUuid,
+    operatorHook.receiverName,
+    bindSnapshot,
+    persistNow,
+  ]);
 
   useEffect(() => {
     if (!(Number.isFinite(woId) && woId > 0)) {
@@ -86,6 +108,15 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         ]);
         setWorkOrder(woRaw as Record<string, unknown>);
         setWarehouseOptions(mapWarehouseSelectOptions(whRes));
+        applyDraftOnce((draft) => {
+          const whId = draftOptionalNumber(draft.warehouseId);
+          if (whId != null) setWarehouseId(whId);
+          if (typeof draft.notes === 'string') setNotes(draft.notes);
+          operatorHook.restoreReceiver(
+            typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
+            typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
+          );
+        });
       } catch (e: unknown) {
         messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseOutbound.entry.loadWorkOrderFailed'));
         leavePage();
@@ -93,7 +124,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [woId, leavePage, messageApi, t]);
+  }, [woId, leavePage, messageApi, t, applyDraftOnce, operatorHook.restoreReceiver]);
 
   const submit = async (mode: 'draft' | 'confirm') => {
     if (!warehouseId || !(warehouseId > 0)) {
@@ -129,6 +160,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         });
       }
       invalidateMenuBadgeCounts();
+      clearDraft();
       if (mode === 'confirm') {
         navigate(OUTBOUND_LIST_PATH, {
           state: {

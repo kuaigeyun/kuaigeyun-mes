@@ -44,6 +44,7 @@ class Quotation(BaseModel):
     # 金额信息
     total_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="总数量")
     total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总金额")
+    discount_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="整单优惠金额")
     price_type = fields.CharField(
         max_length=20,
         default="tax_exclusive",

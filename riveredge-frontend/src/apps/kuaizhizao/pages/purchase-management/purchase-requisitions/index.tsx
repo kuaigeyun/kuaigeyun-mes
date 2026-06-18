@@ -39,8 +39,8 @@ import {
   buildDocumentCreateDraftKey,
   clearDocumentFormDraft,
   getDocumentFormDraft,
-  setDocumentFormDraft,
 } from '../../../../../utils/documentFormDraftCache';
+import { useDocumentCreateFormDraft } from '../../../../../hooks/useDocumentCreateFormDraft';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
@@ -200,6 +200,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [pullComputationCandidates, setPullComputationCandidates] = useState<PullDemandComputationCandidate[]>([]);
   const [selectedPullComputationId, setSelectedPullComputationId] = useState<number | null>(null);
   const createFormRef = useRef<any>(null);
+  const persistPurchaseRequisitionCreateDraft = useDocumentCreateFormDraft(
+    isCreatePage,
+    purchaseRequisitionCreateDraftKey,
+    createFormRef,
+  );
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
@@ -1600,14 +1605,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
-                onValuesChange={(_, allValues) => {
-                  if (isCreatePage && purchaseRequisitionCreateDraftKey) {
-                    setDocumentFormDraft(
-                      purchaseRequisitionCreateDraftKey,
-                      allValues as Record<string, unknown>,
-                    );
-                  }
-                }}
+                onValuesChange={persistPurchaseRequisitionCreateDraft}
                 onFinish={handleModalSubmit}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];

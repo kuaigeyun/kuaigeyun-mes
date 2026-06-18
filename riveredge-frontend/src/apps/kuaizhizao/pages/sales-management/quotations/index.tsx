@@ -25,7 +25,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniBatchButton, UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
@@ -74,6 +74,7 @@ import {
   Quotation,
 } from '../../../services/quotation';
 import { getSalesOrder, type SalesOrder } from '../../../services/sales-order';
+import { salesContractApi } from '../../../services/sales-contract';
 import { SalesOrderDetailBody } from '../sales-orders/components/SalesOrderDetailBody';
 import { getQuotationLifecycle } from '../../../utils/quotationLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -138,7 +139,11 @@ const LazyUniImport = lazy(() =>
 const LazySyncFromDatasetModal = lazy(() => import('../../../../../components/sync-from-dataset-modal'));
 
 /** 详情/列表状态 Tag：与生命周期主轴文案一致（含待审核等子态） */
-function getQuotationStatusTagProps(record: Quotation, auditRequired: boolean): { text: string; color: string } {
+function getQuotationStatusTagProps(
+  record: Quotation,
+  auditRequired: boolean,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): { text: string; color: string } {
   const lc = getQuotationLifecycle(record, auditRequired, t);
   if (lc.status === 'exception') return { text: lc.stageName, color: 'error' };
   if (lc.status === 'success') return { text: lc.stageName, color: 'success' };
@@ -230,6 +235,7 @@ function isQuotationSuperseded(q: Quotation): boolean {
 
 /** 允许「转订单」：已接受；或开审核且已发送并已审核通过；或已转单但下游已删可重新下推 */
 function canConvertQuotation(q: Quotation, auditRequired: boolean): boolean {
+  if (q.contract_id != null && Number(q.contract_id) > 0) return false;
   if (q.is_latest_in_series === false) return false;
   if (q.status === '已拒绝') return false;
   if (q.status === '已转订单') {
@@ -241,6 +247,16 @@ function canConvertQuotation(q: Quotation, auditRequired: boolean): boolean {
     return isApprovedReview(q.review_status);
   }
   return false;
+}
+
+/** 允许「下推销售合同」：已发送/已接受、未关联合同、非旧版、未直转订单 */
+function canConvertQuotationToContract(q: Quotation): boolean {
+  if (isQuotationSuperseded(q)) return false;
+  if (q.contract_id != null && Number(q.contract_id) > 0) return false;
+  if (q.status === '已转订单') return false;
+  if (q.sales_order_id != null && Number(q.sales_order_id) > 0) return false;
+  const st = (q.status || '').trim();
+  return st === '已发送' || st === '已接受';
 }
 
 /** 生成PDF报价：与后端 print 门禁一致；未开审核时「已发送」也可生成 */
@@ -626,6 +642,9 @@ const QuotationFormSummary: React.FC = () => (
 );
 
 const QUOTATION_RESOURCE = 'kuaizhizao:quotation';
+const SALES_CONTRACT_RESOURCE = 'kuaizhizao:sales-contract';
+const SALES_CONTRACT_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-contracts';
+const salesContractEditPath = (id: number) => `${SALES_CONTRACT_LIST_PATH}/${id}/edit`;
 
 const QuotationsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -800,6 +819,7 @@ const QuotationsPage: React.FC = () => {
 
   const currentUser = useGlobalStore((s) => s.currentUser);
   const quotationPerms = useResourcePermissions(QUOTATION_RESOURCE);
+  const salesContractPerms = useResourcePermissions(SALES_CONTRACT_RESOURCE);
   const canSubmitQuotation = hasModulePermission(currentUser ?? undefined, QUOTATION_RESOURCE, 'submit');
   const canRevokeQuotation = hasModulePermission(currentUser ?? undefined, QUOTATION_RESOURCE, 'revoke');
   const canReviewQuotation = hasReviewPermission(currentUser ?? undefined, QUOTATION_RESOURCE);
@@ -968,14 +988,6 @@ const QuotationsPage: React.FC = () => {
       render: (_, r) => r.quotation_series_code || r.quotation_code || '-',
     },
     {
-      title: t('app.kuaizhizao.quotation.colVersion'),
-      dataIndex: 'version_no',
-      width: 88,
-      hideInSearch: true,
-      order: 13,
-      render: (_, r) => t('app.kuaizhizao.quotation.versionDisplay', { n: r.version_no ?? 1 }),
-    },
-    {
       title: t('app.kuaizhizao.customerFollowUp.colCustomer'),
       dataIndex: 'customer_name',
       width: 260,
@@ -983,6 +995,21 @@ const QuotationsPage: React.FC = () => {
       hideInTable: true,
       order: 20,
       fieldProps: { placeholder: t('field.customer.name') },
+    },
+    {
+      title: t('app.kuaizhizao.quotation.colSalesman'),
+      dataIndex: 'salesman_name',
+      width: 100,
+      ellipsis: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quotation.colVersion'),
+      dataIndex: 'version_no',
+      width: 88,
+      hideInSearch: true,
+      order: 13,
+      render: (_, r) => t('app.kuaizhizao.quotation.versionDisplay', { n: r.version_no ?? 1 }),
     },
     {
       title: t('app.kuaizhizao.quotation.colQuotationDate'),
@@ -998,13 +1025,6 @@ const QuotationsPage: React.FC = () => {
       hideInTable: true,
       fieldProps: { placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')] },
       order: 30,
-    },
-    {
-      title: t('app.kuaizhizao.quotation.colSalesman'),
-      dataIndex: 'salesman_name',
-      width: 100,
-      ellipsis: true,
-      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.quotation.colTotalAmount'),
@@ -1127,6 +1147,18 @@ const QuotationsPage: React.FC = () => {
       messageApi.error(t('app.kuaizhizao.quotation.detailFailed'));
     }
   };
+
+  const loadQuotationDetail = useCallback(
+    async (id: number) => {
+      try {
+        const res = await getQuotation(id);
+        if (res) setQuotationDetail(res);
+      } catch (e: any) {
+        messageApi.error(e?.message || t('app.kuaizhizao.quotation.detailFailed'));
+      }
+    },
+    [messageApi, t],
+  );
 
   /** 从销售订单全链路浮层「打开报价单」跳转携带 state，到达本页后自动打开详情 */
   useEffect(() => {
@@ -1544,6 +1576,47 @@ const QuotationsPage: React.FC = () => {
     });
   };
 
+  const handleConvertToContract = (record: Quotation) => {
+    Modal.confirm({
+      title: t('app.kuaizhizao.quotation.pushToSalesContract'),
+      content: t('app.kuaizhizao.quotation.pushToSalesContractConfirm', { code: record.quotation_code }),
+      onOk: async () => {
+        try {
+          const contract = await salesContractApi.convertFromQuotation(record.id!);
+          const contractId = contract.id;
+          const contractCode = contract.contract_code || '';
+          messageApi.success({
+            content: (
+              <span>
+                {t('app.kuaizhizao.quotation.pushedToSalesContract')}
+                {contractId ? (
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: 0, height: 'auto' }}
+                    onClick={() => navigate(salesContractEditPath(contractId))}
+                  >
+                    {contractCode}
+                  </Button>
+                ) : (
+                  contractCode
+                )}
+              </span>
+            ),
+            duration: 6,
+          });
+          invalidateMenuBadgeCounts();
+          actionRef.current?.reload();
+          if (quotationDetail?.id === record.id) {
+            void loadQuotationDetail(record.id!);
+          }
+        } catch (error: any) {
+          messageApi.error(error?.message || t('app.kuaizhizao.quotation.pushToSalesContractFailed'));
+        }
+      },
+    });
+  };
+
   // 统一审核动作由 UniWorkflowActions 接管（提交/撤回/通过/驳回/反审核）
 
   const handleConfirmCustomer = (record: Quotation) => {
@@ -1632,7 +1705,13 @@ const QuotationsPage: React.FC = () => {
   const handlePrint = useCallback(
     (record: Quotation) => {
       if (!record.id) return;
-      openPrint({ documentType: 'quotation', documentId: record.id });
+      openPrint({
+        documentType: 'quotation',
+        documentId: record.id,
+        pdfDownloadFilename: record.quotation_code
+          ? `${record.quotation_code}.pdf`
+          : `quotation-${record.id}.pdf`,
+      });
     },
     [openPrint],
   );
@@ -1692,13 +1771,19 @@ const QuotationsPage: React.FC = () => {
     (record: Quotation) => {
       const superseded = isQuotationSuperseded(record);
       const convertible = canConvertQuotation(record, quotationAuditRequired);
+      const contractConvertible = canConvertQuotationToContract(record);
+      const hasContract = record.contract_id != null && Number(record.contract_id) > 0;
       return buildUniPushMenuItems([
         {
           key: 'sales-order',
           label: t('app.kuaizhizao.quotation.convertToSalesOrder'),
           icon: <SwapOutlined />,
           disabled: superseded || !convertible,
-          title: superseded ? t('app.kuaizhizao.quotation.supersededConvertHint') : undefined,
+          title: superseded
+            ? t('app.kuaizhizao.quotation.supersededConvertHint')
+            : hasContract
+              ? t('app.kuaizhizao.quotation.alreadyLinkedContract')
+              : undefined,
           onClick: () => {
             if (superseded || !convertible) return;
             void (async () => {
@@ -1711,9 +1796,40 @@ const QuotationsPage: React.FC = () => {
             })();
           },
         },
+        {
+          key: 'sales-contract',
+          label: t('app.kuaizhizao.quotation.pushToSalesContract'),
+          icon: <FileTextOutlined />,
+          disabled: superseded || !contractConvertible || !salesContractPerms.canCreate,
+          title: superseded
+            ? t('app.kuaizhizao.quotation.supersededConvertHint')
+            : hasContract
+              ? t('app.kuaizhizao.quotation.alreadyLinkedContract')
+              : !salesContractPerms.canCreate
+                ? t('common.permissionDenied')
+                : undefined,
+          onClick: () => {
+            if (superseded || !contractConvertible || !salesContractPerms.canCreate) return;
+            void (async () => {
+              try {
+                const latest = await getQuotation(record.id!);
+                handleConvertToContract(latest);
+              } catch (error: any) {
+                messageApi.error(error?.message || t('app.kuaizhizao.quotation.loadFailed'));
+              }
+            })();
+          },
+        },
       ]);
     },
-    [handleConvert, messageApi, quotationAuditRequired],
+    [
+      handleConvert,
+      handleConvertToContract,
+      messageApi,
+      quotationAuditRequired,
+      salesContractPerms.canCreate,
+      t,
+    ],
   );
 
   const toolbarPushMenuItems = useMemo(
@@ -1848,6 +1964,7 @@ const QuotationsPage: React.FC = () => {
         notes: detail.notes,
         attachments: mapAttachmentsToUploadList(detail.attachments),
         price_type: detail.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
+        discount_amount: Number(detail.discount_amount ?? 0) || 0,
         items: (detail.items || []).map((it) => ({
           material_id: it.material_id!,
           material_code: it.material_code || '',
@@ -1930,6 +2047,7 @@ const QuotationsPage: React.FC = () => {
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
         price_type: values.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
+        discount_amount: Number(values.discount_amount ?? 0) || 0,
         items: submitItems,
       },
       { autoSubmit: !options?.asDraft },
@@ -2015,6 +2133,7 @@ const QuotationsPage: React.FC = () => {
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
       price_type: values.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
+      discount_amount: Number(values.discount_amount ?? 0) || 0,
       items: submitItems,
     });
     messageApi.success(t('common.updateSuccess'));
@@ -2051,7 +2170,7 @@ const QuotationsPage: React.FC = () => {
       title: t('common.status'),
       dataIndex: 'status',
       render: (_, r) => {
-        const c = getQuotationStatusTagProps(r, quotationAuditRequired);
+        const c = getQuotationStatusTagProps(r, quotationAuditRequired, t);
         return <Tag {...resolveStatusTagDisplayProps(c)}>{c.text}</Tag>;
       },
     },
@@ -2067,6 +2186,16 @@ const QuotationsPage: React.FC = () => {
       dataIndex: 'price_type',
       render: (_: unknown, r: Quotation) =>
         r.price_type === 'tax_inclusive' ? t('app.kuaizhizao.salesOrder.taxInclusive') : t('app.kuaizhizao.salesOrder.taxExclusive'),
+    },
+    {
+      title: t('app.kuaizhizao.salesOrder.discountAmount'),
+      dataIndex: 'discount_amount',
+      render: (_, r) =>
+        Number(r.discount_amount ?? 0) > 0 ? (
+          <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="amount" value={r.discount_amount} />
+        ) : (
+          '-'
+        ),
     },
     {
       title: t('app.kuaizhizao.quotation.colTotalAmount'),
@@ -2920,6 +3049,7 @@ const QuotationsPage: React.FC = () => {
                         quotation_date: dayjs(),
                         currency_code: defaultQuotationCurrency,
                         price_type: 'tax_exclusive',
+                        discount_amount: 0,
                       }
                     : undefined
                 }
@@ -2981,36 +3111,48 @@ const QuotationsPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.quotation.confirmBatchDelete', { count })}
-          toolBarActionsAfterDelete={[
-            <UniBatchMenuButton
-              key="quotation-batch-menu"
-              selectedRowKeys={selectedRowKeys}
-              menuItems={[
-                {
-                  key: 'confirmCustomer',
-                  label: t('app.kuaizhizao.quotation.batchConfirmCustomer'),
-                  icon: <CommentOutlined />,
-                  requireConfirm: true,
-                  confirmTitle: t('app.kuaizhizao.quotation.batchConfirmCustomer'),
-                  confirmDescription: (count) =>
-                    t('app.kuaizhizao.quotation.batchConfirmCustomerConfirm', { count }),
-                  onClick: handleBatchConfirmCustomer,
-                },
-                ...(quotationAuditRequired
-                  ? [
+          toolBarActionsAfterDelete={
+            quotationAuditRequired
+              ? [
+                  <UniBatchMenuButton
+                    key="quotation-batch-menu"
+                    selectedRowKeys={selectedRowKeys}
+                    menuItems={[
                       {
                         key: 'approve',
                         label: t('app.kuaizhizao.quotation.batchApprove'),
                         icon: <CheckOutlined />,
                         onClick: handleBatchApprove,
                       },
-                    ]
-                  : []),
-              ]}
-              toolBarButtonSize="middle"
-            />,
-          ]}
+                    ]}
+                    toolBarButtonSize="middle"
+                  />,
+                ]
+              : []
+          }
           toolBarActionsAfterBatch={[
+            <UniBatchButton
+              key="quotation-confirm-customer"
+              selectedRowKeys={selectedRowKeys}
+              onAction={handleBatchConfirmCustomer}
+              icon={<CommentOutlined />}
+              size="middle"
+              requireConfirm
+              confirmTitle={(count) =>
+                count === 1
+                  ? t('app.kuaizhizao.quotation.customerConfirm')
+                  : t('app.kuaizhizao.quotation.batchConfirm')
+              }
+              confirmDescription={(count) =>
+                count === 1
+                  ? t('app.kuaizhizao.quotation.customerConfirmContent')
+                  : t('app.kuaizhizao.quotation.batchConfirmCustomerConfirm', { count })
+              }
+            >
+              {selectedRowKeys.length <= 1
+                ? t('app.kuaizhizao.quotation.customerConfirm')
+                : t('app.kuaizhizao.quotation.batchConfirm')}
+            </UniBatchButton>,
             <Button
               key="toolbar-revision-direct"
               icon={<BranchesOutlined />}
@@ -3145,6 +3287,11 @@ const QuotationsPage: React.FC = () => {
               )}
               {canConvertQuotation(quotationDetail, quotationAuditRequired) && (
                 <Button type="primary" icon={<SwapOutlined />} onClick={() => handleConvert(quotationDetail)}>{t('app.kuaizhizao.quotation.convertToSalesOrder')}</Button>
+              )}
+              {canConvertQuotationToContract(quotationDetail) && salesContractPerms.canCreate && (
+                <Button icon={<FileTextOutlined />} onClick={() => handleConvertToContract(quotationDetail)}>
+                  {t('app.kuaizhizao.quotation.pushToSalesContract')}
+                </Button>
               )}
               {canRevokePushQuotation(quotationDetail) && (
                 <Button icon={<RollbackOutlined />} onClick={() => handleRevokePush(quotationDetail)}>{t('app.kuaizhizao.quotation.revokePush')}</Button>

@@ -2052,12 +2052,39 @@ class ApprovalInstanceService:
                 )
                 logger.info(f"工艺路线变更 {entity_id} 审批回调完成: {approval_instance.status}")
 
+            async def _handle_quotation() -> None:
+                from apps.kuaizhizao.models.quotation import Quotation
+                from apps.kuaizhizao.services.quotation_service import QuotationService
+
+                quotation = await Quotation.get_or_none(
+                    tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+                )
+                if not quotation:
+                    return
+                service = QuotationService()
+                if approval_instance.status == "approved":
+                    await service.approve_quotation(
+                        tenant_id=tenant_id,
+                        quotation_id=quotation.id,
+                        operator_id=approver_id,
+                        review_remarks="审批通过",
+                    )
+                elif approval_instance.status == "rejected":
+                    await service.reject_quotation(
+                        tenant_id=tenant_id,
+                        quotation_id=quotation.id,
+                        operator_id=approver_id,
+                        review_remarks="审批驳回",
+                    )
+                logger.info(f"报价单 {entity_id} 审批回调完成: {approval_instance.status}")
+
             completion_handlers = {
                 "sales_order": _handle_sales_order,
                 "demand": _handle_demand,
                 "purchase_order": _handle_purchase_order,
                 "bom_change": _handle_bom_change,
                 "process_route_change": _handle_process_route_change,
+                "quotation": _handle_quotation,
             }
             handler = completion_handlers.get(entity_type)
             if handler:

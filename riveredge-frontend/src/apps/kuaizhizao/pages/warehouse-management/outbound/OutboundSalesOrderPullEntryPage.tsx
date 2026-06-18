@@ -10,6 +10,12 @@ import { ArrowLeftOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { UploadFile } from 'antd/es/upload/interface';
 import {
+  draftDayjs,
+  draftOptionalNumber,
+  mergeRecordMaps,
+  usePullEntryFormDraft,
+} from '../shared/pullEntryFormDraft';
+import {
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   DocumentFormPageLayout,
   PAGE_SPACING,
@@ -52,6 +58,9 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
   const [deliveryTime, setDeliveryTime] = useState(() => dayjs());
   const [notes, setNotes] = useState('');
   const [attachments, setAttachments] = useState<UploadFile[]>([]);
+  const { bindSnapshot, persistNow, clearDraft, applyDraftOnce } = usePullEntryFormDraft(
+    'kuaizhizao:outbound-sales-order-pull',
+  );
 
   const pagePath =
     Number.isFinite(salesOrderId) && salesOrderId > 0 ? outboundSalesOrderEntryPath(salesOrderId) : OUTBOUND_LIST_PATH;
@@ -103,8 +112,30 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
   );
 
   const leavePage = useCallback(() => {
+    clearDraft();
     navigate(OUTBOUND_LIST_PATH);
-  }, [navigate]);
+  }, [clearDraft, navigate]);
+
+  useEffect(() => {
+    bindSnapshot(() => ({
+      quantities,
+      warehouseId,
+      deliveryTime,
+      notes,
+      receiverUuid: operatorHook.receiverUuid,
+      receiverName: operatorHook.receiverName,
+    }));
+    persistNow();
+  }, [
+    quantities,
+    warehouseId,
+    deliveryTime,
+    notes,
+    operatorHook.receiverUuid,
+    operatorHook.receiverName,
+    bindSnapshot,
+    persistNow,
+  ]);
 
   useEffect(() => {
     if (!(Number.isFinite(salesOrderId) && salesOrderId > 0)) {
@@ -146,6 +177,19 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
           initQty[it.id] = pending > 0 ? pending : 0;
         });
         setQuantities(initQty);
+        applyDraftOnce((draft) => {
+          if (draft.quantities) {
+            setQuantities((prev) => mergeRecordMaps(prev, draft.quantities as Record<number, number>));
+          }
+          const whId = draftOptionalNumber(draft.warehouseId);
+          if (whId != null) setWarehouseId(whId);
+          if (draft.deliveryTime) setDeliveryTime(draftDayjs(draft.deliveryTime));
+          if (typeof draft.notes === 'string') setNotes(draft.notes);
+          operatorHook.restoreReceiver(
+            typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
+            typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
+          );
+        });
       } catch (e: unknown) {
         messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseOutbound.entry.loadSalesOrderFailed'));
         leavePage();
@@ -153,7 +197,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [salesOrderId, leavePage, messageApi, t]);
+  }, [salesOrderId, leavePage, messageApi, t, applyDraftOnce, operatorHook.restoreReceiver]);
 
   const submit = async (mode: 'draft' | 'confirm') => {
     if (!warehouseId || !(warehouseId > 0)) {
@@ -210,6 +254,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
         attachments: normalizeDocumentAttachments(attachments),
       });
       invalidateMenuBadgeCounts();
+      clearDraft();
       if (mode === 'confirm') {
         navigate(OUTBOUND_LIST_PATH, {
           state: {

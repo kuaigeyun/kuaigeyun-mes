@@ -45,6 +45,8 @@ export interface Quotation {
   customer_phone?: string;
   total_quantity?: number;
   total_amount?: number;
+  /** 整单优惠金额（从价税合计扣减，不改明细单价） */
+  discount_amount?: number;
   /** 与销售订单一致：tax_inclusive 含税单价 / tax_exclusive 不含税单价 */
   price_type?: 'tax_inclusive' | 'tax_exclusive' | string;
   status?: string;

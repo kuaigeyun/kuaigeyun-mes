@@ -31,6 +31,7 @@ import {
 import { inboundReceiptTypeLabel } from './inboundHubTypes';
 import { INBOUND_LIST_PATH, inboundWorkOrderEntryPath } from './inboundPaths';
 import type { InboundReceiptType } from './inboundHubTypes';
+import { draftDayjs, draftOptionalNumber, usePullEntryFormDraft } from '../shared/pullEntryFormDraft';
 
 type PreviewLine = {
   material_id: number;
@@ -71,6 +72,9 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
   const [warehouseId, setWarehouseId] = useState<number | undefined>();
   const [receiptTime, setReceiptTime] = useState(() => dayjs());
   const [receiptNotes, setReceiptNotes] = useState('');
+  const { bindSnapshot, persistNow, clearDraft, applyDraftOnce } = usePullEntryFormDraft(
+    'kuaizhizao:inbound-work-order-pull',
+  );
 
   const line = preview?.lines?.[0];
   const receiptType: InboundReceiptType = preview?.inbound_doc_kind ?? 'finished_goods';
@@ -79,8 +83,30 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
   const maxQty = Number(line?.source_pending_quantity ?? 0);
 
   const leavePage = useCallback(() => {
+    clearDraft();
     navigate(INBOUND_LIST_PATH);
-  }, [navigate]);
+  }, [clearDraft, navigate]);
+
+  useEffect(() => {
+    bindSnapshot(() => ({
+      receiptQty,
+      warehouseId,
+      receiptTime,
+      receiptNotes,
+      receiverUuid: receiverHook.receiverUuid,
+      receiverName: receiverHook.receiverName,
+    }));
+    persistNow();
+  }, [
+    receiptQty,
+    warehouseId,
+    receiptTime,
+    receiptNotes,
+    receiverHook.receiverUuid,
+    receiverHook.receiverName,
+    bindSnapshot,
+    persistNow,
+  ]);
 
   useEffect(() => {
     if (!(Number.isFinite(woId) && woId > 0)) {
@@ -123,6 +149,18 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
         setWorkOrder(woRaw as Record<string, unknown>);
         const firstLine = previewRaw.lines[0];
         setReceiptQty(Number(firstLine.receipt_quantity ?? firstLine.source_pending_quantity ?? 0));
+        applyDraftOnce((draft) => {
+          const qty = draftOptionalNumber(draft.receiptQty);
+          if (qty != null) setReceiptQty(qty);
+          const whId = draftOptionalNumber(draft.warehouseId);
+          if (whId != null) setWarehouseId(whId);
+          if (draft.receiptTime) setReceiptTime(draftDayjs(draft.receiptTime));
+          if (typeof draft.receiptNotes === 'string') setReceiptNotes(draft.receiptNotes);
+          receiverHook.restoreReceiver(
+            typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
+            typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
+          );
+        });
       } catch (e: unknown) {
         messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseInbound.entry.workOrder.loadFailed'));
         leavePage();
@@ -130,7 +168,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [woId, leavePage, messageApi, t]);
+  }, [woId, leavePage, messageApi, t, applyDraftOnce, receiverHook.restoreReceiver]);
 
   const submit = async (mode: 'draft' | 'confirm') => {
     if (!preview || !line) return;
@@ -236,6 +274,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
         return;
       }
       invalidateMenuBadgeCounts();
+      clearDraft();
       if (mode === 'confirm') {
         navigate(INBOUND_LIST_PATH, {
           state: {

@@ -1,7 +1,7 @@
 /**
  * 客户跟进（销售极简 CRM）
  *
- * 列表与详情抽屉风格对齐报价单：生命周期列、UniLifecycle、DetailDrawerTemplate；
+ * 列表与详情抽屉风格对齐报价单：UniLifecycle、DetailDrawerTemplate；
  * 操作列仅返回 Button[] + rowActionKind，由 UniTable → uni-action 统一规范化。
  */
 
@@ -22,8 +22,6 @@ import {
   detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
-import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { rowActionKind, rowActionAddFollowUpFromDocument } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -355,16 +353,6 @@ const CustomerFollowUpsPage: React.FC = () => {
       width: 100,
       ellipsis: true,
       hideInSearch: true,
-    },
-    {
-      title: t('app.kuaizhizao.quotation.colLifecycle'),
-      dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => (
-        <ListUniLifecycleCell lifecycle={getCustomerFollowUpLifecycle(record, t)} />
-      ),
     },
     {
       title: t('common.actions'),

@@ -39,6 +39,12 @@ import {
   useInboundReceiverSelect,
 } from './inboundEntryShared';
 import { INBOUND_LIST_PATH, inboundOutsourceEntryPath } from './inboundPaths';
+import {
+  draftDayjs,
+  draftOptionalNumber,
+  mergeKeyedLineQuantities,
+  usePullEntryFormDraft,
+} from '../shared/pullEntryFormDraft';
 
 const PULL_TYPE_TO_RECEIPT_TYPE: Record<InboundOutsourcePullType, InboundReceiptType> = {
   outsource_receipt: 'outsource_receipt',
@@ -84,6 +90,9 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
   const [warehouseId, setWarehouseId] = useState<number | undefined>();
   const [receiptTime, setReceiptTime] = useState(() => dayjs());
   const [notes, setNotes] = useState('');
+  const { bindSnapshot, persistNow, clearDraft, applyDraftOnce, resetDraftRestore } = usePullEntryFormDraft(
+    'kuaizhizao:inbound-outsource-pull',
+  );
 
   const receiptType = PULL_TYPE_TO_RECEIPT_TYPE[pullType];
   const inboundTypeLabel = inboundReceiptTypeLabel(t, receiptType);
@@ -102,8 +111,42 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
   );
 
   const leavePage = useCallback(() => {
+    clearDraft();
     navigate(INBOUND_LIST_PATH);
-  }, [navigate]);
+  }, [clearDraft, navigate]);
+
+  useEffect(() => {
+    bindSnapshot(() => ({
+      warehouseId,
+      receiptTime,
+      notes,
+      receiverUuid: receiverHook.receiverUuid,
+      receiverName: receiverHook.receiverName,
+      receiptLine: receiptLine
+        ? {
+            receiptQuantity: receiptLine.receiptQuantity,
+            qualifiedQuantity: receiptLine.qualifiedQuantity,
+            unqualifiedQuantity: receiptLine.unqualifiedQuantity,
+          }
+        : undefined,
+      previewQtyByKey:
+        pullType === 'outsource_receipt'
+          ? undefined
+          : Object.fromEntries(previewLines.map((line) => [line.key, line.return_quantity])),
+    }));
+    persistNow();
+  }, [
+    warehouseId,
+    receiptTime,
+    notes,
+    receiptLine,
+    previewLines,
+    pullType,
+    receiverHook.receiverUuid,
+    receiverHook.receiverName,
+    bindSnapshot,
+    persistNow,
+  ]);
 
   useEffect(() => {
     if (!(Number.isFinite(woId) && woId > 0)) {
@@ -127,7 +170,8 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
   useEffect(() => {
     if (!Number.isFinite(woId) || woId <= 0) return;
     initRef.current = false;
-  }, [woId, pullType]);
+    resetDraftRestore();
+  }, [woId, pullType, resetDraftRestore]);
 
   useEffect(() => {
     if (!Number.isFinite(woId) || woId <= 0 || initRef.current) return;
@@ -202,6 +246,23 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           );
           setReceiptLine(null);
         }
+        applyDraftOnce((draft) => {
+          const whId = draftOptionalNumber(draft.warehouseId);
+          if (whId != null) setWarehouseId(whId);
+          if (draft.receiptTime) setReceiptTime(draftDayjs(draft.receiptTime));
+          if (typeof draft.notes === 'string') setNotes(draft.notes);
+          receiverHook.restoreReceiver(
+            typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
+            typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
+          );
+          if (pullType === 'outsource_receipt' && draft.receiptLine) {
+            setReceiptLine((prev) => (prev ? { ...prev, ...(draft.receiptLine as Partial<OutsourceReceiptLine>) } : prev));
+          } else if (draft.previewQtyByKey) {
+            setPreviewLines((prev) =>
+              mergeKeyedLineQuantities(prev, draft.previewQtyByKey as Record<string, number>),
+            );
+          }
+        });
       } catch (e: unknown) {
         messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseInbound.entry.outsource.loadFailed'));
         leavePage();
@@ -209,7 +270,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [woId, pullType, leavePage, messageApi, t]);
+  }, [woId, pullType, leavePage, messageApi, t, applyDraftOnce, receiverHook.restoreReceiver]);
 
   const receiptTableData = useMemo(() => (receiptLine ? [receiptLine] : []), [receiptLine]);
 
@@ -465,6 +526,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
       }
 
       invalidateMenuBadgeCounts();
+      clearDraft();
       if (mode === 'confirm') {
         if (createdIds.length === 1) {
           navigate(INBOUND_LIST_PATH, {

@@ -59,8 +59,8 @@ import {
   buildDocumentCreateDraftKey,
   clearDocumentFormDraft,
   getDocumentFormDraft,
-  setDocumentFormDraft,
 } from '../../../../../utils/documentFormDraftCache';
+import { useDocumentCreateFormDraft } from '../../../../../hooks/useDocumentCreateFormDraft';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
@@ -378,6 +378,11 @@ const PurchaseOrdersPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<PurchaseOrder | null>(null);
   const formRef = useRef<any>(null);
+  const persistPurchaseOrderCreateDraft = useDocumentCreateFormDraft(
+    isCreatePage,
+    purchaseOrderCreateDraftKey,
+    formRef,
+  );
 
   const {
     customFields: purchaseOrderFormCustomFields,
@@ -2555,11 +2560,7 @@ const PurchaseOrdersPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
-                onValuesChange={(_, allValues) => {
-                  if (isCreatePage && purchaseOrderCreateDraftKey) {
-                    setDocumentFormDraft(purchaseOrderCreateDraftKey, allValues as Record<string, unknown>);
-                  }
-                }}
+                onValuesChange={persistPurchaseOrderCreateDraft}
                 onFinish={handleFormSubmit}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];

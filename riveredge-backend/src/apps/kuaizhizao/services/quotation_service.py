@@ -190,6 +190,41 @@ class QuotationService:
         if total_amount is not None and total_amount < Decimal("0"):
             raise ValidationError("报价单总金额不能为负数")
 
+    @staticmethod
+    def _apply_header_discount(
+        goods_incl: Decimal,
+        discount_amount: Optional[Decimal],
+    ) -> tuple[Decimal, Decimal]:
+        discount = Decimal(str(discount_amount or 0))
+        if discount < Decimal("0"):
+            raise ValidationError("整单优惠不能为负数")
+        if discount > goods_incl:
+            raise ValidationError("整单优惠不能大于价税合计")
+        net = (goods_incl - discount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        return discount, net
+
+    async def _refresh_quotation_totals(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        discount_amount: Optional[Decimal] = None,
+    ) -> None:
+        q = await Quotation.get(id=quotation_id)
+        items = await QuotationItem.filter(tenant_id=tenant_id, quotation_id=quotation_id).order_by("id")
+        total_qty = sum((it.quote_quantity or Decimal("0")) for it in items)
+        goods_incl = sum((it.total_amount or Decimal("0")) for it in items)
+        discount_val = (
+            discount_amount
+            if discount_amount is not None
+            else getattr(q, "discount_amount", None) or Decimal("0")
+        )
+        discount, net_amt = self._apply_header_discount(goods_incl, discount_val)
+        await Quotation.filter(id=quotation_id).update(
+            total_quantity=total_qty,
+            total_amount=net_amt,
+            discount_amount=discount,
+        )
+
     def _quotation_to_response(
         self,
         quotation: Quotation,
@@ -220,6 +255,7 @@ class QuotationService:
             "customer_phone": quotation.customer_phone,
             "total_quantity": quotation.total_quantity,
             "total_amount": quotation.total_amount,
+            "discount_amount": getattr(quotation, "discount_amount", None) or Decimal("0"),
             "price_type": getattr(quotation, "price_type", None) or "tax_exclusive",
             "status": quotation.status,
             "reviewer_id": quotation.reviewer_id,
@@ -381,6 +417,56 @@ class QuotationService:
                 "提交",
             )
 
+    async def _submit_quotation_with_audit(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        submitted_by: int,
+    ) -> None:
+        """草稿提交为已发送；需审核时启动平台审批实例。"""
+        quotation = await Quotation.get_or_none(
+            tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+        )
+        if not quotation:
+            raise NotFoundError(f"报价单不存在: {quotation_id}")
+
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "quotation"
+        )
+        if not audit_required:
+            async with in_transaction():
+                await self._release_quotation_from_draft(
+                    tenant_id,
+                    quotation_id,
+                    submitted_by,
+                    auto_approved=True,
+                )
+            return
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        instance = await ApprovalInstanceService.start_approval_for_node(
+            tenant_id=tenant_id,
+            user_id=submitted_by,
+            node_key="quotation",
+            entity_type="quotation",
+            entity_id=quotation.id,
+            entity_uuid=str(quotation.uuid),
+            title=f"报价单审核: {quotation.quotation_code}",
+            content=f"客户: {quotation.customer_name}, 金额: {quotation.total_amount}",
+        )
+        if not instance:
+            raise BusinessLogicError(
+                "报价单审核已开启但未找到可用的审批流程，请在配置中心检查 quotation 审批流程是否已激活"
+            )
+        async with in_transaction():
+            await self._release_quotation_from_draft(
+                tenant_id,
+                quotation_id,
+                submitted_by,
+                auto_approved=False,
+            )
+
     async def create_quotation(
         self,
         tenant_id: int,
@@ -415,6 +501,8 @@ class QuotationService:
             q_dict["superseded_by_id"] = None
             q_dict["formal_document_generated_at"] = None
             q_dict["root_quotation_id"] = None
+            q_dict["status"] = "草稿"
+            q_dict["review_status"] = None
 
             # 自动带出归属业务员
             if not q_dict.get("salesman_id") and q_dict.get("customer_id"):
@@ -468,21 +556,17 @@ class QuotationService:
                     notes=item_data.notes,
                 )
 
+            discount = Decimal(str(getattr(quotation_data, "discount_amount", None) or 0))
+            discount, net_amt = self._apply_header_discount(total_amt, discount)
             await Quotation.filter(id=quotation.id).update(
                 total_quantity=total_qty,
-                total_amount=total_amt,
+                total_amount=net_amt,
+                discount_amount=discount,
             )
             quotation = await Quotation.get(id=quotation.id)
             if auto_submit:
-                # 创建完成后即提交为「已发送」，生命周期进入「已报价」（审核按蓝图 quotation.auditRequired）
-                audit_required = await self.business_config_service.check_audit_required(
-                    tenant_id, "quotation"
-                )
-                await self._release_quotation_from_draft(
-                    tenant_id,
-                    quotation.id,
-                    created_by,
-                    auto_approved=not audit_required,
+                await self._submit_quotation_with_audit(
+                    tenant_id, quotation.id, created_by
                 )
                 quotation = await Quotation.get(id=quotation.id)
             items = await QuotationItem.filter(
@@ -506,16 +590,7 @@ class QuotationService:
             raise BusinessLogicError(
                 f"仅草稿状态可提交，当前状态: {quotation.status}"
             )
-        audit_required = await self.business_config_service.check_audit_required(
-            tenant_id, "quotation"
-        )
-        async with in_transaction():
-            await self._release_quotation_from_draft(
-                tenant_id,
-                quotation_id,
-                submitted_by,
-                auto_approved=not audit_required,
-            )
+        await self._submit_quotation_with_audit(tenant_id, quotation_id, submitted_by)
         return await self.get_quotation_by_id(
             tenant_id, quotation_id, include_items=True
         )
@@ -545,9 +620,17 @@ class QuotationService:
 
         op_name = await AppBaseService().get_user_name(withdrawn_by)
         async with in_transaction():
+            from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+            await ApprovalInstanceService.cancel_approval(
+                tenant_id=tenant_id,
+                entity_type="quotation",
+                entity_id=quotation_id,
+                operator_id=withdrawn_by,
+            )
             await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
                 status="草稿",
-                review_status="待审核",
+                review_status=None,
                 reviewer_id=None,
                 reviewer_name=None,
                 review_time=None,
@@ -587,27 +670,44 @@ class QuotationService:
         rs = (quotation.review_status or "").strip()
         if rs not in LEGACY_PENDING_VALUES and rs != "":
             raise BusinessLogicError(f"仅待审核的报价单可审核通过，当前审核状态: {quotation.review_status}")
-        now = datetime.now()
-        op_name = await AppBaseService().get_user_name(operator_id)
-        async with in_transaction():
-            await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
-                review_status="已通过",
-                reviewer_id=operator_id,
-                reviewer_name=op_name,
-                review_time=now,
-                review_remarks=review_remarks,
-                updated_by=operator_id,
-            )
-            await self._log_quotation_state_transition(
-                tenant_id,
-                quotation_id,
-                "待审核",
-                "已通过",
-                operator_id,
-                op_name,
-                "审核通过",
-            )
-        return await self.get_quotation_by_id(tenant_id, quotation_id, include_items=True)
+
+        from core.services.approval.uni_audit_service import UniAuditService
+
+        async def _do_approve() -> QuotationResponse:
+            now = datetime.now()
+            op_name = await AppBaseService().get_user_name(operator_id)
+            async with in_transaction():
+                await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
+                    review_status="已通过",
+                    reviewer_id=operator_id,
+                    reviewer_name=op_name,
+                    review_time=now,
+                    review_remarks=review_remarks,
+                    updated_by=operator_id,
+                )
+                await self._log_quotation_state_transition(
+                    tenant_id,
+                    quotation_id,
+                    "待审核",
+                    "已通过",
+                    operator_id,
+                    op_name,
+                    "审核通过",
+                )
+            return await self.get_quotation_by_id(tenant_id, quotation_id, include_items=True)
+
+        result = await UniAuditService.approve_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="quotation",
+            entity_id=quotation_id,
+            approver_id=operator_id,
+            flow_approve=_do_approve,
+        )
+        return (
+            result
+            if result is not None
+            else await self.get_quotation_by_id(tenant_id, quotation_id, include_items=True)
+        )
 
     async def reject_quotation(
         self,
@@ -629,28 +729,47 @@ class QuotationService:
         rs = (quotation.review_status or "").strip()
         if rs not in LEGACY_PENDING_VALUES and rs != "":
             raise BusinessLogicError(f"仅待审核的报价单可驳回，当前审核状态: {quotation.review_status}")
-        now = datetime.now()
-        op_name = await AppBaseService().get_user_name(operator_id)
-        async with in_transaction():
-            await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
-                status="已拒绝",
-                review_status="审核驳回",
-                reviewer_id=operator_id,
-                reviewer_name=op_name,
-                review_time=now,
-                review_remarks=review_remarks,
-                updated_by=operator_id,
-            )
-            await self._log_quotation_state_transition(
-                tenant_id,
-                quotation_id,
-                "待审核",
-                "已拒绝",
-                operator_id,
-                op_name,
-                "审核驳回",
-            )
-        return await self.get_quotation_by_id(tenant_id, quotation_id, include_items=True)
+
+        from core.services.approval.uni_audit_service import UniAuditService
+
+        async def _do_reject(reason: Optional[str]) -> QuotationResponse:
+            now = datetime.now()
+            op_name = await AppBaseService().get_user_name(operator_id)
+            reject_remarks = reason or review_remarks
+            async with in_transaction():
+                await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
+                    status="已拒绝",
+                    review_status="审核驳回",
+                    reviewer_id=operator_id,
+                    reviewer_name=op_name,
+                    review_time=now,
+                    review_remarks=reject_remarks,
+                    updated_by=operator_id,
+                )
+                await self._log_quotation_state_transition(
+                    tenant_id,
+                    quotation_id,
+                    "待审核",
+                    "已拒绝",
+                    operator_id,
+                    op_name,
+                    "审核驳回",
+                )
+            return await self.get_quotation_by_id(tenant_id, quotation_id, include_items=True)
+
+        result = await UniAuditService.reject_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="quotation",
+            entity_id=quotation_id,
+            approver_id=operator_id,
+            reason=review_remarks,
+            flow_reject=_do_reject,
+        )
+        return (
+            result
+            if result is not None
+            else await self.get_quotation_by_id(tenant_id, quotation_id, include_items=True)
+        )
 
     async def revoke_review_quotation(
         self,
@@ -1050,14 +1169,21 @@ class QuotationService:
                         quote_quantity=qty,
                         unit_price=unit_pr,
                         tax_rate=tax_r,
-                    total_amount=amt,
-                    variant_attributes=getattr(item_data, "variant_attributes", None),
-                    delivery_date=item_data.delivery_date,
-                    notes=item_data.notes,
+                        total_amount=amt,
+                        variant_attributes=getattr(item_data, "variant_attributes", None),
+                        delivery_date=item_data.delivery_date,
+                        notes=item_data.notes,
                     )
-                await Quotation.filter(id=quotation_id).update(
-                    total_quantity=total_qty,
-                    total_amount=total_amt,
+                await self._refresh_quotation_totals(
+                    tenant_id,
+                    quotation_id,
+                    getattr(quotation_data, "discount_amount", None),
+                )
+            elif quotation_data.discount_amount is not None:
+                await self._refresh_quotation_totals(
+                    tenant_id,
+                    quotation_id,
+                    quotation_data.discount_amount,
                 )
 
         return await self.get_quotation_by_id(tenant_id, quotation_id, include_items=True)
@@ -1136,9 +1262,12 @@ class QuotationService:
                 customer_phone=overrides.get("customer_phone", latest.customer_phone),
                 total_quantity=overrides.get("total_quantity", latest.total_quantity),
                 total_amount=overrides.get("total_amount", latest.total_amount),
+                discount_amount=overrides.get(
+                    "discount_amount", getattr(latest, "discount_amount", None) or Decimal("0")
+                ),
                 price_type=row_price_type,
                 status="草稿",
-                review_status="待审核",
+                review_status=None,
                 reviewer_id=None,
                 reviewer_name=None,
                 review_time=None,
@@ -1243,10 +1372,10 @@ class QuotationService:
                     notes=nit,
                 )
 
-            await Quotation.filter(id=new_row.id).update(
-                total_quantity=total_qty,
-                total_amount=total_amt,
+            disc = overrides.get(
+                "discount_amount", getattr(latest, "discount_amount", None) or Decimal("0")
             )
+            await self._refresh_quotation_totals(tenant_id, new_row.id, disc)
 
         return await self.get_quotation_by_id(tenant_id, new_row.id, include_items=True)
 
@@ -1354,6 +1483,20 @@ class QuotationService:
 
         q_price_type = getattr(quotation, "price_type", None) or "tax_exclusive"
 
+        all_items = await QuotationItem.filter(
+            tenant_id=tenant_id, quotation_id=quotation_id
+        ).order_by("id")
+        full_goods = sum((it.total_amount or Decimal("0")) for it in all_items)
+        selected_goods = sum((it.total_amount or Decimal("0")) for it in items)
+        q_discount = Decimal(str(getattr(quotation, "discount_amount", None) or 0))
+        if full_goods > 0 and len(items) < len(all_items):
+            discount = (q_discount * selected_goods / full_goods).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+        else:
+            discount = q_discount
+        selected_qty = sum((it.quote_quantity or Decimal("0")) for it in items)
+
         so_items = [
             SalesOrderItemCreate(
                 material_id=it.material_id,
@@ -1379,8 +1522,8 @@ class QuotationService:
             customer_name=quotation.customer_name,
             customer_contact=quotation.customer_contact,
             customer_phone=quotation.customer_phone,
-            total_quantity=quotation.total_quantity,
-            total_amount=quotation.total_amount,
+            total_quantity=selected_qty,
+            discount_amount=discount,
             price_type=q_price_type,
             status=DemandStatus.DRAFT,
             review_status=ReviewStatus.PENDING,

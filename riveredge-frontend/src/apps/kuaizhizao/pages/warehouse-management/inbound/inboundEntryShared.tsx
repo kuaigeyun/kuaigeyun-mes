@@ -145,6 +145,11 @@ export function useInboundReceiverSelect() {
     [receiverSelectOptions],
   );
 
+  const restoreReceiver = useCallback((uuid?: string, name?: string) => {
+    if (uuid) setReceiverUuid(uuid);
+    if (name !== undefined) setReceiverName(name);
+  }, []);
+
   return {
     currentUser,
     receiverUuid,
@@ -153,6 +158,7 @@ export function useInboundReceiverSelect() {
     receiverSelectOptions,
     debounceLoadReceiverOptions,
     handleReceiverChange,
+    restoreReceiver,
   };
 }
 

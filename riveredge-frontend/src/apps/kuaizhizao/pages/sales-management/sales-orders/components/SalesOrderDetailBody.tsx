@@ -320,6 +320,16 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
               : t('app.kuaizhizao.salesOrder.taxExclusive'),
         },
         {
+          key: 'discount_amount',
+          label: t('app.kuaizhizao.salesOrder.discountAmount'),
+          children:
+            Number(order.discount_amount ?? 0) > 0 ? (
+              <AmountDisplay resource={SO} fieldName="amount" value={order.discount_amount ?? 0} />
+            ) : (
+              '-'
+            ),
+        },
+        {
           key: 'total_amount',
           label: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
           children: <AmountDisplay resource={SO} fieldName="total_amount" value={order.total_amount ?? 0} />,

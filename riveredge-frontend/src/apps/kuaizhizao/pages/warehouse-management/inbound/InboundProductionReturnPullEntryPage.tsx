@@ -30,6 +30,12 @@ import {
 } from './inboundEntryShared';
 import { inboundReceiptTypeLabel } from './inboundHubTypes';
 import { INBOUND_LIST_PATH, inboundProductionReturnEntryPath } from './inboundPaths';
+import {
+  draftDayjs,
+  draftOptionalNumber,
+  mergeKeyedLineQuantities,
+  usePullEntryFormDraft,
+} from '../shared/pullEntryFormDraft';
 
 type ReturnLine = {
   key: number;
@@ -65,6 +71,9 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
   const [warehouseId, setWarehouseId] = useState<number | undefined>();
   const [returnTime, setReturnTime] = useState(() => dayjs());
   const [returnNotes, setReturnNotes] = useState('');
+  const { bindSnapshot, persistNow, clearDraft, applyDraftOnce } = usePullEntryFormDraft(
+    'kuaizhizao:inbound-production-return-pull',
+  );
 
   const pagePath =
     Number.isFinite(workOrderId) && workOrderId > 0
@@ -81,8 +90,32 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
   );
 
   const leavePage = useCallback(() => {
+    clearDraft();
     navigate(INBOUND_LIST_PATH);
-  }, [navigate]);
+  }, [clearDraft, navigate]);
+
+  useEffect(() => {
+    bindSnapshot(() => ({
+      pickingId,
+      lineReturnQty: Object.fromEntries(lines.map((row) => [row.key, row.return_quantity])),
+      warehouseId,
+      returnTime,
+      returnNotes,
+      receiverUuid: receiverHook.receiverUuid,
+      receiverName: receiverHook.receiverName,
+    }));
+    persistNow();
+  }, [
+    pickingId,
+    lines,
+    warehouseId,
+    returnTime,
+    returnNotes,
+    receiverHook.receiverUuid,
+    receiverHook.receiverName,
+    bindSnapshot,
+    persistNow,
+  ]);
 
   const loadPickings = useCallback(async (woId: number) => {
     setPickingLoading(true);
@@ -183,6 +216,31 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
         setWorkOrder(woRaw as Record<string, unknown>);
         setWarehouseOptions(mapWarehouseSelectOptions(whRes));
         await loadPickings(workOrderId);
+        applyDraftOnce(async (draft) => {
+          const whId = draftOptionalNumber(draft.warehouseId);
+          if (whId != null) setWarehouseId(whId);
+          if (draft.returnTime) setReturnTime(draftDayjs(draft.returnTime));
+          if (typeof draft.returnNotes === 'string') setReturnNotes(draft.returnNotes);
+          receiverHook.restoreReceiver(
+            typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
+            typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
+          );
+          const draftPickingId = draftOptionalNumber(draft.pickingId);
+          if (draftPickingId != null) {
+            setPickingId(draftPickingId);
+            await loadPickingLines(draftPickingId);
+            const qtyByKey = draft.lineReturnQty as Record<number, number> | undefined;
+            if (qtyByKey) {
+              setLines((prev) =>
+                prev.map((row) =>
+                  qtyByKey[row.key] != null
+                    ? { ...row, return_quantity: Number(qtyByKey[row.key]) }
+                    : row,
+                ),
+              );
+            }
+          }
+        });
       } catch (e: unknown) {
         messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseInbound.entry.workOrder.loadFailed'));
         leavePage();
@@ -190,7 +248,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [workOrderId, leavePage, loadPickings, messageApi, t]);
+  }, [workOrderId, leavePage, loadPickings, loadPickingLines, messageApi, t, applyDraftOnce, receiverHook.restoreReceiver]);
 
   const submit = async (mode: 'draft' | 'confirm') => {
     if (!pickingId) {
@@ -250,6 +308,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
         return;
       }
       invalidateMenuBadgeCounts();
+      clearDraft();
       if (mode === 'confirm') {
         navigate(INBOUND_LIST_PATH, {
           state: {

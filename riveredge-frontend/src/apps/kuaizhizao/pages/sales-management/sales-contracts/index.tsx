@@ -1012,6 +1012,8 @@ const SalesContractsPage: React.FC = () => {
 
       attachments: normalizeDocumentAttachments(values.attachments),
 
+      discount_amount: Number(values.discount_amount ?? 0) || 0,
+
       items: validItems.map((it: any) => {
         const resolved = resolveContractLineMaterialFields(it, materialList);
         return {
@@ -1073,6 +1075,7 @@ const SalesContractsPage: React.FC = () => {
         valid_from: dayjs(),
         price_type: 'tax_exclusive',
         currency_code: 'CNY',
+        discount_amount: 0,
         items: [{ ...defaultContractItem }],
         milestones: [],
         term_group_id: undefined,
@@ -1106,6 +1109,7 @@ const SalesContractsPage: React.FC = () => {
           valid_to: data.valid_to ? dayjs(data.valid_to) : undefined,
           price_type: data.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
           currency_code: data.currency_code || 'CNY',
+          discount_amount: Number(data.discount_amount ?? 0) || 0,
           salesman_name: data.salesman_name,
           shipping_address: data.shipping_address,
           shipping_method: data.shipping_method,
@@ -2500,6 +2504,21 @@ const SalesContractsPage: React.FC = () => {
 
     {
 
+      title: t('app.kuaizhizao.salesOrder.discountAmount'),
+
+      dataIndex: 'discount_amount',
+
+      render: (_, r) =>
+        Number(r.discount_amount ?? 0) > 0 ? (
+          <AmountDisplay resource={SC} fieldName="amount" value={r.discount_amount} />
+        ) : (
+          '-'
+        ),
+
+    },
+
+    {
+
       title: t('app.kuaizhizao.salesContract.contractAmount'),
 
       dataIndex: 'total_amount',
@@ -2701,7 +2720,7 @@ const SalesContractsPage: React.FC = () => {
                   const text = first?.errors?.filter(Boolean)[0];
                   messageApi.error(text || t('components.layoutTemplates.formModal.checkFormHint'));
                 }}
-                initialValues={isCreatePage ? { items: [{ ...defaultContractItem }] } : undefined}
+                initialValues={isCreatePage ? { items: [{ ...defaultContractItem }], discount_amount: 0 } : undefined}
               >
                 {renderCreateForm()}
               </ProForm>

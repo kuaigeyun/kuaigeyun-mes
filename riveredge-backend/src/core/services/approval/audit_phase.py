@@ -24,6 +24,10 @@ _APPROVED_ONGOING = {
 _REJECTED_STATUS = {"rejected", "已驳回", "审核驳回"}
 _REVIEW_APPROVED = {"approved", "审核通过", "已通过", "通过", "已审核"}
 _REVIEW_REJECTED = {"rejected", "已驳回", "审核驳回"}
+_REVIEW_PENDING = {"待审核", "pending_review", "pending_approval", "已提交"}
+
+# 提交后仍保持主状态为草稿、仅 review_status 进入待审的单据（如采购询价）
+_DRAFT_REVIEW_PENDING_ENTITY_TYPES = frozenset({"purchase_inquiry"})
 
 # phase -> 该相位下允许的审核动作（前端据此渲染按钮，无需任何本地状态数组）
 _ALLOWED_ACTIONS_BY_PHASE: Dict[str, List[str]] = {
@@ -61,7 +65,10 @@ def derive_audit_phase(
         phase = "rejected"
     elif s in _DRAFT:
         # 主状态仍为草稿但已提交待审（如采购询价单 status=DRAFT + review_status=待审核）
-        if r in {_norm("待审核"), _norm("pending_review"), _norm("pending_approval"), _norm("已提交")}:
+        if (
+            entity_type in _DRAFT_REVIEW_PENDING_ENTITY_TYPES
+            and r in _REVIEW_PENDING
+        ):
             phase = "pending"
         else:
             phase = "draft"

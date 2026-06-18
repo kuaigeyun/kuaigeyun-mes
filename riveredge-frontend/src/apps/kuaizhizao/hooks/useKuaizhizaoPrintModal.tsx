@@ -15,6 +15,7 @@ export interface KuaizhizaoPrintTarget {
   documentId: number;
   title?: string;
   printApiPath?: string;
+  pdfDownloadFilename?: string;
 }
 
 export function useKuaizhizaoPrintModal(options?: {
@@ -42,6 +43,7 @@ export function useKuaizhizaoPrintModal(options?: {
             : ''
         }
         title={target?.title ?? (target ? getKuaizhizaoPrintTitle(target.documentType) : '打印预览')}
+        pdfDownloadFilename={target?.pdfDownloadFilename}
         onAfterPrint={target && options?.onAfterPrint ? () => options.onAfterPrint!(target) : undefined}
       />
     ),

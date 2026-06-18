@@ -1,4 +1,6 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { NavigationType, UNSAFE_LocationContext as LocationContext } from 'react-router-dom';
+import type { Location } from 'react-router-dom';
 
 type CacheEntry = {
   node: React.ReactNode;
@@ -18,8 +20,38 @@ const routeTransitionStyle: React.CSSProperties = {
   ...routePaneStyle,
 };
 
+/** 将 UniTabs 的 tabKey（pathname + 可选 query）解析为独立 Location，供缓存页使用。 */
+function parseTabKeyToLocation(tabKey: string): Location {
+  const qIndex = tabKey.indexOf('?');
+  const pathname = qIndex >= 0 ? tabKey.slice(0, qIndex) : tabKey;
+  const search = qIndex >= 0 ? tabKey.slice(qIndex) : '';
+  return {
+    pathname,
+    search,
+    hash: '',
+    state: null,
+    key: `tab-cache:${tabKey}`,
+  };
+}
+
 /**
- * 多标签页路由缓存：已打开的标签切换时不卸载页面，避免新建/编辑表单数据丢失。
+ * 为每个缓存 Tab 提供「冻结」的路由位置。
+ * 否则切到其他 Tab 时全局 location 变化，同一页面组件（如报价 list+new 共用）会误判路由而卸载表单。
+ */
+function TabRouteLocationScope({ tabKey, children }: { tabKey: string; children: React.ReactNode }) {
+  const locationContext = useMemo(
+    () => ({
+      location: parseTabKeyToLocation(tabKey),
+      navigationType: NavigationType.Pop,
+    }),
+    [tabKey],
+  );
+  return <LocationContext.Provider value={locationContext}>{children}</LocationContext.Provider>;
+}
+
+/**
+ * 多标签页路由缓存（Keep-Alive）：已打开的标签切换时不卸载页面，避免新建/编辑表单（含 Form.List 明细）丢失。
+ * React 无 Vue keep-alive；通过 display:none 保活 + 每 Tab 独立 Location 上下文实现。
  * 标签关闭时从缓存移除；右键刷新时仅替换当前标签的缓存条目。
  */
 export function TabRouteCache({
@@ -64,7 +96,6 @@ export function TabRouteCache({
     });
   }, [activeKey, children, openTabKeys, refreshToken]);
 
-  const activeEntry = cache.get(activeKey);
   const nodesToRender =
     cache.size === 0
       ? [[activeKey, { node: children, refreshToken }] as const]
@@ -74,7 +105,6 @@ export function TabRouteCache({
     <>
       {nodesToRender.map(([key, entry]) => {
         const isActive = key === activeKey;
-        const node = isActive && activeEntry ? activeEntry.node : entry.node;
         return (
           <div
             key={key}
@@ -86,7 +116,7 @@ export function TabRouteCache({
             aria-hidden={!isActive}
           >
             <div className="riveredge-route-transition" style={routeTransitionStyle}>
-              {node}
+              <TabRouteLocationScope tabKey={key}>{entry.node}</TabRouteLocationScope>
             </div>
           </div>
         );

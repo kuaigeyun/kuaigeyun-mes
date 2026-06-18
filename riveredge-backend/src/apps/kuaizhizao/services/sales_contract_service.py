@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import List, Optional, Dict, Any
 
 from tortoise.expressions import Q
@@ -120,6 +120,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             "valid_to": contract.valid_to,
             "total_quantity": contract.total_quantity,
             "total_amount": contract.total_amount,
+            "discount_amount": getattr(contract, "discount_amount", None) or Decimal("0"),
             "released_quantity": contract.released_quantity,
             "released_amount": contract.released_amount,
             "remaining_quantity": rem_qty,
@@ -238,6 +239,41 @@ class SalesContractService(AppBaseService[SalesContract]):
             total_amt += Decimal(str(it.total_amount or 0))
         return total_qty, total_amt
 
+    @staticmethod
+    def _apply_header_discount(
+        goods_incl: Decimal,
+        discount_amount: Optional[Decimal],
+    ) -> tuple[Decimal, Decimal]:
+        discount = Decimal(str(discount_amount or 0))
+        if discount < Decimal("0"):
+            raise ValidationError("整单优惠不能为负数")
+        if discount > goods_incl:
+            raise ValidationError("整单优惠不能大于价税合计")
+        net = (goods_incl - discount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        return discount, net
+
+    async def _refresh_contract_totals(
+        self,
+        tenant_id: int,
+        contract_id: int,
+        discount_amount: Optional[Decimal] = None,
+    ) -> None:
+        contract = await SalesContract.get(id=contract_id)
+        items = await SalesContractItem.filter(tenant_id=tenant_id, contract_id=contract_id).order_by("id")
+        total_qty = sum((it.contract_quantity or Decimal("0")) for it in items)
+        goods_incl = sum((it.total_amount or Decimal("0")) for it in items)
+        discount_val = (
+            discount_amount
+            if discount_amount is not None
+            else getattr(contract, "discount_amount", None) or Decimal("0")
+        )
+        discount, net_amt = self._apply_header_discount(goods_incl, discount_val)
+        await SalesContract.filter(id=contract_id).update(
+            total_quantity=total_qty,
+            total_amount=net_amt,
+            discount_amount=discount,
+        )
+
     async def create_contract(
         self,
         tenant_id: int,
@@ -255,6 +291,9 @@ class SalesContractService(AppBaseService[SalesContract]):
             if cfg.get("parameters", {}).get("sales", {}).get("contract_milestone_required") and not data.milestones:
                 raise ValidationError("框架合同须维护至少一条收款里程碑")
         total_qty, total_amt = self._sum_items(data.items)
+        discount, net_amt = self._apply_header_discount(
+            total_amt, getattr(data, "discount_amount", None)
+        )
         term_group_id, term_group_name, contract_terms = await self._resolve_contract_terms(
             tenant_id, data.term_group_id, data.contract_terms
         )
@@ -272,7 +311,8 @@ class SalesContractService(AppBaseService[SalesContract]):
                 valid_from=data.valid_from or data.contract_date,
                 valid_to=data.valid_to,
                 total_quantity=total_qty,
-                total_amount=total_amt,
+                total_amount=net_amt,
+                discount_amount=discount,
                 price_type=data.price_type or "tax_exclusive",
                 currency_code=data.currency_code or "CNY",
                 status="草稿",
@@ -460,9 +500,6 @@ class SalesContractService(AppBaseService[SalesContract]):
             if data.items is not None:
                 if not data.items:
                     raise ValidationError("合同明细不能为空")
-                total_qty, total_amt = self._sum_items(data.items)
-                contract.total_quantity = total_qty
-                contract.total_amount = total_amt
                 await SalesContractItem.filter(tenant_id=tenant_id, contract_id=contract_id).delete()
                 for it in data.items:
                     await SalesContractItem.create(
@@ -481,6 +518,22 @@ class SalesContractService(AppBaseService[SalesContract]):
                         delivery_date=it.delivery_date,
                         notes=it.notes,
                     )
+                await self._refresh_contract_totals(
+                    tenant_id,
+                    contract_id,
+                    getattr(data, "discount_amount", None),
+                )
+            elif data.discount_amount is not None:
+                await self._refresh_contract_totals(
+                    tenant_id,
+                    contract_id,
+                    data.discount_amount,
+                )
+            if data.items is not None or data.discount_amount is not None:
+                refreshed = await SalesContract.get(id=contract_id)
+                contract.total_quantity = refreshed.total_quantity
+                contract.total_amount = refreshed.total_amount
+                contract.discount_amount = refreshed.discount_amount
             if data.milestones is not None:
                 await SalesContractMilestone.filter(tenant_id=tenant_id, contract_id=contract_id).delete()
                 for ms in data.milestones:
@@ -861,6 +914,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             shipping_method=quotation.shipping_method,
             payment_terms=quotation.payment_terms,
             quotation_id=quotation_id,
+            discount_amount=getattr(quotation, "discount_amount", None) or Decimal("0"),
             notes=quotation.notes,
             items=[
                 SalesContractItemCreate(
@@ -949,6 +1003,14 @@ class SalesContractService(AppBaseService[SalesContract]):
             )
             for it, qty in plan
         ]
+        full_goods = sum((it.total_amount or Decimal("0")) for it in all_items)
+        contract_discount = Decimal(str(getattr(contract, "discount_amount", None) or 0))
+        if full_goods > 0 and order_amt < full_goods - Decimal("0.005"):
+            discount = (contract_discount * order_amt / full_goods).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+        else:
+            discount = contract_discount
         so_create = SalesOrderCreate(
             order_date=date.today(),
             delivery_date=delivery_date,
@@ -957,7 +1019,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             customer_contact=contract.customer_contact,
             customer_phone=contract.customer_phone,
             total_quantity=order_qty,
-            total_amount=order_amt,
+            discount_amount=discount,
             price_type=contract.price_type,
             status=DemandStatus.DRAFT,
             review_status=ReviewStatus.PENDING,

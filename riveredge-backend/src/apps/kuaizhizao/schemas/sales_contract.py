@@ -81,6 +81,7 @@ class SalesContractCreate(BaseModel):
     term_group_id: Optional[int] = None
     contract_terms: Optional[List[SalesContractTermSnapshot]] = None
     quotation_id: Optional[int] = None
+    discount_amount: Decimal = Decimal("0")
     notes: Optional[str] = None
     attachments: Optional[list] = None
     items: List[SalesContractItemCreate] = Field(default_factory=list)
@@ -105,6 +106,7 @@ class SalesContractUpdate(BaseModel):
     payment_terms: Optional[str] = None
     term_group_id: Optional[int] = None
     contract_terms: Optional[List[SalesContractTermSnapshot]] = None
+    discount_amount: Optional[Decimal] = None
     notes: Optional[str] = None
     attachments: Optional[list] = None
     items: Optional[List[SalesContractItemCreate]] = None
@@ -127,6 +129,7 @@ class SalesContractResponse(BaseModel):
     valid_to: Optional[date] = None
     total_quantity: Decimal
     total_amount: Decimal
+    discount_amount: Decimal = Decimal("0")
     released_quantity: Decimal
     released_amount: Decimal
     remaining_quantity: Optional[Decimal] = None

@@ -1174,8 +1174,15 @@ const SalesOrdersPage: React.FC = () => {
       // 计算金额汇总（对齐采购订单逻辑）
       values.price_type = values.price_type || 'tax_exclusive';
       const feeDetails = values.fee_details ?? [];
-      const sums = computeSalesDocumentTotals(validItems, feeDetails, values.price_type, 'required_quantity');
+      const sums = computeSalesDocumentTotals(
+        validItems,
+        feeDetails,
+        values.price_type,
+        'required_quantity',
+        values.discount_amount ?? 0,
+      );
       values.total_amount = sums.estimatedReceivable;
+      values.discount_amount = sums.discountAmount;
       values.total_fee_amount = sums.ourFees + sums.customerFees;
 
       // 格式化主表日期字段，避免后端报错
@@ -3386,7 +3393,8 @@ const SalesOrdersPage: React.FC = () => {
           shouldUpdate={(prev: any, curr: any) =>
             prev?.items !== curr?.items ||
             prev?.fee_details !== curr?.fee_details ||
-            prev?.price_type !== curr?.price_type
+            prev?.price_type !== curr?.price_type ||
+            prev?.discount_amount !== curr?.discount_amount
           }
         >
           {({ getFieldValue }: { getFieldValue: (n: string) => any }) => (

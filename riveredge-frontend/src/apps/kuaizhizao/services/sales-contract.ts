@@ -99,6 +99,9 @@ export interface SalesContract {
 
   total_amount?: number;
 
+  /** 整单优惠金额（从价税合计扣减，不改明细单价） */
+  discount_amount?: number;
+
   released_quantity?: number;
 
   released_amount?: number;

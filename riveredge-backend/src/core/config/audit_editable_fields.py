@@ -53,6 +53,7 @@ _DEFAULT_EDITABLE: Dict[str, EditableFieldsSpec] = {
         "valid_from",
         "valid_to",
         "attachments",
+        "discount_amount",
     ],
     "purchase_request": [
         "notes",

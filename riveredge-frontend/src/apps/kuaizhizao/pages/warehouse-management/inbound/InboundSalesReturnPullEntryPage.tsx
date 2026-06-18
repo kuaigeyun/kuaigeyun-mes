@@ -33,6 +33,12 @@ import {
 } from './inboundEntryShared';
 import { inboundReceiptTypeLabel } from './inboundHubTypes';
 import { INBOUND_LIST_PATH, inboundSalesReturnEntryPath } from './inboundPaths';
+import {
+  draftDayjs,
+  draftOptionalNumber,
+  mergeRecordMaps,
+  usePullEntryFormDraft,
+} from '../shared/pullEntryFormDraft';
 
 type PreviewLine = {
   sales_order_item_id?: number;
@@ -76,6 +82,9 @@ const InboundSalesReturnPullEntryPage: React.FC = () => {
   const [returnTime, setReturnTime] = useState(() => dayjs());
   const [returnNotes, setReturnNotes] = useState('');
   const [attachments, setAttachments] = useState<UploadFile[]>([]);
+  const { bindSnapshot, persistNow, clearDraft, applyDraftOnce } = usePullEntryFormDraft(
+    'kuaizhizao:inbound-sales-return-pull',
+  );
 
   const lines = preview?.lines ?? [];
   const pagePath =
@@ -95,8 +104,32 @@ const InboundSalesReturnPullEntryPage: React.FC = () => {
   );
 
   const leavePage = useCallback(() => {
+    clearDraft();
     navigate(INBOUND_LIST_PATH);
-  }, [navigate]);
+  }, [clearDraft, navigate]);
+
+  useEffect(() => {
+    bindSnapshot(() => ({
+      quantities,
+      defaultWarehouseId,
+      lineWh,
+      returnTime,
+      returnNotes,
+      receiverUuid: receiverHook.receiverUuid,
+      receiverName: receiverHook.receiverName,
+    }));
+    persistNow();
+  }, [
+    quantities,
+    defaultWarehouseId,
+    lineWh,
+    returnTime,
+    returnNotes,
+    receiverHook.receiverUuid,
+    receiverHook.receiverName,
+    bindSnapshot,
+    persistNow,
+  ]);
 
   useEffect(() => {
     if (!(Number.isFinite(salesOrderId) && salesOrderId > 0)) {
@@ -143,6 +176,22 @@ const InboundSalesReturnPullEntryPage: React.FC = () => {
         setPreview(previewRaw);
         setOrder(orderRaw as Record<string, unknown>);
         setQuantities(qtyMap);
+        applyDraftOnce((draft) => {
+          if (draft.quantities) {
+            setQuantities((prev) => mergeRecordMaps(prev, draft.quantities as Record<number, number>));
+          }
+          const whId = draftOptionalNumber(draft.defaultWarehouseId);
+          if (whId != null) setDefaultWarehouseId(whId);
+          if (draft.lineWh) {
+            setLineWh((prev) => mergeRecordMaps(prev, draft.lineWh as Record<number, number>));
+          }
+          if (draft.returnTime) setReturnTime(draftDayjs(draft.returnTime));
+          if (typeof draft.returnNotes === 'string') setReturnNotes(draft.returnNotes);
+          receiverHook.restoreReceiver(
+            typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
+            typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
+          );
+        });
       } catch (e: unknown) {
         messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseInbound.entry.salesReturn.loadFailed'));
         leavePage();
@@ -150,7 +199,7 @@ const InboundSalesReturnPullEntryPage: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [salesOrderId, leavePage, messageApi, t]);
+  }, [salesOrderId, leavePage, messageApi, t, applyDraftOnce, receiverHook.restoreReceiver]);
 
   const applyDefaultWarehouse = (warehouseId: number) => {
     setDefaultWarehouseId(warehouseId);
@@ -214,6 +263,7 @@ const InboundSalesReturnPullEntryPage: React.FC = () => {
         attachments: normalizeDocumentAttachments(attachments),
       });
       invalidateMenuBadgeCounts();
+      clearDraft();
       if (mode === 'confirm') {
         navigate(INBOUND_LIST_PATH, {
           state: {

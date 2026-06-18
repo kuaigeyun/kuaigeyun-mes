@@ -50,6 +50,12 @@ import {
 } from './inboundEntryShared';
 import { inboundReceiptTypeLabel } from './inboundHubTypes';
 import { INBOUND_LIST_PATH, inboundPoEntryPath } from './inboundPaths';
+import {
+  draftDayjs,
+  draftOptionalNumber,
+  mergeRecordMaps,
+  usePullEntryFormDraft,
+} from '../shared/pullEntryFormDraft';
 
 const InboundPoPullEntryPage: React.FC = () => {
   const { poId: poIdParam } = useParams<{ poId: string }>();
@@ -85,6 +91,9 @@ const InboundPoPullEntryPage: React.FC = () => {
   const [defaultWarehouseId, setDefaultWarehouseId] = useState<number | undefined>();
   const [receiptNotes, setReceiptNotes] = useState('');
   const [receiptAttachments, setReceiptAttachments] = useState<any[]>([]);
+  const { bindSnapshot, persistNow, clearDraft, applyDraftOnce } = usePullEntryFormDraft(
+    'kuaizhizao:inbound-po-pull',
+  );
 
   const outstandingItems = useMemo(() => getOutstandingPoItems(order), [order]);
   const totalReceiptQty = useMemo(
@@ -98,8 +107,42 @@ const InboundPoPullEntryPage: React.FC = () => {
   const pagePath = Number.isFinite(poId) && poId > 0 ? inboundPoEntryPath(poId) : INBOUND_LIST_PATH;
 
   const leavePage = useCallback(() => {
+    clearDraft();
     navigate(INBOUND_LIST_PATH);
-  }, [navigate]);
+  }, [clearDraft, navigate]);
+
+  useEffect(() => {
+    bindSnapshot(() => ({
+      quantities,
+      batchNumbers,
+      lineWh,
+      lineLoc,
+      lineLocCode,
+      serials,
+      defaultWarehouseId,
+      receiptTime,
+      deliveryNote,
+      receiptNotes,
+      receiverUuid: receiverHook.receiverUuid,
+      receiverName: receiverHook.receiverName,
+    }));
+    persistNow();
+  }, [
+    quantities,
+    batchNumbers,
+    lineWh,
+    lineLoc,
+    lineLocCode,
+    serials,
+    defaultWarehouseId,
+    receiptTime,
+    deliveryNote,
+    receiptNotes,
+    receiverHook.receiverUuid,
+    receiverHook.receiverName,
+    bindSnapshot,
+    persistNow,
+  ]);
 
   const applyLineWarehouse = useCallback(async (lineIds: number[], warehouseId: number) => {
     if (!lineIds.length) return;
@@ -262,6 +305,35 @@ const InboundPoPullEntryPage: React.FC = () => {
         } catch {
           /* 物料属性或库位加载失败不阻断录入 */
         }
+        applyDraftOnce((draft) => {
+          if (draft.quantities) {
+            setQuantities((prev) => mergeRecordMaps(prev, draft.quantities as Record<number, number>));
+          }
+          if (draft.batchNumbers) {
+            setBatchNumbers((prev) => mergeRecordMaps(prev, draft.batchNumbers as Record<number, string>));
+          }
+          if (draft.lineWh) {
+            setLineWh((prev) => mergeRecordMaps(prev, draft.lineWh as Record<number, number>));
+          }
+          if (draft.lineLoc) {
+            setLineLoc((prev) => ({ ...prev, ...(draft.lineLoc as Record<number, number | undefined>) }));
+          }
+          if (draft.lineLocCode) {
+            setLineLocCode((prev) => mergeRecordMaps(prev, draft.lineLocCode as Record<number, string>));
+          }
+          if (draft.serials) {
+            setSerials((prev) => ({ ...prev, ...(draft.serials as Record<number, string[]>) }));
+          }
+          const whId = draftOptionalNumber(draft.defaultWarehouseId);
+          if (whId != null) setDefaultWarehouseId(whId);
+          if (draft.receiptTime) setReceiptTime(draftDayjs(draft.receiptTime));
+          if (typeof draft.deliveryNote === 'string') setDeliveryNote(draft.deliveryNote);
+          if (typeof draft.receiptNotes === 'string') setReceiptNotes(draft.receiptNotes);
+          receiverHook.restoreReceiver(
+            typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
+            typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
+          );
+        });
       } catch (e: unknown) {
         messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseInbound.entry.purchase.loadFailed'));
         leavePage();
@@ -269,7 +341,7 @@ const InboundPoPullEntryPage: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [poId, leavePage, messageApi]);
+  }, [poId, leavePage, messageApi, applyDraftOnce, receiverHook.restoreReceiver]);
 
   const handleGenerateSerial = async (poItemId: number, qty: number) => {
     const meta = materialMeta[poItemId];
@@ -385,6 +457,7 @@ const InboundPoPullEntryPage: React.FC = () => {
       }
       await saveReceiptHeader(Number(created.id));
       invalidateMenuBadgeCounts();
+      clearDraft();
       if (mode === 'confirm') {
         navigate(INBOUND_LIST_PATH, {
           state: {

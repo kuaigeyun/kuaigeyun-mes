@@ -85,7 +85,8 @@ class QuotationBase(BaseSchema):
 
     # 金额信息
     total_quantity: Decimal = Field(Decimal("0"), ge=0, description="总数量")
-    total_amount: Decimal = Field(Decimal("0"), ge=0, description="总金额")
+    total_amount: Decimal = Field(Decimal("0"), ge=0, description="总金额（优惠后）")
+    discount_amount: Decimal = Field(Decimal("0"), ge=0, description="整单优惠金额")
     price_type: Optional[str] = Field(
         "tax_exclusive",
         max_length=20,
@@ -139,6 +140,7 @@ class QuotationUpdate(BaseSchema):
     customer_phone: Optional[str] = Field(None, max_length=20)
     total_quantity: Optional[Decimal] = Field(None, ge=0)
     total_amount: Optional[Decimal] = Field(None, ge=0)
+    discount_amount: Optional[Decimal] = Field(None, ge=0)
     price_type: Optional[str] = Field(None, max_length=20)
     status: Optional[str] = Field(None, max_length=20)
     salesman_id: Optional[int] = None

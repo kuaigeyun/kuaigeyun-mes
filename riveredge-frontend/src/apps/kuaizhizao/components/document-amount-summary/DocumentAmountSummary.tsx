@@ -1,13 +1,15 @@
 import React, { useMemo } from 'react';
-import { Divider, Form, theme as antdTheme } from 'antd';
+import { Divider, Form, InputNumber, theme as antdTheme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { normalizeFormListItems } from '../../../../utils/formListItems';
 import {
   computeDocumentGoodsTotals,
+  computeDocumentTotalsWithDiscount,
   computePurchaseDocumentTotals,
   computeSalesDocumentTotals,
   formatDocumentMoneyYuan,
   type DocumentGoodsTotals,
+  type DocumentTotalsWithDiscount,
   type PurchaseDocumentTotals,
   type SalesDocumentTotals,
 } from '../../utils/documentLineAmounts';
@@ -23,6 +25,30 @@ type SummaryRowDef = {
   secondary?: boolean;
   hidden?: boolean;
 };
+
+function appendDiscountRows(
+  t: (key: string) => string,
+  totals: DocumentTotalsWithDiscount,
+  options: { finalEmphasis?: boolean },
+): SummaryRowDef[] {
+  if (totals.discountAmount <= 0.005) return [];
+  return [
+    {
+      key: 'discount',
+      label: t('app.kuaizhizao.salesOrder.discountAmount'),
+      hint: t('app.kuaizhizao.salesOrder.discountAmountHint'),
+      value: totals.discountAmount,
+      secondary: true,
+    },
+    {
+      key: 'afterDiscount',
+      label: t('app.kuaizhizao.salesOrder.amountAfterDiscount'),
+      hint: t('app.kuaizhizao.salesOrder.amountAfterDiscountHint'),
+      value: totals.goodsAfterDiscount,
+      emphasis: options.finalEmphasis,
+    },
+  ];
+}
 
 function buildGoodsRows(
   t: (key: string) => string,
@@ -70,6 +96,7 @@ function buildSalesRows(
 ): SummaryRowDef[] {
   const isInclusive = priceType === 'tax_inclusive';
   const hasFees = totals.customerFees > 0.005 || totals.ourFees > 0.005;
+  const hasDiscount = totals.discountAmount > 0.005;
   const hasTax = Math.abs(totals.taxAmount) > 0.005;
   const rows: SummaryRowDef[] = [
     {
@@ -98,7 +125,7 @@ function buildSalesRows(
       key: 'grandTotal',
       label: t('app.kuaizhizao.quotation.summary.totalIncl'),
       value: totals.goodsIncl,
-      emphasis: !hasFees,
+      emphasis: !hasFees && !hasDiscount,
     });
   } else {
     rows.push({
@@ -106,9 +133,11 @@ function buildSalesRows(
       label: t('app.kuaizhizao.quotation.summary.grandTotal'),
       hint: t('app.kuaizhizao.salesOrder.amountGoodsValueHint'),
       value: totals.goodsExcl,
-      emphasis: !hasFees,
+      emphasis: !hasFees && !hasDiscount,
     });
   }
+
+  rows.push(...appendDiscountRows(t, totals, { finalEmphasis: !hasFees }));
 
   rows.push(
     {
@@ -134,7 +163,7 @@ function buildSalesRows(
       key: 'estimatedReceivable',
       label: t('app.kuaizhizao.salesOrder.amountEstimatedReceivable'),
       hint: t('app.kuaizhizao.salesOrder.amountEstimatedReceivableHint'),
-      value: isInclusive ? totals.estimatedReceivable : totals.goodsExcl + totals.ourFees,
+      value: totals.estimatedReceivable,
       emphasis: true,
     });
   }
@@ -228,13 +257,18 @@ function buildPurchaseRows(
   return rows;
 }
 
-function buildLinesRows(t: (key: string) => string, goods: DocumentGoodsTotals, priceType: string): SummaryRowDef[] {
+function buildLinesRows(
+  t: (key: string) => string,
+  totals: DocumentTotalsWithDiscount,
+  priceType: string,
+): SummaryRowDef[] {
   const isInclusive = priceType === 'tax_inclusive';
-  const hasTax = Math.abs(goods.taxAmount) > 0.005;
+  const hasTax = Math.abs(totals.taxAmount) > 0.005;
+  const hasDiscount = totals.discountAmount > 0.005;
   const quantityRow: SummaryRowDef = {
     key: 'quantity',
     label: t('app.kuaizhizao.quotation.summary.totalQuantity'),
-    value: goods.totalQuantity,
+    value: totals.totalQuantity,
     secondary: true,
   };
 
@@ -245,34 +279,37 @@ function buildLinesRows(t: (key: string) => string, goods: DocumentGoodsTotals, 
         key: 'goodsExcl',
         label: t('app.kuaizhizao.salesOrder.amountGoodsValue'),
         hint: t('app.kuaizhizao.salesOrder.amountGoodsValueHint'),
-        value: goods.goodsExcl,
+        value: totals.goodsExcl,
       },
     ];
     if (hasTax) {
       rows.push({
         key: 'tax',
         label: t('app.kuaizhizao.salesOrder.amountTax'),
-        value: goods.taxAmount,
+        value: totals.taxAmount,
       });
     }
     rows.push({
       key: 'grandTotal',
       label: t('app.kuaizhizao.quotation.summary.totalIncl'),
-      value: goods.goodsIncl,
-      emphasis: true,
+      value: totals.goodsIncl,
+      emphasis: !hasDiscount,
     });
+    rows.push(...appendDiscountRows(t, totals, { finalEmphasis: true }));
     return rows;
   }
 
-  return [
+  const rows: SummaryRowDef[] = [
     quantityRow,
     {
       key: 'grandTotal',
       label: t('app.kuaizhizao.quotation.summary.grandTotal'),
-      value: goods.goodsExcl,
-      emphasis: true,
+      value: totals.goodsExcl,
+      emphasis: !hasDiscount,
     },
   ];
+  rows.push(...appendDiscountRows(t, totals, { finalEmphasis: true }));
+  return rows;
 }
 
 function buildBasicRows(
@@ -355,8 +392,46 @@ export type DocumentAmountSummaryProps = {
   feeDetails?: unknown[];
   priceType?: string;
   quantityField?: string;
+  discountAmount?: unknown;
+  showDiscount?: boolean;
   getFieldValue?: (name: string) => unknown;
   style?: React.CSSProperties;
+};
+
+const DocumentDiscountInput: React.FC<{
+  goodsIncl: number;
+  token: ReturnType<typeof antdTheme.useToken>['token'];
+}> = ({ goodsIncl, token }) => {
+  const { t } = useTranslation();
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 24,
+        padding: '3px 0 10px',
+        borderBottom: `1px dashed ${token.colorBorderSecondary}`,
+        marginBottom: 8,
+      }}
+    >
+      <span
+        style={{ color: token.colorTextSecondary, fontSize: 13 }}
+        title={t('app.kuaizhizao.salesOrder.discountAmountHint')}
+      >
+        {t('app.kuaizhizao.salesOrder.discountAmount')}
+      </span>
+      <Form.Item name="discount_amount" noStyle initialValue={0}>
+        <InputNumber
+          min={0}
+          max={goodsIncl > 0 ? goodsIncl : undefined}
+          precision={2}
+          prefix="¥"
+          style={{ width: 140 }}
+        />
+      </Form.Item>
+    </div>
+  );
 };
 
 export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
@@ -365,6 +440,8 @@ export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
   feeDetails: feeDetailsProp,
   priceType: priceTypeProp,
   quantityField = 'required_quantity',
+  discountAmount: discountAmountProp,
+  showDiscount: showDiscountProp,
   getFieldValue,
   style,
 }) => {
@@ -374,6 +451,21 @@ export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
   const items = itemsProp ?? normalizeFormListItems(getFieldValue?.('items'));
   const feeDetails = feeDetailsProp ?? normalizeFormListItems(getFieldValue?.('fee_details'));
   const priceType = (priceTypeProp ?? getFieldValue?.('price_type') ?? 'tax_exclusive') as string;
+  const showDiscount =
+    showDiscountProp ?? (variant === 'lines' || variant === 'sales');
+  const discountAmount = showDiscount
+    ? (discountAmountProp ?? getFieldValue?.('discount_amount') ?? 0)
+    : 0;
+
+  const goodsInclForCap = useMemo(
+    () =>
+      computeDocumentGoodsTotals(items, priceType, (row) => ({
+        qty: row[quantityField],
+        price: row.unit_price,
+        taxRate: row.tax_rate,
+      })).goodsIncl,
+    [items, priceType, quantityField],
+  );
 
   const rows = useMemo(() => {
     if (variant === 'basic') {
@@ -382,7 +474,13 @@ export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
     if (variant === 'sales') {
       return buildSalesRows(
         t,
-        computeSalesDocumentTotals(items, feeDetails, priceType, quantityField),
+        computeSalesDocumentTotals(
+          items,
+          feeDetails,
+          priceType,
+          quantityField,
+          discountAmount,
+        ),
         priceType,
       );
     }
@@ -393,13 +491,12 @@ export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
         priceType,
       );
     }
-    const goods = computeDocumentGoodsTotals(items, priceType, (row) => ({
-      qty: row[quantityField],
-      price: row.unit_price,
-      taxRate: row.tax_rate,
-    }));
-    return buildLinesRows(t, goods, priceType);
-  }, [variant, items, feeDetails, priceType, quantityField, t]);
+    return buildLinesRows(
+      t,
+      computeDocumentTotalsWithDiscount(items, priceType, quantityField, discountAmount),
+      priceType,
+    );
+  }, [variant, items, feeDetails, priceType, quantityField, discountAmount, t]);
 
   const visibleRows = rows.filter((row) => !row.hidden);
   const emphasisIndex = visibleRows.findIndex((row) => row.emphasis);
@@ -420,6 +517,9 @@ export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
       }}
     >
       <div style={{ maxWidth: 440, marginLeft: 'auto' }}>
+        {showDiscount && getFieldValue && (
+          <DocumentDiscountInput goodsIncl={goodsInclForCap} token={token} />
+        )}
         {bodyRows.map((row) => (
           <SummaryRow key={row.key} row={row} token={token} />
         ))}
@@ -436,14 +536,18 @@ export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
 
 /** 表单内实时汇总（与明细表共用 shouldUpdate，确保 price_type 与价税列一致） */
 export const DocumentAmountSummaryWatch: React.FC<
-  Omit<DocumentAmountSummaryProps, 'getFieldValue' | 'items' | 'feeDetails' | 'priceType'>
-> = ({ variant, quantityField, style }) => (
+  Omit<
+    DocumentAmountSummaryProps,
+    'getFieldValue' | 'items' | 'feeDetails' | 'priceType' | 'discountAmount'
+  >
+> = ({ variant, quantityField, style, showDiscount }) => (
   <Form.Item
     noStyle
     shouldUpdate={(prev, curr) =>
       prev?.items !== curr?.items ||
       prev?.fee_details !== curr?.fee_details ||
-      prev?.price_type !== curr?.price_type
+      prev?.price_type !== curr?.price_type ||
+      prev?.discount_amount !== curr?.discount_amount
     }
   >
     {({ getFieldValue }) => (
@@ -452,6 +556,7 @@ export const DocumentAmountSummaryWatch: React.FC<
         getFieldValue={getFieldValue}
         quantityField={quantityField}
         style={style}
+        showDiscount={showDiscount}
       />
     )}
   </Form.Item>

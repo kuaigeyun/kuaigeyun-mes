@@ -37,6 +37,11 @@ import {
 } from './outboundEntryShared';
 import { getOutboundIssueTypeLabel } from './outboundHubTypes';
 import { OUTBOUND_LIST_PATH, outboundOutsourceEntryPath } from './outboundPaths';
+import {
+  draftOptionalNumber,
+  mergeMaterialIssueQuantities,
+  usePullEntryFormDraft,
+} from '../shared/pullEntryFormDraft';
 
 type IssueLine = {
   key: number;
@@ -65,6 +70,9 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [issueLines, setIssueLines] = useState<IssueLine[]>([]);
   const [previewMessage, setPreviewMessage] = useState<string | null>(null);
+  const { bindSnapshot, persistNow, clearDraft, applyDraftOnce } = usePullEntryFormDraft(
+    'kuaizhizao:outbound-outsource-pull',
+  );
 
   const pagePath = Number.isFinite(woId) && woId > 0 ? outboundOutsourceEntryPath(woId) : OUTBOUND_LIST_PATH;
   const woCode = String(workOrder?.code ?? '');
@@ -114,8 +122,18 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
   );
 
   const leavePage = useCallback(() => {
+    clearDraft();
     navigate(OUTBOUND_LIST_PATH);
-  }, [navigate]);
+  }, [clearDraft, navigate]);
+
+  useEffect(() => {
+    bindSnapshot(() => ({
+      warehouseId,
+      notes,
+      issueQuantities: Object.fromEntries(issueLines.map((line) => [line.materialId, line.issueQuantity])),
+    }));
+    persistNow();
+  }, [warehouseId, notes, issueLines, bindSnapshot, persistNow]);
 
   useEffect(() => {
     if (!(Number.isFinite(woId) && woId > 0)) {
@@ -166,6 +184,16 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
             };
           }),
         );
+        applyDraftOnce((draft) => {
+          const whId = draftOptionalNumber(draft.warehouseId);
+          if (whId != null) setWarehouseId(whId);
+          if (typeof draft.notes === 'string') setNotes(draft.notes);
+          if (draft.issueQuantities) {
+            setIssueLines((prev) =>
+              mergeMaterialIssueQuantities(prev, draft.issueQuantities as Record<number, number>),
+            );
+          }
+        });
       } catch (e: unknown) {
         messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseOutbound.entry.loadOutsourceFailed'));
         leavePage();
@@ -173,7 +201,7 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [woId, leavePage, messageApi, t]);
+  }, [woId, leavePage, messageApi, t, applyDraftOnce]);
 
   const submit = async () => {
     if (!warehouseId || !(warehouseId > 0)) {
@@ -206,6 +234,7 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
         })),
       });
       invalidateMenuBadgeCounts();
+      clearDraft();
       messageApi.success(t('app.kuaizhizao.warehouseOutbound.entry.outsourceIssueCreated'));
       leavePage();
     } catch (e: unknown) {
