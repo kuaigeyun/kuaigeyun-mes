@@ -31,10 +31,9 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, DocumentFormPageLayout, DOCUMENT_DETAIL_PAGE_TITLE_STYLE, PAGE_SPACING } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE, PAGE_SPACING } from '../../../../../components/layout-templates';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
-import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import {
   buildDocumentCreateDraftKey,
@@ -1584,15 +1583,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   : t('app.kuaizhizao.menu.purchase-management.purchase-requisitions.edit')}
               </Typography.Title>
             </Space>
-            <Space wrap>
-              <Button onClick={leavePurchaseRequisitionFormPage}>{t('common.cancel')}</Button>
-              <Button type="primary" onClick={triggerPurchaseRequisitionFormSubmit}>
-                {isCreatePage
-                  ? t('components.layoutTemplates.formModal.submitCreate')
-                  : t('common.save')}
-                {SUBMIT_SHORTCUT_HINT}
-              </Button>
-            </Space>
+            <DocumentFormPageHeaderActions
+              onCancel={leavePurchaseRequisitionFormPage}
+              onSaveDraft={triggerPurchaseRequisitionFormSubmit}
+              onPrimarySubmit={triggerPurchaseRequisitionFormSubmit}
+              isCreatePage={isCreatePage}
+              showSaveDraft={false}
+            />
             </>
           }
         >

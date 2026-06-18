@@ -36,6 +36,8 @@ export type { FormModalTemplateProps } from './FormModalTemplate'
 // 独立新建/编辑页布局
 export { DocumentFormPageLayout } from './DocumentFormPageLayout'
 export type { DocumentFormPageLayoutProps } from './DocumentFormPageLayout'
+export { DocumentFormPageHeaderActions } from './DocumentFormPageHeaderActions'
+export type { DocumentFormPageHeaderActionsProps } from './DocumentFormPageHeaderActions'
 
 // 详情 Drawer 模板
 export { DetailDrawerTemplate } from './DetailDrawerTemplate'

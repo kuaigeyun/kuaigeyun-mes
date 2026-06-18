@@ -1901,6 +1901,9 @@ export default {
   // Layout templates (platform-level)
   'components.layoutTemplates.formModal.submitCreate': 'Create',
   'components.layoutTemplates.formModal.submitUpdate': 'Update',
+  'components.layoutTemplates.documentFormPage.saveDraft': 'Save as Draft',
+  'components.layoutTemplates.documentFormPage.saveAndSubmit': 'Save and Submit',
+  'components.layoutTemplates.formModal.submitUpdate': 'Update',
   'components.layoutTemplates.formModal.checkFormHint': 'Please check that the form is filled in correctly',
   'components.layoutTemplates.formModal.formNotReady': 'The form is not ready yet. Please try again in a moment.',
   'components.secureImage.viewOriginal': 'View original',
@@ -4607,7 +4610,7 @@ export default {
   'app.kuaizhizao.salesOrder.selectPaymentTerms': 'Select payment terms',
   'app.kuaizhizao.salesOrder.selectMaterial': 'Select material',
   'app.kuaizhizao.salesOrder.quantityMinHint': '>0',
-  'app.kuaizhizao.salesOrder.feeDetailsFormLabel': 'Fee details (logistics/packaging, etc.)',
+  'app.kuaizhizao.salesOrder.feeDetailsFormLabel': 'Fee details',
   'app.kuaizhizao.salesOrder.attachments': 'Attachments',
   'app.kuaizhizao.salesOrder.notesPlaceholder': 'Enter notes',
   'app.kuaizhizao.salesOrder.helpTableView': ': order-level view.',

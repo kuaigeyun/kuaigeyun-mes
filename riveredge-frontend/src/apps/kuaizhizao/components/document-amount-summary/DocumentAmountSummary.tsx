@@ -71,7 +71,14 @@ function buildSalesRows(
   const isInclusive = priceType === 'tax_inclusive';
   const hasFees = totals.customerFees > 0.005 || totals.ourFees > 0.005;
   const hasTax = Math.abs(totals.taxAmount) > 0.005;
-  const rows: SummaryRowDef[] = [];
+  const rows: SummaryRowDef[] = [
+    {
+      key: 'quantity',
+      label: t('app.kuaizhizao.quotation.summary.totalQuantity'),
+      value: totals.totalQuantity,
+      secondary: true,
+    },
+  ];
 
   if (isInclusive) {
     rows.push({
@@ -143,7 +150,14 @@ function buildPurchaseRows(
   const isInclusive = priceType === 'tax_inclusive';
   const hasFees = totals.otherSideFees > 0.005 || totals.ourSideFees > 0.005;
   const hasTax = Math.abs(totals.taxAmount) > 0.005;
-  const rows: SummaryRowDef[] = [];
+  const rows: SummaryRowDef[] = [
+    {
+      key: 'quantity',
+      label: t('app.kuaizhizao.quotation.summary.totalQuantity'),
+      value: totals.totalQuantity,
+      secondary: true,
+    },
+  ];
 
   if (isInclusive) {
     rows.push({
@@ -295,7 +309,7 @@ const SummaryRow: React.FC<{
   if (row.hidden) return null;
   const isQuantity = row.key === 'quantity';
   const displayValue = isQuantity
-    ? String(row.value)
+    ? row.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : formatDocumentMoneyYuan(row.value);
 
   return (

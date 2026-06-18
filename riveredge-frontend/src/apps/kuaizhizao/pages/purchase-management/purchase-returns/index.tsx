@@ -67,6 +67,7 @@ const LazyUniImport = lazy(() =>
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
   DOCUMENT_DETAIL_COL_WIDTH,
+  DOCUMENT_DETAIL_CONTROL_SIZE,
   DOCUMENT_DETAIL_NUM_COL,
   DOCUMENT_DETAIL_TABLE_PROPS,
   DOCUMENT_DETAIL_TEXT_COL,
@@ -1034,7 +1035,7 @@ const PurchaseReturnsPage: React.FC = () => {
             label=""
             placeholder={t('common.selectMaterial')}
             required
-            size="small"
+            size={DOCUMENT_DETAIL_CONTROL_SIZE}
             listFieldKey={index}
             listFieldName="items"
             fillMapping={{
@@ -1054,7 +1055,7 @@ const PurchaseReturnsPage: React.FC = () => {
         ...DOCUMENT_DETAIL_TEXT_COL,
         render: (_: unknown, __: unknown, index: number) => (
           <AntForm.Item name={[index, 'batch_number']} noStyle>
-            <Input size="small" placeholder={t('app.kuaizhizao.purchaseReturn.batchNumberPlaceholder')} />
+            <Input size={DOCUMENT_DETAIL_CONTROL_SIZE} placeholder={t('app.kuaizhizao.purchaseReturn.batchNumberPlaceholder')} />
           </AntForm.Item>
         ),
       },
@@ -1069,7 +1070,7 @@ const PurchaseReturnsPage: React.FC = () => {
               options={locationOptions}
               placeholder={selectedWarehouseId ? t('app.kuaizhizao.purchaseReturn.selectLocation') : t('app.kuaizhizao.purchaseReturn.selectWarehouseFirst')}
               style={{ width: '100%' }}
-              size="small"
+              size={DOCUMENT_DETAIL_CONTROL_SIZE}
               showSearch
               optionFilterProp="label"
               allowClear
@@ -1085,7 +1086,7 @@ const PurchaseReturnsPage: React.FC = () => {
         ...DOCUMENT_DETAIL_NUM_COL,
         render: (_: unknown, __: unknown, index: number) => (
           <AntForm.Item name={[index, 'return_quantity']} noStyle>
-            <InputNumber size="small" style={{ width: '100%' }} min={1} />
+            <InputNumber size={DOCUMENT_DETAIL_CONTROL_SIZE} style={{ width: '100%' }} min={1} />
           </AntForm.Item>
         ),
       },
@@ -1096,7 +1097,7 @@ const PurchaseReturnsPage: React.FC = () => {
         ...DOCUMENT_DETAIL_NUM_COL,
         render: (_: unknown, __: unknown, index: number) => (
           <AntForm.Item name={[index, 'unit_price']} noStyle>
-            <InputNumber size="small" style={{ width: '100%' }} min={0} prefix="¥" />
+            <InputNumber size={DOCUMENT_DETAIL_CONTROL_SIZE} style={{ width: '100%' }} min={0} prefix="¥" />
           </AntForm.Item>
         ),
       },

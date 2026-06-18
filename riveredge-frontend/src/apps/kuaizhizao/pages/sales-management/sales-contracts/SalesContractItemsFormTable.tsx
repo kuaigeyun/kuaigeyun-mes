@@ -14,6 +14,7 @@ import {
   DOCUMENT_DETAIL_COL_WIDTH,
   DOCUMENT_DETAIL_DATE_PICKER_STYLE,
   DOCUMENT_DETAIL_NUM_COL,
+  DOCUMENT_DETAIL_CONTROL_SIZE,
   DOCUMENT_DETAIL_TABLE_PROPS,
   DOCUMENT_DETAIL_TEXT_COL,
   DocumentDetailTableStyles,
@@ -75,7 +76,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       width: DOCUMENT_DETAIL_COL_WIDTH.material,
                       ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: unknown, __: unknown, index: number) => (
-                        <ContractMaterialSelectCell index={index} />
+                        <ContractMaterialSelectCell index={index} materialList={materialList} />
                       ),
                     },
                     {
@@ -100,7 +101,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: unknown, __: unknown, index: number) => (
                         <Form.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                          <Input placeholder={t('app.kuaizhizao.salesOrder.spec')} size="small" />
+                          <Input placeholder={t('app.kuaizhizao.salesOrder.spec')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                         </Form.Item>
                       ),
                     },
@@ -120,7 +121,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                             const materialId = gf(['items', index, 'material_id']);
                             return (
                               <Form.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                                <MaterialUnitSelect materialId={materialId} size="small" noStyle />
+                                <MaterialUnitSelect materialId={materialId} size={DOCUMENT_DETAIL_CONTROL_SIZE} noStyle />
                               </Form.Item>
                             );
                           }}
@@ -143,7 +144,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                             min={0.01}
                             precision={2}
                             style={{ width: '100%' }}
-                            size="small"
+                            size={DOCUMENT_DETAIL_CONTROL_SIZE}
                           />
                         </Form.Item>
                       ),
@@ -184,7 +185,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                             precision={2}
                             prefix="¥"
                             style={{ width: '100%' }}
-                            size="small"
+                            size={DOCUMENT_DETAIL_CONTROL_SIZE}
                           />
                         </Form.Item>
                       ),
@@ -304,7 +305,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                                   precision={2}
                                   prefix="¥"
                                   style={{ width: '100%' }}
-                                  size="small"
+                                  size={DOCUMENT_DETAIL_CONTROL_SIZE}
                                   value={displayValue}
                                   onChange={(val) => {
                                     const v = val ?? null;
@@ -347,7 +348,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       render: (_: unknown, __: unknown, index: number) => (
                         <Form.Item name={[index, 'delivery_date']} style={{ margin: 0 }}>
                           <FutureDatePicker
-                            size="small"
+                            size={DOCUMENT_DETAIL_CONTROL_SIZE}
                             style={DOCUMENT_DETAIL_DATE_PICKER_STYLE}
                             format="YYYY-MM-DD"
                             getForm={() => formRef.current}
@@ -367,7 +368,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: unknown, __: unknown, index: number) => (
                         <Form.Item name={[index, 'notes']} style={{ margin: 0 }}>
-                          <Input placeholder={t('app.kuaizhizao.salesOrder.notes')} size="small" />
+                          <Input placeholder={t('app.kuaizhizao.salesOrder.notes')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                         </Form.Item>
                       ),
                     },

@@ -46,9 +46,12 @@ export const DOCUMENT_DETAIL_DATE_PICKER_STYLE: React.CSSProperties = {
 
 export const DOCUMENT_DETAIL_TABLE_PROPS = {
   className: DOCUMENT_DETAIL_TABLE_CLASS,
-  size: 'small' as const,
+  size: 'middle' as const,
   style: { width: '100%', margin: 0 },
 };
+
+/** 明细表行内 Input / Select / DatePicker 等与 Table middle 对齐 */
+export const DOCUMENT_DETAIL_CONTROL_SIZE = 'middle' as const;
 
 const DOCUMENT_DETAIL_TABLE_STYLE_BLOCK = `
   .quotation-detail-table .quotation-material-cell .ant-form-item,
@@ -123,7 +126,6 @@ export function TaxRateDetailCell({ index }: { index: number }) {
           precision={0}
           addonAfter="%"
           controls={false}
-          size="small"
         />
       </Form.Item>
     </div>

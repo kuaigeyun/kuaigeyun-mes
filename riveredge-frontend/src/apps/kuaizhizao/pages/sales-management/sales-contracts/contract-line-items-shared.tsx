@@ -11,6 +11,7 @@ import {
   applySalesDocumentLineMaterialPricing,
   convertUnitPriceByPriceType,
 } from '../../../../master-data/utils/resolve-partner-material-price';
+import { DOCUMENT_DETAIL_CONTROL_SIZE } from '../../../components/document-detail-table/documentDetailTable';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 
 export { convertUnitPriceByPriceType };
@@ -87,7 +88,10 @@ export function resolveContractLineMaterialFields(
   return { material_code, material_name, material_unit };
 }
 
-export const ContractMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => {
+export const ContractMaterialSelectCell: React.FC<{ index: number; materialList?: Material[] }> = ({
+  index,
+  materialList,
+}) => {
   const { t } = useTranslation();
   const form = Form.useFormInstance();
   const row = Form.useWatch(['items', index]);
@@ -126,9 +130,12 @@ export const ContractMaterialSelectCell: React.FC<{ index: number }> = ({ index 
       );
       form.setFieldValue(['items', index, '_masterMaterialUuid'], material.uuid);
       form.setFieldValue(['items', index, 'variant_attributes'], undefined);
-      void applySalesDocumentLineMaterialPricing(form, index, material, { asOfField: 'contract_date' });
+      void applySalesDocumentLineMaterialPricing(form, index, material, {
+        materialList,
+        asOfField: 'contract_date',
+      });
     },
-    [form, index],
+    [form, index, materialList],
   );
   return (
     <div
@@ -141,7 +148,7 @@ export const ContractMaterialSelectCell: React.FC<{ index: number }> = ({ index 
           label=""
           placeholder={t('app.kuaizhizao.salesContract.materialSelectPlaceholder')}
           required
-          size="small"
+          size={DOCUMENT_DETAIL_CONTROL_SIZE}
           listFieldKey={index}
           listFieldName="items"
           fillMapping={{

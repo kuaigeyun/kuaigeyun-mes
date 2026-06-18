@@ -131,7 +131,7 @@ export async function resolveMaterialForPricing(
     materialList?.find((m) => Number((m as any).id) === id) ?? material;
   const uuid = String((full as any).uuid ?? (material as any).uuid ?? '').trim();
   const needsDetail =
-    getMaterialDefaultSalePrice(full) <= 0 && getMaterialDefaultTaxRate(full) <= 0;
+    getMaterialDefaultSalePrice(full) <= 0 || getMaterialDefaultTaxRate(full) <= 0;
   if (uuid && needsDetail) {
     try {
       full = await materialApi.get(uuid);
@@ -259,6 +259,72 @@ export function pickPurchaseUnitPrice(
     if (fromResolved != null) return fromResolved;
   }
   return getMaterialDefaultPurchasePrice(material);
+}
+
+export type ResolvedSalesMaterialLinePricing = {
+  material: Material | Record<string, unknown>;
+  unitPrice: number;
+  taxRate: number;
+};
+
+/** 批量选料：客户价本 + 物料默认价税（与单行 applySalesDocumentLineMaterialPricing 一致） */
+export async function resolveSalesDocumentMaterialLinesPricing(
+  materials: Array<Material | Record<string, unknown>>,
+  options?: {
+    customerId?: number;
+    asOf?: string | dayjs.Dayjs;
+    priceType?: string;
+    materialList?: Array<Material | Record<string, unknown>>;
+  },
+): Promise<ResolvedSalesMaterialLinePricing[]> {
+  if (!materials.length) return [];
+
+  const pt = options?.priceType ?? 'tax_exclusive';
+  const asOf =
+    options?.asOf != null
+      ? dayjs.isDayjs(options.asOf)
+        ? options.asOf
+        : dayjs(options.asOf)
+      : dayjs();
+
+  const enriched = await Promise.all(
+    materials.map((m) => resolveMaterialForPricing(m, options?.materialList)),
+  );
+
+  const resolveMap = new Map<number, PartnerPriceResolveResult>();
+  const customerId = options?.customerId ? Number(options.customerId) : undefined;
+  if (customerId && enriched.length) {
+    try {
+      const items = await resolveCustomerSalePricesBatch(
+        customerId,
+        enriched.map((m) => ({
+          materialId: Number((m as Material).id),
+          variantAttributes: parseVariantAttributesValue(
+            (m as Material).variantAttributes ?? (m as any).variant_attributes,
+          ),
+        })),
+        asOf,
+        enriched,
+      );
+      enriched.forEach((m, i) => {
+        const id = Number((m as Material).id);
+        if (items[i]) resolveMap.set(id, items[i]);
+      });
+    } catch {
+      /* 回退物料默认价 */
+    }
+  }
+
+  return enriched.map((full, idx) => {
+    const id = Number((full as Material).id ?? (materials[idx] as Material).id);
+    const resolved = resolveMap.get(id);
+    const taxRate = pickResolvedTaxRate(resolved) ?? getMaterialDefaultTaxRate(full);
+    let unitPrice = pickSaleUnitPrice(full, resolved);
+    if (pt === 'tax_inclusive' && unitPrice > 0) {
+      unitPrice = convertUnitPriceByPriceType(unitPrice, taxRate, 'tax_exclusive', 'tax_inclusive');
+    }
+    return { material: full, unitPrice, taxRate };
+  });
 }
 
 export async function resolveOrderLineSalePrice(

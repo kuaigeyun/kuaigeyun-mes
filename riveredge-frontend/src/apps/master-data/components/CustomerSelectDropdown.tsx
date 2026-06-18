@@ -2,7 +2,7 @@
  * 客户选择下拉：快速新建 / 快速编辑 / 高级搜索（与报价单一致）
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { App } from 'antd';
+import { App, Form } from 'antd';
 import { UniDropdown, type UniDropdownProps } from '../../../components/uni-dropdown';
 import type { Customer } from '../types/supply-chain';
 import { CustomerFormModal } from './CustomerFormModal';
@@ -11,6 +11,7 @@ import {
   ReferenceDisplayAccessError,
   canReadReferenceResource,
   referenceDisplayToIdOptions,
+  resolveReferenceDisplay,
   searchReferenceDisplay,
 } from '../../../utils/referenceDisplay';
 
@@ -42,6 +43,11 @@ export type CustomerSelectDropdownProps = Omit<
   autoLoad?: boolean;
   /** 宿主 {app}:{module}，供隐式 display 鉴权 */
   hostResource?: string;
+  /**
+   * 与表单 customer_name 快照字段联动，options 未就绪时用名称回显，避免裸 id 闪烁。
+   * 设为 false 则不读取 Form。
+   */
+  snapshotNameField?: string | false;
 };
 
 export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
@@ -52,13 +58,22 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
   modalZIndex,
   autoLoad = true,
   hostResource,
+  snapshotNameField = 'customer_name',
   onChange,
+  value,
   ...rest
 }) => {
   const { message: messageApi } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
+  const form = Form.useFormInstance();
+  const snapshotName =
+    snapshotNameField === false
+      ? undefined
+      : Form.useWatch(snapshotNameField, form);
   const [internalCustomers, setInternalCustomers] = useState<Customer[]>([]);
   const [internalLoading, setInternalLoading] = useState(false);
+  const [resolvedById, setResolvedById] = useState<Map<number, Customer>>(new Map());
+  const [resolvingId, setResolvingId] = useState<number | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
 
@@ -117,22 +132,97 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
     }
   }, [autoLoad, customersProp, refreshCustomers]);
 
-  const options = useMemo(
-    () =>
-      customers.map((c) => ({
-        value: getCustomerId(c),
-        label: formatCustomerLabel(c),
-      })),
-    [customers],
-  );
+  const selectedId = value != null && value !== '' ? Number(value) : NaN;
+
+  useEffect(() => {
+    if (!Number.isFinite(selectedId)) return;
+    if (customers.some((c) => getCustomerId(c) === selectedId)) return;
+    if (resolvedById.has(selectedId)) return;
+
+    let cancelled = false;
+    setResolvingId(selectedId);
+    void resolveReferenceDisplay({
+      resource: 'master-data:supply-chain:customer',
+      recordIds: [selectedId],
+      hostResource,
+    })
+      .then((items) => {
+        if (cancelled || !items.length) return;
+        const item = items[0];
+        const id = item.id != null ? Number(item.id) : selectedId;
+        setResolvedById((prev) => {
+          if (prev.has(id)) return prev;
+          const next = new Map(prev);
+          next.set(id, {
+            id,
+            uuid: item.uuid ?? undefined,
+            code: item.code ?? undefined,
+            name: item.name ?? undefined,
+          } as Customer);
+          return next;
+        });
+      })
+      .catch((err) => {
+        if (err instanceof ReferenceDisplayAccessError) {
+          messageApi.warning(err.message);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setResolvingId((cur) => (cur === selectedId ? null : cur));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId, customers, hostResource, messageApi, resolvedById]);
+
+  const allCustomers = useMemo(() => {
+    const seen = new Set<number>();
+    const merged: Customer[] = [];
+    for (const c of customers) {
+      const id = getCustomerId(c);
+      if (id == null || seen.has(id)) continue;
+      seen.add(id);
+      merged.push(c);
+    }
+    for (const [id, c] of resolvedById) {
+      if (!seen.has(id)) merged.push(c);
+    }
+    return merged;
+  }, [customers, resolvedById]);
+
+  const snapshotDisplayLabel = useMemo(() => {
+    if (snapshotName == null || snapshotName === '') return undefined;
+    const text = String(snapshotName).trim();
+    return text || undefined;
+  }, [snapshotName]);
+
+  const options = useMemo(() => {
+    const base = allCustomers.map((c) => ({
+      value: getCustomerId(c),
+      label: formatCustomerLabel(c),
+    }));
+    if (!Number.isFinite(selectedId) || base.some((o) => o.value === selectedId)) {
+      return base;
+    }
+    const resolved = resolvedById.get(selectedId);
+    const label =
+      (resolved ? formatCustomerLabel(resolved) : undefined) ??
+      snapshotDisplayLabel ??
+      (resolvingId === selectedId ? snapshotDisplayLabel ?? '\u00A0' : undefined);
+    if (!label) return base;
+    return [...base, { value: selectedId, label }];
+  }, [allCustomers, selectedId, resolvedById, snapshotDisplayLabel, resolvingId]);
 
   const handleChange = useCallback(
-    (value: number | undefined, option: unknown) => {
-      const c = value != null ? customers.find((x) => getCustomerId(x) === value) : null;
+    (nextValue: number | undefined, option: unknown) => {
+      const c = nextValue != null ? allCustomers.find((x) => getCustomerId(x) === nextValue) : null;
       onCustomerPick?.(c ?? null);
-      onChange?.(value, option as Parameters<NonNullable<UniDropdownProps['onChange']>>[1]);
+      onChange?.(nextValue, option as Parameters<NonNullable<UniDropdownProps['onChange']>>[1]);
     },
-    [customers, onChange, onCustomerPick],
+    [allCustomers, onChange, onCustomerPick],
   );
 
   const openCreate = useCallback(() => {
@@ -142,7 +232,7 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
 
   const openEdit = useCallback(
     (customerId: unknown) => {
-      const c = customers.find((x) => getCustomerId(x) === customerId);
+      const c = allCustomers.find((x) => getCustomerId(x) === customerId);
       const uuid = c?.uuid;
       if (!uuid) {
         messageApi.warning('无法编辑该客户，请刷新客户列表后重试');
@@ -151,12 +241,12 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
       setEditUuid(String(uuid));
       setFormOpen(true);
     },
-    [customers, messageApi],
+    [allCustomers, messageApi],
   );
 
   const handleSuccess = useCallback(
     (customer: Customer) => {
-      const nextList = mergeCustomerList(customers, customer);
+      const nextList = mergeCustomerList(allCustomers, customer);
       if (customersProp == null) {
         setInternalCustomers(nextList);
       }
@@ -169,18 +259,22 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
       setFormOpen(false);
       setEditUuid(null);
     },
-    [customers, customersProp, mergeCustomerList, onChange, onCustomerPick, onCustomersChange],
+    [allCustomers, customersProp, mergeCustomerList, onChange, onCustomerPick, onCustomersChange],
   );
 
   const canManageCustomer = canReadReferenceResource(currentUser, 'master-data:supply-chain:customer');
+
+  const optionPending =
+    Number.isFinite(selectedId) && !options.some((o) => o.value === selectedId);
 
   return (
     <>
       <UniDropdown
         {...rest}
+        value={value}
         showSearch
         allowClear
-        loading={loading}
+        loading={loading || (optionPending && resolvingId === selectedId)}
         options={options}
         onChange={handleChange}
         quickCreate={

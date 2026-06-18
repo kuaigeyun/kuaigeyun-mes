@@ -786,21 +786,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [isFullscreen, setIsFullscreen] = useState(false);
   // 浏览器全屏模式 (由顶栏控制)
   const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
-  /**
-   * 侧栏收起时，antd 会把 `display: inline-flex` 等写进 `span.ant-menu-title-content` 的 **style**（与 Pro 的 CSS 叠加），
-   * 在 DevTools 里「圈掉」的就是这一段。仅选子 `span` 无法命中，因为 Pro 的标题包装是 `div...-item-title`。
-   * 在 Menu 的语义 styles 里覆盖，等价于删掉那段 inline。展开侧栏不传入，避免影响非收起态。
-   */
-  const collapsedSiderMenuStyles = useMemo<MenuProps['styles'] | undefined>(
-    () =>
-      !isFullscreen && collapsed
-        ? {
-            itemContent: { display: 'block' },
-            subMenu: { itemContent: { display: 'block' } },
-          }
-        : undefined,
-    [collapsed, isFullscreen]
-  );
   const [techStackModalOpen, setTechStackModalOpen] = useState(false);
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
@@ -2952,10 +2937,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
          * 使用主题颜色变量，支持深色模式，并根据菜单栏背景色自动适配
          */
         /* 侧边栏内的分组标题 - 根据菜单栏背景色自动适配 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group-title,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-item-group-title {
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item-group > .ant-menu-item-group-title {
           font-size: var(--ant-fontSize) !important;
           color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
           line-height: 1.5714285714285714 !important;
@@ -2981,126 +2963,25 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           padding: 0 !important;
           margin: 0 !important;
         }
-        /* 浅色模式下，菜单收起时弹出的二级菜单中的分组标题 - 使用深色文字 */
-        /* 弹出菜单通常在 body 下，不在 .ant-pro-layout 内，所以使用全局选择器 */
-        /* 只在浅色模式下应用（非深色模式），确保优先级足够高，放在最后以覆盖其他规则 */
-        ${!isDarkMode ? `
-        /* 弹出菜单中的分组标题 - 使用深色文字（弹出菜单背景是浅色的） */
-        body .ant-menu-submenu-popup .ant-menu-item-group-title,
-        body .ant-menu-popup .ant-menu-item-group-title,
-        body .ant-menu-submenu-popup .ant-menu-item-group-title:hover,
-        body .ant-menu-submenu-popup .ant-menu-item-group-title:active,
-        body .ant-menu-submenu-popup .ant-menu-item-group-title:focus,
-        body .ant-menu-popup .ant-menu-item-group-title:hover,
-        body .ant-menu-popup .ant-menu-item-group-title:active,
-        body .ant-menu-popup .ant-menu-item-group-title:focus {
-          color: rgba(0, 0, 0, 0.45) !important;
-          border-bottom: 1px solid var(--river-divider-color) !important;
-        }
-        ` : ''}
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group-title:hover,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group-title:active,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group-title:focus,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title:hover,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title:active,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title:focus,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title:hover,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title:active,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title:focus {
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item-group > .ant-menu-item-group-title:hover,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item-group > .ant-menu-item-group-title:active,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item-group > .ant-menu-item-group-title:focus {
           background: transparent !important;
           color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
         }
         /* ==================== 一级菜单项 - 完全遵循 Ant Design 原生样式 ==================== */
         /* 不做任何修改，完全使用 Ant Design 的原生样式和垂直居中 */
-        /* 统一所有一级菜单项的图标样式 */
-        /* 统一所有菜单图标大小：16px，背景容器：20x20（仅展开态；收起态见文末，避免 margin-right 压过 antd 居中） */
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-item .anticon,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-submenu-title .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-submenu-title .anticon,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-item .anticon {
-          font-size: 16px !important;
-          width: 16px !important;
-          height: 16px !important;
-          display: inline-flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          min-width: 16px !important;
-          min-height: 16px !important;
-          max-width: 16px !important;
-          max-height: 16px !important;
-          position: relative !important;
-          margin-right: 12px !important;
-          margin-left: 0 !important;
-          color: inherit !important;
-          line-height: 1 !important;
-          vertical-align: middle !important;
-        }
-        /* 为图标添加统一的 20x20 背景容器（使用伪元素，配合主题色但更淡） */
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-item .ant-menu-item-icon::before,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-item .anticon::before,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-submenu-title .ant-menu-item-icon::before,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-submenu-title .anticon::before {
-          content: '' !important;
-          position: absolute !important;
-          left: 50% !important;
-          top: 50% !important;
-          transform: translate(-50%, -50%) !important;
-          width: 20px !important;
-          height: 20px !important;
-          background: ${(() => {
-          // 将主题色转换为 rgba，使用 0.15 的透明度（更淡但可见）
-          const primaryColor = String(token.colorPrimary || '#1890ff');
-          // 如果是十六进制颜色，转换为 rgba
-          if (primaryColor.startsWith('#')) {
-            const hex = primaryColor.slice(1);
-            // 处理 3 位或 6 位十六进制
-            const r = hex.length === 3
-              ? parseInt(hex[0] + hex[0], 16)
-              : parseInt(hex.slice(0, 2), 16);
-            const g = hex.length === 3
-              ? parseInt(hex[1] + hex[1], 16)
-              : parseInt(hex.slice(2, 4), 16);
-            const b = hex.length === 3
-              ? parseInt(hex[2] + hex[2], 16)
-              : parseInt(hex.slice(4, 6), 16);
-            return `rgba(${r}, ${g}, ${b}, 0.15)`;
-          }
-          // 如果已经是 rgba 格式，提取颜色并降低透明度
-          const rgbaMatch = primaryColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-          if (rgbaMatch) {
-            return `rgba(${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]}, 0.15)`;
-          }
-          // 默认使用主题色但更淡
-          return 'rgba(24, 144, 255, 0.15)';
-        })()} !important;
-          border-radius: 4px !important;
-          z-index: 0 !important;
-          pointer-events: none !important;
-        }
-        /* 选中菜单项的图标强制白色 */
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .anticon {
-          color: #fff !important;
-        }
+        /* 侧栏菜单图标是 Lucide <svg>（包裹在 .ant-pro-base-menu-inline-item-icon 内，size=16），
+           颜色经 currentColor 继承自菜单项文字色。原先这里针对 .ant-menu-item-icon/.anticon 的
+           图标尺寸、20x20 伪元素背景、选中白色等规则均为 antd v4/v5 残留，对 ProLayout 7.x 结构
+           完全不命中（零匹配），已清理。 */
         /* ==================== 菜单项样式 - 使用 Ant Design 原生 ==================== */
         /* 让 Ant Design 使用其默认的菜单项高度和行高 */
 
-        /* ==================== 分组菜单下的子菜单项 ==================== */
-        /* 使用最高优先级的选择器覆盖内联样式 - 必须匹配所有可能的组合 */
-        /* 注意：CSS 的 !important 可以覆盖内联样式，但需要选择器足够具体 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group .ant-menu-item.ant-menu-item-selected.ant-menu-item-only-child.ant-pro-base-menu-inline-menu-item,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group .ant-menu-item.ant-menu-item-selected.ant-menu-item-only-child.ant-pro-base-menu-inline-menu-item,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group .ant-menu-item.ant-menu-item-selected.ant-menu-item-only-child,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group .ant-menu-item.ant-menu-item-selected.ant-menu-item-only-child,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group .ant-menu-item.ant-menu-item-selected,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group .ant-menu-item.ant-menu-item-selected,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group .ant-menu-item,
         /* 子菜单标题样式（ant-menu-submenu-title）- 使用 Ant Design 原生样式 */
         /* 使用主题颜色变量，支持深色模式 */
         /* 注意：只针对侧边栏内的子菜单标题，不影响弹出菜单 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title {
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title {
           /* 子菜单标题的独立样式，与普通菜单项区分开 */
           padding-right: 4px !important; /* 增加右侧padding，为下拉箭头留出更多空间 */
           color: ${siderTextColor} !important;
@@ -3108,8 +2989,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           font-weight: normal !important;
         }
         
-        /* 优化菜单标题内容，防止文字与箭头重叠 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content {
+        /* 优化菜单标题内容，防止文字与箭头重叠（仅展开态：calc(100%-32px) 给箭头留位；
+           收起态项很窄会算成≈0 + overflow:hidden 把图标整块裁没，故排除收起态） */
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content {
           max-width: calc(100% - 32px) !important; /* 为箭头预留32px空间 */
           overflow: hidden !important;
           text-overflow: ellipsis !important;
@@ -3118,29 +3000,54 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           min-width: 0 !important; /* 允许flex子元素收缩 */
         }
         
-        /* 一级菜单项的文字内容也需要优化 */
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content {
+        /* 一级菜单项的文字内容也需要优化（同上，仅展开态） */
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-item .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content {
           max-width: calc(100% - 32px) !important; /* 为箭头预留32px空间 */
           overflow: hidden !important;
           text-overflow: ellipsis !important;
           white-space: nowrap !important;
           flex: 1 !important;
           min-width: 0 !important; /* 允许flex子元素收缩 */
+        }
+
+        /* ⚠️ 收起态唯一必要的框架兼容修复（仅作用于收起栏的「一级项」），其余一切保持 ProLayout 原生。
+           antd v6（node_modules/antd/es/menu/style/vertical.js）对收起态写死：
+             .ant-menu-inline-collapsed > .ant-menu-item > .ant-menu-title-content { width:0; opacity:0; overflow:hidden }
+           v6 假设图标是 title-content 的兄弟节点（antd 自带的 .ant-menu-item-icon），收起时把整块
+           title-content 隐藏、单独保留图标；但 ProLayout 7.x 把图标放进 title-content 内部
+           （.ant-pro-base-menu-inline-item-icon），导致图标被一起隐藏。这里恢复其可见并居中（仅图标，无文字）。
+           ⚠️ 必须用「子选择器」精确限定到收起栏顶层项，不能用后代选择器——否则会波及悬浮弹出的二级菜单
+           （ProLayout 把弹出层挂在 body，层级与作用域均不同），破坏其 antd 原生样式。 */
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-inline-collapsed > .ant-menu-item > .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-inline-collapsed > .ant-menu-submenu > .ant-menu-submenu-title > .ant-menu-title-content {
+          width: 100% !important;
+          opacity: 1 !important;
+          overflow: visible !important;
+          display: flex !important;
+          justify-content: center !important;
+          align-items: center !important;
+          flex: none !important;
+        }
+        /* 收起态一级项：清掉 antd v6 的 padding-inline 居中（其前提是图标在 title-content 外），改用 flex 居中。 */
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-inline-collapsed > .ant-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-inline-collapsed > .ant-menu-submenu > .ant-menu-submenu-title {
+          padding-inline: 0 !important;
+          justify-content: center !important;
         }
         
         /* 确保下拉箭头有足够的空间 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-submenu-arrow {
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-submenu-arrow {
           flex-shrink: 0 !important;
           margin-left: 8px !important; /* 增加箭头与文字的间距 */
         }
         /* 子菜单标题悬浮状态 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title:hover {
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title:hover {
           background-color: var(--ant-colorFillTertiary) !important;
           color: ${siderTextColor} !important;
         }
         /* 子菜单标题激活状态 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-selected > .ant-menu-submenu-title {
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title {
           color: var(--riveredge-menu-primary-color) !important;
         }
         /* 使用自定义样式选择器针对插件分组标题 */
@@ -3747,31 +3654,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 根据菜单栏背景色自动适配文字颜色 */
         /* 深色背景使用浅色文字，浅色背景使用深色文字 */
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item:not(.ant-menu-item-selected),
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title:not(.ant-menu-submenu-selected > .ant-menu-submenu-title),
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title {
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item-group > .ant-menu-item-group-title {
           color: ${siderTextColor} !important;
         }
         
-        /* 菜单项图标颜色也自动适配 */
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item:not(.ant-menu-item-selected) .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item:not(.ant-menu-item-selected) .anticon,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title:not(.ant-menu-submenu-selected > .ant-menu-submenu-title) .anticon,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title) .anticon,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title) .anticon {
-          color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : siderTextColor} !important;
-        }
-        
-        /* 子菜单项文字颜色也自动适配 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item:not(.ant-menu-item-selected),
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item:not(.ant-menu-item-selected) {
-          color: ${siderTextColor} !important;
-        }
-        
-        /* 三级子菜单标题箭头图标颜色也自动适配 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title) .ant-menu-submenu-arrow,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title) .ant-menu-submenu-arrow {
-          color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : 'var(--ant-colorTextSecondary)'} !important;
-        }
+        /* （菜单图标颜色由 currentColor 继承自上面的菜单项文字色，无需单独的 .anticon 规则，已清理） */
         
         /* 菜单栏增加与顶部间距 */
         .ant-pro-layout .ant-pro-sider-menu {
@@ -3809,11 +3697,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           color: #fff !important;
           font-weight: normal !important;
         }
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .anticon,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon .anticon {
-          color: #fff !important;
-        }
+        /* （选中项图标白色由 currentColor 继承自选中项 color:#fff，无需单独 .anticon 规则，已清理） */
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected::after {
           display: none !important;
         }
@@ -3825,88 +3709,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           color: var(--riveredge-menu-primary-color) !important;
         }
         
-        /* 二级及以下菜单激活状态 - 使用主题色背景 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-selected,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item-selected {
-          background-color: var(--riveredge-menu-primary-color) !important;
-        }
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-selected > .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-selected > .ant-menu-title-content > a,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item-selected > .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item-selected > .ant-menu-title-content > a {
-          color: #fff !important;
-        }
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-selected::after,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item-selected::after {
-          border-right-color: var(--riveredge-menu-primary-color) !important;
-        }
-        /* 子菜单项选中背景切换：短促 ease-out，覆盖 antd 默认 background / title-content 慢过渡 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item {
-          transition:
-            background 0.07s cubic-bezier(0.33, 1, 0.68, 1),
-            background-color 0.07s cubic-bezier(0.33, 1, 0.68, 1),
-            color 0.07s cubic-bezier(0.33, 1, 0.68, 1) !important;
-        }
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item .ant-menu-title-content {
-          transition: color 0.07s cubic-bezier(0.33, 1, 0.68, 1) !important;
-        }
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item::after,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item::after {
-          transition:
-            transform 0.07s cubic-bezier(0.33, 1, 0.68, 1),
-            opacity 0.07s cubic-bezier(0.33, 1, 0.68, 1) !important;
-        }
-        /* 隐藏子菜单中的图标（只保留一级菜单的图标） */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group .ant-menu-item .ant-menu-item-icon {
-          display: none !important;
-        }
-        /* 子菜单内边距设置 */
-        .ant-pro-base-menu-inline .ant-pro-base-menu-inline-submenu-has-icon > .ant-menu-sub {
-          padding-inline-start: 0 !important;
-          padding:0 10px !important;
-        }
-        .ant-menu-item ant-menu-item-only-child ant-pro-base-menu-inline-menu-item {
-          padding-left: 32px !important;
-        }
-        /* 二级及以下子菜单标题固定样式 - 使用 Ant Design 原生样式（排除分组标题） */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title) {
-          background-color: transparent !important;
-          background: transparent !important;
-          color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : 'var(--ant-colorTextSecondary)'} !important;
-          /* border-bottom: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'} !important; */
-
-          padding-left: 32px !important;
-          padding-right: 16px !important;
-          border-radius: 0 !important;
-          box-sizing: border-box !important;
-          transition: none !important;
-        }
-        /* 二级子菜单标题 hover 和 content 样式 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title):hover,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title):hover,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title):hover,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title):hover,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title) > .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title) > .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title) > .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title) > .ant-menu-title-content {
-          background: transparent !important;
-          color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : 'var(--ant-colorTextSecondary)'} !important;
-        }
-        /* 确保分组标题不受子菜单激活状态影响，使用菜单栏文字颜色 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-item-group-title {
-          background: transparent !important;
-          color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
-        }
+        /* 二级及以下菜单恢复 antd/pro-layout 原生样式：不再覆写颜色、选中态、缩进与过渡。 */
         /* ==================== 侧栏菜单动效：更短、更利落（仅作用于侧栏，不影响主题切换全局 0s 规则） ==================== */
         .ant-pro-layout .ant-pro-sider .ant-motion-collapse,
         .ant-pro-layout .ant-pro-sider .ant-motion-collapse-legacy-active {
@@ -3914,15 +3717,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             height 0.15s cubic-bezier(0.33, 1, 0.68, 1),
             opacity 0.1s ease !important;
         }
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu .ant-menu-item,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu .ant-menu-submenu-title {
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu > .ant-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu > .ant-menu-submenu > .ant-menu-submenu-title {
           transition:
             background-color 0.12s cubic-bezier(0.33, 1, 0.68, 1),
             color 0.12s cubic-bezier(0.33, 1, 0.68, 1) !important;
         }
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-arrow,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-arrow::before,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-arrow::after {
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-submenu-arrow,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-submenu-arrow::before,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-submenu-arrow::after {
           transition: transform 0.12s cubic-bezier(0.33, 1, 0.68, 1) !important;
         }
         .ant-pro-layout .ant-pro-sider.ant-layout-sider {
@@ -3935,11 +3738,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         @media (prefers-reduced-motion: reduce) {
           .ant-pro-layout .ant-pro-sider .ant-motion-collapse,
           .ant-pro-layout .ant-pro-sider .ant-motion-collapse-legacy-active,
-          .ant-pro-layout .ant-pro-sider-menu.ant-menu .ant-menu-item,
-          .ant-pro-layout .ant-pro-sider-menu.ant-menu .ant-menu-submenu-title,
-          .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item,
-          .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item .ant-menu-title-content,
-          .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item::after,
+          .ant-pro-layout .ant-pro-sider-menu.ant-menu > .ant-menu-item,
+          .ant-pro-layout .ant-pro-sider-menu.ant-menu > .ant-menu-submenu > .ant-menu-submenu-title,
           .ant-pro-layout .ant-pro-sider.ant-layout-sider {
             transition: none !important;
           }
@@ -4731,98 +4531,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             padding: 0 !important;
           }
         }
-        /* ==================== 弹出菜单文字颜色（放在最后，确保最高优先级） ==================== */
-        /* 浅色模式下，菜单收起时弹出的菜单 - 使用深色文字（弹出菜单背景是浅色的） */
-        ${!isDarkMode ? `
-        /* 弹出菜单中的第一层菜单项和子菜单标题 - 使用深色文字（最高优先级，覆盖所有其他规则） */
-        body .ant-menu-submenu-popup .ant-menu-item,
-        body .ant-menu-submenu-popup .ant-menu-submenu > .ant-menu-submenu-title,
-        body .ant-menu-submenu-popup .ant-menu-item-group .ant-menu-item,
-        body .ant-menu-popup .ant-menu-item,
-        body .ant-menu-popup .ant-menu-submenu > .ant-menu-submenu-title,
-        body .ant-menu-popup .ant-menu-item-group .ant-menu-item,
-        /* 覆盖所有状态（hover、selected） */
-        body .ant-menu-submenu-popup .ant-menu-submenu > .ant-menu-submenu-title:hover,
-        body .ant-menu-submenu-popup .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title,
-        body .ant-menu-popup .ant-menu-submenu > .ant-menu-submenu-title:hover,
-        body .ant-menu-popup .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title,
-        /* 文字内容 */
-        body .ant-menu-submenu-popup .ant-menu-item .ant-menu-title-content,
-        body .ant-menu-submenu-popup .ant-menu-item .ant-menu-title-content > a,
-        body .ant-menu-submenu-popup .ant-menu-item .ant-menu-title-content > span,
-        body .ant-menu-submenu-popup .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content,
-        body .ant-menu-submenu-popup .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content > span,
-        body .ant-menu-submenu-popup .ant-menu-item-group .ant-menu-item .ant-menu-title-content,
-        body .ant-menu-popup .ant-menu-item .ant-menu-title-content,
-        body .ant-menu-popup .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content,
-        body .ant-menu-popup .ant-menu-item-group .ant-menu-item .ant-menu-title-content {
-          color: var(--ant-colorText) !important;
-        }
-        ` : ''}
-        /* ========== 侧栏收起（inline-collapsed）图标居中：根因修复 ========== */
-        /* 1) 曾用 margin-right:12px !important 未排除收起态，覆盖 antd 对图标的 margin:0，视觉整体偏左。已在上方改为仅 :not(.ant-menu-inline-collapsed)。 */
-        /* 2) Pro BaseMenu 令一级项 padding-inline:0 且 .ant-menu-title-content 仍 flex 占位时，用主轴居中 + 收标题宽。 */
-        /* 3) ant-pro-sider-menu 与 ant-menu 在同一 ul 上，禁止使用中间带空格的 .ant-pro-sider-menu .ant-menu 误选子代。 */
-        .ant-layout-sider-collapsed .ant-layout-sider-children {
-          padding-inline: 0 !important;
-        }
-        .ant-layout-sider-collapsed
-          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
-          > .ant-menu-item,
-        .ant-layout-sider-collapsed
-          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
-          > .ant-menu-item-group
-          > .ant-menu-item-group-list
-          > .ant-menu-item,
-        .ant-layout-sider-collapsed
-          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
-          > .ant-menu-item-group
-          > .ant-menu-item-group-list
-          > .ant-menu-submenu
-          > .ant-menu-submenu-title,
-        .ant-layout-sider-collapsed
-          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
-          > .ant-menu-submenu
-          > .ant-menu-submenu-title {
-          justify-content: center !important;
-        }
-        .ant-layout-sider-collapsed
-          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
-          > .ant-menu-item
-          .ant-menu-title-content,
-        .ant-layout-sider-collapsed
-          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
-          > .ant-menu-item-group
-          > .ant-menu-item-group-list
-          > .ant-menu-item
-          .ant-menu-title-content,
-        .ant-layout-sider-collapsed
-          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
-          > .ant-menu-item-group
-          > .ant-menu-item-group-list
-          > .ant-menu-submenu
-          > .ant-menu-submenu-title
-          .ant-menu-title-content,
-        .ant-layout-sider-collapsed
-          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
-          > .ant-menu-submenu
-          > .ant-menu-submenu-title
-          .ant-menu-title-content {
-          /* 与 menuProps.styles.itemContent 一致，盖过 Pro/Token 的 inline-flex，避免在 DevTools 里「删不掉」的观感 */
-          display: block !important;
-          flex: 0 0 0 !important;
-          min-width: 0 !important;
-          max-width: 0 !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          overflow: hidden !important;
-        }
-        .ant-layout-sider-collapsed .ant-pro-sider-footer,
-        .ant-layout-sider-collapsed .ant-pro-sider-footer > div {
-          width: 100% !important;
-          max-width: 100% !important;
-          box-sizing: border-box !important;
-        }
       `}</style>
       <ProLayout
         title={siteName}
@@ -5431,6 +5139,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           return <Space size={8} align="center" style={{ flexShrink: 0 }}>{actions}</Space>;
         }}
         menuDataRender={() => {
+          // 过滤系统设置项并插入加载骨架（收起态仅显示原生图标，无简称文字）。
           const data = filteredMenuData.filter((item) => item.path !== '/system');
           if (appMenuSkeletonItems.length) {
             // APP 菜单插入在系统首项之后（与 useUnifiedMenuData 的 splice(1, ...) 一致）
@@ -5445,10 +5154,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }}
         menuProps={{
           mode: 'inline',
-          /** 显式与侧栏收起同步。Pro BaseMenu 在未传时仅依赖 Sider 上下文，混排/时序下偶发与 props 不一致。 */
-          inlineCollapsed: !isFullscreen && collapsed,
-          /** 见 `collapsedSiderMenuStyles`：覆盖 title-content 上 antd/Pro 注入的 display，避免仅靠 CSS 选错节点无效。 */
-          styles: collapsedSiderMenuStyles,
           openKeys: openKeys, // 受控的 openKeys，合并用户手动展开的菜单和当前路径的父菜单
           selectedKeys: selectedKeys, // 受控的 selectedKeys，只选中精确匹配的路径
           // ⚠️ 关键修复：阻止 Ant Design Menu 的默认链接行为，防止整页刷新
@@ -5521,21 +5226,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             masterDataPaths.forEach((p) => prefetchMasterDataRoute(p));
             if (systemPaths.length > 0) prefetchSystemRoutes(systemPaths);
           };
-          /* 侧栏收起时不要写 display:inline-flex + width:100%：会套在 .ant-menu-title-content 与 Pro 的 item-title 之间，
-           * 在 DevTools 里看到的就是这一层，挤压图标。展开态保留 flex 以便父级子菜单标题与预取热区排布。 */
-          const siderForMenuCollapsed = !isFullscreen && collapsed;
-          return (
-            <span
-              onMouseEnter={handleEnter}
-              style={
-                siderForMenuCollapsed
-                  ? { display: 'block', width: '100%' }
-                  : { display: 'inline-flex', alignItems: 'center', width: '100%' }
-              }
-            >
-              {defaultDom}
-            </span>
-          );
+          // 保持 ProLayout 原生结构，仅克隆挂上悬停预取（不包裹额外节点、不叠布局样式）。
+          return React.isValidElement(defaultDom)
+            ? React.cloneElement(defaultDom as React.ReactElement, { onMouseEnter: handleEnter })
+            : defaultDom;
         }}
         menuItemRender={(item: any, dom) => {
           // APP 菜单加载占位：首次拉取 navigation-tree 期间的骨架行
@@ -5630,52 +5324,20 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           // ⚠️ 关键修复：使用 ProLayout 原生方式，返回 React Router 的 Link 组件
           // Link 组件会自动处理 SPA 路由，不会整页刷新
           if (item.path && !item.disabled) {
-            // 内部路由：使用 Link 组件进行 SPA 路由跳转
-            // 确保应用菜单的子菜单项使用翻译后的名称
-            // item.name 已经在 convertMenuTreeToMenuDataItem 中翻译过，但 Ant Design Menu 可能使用原始的 dom
-            // 如果是应用菜单项，确保使用翻译后的名称
-            let finalDom = dom;
-            if (item.path.startsWith('/apps/') && item.name) {
-              // 再次翻译，确保使用最新的翻译函数（因为 t 可能已经更新）
-              const translatedName = translateAppMenuItemName(item.name as string, item.path, t);
-              // 仅用纯文本替换 dom 会丢掉标题里的图标。不要再用 class ant-menu-item-icon：
-              // BasicLayout 全局样式会给 .ant-menu-item-icon 加 ::before 圆角底 + margin-right，叠在自定义 dom 里会只坑叶子项且间距加倍。
-              if (translatedName) {
-                finalDom = (
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      columnGap: 0,
-                      minWidth: 0,
-                      maxWidth: '100%',
-                    }}
-                  >
-                    {item.icon ? (
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                          width: 16,
-                          height: 16,
-                          marginInlineEnd: 12,
-                        }}
-                      >
-                        {item.icon}
-                      </span>
-                    ) : null}
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
-                      {translatedName}
-                    </span>
-                  </span>
-                );
+            const path = item.path as string;
+
+            const prefetchForPath = () => {
+              if (path.startsWith('/apps/')) {
+                const appCode = extractAppCodeFromPath(path);
+                if (appCode) prefetchPlugin(appCode);
+                if (path.startsWith('/apps/kuaizhizao')) prefetchKuaizhizaoRoute(path);
+                if (path.startsWith('/apps/master-data')) prefetchMasterDataRoute(path);
+              } else {
+                prefetchSystemRoute(path);
               }
-            }
+            };
 
             // 左侧菜单小徽标：仅业务单据显示未完成数量
-            const path = item.path as string;
             const badgeKey = getMenuBadgeKey(path);
             const badgeData = (badgeKey ? menuBadgeCounts[badgeKey] : null) as any;
 
@@ -5725,7 +5387,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 style={{ display: 'block', width: '100%' }}
               >
                 <Link to={item.path} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 6 }}>
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{finalDom}</span>
+                  {dom}
                   {badgeEl}
                 </Link>
               </div>

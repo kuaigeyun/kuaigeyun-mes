@@ -15,12 +15,11 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
-import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
+import { useDocumentCreateFormDraft } from '../../../../../hooks/useDocumentCreateFormDraft';
 import {
   buildDocumentCreateDraftKey,
   clearDocumentFormDraft,
   getDocumentFormDraft,
-  setDocumentFormDraft,
 } from '../../../../../utils/documentFormDraftCache';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
@@ -137,6 +136,7 @@ import {
   MODAL_CONFIG,
 
   DocumentFormPageLayout,
+  DocumentFormPageHeaderActions,
 
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
 
@@ -150,7 +150,11 @@ import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../comp
 
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 
-import { resolveOrderLineSalePrice } from '../../../../master-data/utils/resolve-partner-material-price';
+import {
+  resolveMaterialForPricing,
+  resolveOrderLineSalePrice,
+  resolveSalesDocumentMaterialLinesPricing,
+} from '../../../../master-data/utils/resolve-partner-material-price';
 
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 
@@ -209,6 +213,7 @@ import {
   SALES_DOC_DETAIL_BASIC_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
+import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
 import SalesContractTermsManageModal from './SalesContractTermsManageModal';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -560,6 +565,11 @@ const SalesContractsPage: React.FC = () => {
     clearDocumentFormDraft(salesContractCreateDraftKey);
     salesContractCreateDraftRestoredRef.current = false;
   }, [salesContractCreateDraftKey]);
+  const persistSalesContractCreateDraft = useDocumentCreateFormDraft(
+    isCreatePage,
+    salesContractCreateDraftKey,
+    formRef,
+  );
   const leaveSalesContractFormPage = useCallback(() => {
     if (isCreatePage) {
       clearSalesContractCreateDraft();
@@ -719,6 +729,10 @@ const SalesContractsPage: React.FC = () => {
 
       const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
 
+      const full = material
+        ? await resolveMaterialForPricing(material, materialList)
+        : undefined;
+
       const { unitPrice, taxRate } = await resolveOrderLineSalePrice(
 
         customerId ? Number(customerId) : undefined,
@@ -727,7 +741,7 @@ const SalesContractsPage: React.FC = () => {
 
         attrs,
 
-        material,
+        full,
 
         asOf,
 
@@ -745,7 +759,12 @@ const SalesContractsPage: React.FC = () => {
 
       if (items[index]) {
 
-        items[index] = { ...items[index], unit_price: up, tax_rate: taxRate };
+        items[index] = {
+          ...items[index],
+          unit_price: up,
+          tax_rate: taxRate,
+          variant_attributes: attrs ?? items[index].variant_attributes,
+        };
 
         formRef.current?.setFieldsValue({ items });
 
@@ -761,11 +780,33 @@ const SalesContractsPage: React.FC = () => {
 
   const appendContractItemsFromMaterials = useCallback(
 
-    (selected: Material[]) => {
+    async (selected: Material[]) => {
 
       const current = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
 
-      const newRows = selected.map((m) => ({
+      const customerId = formRef.current?.getFieldValue('customer_id');
+
+      const contractDate = formRef.current?.getFieldValue('contract_date');
+
+      const asOf =
+
+        contractDate != null ? (dayjs.isDayjs(contractDate) ? contractDate : dayjs(contractDate)) : dayjs();
+
+      const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
+
+      const priced = await resolveSalesDocumentMaterialLinesPricing(selected, {
+
+        customerId: customerId ? Number(customerId) : undefined,
+
+        asOf,
+
+        priceType: pt,
+
+        materialList,
+
+      });
+
+      const newRows = selected.map((m, i) => ({
 
         material_id: m.id,
 
@@ -779,9 +820,9 @@ const SalesContractsPage: React.FC = () => {
 
         contract_quantity: 1,
 
-        unit_price: (m as any).defaults?.defaultSalePrice ?? (m as any).defaults?.default_sale_price ?? 0,
+        unit_price: priced[i].unitPrice,
 
-        tax_rate: (m as any).defaults?.defaultTaxRate ?? (m as any).defaults?.default_tax_rate ?? 0,
+        tax_rate: priced[i].taxRate,
 
       }));
 
@@ -799,7 +840,7 @@ const SalesContractsPage: React.FC = () => {
 
     },
 
-    [messageApi, t],
+    [materialList, messageApi, t],
 
   );
 
@@ -1301,41 +1342,9 @@ const SalesContractsPage: React.FC = () => {
               autoLoad={false}
 
               onCustomerPick={(cust) => {
-
-                if (cust) {
-
-                  formRef.current?.setFieldsValue({
-
-                    customer_name: cust.name || (cust as any).customer_name,
-
-                    customer_contact: cust.contactPerson ?? (cust as any).contact,
-
-                    customer_phone: cust.phone,
-
-                    shipping_address: cust.address,
-
-                    salesman_name: (cust as any).salesman_name ?? (cust as any).salesmanName,
-
-                  });
-
-                } else {
-
-                  formRef.current?.setFieldsValue({
-
-                    customer_name: undefined,
-
-                    customer_contact: undefined,
-
-                    customer_phone: undefined,
-
-                    shipping_address: undefined,
-
-                    salesman_name: undefined,
-
-                  });
-
-                }
-
+                applyCustomerFormFields(formRef, cust as Record<string, unknown> | null, {
+                  customerList,
+                });
               }}
 
             />
@@ -1661,7 +1670,7 @@ const SalesContractsPage: React.FC = () => {
 
                   {fields.length > 0 ? (
 
-                    <Table size="small" pagination={false} rowKey="key" dataSource={fields} columns={msCols as any} scroll={{ x: 'max-content' }} />
+                    <Table size="small" bordered pagination={false} rowKey="key" dataSource={fields} columns={msCols as any} scroll={{ x: 'max-content' }} />
 
                   ) : null}
 
@@ -2669,20 +2678,12 @@ const SalesContractsPage: React.FC = () => {
                   : t('app.kuaizhizao.menu.sales-management.sales-contracts.edit')}
               </Typography.Title>
             </Space>
-            <Space wrap>
-              <Button onClick={leaveSalesContractFormPage}>{t('common.cancel')}</Button>
-              <Button onClick={() => void handleSaveDraft()}>
-                {isCreatePage
-                  ? t('app.kuaizhizao.salesContract.saveDraft')
-                  : t('common.save')}
-              </Button>
-              <Button type="primary" onClick={triggerContractFormSubmit}>
-                {isCreatePage
-                  ? t('components.layoutTemplates.formModal.submitCreate')
-                  : t('app.kuaizhizao.salesContract.saveAndSubmit')}
-                {SUBMIT_SHORTCUT_HINT}
-              </Button>
-            </Space>
+            <DocumentFormPageHeaderActions
+              onCancel={leaveSalesContractFormPage}
+              onSaveDraft={() => void handleSaveDraft()}
+              onPrimarySubmit={triggerContractFormSubmit}
+              isCreatePage={isCreatePage}
+            />
             </>
           }
         >
@@ -2693,11 +2694,7 @@ const SalesContractsPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
-                onValuesChange={(_, allValues) => {
-                  if (isCreatePage && salesContractCreateDraftKey) {
-                    setDocumentFormDraft(salesContractCreateDraftKey, allValues as Record<string, unknown>);
-                  }
-                }}
+                onValuesChange={persistSalesContractCreateDraft}
                 onFinish={(values) => handleFormSubmit(values, { asDraft: false })}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];

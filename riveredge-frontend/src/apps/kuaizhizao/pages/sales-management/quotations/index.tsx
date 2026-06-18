@@ -40,16 +40,15 @@ import type { Material } from '../../../../master-data/types/material';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import {
+  applySalesDocumentLineMaterialPricing,
   getMaterialDefaultTaxRate,
-  pickResolvedTaxRate,
-  pickSaleUnitPrice,
-  resolveCustomerSalePricesBatch,
   resolveMaterialForPricing,
   resolveOrderLineSalePrice,
+  resolveSalesDocumentMaterialLinesPricing,
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
 import { parseVariantAttributesValue } from '../../../../master-data/components/VariantAttributeFields';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET, PAGE_SPACING, DocumentFormPageLayout, DOCUMENT_DETAIL_PAGE_TITLE_STYLE } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET, PAGE_SPACING, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE } from '../../../../../components/layout-templates';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { AmountDisplay } from '../../../../../components/permission';
@@ -106,15 +105,18 @@ import { displayItemsToUsers, formatUserDisplayLabel } from '../../../../../util
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import {
+  DOCUMENT_DETAIL_CONTROL_SIZE,
+  DOCUMENT_DETAIL_TABLE_PROPS,
+} from '../../../components/document-detail-table/documentDetailTable';
 import { RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
-import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
+import { useDocumentCreateFormDraft } from '../../../../../hooks/useDocumentCreateFormDraft';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import {
   buildDocumentCreateDraftKey,
   clearDocumentFormDraft,
   getDocumentFormDraft,
-  setDocumentFormDraft,
 } from '../../../../../utils/documentFormDraftCache';
 import {
   alignDescriptionColumns,
@@ -123,6 +125,7 @@ import {
   SALES_DOC_DETAIL_BASIC_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
+import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
 
 const QUOTATION_LIST_PATH = '/apps/kuaizhizao/sales-management/quotations';
 const QUOTATION_CREATE_PATH = `${QUOTATION_LIST_PATH}/new`;
@@ -445,40 +448,6 @@ const QUOTATION_DETAIL_NUM_COL = {
 };
 const QUOTATION_DETAIL_AMOUNT_STYLE: React.CSSProperties = { display: 'block', textAlign: 'right' };
 
-async function applyQuotationLineMaterialPricing(
-  form: ReturnType<typeof Form.useFormInstance>,
-  index: number,
-  material: Material,
-  materialList: Material[],
-): Promise<void> {
-  const full = await resolveMaterialForPricing(material, materialList);
-  const customerId = form.getFieldValue('customer_id');
-  const quotationDate = form.getFieldValue('quotation_date');
-  const asOf =
-    quotationDate != null
-      ? dayjs.isDayjs(quotationDate)
-        ? quotationDate
-        : dayjs(quotationDate)
-      : dayjs();
-  const pt = form.getFieldValue('price_type') ?? 'tax_exclusive';
-  const materialId = Number((full as Material).id ?? material.id);
-  const { unitPrice, taxRate } = await resolveOrderLineSalePrice(
-    customerId ? Number(customerId) : undefined,
-    Number.isFinite(materialId) ? materialId : undefined,
-    undefined,
-    full,
-    asOf,
-  );
-  let up = unitPrice;
-  if (pt === 'tax_inclusive' && up > 0) {
-    up = convertUnitPriceByPriceType(up, taxRate, 'tax_exclusive', 'tax_inclusive');
-  }
-  const items = [...normalizeFormListItems<any>(form.getFieldValue('items'))];
-  if (!items[index]) return;
-  items[index] = { ...items[index], unit_price: up, tax_rate: taxRate };
-  form.setFieldsValue({ items });
-}
-
 /** 归属业务员：与销售订单一致，用 display API 选项并在无匹配时用 salesman_name 回显 */
 const QuotationSalesmanField: React.FC<{ userList: User[]; loading: boolean }> = ({ userList, loading }) => {
   const { t } = useTranslation();
@@ -559,7 +528,10 @@ const QuotationMaterialSelectCell: React.FC<{ index: number; materialList: Mater
       );
       form.setFieldValue(['items', index, '_masterMaterialUuid'], material.uuid);
       form.setFieldValue(['items', index, 'variant_attributes'], undefined);
-      void applyQuotationLineMaterialPricing(form, index, material, materialList);
+      void applySalesDocumentLineMaterialPricing(form, index, material, {
+        materialList,
+        asOfField: 'quotation_date',
+      });
     },
     [form, index, materialList],
   );
@@ -574,7 +546,7 @@ const QuotationMaterialSelectCell: React.FC<{ index: number; materialList: Mater
           label=""
           placeholder={t('app.kuaizhizao.quotation.form.selectMaterial')}
           required
-          size="small"
+          size={DOCUMENT_DETAIL_CONTROL_SIZE}
           listFieldKey={index}
           listFieldName="items"
           fillMapping={{
@@ -807,6 +779,11 @@ const QuotationsPage: React.FC = () => {
     clearDocumentFormDraft(quotationCreateDraftKey);
     quotationCreateDraftRestoredRef.current = false;
   }, [quotationCreateDraftKey]);
+  const persistQuotationCreateDraft = useDocumentCreateFormDraft(
+    isCreatePage,
+    quotationCreateDraftKey,
+    formRef,
+  );
   const leaveQuotationFormPage = useCallback(() => {
     if (isCreatePage) {
       clearQuotationCreateDraft();
@@ -876,30 +853,14 @@ const QuotationsPage: React.FC = () => {
   }, [currentUser]);
 
   const applyCustomerToQuotationForm = useCallback(
-    (c: Record<string, any>) => {
-      if (!c) return;
-      const sIdRaw = c.salesmanId ?? c.salesman_id;
-      const sId =
-        sIdRaw != null && sIdRaw !== '' && Number.isFinite(Number(sIdRaw)) ? Number(sIdRaw) : undefined;
-      const salesman = sId != null ? userList.find((u) => Number(u.id) === sId) : undefined;
-      const sName =
-        c.salesmanName ?? c.salesman_name ?? (salesman ? formatUserDisplayLabel(salesman) : '');
-      formRef.current?.setFieldsValue({
-        customer_id: c.id ?? c.customer_id,
-        customer_name: c.name ?? c.customer_name,
-        customer_contact: c.contactPerson ?? c.contact_person ?? c.contact ?? c.customer_contact,
-        customer_phone: c.phone ?? c.customer_phone,
-        salesman_id: sId,
-        salesman_name: sName,
-        shipping_address:
-          c.deliveryAddress ??
-          c.delivery_address ??
-          c.address ??
-          c.shipping_address ??
-          '',
+    (c: Record<string, any> | null) => {
+      applyCustomerFormFields(formRef, c, {
+        users: userList,
+        customerList,
+        includeCustomerId: true,
       });
     },
-    [userList],
+    [userList, customerList],
   );
 
   const applyCustomerById = useCallback(
@@ -2207,7 +2168,12 @@ const QuotationsPage: React.FC = () => {
       }
       const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))];
       if (items[index]) {
-        items[index] = { ...items[index], unit_price: up, tax_rate: taxRate };
+        items[index] = {
+          ...items[index],
+          unit_price: up,
+          tax_rate: taxRate,
+          variant_attributes: attrs ?? items[index].variant_attributes,
+        };
         formRef.current?.setFieldsValue({ items });
       }
     },
@@ -2225,64 +2191,35 @@ const QuotationsPage: React.FC = () => {
       const asOf =
         quotationDate != null ? (dayjs.isDayjs(quotationDate) ? quotationDate : dayjs(quotationDate)) : dayjs();
 
-      const enriched = await Promise.all(
-        selected.map((m) => resolveMaterialForPricing(m, materialList as Material[])),
-      );
+      const priced = await resolveSalesDocumentMaterialLinesPricing(selected, {
+        customerId: customerId ? Number(customerId) : undefined,
+        asOf,
+        priceType: pt,
+        materialList: materialList as Material[],
+      });
 
-      const resolveMap = new Map<number, Awaited<ReturnType<typeof resolveCustomerSalePricesBatch>>[number]>();
-      if (customerId && enriched.length) {
-        try {
-          const items = await resolveCustomerSalePricesBatch(
-            Number(customerId),
-            enriched.map((m) => ({
-              materialId: Number((m as Material).id),
-              variantAttributes: parseVariantAttributesValue(
-                (m as Material).variantAttributes ?? (m as any).variant_attributes,
-              ),
-            })),
-            asOf,
-            enriched,
-          );
-          enriched.forEach((m, i) => {
-            const id = Number((m as Material).id);
-            if (items[i]) resolveMap.set(id, items[i]);
-          });
-        } catch {
-          /* 回退物料默认价 */
-        }
-      }
-
-      const rowFromMaterial = (m: Material | Record<string, unknown>, idx: number) => {
-        const full = enriched[idx] ?? m;
-        const resolved = resolveMap.get(Number((m as Material).id));
-        const taxR = pickResolvedTaxRate(resolved) ?? getMaterialDefaultTaxRate(full);
-        let up = pickSaleUnitPrice(full, resolved);
-        if (pt === 'tax_inclusive' && up > 0) {
-          up = convertUnitPriceByPriceType(up, taxR, 'tax_exclusive', 'tax_inclusive');
-        }
-        return {
-          material_id: m.id,
-          material_code: String(getMaterialField(m as Record<string, unknown>, 'mainCode') ?? getMaterialField(m as Record<string, unknown>, 'code') ?? ''),
-          material_name: String(getMaterialField(m as Record<string, unknown>, 'name') ?? ''),
-          material_spec: String(getMaterialField(m as Record<string, unknown>, 'specification') ?? ''),
-          material_unit: String(getMaterialField(m as Record<string, unknown>, 'baseUnit') ?? ''),
-          quote_quantity: 1,
-          unit_price: up,
-          tax_rate: taxR,
-          variant_attributes: undefined,
-          _sourceType: m.sourceType ?? (m as any).source_type,
-          _masterMaterialUuid: m.uuid,
-          delivery_date: defaultDelivery,
-          notes: '',
-        };
-      };
+      const rowFromMaterial = (m: Material, pricing: (typeof priced)[number]) => ({
+        material_id: m.id,
+        material_code: String(getMaterialField(m as Record<string, unknown>, 'mainCode') ?? getMaterialField(m as Record<string, unknown>, 'code') ?? ''),
+        material_name: String(getMaterialField(m as Record<string, unknown>, 'name') ?? ''),
+        material_spec: String(getMaterialField(m as Record<string, unknown>, 'specification') ?? ''),
+        material_unit: String(getMaterialField(m as Record<string, unknown>, 'baseUnit') ?? ''),
+        quote_quantity: 1,
+        unit_price: pricing.unitPrice,
+        tax_rate: pricing.taxRate,
+        variant_attributes: undefined,
+        _sourceType: m.sourceType ?? (m as any).source_type,
+        _masterMaterialUuid: m.uuid,
+        delivery_date: defaultDelivery,
+        notes: '',
+      });
       const isEmptyItemRow = (row: any) => {
         if (row == null) return true;
         if (row.material_id != null && row.material_id !== '') return false;
         const code = row.material_code;
         return code == null || String(code).trim() === '';
       };
-      const queue = selected.map((m, idx) => rowFromMaterial(m, idx));
+      const queue = selected.map((m, idx) => rowFromMaterial(m, priced[idx]));
       const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))].map((row: any) => ({ ...row }));
       for (let i = 0; i < items.length && queue.length > 0; i++) {
         if (isEmptyItemRow(items[i])) {
@@ -2307,29 +2244,21 @@ const QuotationsPage: React.FC = () => {
 
   const quotationFormOnValuesChange = useCallback(
     (changed: Record<string, unknown>, all: Record<string, unknown>) => {
-      if ('customer_id' in changed && changed.customer_id != null) {
-        const c = customerList.find((x: any) => (x.id ?? x.customer_id) === changed.customer_id);
-        if (c) {
-          const sIdRaw = c.salesmanId ?? c.salesman_id;
-          const sId =
-            sIdRaw != null && sIdRaw !== '' && Number.isFinite(Number(sIdRaw)) ? Number(sIdRaw) : undefined;
-          const salesman = sId != null ? userList.find((u) => Number(u.id) === sId) : undefined;
-          const sName =
-            c.salesmanName ?? c.salesman_name ?? (salesman ? formatUserDisplayLabel(salesman) : '');
-          formRef.current?.setFieldsValue({
-            customer_name: c.name ?? c.customer_name,
-            customer_contact: c.contactPerson ?? c.contact_person ?? c.contact ?? c.customer_contact,
-            customer_phone: c.phone ?? c.customer_phone,
-            salesman_id: sId,
-            salesman_name: sName,
-          });
+      if ('customer_id' in changed) {
+        const customerId = changed.customer_id;
+        if (customerId != null) {
+          const c = customerList.find((x: any) => Number(x.id ?? x.customer_id) === Number(customerId));
+          if (c) {
+            applyCustomerFormFields(formRef, c as Record<string, unknown>, {
+              users: userList,
+              customerList,
+            });
+          }
         }
       }
-      if (isCreatePage && quotationCreateDraftKey) {
-        setDocumentFormDraft(quotationCreateDraftKey, all);
-      }
+      persistQuotationCreateDraft(changed, all);
     },
-    [customerList, userList, isCreatePage, quotationCreateDraftKey],
+    [customerList, userList, persistQuotationCreateDraft],
   );
 
   const triggerQuotationFormSubmit = useCallback(() => {
@@ -2380,24 +2309,13 @@ const QuotationsPage: React.FC = () => {
               hostResource="kuaizhizao:quotation"
               placeholder={t('app.kuaizhizao.quotation.form.selectCustomer')}
               style={{ width: '100%' }}
-              customers={customerList.length > 0 ? customerList : undefined}
+              customers={customerList}
               loading={customersLoading}
               onCustomersChange={setCustomerList}
-              autoLoad
+              autoLoad={false}
               modalZIndex={quotationNestedElevatedPopupZIndex}
               onCustomerPick={(c) => {
-                if (c) {
-                  applyCustomerToQuotationForm(c as Record<string, any>);
-                } else {
-                  formRef.current?.setFieldsValue({
-                    customer_name: undefined,
-                    customer_contact: undefined,
-                    customer_phone: undefined,
-                    salesman_id: undefined,
-                    salesman_name: undefined,
-                    shipping_address: undefined,
-                  });
-                }
+                applyCustomerToQuotationForm(c as Record<string, any> | null);
               }}
             />
           </ProForm.Item>
@@ -2528,7 +2446,7 @@ const QuotationsPage: React.FC = () => {
                         ...QUOTATION_DETAIL_TEXT_COL,
                         render: (_: unknown, __: unknown, index: number) => (
                           <Form.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                            <Input placeholder={t('app.kuaizhizao.salesOrder.spec')} size="small" />
+                            <Input placeholder={t('app.kuaizhizao.salesOrder.spec')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                           </Form.Item>
                         ),
                       },
@@ -2548,7 +2466,7 @@ const QuotationsPage: React.FC = () => {
                               const materialId = gf(['items', index, 'material_id']);
                               return (
                                 <Form.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                                  <MaterialUnitSelect materialId={materialId} size="small" noStyle />
+                                  <MaterialUnitSelect materialId={materialId} size={DOCUMENT_DETAIL_CONTROL_SIZE} noStyle />
                                 </Form.Item>
                               );
                             }}
@@ -2571,7 +2489,7 @@ const QuotationsPage: React.FC = () => {
                               min={0.01}
                               precision={2}
                               style={{ width: '100%' }}
-                              size="small"
+                              size={DOCUMENT_DETAIL_CONTROL_SIZE}
                             />
                           </Form.Item>
                         ),
@@ -2614,7 +2532,7 @@ const QuotationsPage: React.FC = () => {
                               precision={2}
                               prefix="¥"
                               style={{ width: '100%' }}
-                              size="small"
+                              size={DOCUMENT_DETAIL_CONTROL_SIZE}
                             />
                           </Form.Item>
                         ),
@@ -2691,7 +2609,7 @@ const QuotationsPage: React.FC = () => {
                                       precision={0}
                                       addonAfter="%"
                                       controls={false}
-                                      size="small"
+                                      size={DOCUMENT_DETAIL_CONTROL_SIZE}
                                     />
                                   </Form.Item>
                                 </div>
@@ -2756,7 +2674,7 @@ const QuotationsPage: React.FC = () => {
                                     precision={2}
                                     prefix="¥"
                                     style={{ width: '100%' }}
-                                    size="small"
+                                    size={DOCUMENT_DETAIL_CONTROL_SIZE}
                                     value={displayValue}
                                     onChange={(val) => {
                                       const v = val ?? null;
@@ -2799,7 +2717,7 @@ const QuotationsPage: React.FC = () => {
                         render: (_: unknown, __: unknown, index: number) => (
                           <Form.Item name={[index, 'delivery_date']} style={{ margin: 0 }}>
                             <FutureDatePicker
-                              size="small"
+                              size={DOCUMENT_DETAIL_CONTROL_SIZE}
                               style={{ width: '100%', minWidth: 140 }}
                               format="YYYY-MM-DD"
                               getForm={() => formRef.current}
@@ -2819,7 +2737,7 @@ const QuotationsPage: React.FC = () => {
                         ...QUOTATION_DETAIL_TEXT_COL,
                         render: (_: unknown, __: unknown, index: number) => (
                           <Form.Item name={[index, 'notes']} style={{ margin: 0 }}>
-                            <Input placeholder={t('app.kuaizhizao.salesOrder.notes')} size="small" />
+                            <Input placeholder={t('app.kuaizhizao.salesOrder.notes')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                           </Form.Item>
                         ),
                       },
@@ -2918,11 +2836,7 @@ const QuotationsPage: React.FC = () => {
                   delivery_date: undefined,
                   notes: '',
                 }}
-                tableProps={{
-                  className: 'quotation-detail-table',
-                  size: 'small',
-                  style: { width: '100%', margin: 0 },
-                }}
+                tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
               />
             </>
           );
@@ -2975,23 +2889,14 @@ const QuotationsPage: React.FC = () => {
                   : t('app.kuaizhizao.menu.sales-management.quotations.edit')}
               </Typography.Title>
             </Space>
-            <Space wrap>
-              <Button onClick={leaveQuotationFormPage}>{t('common.cancel')}</Button>
-              {isCreatePage ? (
-                <>
-                  <Button onClick={() => void handleSaveDraft()}>{t('app.kuaizhizao.quotation.saveDraft')}</Button>
-                  <Button type="primary" onClick={triggerQuotationFormSubmit}>
-                    {t('components.layoutTemplates.formModal.submitCreate')}
-                    {SUBMIT_SHORTCUT_HINT}
-                  </Button>
-                </>
-              ) : (
-                <Button type="primary" onClick={triggerQuotationFormSubmit}>
-                  {t('common.save')}
-                  {SUBMIT_SHORTCUT_HINT}
-                </Button>
-              )}
-            </Space>
+            <DocumentFormPageHeaderActions
+              onCancel={leaveQuotationFormPage}
+              onSaveDraft={() => void handleSaveDraft()}
+              onPrimarySubmit={triggerQuotationFormSubmit}
+              isCreatePage={isCreatePage}
+              showSaveDraft={isCreatePage}
+              canSubmitAfterSave={isCreatePage}
+            />
             </>
           }
         >

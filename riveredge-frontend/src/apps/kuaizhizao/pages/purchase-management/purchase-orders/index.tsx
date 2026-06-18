@@ -41,6 +41,7 @@ import {
   MODAL_CONFIG,
   DRAWER_CONFIG,
   DocumentFormPageLayout,
+  DocumentFormPageHeaderActions,
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   PAGE_SPACING,
   type StatCard,
@@ -54,7 +55,6 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
-import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
 import {
   buildDocumentCreateDraftKey,
   clearDocumentFormDraft,
@@ -68,6 +68,7 @@ import {
   DOCUMENT_DETAIL_COL_WIDTH,
   DOCUMENT_DETAIL_DATE_PICKER_STYLE,
   DOCUMENT_DETAIL_NUM_COL,
+  DOCUMENT_DETAIL_CONTROL_SIZE,
   DOCUMENT_DETAIL_TABLE_PROPS,
   DOCUMENT_DETAIL_TEXT_COL,
   DocumentDetailTableStyles,
@@ -2018,9 +2019,33 @@ const PurchaseOrdersPage: React.FC = () => {
         },
       ];
 
-  const triggerPurchaseOrderFormSubmit = () => formRef.current?.submit?.();
+  const triggerPurchaseOrderPrimarySubmit = useCallback(async () => {
+    try {
+      await formRef.current?.validateFields();
+      submitAfterSaveRef.current = !!(
+        isCreatePage || (isEditPage && isDraftStatus(currentOrder?.status))
+      );
+      formRef.current?.submit();
+    } catch (err: any) {
+      if (err?.errorFields?.length) {
+        messageApi.warning(t('app.kuaizhizao.purchaseOrder.fillRequiredBeforeSubmit'));
+      }
+    }
+  }, [currentOrder?.status, isCreatePage, isEditPage, messageApi, t]);
 
-  useSubmitShortcut(() => triggerPurchaseOrderFormSubmit(), isFormPage);
+  const handleSaveDraft = useCallback(async () => {
+    try {
+      await formRef.current?.validateFields();
+      submitAfterSaveRef.current = false;
+      formRef.current?.submit();
+    } catch (err: any) {
+      if (err?.errorFields?.length) {
+        messageApi.warning(t('app.kuaizhizao.purchaseOrder.fillRequiredBeforeSubmit'));
+      }
+    }
+  }, [messageApi, t]);
+
+  useSubmitShortcut(() => void triggerPurchaseOrderPrimarySubmit(), isFormPage);
 
   const purchaseOrderFormItemContent = (
     <>
@@ -2239,7 +2264,7 @@ const PurchaseOrdersPage: React.FC = () => {
                               label=""
                               placeholder={t('app.kuaizhizao.salesOrder.selectMaterial')}
                               required
-                              size="small"
+                              size={DOCUMENT_DETAIL_CONTROL_SIZE}
                               listFieldKey={index}
                               listFieldName="items"
                               fillMapping={{
@@ -2265,7 +2290,7 @@ const PurchaseOrdersPage: React.FC = () => {
                     ...DOCUMENT_DETAIL_TEXT_COL,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                        <Input placeholder={t('app.kuaizhizao.purchaseOrder.form.spec')} size="small" />
+                        <Input placeholder={t('app.kuaizhizao.purchaseOrder.form.spec')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                       </AntForm.Item>
                     ),
                   },
@@ -2282,7 +2307,7 @@ const PurchaseOrdersPage: React.FC = () => {
                             <AntForm.Item name={[index, 'unit']} style={{ margin: 0 }}>
                               <MaterialUnitSelect 
                                 materialId={materialId} 
-                                size="small" 
+                                size={DOCUMENT_DETAIL_CONTROL_SIZE} 
                                 noStyle 
                               />
                             </AntForm.Item>
@@ -2298,7 +2323,7 @@ const PurchaseOrdersPage: React.FC = () => {
                     ...DOCUMENT_DETAIL_NUM_COL,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'ordered_quantity']} rules={[{ required: true, message: t('common.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.salesOrder.quantityMinHint') }]} style={{ margin: 0 }}>
-                        <InputNumber placeholder={t('app.kuaizhizao.purchaseOrder.form.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
+                        <InputNumber placeholder={t('app.kuaizhizao.purchaseOrder.form.quantity')} min={0} precision={2} style={{ width: '100%' }} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                       </AntForm.Item>
                     ),
                   },
@@ -2323,7 +2348,7 @@ const PurchaseOrdersPage: React.FC = () => {
                               precision={2}
                               prefix="¥"
                               style={{ width: '100%' }}
-                              size="small"
+                              size={DOCUMENT_DETAIL_CONTROL_SIZE}
                             />
                           </AntForm.Item>
                         )}
@@ -2419,7 +2444,7 @@ const PurchaseOrdersPage: React.FC = () => {
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'required_date']} rules={[{ required: true, message: t('common.required') }]} style={{ margin: 0 }}>
                         <FutureDatePicker
-                          size="small"
+                          size={DOCUMENT_DETAIL_CONTROL_SIZE}
                           style={DOCUMENT_DETAIL_DATE_PICKER_STYLE}
                           format="YYYY-MM-DD"
                           getForm={() => formRef.current}
@@ -2513,37 +2538,13 @@ const PurchaseOrdersPage: React.FC = () => {
                   : t('app.kuaizhizao.menu.purchase-management.purchase-orders.edit')}
               </Typography.Title>
             </Space>
-            <Space wrap>
-              <Button onClick={leavePurchaseOrderFormPage}>{t('common.cancel')}</Button>
-              <Button onClick={triggerPurchaseOrderFormSubmit}>
-                {isCreatePage ? t('app.kuaizhizao.purchaseOrder.saveDraft') : t('common.save')}
-              </Button>
-              {canSubmitAfterSave ? (
-                <Button
-                  type="primary"
-                  icon={<SendOutlined />}
-                  onClick={async () => {
-                    try {
-                      await formRef.current?.validateFields();
-                      submitAfterSaveRef.current = true;
-                      formRef.current?.submit();
-                    } catch (err) {
-                      if ((err as any)?.errorFields?.length) {
-                        messageApi.warning(t('app.kuaizhizao.purchaseOrder.fillRequiredBeforeSubmit'));
-                      }
-                    }
-                  }}
-                >
-                  {isCreatePage ? t('app.kuaizhizao.purchaseOrder.createAndSubmit') : t('app.kuaizhizao.purchaseOrder.saveAndSubmit')}
-                  {SUBMIT_SHORTCUT_HINT}
-                </Button>
-              ) : (
-                <Button type="primary" onClick={triggerPurchaseOrderFormSubmit}>
-                  {t('common.save')}
-                  {SUBMIT_SHORTCUT_HINT}
-                </Button>
-              )}
-            </Space>
+            <DocumentFormPageHeaderActions
+              onCancel={leavePurchaseOrderFormPage}
+              onSaveDraft={() => void handleSaveDraft()}
+              onPrimarySubmit={() => void triggerPurchaseOrderPrimarySubmit()}
+              isCreatePage={isCreatePage}
+              canSubmitAfterSave={canSubmitAfterSave}
+            />
             </>
           }
         >

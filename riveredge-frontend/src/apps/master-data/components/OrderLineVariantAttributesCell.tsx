@@ -17,6 +17,13 @@ import { variantAttributeApi } from '../services/variant-attribute';
 import type { Material } from '../types/material';
 import type { VariantAttributeDefinition } from '../types/variant-attribute';
 import { VariantAttributeFields, parseVariantAttributesValue } from './VariantAttributeFields';
+import { normalizeFormListItems } from '../../../utils/formListItems';
+
+/** Form.List 内注册 variant_attributes，不渲染 UI */
+const VariantAttributesFormBridge: React.FC<{
+  value?: Record<string, unknown>;
+  onChange?: (value?: Record<string, unknown>) => void;
+}> = () => null;
 
 export interface OrderLineVariantAttributesCellProps {
   form: FormInstance;
@@ -91,6 +98,15 @@ export const OrderLineVariantAttributesCell: React.FC<OrderLineVariantAttributes
     st === 'Configure' || isVariantMasterMaterial(material) || isPrecombinedSku(material);
   const resolvedMasterUuid = masterMaterialUuid || material?.uuid;
 
+  const applyAttributes = (next: Record<string, unknown> | undefined) => {
+    const items = normalizeFormListItems<Record<string, unknown>>(form.getFieldValue('items'));
+    if (!items[rowIndex]) return;
+    const nextItems = items.slice();
+    nextItems[rowIndex] = { ...nextItems[rowIndex], [fieldName]: next };
+    form.setFieldsValue({ items: nextItems });
+    onAttributesChange?.(next);
+  };
+
   useEffect(() => {
     if (!showEditor) return;
     let cancelled = false;
@@ -115,15 +131,10 @@ export const OrderLineVariantAttributesCell: React.FC<OrderLineVariantAttributes
       material.variantAttributes ?? (material as any).variant_attributes,
     );
     if (skuAttrs && !parseVariantAttributesValue(rawAttrs)) {
-      form.setFieldValue(['items', rowIndex, fieldName], skuAttrs);
-      onAttributesChange?.(skuAttrs);
+      applyAttributes(skuAttrs);
     }
-  }, [material, form, rowIndex, fieldName, rawAttrs, onAttributesChange]);
-
-  const applyAttributes = (next: Record<string, unknown> | undefined) => {
-    form.setFieldValue(['items', rowIndex, fieldName], next);
-    onAttributesChange?.(next);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyAttributes 依赖 rowIndex/fieldName
+  }, [material, rawAttrs]);
 
   const openModal = () => {
     const current = parseVariantAttributesValue(rawAttrs) ?? {};
@@ -147,7 +158,12 @@ export const OrderLineVariantAttributesCell: React.FC<OrderLineVariantAttributes
         return;
       }
       const attrs = normalizeScalarAttrs(getMaterialVariantAttrs(selectedSku) as Record<string, unknown>);
-      if (Object.keys(attrs).length === 0) return;
+      if (Object.keys(attrs).length === 0) {
+        message.warning(
+          t('app.kuaizhizao.salesOrder.variantAttrsEmpty', '所选 SKU 未包含有效属性，请重新选择或手动配置'),
+        );
+        return;
+      }
       applyAttributes(attrs);
       closeModal();
       return;
@@ -186,6 +202,9 @@ export const OrderLineVariantAttributesCell: React.FC<OrderLineVariantAttributes
 
   return (
     <>
+      <Form.Item name={[rowIndex, fieldName]} noStyle>
+        <VariantAttributesFormBridge />
+      </Form.Item>
       <div style={{ minWidth: 140, maxWidth: 260 }}>
         {attrs ? (
           <div style={{ marginBottom: 6 }}>

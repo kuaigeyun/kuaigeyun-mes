@@ -29,6 +29,7 @@ import {
   TENANT_BACKEND_HOME_QUERY_KEY,
 } from '../../services/menu';
 import { RouteTransition } from '../route-transition';
+import { TabRouteCache } from './TabRouteCache';
 import { readUniTabsBorderRadius } from '../../utils/themeBorderRadius';
 
 function isTenantDefaultHomePath(p: string): boolean {
@@ -1070,6 +1071,14 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
 
 
+  const openTabKeys = useMemo(() => tabs.map((tab) => tab.key), [tabs]);
+
+  const renderCachedRouteContent = (content: React.ReactNode) => (
+    <TabRouteCache activeKey={activeKey} openTabKeys={openTabKeys} refreshToken={refreshKey}>
+      {content}
+    </TabRouteCache>
+  );
+
   // 如果没有标签，直接渲染子组件
   if (tabs.length === 0) {
     return (
@@ -2047,18 +2056,17 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         </div>
         <div
           className={`uni-tabs-content${isDashboardScrollPage ? ' uni-tabs-content-dashboard' : ''}${isBusinessBoardAnalysisPage ? ' uni-tabs-content-business-board' : ''}`}
-          key={`content-refresh-${refreshKey}`}
         >
           {isHMIPage ? (
             <div className="uni-tabs-content-hmi-container">
               <div className="uni-tabs-content-hmi-inner">
-                <RouteTransition>{children}</RouteTransition>
+                {renderCachedRouteContent(children)}
               </div>
             </div>
           ) : isBusinessBoardAnalysisPage ? (
             <div className="uni-tabs-content-board-outer">
               <div className="uni-tabs-content-board-inner">
-                <RouteTransition>{children}</RouteTransition>
+                {renderCachedRouteContent(children)}
               </div>
             </div>
           ) : (
@@ -2066,7 +2074,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
               className={`uni-tabs-content-page-outer${isFlushDashboardOuter ? ' uni-tabs-content-page-outer--flush' : ''}`}
             >
               <div className="uni-tabs-content-page-inner">
-                <RouteTransition>{children}</RouteTransition>
+                {renderCachedRouteContent(children)}
               </div>
             </div>
           )}

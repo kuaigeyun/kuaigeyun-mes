@@ -28,18 +28,18 @@ import {
   DetailDrawerInlineFullChain,
   DRAWER_CONFIG,
   DocumentFormPageLayout,
+  DocumentFormPageHeaderActions,
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   PAGE_SPACING,
   type StatCard,
 } from '../../../../../components/layout-templates'
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle'
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut'
-import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut'
+import { useDocumentCreateFormDraft } from '../../../../../hooks/useDocumentCreateFormDraft'
 import {
   buildDocumentCreateDraftKey,
   clearDocumentFormDraft,
   getDocumentFormDraft,
-  setDocumentFormDraft,
 } from '../../../../../utils/documentFormDraftCache'
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts'
 import { UniTable } from '../../../../../components/uni-table'
@@ -54,6 +54,10 @@ import { UniMaterialSelect } from '../../../../../components/uni-material-select
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker'
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select'
 import { UniTableDetail } from '../../../../../components/uni-table-detail'
+import {
+  DOCUMENT_DETAIL_CONTROL_SIZE,
+  DOCUMENT_DETAIL_TABLE_PROPS,
+} from '../../../components/document-detail-table/documentDetailTable'
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment'
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
@@ -197,6 +201,11 @@ export default function SalesForecastsPage() {
     clearDocumentFormDraft(salesForecastCreateDraftKey);
     salesForecastCreateDraftRestoredRef.current = false;
   }, [salesForecastCreateDraftKey]);
+  const persistSalesForecastCreateDraft = useDocumentCreateFormDraft(
+    isCreatePage,
+    salesForecastCreateDraftKey,
+    formRef,
+  );
   const leaveSalesForecastFormPage = useCallback(() => {
     if (isCreatePage) {
       clearSalesForecastCreateDraft();
@@ -1417,7 +1426,7 @@ export default function SalesForecastsPage() {
                         label=""
                         placeholder={t('common.selectMaterial')}
                         required
-                        size="small"
+                        size={DOCUMENT_DETAIL_CONTROL_SIZE}
                         listFieldKey={index}
                         listFieldName="items"
                         fillMapping={{
@@ -1439,7 +1448,7 @@ export default function SalesForecastsPage() {
                       <AntForm.Item name={[index, 'variant_attributes']} style={{ margin: 0 }}>
                         <Input
                           placeholder={t('app.kuaizhizao.salesForecast.attributePlaceholder')}
-                          size="small"
+                          size={DOCUMENT_DETAIL_CONTROL_SIZE}
                           allowClear
                         />
                       </AntForm.Item>
@@ -1451,7 +1460,7 @@ export default function SalesForecastsPage() {
                     width: 120,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                        <Input placeholder={t('app.kuaizhizao.salesForecast.specPlaceholder')} size="small" />
+                        <Input placeholder={t('app.kuaizhizao.salesForecast.specPlaceholder')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                       </AntForm.Item>
                     ),
                   },
@@ -1470,7 +1479,7 @@ export default function SalesForecastsPage() {
                           const materialId = getFieldValue(['items', index, 'material_id']);
                           return (
                             <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                              <MaterialUnitSelect materialId={materialId} size="small" noStyle />
+                              <MaterialUnitSelect materialId={materialId} size={DOCUMENT_DETAIL_CONTROL_SIZE} noStyle />
                             </AntForm.Item>
                           );
                         }}
@@ -1488,7 +1497,7 @@ export default function SalesForecastsPage() {
                         rules={[{ required: true, message: t('common.required') }]}
                         style={{ margin: 0 }}
                       >
-                        <InputNumber min={0.01} precision={2} style={{ width: '100%' }} size="small" />
+                        <InputNumber min={0.01} precision={2} style={{ width: '100%' }} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                       </AntForm.Item>
                     ),
                   },
@@ -1503,7 +1512,7 @@ export default function SalesForecastsPage() {
                         style={{ margin: 0 }}
                       >
                         <FutureDatePicker
-                          size="small"
+                          size={DOCUMENT_DETAIL_CONTROL_SIZE}
                           style={{ width: '100%' }}
                           format="YYYY-MM-DD"
                           getForm={() => formRef.current}
@@ -1521,17 +1530,14 @@ export default function SalesForecastsPage() {
                     dataIndex: 'notes',
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'notes']} style={{ margin: 0 }}>
-                        <Input placeholder={t('app.kuaizhizao.salesForecast.notes')} size="small" />
+                        <Input placeholder={t('app.kuaizhizao.salesForecast.notes')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                       </AntForm.Item>
                     ),
                   },
                 ]}
           disabledAdd
           initialValue={{ ...defaultForecastItem }}
-          tableProps={{
-            size: 'small',
-            style: { width: '100%', margin: 0 },
-          }}
+          tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
         />
         <SalesForecastFormSummary />
         <DocumentAttachmentsField category="sales_forecast_attachments" />
@@ -1677,23 +1683,14 @@ export default function SalesForecastsPage() {
                   : t('app.kuaizhizao.menu.sales-management.sales-forecasts.edit')}
               </Typography.Title>
             </Space>
-            <Space wrap>
-              <Button onClick={leaveSalesForecastFormPage}>{t('common.cancel')}</Button>
-              {isCreatePage ? (
-                <>
-                  <Button onClick={() => void handleSaveDraft()}>{t('app.kuaizhizao.salesOrder.saveDraft')}</Button>
-                  <Button type="primary" onClick={triggerForecastFormSubmit}>
-                    {t('components.layoutTemplates.formModal.submitCreate')}
-                    {SUBMIT_SHORTCUT_HINT}
-                  </Button>
-                </>
-              ) : (
-                <Button type="primary" onClick={triggerForecastFormSubmit}>
-                  {t('common.save')}
-                  {SUBMIT_SHORTCUT_HINT}
-                </Button>
-              )}
-            </Space>
+            <DocumentFormPageHeaderActions
+              onCancel={leaveSalesForecastFormPage}
+              onSaveDraft={() => void handleSaveDraft()}
+              onPrimarySubmit={triggerForecastFormSubmit}
+              isCreatePage={isCreatePage}
+              showSaveDraft={isCreatePage}
+              canSubmitAfterSave={isCreatePage}
+            />
             </>
           }
         >
@@ -1704,11 +1701,7 @@ export default function SalesForecastsPage() {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
-                onValuesChange={(_, allValues) => {
-                  if (isCreatePage && salesForecastCreateDraftKey) {
-                    setDocumentFormDraft(salesForecastCreateDraftKey, allValues as Record<string, unknown>);
-                  }
-                }}
+                onValuesChange={persistSalesForecastCreateDraft}
                 onFinish={(values) => handleSaveInternal(values, false)}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];

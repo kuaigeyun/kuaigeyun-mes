@@ -74,6 +74,7 @@ import {
   MODAL_NESTED_ABOVE_PARENT_OFFSET,
   PAGE_SPACING,
   DocumentFormPageLayout,
+  DocumentFormPageHeaderActions,
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   type StatCard,
 } from '../../../../../components/layout-templates';
@@ -86,6 +87,7 @@ import {
   DOCUMENT_DETAIL_COL_WIDTH,
   DOCUMENT_DETAIL_DATE_PICKER_STYLE,
   DOCUMENT_DETAIL_NUM_COL,
+  DOCUMENT_DETAIL_CONTROL_SIZE,
   DOCUMENT_DETAIL_TABLE_PROPS,
   DOCUMENT_DETAIL_TEXT_COL,
   DocumentDetailTableStyles,
@@ -148,10 +150,9 @@ import type { Customer } from '../../../../master-data/types/supply-chain';
 import {
   applySalesDocumentLineMaterialPricing,
   getMaterialDefaultTaxRate,
-  pickSaleUnitPrice,
-  resolveCustomerSalePricesBatch,
   resolveMaterialForPricing,
   resolveOrderLineSalePrice,
+  resolveSalesDocumentMaterialLinesPricing,
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
 import { parseVariantAttributesValue } from '../../../../master-data/components/VariantAttributeFields';
@@ -181,12 +182,11 @@ import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../..
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
-import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
+import { useDocumentCreateFormDraft } from '../../../../../hooks/useDocumentCreateFormDraft';
 import {
   buildDocumentCreateDraftKey,
   clearDocumentFormDraft,
   getDocumentFormDraft,
-  setDocumentFormDraft,
 } from '../../../../../utils/documentFormDraftCache';
 
 /** API 异常 detail 可能是字符串或 { message, trace_id }，不能直接交给 message.error 渲染 */
@@ -457,6 +457,11 @@ const SalesOrdersPage: React.FC = () => {
     clearDocumentFormDraft(salesOrderCreateDraftKey);
     salesOrderCreateDraftRestoredRef.current = false;
   }, [salesOrderCreateDraftKey]);
+  const persistSalesOrderCreateDraft = useDocumentCreateFormDraft(
+    isCreatePage,
+    salesOrderCreateDraftKey,
+    formRef,
+  );
   const leaveSalesOrderFormPage = useCallback(() => {
     if (isCreatePage) {
       clearSalesOrderCreateDraft();
@@ -2041,7 +2046,12 @@ const SalesOrdersPage: React.FC = () => {
       }
       const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))];
       if (items[index]) {
-        items[index] = { ...items[index], unit_price: up, tax_rate: taxRate };
+        items[index] = {
+          ...items[index],
+          unit_price: up,
+          tax_rate: taxRate,
+          variant_attributes: attrs ?? items[index].variant_attributes,
+        };
         formRef.current?.setFieldsValue({ items });
       }
     },
@@ -2058,37 +2068,16 @@ const SalesOrdersPage: React.FC = () => {
       const orderDate = formRef.current?.getFieldValue('order_date');
       const asOf = orderDate != null ? (dayjs.isDayjs(orderDate) ? orderDate : dayjs(orderDate)) : dayjs();
 
-      const resolveMap = new Map<number, Awaited<ReturnType<typeof resolveCustomerSalePricesBatch>>[number]>();
-      if (customerId && selected.length) {
-        try {
-          const items = await resolveCustomerSalePricesBatch(
-            Number(customerId),
-            selected.map((m) => ({
-              materialId: m.id,
-              variantAttributes: parseVariantAttributesValue(
-                m.variantAttributes ?? (m as any).variant_attributes,
-              ),
-            })),
-            asOf,
-            selected,
-          );
-          selected.forEach((m, i) => {
-            if (items[i]) resolveMap.set(m.id, items[i]);
-          });
-        } catch {
-          /* 回退物料默认价 */
-        }
-      }
+      const priced = await resolveSalesDocumentMaterialLinesPricing(selected, {
+        customerId: customerId ? Number(customerId) : undefined,
+        asOf,
+        priceType: pt,
+        materialList: materials,
+      });
 
-      const rowFromMaterial = (m: Material) => {
+      const rowFromMaterial = (m: Material, pricing: (typeof priced)[number]) => {
         const mainCode = m.mainCode ?? m.code ?? '';
         const st = m.sourceType ?? (m as any).source_type;
-        const resolved = resolveMap.get(m.id);
-        const taxR = resolved?.taxRate != null ? Number(resolved.taxRate) : getMaterialDefaultTaxRate(m);
-        let up = pickSaleUnitPrice(m, resolved);
-        if (pt === 'tax_inclusive' && up > 0) {
-          up = convertUnitPriceByPriceType(up, taxR, 'tax_exclusive', 'tax_inclusive');
-        }
         return {
           material_id: m.id,
           material_code: mainCode,
@@ -2097,8 +2086,8 @@ const SalesOrdersPage: React.FC = () => {
           material_unit: m.baseUnit ?? '',
           required_quantity: 1,
           delivery_date: defaultDelivery,
-          unit_price: up,
-          tax_rate: taxR,
+          unit_price: pricing.unitPrice,
+          tax_rate: pricing.taxRate,
           variant_attributes: undefined,
           _sourceType: st,
           _masterMaterialUuid: m.uuid,
@@ -2110,7 +2099,7 @@ const SalesOrdersPage: React.FC = () => {
         const code = row.material_code;
         return code == null || String(code).trim() === '';
       };
-      const queue = selected.map(rowFromMaterial);
+      const queue = selected.map((m, i) => rowFromMaterial(m, priced[i]));
       const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))].map((row: any) => ({ ...row }));
       for (let i = 0; i < items.length && queue.length > 0; i++) {
         if (isEmptyItemRow(items[i])) {
@@ -3007,9 +2996,7 @@ const SalesOrdersPage: React.FC = () => {
                                     label=""
                                     placeholder={t('app.kuaizhizao.salesOrder.selectMaterial')}
                                     required
-                                    size="small"
-                                    listFieldKey={index}
-                                    listFieldName="items"
+                                    size={DOCUMENT_DETAIL_CONTROL_SIZE}
                                     fillMapping={{
                                       material_code: 'mainCode',
                                       material_name: 'name',
@@ -3071,7 +3058,7 @@ const SalesOrdersPage: React.FC = () => {
                       ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                          <Input placeholder={t('app.kuaizhizao.salesOrder.spec')} size="small" />
+                          <Input placeholder={t('app.kuaizhizao.salesOrder.spec')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                         </AntForm.Item>
                       ),
                     },
@@ -3088,7 +3075,7 @@ const SalesOrdersPage: React.FC = () => {
                               <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
                                 <MaterialUnitSelect 
                                   materialId={materialId} 
-                                  size="small" 
+                                  size={DOCUMENT_DETAIL_CONTROL_SIZE} 
                                   noStyle 
                                 />
                               </AntForm.Item>
@@ -3104,7 +3091,7 @@ const SalesOrdersPage: React.FC = () => {
                       ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: t('common.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.salesOrder.quantityMinHint') }]} style={{ margin: 0 }}>
-                          <InputNumber placeholder={t('app.kuaizhizao.salesOrder.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
+                          <InputNumber placeholder={t('app.kuaizhizao.salesOrder.quantity')} min={0} precision={2} style={{ width: '100%' }} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                         </AntForm.Item>
                       ),
                     },
@@ -3130,7 +3117,7 @@ const SalesOrdersPage: React.FC = () => {
                                 precision={2}
                                 prefix="¥"
                                 style={{ width: '100%' }}
-                                size="small"
+                                size={DOCUMENT_DETAIL_CONTROL_SIZE}
                               />
                             </AntForm.Item>
                           )}
@@ -3259,7 +3246,7 @@ const SalesOrdersPage: React.FC = () => {
                                 precision={2}
                                 prefix="¥"
                                 style={{ width: '100%' }}
-                                size="small"
+                                size={DOCUMENT_DETAIL_CONTROL_SIZE}
                                 value={displayValue}
                                 onChange={(val) => {
                                   const v = val ?? null;
@@ -3303,7 +3290,7 @@ const SalesOrdersPage: React.FC = () => {
                           normalize={(value) => coerceFormDate(value) ?? undefined}
                         >
                           <FutureDatePicker
-                            size="small"
+                            size={DOCUMENT_DETAIL_CONTROL_SIZE}
                             style={DOCUMENT_DETAIL_DATE_PICKER_STYLE}
                             format="YYYY-MM-DD"
                             getForm={() => formRef.current}
@@ -3323,7 +3310,7 @@ const SalesOrdersPage: React.FC = () => {
                       ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item name={[index, 'notes']} style={{ margin: 0 }}>
-                          <Input placeholder={t('app.kuaizhizao.salesOrder.notes')} size="small" />
+                          <Input placeholder={t('app.kuaizhizao.salesOrder.notes')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                         </AntForm.Item>
                       ),
                     },
@@ -3466,25 +3453,13 @@ const SalesOrdersPage: React.FC = () => {
                   : t('app.kuaizhizao.menu.sales-management.sales-orders.edit')}
               </Typography.Title>
             </Space>
-            <Space wrap>
-              <Button onClick={leaveSalesOrderFormPage}>{t('common.cancel')}</Button>
-              <Button onClick={() => void handleSaveDraft()}>
-                {isCreatePage ? t('app.kuaizhizao.salesOrder.saveDraft') : t('common.save')}
-              </Button>
-              {canSubmitAfterSave ? (
-                <Button type="primary" onClick={triggerSalesOrderFormSubmit}>
-                  {isCreatePage
-                    ? t('components.layoutTemplates.formModal.submitCreate')
-                    : t('app.kuaizhizao.salesOrder.saveAndSubmit')}
-                  {SUBMIT_SHORTCUT_HINT}
-                </Button>
-              ) : (
-                <Button type="primary" onClick={triggerSalesOrderFormSubmit}>
-                  {t('common.save')}
-                  {SUBMIT_SHORTCUT_HINT}
-                </Button>
-              )}
-            </Space>
+            <DocumentFormPageHeaderActions
+              onCancel={leaveSalesOrderFormPage}
+              onSaveDraft={() => void handleSaveDraft()}
+              onPrimarySubmit={triggerSalesOrderFormSubmit}
+              isCreatePage={isCreatePage}
+              canSubmitAfterSave={canSubmitAfterSave}
+            />
             </>
           }
         >
@@ -3495,11 +3470,7 @@ const SalesOrdersPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
-                onValuesChange={(_, allValues) => {
-                  if (isCreatePage && salesOrderCreateDraftKey) {
-                    setDocumentFormDraft(salesOrderCreateDraftKey, allValues as Record<string, unknown>);
-                  }
-                }}
+                onValuesChange={persistSalesOrderCreateDraft}
                 onFinish={async () => {
                   setModalSubmitting(true);
                   try {
