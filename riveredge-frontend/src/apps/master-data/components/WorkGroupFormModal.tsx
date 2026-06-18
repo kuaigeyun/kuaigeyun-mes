@@ -2,15 +2,17 @@
  * 工作小组新建/编辑弹窗
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormInstance, ProFormList, ProFormSelect, ProFormDigit, ProFormGroup } from '@ant-design/pro-components';
-import { App } from 'antd';
+import { App, theme } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { workGroupApi } from '../services/factory';
 import { useGlobalStore } from '../../../stores';
-import { searchUserIdOptions } from '../../../utils/userDisplay';
+import { getUserList, searchUserDisplay } from '../../../services/user';
+import { canPickUsersForDisplay, canReadUserDirectory, formatUserDisplayLabel } from '../../../utils/userDisplay';
+import { renderUserPickOptionLabel, type UserRoleBadgeItem } from '../../../components/user-role-badges';
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import type { WorkGroup, WorkGroupCreate, WorkGroupUpdate, WorkGroupMemberItem } from '../types/factory';
@@ -18,6 +20,13 @@ import { SchemaFormRenderer } from '../../../components/schema-form';
 import { workGroupFormSchemaBasic, workGroupFormSchemaRest } from '../schemas/workGroup';
 
 const PAGE_CODE = 'master-data-factory-work-group';
+
+type EmployeePick = {
+  id: number;
+  label: string;
+  fullName?: string;
+  roles: UserRoleBadgeItem[];
+};
 
 export interface WorkGroupFormModalProps {
   open: boolean;
@@ -34,21 +43,49 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
   const formRef = useRef<ProFormInstance>();
   const [formLoading, setFormLoading] = useState(false);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
-  const [employees, setEmployees] = useState<{ id: number; full_name: string }[]>([]);
+  const [employees, setEmployees] = useState<EmployeePick[]>([]);
+  const employeeById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
 
   const isEdit = Boolean(editUuid);
   const currentUser = useGlobalStore((s) => s.currentUser);
 
   useEffect(() => {
-    void searchUserIdOptions({ pageSize: 200, currentUser })
-      .then((opts) =>
-        setEmployees(opts.map((o) => ({ id: o.value, full_name: o.label }))),
-      )
-      .catch(() => {});
+    if (!canPickUsersForDisplay(currentUser)) {
+      setEmployees([]);
+      return;
+    }
+    void (async () => {
+      try {
+        if (canReadUserDirectory(currentUser)) {
+          const res = await getUserList({ page: 1, page_size: 200, is_active: true });
+          setEmployees(
+            (res.items || []).map((u) => ({
+              id: u.id,
+              label: formatUserDisplayLabel(u),
+              fullName: u.full_name || undefined,
+              roles: (u.roles || []).map((r) => ({ uuid: r.uuid, name: r.name, code: r.code })),
+            })),
+          );
+          return;
+        }
+        const res = await searchUserDisplay({ page: 1, page_size: 200, is_active: true });
+        setEmployees(
+          (res.items || []).map((u) => ({
+            id: u.id,
+            label: u.label || formatUserDisplayLabel(u),
+            fullName: u.full_name || undefined,
+            roles: (u.roles || []).map((r) => ({ uuid: r.uuid, name: r.name, code: r.code })),
+          })),
+        );
+      } catch {
+        setEmployees([]);
+      }
+    })();
   }, [currentUser]);
 
   useEffect(() => {
@@ -115,7 +152,8 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
 
       const members: WorkGroupMemberItem[] = (values.members ?? []).map((m: any, i: number) => ({
         employeeId: m.employeeId ?? m.employee_id,
-        employeeName: employees.find((e) => e.id === (m.employeeId ?? m.employee_id))?.full_name,
+        employeeName: employeeById.get(m.employeeId ?? m.employee_id)?.fullName
+          || employeeById.get(m.employeeId ?? m.employee_id)?.label,
         performanceWeight: Number(m.performanceWeight ?? m.performance_weight ?? 1),
         sortOrder: i,
       })).filter((m: WorkGroupMemberItem) => m.employeeId);
@@ -197,9 +235,9 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
           marginLeft: 8,
           marginRight: 8,
           padding: '16px',
-          background: 'rgba(0, 0, 0, 0.02)',
-          borderRadius: 6,
-          border: '1px solid rgba(0, 0, 0, 0.06)',
+          background: token.colorFillAlter,
+          borderRadius: token.borderRadius,
+          border: `1px solid ${token.colorBorderSecondary}`,
         }}
       >
         <ProFormList
@@ -220,7 +258,16 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
               name="employeeId"
               label={t('field.workGroup.memberEmployee')}
               placeholder={t('field.workGroup.memberEmployeePlaceholder')}
-              options={employees.map((e) => ({ label: e.full_name, value: e.id }))}
+              options={employees.map((e) => ({ label: e.label, value: e.id }))}
+              fieldProps={{
+                showSearch: true,
+                optionFilterProp: 'label',
+                optionRender: (option) =>
+                  renderUserPickOptionLabel(
+                    option.label,
+                    employeeById.get(option.value as number)?.roles,
+                  ),
+              }}
               rules={[{ required: true, message: t('field.workGroup.memberEmployeeRequired') }]}
               colProps={{ span: 12 }}
             />

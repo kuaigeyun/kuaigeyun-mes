@@ -8,7 +8,7 @@ from tortoise.expressions import Q
 
 from core.models.department import Department
 from core.models.position import Position
-from core.schemas.user_display import UserDisplayItem
+from core.schemas.user_display import UserDisplayItem, UserDisplayRoleItem
 from infra.models.user import User
 
 
@@ -37,6 +37,25 @@ class UserDisplayService:
         return {d.id: d.uuid for d in rows}
 
     @staticmethod
+    def _roles_data(user: User) -> list[UserDisplayRoleItem]:
+        roles_rel = getattr(user, "roles", None)
+        if not roles_rel:
+            return []
+        out: list[UserDisplayRoleItem] = []
+        for role in roles_rel:
+            name = (getattr(role, "name", None) or "").strip()
+            if not name:
+                continue
+            out.append(
+                UserDisplayRoleItem(
+                    uuid=str(role.uuid),
+                    name=name,
+                    code=getattr(role, "code", None),
+                )
+            )
+        return out
+
+    @staticmethod
     def _to_item(user: User, dept_uuid_by_id: dict[int, str]) -> UserDisplayItem:
         dept_uuid = None
         if user.department_id:
@@ -52,6 +71,7 @@ class UserDisplayService:
                 user_id=user.id,
             ),
             department_uuid=dept_uuid,
+            roles=UserDisplayService._roles_data(user),
         )
 
     @staticmethod
@@ -96,6 +116,7 @@ class UserDisplayService:
             .order_by("full_name", "username")
             .offset(offset)
             .limit(page_size)
+            .prefetch_related("roles")
             .all()
         )
         dept_ids = {u.department_id for u in users if u.department_id}
@@ -128,7 +149,7 @@ class UserDisplayService:
         else:
             cond &= Q(uuid__in=uuids)
 
-        users = await User.filter(cond).all()
+        users = await User.filter(cond).prefetch_related("roles").all()
         dept_ids = {u.department_id for u in users if u.department_id}
         dept_uuid_by_id = await UserDisplayService._department_uuid_map(tenant_id, dept_ids)
         return [UserDisplayService._to_item(u, dept_uuid_by_id) for u in users]

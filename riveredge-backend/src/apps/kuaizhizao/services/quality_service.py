@@ -120,6 +120,7 @@ async def _resolve_inspection_template_fields(
     """按场景解析 mode/plan_id 并填充检验项模板。"""
     from apps.kuaizhizao.models.inspection_plan import InspectionPlan, InspectionPlanStep
     from apps.kuaizhizao.models.quality_standard import QualityStandard
+    from apps.kuaizhizao.services.inspection_step_spec import plan_step_to_snapshot_item
     from infra.exceptions.exceptions import ConflictError
 
     if not material_id:
@@ -164,13 +165,7 @@ async def _resolve_inspection_template_fields(
             steps = await InspectionPlanStep.filter(plan_id=plan.id).order_by("sequence").all()
             items: List[Dict[str, Any]] = []
             for step in steps:
-                item: Dict[str, Any] = {
-                    "sequence": step.sequence,
-                    "inspection_item": step.inspection_item,
-                    "inspection_method": step.inspection_method,
-                    "acceptance_criteria": step.acceptance_criteria,
-                    "sampling_type": step.sampling_type,
-                }
+                item: Dict[str, Any] = plan_step_to_snapshot_item(step)
                 if step.quality_standard_id:
                     std = await QualityStandard.get_or_none(
                         tenant_id=tenant_id, id=step.quality_standard_id, deleted_at__isnull=True
@@ -182,7 +177,7 @@ async def _resolve_inspection_template_fields(
                             "acceptance_criteria": std.acceptance_criteria,
                         }
                 items.append(item)
-            payload = {"plan_id": plan.id, "plan_code": plan.plan_code, "items": items}
+            payload = {"plan_id": plan.id, "plan_code": plan.plan_code, "plan_version": plan.version, "items": items}
             return {
                 "inspection_standard": f"{plan.plan_name} ({plan.plan_code})",
                 **_items_field(payload),
@@ -205,6 +200,15 @@ async def _resolve_inspection_template_fields(
                 deleted_at__isnull=True,
             ).order_by("-created_at").first()
         if std:
+            from apps.kuaizhizao.services.inspection_step_spec import quality_standard_to_template_items
+
+            structured = quality_standard_to_template_items(std)
+            if structured:
+                payload = {"standard_id": std.id, "items": structured}
+                return {
+                    "inspection_standard": f"{std.standard_name} ({std.standard_code})",
+                    **_items_field(payload),
+                }
             methods = std.inspection_methods
             first_method = methods[0] if isinstance(methods, list) and methods else None
             payload = {
@@ -225,36 +229,9 @@ def _validate_inspection_template_conduct(
     template_json: Any,
     conduct_data: Dict[str, Any],
 ) -> None:
-    """plan 模式须逐项填写 item_results 或 measurement_data 后方可提交。"""
-    from infra.exceptions.exceptions import ValidationError
+    from apps.kuaizhizao.services.inspection_step_spec import validate_inspection_template_conduct
 
-    if not template_json or not isinstance(template_json, dict):
-        return
-    items = template_json.get("items")
-    if not items or not isinstance(items, list):
-        if template_json.get("plan_id"):
-            item_results = conduct_data.get("item_results") or {}
-            if not item_results:
-                raise ValidationError("检验方案模式下须填写检验项判定结果")
-        return
-
-    measurement = conduct_data.get("measurement_data") or {}
-    item_results = conduct_data.get("item_results") or {}
-    missing: List[str] = []
-    for idx, item in enumerate(items):
-        if not isinstance(item, dict):
-            continue
-        name = item.get("inspection_item") or f"项{idx + 1}"
-        key = str(idx)
-        filled = (
-            key in item_results and item_results[key] not in (None, "")
-        ) or (
-            name in measurement and measurement[name] not in (None, "")
-        )
-        if not filled:
-            missing.append(str(name))
-    if missing:
-        raise ValidationError(f"请完成检验项：{'、'.join(missing)}")
+    validate_inspection_template_conduct(template_json, conduct_data)
 
 
 def _apply_template_conduct_to_payload(
@@ -263,17 +240,29 @@ def _apply_template_conduct_to_payload(
     inspection_data: dict,
 ) -> dict:
     """校验方案项并返回可写入 ORM 的 conduct 附加字段。"""
+    from apps.kuaizhizao.services.inspection_step_spec import (
+        apply_derived_step_results,
+        build_measurement_data_from_conduct,
+        merge_template_conduct_results,
+    )
+
     template = getattr(inspection, template_attr, None)
-    _validate_inspection_template_conduct(template, inspection_data)
+    conduct_input = apply_derived_step_results(template, dict(inspection_data))
+    _validate_inspection_template_conduct(template, conduct_input)
     payload = {
         k: v
-        for k, v in inspection_data.items()
-        if k not in ("item_results",) and v is not None
+        for k, v in conduct_input.items()
+        if k not in ("item_results", "conduct_step_results") and v is not None
     }
+    merged_measurement = build_measurement_data_from_conduct(template, conduct_input)
+    if merged_measurement and hasattr(inspection, "measurement_data"):
+        payload["measurement_data"] = merged_measurement
     if template and (
-        inspection_data.get("item_results") or inspection_data.get("measurement_data")
+        conduct_input.get("item_results")
+        or conduct_input.get("conduct_step_results")
+        or conduct_input.get("measurement_data")
     ):
-        payload[template_attr] = _merge_template_conduct_results(template, inspection_data)
+        payload[template_attr] = merge_template_conduct_results(template, conduct_input)
     elif "item_results" in payload:
         payload.pop("item_results", None)
     return payload
@@ -283,15 +272,9 @@ def _merge_template_conduct_results(
     template_json: Any,
     conduct_data: Dict[str, Any],
 ) -> Any:
-    """将 conduct 的 item_results / measurement_data 写回模板 JSON 副本。"""
-    if not template_json or not isinstance(template_json, dict):
-        return template_json
-    merged = dict(template_json)
-    if conduct_data.get("item_results"):
-        merged["conduct_item_results"] = conduct_data["item_results"]
-    if conduct_data.get("measurement_data"):
-        merged["conduct_measurement_data"] = conduct_data["measurement_data"]
-    return merged
+    from apps.kuaizhizao.services.inspection_step_spec import merge_template_conduct_results
+
+    return merge_template_conduct_results(template_json, conduct_data)
 
 
 async def _maybe_create_quality_exception_from_inspection(
@@ -327,39 +310,47 @@ async def _maybe_create_quality_exception_from_inspection(
     )
 
 
-async def _maybe_record_spc_samples_from_ipqc(
+async def _maybe_record_spc_samples_from_inspection(
     tenant_id: int,
-    inspection_id: int,
-    inspection_code: str,
-    measurement_data: Any,
+    inspection: Any,
+    template_attr: str,
+    inspection_data: dict,
     user_id: int,
+    source_type: str,
 ) -> None:
-    """IPQC 检验含测量数据时写入 SPC 样本。"""
-    if not measurement_data or not isinstance(measurement_data, dict):
-        return
-
+    """检验含数值步骤时写入 SPC 样本（按 step_key + 物料）。"""
     from apps.kuaizhizao.schemas.quality_improvement import SPCSampleCreate
+    from apps.kuaizhizao.services.inspection_step_spec import build_spc_sample_payloads
     from apps.kuaizhizao.services.quality_improvement_service import SPCService
+
+    template = getattr(inspection, template_attr, None)
+    payloads = build_spc_sample_payloads(
+        template,
+        inspection_data,
+        material_id=getattr(inspection, "material_id", None),
+        material_code=getattr(inspection, "material_code", None),
+        source_type=source_type,
+        source_id=getattr(inspection, "id", None),
+        source_code=getattr(inspection, "inspection_code", None),
+    )
+    if not payloads:
+        return
 
     spc_svc = SPCService()
     sample_time = datetime.now()
-    for key, value in measurement_data.items():
-        if value is None:
-            continue
-        try:
-            numeric = float(value)
-        except (TypeError, ValueError):
-            continue
+    for row in payloads:
         await spc_svc.create_sample(
             tenant_id=tenant_id,
             user_id=user_id,
             payload=SPCSampleCreate(
-                characteristic_name=str(key),
+                characteristic_name=row["characteristic_name"],
                 sample_time=sample_time,
-                sample_value=numeric,
-                source_type="process_inspection",
-                source_id=inspection_id,
-                source_code=inspection_code,
+                sample_value=row["sample_value"],
+                sample_group=row.get("sample_group"),
+                source_type=row.get("source_type"),
+                source_id=row.get("source_id"),
+                source_code=row.get("source_code"),
+                remarks=row.get("remarks"),
             ),
         )
 
@@ -513,6 +504,15 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     problem_description=inspection_data.get("nonconformance_reason")
                     or f"来料检验不合格：{updated_inspection.inspection_code}",
                 )
+
+            await _maybe_record_spc_samples_from_inspection(
+                tenant_id=tenant_id,
+                inspection=updated_inspection,
+                template_attr="other_checks",
+                inspection_data=inspection_data,
+                user_id=inspected_by,
+                source_type="incoming_inspection",
+            )
 
             # 如果合格，可以增加逻辑确保其可以正式入库（如果入库单是待入库状态）
             if updated_inspection.quality_status == "合格" and updated_inspection.qualified_quantity > 0:
@@ -1217,15 +1217,14 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                     or f"过程检验不合格：{updated_inspection.inspection_code}",
                 )
 
-            measurement_data = inspection_data.get("measurement_data")
-            if measurement_data:
-                await _maybe_record_spc_samples_from_ipqc(
-                    tenant_id=tenant_id,
-                    inspection_id=inspection_id,
-                    inspection_code=updated_inspection.inspection_code,
-                    measurement_data=measurement_data,
-                    user_id=inspected_by,
-                )
+            await _maybe_record_spc_samples_from_inspection(
+                tenant_id=tenant_id,
+                inspection=updated_inspection,
+                template_attr="quality_characteristics",
+                inspection_data=inspection_data,
+                user_id=inspected_by,
+                source_type="process_inspection",
+            )
 
             # 自动更新报工合格数
             if inspection.work_order_id:
@@ -1787,6 +1786,15 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                     problem_description=inspection_data.get("nonconformance_reason")
                     or f"成品检验不合格：{updated_inspection.inspection_code}",
                 )
+
+            await _maybe_record_spc_samples_from_inspection(
+                tenant_id=tenant_id,
+                inspection=updated_inspection,
+                template_attr="other_checks",
+                inspection_data=inspection_data,
+                user_id=inspected_by,
+                source_type="finished_goods_inspection",
+            )
 
             return updated_inspection
 

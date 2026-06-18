@@ -5,7 +5,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormInstance, ProForm, ProFormDependency } from '@ant-design/pro-components';
-import { App, Tag, Typography } from 'antd';
+import { App, Tag } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { processRouteApi } from '../services/process';
@@ -320,13 +320,10 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
         style={{ width: '100%', minWidth: 0 }}
       >
         <div style={{ width: '100%', minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ marginBottom: 16 }}>
             <Tag color={operationSequence.length > 0 ? 'processing' : 'default'}>
               {t('app.master-data.operationsConfigured', { count: operationSequence.length })}
             </Tag>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {t('field.route.operationSequenceHint')}
-            </Typography.Text>
           </div>
           <ProFormDependency name={['allowOperationJump']}>
             {({ allowOperationJump }) => (

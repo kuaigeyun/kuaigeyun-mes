@@ -19,7 +19,10 @@ from apps.master_data.schemas.process_route_change_schemas import (
     ProcessRouteChangeResponse,
     ProcessRouteChangeListResponse,
 )
-from apps.kuaiplm.services.engineering_change_audit import is_audit_required
+from apps.kuaiplm.services.engineering_change_audit import (
+    is_audit_required,
+    start_change_approval_flow,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
@@ -124,15 +127,26 @@ class ProcessRouteChangeService:
         change_id: int,
         operator_id: int,
     ) -> ProcessRouteChangeResponse:
+        """提交变更（草稿 → 待审批 / 已审批），待审批时自动启动审批流。"""
         change = await ProcessRouteChangeService._get_change_or_raise(tenant_id, change_id)
         if change.status != "draft":
             raise ValidationError(f"变更记录状态为 {change.status}，无法提交")
 
         audit_required = await is_audit_required(tenant_id, "process_route")
-        change.status = "pending" if audit_required else "approved"
-        if not audit_required:
+        if audit_required:
+            change.status = "pending"
+            await change.save()
+            submitter_id = change.applicant_id or operator_id
+            await start_change_approval_flow(
+                tenant_id,
+                "process_route",
+                change,
+                submitter_id=submitter_id,
+            )
+        else:
+            change.status = "approved"
             change.approver_id = operator_id
-        await change.save()
+            await change.save()
         return _to_process_route_change_response(change)
 
     @staticmethod
@@ -141,14 +155,27 @@ class ProcessRouteChangeService:
         change_id: int,
         operator_id: int,
     ) -> ProcessRouteChangeResponse:
+        from core.services.approval.uni_audit_service import UniAuditService
+
         change = await ProcessRouteChangeService._get_change_or_raise(tenant_id, change_id)
         if change.status != "pending":
             raise ValidationError(f"变更记录状态为 {change.status}，无法撤回")
-        change.status = "draft"
-        change.approver_id = None
-        change.approval_comment = None
-        await change.save()
-        return _to_process_route_change_response(change)
+
+        async def _do_withdraw() -> ProcessRouteChangeResponse:
+            change.status = "draft"
+            change.approver_id = None
+            change.approval_comment = None
+            await change.save()
+            return _to_process_route_change_response(change)
+
+        result = await UniAuditService.withdraw_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="process_route_change",
+            entity_id=change.id,
+            operator_id=operator_id,
+            flow_withdraw=_do_withdraw,
+        )
+        return result if result is not None else _to_process_route_change_response(change)
 
     @staticmethod
     async def revoke_change(
@@ -156,14 +183,27 @@ class ProcessRouteChangeService:
         change_id: int,
         operator_id: int,
     ) -> ProcessRouteChangeResponse:
+        from core.services.approval.uni_audit_service import UniAuditService
+
         change = await ProcessRouteChangeService._get_change_or_raise(tenant_id, change_id)
         if change.status != "approved":
             raise ValidationError(f"变更记录状态为 {change.status}，无法反审核")
-        change.status = "draft"
-        change.approver_id = None
-        change.approval_comment = None
-        await change.save()
-        return _to_process_route_change_response(change)
+
+        async def _do_revoke() -> ProcessRouteChangeResponse:
+            change.status = "draft"
+            change.approver_id = None
+            change.approval_comment = None
+            await change.save()
+            return _to_process_route_change_response(change)
+
+        result = await UniAuditService.revoke_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="process_route_change",
+            entity_id=change.id,
+            operator_id=operator_id,
+            flow_revoke=_do_revoke,
+        )
+        return result if result is not None else _to_process_route_change_response(change)
     
     @staticmethod
     async def get_change_by_uuid(
@@ -250,6 +290,14 @@ class ProcessRouteChangeService:
         
         items = []
         for change in changes:
+            if change.status == "pending":
+                from apps.kuaiplm.services.engineering_change_audit import (
+                    ensure_pending_change_approval_instance,
+                )
+
+                await ensure_pending_change_approval_instance(
+                    tenant_id, "process_route", change
+                )
             items.append(_to_process_route_change_response(change))
         
         return ProcessRouteChangeListResponse(items=items, total=total)
@@ -293,6 +341,34 @@ class ProcessRouteChangeService:
         return _to_process_route_change_response(change)
     
     @staticmethod
+    async def _apply_approval_decision(
+        tenant_id: int,
+        change_uuid: str,
+        approver_id: int,
+        approved: bool,
+        approval_comment: Optional[str] = None,
+    ) -> ProcessRouteChangeResponse:
+        change = await ProcessRouteChange.filter(
+            tenant_id=tenant_id,
+            uuid=change_uuid,
+            deleted_at__isnull=True,
+        ).prefetch_related("process_route").first()
+
+        if not change:
+            raise NotFoundError("工艺路线变更记录", change_uuid)
+
+        if change.status not in ("pending",):
+            raise ValidationError(f"变更记录状态为 {change.status}，无法审批")
+
+        change.status = "approved" if approved else "rejected"
+        change.approver_id = approver_id
+        if approval_comment:
+            change.approval_comment = approval_comment
+
+        await change.save()
+        return _to_process_route_change_response(change)
+
+    @staticmethod
     async def approve_change(
         tenant_id: int,
         change_uuid: str,
@@ -300,44 +376,62 @@ class ProcessRouteChangeService:
         approved: bool,
         approval_comment: Optional[str] = None
     ) -> ProcessRouteChangeResponse:
-        """
-        审批变更记录
-        
-        Args:
-            tenant_id: 租户ID
-            change_uuid: 变更记录UUID
-            approver_id: 审批人ID
-            approved: 是否同意（True:同意, False:拒绝）
-            approval_comment: 审批意见（可选）
-            
-        Returns:
-            ProcessRouteChangeResponse: 更新后的变更记录对象
-            
-        Raises:
-            NotFoundError: 当变更记录不存在时抛出
-            ValidationError: 当变更记录状态不允许审批时抛出
-        """
+        """审批变更记录（优先走平台审批流）。"""
+        from core.services.approval.uni_audit_service import UniAuditService
+
         change = await ProcessRouteChange.filter(
             tenant_id=tenant_id,
             uuid=change_uuid,
-            deleted_at__isnull=True
+            deleted_at__isnull=True,
         ).prefetch_related("process_route").first()
-        
+
         if not change:
             raise NotFoundError("工艺路线变更记录", change_uuid)
-        
+
         if change.status not in ("pending",):
             raise ValidationError(f"变更记录状态为 {change.status}，无法审批")
-        
-        # 更新审批信息
-        change.status = "approved" if approved else "rejected"
-        change.approver_id = approver_id
-        if approval_comment:
-            change.approval_comment = approval_comment
-        
-        await change.save()
-        
-        return _to_process_route_change_response(change)
+
+        async def _do_approve() -> ProcessRouteChangeResponse:
+            return await ProcessRouteChangeService._apply_approval_decision(
+                tenant_id, change_uuid, approver_id, True, approval_comment
+            )
+
+        async def _do_reject(reason: Optional[str]) -> ProcessRouteChangeResponse:
+            return await ProcessRouteChangeService._apply_approval_decision(
+                tenant_id,
+                change_uuid,
+                approver_id,
+                False,
+                reason or approval_comment or "审批驳回",
+            )
+
+        if approved:
+            result = await UniAuditService.approve_with_flow_fallback(
+                tenant_id=tenant_id,
+                entity_type="process_route_change",
+                entity_id=change.id,
+                approver_id=approver_id,
+                flow_approve=_do_approve,
+            )
+        else:
+            result = await UniAuditService.reject_with_flow_fallback(
+                tenant_id=tenant_id,
+                entity_type="process_route_change",
+                entity_id=change.id,
+                approver_id=approver_id,
+                reason=approval_comment or "审批驳回",
+                flow_reject=_do_reject,
+            )
+        if result is not None:
+            return result
+        refreshed = await ProcessRouteChange.filter(
+            tenant_id=tenant_id,
+            uuid=change_uuid,
+            deleted_at__isnull=True,
+        ).prefetch_related("process_route").first()
+        if not refreshed:
+            raise NotFoundError("工艺路线变更记录", change_uuid)
+        return _to_process_route_change_response(refreshed)
     
     @staticmethod
     async def execute_change(

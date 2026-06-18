@@ -488,14 +488,14 @@ export const sopExecutionApi = {
   },
 
   /**
-   * 启动执行（发送 Inngest 事件）
+   * 启动执行
    */
   start: async (uuid: string): Promise<void> => {
     return api.post(`/apps/master-data/process/sop-executions/${uuid}/start`);
   },
 
   /**
-   * 完成节点（发送 Inngest 事件）
+   * 完成节点
    */
   completeNode: async (uuid: string, data: SOPNodeCompleteRequest): Promise<void> => {
     return api.post(`/apps/master-data/process/sop-executions/${uuid}/complete-node`, data);

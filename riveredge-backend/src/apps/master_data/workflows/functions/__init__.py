@@ -1,14 +1,3 @@
 """
-master_data 工作流函数入口。
+master_data 应用无独立异步工作流处理器（原 SOP Inngest 流程已移除）。
 """
-
-from apps.master_data.workflows.functions.sop_execution_workflow import (
-    sop_execution_workflow_function,
-    sop_node_complete_workflow_function,
-)
-
-__all__ = [
-    "sop_execution_workflow_function",
-    "sop_node_complete_workflow_function",
-]
-

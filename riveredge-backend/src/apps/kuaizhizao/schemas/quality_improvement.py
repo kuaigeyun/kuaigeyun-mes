@@ -145,7 +145,8 @@ class OQCInspectionConduct(BaseSchema):
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     measurement_data: Optional[dict] = Field(None, description="测量数据")
-    item_results: Optional[dict] = Field(None, description="检验项判定结果")
+    item_results: Optional[dict] = Field(None, description="检验项判定结果（legacy）")
+    conduct_step_results: Optional[dict] = Field(None, description="方案步骤检验结果（按 step_key）")
 
 
 class OQCInspectionResponse(OQCInspectionBase):

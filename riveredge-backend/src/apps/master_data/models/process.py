@@ -86,7 +86,6 @@ class SOPExecution(BaseModel):
             ("status",),
             ("executor_id",),
             ("current_node_id",),
-            ("inngest_run_id",),
             ("created_at",),
             # 复合索引：优化常用组合查询
             ("tenant_id", "status"),  # 按组织+状态查询
@@ -124,13 +123,6 @@ class SOPExecution(BaseModel):
     node_data = fields.JSONField(
         null=True,
         description="节点执行数据（JSON格式，格式：{nodeId: {formData: {...}, completedAt: '...'}}）"
-    )
-    
-    # Inngest 关联
-    inngest_run_id = fields.CharField(
-        max_length=100,
-        null=True,
-        description="Inngest 运行ID（关联 Inngest 工作流实例）"
     )
     
     # 执行信息

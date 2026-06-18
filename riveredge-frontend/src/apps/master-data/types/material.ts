@@ -18,6 +18,8 @@ export interface MaterialGroup {
   processRouteName?: string;
   process_route_id?: number;
   process_route_name?: string;
+  inspectionStages?: Record<string, { mode?: string; planId?: number | null; plan_id?: number | null }>;
+  inspection_stages?: Record<string, { mode?: string; planId?: number | null; plan_id?: number | null }>;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -49,6 +51,7 @@ export interface MaterialGroupCreate {
   description?: string;
   isActive?: boolean;
   processRouteId?: number | null;
+  inspectionStages?: Record<string, { mode?: string; planId?: number | null }>;
 }
 
 export interface MaterialGroupUpdate {
@@ -59,6 +62,7 @@ export interface MaterialGroupUpdate {
   description?: string;
   isActive?: boolean;
   processRouteId?: number | null;
+  inspectionStages?: Record<string, { mode?: string; planId?: number | null }>;
 }
 
 export interface MaterialGroupListParams {

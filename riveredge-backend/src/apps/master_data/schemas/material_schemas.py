@@ -74,6 +74,11 @@ class MaterialGroupCreate(MaterialGroupBase):
         alias="processRouteId",
         description="默认工艺路线ID（组内物料未单独指派时使用）",
     )
+    inspection_stages: Optional[MaterialInspectionStagesSchema] = Field(
+        None,
+        alias="inspectionStages",
+        description="分场景默认质检策略（组内物料未单独配置时使用）",
+    )
 
 
 class MaterialGroupUpdate(BaseModel):
@@ -89,6 +94,11 @@ class MaterialGroupUpdate(BaseModel):
         None,
         alias="processRouteId",
         description="默认工艺路线ID；传 null 可清空",
+    )
+    inspection_stages: Optional[MaterialInspectionStagesSchema] = Field(
+        None,
+        alias="inspectionStages",
+        description="分场景默认质检策略；传 null 可清空",
     )
     
     model_config = ConfigDict(
@@ -127,6 +137,9 @@ class MaterialGroupResponse(MaterialGroupBase):
     parent_id: Optional[int] = Field(None, alias="parentId", description="父分组ID")
     process_route_id: Optional[int] = Field(None, alias="processRouteId", description="工艺路线ID")
     process_route_name: Optional[str] = Field(None, alias="processRouteName", description="工艺路线名称")
+    inspection_stages: Optional[MaterialInspectionStagesSchema] = Field(
+        None, alias="inspectionStages", description="分场景默认质检策略"
+    )
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
@@ -627,16 +640,20 @@ class MaterialCodeAliasResponse(BaseModel):
     """物料编码别名响应 Schema"""
     
     id: int = Field(..., description="主键ID")
-    code_type: str = Field(..., description="编码类型")
+    code_type: str = Field(..., alias="codeType", description="编码类型")
     code: str = Field(..., description="编码（部门编码、客户编码或供应商编码）")
     department: Optional[str] = Field(None, description="部门名称（可选，用于部门编码）")
-    external_entity_type: Optional[str] = Field(None, description="外部实体类型（customer/supplier，用于客户编码和供应商编码）")
-    external_entity_id: Optional[int] = Field(None, description="外部实体ID（客户ID或供应商ID）")
+    external_entity_type: Optional[str] = Field(
+        None, alias="externalEntityType", description="外部实体类型（customer/supplier，用于客户编码和供应商编码）"
+    )
+    external_entity_id: Optional[int] = Field(
+        None, alias="externalEntityId", description="外部实体ID（客户ID或供应商ID）"
+    )
     description: Optional[str] = Field(None, description="描述")
     name: Optional[str] = Field(None, description="名称（客户品名/供应商品名等）")
-    is_primary: bool = Field(False, description="是否为主要编码")
+    is_primary: bool = Field(False, alias="isPrimary", description="是否为主要编码")
     
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class MaterialResponse(MaterialBase):

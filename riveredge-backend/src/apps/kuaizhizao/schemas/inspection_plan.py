@@ -8,10 +8,17 @@ Date: 2026-02-26
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Any, Dict
 
-from pydantic import Field
+from pydantic import Field, field_validator, model_validator
 from core.schemas.base import BaseSchema
+from apps.kuaizhizao.services.inspection_step_spec import (
+    INSPECTION_STEP_VALUE_TYPES,
+    normalize_value_type,
+    normalize_value_spec,
+    format_acceptance_criteria,
+    validate_plan_step_dict,
+)
 
 
 # === 质检方案步骤 ===
@@ -19,12 +26,33 @@ from core.schemas.base import BaseSchema
 class InspectionPlanStepBase(BaseSchema):
     """质检方案步骤基础 schema"""
     sequence: int = Field(0, description="步骤序号")
+    step_key: Optional[str] = Field(None, max_length=36, description="步骤稳定标识")
     inspection_item: str = Field(..., max_length=200, description="检验项目名称")
     inspection_method: Optional[str] = Field(None, max_length=200, description="检验方法")
     acceptance_criteria: Optional[str] = Field(None, description="合格标准")
+    value_type: str = Field("boolean", max_length=20, description="值类型")
+    value_spec: Optional[Dict[str, Any]] = Field(None, description="类型规格 JSON")
     sampling_type: str = Field("full", max_length=20, description="抽样方式（full/sampling）")
     quality_standard_id: Optional[int] = Field(None, description="引用的质检标准ID（可选）")
     remarks: Optional[str] = Field(None, description="备注")
+
+    @field_validator("value_type")
+    @classmethod
+    def validate_value_type(cls, v: str) -> str:
+        return normalize_value_type(v)
+
+    @model_validator(mode="after")
+    def normalize_step_spec(self) -> "InspectionPlanStepBase":
+        vt = normalize_value_type(self.value_type)
+        spec = normalize_value_spec(vt, self.value_spec)
+        object.__setattr__(self, "value_type", vt)
+        object.__setattr__(self, "value_spec", spec)
+        if not self.acceptance_criteria:
+            auto = format_acceptance_criteria(vt, spec)
+            if auto:
+                object.__setattr__(self, "acceptance_criteria", auto)
+        validate_plan_step_dict(self.model_dump())
+        return self
 
 
 class InspectionPlanStepCreate(InspectionPlanStepBase):
@@ -45,6 +73,10 @@ class InspectionPlanStepResponse(InspectionPlanStepBase):
 
     class Config:
         from_attributes = True
+
+
+# 导出供前端文档引用
+INSPECTION_PLAN_STEP_VALUE_TYPES = INSPECTION_STEP_VALUE_TYPES
 
 
 # === 质检方案 ===

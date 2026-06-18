@@ -35,6 +35,7 @@ import {
   Skeleton,
   Form,
   InputNumber,
+  Tabs,
 } from 'antd'
 import {
   EditOutlined,
@@ -57,6 +58,7 @@ import {
   PartitionOutlined,
   ClusterOutlined,
   SettingOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons'
 import {
   ActionType,
@@ -64,6 +66,7 @@ import {
   ProFormText,
   ProFormTextArea,
   ProFormSwitch,
+  ProFormItem,
   ProFormInstance,
 } from '@ant-design/pro-components'
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components'
@@ -101,7 +104,8 @@ import {
 } from '../../../../components/layout-templates/constants'
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail'
 import { MaterialForm } from '../../components/MaterialForm'
-import { normalizeStagesInput, stagesFromLegacy } from '../../components/InspectionStagesEditor'
+import { normalizeStagesInput, stagesFromLegacy, materialStagesToApiPayload, InspectionStagesEditor } from '../../components/InspectionStagesEditor'
+import { QualityMasterDataHint } from '../../../kuaizhizao/pages/quality-management/components/QualityMasterDataHint'
 import { MaterialVariantSkusPanel } from '../../components/MaterialVariantSkusPanel'
 import { isVariantSkuMaterial, isVariantMasterMaterial, formatVariantAttributesLine } from '../../components/MaterialVariantCombinationsTable'
 import { variantAttributeApi } from '../../services/variant-attribute'
@@ -472,6 +476,7 @@ const MaterialsManagementPage: React.FC = () => {
   /** 新建分组时预填的父分组 ID（右键「新建子分组」） */
   const [groupParentIdPreset, setGroupParentIdPreset] = useState<number | undefined>(undefined)
   const [groupFormLoading, setGroupFormLoading] = useState(false)
+  const [groupFormActiveTab, setGroupFormActiveTab] = useState('basic')
 
   const {
     customFields: groupCustomFields,
@@ -769,7 +774,7 @@ const MaterialsManagementPage: React.FC = () => {
       try {
         const detail = await materialApi.get(record.uuid)
         setCurrentMaterial(detail)
-        await loadFieldValuesForDetail(record.uuid)
+        await loadFieldValuesForDetail(detail.id)
       } catch (error: any) {
         messageApi.error(error.message || t('app.master-data.materials.getDetailFailed'))
         setMaterialDrawerVisible(false)
@@ -1049,6 +1054,7 @@ const MaterialsManagementPage: React.FC = () => {
     setGroupParentIdPreset(undefined)
     setGroupIsEdit(false)
     setCurrentGroup(null)
+    setGroupFormActiveTab('basic')
     setGroupModalVisible(true)
   }, [])
 
@@ -1056,12 +1062,14 @@ const MaterialsManagementPage: React.FC = () => {
     setGroupParentIdPreset(parent.id)
     setGroupIsEdit(false)
     setCurrentGroup(null)
+    setGroupFormActiveTab('basic')
     setGroupModalVisible(true)
   }, [])
 
   const handleCloseGroupModal = useCallback(() => {
     setGroupModalVisible(false)
     setGroupParentIdPreset(undefined)
+    setGroupFormActiveTab('basic')
     resetGroupFieldValues()
   }, [resetGroupFieldValues])
 
@@ -1069,6 +1077,7 @@ const MaterialsManagementPage: React.FC = () => {
     setGroupParentIdPreset(undefined)
     setGroupIsEdit(true)
     setCurrentGroup(group)
+    setGroupFormActiveTab('basic')
     setGroupModalVisible(true)
   }, [])
 
@@ -1120,6 +1129,9 @@ const MaterialsManagementPage: React.FC = () => {
       const payload = {
         ...standardValues,
         processRouteId: standardValues.processRouteId ?? null,
+        inspectionStages: materialStagesToApiPayload(
+          normalizeStagesInput(standardValues.inspectionStages),
+        ),
       }
 
       if (groupIsEdit && currentGroup) {
@@ -3517,7 +3529,7 @@ const MaterialsManagementPage: React.FC = () => {
         isEdit={groupIsEdit}
         loading={groupFormLoading}
         formRef={groupFormRef as React.RefObject<ProFormInstance>}
-        width={MODAL_CONFIG.SMALL_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         initialValues={
           groupIsEdit && currentGroup
             ? {
@@ -3531,6 +3543,10 @@ const MaterialsManagementPage: React.FC = () => {
                   currentGroup.processRouteId ??
                   (currentGroup as { process_route_id?: number }).process_route_id ??
                   null,
+                inspectionStages: normalizeStagesInput(
+                  currentGroup.inspectionStages ??
+                    (currentGroup as { inspection_stages?: unknown }).inspection_stages,
+                ),
               }
             : {
                 isActive: true,
@@ -3538,89 +3554,128 @@ const MaterialsManagementPage: React.FC = () => {
               }
         }
       >
-        <SafeProFormSelect
-          name="parentId"
-          label={t('app.master-data.materials.parentGroup')}
-          placeholder={t('app.master-data.materials.parentGroupPlaceholder')}
-          options={materialGroups
-            .filter(g => !groupIsEdit || g.id !== currentGroup?.id) // 编辑时排除自己
-            .map(g => ({
-              label: formatMaterialGroupLabel(g),
-              value: g.id,
-            }))}
-          fieldProps={{
-            loading: materialGroupsLoading,
-            showSearch: true,
-            allowClear: true,
-            filterOption: (input: string, option: any) =>
-              (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-          }}
-        />
-        <ProFormText
-          name="code"
-          label={t('app.master-data.materials.groupCode')}
-          placeholder={t('app.master-data.materials.groupCodePlaceholder')}
-          extra={t('app.master-data.materials.groupCodeExtra')}
-          rules={[
-            { required: true, message: t('app.master-data.materials.groupCodeRequired') },
-            { max: 50, message: t('app.master-data.materials.groupCodeMax') },
+        <Tabs
+          activeKey={groupFormActiveTab}
+          onChange={setGroupFormActiveTab}
+          destroyInactiveTabPane={false}
+          items={[
+            {
+              key: 'basic',
+              label: t('app.master-data.materialForm.basicInfo'),
+              children: (
+                <>
+                  <SafeProFormSelect
+                    name="parentId"
+                    label={t('app.master-data.materials.parentGroup')}
+                    placeholder={t('app.master-data.materials.parentGroupPlaceholder')}
+                    options={materialGroups
+                      .filter(g => !groupIsEdit || g.id !== currentGroup?.id)
+                      .map(g => ({
+                        label: formatMaterialGroupLabel(g),
+                        value: g.id,
+                      }))}
+                    fieldProps={{
+                      loading: materialGroupsLoading,
+                      showSearch: true,
+                      allowClear: true,
+                      filterOption: (input: string, option: any) =>
+                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                    }}
+                  />
+                  <ProFormText
+                    name="code"
+                    label={t('app.master-data.materials.groupCode')}
+                    placeholder={t('app.master-data.materials.groupCodePlaceholder')}
+                    extra={t('app.master-data.materials.groupCodeExtra')}
+                    rules={[
+                      { required: true, message: t('app.master-data.materials.groupCodeRequired') },
+                      { max: 50, message: t('app.master-data.materials.groupCodeMax') },
+                    ]}
+                    fieldProps={{
+                      style: { textTransform: 'uppercase' },
+                    }}
+                  />
+                  <ProFormText
+                    name="name"
+                    label={t('app.master-data.materials.groupName')}
+                    placeholder={t('app.master-data.materials.groupNamePlaceholder')}
+                    rules={[
+                      { required: true, message: t('app.master-data.materials.groupNameRequired') },
+                      { max: 200, message: t('app.master-data.materials.groupNameMax') },
+                    ]}
+                  />
+                  <ProFormText
+                    name="alias"
+                    label={t('app.master-data.materials.groupAlias')}
+                    placeholder={t('app.master-data.materials.groupAliasPlaceholder')}
+                    rules={[
+                      { max: 100, message: t('app.master-data.materials.groupAliasMax') },
+                    ]}
+                  />
+                  <CustomFieldsFormSection
+                    customFields={groupCustomFields}
+                    customFieldValues={groupCustomFieldValues}
+                    gridColumns={1}
+                  />
+                  <ProFormTextArea
+                    name="description"
+                    label={t('app.master-data.materials.description')}
+                    placeholder={t('app.master-data.materials.descriptionPlaceholder')}
+                    rows={3}
+                    fieldProps={{
+                      maxLength: 500,
+                    }}
+                  />
+                  <ProFormSwitch
+                    name="isActive"
+                    label={t('app.master-data.materials.enabledStatusLabel')}
+                    checkedChildren={t('app.master-data.materials.checkedChildren')}
+                    unCheckedChildren={t('app.master-data.materials.unCheckedChildren')}
+                  />
+                </>
+              ),
+            },
+            {
+              key: 'processQuality',
+              label: t('app.master-data.materials.groupTabProcessQuality'),
+              children: (
+                <>
+                  <SafeProFormSelect
+                    name="processRouteId"
+                    label={t('app.master-data.source.defaultProcessRoute')}
+                    placeholder={t('app.master-data.source.selectProcessRoute')}
+                    tooltip={t('app.master-data.source.defaultProcessRouteGroupHint')}
+                    options={processRoutesForGroup.map((r) => ({
+                      label: `${r.code} ${r.name}`.trim(),
+                      value: r.id,
+                    }))}
+                    fieldProps={{
+                      allowClear: true,
+                      showSearch: true,
+                      loading: processRoutesForGroupLoading,
+                      optionFilterProp: 'label',
+                    }}
+                  />
+                  <QualityMasterDataHint scope="material" />
+                  <ProFormItem
+                    name="inspectionStages"
+                    label={
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span>{t('app.master-data.materialForm.inspectionStagesTitle')}</span>
+                        <Tooltip title={t('app.master-data.materials.groupInspectionStagesHint')}>
+                          <QuestionCircleOutlined
+                            style={{ color: 'rgba(0,0,0,.45)', fontSize: 14, cursor: 'help' }}
+                          />
+                        </Tooltip>
+                      </span>
+                    }
+                  >
+                    <InspectionStagesEditor scope="material" />
+                  </ProFormItem>
+                </>
+              ),
+            },
           ]}
-          fieldProps={{
-            style: { textTransform: 'uppercase' },
-          }}
-        />
-        <ProFormText
-          name="name"
-          label={t('app.master-data.materials.groupName')}
-          placeholder={t('app.master-data.materials.groupNamePlaceholder')}
-          rules={[
-            { required: true, message: t('app.master-data.materials.groupNameRequired') },
-            { max: 200, message: t('app.master-data.materials.groupNameMax') },
-          ]}
-        />
-        <ProFormText
-          name="alias"
-          label={t('app.master-data.materials.groupAlias')}
-          placeholder={t('app.master-data.materials.groupAliasPlaceholder')}
-          rules={[
-            { max: 100, message: t('app.master-data.materials.groupAliasMax') },
-          ]}
-        />
-        <SafeProFormSelect
-          name="processRouteId"
-          label={t('app.master-data.source.defaultProcessRoute')}
-          placeholder={t('app.master-data.source.selectProcessRoute')}
-          tooltip={t('app.master-data.source.defaultProcessRouteGroupHint')}
-          options={processRoutesForGroup.map((r) => ({
-            label: `${r.code} ${r.name}`.trim(),
-            value: r.id,
-          }))}
-          fieldProps={{
-            allowClear: true,
-            showSearch: true,
-            loading: processRoutesForGroupLoading,
-            optionFilterProp: 'label',
-          }}
-        />
-        <CustomFieldsFormSection
-          customFields={groupCustomFields}
-          customFieldValues={groupCustomFieldValues}
-          gridColumns={1}
-        />
-        <ProFormTextArea
-          name="description"
-          label={t('app.master-data.materials.description')}
-          placeholder={t('app.master-data.materials.descriptionPlaceholder')}
-          rows={3}
-          fieldProps={{
-            maxLength: 500,
-          }}
-        />
-        <ProFormSwitch
-          name="isActive"
-          label={t('app.master-data.materials.enabledStatusLabel')}
-          checkedChildren={t('app.master-data.materials.checkedChildren')}
-          unCheckedChildren={t('app.master-data.materials.unCheckedChildren')}
         />
       </FormModalTemplate>
 

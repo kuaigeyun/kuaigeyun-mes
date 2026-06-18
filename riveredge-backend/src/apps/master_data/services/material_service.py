@@ -366,6 +366,18 @@ def _material_orm_matches_keyword(material, keyword: str) -> bool:
     return False
 
 
+def _partner_id_from_code_mapping_payload(payload: Dict[str, Any], *keys: str) -> Optional[int]:
+    """从编号映射请求体读取客户/供应商 ID（兼容 snake_case 与 camelCase）。"""
+    for key in keys:
+        if key not in payload or payload[key] is None or payload[key] == "":
+            continue
+        try:
+            return int(payload[key])
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 def _material_to_response_data(material) -> Dict[str, Any]:
     """
     从 Material ORM 实例构建 MaterialResponse 所需的字典（不含 code_aliases）。
@@ -470,11 +482,16 @@ class MaterialService:
 
     @staticmethod
     async def _material_group_to_response(material_group: MaterialGroup) -> MaterialGroupResponse:
+        from apps.kuaizhizao.services.inspection_policy_service import normalize_material_inspection_stages
+
         group_data = MaterialGroupResponse.model_validate(material_group)
         group_data.process_route_id = getattr(material_group, "process_route_id", None)
         pr = getattr(material_group, "process_route", None)
         if pr:
             group_data.process_route_name = getattr(pr, "name", None)
+        group_data.inspection_stages = normalize_material_inspection_stages(
+            getattr(material_group, "inspection_stages", None),
+        )
         return group_data
     
     @staticmethod
@@ -519,11 +536,24 @@ class MaterialService:
         await MaterialService._validate_material_group_process_route_id(
             tenant_id, data.process_route_id
         )
+
+        from apps.kuaizhizao.services.inspection_policy_service import (
+            assert_master_data_inspection_stages_allowed,
+            prepare_material_group_inspection_for_write,
+        )
+
+        group_data = data.model_dump(exclude_unset=True)
+        if group_data.get("inspection_stages") is not None:
+            prepare_material_group_inspection_for_write(group_data)
+            await assert_master_data_inspection_stages_allowed(
+                tenant_id,
+                material_stages=group_data.get("inspection_stages"),
+            )
         
         # 创建物料分组
         material_group = await MaterialGroup.create(
             tenant_id=tenant_id,
-            **data.dict()
+            **group_data
         )
         await material_group.fetch_related("process_route")
         return await MaterialService._material_group_to_response(material_group)
@@ -550,12 +580,12 @@ class MaterialService:
             tenant_id=tenant_id,
             uuid=group_uuid,
             deleted_at__isnull=True
-        ).prefetch_related("parent").first()
+        ).prefetch_related("process_route", "parent").first()
         
         if not material_group:
             raise NotFoundError(f"物料分组 {group_uuid} 不存在")
         
-        return MaterialGroupResponse.model_validate(material_group)
+        return await MaterialService._material_group_to_response(material_group)
     
     @staticmethod
     async def list_material_groups(
@@ -596,21 +626,7 @@ class MaterialService:
         result = []
         for mg in material_groups:
             try:
-                group_data = MaterialGroupResponse.model_validate(mg)
-                # 安全地添加process_route_id和process_route_name
-                # 优先使用模型的process_route_id字段（如果存在），否则从关联对象获取
-                if hasattr(mg, 'process_route_id'):
-                    group_data.process_route_id = getattr(mg, 'process_route_id', None)
-                elif hasattr(mg, 'process_route') and mg.process_route:
-                    group_data.process_route_id = getattr(mg.process_route, 'id', None)
-                else:
-                    group_data.process_route_id = None
-                
-                if hasattr(mg, 'process_route') and mg.process_route:
-                    group_data.process_route_name = getattr(mg.process_route, 'name', None)
-                else:
-                    group_data.process_route_name = None
-                result.append(group_data)
+                result.append(await MaterialService._material_group_to_response(mg))
             except Exception as e:
                 # 如果序列化失败，记录错误并跳过
                 import logging
@@ -700,10 +716,22 @@ class MaterialService:
                 raise ValidationError(f"物料分组编码 {data.code} 已存在")
         
         # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        update_data = data.model_dump(exclude_unset=True)
         if "process_route_id" in update_data:
             await MaterialService._validate_material_group_process_route_id(
                 tenant_id, update_data.get("process_route_id")
+            )
+        if "inspection_stages" in update_data:
+            from apps.kuaizhizao.services.inspection_policy_service import (
+                assert_master_data_inspection_stages_allowed,
+                prepare_material_group_inspection_for_write,
+            )
+
+            if update_data["inspection_stages"] is not None:
+                prepare_material_group_inspection_for_write(update_data)
+            await assert_master_data_inspection_stages_allowed(
+                tenant_id,
+                material_stages=update_data.get("inspection_stages"),
             )
         for key, value in update_data.items():
             setattr(material_group, key, value)
@@ -1152,7 +1180,9 @@ class MaterialService:
                         name=customer_code_data.get("name"),
                         description=customer_code_data.get("description"),
                         external_entity_type="customer",
-                        external_entity_id=customer_code_data.get("customer_id")
+                        external_entity_id=_partner_id_from_code_mapping_payload(
+                            customer_code_data, "customer_id", "customerId"
+                        ),
                     )
                 except ValidationError as e:
                     logger.warning(f"创建客户编码别名失败: {e}")
@@ -1169,7 +1199,9 @@ class MaterialService:
                         name=supplier_code_data.get("name"),
                         description=supplier_code_data.get("description"),
                         external_entity_type="supplier",
-                        external_entity_id=supplier_code_data.get("supplier_id")
+                        external_entity_id=_partner_id_from_code_mapping_payload(
+                            supplier_code_data, "supplier_id", "supplierId"
+                        ),
                     )
                 except ValidationError as e:
                     logger.warning(f"创建供应商编码别名失败: {e}")
@@ -2412,7 +2444,9 @@ class MaterialService:
                             name=customer_code_data.get("name"),
                             description=customer_code_data.get("description"),
                             external_entity_type="customer",
-                            external_entity_id=customer_code_data.get("customer_id")
+                            external_entity_id=_partner_id_from_code_mapping_payload(
+                            customer_code_data, "customer_id", "customerId"
+                        ),
                         )
                     except ValidationError as e:
                         logger.warning(f"创建客户编码别名失败: {e}")
@@ -2428,7 +2462,9 @@ class MaterialService:
                             name=supplier_code_data.get("name"),
                             description=supplier_code_data.get("description"),
                             external_entity_type="supplier",
-                            external_entity_id=supplier_code_data.get("supplier_id")
+                            external_entity_id=_partner_id_from_code_mapping_payload(
+                            supplier_code_data, "supplier_id", "supplierId"
+                        ),
                         )
                     except ValidationError as e:
                         logger.warning(f"创建供应商编码别名失败: {e}")
@@ -4344,6 +4380,7 @@ class MaterialService:
                 # 注意：使用getattr安全访问，避免字段不存在时出错
                 "process_route_id": getattr(group, 'process_route_id', None) if hasattr(group, 'process_route_id') else (getattr(group.process_route, 'id', None) if hasattr(group, 'process_route') and group.process_route else None),
                 "process_route_name": getattr(group.process_route, 'name', None) if hasattr(group, 'process_route') and group.process_route else None,
+                "inspection_stages": getattr(group, "inspection_stages", None),
             }
             group_response = MaterialGroupTreeResponse.model_validate(group_dict)
             group_map[parent_id].append(group_response)

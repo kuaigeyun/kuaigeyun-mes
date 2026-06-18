@@ -72,6 +72,11 @@ class MaterialGroup(BaseModel):
         null=True,
         description="绑定的工艺路线（分组级别，物料未绑定时使用）"
     )
+
+    inspection_stages = fields.JSONField(
+        null=True,
+        description="分场景默认质检策略（组内物料未单独配置 inspection_stages 时继承）",
+    )
     
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")

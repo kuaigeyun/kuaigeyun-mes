@@ -372,7 +372,10 @@ const OQCInspectionPage: React.FC = () => {
             actionRef.current?.reload();
           }}
         >
-          <InspectionTemplateConductFields inspection={currentRow as Record<string, unknown>} />
+          <InspectionTemplateConductFields
+            inspection={currentRow as Record<string, unknown>}
+            photoCategory="oqc_inspection_attachments"
+          />
           <ProFormSelect
             name="inspection_result"
             label={t('app.kuaizhizao.quality.common.columns.inspectionResult')}

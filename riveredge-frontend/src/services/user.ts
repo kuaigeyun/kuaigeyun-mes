@@ -403,6 +403,12 @@ export async function generateUserQRCode(userUuid: string, username: string, ful
 }
 
 /** 人员展示项（选人/回显，非人员管理全量读） */
+export interface UserDisplayRoleItem {
+  uuid: string;
+  name: string;
+  code?: string;
+}
+
 export interface UserDisplayItem {
   id: number;
   uuid: string;
@@ -410,6 +416,7 @@ export interface UserDisplayItem {
   full_name?: string | null;
   label: string;
   department_uuid?: string | null;
+  roles?: UserDisplayRoleItem[];
 }
 
 export interface UserDisplayListParams {

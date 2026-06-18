@@ -101,9 +101,14 @@ class InspectionPlanStep(BaseModel):
         description="关联质检方案",
     )
     sequence = fields.IntField(default=0, description="步骤序号")
+    step_key = fields.CharField(max_length=36, null=True, description="步骤稳定标识")
     inspection_item = fields.CharField(max_length=200, description="检验项目名称")
     inspection_method = fields.CharField(max_length=200, null=True, description="检验方法")
     acceptance_criteria = fields.TextField(null=True, description="合格标准")
+    value_type = fields.CharField(
+        max_length=20, default="boolean", description="值类型（boolean/single_select/multi_select/text/numeric）"
+    )
+    value_spec = fields.JSONField(null=True, description="类型规格 JSON")
     sampling_type = fields.CharField(max_length=20, default="full", description="抽样方式（full/sampling）")
     quality_standard_id = fields.IntField(null=True, description="引用的质检标准ID（可选）")
     remarks = fields.TextField(null=True, description="备注")

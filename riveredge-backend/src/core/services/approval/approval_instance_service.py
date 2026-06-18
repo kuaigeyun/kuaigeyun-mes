@@ -2010,10 +2010,54 @@ class ApprovalInstanceService:
                 )
                 logger.info(f"采购订单 {entity_id} 审批回调完成: {approval_instance.status}")
 
+            async def _handle_bom_change() -> None:
+                from apps.master_data.models.bom_change import BOMChange
+                from apps.master_data.services.bom_change_service import BOMChangeService
+
+                change = await BOMChange.filter(
+                    tenant_id=tenant_id,
+                    id=entity_id,
+                    deleted_at__isnull=True,
+                ).first()
+                if not change:
+                    return
+                approved = approval_instance.status == "approved"
+                await BOMChangeService._apply_approval_decision(
+                    tenant_id,
+                    str(change.uuid),
+                    approver_id,
+                    approved,
+                    "审批通过" if approved else "审批驳回",
+                )
+                logger.info(f"BOM 工程变更 {entity_id} 审批回调完成: {approval_instance.status}")
+
+            async def _handle_process_route_change() -> None:
+                from apps.master_data.models.process_route_change import ProcessRouteChange
+                from apps.master_data.services.process_route_change_service import ProcessRouteChangeService
+
+                change = await ProcessRouteChange.filter(
+                    tenant_id=tenant_id,
+                    id=entity_id,
+                    deleted_at__isnull=True,
+                ).first()
+                if not change:
+                    return
+                approved = approval_instance.status == "approved"
+                await ProcessRouteChangeService._apply_approval_decision(
+                    tenant_id,
+                    str(change.uuid),
+                    approver_id,
+                    approved,
+                    "审批通过" if approved else "审批驳回",
+                )
+                logger.info(f"工艺路线变更 {entity_id} 审批回调完成: {approval_instance.status}")
+
             completion_handlers = {
                 "sales_order": _handle_sales_order,
                 "demand": _handle_demand,
                 "purchase_order": _handle_purchase_order,
+                "bom_change": _handle_bom_change,
+                "process_route_change": _handle_process_route_change,
             }
             handler = completion_handlers.get(entity_type)
             if handler:

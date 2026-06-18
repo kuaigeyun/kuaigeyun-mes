@@ -357,7 +357,6 @@ export interface SOPExecution {
   status: 'pending' | 'running' | 'completed' | 'paused' | 'cancelled';
   currentNodeId?: string;
   nodeData?: Record<string, { formData: Record<string, any>; completedAt: string }>;
-  inngestRunId?: string;
   executorId: number;
   startedAt: string;
   completedAt?: string;

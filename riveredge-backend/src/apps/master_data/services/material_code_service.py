@@ -9,6 +9,7 @@ Date: 2026-01-08
 
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
+from tortoise.exceptions import IntegrityError
 from tortoise.models import Q
 from loguru import logger
 
@@ -219,31 +220,89 @@ class MaterialCodeService:
                 )
             # 如果映射到同一物料，直接返回现有记录
             return existing
-        
-        # 如果设置为主要编码，取消同类型的其他主要编码
-        if is_primary:
-            await MaterialCodeAlias.filter(
+
+        async def _clear_other_primary_flags() -> None:
+            if is_primary:
+                await MaterialCodeAlias.filter(
+                    tenant_id=tenant_id,
+                    material_id=material_id,
+                    code_type=code_type,
+                    is_primary=True,
+                    deleted_at__isnull=True,
+                ).update(is_primary=False)
+
+        async def _restore_deleted_alias(deleted_alias: MaterialCodeAlias) -> MaterialCodeAlias:
+            if deleted_alias.material_id != material_id:
+                raise ValidationError(
+                    f"编码类型 {code_type} 的编码 {code} 已存在，映射到物料 {deleted_alias.material_id}。"
+                    f"如需合并物料，请使用物料映射工具。"
+                )
+            await _clear_other_primary_flags()
+            deleted_alias.deleted_at = None
+            deleted_alias.department = department
+            deleted_alias.description = description
+            deleted_alias.name = name
+            deleted_alias.is_primary = is_primary
+            deleted_alias.external_entity_type = external_entity_type
+            deleted_alias.external_entity_id = external_entity_id
+            await deleted_alias.save()
+            logger.info(f"恢复物料 {material_id} 编码别名: {code_type}:{code}")
+            return deleted_alias
+
+        # 唯一约束 (tenant_id, code_type, code) 不含 deleted_at，软删后须恢复而非 INSERT
+        deleted_existing = await MaterialCodeAlias.filter(
+            tenant_id=tenant_id,
+            code_type=code_type,
+            code=code,
+            deleted_at__isnull=False,
+        ).first()
+        if deleted_existing:
+            return await _restore_deleted_alias(deleted_existing)
+
+        await _clear_other_primary_flags()
+
+        try:
+            code_alias = await MaterialCodeAlias.create(
                 tenant_id=tenant_id,
                 material_id=material_id,
                 code_type=code_type,
-                is_primary=True,
-                deleted_at__isnull=True
-            ).update(is_primary=False)
-        
-        # 创建编码别名
-        code_alias = await MaterialCodeAlias.create(
-            tenant_id=tenant_id,
-            material_id=material_id,
-            code_type=code_type,
-            code=code,
-            department=department,
-            description=description,
-            name=name,
-            is_primary=is_primary,
-            external_entity_type=external_entity_type,
-            external_entity_id=external_entity_id
-        )
-        
+                code=code,
+                department=department,
+                description=description,
+                name=name,
+                is_primary=is_primary,
+                external_entity_type=external_entity_type,
+                external_entity_id=external_entity_id,
+            )
+        except IntegrityError as e:
+            error_str = str(e).lower()
+            if "unique" not in error_str and "duplicate" not in error_str:
+                raise
+            deleted_retry = await MaterialCodeAlias.filter(
+                tenant_id=tenant_id,
+                code_type=code_type,
+                code=code,
+                deleted_at__isnull=False,
+            ).first()
+            if deleted_retry:
+                return await _restore_deleted_alias(deleted_retry)
+            active_conflict = await MaterialCodeAlias.filter(
+                tenant_id=tenant_id,
+                code_type=code_type,
+                code=code,
+                deleted_at__isnull=True,
+            ).first()
+            if active_conflict and active_conflict.material_id == material_id:
+                return active_conflict
+            if active_conflict:
+                raise ValidationError(
+                    f"编码类型 {code_type} 的编码 {code} 已存在，映射到物料 {active_conflict.material_id}。"
+                    f"如需合并物料，请使用物料映射工具。"
+                ) from e
+            raise ValidationError(
+                f"编码类型 {code_type} 的编码 {code} 已存在，无法重复创建。"
+            ) from e
+
         logger.info(f"为物料 {material_id} 创建编码别名: {code_type}:{code}")
         return code_alias
 

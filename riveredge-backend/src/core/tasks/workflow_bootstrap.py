@@ -19,7 +19,6 @@ _PLACEHOLDER_APP_CODES: Set[str] = {"kuaicrm", "kuaipdm", "kuaichain", "kuaiiot"
 
 # 已知 workflow 包（其余应用按约定路径探测）
 _KNOWN_WORKFLOW_PACKAGES: dict[str, str] = {
-    "master-data": "apps.master_data.workflows.functions",
     "kuaizhizao": "apps.kuaizhizao.workflows.functions",
 }
 

@@ -1,4 +1,9 @@
 import type { TFunction } from 'i18next';
+import {
+  normalizeValueType,
+  type InspectionTemplateStepItem,
+  type StepConductEntry,
+} from '../../../types/inspectionStepSpec';
 
 /** 从检验单记录解析方案/标准模板（other_checks 或 quality_characteristics） */
 export function getInspectionTemplateSource(record: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
@@ -8,34 +13,87 @@ export function getInspectionTemplateSource(record: Record<string, unknown> | nu
   return src as Record<string, unknown>;
 }
 
-export type InspectionPlanStepItem = {
-  sequence?: number;
-  inspection_item?: string;
-  inspection_method?: string;
-  acceptance_criteria?: string;
-  sampling_type?: string;
-};
+export type { InspectionTemplateStepItem };
 
-export function getTemplateStepItems(template: Record<string, unknown> | null): InspectionPlanStepItem[] {
+export function getTemplateStepItems(template: Record<string, unknown> | null): InspectionTemplateStepItem[] {
   if (!template) return [];
   const items = template.items;
-  return Array.isArray(items) ? (items as InspectionPlanStepItem[]) : [];
+  if (!Array.isArray(items)) return [];
+  return items as InspectionTemplateStepItem[];
 }
 
 export function hasInspectionPlanSteps(template: Record<string, unknown> | null): boolean {
   return getTemplateStepItems(template).length > 0;
 }
 
-/** 从表单值提取 conduct 所需的 measurement_data / item_results */
+/** 快照项是否含结构化 value_type（新方案）；否则走 legacy 合格/不合格 */
+export function isTypedInspectionStep(step: InspectionTemplateStepItem): boolean {
+  return !!step.value_type;
+}
+
+/** 已保存的分项检验结果（conduct 后写入模板 JSON） */
+export function getConductStepResults(
+  template: Record<string, unknown> | null,
+): Record<string, StepConductEntry> {
+  if (!template) return {};
+  const typed = template.conduct_step_results;
+  if (typed && typeof typed === 'object') {
+    return typed as Record<string, StepConductEntry>;
+  }
+  const legacy = template.conduct_item_results;
+  if (!legacy || typeof legacy !== 'object') return {};
+  const out: Record<string, StepConductEntry> = {};
+  Object.entries(legacy as Record<string, unknown>).forEach(([k, v]) => {
+    if (v === 'pass' || v === 'fail') {
+      out[k] = { judgment: v };
+    }
+  });
+  return out;
+}
+
+export function hasConductStepResults(inspection: Record<string, unknown> | null | undefined): boolean {
+  const template = getInspectionTemplateSource(inspection);
+  if (!template) return false;
+  return Object.keys(getConductStepResults(template)).length > 0;
+}
+
+/** 从表单值提取 conduct 所需的 measurement_data / item_results / conduct_step_results */
 export function pickInspectionConductExtras(values: Record<string, unknown>): Record<string, unknown> {
   const extras: Record<string, unknown> = {};
   const measurement = values.measurement_data;
   const itemResults = values.item_results;
+  const stepResults = values.conduct_step_results;
   if (measurement && typeof measurement === 'object' && Object.keys(measurement as object).length > 0) {
     extras.measurement_data = measurement;
   }
   if (itemResults && typeof itemResults === 'object' && Object.keys(itemResults as object).length > 0) {
     extras.item_results = itemResults;
+  }
+  if (stepResults && typeof stepResults === 'object' && Object.keys(stepResults as object).length > 0) {
+    const normalized: Record<string, unknown> = {};
+    Object.entries(stepResults as Record<string, unknown>).forEach(([key, raw]) => {
+      if (!raw || typeof raw !== 'object') {
+        normalized[key] = raw;
+        return;
+      }
+      const entry = { ...(raw as Record<string, unknown>) };
+      if (Array.isArray(entry.photos)) {
+        entry.photos = entry.photos
+          .filter((p) => p && typeof p === 'object')
+          .map((p) => {
+            const photo = p as Record<string, unknown>;
+            return {
+              uid: photo.uid,
+              name: photo.name,
+              url: photo.url,
+              status: photo.status || 'done',
+            };
+          })
+          .filter((p) => p.uid || p.url);
+      }
+      normalized[key] = entry;
+    });
+    extras.conduct_step_results = normalized;
   }
   return extras;
 }

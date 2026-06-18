@@ -7,6 +7,12 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+class UserDisplayRoleItem(BaseModel):
+    uuid: str
+    name: str
+    code: Optional[str] = None
+
+
 class UserDisplayItem(BaseModel):
     id: int
     uuid: str
@@ -14,6 +20,7 @@ class UserDisplayItem(BaseModel):
     full_name: Optional[str] = None
     label: str = Field(..., description="下拉与只读展示用文案")
     department_uuid: Optional[str] = None
+    roles: list[UserDisplayRoleItem] = Field(default_factory=list, description="用户角色（展示用）")
 
 
 class UserDisplayListResponse(BaseModel):

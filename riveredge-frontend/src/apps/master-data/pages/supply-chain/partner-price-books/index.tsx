@@ -50,6 +50,16 @@ import type {
   PartnerPriceBookType,
   PartnerPriceVariantLine,
 } from '../../../types/partner-price-book';
+import type { Material } from '../../../types/material';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+
+function getMaterialAllowedUnits(material?: Material | null): string[] {
+  if (!material) return [];
+  const baseUnit = material.baseUnit ?? (material as { base_unit?: string }).base_unit ?? '';
+  const auxiliaryUnits = material.units?.units?.map((u) => u.unit).filter(Boolean) ?? [];
+  if (!baseUnit) return auxiliaryUnits;
+  return [baseUnit, ...auxiliaryUnits.filter((u) => u !== baseUnit)];
+}
 
 function normalizeVariantPricesForSubmit(rows: unknown): PartnerPriceVariantLine[] | undefined {
   if (!Array.isArray(rows) || rows.length === 0) return undefined;
@@ -93,7 +103,47 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
   const [aliasLocked, setAliasLocked] = useState(false);
   const [partnerOptions, setPartnerOptions] = useState<{ label: string; value: number }[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [unitOptions, setUnitOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [unitOptionsLoading, setUnitOptionsLoading] = useState(false);
+  const [materialAllowedUnits, setMaterialAllowedUnits] = useState<string[]>([]);
+  const watchedUnit = Form.useWatch('unit', form);
   const detailReqRef = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setUnitOptionsLoading(true);
+        const dictionary = await getDataDictionaryByCode('MATERIAL_UNIT');
+        const items = await getDictionaryItemList(dictionary.uuid, true);
+        if (cancelled) return;
+        setUnitOptions(
+          items
+            .sort((a, b) => a.sort_order - b.sort_order)
+            .map((item) => ({ label: item.label, value: item.value })),
+        );
+      } catch {
+        if (!cancelled) setUnitOptions([]);
+      } finally {
+        if (!cancelled) setUnitOptionsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const unitSelectOptions = useMemo(() => {
+    const filtered =
+      materialAllowedUnits.length > 0
+        ? unitOptions.filter((opt) => materialAllowedUnits.includes(opt.value))
+        : unitOptions;
+    if (watchedUnit && !filtered.some((opt) => opt.value === watchedUnit)) {
+      const label = unitOptions.find((opt) => opt.value === watchedUnit)?.label ?? watchedUnit;
+      return [...filtered, { value: watchedUnit, label }];
+    }
+    return filtered;
+  }, [materialAllowedUnits, unitOptions, watchedUnit]);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,6 +178,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
     form.setFieldsValue({ isActive: true, syncPartnerAlias: true, variantPrices: [], _masterMaterialUuid: undefined });
     setAliasPreview({});
     setAliasLocked(false);
+    setMaterialAllowedUnits([]);
     setModalVisible(true);
   };
 
@@ -169,9 +220,13 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         if (master?.uuid) {
           form.setFieldValue('_masterMaterialUuid', master.uuid);
         }
+        setMaterialAllowedUnits(getMaterialAllowedUnits(master));
       } catch {
+        setMaterialAllowedUnits([]);
         /* 编辑时无法解析主物料 UUID 时仍可手工维护单价行 */
       }
+    } else {
+      setMaterialAllowedUnits([]);
     }
     setModalVisible(true);
   };
@@ -600,8 +655,10 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
                 label={t('app.master-data.materialForm.mainCode', '内部物料')}
                 placeholder={t('app.master-data.materialForm.mainCodePlaceholder', '请选择物料')}
                 required
+                fillMapping={{ unit: 'baseUnit' }}
                 onChange={(materialId, material) => {
                   const partnerId = form.getFieldValue('partnerId');
+                  setMaterialAllowedUnits(getMaterialAllowedUnits(material));
                   form.setFieldsValue({
                     _masterMaterialUuid: material?.uuid,
                     variantPrices: [],
@@ -694,7 +751,15 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
               <InputNumber min={0} max={100} precision={2} style={{ width: '100%' }} />
             </Form.Item>
             <Form.Item name="unit" label={t('app.master-data.materialForm.baseUnit', '基础单位')}>
-              <Input style={{ width: '100%' }} />
+              <UniDropdown
+                placeholder={t('app.master-data.materialForm.baseUnitPlaceholder', '请选择单位')}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                loading={unitOptionsLoading}
+                options={unitSelectOptions}
+                style={{ width: '100%' }}
+              />
             </Form.Item>
           </div>
           <div style={{ marginBottom: 24 }}>

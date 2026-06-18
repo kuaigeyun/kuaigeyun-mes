@@ -207,11 +207,11 @@ const ChangeManagementPage: React.FC = () => {
           const rowAuditEnabled =
             row.change_category === 'route' ? routeAuditEnabled : bomAuditEnabled;
           return [
-            row.id ? (
-              <UniWorkflowActions
-                key="audit"
-                record={row}
-                rowKey="id"
+            <UniWorkflowActions
+              {...rowActionKind('skip')}
+              key="audit"
+              record={row}
+              rowKey="id"
                 unifiedAudit
                 auditNodeKey={auditNodeKeyForRow(row)}
                 entityType={row.audit?.entity_type || auditNodeKeyForRow(row)}
@@ -224,8 +224,7 @@ const ChangeManagementPage: React.FC = () => {
                 onSuccess={() => actionRef.current?.reload()}
                 theme="link"
                 size="small"
-              />
-            ) : null,
+              />,
             status === 'approved' || row.status === '已审批' ? (
               <Button
                 {...rowActionKind('execute')}

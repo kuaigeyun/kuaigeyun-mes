@@ -14,6 +14,7 @@ from typing import List, Optional
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
 
+from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.inspection_plan import InspectionPlan, InspectionPlanStep
 from apps.kuaizhizao.schemas.inspection_plan import (
     InspectionPlanCreate,
@@ -24,7 +25,7 @@ from apps.kuaizhizao.schemas.inspection_plan import (
     InspectionPlanStepResponse,
 )
 
-from apps.common.base_service import AppBaseService
+from apps.kuaizhizao.services.inspection_step_spec import prepare_plan_step_dict, validate_plan_steps_relations
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -33,6 +34,34 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
 
     def __init__(self):
         super().__init__(InspectionPlan)
+
+    @staticmethod
+    def _to_list_response(
+        plan: InspectionPlan,
+        steps: Optional[List[InspectionPlanStep]] = None,
+    ) -> InspectionPlanListResponse:
+        """列表响应：排除未加载的 ReverseRelation steps，避免 Pydantic 校验失败。"""
+        plan_data = plan.__dict__.copy()
+        plan_data.pop("steps", None)
+        resp = InspectionPlanListResponse.model_construct(**plan_data)
+        if steps is not None:
+            resp.steps = [InspectionPlanStepResponse.model_validate(s) for s in steps]
+        else:
+            resp.steps = None
+        return resp
+
+    @staticmethod
+    def _to_response(plan: InspectionPlan, steps: List[InspectionPlanStep]) -> InspectionPlanResponse:
+        """详情/创建/更新响应：勿对 plan.steps 赋值（ReverseRelation 无 setter）。"""
+        plan_data = plan.__dict__.copy()
+        plan_data.pop("steps", None)
+        resp = InspectionPlanResponse.model_construct(**plan_data)
+        resp.steps = [InspectionPlanStepResponse.model_validate(s) for s in steps]
+        return resp
+
+    @staticmethod
+    async def _load_plan_steps(plan: InspectionPlan) -> List[InspectionPlanStep]:
+        return await InspectionPlanStep.filter(plan_id=plan.id).order_by("sequence").all()
 
     async def create_inspection_plan(
         self,
@@ -69,8 +98,11 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
             plan = await InspectionPlan.create(**plan_dict)
 
             if plan_data.steps:
-                for idx, step_data in enumerate(plan_data.steps):
-                    step_dict = step_data.model_dump()
+                prepared_steps = [
+                    prepare_plan_step_dict(step_data.model_dump()) for step_data in plan_data.steps
+                ]
+                validate_plan_steps_relations(prepared_steps)
+                for idx, step_dict in enumerate(prepared_steps):
                     step_dict["sequence"] = step_dict.get("sequence", idx)
                     await InspectionPlanStep.create(
                         plan_id=plan.id,
@@ -79,10 +111,8 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
                     )
 
             await plan.fetch_related("steps")
-            plan.steps = await plan.steps.order_by("sequence").all()
-            resp = InspectionPlanResponse.model_validate(plan)
-            resp.steps = [InspectionPlanStepResponse.model_validate(s) for s in plan.steps]
-            return resp
+            step_rows = await self._load_plan_steps(plan)
+            return self._to_response(plan, step_rows)
 
     async def get_inspection_plan_by_id(
         self,
@@ -99,11 +129,8 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
         if not plan:
             raise NotFoundError(f"质检方案 ID {plan_id} 不存在")
 
-        await plan.fetch_related("steps")
-        plan.steps = await plan.steps.order_by("sequence").all()
-        resp = InspectionPlanResponse.model_validate(plan)
-        resp.steps = [InspectionPlanStepResponse.model_validate(s) for s in plan.steps]
-        return resp
+        step_rows = await self._load_plan_steps(plan)
+        return self._to_response(plan, step_rows)
 
     async def list_inspection_plans(
         self,
@@ -141,13 +168,10 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
         result = []
         for plan in plans:
             if include_steps:
-                await plan.fetch_related("steps")
-                plan.steps = await plan.steps.order_by("sequence").all()
-                resp = InspectionPlanListResponse.model_validate(plan)
-                resp.steps = [InspectionPlanStepResponse.model_validate(s) for s in plan.steps]
-                result.append(resp)
+                step_rows = await self._load_plan_steps(plan)
+                result.append(self._to_list_response(plan, step_rows))
             else:
-                result.append(InspectionPlanListResponse.model_validate(plan))
+                result.append(self._to_list_response(plan))
         return result
 
     async def update_inspection_plan(
@@ -174,9 +198,12 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
             await plan.save()
 
             if plan_data.steps is not None:
+                prepared_steps = [
+                    prepare_plan_step_dict(step_data.model_dump()) for step_data in plan_data.steps
+                ]
+                validate_plan_steps_relations(prepared_steps)
                 await InspectionPlanStep.filter(plan_id=plan_id).delete()
-                for idx, step_data in enumerate(plan_data.steps):
-                    step_dict = step_data.model_dump()
+                for idx, step_dict in enumerate(prepared_steps):
                     step_dict["sequence"] = step_dict.get("sequence", idx)
                     await InspectionPlanStep.create(
                         plan_id=plan.id,
@@ -222,4 +249,4 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
         if plan_type:
             query = query.filter(plan_type=plan_type)
         plans = await query.order_by("-material_id", "-created_at").all()
-        return [InspectionPlanListResponse.model_validate(p) for p in plans]
+        return [self._to_list_response(p) for p in plans]

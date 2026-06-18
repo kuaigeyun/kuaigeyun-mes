@@ -28,11 +28,22 @@ class ChangeDeskService:
             return items
         bom_rows = [item for item in items if item.category == "bom"]
         route_rows = [item for item in items if item.category == "process_route"]
+        bom_by_uuid: dict[str, ChangeDeskItem] = {}
+        route_by_uuid: dict[str, ChangeDeskItem] = {}
         if bom_rows:
-            await enrich_items(tenant_id, "bom_change", bom_rows)
+            enriched_bom = await enrich_items(tenant_id, "bom_change", bom_rows)
+            bom_by_uuid = {item.uuid: item for item in enriched_bom}
         if route_rows:
-            await enrich_items(tenant_id, "process_route_change", route_rows)
-        return items
+            enriched_route = await enrich_items(tenant_id, "process_route_change", route_rows)
+            route_by_uuid = {item.uuid: item for item in enriched_route}
+        return [
+            bom_by_uuid.get(item.uuid, item)
+            if item.category == "bom"
+            else route_by_uuid.get(item.uuid, item)
+            if item.category == "process_route"
+            else item
+            for item in items
+        ]
 
     async def list_changes(
         self,

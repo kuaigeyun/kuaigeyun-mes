@@ -59,6 +59,7 @@ import { apiRequest } from '../../../../../services/api';
 import { qualityApi } from '../../../services/production';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
+import InspectionTemplateConductResultsTable from '../components/InspectionTemplateConductResultsTable';
 import InspectionDetailQualityActions from '../components/InspectionDetailQualityActions';
 import { pickInspectionConductExtras } from '../components/inspectionTemplateUtils';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -960,7 +961,10 @@ const IncomingInspectionPage: React.FC = () => {
             </Row>
           </Card>
         )}
-        <InspectionTemplateConductFields inspection={currentInspection as Record<string, unknown>} />
+        <InspectionTemplateConductFields
+          inspection={currentInspection as Record<string, unknown>}
+          photoCategory="incoming_inspection_attachments"
+        />
         <ProFormDigit
           name="qualified_quantity"
           label={t('app.kuaizhizao.quality.common.form.qualifiedQty')}
@@ -1138,7 +1142,7 @@ const IncomingInspectionPage: React.FC = () => {
               </DetailDrawerSection>
 
               <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.detailInfo')}>
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.quality.common.empty.noDetailLines')} />
+                <InspectionTemplateConductResultsTable inspection={inspectionDetail as Record<string, unknown>} />
               </DetailDrawerSection>
 
               <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.operationLog')}>

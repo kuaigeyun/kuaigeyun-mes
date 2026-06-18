@@ -3,6 +3,7 @@
 
 设计要点：
 - IQC/FQC/OQC：物料 inspection_stages[stage] 为唯一主数据源（legacy inspection_mode 仅读 shim）
+- 物料未配置 inspection_stages 时，继承物料分组 inspection_stages（与分组工艺路线同理）
 - IPQC：仅工序 inspection_stages.ipqc（物料不参与过程检）
 - 检验方案 plan_type 与 stage 映射：iqc→incoming, ipqc→process, fqc→finished, oqc→outbound
 """
@@ -213,6 +214,60 @@ def sync_legacy_fields_from_stages(stages: Dict[str, Dict[str, Any]]) -> Tuple[s
     return mode, plan_id
 
 
+async def get_material_group_inspection_stages(tenant_id: int, group_id: int) -> Dict[str, Dict[str, Any]]:
+    from apps.master_data.models.material import MaterialGroup
+
+    group = await MaterialGroup.get_or_none(tenant_id=tenant_id, id=group_id, deleted_at__isnull=True)
+    if not group:
+        return material_stages_from_legacy("none", None)
+    return normalize_material_inspection_stages(getattr(group, "inspection_stages", None))
+
+
+async def resolve_effective_material_stage_policy(
+    tenant_id: int,
+    material_id: int,
+    stage: InspectionStage,
+) -> Tuple[str, Optional[int], str]:
+    """物料级优先；物料未配置 inspection_stages 时继承分组默认（对齐工艺路线解析顺序）。"""
+    from apps.master_data.models.material import Material
+
+    if stage not in MATERIAL_INSPECTION_STAGE_KEYS:
+        return "none", None, "default_none"
+
+    mat = await Material.get_or_none(tenant_id=tenant_id, id=material_id, deleted_at__isnull=True)
+    if not mat:
+        return "none", None, "default_none"
+
+    raw_stages = getattr(mat, "inspection_stages", None)
+    if isinstance(raw_stages, dict) and raw_stages:
+        mat_stages = normalize_material_inspection_stages(raw_stages)
+        policy = normalize_stage_policy(mat_stages.get(stage))
+        has_custom = any(
+            normalize_stage_policy(mat_stages.get(k))["mode"] != "none"
+            for k in MATERIAL_INSPECTION_STAGE_KEYS
+        )
+        if has_custom:
+            return policy["mode"], policy["plan_id"], "material"
+        # 物料三场景均为 none：与未配置同理，继承分组默认
+
+    legacy_stages = normalize_material_inspection_stages(
+        None,
+        legacy_mode=getattr(mat, "inspection_mode", None),
+        legacy_plan_id=getattr(mat, "default_inspection_plan_id", None),
+    )
+    policy = normalize_stage_policy(legacy_stages.get(stage))
+    if policy["mode"] != "none":
+        return policy["mode"], policy["plan_id"], "material_legacy"
+
+    if mat.group_id:
+        grp_stages = await get_material_group_inspection_stages(tenant_id, mat.group_id)
+        grp_policy = normalize_stage_policy(grp_stages.get(stage))
+        if grp_policy["mode"] != "none":
+            return grp_policy["mode"], grp_policy["plan_id"], "material_group"
+
+    return "none", None, "default_none"
+
+
 async def get_material_inspection_stages(tenant_id: int, material_id: int) -> Dict[str, Dict[str, Any]]:
     from apps.master_data.models.material import Material
 
@@ -373,10 +428,11 @@ async def resolve_inspection_policy(
         return "none", None, "default_none"
 
     if material_id:
-        mat_stages = await get_material_inspection_stages(tenant_id, material_id)
-        policy = normalize_stage_policy(mat_stages.get(stage))
-        if policy["mode"] != "none":
-            return policy["mode"], policy["plan_id"], "material"
+        eff_mode, plan_id, reason = await resolve_effective_material_stage_policy(
+            tenant_id, material_id, stage
+        )
+        if eff_mode != "none":
+            return eff_mode, plan_id, reason
     elif material_inspection_mode is not None:
         leg = normalize_inspection_mode(material_inspection_mode)
         if leg != "none":
@@ -623,6 +679,14 @@ async def assert_oqc_before_sales_delivery_confirm(
         source_type="sales_delivery" if sales_delivery_id else None,
         source_id=sales_delivery_id,
     )
+
+
+def prepare_material_group_inspection_for_write(data: Dict[str, Any]) -> Dict[str, Any]:
+    """写入物料分组：规范化 inspection_stages。"""
+    if data.get("inspection_stages") is not None:
+        stages = normalize_material_inspection_stages(data["inspection_stages"])
+        data["inspection_stages"] = {k: stages[k] for k in MATERIAL_INSPECTION_STAGE_KEYS}
+    return data
 
 
 def prepare_material_inspection_for_write(data: Dict[str, Any]) -> Dict[str, Any]:

@@ -16,6 +16,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch, Card, theme, Upload, Typography, Tooltip } from 'antd';
+import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
 import { FormModalTemplate } from '../../../components/layout-templates';
@@ -37,10 +38,10 @@ import type { Customer } from '../types/supply-chain';
 import type { Supplier } from '../types/supply-chain';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { customerApi, supplierApi, unwrapSupplyPagedList } from '../services/supply-chain';
-import { warehouseApi } from '../services/warehouse';
+import { warehouseApi, storageLocationApi, storageAreaApi } from '../services/warehouse';
 import { processRouteApi, operationApi } from '../services/process';
 import { materialCodeMappingApi } from '../services/material';
-import type { Warehouse } from '../types/warehouse';
+import type { Warehouse, StorageLocation, StorageArea } from '../types/warehouse';
 import type { ProcessRoute, Operation } from '../types/process';
 import {
   MaterialVariantCombinationsTable,
@@ -219,14 +220,8 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         iv?.variant_managed ??
         false;
       setVariantManaged(!!vm);
-      
-      if (isEdit && material?.uuid) {
-        loadFieldValues();
-      } else {
-        resetFieldValues();
-      }
     }
-  }, [open, isEdit, material, material?.variantManaged, (material as any)?.variant_managed, initialValues, emitAgentDebugLog, loadFieldValues, resetFieldValues]);
+  }, [open, isEdit, material, material?.variantManaged, (material as any)?.variant_managed, initialValues, emitAgentDebugLog]);
   
   // 客户和供应商列表
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -472,10 +467,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
             const externalEntityId = alias.external_entity_id || alias.externalEntityId;
             
             if (codeType === 'CUSTOMER' || externalEntityType === 'customer') {
-              const customerId = externalEntityId || 0;
-              // 注意：这里 customers 可能还没有加载完成，所以先设置ID，后续再更新名称
+              const rawCustomerId = externalEntityId ?? alias.customerId ?? alias.customer_id;
+              const customerId =
+                rawCustomerId != null && rawCustomerId !== '' ? Number(rawCustomerId) : undefined;
               custCodes.push({
-                customerId,
+                customerId: Number.isFinite(customerId) ? customerId! : 0,
                 customerUuid: undefined,
                 customerName: undefined,
                 code: alias.code,
@@ -483,10 +479,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                 description: alias.description,
               });
             } else if (codeType === 'SUPPLIER' || externalEntityType === 'supplier') {
-              const supplierId = externalEntityId || 0;
-              // 注意：这里 suppliers 可能还没有加载完成，所以先设置ID，后续再更新名称
+              const rawSupplierId = externalEntityId ?? alias.supplierId ?? alias.supplier_id;
+              const supplierId =
+                rawSupplierId != null && rawSupplierId !== '' ? Number(rawSupplierId) : undefined;
               suppCodes.push({
-                supplierId,
+                supplierId: Number.isFinite(supplierId) ? supplierId! : 0,
                 supplierUuid: undefined,
                 supplierName: undefined,
                 code: alias.code,
@@ -707,57 +704,57 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
    * 当客户列表加载完成后，更新客户编号映射中的名称
    */
   useEffect(() => {
-    if (customers.length > 0 && customerCodes.length > 0) {
-      const updatedCodes = customerCodes.map(code => {
-        const customer = customers.find(c => c.id === code.customerId);
-        if (customer) {
-          return {
-            ...code,
-            customerUuid: customer.uuid,
-            customerName: customer.name,
-          };
-        }
-        return code;
-      });
-      // 检查是否有变化
-      const hasChanges = updatedCodes.some((code, index) => {
-        const oldCode = customerCodes[index];
-        return !oldCode || code.customerName !== oldCode.customerName;
-      });
-      if (hasChanges) {
-        setCustomerCodes(updatedCodes);
-      }
+    if (customers.length === 0 || customerCodes.length === 0) return;
+    const updatedCodes = customerCodes.map((code) => {
+      if (!code.customerId) return code;
+      const customer = customers.find((c) => c.id === code.customerId);
+      if (!customer) return code;
+      return {
+        ...code,
+        customerUuid: customer.uuid,
+        customerName: customer.name,
+      };
+    });
+    const hasChanges = updatedCodes.some((code, index) => {
+      const oldCode = customerCodes[index];
+      return (
+        !oldCode
+        || code.customerName !== oldCode.customerName
+        || code.customerUuid !== oldCode.customerUuid
+      );
+    });
+    if (hasChanges) {
+      setCustomerCodes(updatedCodes);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customers.length]); // 只依赖 customers 的长度变化
+  }, [customers, customerCodes]);
   
   /**
    * 当供应商列表加载完成后，更新供应商编号映射中的名称
    */
   useEffect(() => {
-    if (suppliers.length > 0 && supplierCodes.length > 0) {
-      const updatedCodes = supplierCodes.map(code => {
-        const supplier = suppliers.find(s => s.id === code.supplierId);
-        if (supplier) {
-          return {
-            ...code,
-            supplierUuid: supplier.uuid,
-            supplierName: supplier.name,
-          };
-        }
-        return code;
-      });
-      // 检查是否有变化
-      const hasChanges = updatedCodes.some((code, index) => {
-        const oldCode = supplierCodes[index];
-        return !oldCode || code.supplierName !== oldCode.supplierName;
-      });
-      if (hasChanges) {
-        setSupplierCodes(updatedCodes);
-      }
+    if (suppliers.length === 0 || supplierCodes.length === 0) return;
+    const updatedCodes = supplierCodes.map((code) => {
+      if (!code.supplierId) return code;
+      const supplier = suppliers.find((s) => s.id === code.supplierId);
+      if (!supplier) return code;
+      return {
+        ...code,
+        supplierUuid: supplier.uuid,
+        supplierName: supplier.name,
+      };
+    });
+    const hasChanges = updatedCodes.some((code, index) => {
+      const oldCode = supplierCodes[index];
+      return (
+        !oldCode
+        || code.supplierName !== oldCode.supplierName
+        || code.supplierUuid !== oldCode.supplierUuid
+      );
+    });
+    if (hasChanges) {
+      setSupplierCodes(updatedCodes);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [suppliers.length]); // 只依赖 suppliers 的长度变化
+  }, [suppliers, supplierCodes]);
 
   /**
    * 处理表单提交
@@ -770,6 +767,14 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         hasDefaultsObject: !!values?.defaults,
         hasFlatDefaultTaxRate: values?.['defaults.defaultTaxRate'] !== undefined,
       });
+      if (customerCodes.some((code) => code.code?.trim() && !(code.customerId > 0))) {
+        messageApi.error(t('app.master-data.codeMapping.selectCustomer'));
+        throw new Error(t('app.master-data.codeMapping.selectCustomer'));
+      }
+      if (supplierCodes.some((code) => code.code?.trim() && !(code.supplierId > 0))) {
+        messageApi.error(t('app.master-data.codeMapping.selectSupplier'));
+        throw new Error(t('app.master-data.codeMapping.selectSupplier'));
+      }
       // 处理物料来源数据（兼容处理：同时设置 camelCase 和 snake_case）
       const sourceTypes = normalizeSourceTypeValues(
         values.sourceType || values.source_type,
@@ -1024,19 +1029,27 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           description: code.description,
         })) : undefined,
         // 客户编号
-        customer_codes: customerCodes.length > 0 ? customerCodes.map(code => ({
-          customer_id: code.customerId,
-          code: code.code,
-          name: code.name,
-          description: code.description,
-        })) : undefined,
+        customer_codes: customerCodes.length > 0
+          ? customerCodes
+              .filter((code) => code.customerId > 0)
+              .map((code) => ({
+                customer_id: code.customerId,
+                code: code.code,
+                name: code.name,
+                description: code.description,
+              }))
+          : undefined,
         // 供应商编号
-        supplier_codes: supplierCodes.length > 0 ? supplierCodes.map(code => ({
-          supplier_id: code.supplierId,
-          code: code.code,
-          name: code.name,
-          description: code.description,
-        })) : undefined,
+        supplier_codes: supplierCodes.length > 0
+          ? supplierCodes
+              .filter((code) => code.supplierId > 0)
+              .map((code) => ({
+                supplier_id: code.supplierId,
+                code: code.code,
+                name: code.name,
+                description: code.description,
+              }))
+          : undefined,
         // 默认值
         defaults: Object.keys(filteredDefaults).length > 0 ? filteredDefaults : undefined,
         // 物料来源控制
@@ -2230,6 +2243,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
 
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [addModalType, setAddModalType] = useState<CodeMappingSourceType>('department');
+  const [editingRow, setEditingRow] = useState<CodeMappingRow | null>(null);
   const [externalSystemModalVisible, setExternalSystemModalVisible] = useState(false);
   const [editingExternalSystemCode, setEditingExternalSystemCode] = useState<MaterialCodeMapping | null>(null);
 
@@ -2256,6 +2270,26 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
     { label: t('app.master-data.codeMapping.prod'), value: 'PROD' },
   ], [t]);
 
+  const resolveCustomerRelation = useCallback(
+    (code: CustomerCodeMapping) => {
+      if (code.customerName) return code.customerName;
+      const customer = customers.find((c) => c.id === code.customerId);
+      if (customer) return `${customer.code} - ${customer.name}`;
+      return code.customerId > 0 ? `#${code.customerId}` : '';
+    },
+    [customers],
+  );
+
+  const resolveSupplierRelation = useCallback(
+    (code: SupplierCodeMapping) => {
+      if (code.supplierName) return code.supplierName;
+      const supplier = suppliers.find((s) => s.id === code.supplierId);
+      if (supplier) return `${supplier.code} - ${supplier.name}`;
+      return code.supplierId > 0 ? `#${code.supplierId}` : '';
+    },
+    [suppliers],
+  );
+
   // 合并为统一表格数据源
   const codeMappingRows: CodeMappingRow[] = useMemo(() => {
     const rows: CodeMappingRow[] = [];
@@ -2279,7 +2313,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
         sourceIndex: i,
         typeLabel: t('app.master-data.codeMapping.customer'),
         code: r.code,
-        relation: r.customerName ?? '',
+        relation: resolveCustomerRelation(r),
         name: r.name,
         description: r.description,
       });
@@ -2291,7 +2325,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
         sourceIndex: i,
         typeLabel: t('app.master-data.codeMapping.supplier'),
         code: r.code,
-        relation: r.supplierName ?? '',
+        relation: resolveSupplierRelation(r),
         name: r.name,
         description: r.description,
       });
@@ -2314,7 +2348,13 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
       });
     }
     return rows;
-  }, [departmentCodes, customerCodes, supplierCodes, externalSystemCodes, materialUuid, departmentCodeTypeLabels, t]);
+  }, [departmentCodes, customerCodes, supplierCodes, externalSystemCodes, materialUuid, departmentCodeTypeLabels, resolveCustomerRelation, resolveSupplierRelation, t]);
+
+  const closeAddModal = () => {
+    setAddModalVisible(false);
+    setEditingRow(null);
+    addForm.resetFields();
+  };
 
   const handleDeleteRow = (record: CodeMappingRow) => {
     if (record.sourceType === 'department' && record.sourceIndex !== undefined) {
@@ -2340,50 +2380,101 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
   };
 
   const handleOpenAddModal = (type?: CodeMappingSourceType) => {
-    const t = type ?? 'department';
-    setAddModalType(t);
+    const nextType = type ?? 'department';
+    setEditingRow(null);
+    setAddModalType(nextType);
     setAddModalVisible(true);
     addForm.resetFields();
+  };
+
+  const handleOpenEditMappingModal = (record: CodeMappingRow) => {
+    if (record.sourceType === 'external') return;
+    if (record.sourceIndex === undefined) return;
+    setEditingRow(record);
+    setAddModalType(record.sourceType);
+    setAddModalVisible(true);
+    addForm.resetFields();
+    if (record.sourceType === 'department') {
+      const row = departmentCodes[record.sourceIndex];
+      addForm.setFieldsValue({
+        code_type: row.code_type,
+        code: row.code,
+        name: row.name,
+        department: row.department,
+        description: row.description,
+      });
+      return;
+    }
+    if (record.sourceType === 'customer') {
+      const row = customerCodes[record.sourceIndex];
+      addForm.setFieldsValue({
+        customerId: row.customerId > 0 ? row.customerId : undefined,
+        code: row.code,
+        name: row.name,
+        description: row.description,
+      });
+      return;
+    }
+    if (record.sourceType === 'supplier') {
+      const row = supplierCodes[record.sourceIndex];
+      addForm.setFieldsValue({
+        supplierId: row.supplierId > 0 ? row.supplierId : undefined,
+        code: row.code,
+        name: row.name,
+        description: row.description,
+      });
+    }
   };
 
   const handleAddSubmit = () => {
     if (addModalType === 'department') {
       addForm.validateFields().then((values) => {
-        onDepartmentCodesChange([...departmentCodes, values]);
-        addForm.resetFields();
-        setAddModalVisible(false);
+        if (editingRow?.sourceType === 'department' && editingRow.sourceIndex !== undefined) {
+          const newCodes = [...departmentCodes];
+          newCodes[editingRow.sourceIndex] = values;
+          onDepartmentCodesChange(newCodes);
+        } else {
+          onDepartmentCodesChange([...departmentCodes, values]);
+        }
+        closeAddModal();
       }).catch(() => {});
       return;
     }
     if (addModalType === 'customer') {
       addForm.validateFields().then((values) => {
-        const customer = customers.find(c => c.id === values.customerId);
-        onCustomerCodesChange([
-          ...customerCodes,
-          {
-            ...values,
-            customerName: customer?.name,
-            customerUuid: customer?.uuid,
-          },
-        ]);
-        addForm.resetFields();
-        setAddModalVisible(false);
+        const customer = customers.find((c) => c.id === values.customerId);
+        const nextRow = {
+          ...values,
+          customerName: customer?.name,
+          customerUuid: customer?.uuid,
+        };
+        if (editingRow?.sourceType === 'customer' && editingRow.sourceIndex !== undefined) {
+          const newCodes = [...customerCodes];
+          newCodes[editingRow.sourceIndex] = nextRow;
+          onCustomerCodesChange(newCodes);
+        } else {
+          onCustomerCodesChange([...customerCodes, nextRow]);
+        }
+        closeAddModal();
       }).catch(() => {});
       return;
     }
     if (addModalType === 'supplier') {
       addForm.validateFields().then((values) => {
-        const supplier = suppliers.find(s => s.id === values.supplierId);
-        onSupplierCodesChange([
-          ...supplierCodes,
-          {
-            ...values,
-            supplierName: supplier?.name,
-            supplierUuid: supplier?.uuid,
-          },
-        ]);
-        addForm.resetFields();
-        setAddModalVisible(false);
+        const supplier = suppliers.find((s) => s.id === values.supplierId);
+        const nextRow = {
+          ...values,
+          supplierName: supplier?.name,
+          supplierUuid: supplier?.uuid,
+        };
+        if (editingRow?.sourceType === 'supplier' && editingRow.sourceIndex !== undefined) {
+          const newCodes = [...supplierCodes];
+          newCodes[editingRow.sourceIndex] = nextRow;
+          onSupplierCodesChange(newCodes);
+        } else {
+          onSupplierCodesChange([...supplierCodes, nextRow]);
+        }
+        closeAddModal();
       }).catch(() => {});
       return;
     }
@@ -2398,8 +2489,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
           isActive: values.isActive !== false,
         });
         messageApi.success(t('common.createSuccess'));
-        addForm.resetFields();
-        setAddModalVisible(false);
+        closeAddModal();
         onReloadExternalSystemCodes?.();
       }).catch(() => {});
     }
@@ -2424,40 +2514,76 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
         loading={externalSystemCodesLoading}
         columns={[
           { title: t('app.master-data.codeMapping.mappingType'), dataIndex: 'typeLabel', key: 'typeLabel', width: 100 },
-          { title: t('app.master-data.codeMapping.code'), dataIndex: 'code', key: 'code', width: 140 },
-          { title: t('app.master-data.codeMapping.relation'), dataIndex: 'relation', key: 'relation', width: 140 },
-          { title: t('app.master-data.codeMapping.name'), dataIndex: 'name', key: 'name', width: 120, ellipsis: true },
+          {
+            title: `${t('app.master-data.codeMapping.name')} / ${t('app.master-data.codeMapping.code')}`,
+            key: 'nameCode',
+            width: 180,
+            ellipsis: false,
+            render: (_, record) => {
+              const name = record.name?.trim() ?? '';
+              const code = record.code?.trim() ?? '';
+              if (name && code) {
+                return <UniTableStackedPrimaryCell primary={name} secondary={code} />;
+              }
+              if (name) {
+                return (
+                  <UniTableStackedPrimaryCell
+                    primary={name}
+                    secondary="-"
+                    secondaryCopyable={false}
+                  />
+                );
+              }
+              return (
+                <UniTableStackedPrimaryCell
+                  primary={code || '-'}
+                  secondary="-"
+                  secondaryCopyable={Boolean(code)}
+                />
+              );
+            },
+          },
+          { title: t('app.master-data.codeMapping.relation'), dataIndex: 'relation', key: 'relation', width: 160, ellipsis: true },
           { title: t('app.master-data.codeMapping.description'), dataIndex: 'description', key: 'description', ellipsis: true },
           { title: t('app.master-data.codeMapping.extra'), dataIndex: 'extra', key: 'extra', width: 100 },
           {
             title: t('app.master-data.materialForm.action'),
             key: 'action',
-            width: 120,
+            width: 72,
             fixed: 'right' as const,
             render: (_, record) => (
               <Space size="small">
-                {record.sourceType === 'external' && (
+                {record.sourceType === 'external' ? (
                   <Button
                     type="link"
                     size="small"
                     icon={<EditOutlined />}
+                    title={t('app.master-data.codeMapping.edit')}
+                    aria-label={t('app.master-data.codeMapping.edit')}
                     onClick={() => {
-                      const ext = externalSystemCodes.find(e => e.uuid === record.externalUuid);
+                      const ext = externalSystemCodes.find((e) => e.uuid === record.externalUuid);
                       if (ext) openEditExternalModal(ext);
                     }}
-                  >
-                    {t('app.master-data.codeMapping.edit')}
-                  </Button>
+                  />
+                ) : (
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<EditOutlined />}
+                    title={t('app.master-data.codeMapping.edit')}
+                    aria-label={t('app.master-data.codeMapping.edit')}
+                    onClick={() => handleOpenEditMappingModal(record)}
+                  />
                 )}
                 <Button
                   type="link"
                   danger
                   size="small"
                   icon={<DeleteOutlined />}
+                  title={t('app.master-data.materialForm.delete')}
+                  aria-label={t('app.master-data.materialForm.delete')}
                   onClick={() => handleDeleteRow(record)}
-                >
-                  {t('app.master-data.materialForm.delete')}
-                </Button>
+                />
               </Space>
             ),
           },
@@ -2479,16 +2605,21 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
 
       {/* 统一添加编号映射 Modal */}
       <Modal
-        title={t('app.master-data.codeMapping.addMapping')}
+        title={
+          editingRow
+            ? `${t('app.master-data.codeMapping.edit')} — ${codeMappingTypeOptions.find((o) => o.value === addModalType)?.label ?? ''}`
+            : t('app.master-data.codeMapping.addMapping')
+        }
         open={addModalVisible}
         onOk={handleAddSubmit}
-        onCancel={() => { setAddModalVisible(false); addForm.resetFields(); }}
+        onCancel={closeAddModal}
         width={600}
       >
         <Form form={addForm} layout="vertical">
           <Form.Item label={t('app.master-data.codeMapping.mappingType')}>
             <Select
               value={addModalType}
+              disabled={!!editingRow}
               options={codeMappingTypeOptions.filter(o => o.value !== 'external' || materialUuid)}
               onChange={(v) => {
                 setAddModalType(v as CodeMappingSourceType);
@@ -2663,6 +2794,48 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
   warehousesLoading,
 }) => {
   const { t } = useTranslation();
+  const [unitOptions, setUnitOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [unitOptionsLoading, setUnitOptionsLoading] = useState(false);
+  const [storageLocations, setStorageLocations] = useState<StorageLocation[]>([]);
+  const [storageLocationsLoading, setStorageLocationsLoading] = useState(false);
+  const [storageAreas, setStorageAreas] = useState<StorageArea[]>([]);
+
+  useEffect(() => {
+    const loadUnitOptions = async () => {
+      try {
+        setUnitOptionsLoading(true);
+        const dictionary = await getDataDictionaryByCode('MATERIAL_UNIT');
+        const items = await getDictionaryItemList(dictionary.uuid, true);
+        setUnitOptions(
+          items
+            .sort((a, b) => a.sort_order - b.sort_order)
+            .map((item) => ({ label: item.label, value: item.value })),
+        );
+      } catch (error) {
+        console.error('加载单位选项失败:', error);
+      } finally {
+        setUnitOptionsLoading(false);
+      }
+    };
+    const loadStorageMaster = async () => {
+      try {
+        setStorageLocationsLoading(true);
+        const [locRes, areaRes] = await Promise.all([
+          storageLocationApi.list({ limit: 1000, is_active: true }),
+          storageAreaApi.list({ limit: 1000, is_active: true }),
+        ]);
+        setStorageLocations(locRes.items ?? []);
+        setStorageAreas(areaRes.items ?? []);
+      } catch (error) {
+        console.error('加载库位选项失败:', error);
+      } finally {
+        setStorageLocationsLoading(false);
+      }
+    };
+    loadUnitOptions();
+    loadStorageMaster();
+  }, []);
+
   return (
     <Collapse defaultActiveKey={['finance', 'sale', 'purchase', 'inventory']}>
         <Panel header={t('app.master-data.defaults.finance')} key="finance">
@@ -2739,11 +2912,34 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
               />
             </Col>
             <Col span={12}>
-              <ProFormText
-                name="defaults.defaultPurchaseUnit"
-                label={t('app.master-data.defaults.defaultPurchaseUnit')}
-                placeholder={t('app.master-data.defaults.defaultPurchaseUnitPlaceholder')}
-              />
+              <ProFormDependency name={['baseUnit', 'units']}>
+                {({ baseUnit, units }) => {
+                  const auxiliaryUnits =
+                    units?.units?.map((u: MaterialUnit) => u.unit).filter(Boolean) ?? [];
+                  const allowedUnits = baseUnit
+                    ? [baseUnit, ...auxiliaryUnits.filter((u: string) => u !== baseUnit)]
+                    : auxiliaryUnits;
+                  const purchaseUnitOptions =
+                    allowedUnits.length > 0
+                      ? unitOptions.filter((opt) => allowedUnits.includes(opt.value))
+                      : unitOptions;
+                  return (
+                    <ProFormSelect
+                      name="defaults.defaultPurchaseUnit"
+                      label={t('app.master-data.defaults.defaultPurchaseUnit')}
+                      placeholder={t('app.master-data.materialForm.selectPurchaseUnit')}
+                      options={purchaseUnitOptions}
+                      fieldProps={{
+                        allowClear: true,
+                        showSearch: true,
+                        loading: unitOptionsLoading,
+                        filterOption: (input: string, option: any) =>
+                          (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                      }}
+                    />
+                  );
+                }}
+              </ProFormDependency>
             </Col>
             <Col span={12}>
               <ProFormDigit
@@ -2776,11 +2972,54 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
               />
             </Col>
             <Col span={12}>
-              <ProFormText
-                name="defaults.defaultLocation"
-                label={t('app.master-data.defaults.defaultLocation')}
-                placeholder={t('app.master-data.defaults.defaultLocationPlaceholder')}
-              />
+              <ProFormDependency name={['defaults.defaultWarehouseIds', 'defaults.defaultLocation']}>
+                {(values) => {
+                  const defaultWarehouseIds: number[] =
+                    values['defaults.defaultWarehouseIds'] ?? [];
+                  const currentLocation = values['defaults.defaultLocation'];
+                  let filteredLocations = storageLocations;
+                  if (defaultWarehouseIds.length > 0 && storageAreas.length > 0) {
+                    const allowedAreaIds = new Set(
+                      storageAreas
+                        .filter((area) => defaultWarehouseIds.includes(area.warehouseId))
+                        .map((area) => area.id),
+                    );
+                    filteredLocations = storageLocations.filter((loc) =>
+                      allowedAreaIds.has(loc.storageAreaId),
+                    );
+                  }
+                  const locationOptions = filteredLocations.map((loc) => ({
+                    label: loc.storageAreaCode
+                      ? `${loc.code} - ${loc.name} (${loc.storageAreaCode})`
+                      : `${loc.code} - ${loc.name}`,
+                    value: loc.code,
+                  }));
+                  if (
+                    currentLocation
+                    && !locationOptions.some((opt) => opt.value === currentLocation)
+                  ) {
+                    locationOptions.unshift({
+                      label: String(currentLocation),
+                      value: String(currentLocation),
+                    });
+                  }
+                  return (
+                    <ProFormSelect
+                      name="defaults.defaultLocation"
+                      label={t('app.master-data.defaults.defaultLocation')}
+                      placeholder={t('app.kuaizhizao.warehouseOtherInbound.field.selectLocation')}
+                      options={locationOptions}
+                      fieldProps={{
+                        allowClear: true,
+                        showSearch: true,
+                        loading: storageLocationsLoading,
+                        filterOption: (input: string, option: any) =>
+                          (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                      }}
+                    />
+                  );
+                }}
+              </ProFormDependency>
             </Col>
             <Col span={12}>
               <ProFormDigit
