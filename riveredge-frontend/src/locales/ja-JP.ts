@@ -4068,6 +4068,12 @@ export default {
   'app.kuaizhizao.quotation.pushToSalesContractFailed': '販売契約への下推に失敗しました',
   'app.kuaizhizao.quotation.alreadyLinkedContract':
     'この見積は既に販売契約に関連付けられています。契約から受注を下推してください',
+  'app.kuaizhizao.quotation.alreadyLinkedSalesOrder':
+    'この見積は既に販売受注に関連付けられており、再度下推できません',
+  'app.kuaizhizao.quotation.historyVersionPushHint':
+    'これは過去の改訂版です。シリーズの最新版から下推してください',
+  'app.kuaizhizao.quotation.pushBlockedStatus':
+    '現在の状態「{{status}}」では下推できません。提出後、審査または顧客確認を完了してください',
   'app.kuaizhizao.quotation.customerConfirm': 'お客様の確認',
   'app.kuaizhizao.quotation.reopenEdit': '再編集',
   'app.kuaizhizao.quotation.revokePush': 'プッシュの取り消し',
@@ -4142,6 +4148,9 @@ export default {
   'app.kuaizhizao.salesContract.validTo': '有効期限',
   'app.kuaizhizao.salesContract.validUntil': '有効期限',
   'app.kuaizhizao.salesContract.contractCode': '契約番号',
+  'app.kuaizhizao.salesContract.contractCodeAutoPlaceholder': '番号は採番ルールに従って自動生成されます（編集可）',
+  'app.kuaizhizao.salesContract.contractCodeRequired': '契約番号を入力してください',
+  'app.kuaizhizao.salesContract.generateCodeFailed': '契約番号の生成に失敗しました',
   'app.kuaizhizao.salesContract.contractAmount': '契約金額',
   'app.kuaizhizao.salesContract.released': 'リリースされました',
   'app.kuaizhizao.salesContract.releasedAmount': '放出量',

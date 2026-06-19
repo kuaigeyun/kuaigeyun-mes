@@ -421,4 +421,7 @@ export async function applySalesDocumentLineMaterialPricing(
   if (!items[index]) return;
   items[index] = { ...items[index], unit_price: up, tax_rate: taxRate };
   form.setFieldsValue({ items });
+  // 嵌套字段显式写入，避免 Form.List 行内 InputNumber 与 store 不同步
+  form.setFieldValue(['items', index, 'unit_price'], up);
+  form.setFieldValue(['items', index, 'tax_rate'], taxRate);
 }

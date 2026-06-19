@@ -15,6 +15,10 @@ function isBrokenDayjsLike(value: unknown): value is Record<string, unknown> {
   return '$d' in obj || (typeof obj.$y === 'number' && typeof obj.$M === 'number');
 }
 
+function looksLikeDateString(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value);
+}
+
 function serializeDraftValue(value: unknown): unknown {
   if (dayjs.isDayjs(value)) {
     const iso = value.toISOString();
@@ -38,6 +42,9 @@ function serializeDraftValue(value: unknown): unknown {
 }
 
 function deserializeDraftValue(value: unknown): unknown {
+  if (looksLikeDateString(value)) {
+    return coerceFormDate(value);
+  }
   if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
     const obj = value as Record<string, unknown>;
     if (typeof obj[DRAFT_DAYJS] === 'string') {

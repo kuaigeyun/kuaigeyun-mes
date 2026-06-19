@@ -20,6 +20,8 @@ _APPROVED_ONGOING = {
     "confirmed", "已确认", "已生效", "effective",
     "executing", "执行中", "in_progress",
     "completed", "已完成", "closed", "已关闭",
+    # 报价单：客户确认 / 已转单后不再展示反审核（与 revoke_review 仅允许「已发送」一致）
+    "已接受", "accepted", "已转订单", "converted",
 }
 _REJECTED_STATUS = {"rejected", "已驳回", "审核驳回"}
 _REVIEW_APPROVED = {"approved", "审核通过", "已通过", "通过", "已审核"}

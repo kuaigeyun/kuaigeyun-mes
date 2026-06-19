@@ -421,7 +421,7 @@ const DocumentDiscountInput: React.FC<{
       >
         {t('app.kuaizhizao.salesOrder.discountAmount')}
       </span>
-      <Form.Item name="discount_amount" noStyle initialValue={0}>
+      <Form.Item name="discount_amount" noStyle>
         <InputNumber
           min={0}
           max={goodsIncl > 0 ? goodsIncl : undefined}

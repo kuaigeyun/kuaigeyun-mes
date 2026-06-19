@@ -4239,6 +4239,9 @@ export default {
   'app.kuaizhizao.quotation.pushedToSalesContract': '已下推销售合同：',
   'app.kuaizhizao.quotation.pushToSalesContractFailed': '下推销售合同失败',
   'app.kuaizhizao.quotation.alreadyLinkedContract': '该报价单已关联销售合同，请从合同下推销售订单',
+  'app.kuaizhizao.quotation.alreadyLinkedSalesOrder': '该报价单已关联销售订单，无法重复下推',
+  'app.kuaizhizao.quotation.historyVersionPushHint': '此为历史修订版，请从系列最新版下推',
+  'app.kuaizhizao.quotation.pushBlockedStatus': '当前状态「{{status}}」不可下推，请先提交并完成审核或客户确认',
   'app.kuaizhizao.quotation.customerConfirm': '客户确认',
   'app.kuaizhizao.quotation.reopenEdit': '重新编辑',
   'app.kuaizhizao.quotation.revokePush': '撤回下推',
@@ -4315,6 +4318,9 @@ export default {
   'app.kuaizhizao.salesContract.validTo': '失效日期',
   'app.kuaizhizao.salesContract.validUntil': '有效期至',
   'app.kuaizhizao.salesContract.contractCode': '合同编号',
+  'app.kuaizhizao.salesContract.contractCodeAutoPlaceholder': '编号将根据编号规则自动生成，可修改',
+  'app.kuaizhizao.salesContract.contractCodeRequired': '请输入合同编号',
+  'app.kuaizhizao.salesContract.generateCodeFailed': '生成合同编号失败',
   'app.kuaizhizao.salesContract.contractAmount': '合同金额',
   'app.kuaizhizao.salesContract.released': '已释放',
   'app.kuaizhizao.salesContract.releasedAmount': '已释放金额',
@@ -4496,6 +4502,13 @@ export default {
   'app.kuaizhizao.quotation.customerConfirmContent':
     '标记为「客户确认」，表示报价已获客户认可，可继续下推销售订单。',
   'app.kuaizhizao.quotation.customerConfirmSuccess': '已标记客户确认',
+  'app.kuaizhizao.quotation.cancelCustomerConfirm': '客户取消确认',
+  'app.kuaizhizao.quotation.batchCancelCustomerConfirm': '批量取消客户确认',
+  'app.kuaizhizao.quotation.cancelCustomerConfirmContent':
+    '将报价单从「客户确认」回到「已发送」，可撤回审核或删除单据。',
+  'app.kuaizhizao.quotation.batchCancelCustomerConfirmContent':
+    '将选中的 {{count}} 条报价单从「客户确认」回到「已发送」。',
+  'app.kuaizhizao.quotation.cancelCustomerConfirmSuccess': '已取消客户确认',
   'app.kuaizhizao.quotation.reopenContent': '将报价单恢复为草稿，修改后可再次提交。',
   'app.kuaizhizao.quotation.reopenSuccess': '已恢复草稿',
   'app.kuaizhizao.quotation.revokePushContent':

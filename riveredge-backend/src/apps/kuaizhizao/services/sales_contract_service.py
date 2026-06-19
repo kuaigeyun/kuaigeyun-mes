@@ -10,6 +10,7 @@ from typing import List, Optional, Dict, Any
 
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
+from tortoise.exceptions import IntegrityError
 
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.constants import LEGACY_PENDING_VALUES, DemandStatus, ReviewStatus
@@ -297,7 +298,57 @@ class SalesContractService(AppBaseService[SalesContract]):
         term_group_id, term_group_name, contract_terms = await self._resolve_contract_terms(
             tenant_id, data.term_group_id, data.contract_terms
         )
-        contract_code = await self._generate_contract_code(tenant_id, data.contract_date)
+        contract_code = (data.contract_code or "").strip() if data.contract_code else ""
+        if not contract_code:
+            contract_code = await self._generate_contract_code(tenant_id, data.contract_date)
+
+        try:
+            return await self._create_contract_in_tx(
+                tenant_id=tenant_id,
+                data=data,
+                contract_code=contract_code,
+                total_qty=total_qty,
+                net_amt=net_amt,
+                discount=discount,
+                term_group_id=term_group_id,
+                term_group_name=term_group_name,
+                contract_terms=contract_terms,
+                created_by=created_by,
+                auto_submit=auto_submit,
+            )
+        except IntegrityError:
+            contract_code = await self._generate_contract_code(tenant_id, data.contract_date)
+            try:
+                return await self._create_contract_in_tx(
+                    tenant_id=tenant_id,
+                    data=data,
+                    contract_code=contract_code,
+                    total_qty=total_qty,
+                    net_amt=net_amt,
+                    discount=discount,
+                    term_group_id=term_group_id,
+                    term_group_name=term_group_name,
+                    contract_terms=contract_terms,
+                    created_by=created_by,
+                    auto_submit=auto_submit,
+                )
+            except IntegrityError as e:
+                raise ValidationError("销售合同编码已存在，请关闭页面后重新新建") from e
+
+    async def _create_contract_in_tx(
+        self,
+        tenant_id: int,
+        data: SalesContractCreate,
+        contract_code: str,
+        total_qty: Decimal,
+        net_amt: Decimal,
+        discount: Decimal,
+        term_group_id: Optional[int],
+        term_group_name: Optional[str],
+        contract_terms: Optional[list],
+        created_by: int,
+        auto_submit: bool,
+    ) -> SalesContractResponse:
         async with in_transaction():
             contract = await SalesContract.create(
                 tenant_id=tenant_id,
@@ -556,9 +607,32 @@ class SalesContractService(AppBaseService[SalesContract]):
             raise NotFoundError("销售合同不存在")
         if (contract.status or "") not in ("草稿",):
             raise BusinessLogicError("仅草稿状态合同可删除")
-        contract.deleted_at = datetime.now()
-        contract.updated_by = deleted_by
-        await contract.save(update_fields=["deleted_at", "updated_by"])
+        from apps.kuaizhizao.models.sales_opportunity import SalesOpportunity
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        async with in_transaction():
+            contract.deleted_at = datetime.now()
+            contract.updated_by = deleted_by
+            await contract.save(update_fields=["deleted_at", "updated_by"])
+            await Quotation.filter(tenant_id=tenant_id, contract_id=contract_id).update(
+                contract_id=None,
+                contract_code=None,
+                updated_by=deleted_by,
+            )
+            await SalesOpportunity.filter(tenant_id=tenant_id, contract_id=contract_id).update(
+                contract_id=None,
+                contract_code=None,
+            )
+            await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                target_type="sales_contract",
+                target_id=contract_id,
+            ).delete()
+            await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="sales_contract",
+                source_id=contract_id,
+            ).delete()
 
     async def submit_contract(self, tenant_id: int, contract_id: int, submitted_by: int) -> SalesContractResponse:
         contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
@@ -886,14 +960,30 @@ class SalesContractService(AppBaseService[SalesContract]):
         created_by: int,
         contract_type: str = "single",
     ) -> SalesContractResponse:
+        from apps.kuaizhizao.services.quotation_service import QuotationService
+
+        quotation_svc = QuotationService()
+        await quotation_svc._detach_quotation_if_contract_deleted(
+            tenant_id, quotation_id, created_by
+        )
         quotation = await Quotation.get_or_none(tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True)
         if not quotation:
             raise NotFoundError("报价单不存在")
-        st = (quotation.status or "").strip()
-        if st not in ("已发送", "已接受"):
-            raise BusinessLogicError("报价单须已发送或已接受后方可转合同")
-        if quotation.contract_id:
-            raise BusinessLogicError("该报价单已关联销售合同")
+        from infra.services.business_config_service import BusinessConfigService
+        from apps.kuaizhizao.services.document_action_policy import assert_quotation_capability
+
+        audit_required = await BusinessConfigService().check_audit_required(
+            tenant_id, "quotation"
+        )
+        contract_missing = await QuotationService._quotation_contract_downstream_missing(
+            tenant_id, quotation
+        )
+        assert_quotation_capability(
+            quotation,
+            "convert_to_contract",
+            audit_required=audit_required,
+            contract_downstream_missing=contract_missing,
+        )
         items = await QuotationItem.filter(tenant_id=tenant_id, quotation_id=quotation_id).order_by("id")
         if not items:
             raise BusinessLogicError("报价单无明细")
@@ -934,34 +1024,40 @@ class SalesContractService(AppBaseService[SalesContract]):
                 for it in items
             ],
         )
-        contract_resp = await self.create_contract(tenant_id, create_data, created_by, auto_submit=False)
-        await Quotation.filter(id=quotation_id).update(
-            contract_id=contract_resp.id,
-            contract_code=contract_resp.contract_code,
-            updated_by=created_by,
-        )
         from apps.kuaizhizao.models.sales_opportunity import SalesOpportunity
-
-        await SalesOpportunity.filter(tenant_id=tenant_id, quotation_id=quotation_id).update(
-            contract_id=contract_resp.id,
-            contract_code=contract_resp.contract_code,
-        )
         from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
         from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
 
-        await DocumentRelationNewService().create_relation(
-            tenant_id=tenant_id,
-            relation_data=DocumentRelationCreate(
-                source_type="quotation",
-                source_id=quotation_id,
-                source_code=quotation.quotation_code,
-                target_type="sales_contract",
-                target_id=contract_resp.id,
-                target_code=contract_resp.contract_code,
-                relation_type="push",
-            ),
-            created_by=created_by,
-        )
+        async with in_transaction():
+            contract_resp = await self.create_contract(
+                tenant_id, create_data, created_by, auto_submit=False
+            )
+            await Quotation.filter(id=quotation_id).update(
+                contract_id=contract_resp.id,
+                contract_code=contract_resp.contract_code,
+                updated_by=created_by,
+            )
+            await SalesOpportunity.filter(tenant_id=tenant_id, quotation_id=quotation_id).update(
+                contract_id=contract_resp.id,
+                contract_code=contract_resp.contract_code,
+            )
+            await DocumentRelationNewService().create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type="quotation",
+                    source_id=quotation_id,
+                    source_code=quotation.quotation_code,
+                    source_name=quotation.quotation_code,
+                    target_type="sales_contract",
+                    target_id=contract_resp.id,
+                    target_code=contract_resp.contract_code,
+                    target_name=contract_resp.contract_code,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="报价单转销售合同",
+                ),
+                created_by=created_by,
+            )
         return contract_resp
 
     async def convert_to_sales_order(
@@ -1058,10 +1154,14 @@ class SalesContractService(AppBaseService[SalesContract]):
                 source_type="sales_contract",
                 source_id=contract_id,
                 source_code=contract.contract_code,
+                source_name=contract.contract_code,
                 target_type="sales_order",
                 target_id=sales_order.id,
                 target_code=sales_order.order_code,
-                relation_type="push",
+                target_name=sales_order.order_code,
+                relation_type="source",
+                relation_mode="push",
+                relation_desc="销售合同下推销售订单",
             ),
             created_by=created_by,
         )

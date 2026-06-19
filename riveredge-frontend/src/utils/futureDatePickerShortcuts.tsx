@@ -2,6 +2,7 @@ import React from 'react';
 import { Button, DatePicker, Space } from 'antd';
 import type { DatePickerProps } from 'antd/es/date-picker';
 import dayjs, { type Dayjs } from 'dayjs';
+import { coerceFormDate } from './formDate';
 
 export type FormDateAccessor = {
   getFieldValue?: (name: string | (string | number)[]) => unknown;
@@ -168,5 +169,6 @@ export const FutureDatePicker: React.FC<FutureDatePickerProps> = ({
         fieldName,
       }),
   });
-  return <DatePicker value={value} onChange={onChange} {...pickerProps} {...shortcutProps} />;
+  const coercedValue = coerceFormDate(value) ?? undefined;
+  return <DatePicker value={coercedValue} onChange={onChange} {...pickerProps} {...shortcutProps} />;
 };

@@ -19,6 +19,7 @@ from apps.kuaizhizao.models.quotation_item import QuotationItem
 from apps.master_data.models.customer import Customer
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+from apps.kuaizhizao.models.sales_contract import SalesContract
 from apps.kuaizhizao.schemas.quotation import (
     QuotationCreate,
     QuotationUpdate,
@@ -31,6 +32,11 @@ from apps.kuaizhizao.schemas.quotation import (
 from apps.kuaizhizao.schemas.sales_order import SalesOrderCreate, SalesOrderItemCreate
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, LEGACY_PENDING_VALUES
 from apps.kuaizhizao.services.document_lifecycle_service import _is_approved
+from apps.kuaizhizao.services.document_action_policy import (
+    assert_quotation_capability,
+    enrich_quotation_capabilities_on_model,
+    enrich_quotation_list_capabilities,
+)
 from core.services.authorization.data_scope_service import DataScopeService
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 from infra.models.user import User
@@ -42,6 +48,29 @@ class QuotationService:
 
     def __init__(self):
         self.business_config_service = BusinessConfigService()
+
+    async def _quotation_audit_required(self, tenant_id: int) -> bool:
+        return await self.business_config_service.check_audit_required(
+            tenant_id, "quotation"
+        )
+
+    async def _assert_quotation_capability(
+        self,
+        tenant_id: int,
+        quotation: Quotation,
+        action: str,
+        *,
+        conversion_downstream_missing: bool = False,
+        contract_downstream_missing: bool = False,
+    ) -> None:
+        audit_required = await self._quotation_audit_required(tenant_id)
+        assert_quotation_capability(
+            quotation,
+            action,
+            audit_required=audit_required,
+            conversion_downstream_missing=conversion_downstream_missing,
+            contract_downstream_missing=contract_downstream_missing,
+        )
 
     @staticmethod
     def _next_revision_quotation_code(series_code: str, version_no: int) -> str:
@@ -74,6 +103,47 @@ class QuotationService:
             )
             return so is None
         return st == "已转订单"
+
+    @staticmethod
+    async def _quotation_contract_downstream_missing(
+        tenant_id: int,
+        quotation: Quotation,
+        alive_contract_ids: Optional[Set[int]] = None,
+    ) -> bool:
+        """报价单仍有关联 contract_id，但下游销售合同已软删或不存在时返回 True。"""
+        cid = quotation.contract_id
+        if not cid:
+            return False
+        if alive_contract_ids is not None:
+            return int(cid) not in alive_contract_ids
+        contract = await SalesContract.get_or_none(
+            tenant_id=tenant_id, id=cid, deleted_at__isnull=True
+        )
+        return contract is None
+
+    async def _detach_quotation_if_contract_deleted(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        operator_id: int,
+    ) -> bool:
+        """若下游销售合同已删除，解除报价单上的合同关联，恢复可再次下推合同。"""
+        q = await Quotation.get_or_none(
+            tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+        )
+        if not q:
+            return False
+        missing = await QuotationService._quotation_contract_downstream_missing(
+            tenant_id, q
+        )
+        if not missing:
+            return False
+        await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
+            contract_id=None,
+            contract_code=None,
+            updated_by=operator_id,
+        )
+        return True
 
     async def _detach_quotation_if_downstream_sales_order_deleted(
         self,
@@ -502,7 +572,8 @@ class QuotationService:
             q_dict["formal_document_generated_at"] = None
             q_dict["root_quotation_id"] = None
             q_dict["status"] = "草稿"
-            q_dict["review_status"] = None
+            # review_status 列 NOT NULL；草稿尚未进入审核流程时用空串表示「未提交审核」
+            q_dict["review_status"] = ""
 
             # 自动带出归属业务员
             if not q_dict.get("salesman_id") and q_dict.get("customer_id"):
@@ -630,7 +701,7 @@ class QuotationService:
             )
             await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
                 status="草稿",
-                review_status=None,
+                review_status="",
                 reviewer_id=None,
                 reviewer_name=None,
                 review_time=None,
@@ -824,12 +895,9 @@ class QuotationService:
         )
         if not quotation:
             raise NotFoundError(f"报价单不存在: {quotation_id}")
-        if quotation.status != "已发送":
-            raise BusinessLogicError(f"仅已发送且已审核通过的报价单可标记客户确认，当前状态: {quotation.status}")
-        if not _is_approved(quotation.review_status):
-            raise BusinessLogicError(
-                f"请先完成审核通过后再标记客户确认，当前审核状态: {quotation.review_status}"
-            )
+        await self._assert_quotation_capability(
+            tenant_id, quotation, "confirm_customer"
+        )
         from apps.common.base_service import AppBaseService
 
         op_name = await AppBaseService().get_user_name(operator_id)
@@ -849,6 +917,49 @@ class QuotationService:
             )
         return await self.get_quotation_by_id(tenant_id, quotation_id, include_items=True)
 
+    async def cancel_customer_confirm_quotation(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        operator_id: int,
+    ) -> QuotationResponse:
+        """客户取消确认：已接受 → 已发送（保留审核通过，可撤回审核或删除）。"""
+        await self._detach_quotation_if_contract_deleted(
+            tenant_id, quotation_id, operator_id
+        )
+        quotation = await Quotation.get_or_none(
+            tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+        )
+        if not quotation:
+            raise NotFoundError(f"报价单不存在: {quotation_id}")
+        contract_missing = await self._quotation_contract_downstream_missing(
+            tenant_id, quotation
+        )
+        await self._assert_quotation_capability(
+            tenant_id,
+            quotation,
+            "cancel_customer_confirm",
+            contract_downstream_missing=contract_missing,
+        )
+        from apps.common.base_service import AppBaseService
+
+        op_name = await AppBaseService().get_user_name(operator_id)
+        async with in_transaction():
+            await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
+                status="已发送",
+                updated_by=operator_id,
+            )
+            await self._log_quotation_state_transition(
+                tenant_id,
+                quotation_id,
+                "已接受",
+                "已发送",
+                operator_id,
+                op_name,
+                "客户取消确认",
+            )
+        return await self.get_quotation_by_id(tenant_id, quotation_id, include_items=True)
+
     async def reopen_quotation_after_reject(
         self,
         tenant_id: int,
@@ -861,8 +972,7 @@ class QuotationService:
         )
         if not quotation:
             raise NotFoundError(f"报价单不存在: {quotation_id}")
-        if quotation.status != "已拒绝":
-            raise BusinessLogicError(f"仅已驳回的报价单可重新编辑，当前状态: {quotation.status}")
+        await self._assert_quotation_capability(tenant_id, quotation, "reopen")
         from apps.common.base_service import AppBaseService
 
         op_name = await AppBaseService().get_user_name(operator_id)
@@ -899,8 +1009,15 @@ class QuotationService:
         )
         if not quotation:
             raise NotFoundError(f"报价单不存在: {quotation_id}")
-        if quotation.status != "已转订单":
-            raise BusinessLogicError(f"仅已转订单状态的报价单可撤回下推，当前状态: {quotation.status}")
+        conv_missing = await self._quotation_conversion_downstream_missing(
+            tenant_id, quotation
+        )
+        await self._assert_quotation_capability(
+            tenant_id,
+            quotation,
+            "revoke_push",
+            conversion_downstream_missing=conv_missing,
+        )
         so_id = quotation.sales_order_id
         if so_id is not None:
             so = await SalesOrder.get_or_none(
@@ -951,6 +1068,14 @@ class QuotationService:
                 user=current_user,
                 resource="kuaizhizao:quotation",
             )
+        if await self._detach_quotation_if_contract_deleted(
+            tenant_id, quotation_id, quotation.updated_by or 0
+        ):
+            quotation = await Quotation.get_or_none(
+                tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+            )
+            if not quotation:
+                raise NotFoundError(f"报价单不存在: {quotation_id}")
 
         items = None
         if include_items:
@@ -963,16 +1088,29 @@ class QuotationService:
         conv_missing = await self._quotation_conversion_downstream_missing(
             tenant_id, quotation
         )
+        contract_missing = await self._quotation_contract_downstream_missing(
+            tenant_id, quotation
+        )
+        audit_required = await self._quotation_audit_required(tenant_id)
         lifecycle = get_quotation_lifecycle(
             quotation,
             milestones=milestones,
             converted_sales_order_missing=conv_missing,
+            audit_required=audit_required,
         )
         result = resp.model_copy(
             update={
                 "lifecycle": lifecycle,
                 "conversion_downstream_missing": conv_missing,
+                "contract_downstream_missing": contract_missing,
             }
+        )
+        result = await enrich_quotation_capabilities_on_model(
+            tenant_id,
+            quotation,
+            result,
+            conversion_downstream_missing=conv_missing,
+            contract_downstream_missing=contract_missing,
         )
         from core.services.approval.audit_record_enricher import enrich_record
 
@@ -1041,26 +1179,67 @@ class QuotationService:
             ).values_list("id", flat=True)
             alive_so = set(alive_rows)
 
+        contract_ids = list({q.contract_id for q in quotations if q.contract_id})
+        alive_contract: Set[int] = set()
+        if contract_ids:
+            alive_contract_rows = await SalesContract.filter(
+                tenant_id=tenant_id, id__in=contract_ids, deleted_at__isnull=True
+            ).values_list("id", flat=True)
+            alive_contract = set(alive_contract_rows)
+
+        audit_required = await self._quotation_audit_required(tenant_id)
+        missing_by_id: dict[int, bool] = {}
+        contract_missing_by_id: dict[int, bool] = {}
+        for q in quotations:
+            qid = int(q.id)
+            missing_by_id[qid] = await self._quotation_conversion_downstream_missing(
+                tenant_id, q, alive_sales_order_ids=alive_so
+            )
+            if q.contract_id:
+                contract_missing_by_id[qid] = int(q.contract_id) not in alive_contract
+            else:
+                contract_missing_by_id[qid] = False
+        stale_contract_q_ids = [
+            qid for qid, missing in contract_missing_by_id.items() if missing
+        ]
+        if stale_contract_q_ids:
+            await Quotation.filter(
+                tenant_id=tenant_id, id__in=stale_contract_q_ids
+            ).update(contract_id=None, contract_code=None)
+            for q in quotations:
+                if int(q.id) in stale_contract_q_ids:
+                    q.contract_id = None
+                    q.contract_code = None
+                    contract_missing_by_id[int(q.id)] = False
         data = []
         for q in quotations:
             r = self._quotation_to_response(q)
-            conv_missing = await self._quotation_conversion_downstream_missing(
-                tenant_id, q, alive_sales_order_ids=alive_so
-            )
+            conv_missing = missing_by_id[int(q.id)]
+            contract_missing = contract_missing_by_id[int(q.id)]
             lifecycle = get_quotation_lifecycle(
-                q, converted_sales_order_missing=conv_missing
+                q,
+                converted_sales_order_missing=conv_missing,
+                audit_required=audit_required,
             )
             data.append(
                 r.model_copy(
                     update={
                         "lifecycle": lifecycle,
                         "conversion_downstream_missing": conv_missing,
+                        "contract_downstream_missing": contract_missing,
                     }
                 )
             )
         from core.services.approval.audit_record_enricher import enrich_items
 
         data = await enrich_items(tenant_id, "quotation", data)
+        data = await enrich_quotation_list_capabilities(
+            tenant_id,
+            list(quotations),
+            data,
+            conversion_downstream_missing_by_id=missing_by_id,
+            contract_downstream_missing_by_id=contract_missing_by_id,
+        )
         return QuotationListResponse(data=data, total=total, success=True)
 
     async def update_quotation(
@@ -1091,21 +1270,19 @@ class QuotationService:
         is_pending_audit = quotation.status == "已发送" and (
             rs in LEGACY_PENDING_VALUES or rs == ""
         )
-        if not is_draft:
-            if not (approval_edit_context and is_pending_audit):
-                if is_pending_audit and not approval_edit_context:
-                    from core.services.approval.approval_edit_guard import ApprovalEditGuard
+        await self._assert_quotation_capability(tenant_id, quotation, "update")
+        if not is_draft and not is_pending_audit:
+            if approval_edit_context:
+                pass
+            else:
+                from core.services.approval.approval_edit_guard import ApprovalEditGuard
 
-                    edit_ctx = await ApprovalEditGuard.get_pending_edit_context(
-                        tenant_id, "quotation", quotation_id, updated_by
-                    )
-                    if not edit_ctx:
-                        raise BusinessLogicError(
-                            f"只能更新草稿状态的报价单，当前状态: {quotation.status}"
-                        )
-                else:
+                edit_ctx = await ApprovalEditGuard.get_pending_edit_context(
+                    tenant_id, "quotation", quotation_id, updated_by
+                )
+                if not edit_ctx:
                     raise BusinessLogicError(
-                        f"只能更新草稿状态的报价单，当前状态: {quotation.status}"
+                        f"只能更新草稿或待审核中的报价单，当前状态: {quotation.status}"
                     )
 
         if approval_edit_context:
@@ -1226,8 +1403,7 @@ class QuotationService:
                 f"存在更新版本，请从最新版发起修订：{latest.quotation_code}"
             )
 
-        if (latest.status or "").strip() in ("草稿", "draft"):
-            raise BusinessLogicError("当前系列最新单为草稿，请直接编辑该草稿，无需另存新版本")
+        await self._assert_quotation_capability(tenant_id, latest, "create_revision")
 
         new_vn = int(latest.version_no or 1) + 1
         new_code = self._next_revision_quotation_code(series, new_vn)
@@ -1267,7 +1443,7 @@ class QuotationService:
                 ),
                 price_type=row_price_type,
                 status="草稿",
-                review_status=None,
+                review_status="",
                 reviewer_id=None,
                 reviewer_name=None,
                 review_time=None,
@@ -1398,14 +1574,19 @@ class QuotationService:
                 user=current_user,
                 resource="kuaizhizao:quotation",
             )
-        if quotation.sales_order_id is not None:
-            so = await SalesOrder.get_or_none(
-                tenant_id=tenant_id,
-                id=quotation.sales_order_id,
-                deleted_at__isnull=True,
-            )
-            if so is not None:
-                raise BusinessLogicError("已关联有效销售订单的报价单不能删除")
+        conv_missing = await self._quotation_conversion_downstream_missing(
+            tenant_id, quotation
+        )
+        contract_missing = await self._quotation_contract_downstream_missing(
+            tenant_id, quotation
+        )
+        await self._assert_quotation_capability(
+            tenant_id,
+            quotation,
+            "delete",
+            conversion_downstream_missing=conv_missing,
+            contract_downstream_missing=contract_missing,
+        )
         now = datetime.now()
         await Quotation.filter(
             id=quotation_id, tenant_id=tenant_id
@@ -1427,32 +1608,32 @@ class QuotationService:
         await self._detach_quotation_if_downstream_sales_order_deleted(
             tenant_id, quotation_id, created_by
         )
+        await self._detach_quotation_if_contract_deleted(
+            tenant_id, quotation_id, created_by
+        )
         quotation = await Quotation.get_or_none(
             tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
         )
         if not quotation:
             raise NotFoundError(f"报价单不存在: {quotation_id}")
-        if quotation.status == "已转订单":
-            raise BusinessLogicError("该报价单已转为销售订单，无法重复转换")
+        conv_missing = await self._quotation_conversion_downstream_missing(
+            tenant_id, quotation
+        )
+        contract_missing = await self._quotation_contract_downstream_missing(
+            tenant_id, quotation
+        )
+        await self._assert_quotation_capability(
+            tenant_id,
+            quotation,
+            "convert_to_order",
+            conversion_downstream_missing=conv_missing,
+            contract_downstream_missing=contract_missing,
+        )
         if quotation.sales_order_id:
             raise BusinessLogicError("该报价单已关联销售订单，无法重复转换")
-        if getattr(quotation, "contract_id", None):
-            raise BusinessLogicError("该报价已关联销售合同，请从「销售合同」下推销售订单")
         biz = await self.business_config_service.get_business_config(tenant_id)
         if biz.get("parameters", {}).get("sales", {}).get("require_contract_before_order"):
             raise BusinessLogicError("当前配置要求经销售合同转单，请先将报价转为销售合同并从合同下推订单")
-
-        if not getattr(quotation, "is_latest_in_series", True):
-            raise BusinessLogicError("仅能对当前系列的最新版本报价单转销售订单")
-
-        st = (quotation.status or "").strip()
-        if st == "已发送":
-            if not _is_approved(quotation.review_status):
-                raise BusinessLogicError("报价单需审核通过后方可转销售订单")
-        elif st == "已接受":
-            pass
-        else:
-            raise BusinessLogicError(f"当前状态「{st}」不可转销售订单，请先提交并完成审核或客户确认")
 
         items = await QuotationItem.filter(
             tenant_id=tenant_id, quotation_id=quotation_id

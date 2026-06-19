@@ -46,8 +46,6 @@ import {
 
 } from '@ant-design/pro-components';
 
-import type { DescriptionsProps } from 'antd';
-
 import {
 
   App,
@@ -103,8 +101,6 @@ import {
 
   PlusOutlined,
 
-  SendOutlined,
-
   ShoppingOutlined,
 
   StopOutlined,
@@ -145,6 +141,10 @@ import {
 } from '../../../../../components/layout-templates';
 
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 
@@ -213,7 +213,10 @@ import {
   SALES_DOC_DETAIL_BASIC_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
+import { buildDescriptionItemsFromColumns } from '../shared/descriptionItems';
 import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { testGenerateCode, getCodeRulePageConfig, generateCode } from '../../../../../services/codeRule';
 import SalesContractTermsManageModal from './SalesContractTermsManageModal';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -280,64 +283,6 @@ function canPrintContract(c: SalesContract): boolean {
   const st = (c.status || '').trim();
   if (!['已生效', '执行中', '已关闭'].includes(st)) return false;
   return isApprovedReview(c.review_status);
-}
-
-
-
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-
-  dataSource: T,
-
-  cols: ProDescriptionsItemProps<T>[],
-
-): NonNullable<DescriptionsProps['items']> {
-
-  return cols.map((col, index) => {
-
-    const dataIndex = col.dataIndex as keyof T | undefined;
-
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-
-    let content: React.ReactNode = value as React.ReactNode;
-
-    if (col.valueType === 'dateTime' && value) {
-
-      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
-
-    } else if (col.valueType === 'date' && value) {
-
-      content = dayjs(value as string).format('YYYY-MM-DD');
-
-    }
-
-    if (col.render && dataSource != null) {
-
-      content = (col.render as (dom: React.ReactNode, entity: T, i: number) => React.ReactNode)(
-
-        content,
-
-        dataSource,
-
-        index,
-
-      );
-
-    }
-
-    return {
-
-      key: String(col.key ?? col.dataIndex ?? index),
-
-      label: col.title as React.ReactNode,
-
-      children: content !== undefined && content !== null && content !== '' ? content : '—',
-
-      span: col.span ?? 1,
-
-    };
-
-  });
-
 }
 
 
@@ -486,7 +431,6 @@ const SalesContractsPage: React.FC = () => {
 
   const currentUser = useGlobalStore((s) => s.currentUser);
   const contractPerms = useResourcePermissions(SALES_CONTRACT_RESOURCE);
-  const canSubmitContract = hasModulePermission(currentUser ?? undefined, SALES_CONTRACT_RESOURCE, 'submit');
   const canRevokeContract = hasModulePermission(currentUser ?? undefined, SALES_CONTRACT_RESOURCE, 'revoke');
   const canReviewContract = hasReviewPermission(currentUser ?? undefined, SALES_CONTRACT_RESOURCE);
 
@@ -499,6 +443,9 @@ const SalesContractsPage: React.FC = () => {
   const contractEditingInclValueRef = useRef<number | null>(null);
 
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
+  const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
 
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
@@ -1067,6 +1014,9 @@ const SalesContractsPage: React.FC = () => {
         ? getDocumentFormDraft<Record<string, unknown>>(salesContractCreateDraftKey)
         : null;
     setEditingId(null);
+    setPreviewCode(null);
+    setEffectiveRuleCode(null);
+    setEffectiveAutoGen(null);
     formRef.current?.resetFields();
     setTimeout(() => {
       formRef.current?.setFieldsValue({
@@ -1091,6 +1041,44 @@ const SalesContractsPage: React.FC = () => {
         }
       }
     }, 100);
+    const applyPreviewCode = async (ruleCode: string, contractDate?: dayjs.Dayjs) => {
+      try {
+        const codeResponse = await testGenerateCode({
+          rule_code: ruleCode,
+          context: contractDate ? { date: toApiDateString(contractDate) } : undefined,
+        });
+        const preview = codeResponse.code;
+        setPreviewCode(preview ?? null);
+        formRef.current?.setFieldsValue({ contract_code: preview ?? '' });
+      } catch (error: unknown) {
+        console.warn('销售合同编号预生成失败:', error);
+        setPreviewCode(null);
+      }
+    };
+    try {
+      const config = await getCodeRulePageConfig('kuaizhizao-sales-contract');
+      const autoGen = config?.autoGenerate ?? isAutoGenerateEnabled('kuaizhizao-sales-contract');
+      const ruleCode = config?.ruleCode ?? getPageRuleCode('kuaizhizao-sales-contract');
+      setEffectiveRuleCode(ruleCode ?? null);
+      setEffectiveAutoGen(autoGen);
+      if (autoGen && ruleCode) {
+        await applyPreviewCode(ruleCode, dayjs());
+      }
+      if (cachedDraft) {
+        formRef.current?.setFieldsValue(cachedDraft);
+      }
+    } catch {
+      const ruleCode = getPageRuleCode('kuaizhizao-sales-contract');
+      const autoGen = isAutoGenerateEnabled('kuaizhizao-sales-contract');
+      setEffectiveRuleCode(ruleCode ?? null);
+      setEffectiveAutoGen(autoGen);
+      if (autoGen && ruleCode) {
+        await applyPreviewCode(ruleCode, dayjs());
+      }
+      if (cachedDraft) {
+        formRef.current?.setFieldsValue(cachedDraft);
+      }
+    }
   }
 
   async function initSalesContractEditForm(contractId: number) {
@@ -1099,6 +1087,7 @@ const SalesContractsPage: React.FC = () => {
       setEditingId(contractId);
       setTimeout(() => {
         formRef.current?.setFieldsValue({
+          contract_code: data.contract_code,
           contract_type: data.contract_type || 'single',
           customer_id: data.customer_id,
           customer_name: data.customer_name,
@@ -1191,7 +1180,36 @@ const SalesContractsPage: React.FC = () => {
   const handleFormSubmit = async (values: any, options?: { asDraft?: boolean }) => {
     const asDraft = options?.asDraft ?? false;
     try {
-      const payload = buildFormPayload(values);
+      let submitValues = values;
+      if (isCreatePage) {
+        const submitRuleCode = effectiveRuleCode || getPageRuleCode('kuaizhizao-sales-contract');
+        const submitAutoEnabled = effectiveAutoGen ?? isAutoGenerateEnabled('kuaizhizao-sales-contract');
+        const contractCode = submitValues.contract_code;
+        if (
+          submitAutoEnabled &&
+          submitRuleCode &&
+          (contractCode === previewCode || !contractCode)
+        ) {
+          try {
+            const codeResponse = await generateCode({
+              rule_code: submitRuleCode,
+              context: submitValues.contract_date
+                ? { date: toApiDateString(submitValues.contract_date) }
+                : undefined,
+            });
+            submitValues = { ...submitValues, contract_code: codeResponse.code };
+          } catch (err: unknown) {
+            messageApi.error(
+              getApiErrorMessage(err, t('app.kuaizhizao.salesContract.generateCodeFailed')),
+            );
+            return;
+          }
+        }
+      }
+      const payload = buildFormPayload(submitValues);
+      if (isCreatePage && submitValues.contract_code?.trim()) {
+        payload.contract_code = submitValues.contract_code.trim();
+      }
 
       if (editingId) {
         await salesContractApi.update(editingId, payload);
@@ -1301,6 +1319,8 @@ const SalesContractsPage: React.FC = () => {
 
 
 
+  const contractCodeAutoEnabled = effectiveAutoGen ?? isAutoGenerateEnabled('kuaizhizao-sales-contract');
+
   const renderCreateForm = () => (
 
     <>
@@ -1309,22 +1329,16 @@ const SalesContractsPage: React.FC = () => {
 
         <Col span={12}>
 
-          <ProFormSelect
-
-            name="contract_type"
-
-            label={t('app.kuaizhizao.salesContract.contractType')}
-
-            rules={[{ required: true, message: t('app.kuaizhizao.salesContract.contractTypeRequired') }]}
-
-            options={[
-
-              { label: t('app.kuaizhizao.salesContract.contractTypeSingle'), value: 'single' },
-
-              { label: t('app.kuaizhizao.salesContract.contractTypeFramework'), value: 'framework' },
-
-            ]}
-
+          <ProFormText
+            name="contract_code"
+            label={t('app.kuaizhizao.salesContract.contractCode')}
+            placeholder={
+              contractCodeAutoEnabled
+                ? t('app.kuaizhizao.salesContract.contractCodeAutoPlaceholder')
+                : t('app.kuaizhizao.salesContract.contractCodeRequired')
+            }
+            rules={[{ required: true, whitespace: true, message: t('app.kuaizhizao.salesContract.contractCodeRequired') }]}
+            fieldProps={{ disabled: isEditPage }}
           />
 
         </Col>
@@ -1515,7 +1529,61 @@ const SalesContractsPage: React.FC = () => {
 
       <div style={{ marginTop: 16 }}>
 
-        <ProForm.Item label={t('app.kuaizhizao.salesContract.paymentPlanOptional')} colon={false}>
+        <Row gutter={16}>
+
+          <Col span={12}>
+
+            <ProFormSelect
+
+              name="contract_type"
+
+              label={t('app.kuaizhizao.salesContract.contractType')}
+
+              rules={[{ required: true, message: t('app.kuaizhizao.salesContract.contractTypeRequired') }]}
+
+              options={[
+
+                { label: t('app.kuaizhizao.salesContract.contractTypeSingle'), value: 'single' },
+
+                { label: t('app.kuaizhizao.salesContract.contractTypeFramework'), value: 'framework' },
+
+              ]}
+
+            />
+
+          </Col>
+
+          <Col span={12}>
+
+            <ProFormSelect
+
+              name="term_group_id"
+
+              label={t('app.kuaizhizao.salesContract.terms.selectGroup')}
+
+              placeholder={t('app.kuaizhizao.salesContract.terms.selectGroupPlaceholder')}
+
+              options={termGroupOptions}
+
+              fieldProps={{
+
+                allowClear: true,
+
+                onChange: (val: number) => {
+
+                  applyTermGroupPreview(val);
+
+                },
+
+              }}
+
+            />
+
+          </Col>
+
+        </Row>
+
+        <ProForm.Item label={t('app.kuaizhizao.salesContract.paymentPlanOptional')} colon={false} style={{ marginTop: 16 }}>
 
           <AntForm.List name="milestones">
 
@@ -1694,42 +1762,6 @@ const SalesContractsPage: React.FC = () => {
 
         </ProForm.Item>
 
-      </div>
-
-      <div style={{ marginTop: 16 }}>
-
-        <Row gutter={16}>
-
-          <Col span={12}>
-
-            <ProFormSelect
-
-              name="term_group_id"
-
-              label={t('app.kuaizhizao.salesContract.terms.selectGroup')}
-
-              placeholder={t('app.kuaizhizao.salesContract.terms.selectGroupPlaceholder')}
-
-              options={termGroupOptions}
-
-              fieldProps={{
-
-                allowClear: true,
-
-                onChange: (val: number) => {
-
-                  applyTermGroupPreview(val);
-
-                },
-
-              }}
-
-            />
-
-          </Col>
-
-        </Row>
-
         {termPlaceholderKeys.length > 0 && (
           <Card
             size="small"
@@ -1882,42 +1914,6 @@ const SalesContractsPage: React.FC = () => {
     setTrackingRefreshKey((k) => k + 1);
 
     reload();
-
-  };
-
-
-
-  const handleSubmit = async (record: SalesContract) => {
-
-    Modal.confirm({
-
-      title: t('app.kuaizhizao.salesContract.submitReview'),
-
-      content: t('app.kuaizhizao.salesContract.submitReviewConfirm', {
-        code: record.contract_code || record.id,
-      }),
-
-      onOk: async () => {
-
-        try {
-
-          await salesContractApi.submit(record.id!);
-
-          messageApi.success(t('app.kuaizhizao.salesContract.submittedForReview'));
-
-          if (detail?.id === record.id) await refreshDetail(record.id!);
-
-          else reload();
-
-        } catch (e: any) {
-
-          messageApi.error(e?.message || t('app.kuaizhizao.salesOrder.submitFailed'));
-
-        }
-
-      },
-
-    });
 
   };
 
@@ -2292,7 +2288,20 @@ const SalesContractsPage: React.FC = () => {
 
     () => [
 
-      { title: t('app.kuaizhizao.salesContract.contractCode'), dataIndex: 'contract_code', width: 160, ellipsis: true },
+      {
+        title: `${t('app.kuaizhizao.salesContract.customer')} / ${t('app.kuaizhizao.salesContract.contractCode')}`,
+        key: 'contract_code',
+        dataIndex: 'contract_code',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        fixed: 'left',
+        fieldProps: { placeholder: t('app.kuaizhizao.salesContract.contractCode') },
+        render: (_, r) => (
+          <UniTableStackedPrimaryCell
+            primary={String(r.customer_name ?? '')}
+            secondary={String(r.contract_code ?? '')}
+          />
+        ),
+      },
 
       {
 
@@ -2301,6 +2310,8 @@ const SalesContractsPage: React.FC = () => {
         dataIndex: 'contract_type',
 
         width: 100,
+
+        uniTableKeepWidth: true,
 
         valueType: 'select',
 
@@ -2313,13 +2324,38 @@ const SalesContractsPage: React.FC = () => {
 
       },
 
-      { title: t('app.kuaizhizao.salesContract.customer'), dataIndex: 'customer_name', ellipsis: true },
+      {
+        title: t('app.kuaizhizao.salesContract.customer'),
+        dataIndex: 'customer_name',
+        ellipsis: true,
+        hideInTable: true,
+        fieldProps: { placeholder: t('field.customer.name') },
+      },
 
-      { title: t('app.kuaizhizao.salesContract.contractDate'), dataIndex: 'contract_date', width: 120, valueType: 'date' },
+      {
+        title: t('app.kuaizhizao.salesContract.contractDate'),
+        dataIndex: 'contract_date',
+        width: 120,
+        uniTableKeepWidth: true,
+        valueType: 'date',
+      },
 
-      { title: t('app.kuaizhizao.salesContract.validUntil'), dataIndex: 'valid_to', width: 120, valueType: 'date' },
+      {
+        title: t('app.kuaizhizao.salesContract.validUntil'),
+        dataIndex: 'valid_to',
+        width: 120,
+        uniTableKeepWidth: true,
+        valueType: 'date',
+      },
 
-      { title: t('app.kuaizhizao.salesContract.contractAmount'), dataIndex: 'total_amount', width: 120, align: 'right', valueType: 'money' },
+      {
+        title: t('app.kuaizhizao.salesContract.contractAmount'),
+        dataIndex: 'total_amount',
+        width: 120,
+        uniTableKeepWidth: true,
+        align: 'right',
+        valueType: 'money',
+      },
 
       {
 
@@ -2328,6 +2364,8 @@ const SalesContractsPage: React.FC = () => {
         dataIndex: 'released_amount',
 
         width: 120,
+
+        uniTableKeepWidth: true,
 
         align: 'right',
 
@@ -2340,6 +2378,10 @@ const SalesContractsPage: React.FC = () => {
         title: t('app.kuaizhizao.salesOrder.lifecycle'),
 
         dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+
+        fixed: 'right',
+
+        align: 'left',
 
         valueType: 'select',
 
@@ -2355,7 +2397,11 @@ const SalesContractsPage: React.FC = () => {
 
         valueType: 'option',
 
-        width: 220,
+        minWidth: 120,
+
+        fixed: 'right',
+
+        hideInSearch: true,
 
         render: (_, record) =>
 
@@ -2435,7 +2481,6 @@ const SalesContractsPage: React.FC = () => {
       renderContractStatus,
       canReviewContract,
       canRevokeContract,
-      canSubmitContract,
       contractPerms.canDelete,
       contractPerms.canPrint,
       contractPerms.canUpdate,
@@ -2771,7 +2816,7 @@ const SalesContractsPage: React.FC = () => {
 
         onRowSelectionChange={setSelectedRowKeys}
 
-        rowSelection={{ type: 'checkbox' }}
+        enableRowSelection
 
         headerTitle={
 
@@ -2938,10 +2983,6 @@ const SalesContractsPage: React.FC = () => {
                     <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteDraft(detail)}>{t('common.delete')}</Button>
                   ) : null}
 
-                  {canSubmitContract ? (
-                    <Button icon={<SendOutlined />} onClick={() => handleSubmit(detail)}>{t('app.kuaizhizao.salesOrder.submitOrder')}</Button>
-                  ) : null}
-
                 </>
 
               )}
@@ -2959,6 +3000,10 @@ const SalesContractsPage: React.FC = () => {
                 pendingStatuses={['待审核', 'pending_review', 'PENDING_REVIEW', '已发送', 'sent']}
                 approvedStatuses={['已审核', '已确认', '审核通过', 'approved', 'APPROVED']}
                 rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
+                onSuccess={() => {
+                  reload();
+                  if (detail.id != null) void refreshDetail(detail.id);
+                }}
               />
 
               {canPrintContract(detail) && contractPerms.canPrint ? (
@@ -3003,7 +3048,7 @@ const SalesContractsPage: React.FC = () => {
 
               size="small"
 
-              items={buildDescriptionItemsFromColumns(detail, alignedDetailBasicColumns)}
+              items={buildDescriptionItemsFromColumns(detail, alignedDetailBasicColumns, { column: 3 })}
 
             />
 

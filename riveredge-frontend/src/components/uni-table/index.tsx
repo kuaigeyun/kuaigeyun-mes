@@ -15,6 +15,7 @@
  *
  * 4. **表格**：右侧固定列顺序由 `normalizeFixedRightColumnOrder` 规范 — **uni-lifecycle**（`lifecycle_stage` / `lifecycle`）、**uni-action**（`uni-action` 模块约定，固定列垫后）。
  *    **主从堆叠列**（减横滚）：见 `stackedPrimaryColumn.tsx` — `UniTableStackedPrimaryCell` + `uniTablePrimaryFlex` + `UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS`。
+ *    **行点击选中**（唯一控制源）：只要启用行选择（`enableRowSelection` 或 `rowSelection`），默认点击表身切换勾选；用 `disableRowClickSelection` 关闭。
  * 5. **详情 uni-detail**：列表侧由 `onDetail`、行内操作列等与页面级 **uni-detail**（如 `DetailDrawerTemplate`）配合；本文件不渲染详情壳。
  *
  * **组装清单（子模块）**：`UniSearch`、`UniView`、`UniPushToolbarButton`、`UniBatchDeleteButton`（及通用 `UniBatchButton`）、`UniImportToolbarButton` + `UniImport`、`UniExportMenuButton`、`UniSyncButton`；列侧 `uni-action` / `uni-lifecycle` 在列定义中接入。
@@ -95,6 +96,7 @@ function shouldIgnoreRowClickForSelection(target: Element): boolean {
       '.ant-table-row-expand-icon',
       '.ant-slider',
       '.ant-rate',
+      '.ant-typography-copy',
     ].join(','),
   )
 }
@@ -669,6 +671,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   rowSelectionGetCheckboxProps?: (record: T) => { disabled?: boolean }
   /**
+   * 关闭「点击表身切换勾选」（默认 false；仅特殊交互表需要显式关闭）
+   */
+  disableRowClickSelection?: boolean
+  /**
    * 是否启用行编辑（默认：false）
    */
   enableRowEdit?: boolean
@@ -871,6 +877,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 批量删除二次确认描述（不传则用 common.confirmBatchDeleteContent）
    */
   deleteConfirmDescription?: string | ((count: number) => string)
+  /**
+   * 批量删除按钮禁用（如选中行均不可删）；无选中时仍由组件内部 disableWhenEmpty 处理
+   */
+  deleteButtonDisabled?: boolean
   /**
    * 默认分页大小（默认：20）
    */
@@ -1138,6 +1148,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   onTableDataChange,
   selectedRowKeys: selectedRowKeysProp,
   rowSelectionGetCheckboxProps,
+  disableRowClickSelection = false,
   enableRowEdit = false,
   onRowEditSave,
   onRowEditDelete,
@@ -1182,6 +1193,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   deleteButtonText,
   deleteConfirmTitle,
   deleteConfirmDescription,
+  deleteButtonDisabled = false,
   defaultPageSize: defaultPageSizeProp,
   showQuickJumper = true,
   viewTypes = ['table', 'help'],
@@ -1360,6 +1372,31 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 存储选中的行键（支持外部受控与内部自持两种模式）
   const [internalSelectedRowKeys, setInternalSelectedRowKeys] = useState<React.Key[]>([])
   const selectedRowKeys = selectedRowKeysProp !== undefined ? selectedRowKeysProp : internalSelectedRowKeys
+
+  /** 同步清空 ProTable 与受控/内部选中态（删除后避免「已选择 N 项」残留） */
+  const clearAllRowSelection = useCallback(() => {
+    nativeTableActionRef.current?.clearSelected?.()
+    setInternalSelectedRowKeys([])
+    onRowSelectionChange?.([])
+  }, [onRowSelectionChange])
+
+  const handleBatchDeleteConfirm = useCallback(
+    async (keys: React.Key[]) => {
+      if (!onDelete) return
+      await Promise.resolve(onDelete(keys))
+      clearAllRowSelection()
+    },
+    [onDelete, clearAllRowSelection],
+  )
+
+  useEffect(() => {
+    if (selectedRowKeysProp !== undefined) {
+      setInternalSelectedRowKeys(selectedRowKeysProp)
+      if (selectedRowKeysProp.length === 0) {
+        nativeTableActionRef.current?.clearSelected?.()
+      }
+    }
+  }, [selectedRowKeysProp])
 
   // 导入弹窗可见状态（用于 showImportButton 时）
   const [importModalVisible, setImportModalVisible] = useState(false)
@@ -1842,8 +1879,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       ...inner,
       reload: (...args: any[]) => reloadWithTanstackCacheBust(...args),
       reloadAndRest: (...args: any[]) => reloadAndRestWithTanstackCacheBust(...args),
+      clearSelected: () => clearAllRowSelection(),
     }
-  }, [outwardActionRef, reloadWithTanstackCacheBust, reloadAndRestWithTanstackCacheBust])
+  }, [outwardActionRef, reloadWithTanstackCacheBust, reloadAndRestWithTanstackCacheBust, clearAllRowSelection])
 
   /**
    * 表格数据请求（核心性能路径）
@@ -2162,11 +2200,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         <UniBatchDeleteButton
           key="delete"
           selectedRowKeys={selectedRowKeys}
-          onConfirm={onDelete}
+          onConfirm={handleBatchDeleteConfirm}
           toolBarButtonSize={toolBarButtonSize}
           buttonText={deleteButtonText}
           confirmTitle={deleteConfirmTitle}
           confirmDescription={deleteConfirmDescription}
+          disabled={deleteButtonDisabled}
         />
       )
     }
@@ -2313,6 +2352,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       toolBarActionsAfterBatch,
       gatedShowCreateButton,
       gatedShowDeleteButton,
+      deleteButtonDisabled,
       gatedShowEditButton,
       permissionGates.canRead,
       restProps.toolBarRender,
@@ -2454,10 +2494,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       : undefined
   ), [enableRowEdit, onRowEditSave, onRowEditDelete])
 
-  const handleClearSelection = useCallback(() => {
-    setInternalSelectedRowKeys([])
-    onRowSelectionChange?.([])
-  }, [onRowSelectionChange])
+  const handleClearSelection = clearAllRowSelection
 
   const memoizedPagination = React.useMemo(() => ({
     defaultPageSize,
@@ -2506,6 +2543,82 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const emptyTableHasFixedColumns =
     isEmptyTable && hasUniTableFixedColumns(effectiveTableColumns)
   const tableHasRowSelection = enableRowSelection || !!normalizedUserRowSelection
+
+  const rowClickSelectionEnabled =
+    !disableRowClickSelection && tableHasRowSelection && !!memoizedRowSelection
+
+  const userOnRowProp = (restProps as { onRow?: (record: T, index: number) => Record<string, unknown> }).onRow
+
+  const getEffectiveSelectedRowKeys = useCallback((): React.Key[] => {
+    const fromRowSelection = memoizedRowSelection?.selectedRowKeys
+    if (Array.isArray(fromRowSelection)) return fromRowSelection as React.Key[]
+    return selectedRowKeys
+  }, [memoizedRowSelection, selectedRowKeys])
+
+  const notifyRowSelectionChange = useCallback(
+    (nextKeys: React.Key[]) => {
+      const rsOnChange = memoizedRowSelection?.onChange as
+        | ((keys: React.Key[], selectedRows: T[], info: { type: string }) => void)
+        | undefined
+      if (typeof rsOnChange === 'function') {
+        rsOnChange(nextKeys, [], { type: 'multiple' })
+        return
+      }
+      handleRowSelectionChange(nextKeys)
+    },
+    [memoizedRowSelection, handleRowSelectionChange],
+  )
+
+  const mergeOnRowWithRowClickSelection = useCallback(
+    (record: T, index: number) => {
+      const base =
+        typeof userOnRowProp === 'function' ? userOnRowProp(record, index) ?? {} : {}
+      if (!rowClickSelectionEnabled) return Object.keys(base).length > 0 ? base : undefined
+
+      return {
+        ...base,
+        onClick: (e: React.MouseEvent<HTMLElement>) => {
+          ;(base as { onClick?: (ev: React.MouseEvent<HTMLElement>) => void }).onClick?.(e)
+          if (e.defaultPrevented) return
+          const el = e.target
+          if (!(el instanceof Element)) return
+          if (shouldIgnoreRowClickForSelection(el)) return
+
+          const recordKey =
+            typeof rowKey === 'function'
+              ? (rowKey as (r: T, i?: number) => React.Key)(record, index)
+              : ((record as Record<string, unknown>)[rowKey as string] as React.Key)
+          if (recordKey === undefined || recordKey === null) return
+
+          if (rowSelectionGetCheckboxProps) {
+            const p = rowSelectionGetCheckboxProps(record)
+            if (p?.disabled) return
+          }
+
+          const key = recordKey as React.Key
+          const currentKeys = getEffectiveSelectedRowKeys()
+          const selectionType = memoizedRowSelection?.type === 'radio' ? 'radio' : 'checkbox'
+          let next: React.Key[]
+          if (selectionType === 'radio') {
+            next = [key]
+          } else {
+            const has = currentKeys.includes(key)
+            next = has ? currentKeys.filter((k) => k !== key) : [...currentKeys, key]
+          }
+          notifyRowSelectionChange(next)
+        },
+      }
+    },
+    [
+      userOnRowProp,
+      rowClickSelectionEnabled,
+      rowKey,
+      rowSelectionGetCheckboxProps,
+      getEffectiveSelectedRowKeys,
+      memoizedRowSelection?.type,
+      notifyRowSelectionChange,
+    ],
+  )
 
   const listPageScrollY = React.useMemo(() => {
     if (!proTableBodyScrollYEnabled) return undefined
@@ -3008,8 +3121,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               pagination={memoizedPagination}
               tableAlertRender={effectiveTableAlertRender}
               toolBarRender={(_action, { selectedRowKeys: toolBarSelectedRowKeys }) => {
-                // 同步工具栏的选中行键到 state
-                if (toolBarSelectedRowKeys) {
+                // 非受控模式：同步 ProTable 工具栏选中到内部 state；受控模式以 props 为准，避免删除后残留 ghost keys
+                if (selectedRowKeysProp === undefined && toolBarSelectedRowKeys) {
                   const currentKeys = selectedRowKeys
                   const newKeys = toolBarSelectedRowKeys
                   if (
@@ -3113,41 +3226,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   }
                 }
 
-                const mergedOnRow =
-                  enableRowSelection && memoizedRowSelection
-                    ? (record: T, index: number) => {
-                        const base =
-                          typeof userOnRow === 'function' ? userOnRow(record, index) ?? {} : {}
-                        return {
-                          ...base,
-                          onClick: (e: React.MouseEvent<HTMLElement>) => {
-                            ;(base as { onClick?: (ev: React.MouseEvent<HTMLElement>) => void }).onClick?.(e)
-                            if (e.defaultPrevented) return
-                            const el = e.target
-                            if (!(el instanceof Element)) return
-                            if (shouldIgnoreRowClickForSelection(el)) return
-
-                            const recordKey =
-                              typeof rowKey === 'function'
-                                ? (rowKey as (r: T, i?: number) => React.Key)(record, index)
-                                : (record as Record<string, unknown>)[rowKey as string] as React.Key
-                            if (recordKey === undefined || recordKey === null) return
-
-                            if (rowSelectionGetCheckboxProps) {
-                              const p = rowSelectionGetCheckboxProps(record)
-                              if (p?.disabled) return
-                            }
-
-                            const key = recordKey as React.Key
-                            const has = selectedRowKeys.includes(key)
-                            const next = has
-                              ? selectedRowKeys.filter((k) => k !== key)
-                              : [...selectedRowKeys, key]
-                            handleRowSelectionChange(next)
-                          },
-                        }
-                      }
-                    : userOnRow
+                const mergedOnRow = rowClickSelectionEnabled
+                  ? mergeOnRowWithRowClickSelection
+                  : userOnRow
 
                 return {
                   ...otherProps,

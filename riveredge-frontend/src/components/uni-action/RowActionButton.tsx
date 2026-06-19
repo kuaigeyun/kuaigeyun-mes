@@ -23,6 +23,7 @@ export function RowActionButton({
   labelKeep,
   followUpFromDocument,
   children,
+  key,
   ...rest
 }: RowActionButtonProps) {
   const profileProps =
@@ -33,6 +34,7 @@ export function RowActionButton({
         : {}
   return (
     <Button
+      key={key}
       {...rowActionKind(kind)}
       {...profileProps}
       {...(labelKeep ? rowActionLabelKeep() : {})}

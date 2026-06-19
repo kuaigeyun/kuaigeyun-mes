@@ -2365,6 +2365,7 @@
     "kuaizhizao:quotation:approve",
     "kuaizhizao:quotation:audit",
     "kuaizhizao:quotation:reject",
+    "kuaizhizao:quotation:execute",
     "kuaizhizao:quotation:print",
     "kuaizhizao:sales-contract:read",
     "kuaizhizao:sales-contract:create",

@@ -4053,6 +4053,12 @@ export default {
   'app.kuaizhizao.quotation.pushToSalesContractFailed': 'Đẩy xuống hợp đồng bán hàng thất bại',
   'app.kuaizhizao.quotation.alreadyLinkedContract':
     'Báo giá này đã liên kết hợp đồng bán hàng; hãy đẩy đơn bán hàng từ hợp đồng',
+  'app.kuaizhizao.quotation.alreadyLinkedSalesOrder':
+    'Báo giá này đã liên kết đơn bán hàng, không thể đẩy lại',
+  'app.kuaizhizao.quotation.historyVersionPushHint':
+    'Đây là bản sửa đổi cũ; hãy đẩy từ phiên bản mới nhất trong chuỗi',
+  'app.kuaizhizao.quotation.pushBlockedStatus':
+    'Trạng thái hiện tại「{{status}}」không cho phép đẩy; hãy gửi và hoàn tất duyệt hoặc xác nhận khách hàng trước',
   'app.kuaizhizao.quotation.customerConfirm': 'Xác nhận khách hàng',
   'app.kuaizhizao.quotation.reopenEdit': 'Chỉnh sửa lại',
   'app.kuaizhizao.quotation.revokePush': 'Thu hồi đẩy',
@@ -4127,6 +4133,9 @@ export default {
   'app.kuaizhizao.salesContract.validTo': 'Hiệu quả để',
   'app.kuaizhizao.salesContract.validUntil': 'Có hiệu lực cho đến khi',
   'app.kuaizhizao.salesContract.contractCode': 'Hợp đồng số',
+  'app.kuaizhizao.salesContract.contractCodeAutoPlaceholder': 'Mã sẽ được tạo tự động theo quy tắc; có thể chỉnh sửa',
+  'app.kuaizhizao.salesContract.contractCodeRequired': 'Nhập số hợp đồng',
+  'app.kuaizhizao.salesContract.generateCodeFailed': 'Không thể tạo số hợp đồng',
   'app.kuaizhizao.salesContract.contractAmount': 'Số tiền hợp đồng',
   'app.kuaizhizao.salesContract.released': 'Phát hành',
   'app.kuaizhizao.salesContract.releasedAmount': 'Số tiền phát hành',

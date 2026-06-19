@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { App, Space } from 'antd';
+import { App, Button, Space } from 'antd';
+import { AuditOutlined, RollbackOutlined, SendOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../services/api';
-import { prepareRowActionButton, rowActionKind } from '../uni-action';
+import { prepareRowActionButton, rowActionKind, type RowActionPermissionKind } from '../uni-action';
+import { rowActionLabel } from '../uni-action/actionCatalog';
 import { useAuditRequired } from '../../hooks/useAuditRequired';
 import { useGlobalStore } from '../../stores';
 import { hasModulePermission, hasReviewPermission } from '../../utils/permissionContract';
@@ -160,6 +162,8 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   auditNodeKey,
   submitActionLabel = '提交',
   onSuccess,
+  theme = 'link',
+  size,
   confirmMessages = {},
   hideAuditActionsWhenDisabled = true,
   resourcePrefix,
@@ -422,26 +426,77 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const isBusy = !!loadingAction;
   const submitUsesCustomLabel = effectiveSubmitLabel !== '提交';
 
+  const isToolbarTheme = theme === 'default';
+  const btnSize = size ?? (isToolbarTheme ? 'middle' : 'small');
+
+  const renderActionButton = (
+    kind: RowActionPermissionKind,
+    config: {
+      key: string;
+      label?: string;
+      labelKeep?: boolean;
+      loading?: boolean;
+      disabled?: boolean;
+      onClick: () => void;
+      danger?: boolean;
+    },
+  ) => {
+    if (!isToolbarTheme) {
+      return prepareRowActionButton(kind, {
+        key: config.key,
+        labelKeep: config.labelKeep,
+        loading: config.loading,
+        disabled: config.disabled,
+        onClick: config.onClick,
+        children: config.label,
+      });
+    }
+    const iconByKind: Partial<Record<RowActionPermissionKind, React.ReactNode>> = {
+      submit: <SendOutlined />,
+      audit: <AuditOutlined />,
+      revoke: <RollbackOutlined />,
+    };
+    const text =
+      config.labelKeep && config.label
+        ? config.label
+        : config.label ?? rowActionLabel(kind);
+    return (
+      <Button
+        key={config.key}
+        {...rowActionKind(kind)}
+        size={btnSize}
+        type="default"
+        danger={config.danger}
+        icon={iconByKind[kind]}
+        loading={config.loading}
+        disabled={config.disabled}
+        onClick={config.onClick}
+      >
+        {text}
+      </Button>
+    );
+  };
+
   if (!record || !record[rowKey]) return null;
 
   const inlineButtons: React.ReactNode[] = [];
 
   if (showSubmit && channelByAction.submit) {
     inlineButtons.push(
-      prepareRowActionButton('submit', {
+      renderActionButton('submit', {
         key: 'audit-submit',
+        label: effectiveSubmitLabel,
         labelKeep: submitUsesCustomLabel,
         loading: loadingAction === 'submit',
         disabled: isBusy && loadingAction !== 'submit',
         onClick: () => openActionModal('submit'),
-        children: submitUsesCustomLabel ? effectiveSubmitLabel : undefined,
       }),
     );
   }
 
   if (showAuditHub) {
     inlineButtons.push(
-      prepareRowActionButton('audit', {
+      renderActionButton('audit', {
         key: 'audit-hub',
         loading: isBusy && auditHubOpen,
         disabled: isBusy && !auditHubOpen,
@@ -452,8 +507,10 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
 
   if (showRevoke && channelByAction.revoke) {
     inlineButtons.push(
-      prepareRowActionButton('revoke', {
+      renderActionButton('revoke', {
         key: 'audit-revoke',
+        label: revokeLabel,
+        labelKeep: true,
         loading: loadingAction === 'revoke',
         disabled: isBusy && loadingAction !== 'revoke',
         onClick: () => openActionModal('revoke'),
@@ -465,7 +522,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
 
   return (
     <>
-      <Space {...rowActionKind('skip')} size={4} align="center">
+      <Space {...rowActionKind('skip')} size={isToolbarTheme ? 8 : 4} align="center">
         {inlineButtons}
       </Space>
 

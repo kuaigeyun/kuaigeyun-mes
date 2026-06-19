@@ -373,14 +373,14 @@ async def _html_to_pdf_bytes(html_string: str, *, tenant_id: Optional[int] = Non
         ) from e
 
 
-def _quotation_formal_print_allowed(quotation: Quotation) -> bool:
-    """正式对外报价 PDF：审核通过、客户确认或已下推后方可打印。"""
-    st = (quotation.status or "").strip()
-    if st in ("已接受", "已转订单"):
-        return True
-    if st == "已发送" and _is_approved(quotation.review_status):
-        return True
-    return False
+def _quotation_formal_print_allowed(quotation: Quotation, *, audit_required: bool = True) -> bool:
+    """正式对外报价 PDF：与 document_action_policy 一致。"""
+    from apps.kuaizhizao.services.document_action_policy import derive_quotation_capabilities
+
+    return derive_quotation_capabilities(
+        quotation,
+        audit_required=audit_required,
+    ).print_formal.allowed
 
 
 def _sales_contract_formal_print_allowed(contract: SalesContract) -> bool:
@@ -936,7 +936,12 @@ class DocumentPrintService:
             document = await Quotation.get_or_none(tenant_id=tenant_id, id=document_id, deleted_at__isnull=True)
             if not document:
                 raise NotFoundError(f"报价单不存在: {document_id}")
-            if not _quotation_formal_print_allowed(document):
+            from infra.services.business_config_service import BusinessConfigService
+
+            audit_required = await BusinessConfigService().check_audit_required(
+                tenant_id, "quotation"
+            )
+            if not _quotation_formal_print_allowed(document, audit_required=audit_required):
                 raise BusinessLogicError(
                     "正式报价单需在审核通过、客户确认或已转订单后方可打印"
                 )

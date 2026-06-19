@@ -4204,6 +4204,12 @@ export default {
   'app.kuaizhizao.quotation.pushToSalesContractFailed': 'Failed to push to sales contract',
   'app.kuaizhizao.quotation.alreadyLinkedContract':
     'This quotation is already linked to a sales contract; release the sales order from the contract',
+  'app.kuaizhizao.quotation.alreadyLinkedSalesOrder':
+    'This quotation is already linked to a sales order and cannot be pushed again',
+  'app.kuaizhizao.quotation.historyVersionPushHint':
+    'This is a historical revision; push from the latest version in the series',
+  'app.kuaizhizao.quotation.pushBlockedStatus':
+    'Status "{{status}}" does not allow push; submit and complete review or customer confirmation first',
   'app.kuaizhizao.quotation.customerConfirm': 'Customer Confirmation',
   'app.kuaizhizao.quotation.reopenEdit': 'Re-edit',
   'app.kuaizhizao.quotation.revokePush': 'Revoke Push',
@@ -4280,6 +4286,9 @@ export default {
   'app.kuaizhizao.salesContract.validTo': 'Effective To',
   'app.kuaizhizao.salesContract.validUntil': 'Valid Until',
   'app.kuaizhizao.salesContract.contractCode': 'Contract No.',
+  'app.kuaizhizao.salesContract.contractCodeAutoPlaceholder': 'Code will be auto-generated from rules; you may edit it',
+  'app.kuaizhizao.salesContract.contractCodeRequired': 'Enter contract number',
+  'app.kuaizhizao.salesContract.generateCodeFailed': 'Failed to generate contract number',
   'app.kuaizhizao.salesContract.contractAmount': 'Contract Amount',
   'app.kuaizhizao.salesContract.released': 'Released',
   'app.kuaizhizao.salesContract.releasedAmount': 'Released Amount',
@@ -4462,6 +4471,13 @@ export default {
   'app.kuaizhizao.quotation.customerConfirmContent':
     'Mark as customer confirmed to indicate acceptance and allow pushing to sales order.',
   'app.kuaizhizao.quotation.customerConfirmSuccess': 'Marked as customer confirmed',
+  'app.kuaizhizao.quotation.cancelCustomerConfirm': 'Cancel customer confirmation',
+  'app.kuaizhizao.quotation.batchCancelCustomerConfirm': 'Batch cancel customer confirmation',
+  'app.kuaizhizao.quotation.cancelCustomerConfirmContent':
+    'Revert from customer confirmed to sent; you can then revoke review or delete.',
+  'app.kuaizhizao.quotation.batchCancelCustomerConfirmContent':
+    'Revert {{count}} selected quotations from customer confirmed to sent.',
+  'app.kuaizhizao.quotation.cancelCustomerConfirmSuccess': 'Customer confirmation cancelled',
   'app.kuaizhizao.quotation.reopenContent': 'Restore quotation to draft for editing and resubmission.',
   'app.kuaizhizao.quotation.reopenSuccess': 'Restored to draft',
   'app.kuaizhizao.quotation.revokePushContent':

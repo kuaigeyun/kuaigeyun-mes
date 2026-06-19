@@ -18,6 +18,24 @@ from loguru import logger
 # 创建路由（公开接口，不需要认证）
 router = APIRouter(prefix="/files", tags=["Core · Files (Public)"])
 
+# 平台品牌资源：favicon 常与 logo 共用同一 UUID（历史上传分类为 platform-logo）
+PUBLIC_BRANDING_CATEGORY_ALIASES: dict[str, list[str]] = {
+    "platform-favicon": ["platform-favicon", "platform-logo"],
+    "platform-logo": ["platform-logo"],
+    "site-logo": ["site-logo"],
+}
+
+
+async def _resolve_public_branding_file(uuid: str, category: str):
+    from core.models.file import File
+
+    categories = PUBLIC_BRANDING_CATEGORY_ALIASES.get(category, [category])
+    for cat in categories:
+        file = await File.get_or_none(uuid=uuid, category=cat)
+        if file:
+            return file
+    return None
+
 
 @router.get("/{uuid}/preview/public", response_model=FilePreviewResponse)
 async def get_file_preview_public(
@@ -50,16 +68,7 @@ async def get_file_preview_public(
                 detail=f"不允许访问该分类的文件。允许的分类: {allowed_categories}"
             )
         
-        # 获取文件（不依赖tenant_id，因为平台LOGO是全局资源）
-        # 尝试从所有租户中查找文件（通过category和uuid过滤）
-        from core.models.file import File
-        
-        # 查询文件（通过uuid和category，不限制tenant_id）
-        file = await File.get_or_none(
-            uuid=uuid,
-            category=category
-        )
-        
+        file = await _resolve_public_branding_file(uuid, category)
         if not file:
             raise NotFoundError(f"文件不存在: {uuid} (category: {category})")
         

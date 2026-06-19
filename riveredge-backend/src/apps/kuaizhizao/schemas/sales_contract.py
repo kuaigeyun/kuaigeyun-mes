@@ -63,6 +63,7 @@ class SalesContractMilestoneResponse(SalesContractMilestoneCreate):
 
 
 class SalesContractCreate(BaseModel):
+    contract_code: Optional[str] = Field(None, max_length=50, description="合同编码（自动生成，可手工填写）")
     contract_type: str = Field(default="single", description="single / framework")
     customer_id: int
     customer_name: str

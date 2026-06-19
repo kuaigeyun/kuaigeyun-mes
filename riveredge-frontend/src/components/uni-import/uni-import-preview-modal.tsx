@@ -128,7 +128,7 @@ export const UniImportPreviewModal: React.FC<UniImportPreviewModalProps> = ({
           <Alert
             type="error"
             showIcon
-            message={t('components.uniImport.previewPrecheckErrorTitle')}
+            title={t('components.uniImport.previewPrecheckErrorTitle')}
             description={renderAlertLines(errorMessages)}
           />
         )}
@@ -136,7 +136,7 @@ export const UniImportPreviewModal: React.FC<UniImportPreviewModalProps> = ({
           <Alert
             type="warning"
             showIcon
-            message={t('components.uniImport.previewPrecheckWarningTitle')}
+            title={t('components.uniImport.previewPrecheckWarningTitle')}
             description={renderAlertLines(warningMessages)}
           />
         )}

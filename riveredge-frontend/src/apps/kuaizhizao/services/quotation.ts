@@ -10,6 +10,25 @@
 import { apiRequest } from '../../../services/api';
 import type { DocumentPrintApiResult } from '../../../utils/printResponseHelpers';
 
+export interface ActionCapability {
+  allowed: boolean;
+  reason?: string | null;
+}
+
+export interface QuotationCapabilities {
+  update: ActionCapability;
+  delete: ActionCapability;
+  submit: ActionCapability;
+  confirm_customer: ActionCapability;
+  cancel_customer_confirm: ActionCapability;
+  convert_to_order: ActionCapability;
+  convert_to_contract: ActionCapability;
+  revoke_push: ActionCapability;
+  reopen: ActionCapability;
+  create_revision: ActionCapability;
+  print_formal: ActionCapability;
+}
+
 export interface QuotationItem {
   id?: number;
   uuid?: string;
@@ -76,6 +95,8 @@ export interface Quotation {
   formal_document_generated_at?: string;
   /** 已转单但下游销售订单已不存在（如已删除） */
   conversion_downstream_missing?: boolean;
+  /** 仍有关联 contract_id，但下游销售合同已不存在（如已删除） */
+  contract_downstream_missing?: boolean;
   notes?: string;
   is_active?: boolean;
   created_by?: number;
@@ -84,6 +105,7 @@ export interface Quotation {
   updated_at?: string;
   items?: QuotationItem[];
   lifecycle?: Record<string, unknown>;
+  capabilities?: QuotationCapabilities;
 }
 
 export interface QuotationListParams {
@@ -187,6 +209,14 @@ export async function confirmCustomerQuotation(id: number): Promise<Quotation> {
   return apiRequest<Quotation>(`/apps/kuaizhizao/quotations/${id}/confirm-customer`, {
     method: 'POST',
   });
+}
+
+/** 客户取消确认（已接受 → 已发送，可撤回审核或删除） */
+export async function cancelCustomerConfirmQuotation(id: number): Promise<Quotation> {
+  return apiRequest<Quotation>(
+    `/apps/kuaizhizao/quotations/${id}/cancel-customer-confirm`,
+    { method: 'POST' },
+  );
 }
 
 /** 驳回后重新编辑（已拒绝 → 草稿） */

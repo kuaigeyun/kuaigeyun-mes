@@ -23,14 +23,32 @@ interface MaterialUnitSelectProps {
 
 // 同一瞬间并发去重，不跨渲染/操作复用物料档案。
 const materialInflight = new Map<string, Promise<Material | null>>();
+const materialByKeyCache = new Map<string, Material>();
 
 export { getMaterialUnitDisplayMapShared } from '../../utils/materialUnitDisplay';
+
+/** 页面已加载物料列表时写入，避免 numeric id 误调 GET /materials/{id}（仅 UUID 合法） */
+export function registerMaterialsForUnitSelect(materials: Array<Material | Record<string, unknown>>): void {
+  for (const raw of materials) {
+    const m = raw as Material;
+    if (m.id != null) materialByKeyCache.set(String(m.id), m);
+    if (m.uuid) materialByKeyCache.set(String(m.uuid), m);
+  }
+}
+
+function rememberMaterialForUnitSelect(material: Material): void {
+  if (material.id != null) materialByKeyCache.set(String(material.id), material);
+  if (material.uuid) materialByKeyCache.set(String(material.uuid), material);
+}
 
 /**
  * 拉取单条物料（每次请求最新；同 id 并发去重）
  */
 async function fetchMaterialForUnitSelectCache(materialId: number | string): Promise<Material | null> {
   const cacheKey = String(materialId);
+  const cached = materialByKeyCache.get(cacheKey);
+  if (cached) return cached;
+
   const inflight = materialInflight.get(cacheKey);
   if (inflight) return inflight;
 
@@ -41,18 +59,14 @@ async function fetchMaterialForUnitSelectCache(materialId: number | string): Pro
     if (idStr.includes('-') && idStr.length > 20) {
       resp = await materialApi.get(idStr);
     } else {
-      const listRes = await materialApi.list({ limit: 10, keyword: idStr });
-      const items = Array.isArray(listRes?.items) ? listRes.items : [];
-      resp = items.find((m) => String(m.id) === idStr) || null;
-
-      if (!resp) {
-        try {
-          resp = await materialApi.get(idStr);
-        } catch {
-          resp = null;
-        }
+      const numericId = Number(idStr);
+      if (Number.isFinite(numericId)) {
+        const listRes = await materialApi.list({ limit: 2000, isActive: true });
+        const items = Array.isArray(listRes?.items) ? listRes.items : [];
+        resp = items.find((m) => Number(m.id) === numericId) ?? null;
       }
     }
+    if (resp) rememberMaterialForUnitSelect(resp);
     return resp;
   })().finally(() => {
     materialInflight.delete(cacheKey);
@@ -85,7 +99,10 @@ export async function prefetchMaterialsForUnitSelect(
     unique.map(async (key) => {
       try {
         const material = await fetchMaterialForUnitSelectCache(key);
-        if (material) out.set(key, material);
+        if (material) {
+          rememberMaterialForUnitSelect(material);
+          out.set(key, material);
+        }
       } catch {
         /* 单条失败不影响其余行 */
       }

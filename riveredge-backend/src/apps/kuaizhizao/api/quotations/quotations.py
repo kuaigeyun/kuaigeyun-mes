@@ -391,6 +391,35 @@ async def confirm_customer_quotation(
         )
 
 
+@router.post(
+    "/{quotation_id}/cancel-customer-confirm",
+    response_model=QuotationResponse,
+    summary="Cancel customer confirm (back to sent)",
+)
+async def cancel_customer_confirm_quotation(
+    quotation_id: int = Path(..., description="报价单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已接受 → 已发送（审核状态不变，可撤回审核或删除）。"""
+    try:
+        return await quotation_service.cancel_customer_confirm_quotation(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+            operator_id=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error("报价单客户取消确认失败: %s", e)
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="报价单客户取消确认失败",
+        )
+
+
 @router.post("/{quotation_id}/reopen", response_model=QuotationResponse, summary="Reopen after rejection")
 async def reopen_quotation(
     quotation_id: int = Path(..., description="报价单ID"),

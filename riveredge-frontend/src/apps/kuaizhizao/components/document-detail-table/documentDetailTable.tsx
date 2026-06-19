@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { Button, Form, InputNumber } from 'antd';
+import { Button, Form, InputNumber, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 
 /** 与报价单明细表一致的 table className */
@@ -115,18 +115,49 @@ export function TaxRateBatchColumnTitle({ onBatch }: { onBatch: () => void }) {
   );
 }
 
+const TAX_RATE_PERCENT_SUFFIX_STYLE: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '0 8px',
+  color: 'var(--ant-color-text-secondary)',
+  background: 'var(--ant-color-fill-alter)',
+  border: '1px solid var(--ant-color-border)',
+  borderLeft: 0,
+  borderRadius: '0 var(--ant-border-radius) var(--ant-border-radius) 0',
+  fontSize: 'inherit',
+};
+
+/** Form.Item 子组件须接收 value/onChange；不可直接用 Space.Compact 包裹 InputNumber */
+function TaxRatePercentInput({
+  value,
+  onChange,
+}: {
+  value?: number | null;
+  onChange?: (value: number | null) => void;
+}) {
+  return (
+    <Space.Compact style={{ width: '100%' }}>
+      <InputNumber
+        value={value}
+        onChange={onChange}
+        placeholder="0"
+        min={0}
+        max={100}
+        precision={0}
+        controls={false}
+        size={DOCUMENT_DETAIL_CONTROL_SIZE}
+        style={{ width: '100%' }}
+      />
+      <span style={TAX_RATE_PERCENT_SUFFIX_STYLE}>%</span>
+    </Space.Compact>
+  );
+}
+
 export function TaxRateDetailCell({ index }: { index: number }) {
   return (
     <div className="quotation-tax-rate-cell">
-      <Form.Item name={[index, 'tax_rate']} initialValue={0} style={{ margin: 0 }}>
-        <InputNumber
-          placeholder="0"
-          min={0}
-          max={100}
-          precision={0}
-          addonAfter="%"
-          controls={false}
-        />
+      <Form.Item name={[index, 'tax_rate']} style={{ margin: 0 }}>
+        <TaxRatePercentInput />
       </Form.Item>
     </div>
   );

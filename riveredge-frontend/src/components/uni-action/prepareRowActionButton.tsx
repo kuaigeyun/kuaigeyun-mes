@@ -17,9 +17,10 @@ export function prepareRowActionButton(
   kind: RowActionPermissionKind,
   props?: PrepareRowActionButtonProps,
 ): React.ReactNode {
-  const { labelKeep, children, ...rest } = props ?? {}
+  const { labelKeep, children, key, ...rest } = props ?? {}
   const node = (
     <Button
+      key={key}
       {...rowActionKind(kind)}
       {...(labelKeep ? rowActionLabelKeep() : {})}
       {...rest}

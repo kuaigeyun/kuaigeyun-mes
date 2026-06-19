@@ -99,6 +99,8 @@ export interface UniBatchDeleteButtonProps {
   buttonText?: string;
   confirmTitle?: string | ((count: number) => string);
   confirmDescription?: string | ((count: number) => string);
+  /** 业务态不可批量删除时置灰（无选中行时仍由 disableWhenEmpty 处理） */
+  disabled?: boolean;
 }
 
 export const UniBatchDeleteButton: React.FC<UniBatchDeleteButtonProps> = ({
@@ -108,6 +110,7 @@ export const UniBatchDeleteButton: React.FC<UniBatchDeleteButtonProps> = ({
   buttonText,
   confirmTitle,
   confirmDescription,
+  disabled: disabledProp,
 }) => {
   const { t } = useTranslation();
   const count = selectedRowKeys.length;
@@ -119,6 +122,7 @@ export const UniBatchDeleteButton: React.FC<UniBatchDeleteButtonProps> = ({
       danger
       icon={<DeleteOutlined />}
       size={toolBarButtonSize}
+      disabled={disabledProp}
       requireConfirm
       confirmTitle={
         typeof confirmTitle === 'function'

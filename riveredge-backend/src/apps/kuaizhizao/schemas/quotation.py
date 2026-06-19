@@ -14,6 +14,7 @@ from typing import Optional, List, Dict, Any
 from decimal import Decimal
 from pydantic import Field, model_validator
 from core.schemas.base import BaseSchema
+from apps.kuaizhizao.services.document_action_policy.types import QuotationCapabilities
 
 
 # === 报价单明细 ===
@@ -182,6 +183,14 @@ class QuotationResponse(QuotationBase):
     conversion_downstream_missing: Optional[bool] = Field(
         None,
         description="已转单标记下，下游销售订单已不存在（如已删除）时为 True，可重新下推或删除本报价单",
+    )
+    contract_downstream_missing: Optional[bool] = Field(
+        None,
+        description="仍有关联 contract_id，但下游销售合同已不存在（如已删除）时为 True，可再次下推合同",
+    )
+    capabilities: Optional[QuotationCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
     )
 
     class Config:

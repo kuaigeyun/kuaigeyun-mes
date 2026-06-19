@@ -13,6 +13,28 @@ import { toRelativeIfLocalhost } from './avatar';
 
 const ICON_PROBE_MS = 8000;
 
+/** 与后端 public branding 别名一致：favicon 配置常指向 platform-logo 文件 */
+const PLATFORM_FAVICON_PUBLIC_CATEGORIES = ['platform-favicon', 'platform-logo'] as const;
+
+async function fetchPlatformFaviconPublicPreviewUrl(uuid: string): Promise<string | undefined> {
+  for (const category of PLATFORM_FAVICON_PUBLIC_CATEGORIES) {
+    try {
+      const res = await fetch(
+        `/api/v1/core/files/${uuid}/preview/public?category=${encodeURIComponent(category)}`,
+      );
+      if (!res.ok) continue;
+      const data = (await res.json()) as { preview_url?: string };
+      const previewUrl = data?.preview_url?.trim();
+      if (previewUrl) {
+        return toRelativeIfLocalhost(previewUrl);
+      }
+    } catch {
+      // try next category
+    }
+  }
+  return undefined;
+}
+
 function setIconLinkHref(href: string): void {
   let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   if (!link) {
@@ -86,24 +108,13 @@ export async function applyFavicon(faviconValue: string | undefined): Promise<vo
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
   if (isUUID(value)) {
-    const failedKey = `RIVEREDGE_FAVICON_FAILED_${value}`;
+    const failedKey = `RIVEREDGE_FAVICON_FAILED_V2_${value}`;
     if (typeof window !== 'undefined' && window.sessionStorage.getItem(failedKey) === '1') {
       await applyFaviconHrefWithFallback(undefined);
       return;
     }
     try {
-      const res = await fetch(
-        `/api/v1/core/files/${value}/preview/public?category=platform-favicon`,
-      );
-      if (!res.ok) {
-        if (typeof window !== 'undefined') {
-          window.sessionStorage.setItem(failedKey, '1');
-        }
-        await applyFaviconHrefWithFallback(undefined);
-        return;
-      }
-      const data = await res.json();
-      const previewUrl = data?.preview_url as string | undefined;
+      const previewUrl = await fetchPlatformFaviconPublicPreviewUrl(value);
       if (!previewUrl) {
         if (typeof window !== 'undefined') {
           window.sessionStorage.setItem(failedKey, '1');
@@ -111,7 +122,7 @@ export async function applyFavicon(faviconValue: string | undefined): Promise<vo
         await applyFaviconHrefWithFallback(undefined);
         return;
       }
-      await applyFaviconHrefWithFallback(toRelativeIfLocalhost(previewUrl));
+      await applyFaviconHrefWithFallback(previewUrl);
     } catch {
       if (typeof window !== 'undefined') {
         window.sessionStorage.setItem(failedKey, '1');

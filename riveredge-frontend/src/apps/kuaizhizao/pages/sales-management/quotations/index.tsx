@@ -9,16 +9,16 @@ import { rowActionKind, rowActionAddFollowUpFromDocument } from '../../../../../
  */
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useInvalidateSalesOrderList } from '../../../../../hooks/useInvalidateSalesOrderList';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Card } from 'antd';
-import type { DescriptionsProps } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, invalidateUniTableListCache } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
   UniTableStackedPrimaryCell,
@@ -28,7 +28,11 @@ import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniBatchButton, UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
-import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
+import {
+  MaterialUnitSelect,
+  prefetchMaterialsForUnitSelect,
+  registerMaterialsForUnitSelect,
+} from '../../../../../components/material-unit-select';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
@@ -67,6 +71,7 @@ import {
   rejectQuotation,
   revokeReviewQuotation,
   confirmCustomerQuotation,
+  cancelCustomerConfirmQuotation,
   reopenQuotation,
   revokePushQuotation,
   createQuotationRevision,
@@ -91,6 +96,7 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/cod
 import { batchImport } from '../../../../../utils/batchOperations';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
+import { formDateFormItemProps, formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { useTranslation } from 'react-i18next';
 import {
@@ -100,6 +106,15 @@ import {
 import { useConfigStore } from '../../../../../stores/configStore';
 import { useGlobalStore } from '../../../../../stores';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import {
+  isQuotationRowSelectable,
+  quotationBatchApproveAllowed,
+  quotationBatchDeleteAllowed,
+  quotationCanPushToSalesOrder,
+  quotationCapabilityAllowed,
+  quotationCapabilityReasonMessage,
+  useQuotationCapabilities,
+} from '../../../../../hooks/useDocumentCapabilities';
 import { hasModulePermission, hasReviewPermission } from '../../../../../utils/permissionContract';
 import { searchUserDisplay, type User } from '../../../../../services/user';
 import { displayItemsToUsers, formatUserDisplayLabel } from '../../../../../utils/userDisplay';
@@ -109,6 +124,8 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import {
   DOCUMENT_DETAIL_CONTROL_SIZE,
   DOCUMENT_DETAIL_TABLE_PROPS,
+  TaxRateBatchColumnTitle,
+  TaxRateDetailCell,
 } from '../../../components/document-detail-table/documentDetailTable';
 import { RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
@@ -126,9 +143,11 @@ import {
   SALES_DOC_DETAIL_BASIC_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
+import { buildDescriptionItemsFromColumns } from '../shared/descriptionItems';
 import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
 
 const QUOTATION_LIST_PATH = '/apps/kuaizhizao/sales-management/quotations';
+const QUOTATION_TABLE_CACHE_ID = 'apps.kuaizhizao.pages.sales-management.quotations';
 const QUOTATION_CREATE_PATH = `${QUOTATION_LIST_PATH}/new`;
 const quotationEditPath = (id: number) => `${QUOTATION_LIST_PATH}/${id}/edit`;
 import { KUAIZHIZAO_QUOTATION_FIELD_RESOURCE as QUOTATION_FIELD_RESOURCE } from '../../../../../constants/fieldPermissionResources';
@@ -173,55 +192,8 @@ function resolveDefaultQuotationListScope(): QuotationListScope {
   return 'mine';
 }
 
-/** 与后端 LEGACY_PENDING_VALUES 一致 */
-const PENDING_REVIEW_STATUSES = new Set(['待审核', 'PENDING', 'PENDING_REVIEW']);
-
-function isApprovedReview(rs: string | undefined): boolean {
-  const r = (rs || '').trim();
-  return ['已通过', 'APPROVED', '审核通过', '通过', '已审核'].includes(r);
-}
-
-function canWithdrawQuotation(q: Quotation, auditRequired: boolean): boolean {
-  if (!auditRequired) return false;
-  return q.status === '已发送' && PENDING_REVIEW_STATUSES.has((q.review_status || '').trim());
-}
-
-function canApproveQuotation(q: Quotation, auditRequired: boolean): boolean {
-  if (!auditRequired) return false;
-  if (q.status !== '已发送') return false;
-  const rs = (q.review_status || '').trim();
-  return PENDING_REVIEW_STATUSES.has(rs) || rs === '';
-}
-
-function canRejectQuotation(q: Quotation, auditRequired: boolean): boolean {
-  return canApproveQuotation(q, auditRequired);
-}
-
-function canRevokeReviewQuotation(q: Quotation, auditRequired: boolean): boolean {
-  if (!auditRequired) return false;
-  return q.status === '已发送' && isApprovedReview(q.review_status);
-}
-
-/** 未开审核时：已发送即可客户确认（不依赖 review_status 是否「已通过」） */
-function canConfirmCustomerQuotation(q: Quotation, auditRequired: boolean): boolean {
-  if (q.status !== '已发送') return false;
-  if (!auditRequired) return true;
-  return isApprovedReview(q.review_status);
-}
-
-function canReopenQuotation(q: Quotation): boolean {
-  return q.status === '已拒绝';
-}
-
-function canRevokePushQuotation(q: Quotation): boolean {
-  return q.status === '已转订单' && q.conversion_downstream_missing === true;
-}
-
-function canDeleteQuotation(q: Quotation): boolean {
-  if (q.conversion_downstream_missing === true) return true;
-  if (q.status === '已转订单') return false;
-  if (q.sales_order_id != null && Number(q.sales_order_id) > 0) return false;
-  return true;
+function quotationStatusNorm(q: Quotation): string {
+  return (q.status || '').trim();
 }
 
 /** 系列已有更新修订版，不可再从旧版下推 */
@@ -233,86 +205,12 @@ function isQuotationSuperseded(q: Quotation): boolean {
   );
 }
 
-/** 允许「转订单」：已接受；或开审核且已发送并已审核通过；或已转单但下游已删可重新下推 */
-function canConvertQuotation(q: Quotation, auditRequired: boolean): boolean {
-  if (q.contract_id != null && Number(q.contract_id) > 0) return false;
-  if (q.is_latest_in_series === false) return false;
-  if (q.status === '已拒绝') return false;
-  if (q.status === '已转订单') {
-    return q.conversion_downstream_missing === true;
-  }
-  if (q.status === '已接受') return true;
-  if (q.status === '已发送') {
-    if (!auditRequired) return false;
-    return isApprovedReview(q.review_status);
-  }
-  return false;
-}
-
-/** 允许「下推销售合同」：已发送/已接受、未关联合同、非旧版、未直转订单 */
-function canConvertQuotationToContract(q: Quotation): boolean {
-  if (isQuotationSuperseded(q)) return false;
-  if (q.contract_id != null && Number(q.contract_id) > 0) return false;
-  if (q.status === '已转订单') return false;
-  if (q.sales_order_id != null && Number(q.sales_order_id) > 0) return false;
-  const st = (q.status || '').trim();
-  return st === '已发送' || st === '已接受';
-}
-
-/** 生成PDF报价：与后端 print 门禁一致；未开审核时「已发送」也可生成 */
-function canPrintFormalQuotation(q: Quotation, auditRequired: boolean): boolean {
-  const st = (q.status || '').trim();
-  if (st === '已接受' || st === '已转订单') return true;
-  if (st === '已发送') {
-    if (!auditRequired) return true;
-    return isApprovedReview(q.review_status);
-  }
-  return false;
-}
-
-/** 新建修订版：非草稿的最新系列行 */
-function canCreateRevision(q: Quotation): boolean {
-  if (q.is_latest_in_series === false) return false;
-  if ((q.status || '').trim() === '草稿') return false;
-  return true;
-}
-
 /** ProForm 提交时日期可能是 dayjs、字符串或 Date，避免直接调用 .format 报错 */
 function toApiDateString(v: unknown): string | undefined {
   if (v == null || v === '') return undefined;
   if (dayjs.isDayjs(v)) return v.isValid() ? v.format('YYYY-MM-DD') : undefined;
   const d = dayjs(v as string | Date | number);
   return d.isValid() ? d.format('YYYY-MM-DD') : undefined;
-}
-
-/** 将 ProDescriptions 列配置转为 Ant Design Descriptions items（与 detailDrawerDescriptionItems 一致） */
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-  dataSource: T,
-  cols: ProDescriptionsItemProps<T>[]
-): NonNullable<DescriptionsProps['items']> {
-  return cols.map((col, index) => {
-    const dataIndex = col.dataIndex as keyof T | undefined;
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-    let content: React.ReactNode = value as React.ReactNode;
-    if (col.valueType === 'dateTime' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
-    } else if (col.valueType === 'date' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD');
-    }
-    if (col.render && dataSource != null) {
-            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
-        content,
-        dataSource,
-        index,
-      );
-    }
-    return {
-      key: String(col.key ?? col.dataIndex ?? index),
-      label: col.title as React.ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
-      span: col.span ?? 1,
-    };
-  });
 }
 
 /** 报价明细表最小横向滚动宽度（避免列换行，以横向滚动为主） */
@@ -677,6 +575,8 @@ const QuotationsPage: React.FC = () => {
   });
   const actionRef = useRef<ActionType>(null);
   const lastQuotationsFlatCacheRef = useRef<Quotation[]>([]);
+  const pendingListReloadRef = useRef(false);
+  const queryClient = useQueryClient();
   const [listScopeFilter, setListScopeFilter] = useState<QuotationListScope>(resolveDefaultQuotationListScope);
   const listScopeFilterRef = useRef(listScopeFilter);
   listScopeFilterRef.current = listScopeFilter;
@@ -728,6 +628,25 @@ const QuotationsPage: React.FC = () => {
   const tableSearchFormRef = useRef<any>(null);
   const [listTotal, setListTotal] = useState(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  /** 列表当前页扁平数据（唯一源：UniTable onTableDataChange，与表格展示一致） */
+  const [tableQuotationsFlat, setTableQuotationsFlat] = useState<Quotation[]>([]);
+  const invalidateQuotationListCache = useCallback(() => {
+    invalidateUniTableListCache(queryClient, QUOTATION_TABLE_CACHE_ID);
+    lastQuotationsFlatCacheRef.current = [];
+    setTableQuotationsFlat([]);
+  }, [queryClient]);
+  const scheduleQuotationListReload = useCallback(() => {
+    invalidateQuotationListCache();
+    pendingListReloadRef.current = true;
+  }, [invalidateQuotationListCache]);
+  const reloadQuotationList = useCallback(() => {
+    invalidateQuotationListCache();
+    actionRef.current?.reloadAndRest?.() ?? actionRef.current?.reload?.();
+  }, [invalidateQuotationListCache]);
+  const clearTableSelection = useCallback(() => {
+    actionRef.current?.clearSelected?.();
+    setSelectedRowKeys([]);
+  }, []);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [quotationDetail, setQuotationDetail] = useState<Quotation | null>(null);
   const quotationTracking = useDocumentTracking(
@@ -820,6 +739,14 @@ const QuotationsPage: React.FC = () => {
   const currentUser = useGlobalStore((s) => s.currentUser);
   const quotationPerms = useResourcePermissions(QUOTATION_RESOURCE);
   const salesContractPerms = useResourcePermissions(SALES_CONTRACT_RESOURCE);
+  const permDeniedTitle = t('common.permissionDenied');
+  const detailCapabilityGates = useQuotationCapabilities(
+    quotationDetail,
+    quotationPerms,
+    salesContractPerms,
+    t,
+    permDeniedTitle,
+  );
   const canSubmitQuotation = hasModulePermission(currentUser ?? undefined, QUOTATION_RESOURCE, 'submit');
   const canRevokeQuotation = hasModulePermission(currentUser ?? undefined, QUOTATION_RESOURCE, 'revoke');
   const canReviewQuotation = hasReviewPermission(currentUser ?? undefined, QUOTATION_RESOURCE);
@@ -846,7 +773,9 @@ const QuotationsPage: React.FC = () => {
         });
         if (cancelled) return;
         const matList = Array.isArray(matRes) ? matRes : (matRes as any)?.data ?? (matRes as any)?.items ?? [];
-        setMaterialList(Array.isArray(matList) ? matList : []);
+        const list = Array.isArray(matList) ? matList : [];
+        registerMaterialsForUnitSelect(list);
+        setMaterialList(list);
       } catch {
         if (!cancelled) setMaterialList([]);
       }
@@ -872,6 +801,12 @@ const QuotationsPage: React.FC = () => {
     };
   }, [currentUser]);
 
+  useEffect(() => {
+    if (materialList.length > 0) {
+      registerMaterialsForUnitSelect(materialList);
+    }
+  }, [materialList]);
+
   const applyCustomerToQuotationForm = useCallback(
     (c: Record<string, any> | null) => {
       applyCustomerFormFields(formRef, c, {
@@ -892,6 +827,16 @@ const QuotationsPage: React.FC = () => {
     },
     [customerList, applyCustomerToQuotationForm],
   );
+
+  useEffect(() => {
+    if (isFormPage) return;
+    if (!pendingListReloadRef.current) return;
+    pendingListReloadRef.current = false;
+    const timer = window.setTimeout(() => {
+      actionRef.current?.reloadAndRest?.() ?? actionRef.current?.reload?.();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [isFormPage, location.pathname]);
 
   useEffect(() => {
     if (!isFormPage) {
@@ -1024,6 +969,7 @@ const QuotationsPage: React.FC = () => {
       valueType: 'dateRange',
       hideInTable: true,
       fieldProps: { placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')] },
+      formItemProps: formDateRangeFormItemProps,
       order: 30,
     },
     {
@@ -1075,8 +1021,8 @@ const QuotationsPage: React.FC = () => {
             {t('common.detail')}
           </Button>,
         ];
-        const canEdit = record.status === '草稿' && quotationPerms.canUpdate;
-        const deletable = canDeleteQuotation(record) && quotationPerms.canDelete;
+        const canEdit = record.capabilities?.update?.allowed === true && quotationPerms.canUpdate;
+        const deletable = record.capabilities?.delete?.allowed === true && quotationPerms.canDelete;
         parts.push(
           <Button {...rowActionKind('update')} key="e" disabled={!canEdit} onClick={() => canEdit && handleEdit(record)}>
             {t('common.edit')}
@@ -1109,16 +1055,16 @@ const QuotationsPage: React.FC = () => {
             }}
           />
         );
-        if (canReopenQuotation(record)) {
+        if (record.capabilities?.reopen?.allowed === true && quotationPerms.canUpdate) {
           parts.push(
             <Button {...rowActionKind('read')} key="ro" onClick={() => handleReopen(record)}>
               {t('app.kuaizhizao.quotation.reopenEdit')}
             </Button>
           );
         }
-        if (canRevokePushQuotation(record)) {
+        if (record.capabilities?.revoke_push?.allowed === true && quotationPerms.canUpdate) {
           parts.push(
-            <Button {...rowActionKind('print')} key="rp" onClick={() => handleRevokePush(record)}>
+            <Button {...rowActionKind('skip')} key="rp" icon={<RollbackOutlined />} onClick={() => handleRevokePush(record)}>
               {t('app.kuaizhizao.quotation.revokePush')}
             </Button>
           );
@@ -1209,6 +1155,7 @@ const QuotationsPage: React.FC = () => {
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
+          setSelectedRowKeys((prev) => prev.filter((k) => Number(k) !== record.id!));
         } catch (error: any) {
           messageApi.error(error.message || t('common.deleteFailed'));
         }
@@ -1231,8 +1178,7 @@ const QuotationsPage: React.FC = () => {
         if (!materialCode) return null;
 
         const material = materialList.find((m: any) => (m.main_code ?? m.mainCode ?? m.code) === materialCode);
-        const taxR =
-          Number(material?.defaults?.defaultTaxRate ?? material?.defaults?.default_tax_rate) || 0;
+        const taxR = material ? getMaterialDefaultTaxRate(material) : 0;
         let unitPrice = price || Number(material?.defaults?.defaultSalePrice ?? material?.default_sale_price) || 0;
         if (priceTypeForm === 'tax_inclusive' && unitPrice > 0) {
           unitPrice = convertUnitPriceByPriceType(unitPrice, taxR, 'tax_exclusive', 'tax_inclusive');
@@ -1265,15 +1211,19 @@ const QuotationsPage: React.FC = () => {
   };
 
   const handleBatchDelete = async (keys: React.Key[]) => {
-    if (keys.length === 0) return;
+    const deletableKeys = keys.filter((k) => {
+      const q = resolveQuotationByRowKey(k);
+      return q != null && q.capabilities?.delete?.allowed === true && quotationPerms.canDelete;
+    });
+    if (deletableKeys.length === 0) return;
     try {
-      for (const k of keys) {
+      for (const k of deletableKeys) {
         await deleteQuotation(Number(k));
       }
-      messageApi.success(t('app.kuaizhizao.quotation.batchDeleteSuccess', { count: keys.length }));
+      messageApi.success(t('app.kuaizhizao.quotation.batchDeleteSuccess', { count: deletableKeys.length }));
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
-      setSelectedRowKeys([]);
+      clearTableSelection();
     } catch (error: any) {
       messageApi.error(error.message || t('common.batchDeleteFailed'));
       throw error;
@@ -1310,13 +1260,53 @@ const QuotationsPage: React.FC = () => {
     invalidateMenuBadgeCounts();
 
     actionRef.current?.reload();
-    setSelectedRowKeys([]);
+    clearTableSelection();
   };
 
   const handleBatchApprove = (keys: React.Key[]) =>
     handleBatchOperation(keys, t('app.kuaizhizao.quotation.batchApprove'), (id) => approveQuotation(id));
-  const handleBatchConfirmCustomer = (keys: React.Key[]) =>
-    handleBatchOperation(keys, t('app.kuaizhizao.quotation.batchConfirmCustomer'), (id) => confirmCustomerQuotation(id));
+  const resolveQuotationByRowKey = useCallback(
+    (key: React.Key): Quotation | null => {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) return null;
+      return (
+        tableQuotationsFlat.find((row) => Number(row.id) === id) ??
+        lastQuotationsFlatCacheRef.current.find((row) => Number(row.id) === id) ??
+        null
+      );
+    },
+    [tableQuotationsFlat],
+  );
+
+  const handleBatchConfirmCustomer = (keys: React.Key[]) => {
+    const confirmableKeys = keys.filter((key) => {
+      const q = resolveQuotationByRowKey(key);
+      return q != null && q.capabilities?.confirm_customer?.allowed === true && quotationPerms.canAction?.('execute');
+    });
+    if (confirmableKeys.length === 0) return;
+    return handleBatchOperation(
+      confirmableKeys,
+      t('app.kuaizhizao.quotation.batchConfirmCustomer'),
+      (id) => confirmCustomerQuotation(id),
+    );
+  };
+
+  const handleBatchCancelCustomerConfirm = (keys: React.Key[]) => {
+    const cancelableKeys = keys.filter((key) => {
+      const q = resolveQuotationByRowKey(key);
+      return (
+        q != null &&
+        q.capabilities?.cancel_customer_confirm?.allowed === true &&
+        quotationPerms.canAction?.('execute')
+      );
+    });
+    if (cancelableKeys.length === 0) return;
+    return handleBatchOperation(
+      cancelableKeys,
+      t('app.kuaizhizao.quotation.batchCancelCustomerConfirm'),
+      (id) => cancelCustomerConfirmQuotation(id),
+    );
+  };
 
   const handleSyncConfirm = async (rows: Record<string, any>[]) => {
     try {
@@ -1638,6 +1628,25 @@ const QuotationsPage: React.FC = () => {
     });
   };
 
+  const handleCancelCustomerConfirm = (record: Quotation) => {
+    Modal.confirm({
+      title: t('app.kuaizhizao.quotation.cancelCustomerConfirm'),
+      content: t('app.kuaizhizao.quotation.cancelCustomerConfirmContent'),
+      onOk: async () => {
+        try {
+          const updated = await cancelCustomerConfirmQuotation(record.id!);
+          messageApi.success(t('app.kuaizhizao.quotation.cancelCustomerConfirmSuccess'));
+          invalidateMenuBadgeCounts();
+
+          actionRef.current?.reload();
+          setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
+        } catch (e: any) {
+          messageApi.error(e?.message || e?.detail || t('common.operationFailed'));
+        }
+      },
+    });
+  };
+
   const handleReopen = (record: Quotation) => {
     Modal.confirm({
       title: t('app.kuaizhizao.quotation.reopenEdit'),
@@ -1726,7 +1735,7 @@ const QuotationsPage: React.FC = () => {
       }
       try {
         const latest = await getQuotation(numericId);
-        if (!canPrintFormalQuotation(latest, quotationAuditRequired)) {
+        if (!latest.capabilities?.print_formal?.allowed) {
           messageApi.warning(t('app.kuaizhizao.quotation.formalPrintDenied'));
           return;
         }
@@ -1748,7 +1757,7 @@ const QuotationsPage: React.FC = () => {
       }
       try {
         const latest = await getQuotation(numericId);
-        if (!canCreateRevision(latest)) {
+        if (!latest.capabilities?.create_revision?.allowed) {
           messageApi.warning(t('app.kuaizhizao.quotation.revisionOnlyLatest'));
           return;
         }
@@ -1762,28 +1771,156 @@ const QuotationsPage: React.FC = () => {
 
   const selectedQuotationForToolbar = useMemo(() => {
     if (selectedRowKeys.length !== 1) return null;
-    const numericId = Number(selectedRowKeys[0]);
-    if (!Number.isFinite(numericId) || numericId <= 0) return null;
-    return lastQuotationsFlatCacheRef.current.find((q) => q.id === numericId) ?? null;
-  }, [selectedRowKeys]);
+    return resolveQuotationByRowKey(selectedRowKeys[0]);
+  }, [selectedRowKeys, resolveQuotationByRowKey]);
+
+  /** 工具栏下推：优先用带 capabilities 的详情，避免列表未 enrich 时整组下推被禁用 */
+  const [toolbarPushQuotation, setToolbarPushQuotation] = useState<Quotation | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (selectedRowKeys.length !== 1) {
+      setToolbarPushQuotation(null);
+      return;
+    }
+    const cached = resolveQuotationByRowKey(selectedRowKeys[0]);
+    if (!cached?.id) {
+      setToolbarPushQuotation(null);
+      return;
+    }
+    if (cached.capabilities?.convert_to_order != null) {
+      setToolbarPushQuotation(cached);
+      return;
+    }
+    void getQuotation(cached.id)
+      .then((full) => {
+        if (!cancelled) setToolbarPushQuotation(full);
+      })
+      .catch(() => {
+        if (!cancelled) setToolbarPushQuotation(cached);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRowKeys, resolveQuotationByRowKey, tableQuotationsFlat]);
+
+  const quotationForToolbarPush = toolbarPushQuotation ?? selectedQuotationForToolbar;
+
+  const quotationRowSelectionGetCheckboxProps = useCallback(
+    (record: Quotation) => ({
+      disabled: !isQuotationRowSelectable(record, quotationAuditRequired),
+    }),
+    [quotationAuditRequired],
+  );
+
+  /** 工具栏「客户确认」：仅当选中项均可确认（已发送且审核通过/未开审核）时可点 */
+  const canToolbarConfirmCustomer = useMemo(() => {
+    if (selectedRowKeys.length === 0) return false;
+    const selected = selectedRowKeys
+      .map((key) => resolveQuotationByRowKey(key))
+      .filter((q): q is Quotation => q != null);
+    if (selected.length !== selectedRowKeys.length) return false;
+    return selected.every(
+      (q) => q.capabilities?.confirm_customer?.allowed === true && quotationPerms.canAction?.('execute'),
+    );
+  }, [selectedRowKeys, quotationPerms, resolveQuotationByRowKey]);
+
+  const canToolbarCancelCustomerConfirm = useMemo(() => {
+    if (selectedRowKeys.length === 0) return false;
+    const selected = selectedRowKeys
+      .map((key) => resolveQuotationByRowKey(key))
+      .filter((q): q is Quotation => q != null);
+    if (selected.length !== selectedRowKeys.length) return false;
+    return selected.every(
+      (q) =>
+        q.capabilities?.cancel_customer_confirm?.allowed === true &&
+        quotationPerms.canAction?.('execute'),
+    );
+  }, [selectedRowKeys, quotationPerms, resolveQuotationByRowKey]);
+
+  const selectedQuotationsForToolbar = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => resolveQuotationByRowKey(key))
+        .filter((q): q is Quotation => q != null),
+    [selectedRowKeys, resolveQuotationByRowKey],
+  );
+
+  const canToolbarBatchDelete = useMemo(
+    () => quotationBatchDeleteAllowed(selectedQuotationsForToolbar, quotationPerms.canDelete),
+    [selectedQuotationsForToolbar, quotationPerms.canDelete],
+  );
+
+  const canToolbarBatchApprove = useMemo(
+    () =>
+      quotationBatchApproveAllowed(
+        selectedQuotationsForToolbar,
+        quotationPerms.canAction?.('approve') === true,
+      ),
+    [selectedQuotationsForToolbar, quotationPerms],
+  );
+
+  const canToolbarCreateRevision = useMemo(() => {
+    if (selectedQuotationsForToolbar.length !== 1) return false;
+    const q = selectedQuotationsForToolbar[0];
+    return q.capabilities?.create_revision?.allowed === true && quotationPerms.canCreate;
+  }, [selectedQuotationsForToolbar, quotationPerms.canCreate]);
+
+  const canToolbarPrint = useMemo(() => {
+    if (selectedQuotationsForToolbar.length !== 1) return false;
+    const q = selectedQuotationsForToolbar[0];
+    return q.capabilities?.print_formal?.allowed === true && quotationPerms.canPrint;
+  }, [selectedQuotationsForToolbar, quotationPerms.canPrint]);
+
+  const handleTableDataChange = useCallback((data: QuotationTableRow[]) => {
+    const flat = flattenQuotationTableRows(data);
+    lastQuotationsFlatCacheRef.current = flat;
+    setTableQuotationsFlat(flat);
+  }, []);
 
   const buildToolbarPushMenuItems = useCallback(
     (record: Quotation) => {
       const superseded = isQuotationSuperseded(record);
-      const convertible = canConvertQuotation(record, quotationAuditRequired);
-      const contractConvertible = canConvertQuotationToContract(record);
+      const orderBizAllowed = quotationCapabilityAllowed(record, 'convert_to_order');
+      const contractBizAllowed = quotationCapabilityAllowed(record, 'convert_to_contract');
+      const convertible = orderBizAllowed && quotationPerms.canUpdate;
+      const contractConvertible = contractBizAllowed;
       const hasContract = record.contract_id != null && Number(record.contract_id) > 0;
+      const notLatest = record.is_latest_in_series === false;
+      const orderPushTitle = superseded
+        ? t('app.kuaizhizao.quotation.supersededConvertHint')
+        : hasContract
+          ? t('app.kuaizhizao.quotation.alreadyLinkedContract')
+          : notLatest
+            ? t('app.kuaizhizao.quotation.historyVersionPushHint')
+            : !convertible
+              ? !orderBizAllowed
+                ? quotationCapabilityReasonMessage(record.capabilities?.convert_to_order?.reason, t) ||
+                  t('app.kuaizhizao.quotation.pushBlockedStatus', {
+                    status: quotationStatusNorm(record) || '-',
+                  })
+                : permDeniedTitle
+              : undefined;
+      const contractPushTitle = superseded
+        ? t('app.kuaizhizao.quotation.supersededConvertHint')
+        : hasContract
+          ? t('app.kuaizhizao.quotation.alreadyLinkedContract')
+          : record.sales_order_id != null && Number(record.sales_order_id) > 0
+            ? t('app.kuaizhizao.quotation.alreadyLinkedSalesOrder')
+            : !contractConvertible
+              ? quotationCapabilityReasonMessage(record.capabilities?.convert_to_contract?.reason, t) ||
+                t('app.kuaizhizao.quotation.pushBlockedStatus', {
+                  status: quotationStatusNorm(record) || '-',
+                })
+              : !salesContractPerms.canCreate
+                ? permDeniedTitle
+                : undefined;
       return buildUniPushMenuItems([
         {
           key: 'sales-order',
           label: t('app.kuaizhizao.quotation.convertToSalesOrder'),
           icon: <SwapOutlined />,
           disabled: superseded || !convertible,
-          title: superseded
-            ? t('app.kuaizhizao.quotation.supersededConvertHint')
-            : hasContract
-              ? t('app.kuaizhizao.quotation.alreadyLinkedContract')
-              : undefined,
+          title: orderPushTitle,
           onClick: () => {
             if (superseded || !convertible) return;
             void (async () => {
@@ -1801,13 +1938,7 @@ const QuotationsPage: React.FC = () => {
           label: t('app.kuaizhizao.quotation.pushToSalesContract'),
           icon: <FileTextOutlined />,
           disabled: superseded || !contractConvertible || !salesContractPerms.canCreate,
-          title: superseded
-            ? t('app.kuaizhizao.quotation.supersededConvertHint')
-            : hasContract
-              ? t('app.kuaizhizao.quotation.alreadyLinkedContract')
-              : !salesContractPerms.canCreate
-                ? t('common.permissionDenied')
-                : undefined,
+          title: contractPushTitle,
           onClick: () => {
             if (superseded || !contractConvertible || !salesContractPerms.canCreate) return;
             void (async () => {
@@ -1826,15 +1957,16 @@ const QuotationsPage: React.FC = () => {
       handleConvert,
       handleConvertToContract,
       messageApi,
-      quotationAuditRequired,
+      quotationPerms.canUpdate,
       salesContractPerms.canCreate,
+      permDeniedTitle,
       t,
     ],
   );
 
   const toolbarPushMenuItems = useMemo(
-    () => (selectedQuotationForToolbar ? buildToolbarPushMenuItems(selectedQuotationForToolbar) : []),
-    [buildToolbarPushMenuItems, selectedQuotationForToolbar],
+    () => (quotationForToolbarPush ? buildToolbarPushMenuItems(quotationForToolbarPush) : []),
+    [buildToolbarPushMenuItems, quotationForToolbarPush],
   );
 
   /**
@@ -1945,6 +2077,7 @@ const QuotationsPage: React.FC = () => {
   async function initQuotationEditForm(quotationId: number) {
     try {
       const detail = await getQuotation(quotationId, true);
+      void prefetchMaterialsForUnitSelect((detail.items ?? []).map((it) => it.material_id));
       setEditingId(quotationId);
       const editValues = {
         quotation_code: detail.quotation_code,
@@ -2059,9 +2192,11 @@ const QuotationsPage: React.FC = () => {
     invalidateMenuBadgeCounts();
 
     if (isFormPage) {
+      scheduleQuotationListReload();
       navigate(QUOTATION_LIST_PATH);
+      return;
     }
-    actionRef.current?.reload();
+    reloadQuotationList();
   };
 
   const handleSaveDraft = async () => {
@@ -2143,12 +2278,12 @@ const QuotationsPage: React.FC = () => {
     invalidateMenuBadgeCounts();
 
     if (isFormPage) {
+      scheduleQuotationListReload();
       navigate(QUOTATION_LIST_PATH);
+      return;
     }
-    actionRef.current?.reload();
+    reloadQuotationList();
   };
-
-  /** 详情-基本信息：顺序按相近职能分组（单据标识 → 客户 → 商务条款 → 交货 → 关联 → 系统） */
   const detailBasicColumns: ProDescriptionsItemProps<Quotation>[] = [
     // —— 单据标识与状态 ——
     { title: t('app.kuaizhizao.quotation.import.code'), dataIndex: 'quotation_code' },
@@ -2304,6 +2439,8 @@ const QuotationsPage: React.FC = () => {
           variant_attributes: attrs ?? items[index].variant_attributes,
         };
         formRef.current?.setFieldsValue({ items });
+        formRef.current?.setFieldValue(['items', index, 'unit_price'], up);
+        formRef.current?.setFieldValue(['items', index, 'tax_rate'], taxRate);
       }
     },
     [materialList],
@@ -2460,6 +2597,7 @@ const QuotationsPage: React.FC = () => {
             name="quotation_date"
             label={t('app.kuaizhizao.quotation.colQuotationDate')}
             rules={[{ required: true }]}
+            formItemProps={formDateFormItemProps}
             fieldProps={{ style: { width: '100%' } }}
           />
         </Col>
@@ -2467,6 +2605,7 @@ const QuotationsPage: React.FC = () => {
           <ProFormDatePicker
             name="valid_until"
             label={t('app.kuaizhizao.quotation.form.validUntil')}
+            formItemProps={formDateFormItemProps}
             fieldProps={buildFutureDateShortcutFieldProps({
               getForm: () => formRef.current,
               fieldName: 'valid_until',
@@ -2479,6 +2618,7 @@ const QuotationsPage: React.FC = () => {
           <ProFormDatePicker
             name="delivery_date"
             label={t('app.kuaizhizao.quotation.form.expectedDeliveryDate')}
+            formItemProps={formDateFormItemProps}
             fieldProps={buildFutureDateShortcutFieldProps({
               getForm: () => formRef.current,
               fieldName: 'delivery_date',
@@ -2528,14 +2668,13 @@ const QuotationsPage: React.FC = () => {
             label={t('app.kuaizhizao.quotation.form.currency')}
             placeholder={t('app.kuaizhizao.quotation.form.selectCurrency')}
             formRef={formRef}
-            initialValue={defaultQuotationCurrency}
             valueEqualsLabel={false}
             quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
           />
         </Col>
       </Row>
       <ProFormText name="customer_name" hidden />
-      <ProFormText name="price_type" hidden initialValue="tax_exclusive" />
+      <ProFormText name="price_type" hidden />
 
       <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
         {({ getFieldValue }: any) => {
@@ -2700,48 +2839,24 @@ const QuotationsPage: React.FC = () => {
                       ...(showTaxColumns
                         ? [
                             {
-                              title: (
-                                <span style={{ whiteSpace: 'nowrap' }}>
-                                  {t('app.kuaizhizao.salesOrder.taxRate')}
-                                  <Button
-                                    type="link"
-                                    size="small"
-                                    style={{ padding: '0 4px', height: 'auto' }}
-                                    onClick={() => {
-                                      const itemsVal = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
-                                      if (itemsVal.length === 0) return;
-                                      const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
-                                      if (rate != null && rate !== '') {
-                                        const num = Math.round(parseFloat(rate));
-                                        if (!Number.isNaN(num) && num >= 0 && num <= 100) {
-                                          const next = itemsVal.map((it: any) => ({ ...it, tax_rate: num }));
-                                          formRef.current?.setFieldsValue({ items: next });
-                                        }
-                                      }
-                                    }}
-                                  >
-                                    {t('app.kuaizhizao.salesOrder.batch')}
-                                  </Button>
-                                </span>
-                              ),
+                              title: <TaxRateBatchColumnTitle onBatch={() => {
+                                const itemsVal = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+                                if (itemsVal.length === 0) return;
+                                const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
+                                if (rate != null && rate !== '') {
+                                  const num = Math.round(parseFloat(rate));
+                                  if (!Number.isNaN(num) && num >= 0 && num <= 100) {
+                                    const next = itemsVal.map((it: any) => ({ ...it, tax_rate: num }));
+                                    formRef.current?.setFieldsValue({ items: next });
+                                  }
+                                }
+                              }} />,
                               dataIndex: 'tax_rate',
                               width: 108,
                               ...QUOTATION_DETAIL_NUM_COL,
                               onCell: () => ({ className: 'quotation-tax-rate-col' }),
                               render: (_: unknown, __: unknown, index: number) => (
-                                <div className="quotation-tax-rate-cell">
-                                  <Form.Item name={[index, 'tax_rate']} initialValue={0} style={{ margin: 0 }}>
-                                    <InputNumber
-                                      placeholder="0"
-                                      min={0}
-                                      max={100}
-                                      precision={0}
-                                      addonAfter="%"
-                                      controls={false}
-                                      size={DOCUMENT_DETAIL_CONTROL_SIZE}
-                                    />
-                                  </Form.Item>
-                                </div>
+                                <TaxRateDetailCell index={index} />
                               ),
                             },
                             {
@@ -2844,7 +2959,11 @@ const QuotationsPage: React.FC = () => {
                         width: 152,
                         ...QUOTATION_DETAIL_TEXT_COL,
                         render: (_: unknown, __: unknown, index: number) => (
-                          <Form.Item name={[index, 'delivery_date']} style={{ margin: 0 }}>
+                          <Form.Item
+                            name={[index, 'delivery_date']}
+                            style={{ margin: 0 }}
+                            {...formDateFormItemProps}
+                          >
                             <FutureDatePicker
                               size={DOCUMENT_DETAIL_CONTROL_SIZE}
                               style={{ width: '100%', minWidth: 140 }}
@@ -3081,6 +3200,7 @@ const QuotationsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={alignedListColumns}
+          onTableDataChange={handleTableDataChange}
           showAdvancedSearch
           beforeSearchButtons={
             <ThemedSegmented
@@ -3102,14 +3222,16 @@ const QuotationsPage: React.FC = () => {
           onCreate={handleCreate}
           toolBarActionsAfterCreate={[
             <UniPushToolbarButton
-              key={`quotation-push-${selectedQuotationForToolbar?.id ?? 'none'}`}
+              key={`quotation-push-${quotationForToolbarPush?.id ?? 'none'}`}
               menuItems={toolbarPushMenuItems}
-              disabled={!selectedQuotationForToolbar}
+              disabled={!quotationForToolbarPush}
             />,
           ]}
           enableRowSelection
+          rowSelectionGetCheckboxProps={quotationRowSelectionGetCheckboxProps}
           showDeleteButton
           onDelete={handleBatchDelete}
+          deleteButtonDisabled={!canToolbarBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.quotation.confirmBatchDelete', { count })}
           toolBarActionsAfterDelete={
             quotationAuditRequired
@@ -3117,6 +3239,7 @@ const QuotationsPage: React.FC = () => {
                   <UniBatchMenuButton
                     key="quotation-batch-menu"
                     selectedRowKeys={selectedRowKeys}
+                    disabled={!canToolbarBatchApprove}
                     menuItems={[
                       {
                         key: 'approve',
@@ -3135,8 +3258,11 @@ const QuotationsPage: React.FC = () => {
               key="quotation-confirm-customer"
               selectedRowKeys={selectedRowKeys}
               onAction={handleBatchConfirmCustomer}
+              disabled={!canToolbarConfirmCustomer}
               icon={<CommentOutlined />}
               size="middle"
+              color="green"
+              variant="solid"
               requireConfirm
               confirmTitle={(count) =>
                 count === 1
@@ -3153,10 +3279,35 @@ const QuotationsPage: React.FC = () => {
                 ? t('app.kuaizhizao.quotation.customerConfirm')
                 : t('app.kuaizhizao.quotation.batchConfirm')}
             </UniBatchButton>,
+            <UniBatchButton
+              key="quotation-cancel-customer-confirm"
+              selectedRowKeys={selectedRowKeys}
+              onAction={handleBatchCancelCustomerConfirm}
+              disabled={!canToolbarCancelCustomerConfirm}
+              icon={<CloseCircleOutlined />}
+              size="middle"
+              color="orange"
+              variant="solid"
+              requireConfirm
+              confirmTitle={(count) =>
+                count === 1
+                  ? t('app.kuaizhizao.quotation.cancelCustomerConfirm')
+                  : t('app.kuaizhizao.quotation.batchCancelCustomerConfirm')
+              }
+              confirmDescription={(count) =>
+                count === 1
+                  ? t('app.kuaizhizao.quotation.cancelCustomerConfirmContent')
+                  : t('app.kuaizhizao.quotation.batchCancelCustomerConfirmContent', { count })
+              }
+            >
+              {selectedRowKeys.length <= 1
+                ? t('app.kuaizhizao.quotation.cancelCustomerConfirm')
+                : t('app.kuaizhizao.quotation.batchCancelCustomerConfirm')}
+            </UniBatchButton>,
             <Button
               key="toolbar-revision-direct"
               icon={<BranchesOutlined />}
-              disabled={selectedRowKeys.length !== 1}
+              disabled={!canToolbarCreateRevision}
               onClick={() => void handleToolbarRevision(selectedRowKeys)}
             >
               {t('app.kuaizhizao.quotation.saveAsRevision')}
@@ -3164,7 +3315,7 @@ const QuotationsPage: React.FC = () => {
             <Button
               key="toolbar-print-direct"
               icon={<PrinterOutlined />}
-              disabled={selectedRowKeys.length !== 1}
+              disabled={!canToolbarPrint}
               onClick={() => void handleToolbarPrint(selectedRowKeys)}
             >
               {t('app.kuaizhizao.quotation.formalPrint')}
@@ -3232,6 +3383,7 @@ const QuotationsPage: React.FC = () => {
               setListTotal(response.total ?? 0);
               const flat = response.data || [];
               lastQuotationsFlatCacheRef.current = flat;
+              setTableQuotationsFlat(flat);
               return {
                 data: buildQuotationSeriesTree(flat),
                 success: true,
@@ -3259,7 +3411,7 @@ const QuotationsPage: React.FC = () => {
         extra={
           quotationDetail && (
             <Space wrap>
-              {canDeleteQuotation(quotationDetail) && quotationPerms.canDelete && (
+              {!detailCapabilityGates.delete.disabled && (
                 <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(quotationDetail)}>{t('common.delete')}</Button>
               )}
               <UniWorkflowActions
@@ -3269,6 +3421,7 @@ const QuotationsPage: React.FC = () => {
                 auditNodeKey="quotation"
                 resourcePrefix="kuaizhizao:quotation"
                 unifiedAudit
+                theme="default"
                 statusField="status"
                 reviewStatusField="review_status"
                 pendingStatuses={['待审核', 'pending_review', 'PENDING_REVIEW', '已发送', 'sent']}
@@ -3279,41 +3432,35 @@ const QuotationsPage: React.FC = () => {
                   void loadQuotationDetail(quotationDetail.id!);
                 }}
               />
-              {canConfirmCustomerQuotation(quotationDetail, quotationAuditRequired) && (
-                <Button icon={<SendOutlined />} onClick={() => handleConfirmCustomer(quotationDetail)}>{t('app.kuaizhizao.quotation.customerConfirm')}</Button>
+              {!detailCapabilityGates.confirmCustomer.disabled && (
+                <Button color="green" variant="solid" icon={<SendOutlined />} onClick={() => handleConfirmCustomer(quotationDetail)}>{t('app.kuaizhizao.quotation.customerConfirm')}</Button>
               )}
-              {canReopenQuotation(quotationDetail) && (
+              {!detailCapabilityGates.cancelCustomerConfirm.disabled && (
+                <Button color="orange" variant="solid" icon={<CloseCircleOutlined />} onClick={() => handleCancelCustomerConfirm(quotationDetail)}>{t('app.kuaizhizao.quotation.cancelCustomerConfirm')}</Button>
+              )}
+              {!detailCapabilityGates.reopen.disabled && (
                 <Button icon={<EditOutlined />} onClick={() => handleReopen(quotationDetail)}>{t('app.kuaizhizao.quotation.reopenEdit')}</Button>
               )}
-              {canConvertQuotation(quotationDetail, quotationAuditRequired) && (
-                <Button type="primary" icon={<SwapOutlined />} onClick={() => handleConvert(quotationDetail)}>{t('app.kuaizhizao.quotation.convertToSalesOrder')}</Button>
-              )}
-              {canConvertQuotationToContract(quotationDetail) && salesContractPerms.canCreate && (
-                <Button icon={<FileTextOutlined />} onClick={() => handleConvertToContract(quotationDetail)}>
-                  {t('app.kuaizhizao.quotation.pushToSalesContract')}
-                </Button>
-              )}
-              {canRevokePushQuotation(quotationDetail) && (
+              {!detailCapabilityGates.revokePush.disabled && (
                 <Button icon={<RollbackOutlined />} onClick={() => handleRevokePush(quotationDetail)}>{t('app.kuaizhizao.quotation.revokePush')}</Button>
               )}
-              {canCreateRevision(quotationDetail) && (
+              {!detailCapabilityGates.createRevision.disabled && (
                 <Button icon={<BranchesOutlined />} onClick={() => handleRevision(quotationDetail)}>
                   {t('app.kuaizhizao.quotation.saveAsRevision')}
                 </Button>
               )}
               <Tooltip
                 title={
-                  canPrintFormalQuotation(quotationDetail, quotationAuditRequired)
-                    ? t('app.kuaizhizao.quotation.formalPrint')
-                    : t('app.kuaizhizao.quotation.formalPrintDenied')
+                  detailCapabilityGates.printFormal.disabled
+                    ? detailCapabilityGates.printFormal.title || t('app.kuaizhizao.quotation.formalPrintDenied')
+                    : t('app.kuaizhizao.quotation.formalPrint')
                 }
               >
                 <Button
                   icon={<PrinterOutlined />}
-                  disabled={!canPrintFormalQuotation(quotationDetail, quotationAuditRequired)}
+                  disabled={detailCapabilityGates.printFormal.disabled}
                   onClick={() =>
-                    canPrintFormalQuotation(quotationDetail, quotationAuditRequired) &&
-                    handlePrint(quotationDetail)
+                    !detailCapabilityGates.printFormal.disabled && handlePrint(quotationDetail)
                   }
                 >
                   {t('app.kuaizhizao.quotation.formalPrint')}
@@ -3327,7 +3474,7 @@ const QuotationsPage: React.FC = () => {
             <Descriptions
               column={3}
               size="small"
-              items={buildDescriptionItemsFromColumns(quotationDetail, alignedDetailBasicColumns)}
+              items={buildDescriptionItemsFromColumns(quotationDetail, alignedDetailBasicColumns, { column: 3 })}
             />
           ) : undefined
         }

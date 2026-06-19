@@ -50,6 +50,12 @@ def resolve_kuaizhizao_module_action(
         return "audit"
     if "/recall" in p:
         return "recall"
+    if "/convert-to-order" in p:
+        return "update"
+    if "/confirm-customer" in p:
+        return "execute"
+    if "/cancel-customer-confirm" in p:
+        return "execute"
     m = (method or "").upper()
     if m == "GET":
         return "read"

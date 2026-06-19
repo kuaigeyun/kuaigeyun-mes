@@ -3290,7 +3290,7 @@ const PurchaseOrdersPage: React.FC = () => {
                             const isPassed = h.action === 'approve';
                             const isRejected = h.action === 'reject';
                             return {
-                              dot: isPassed ? (
+                              icon: isPassed ? (
                                 <CheckCircleTwoTone twoToneColor="#52c41a" />
                               ) : isRejected ? (
                                 <CloseCircleTwoTone twoToneColor="#ff4d4f" />
@@ -3298,7 +3298,7 @@ const PurchaseOrdersPage: React.FC = () => {
                                 <ClockCircleOutlined style={{ color: '#1890ff' }} />
                               ),
                               color: isPassed ? 'green' : isRejected ? 'red' : 'blue',
-                              children: (
+                              content: (
                                 <div>
                                   <div style={{ marginBottom: 4 }}>
                                     <Tag color={isPassed ? 'success' : isRejected ? 'error' : 'processing'}>

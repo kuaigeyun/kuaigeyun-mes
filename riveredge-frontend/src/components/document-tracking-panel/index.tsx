@@ -204,7 +204,7 @@ export const DocumentTrackingTimelineBody: React.FC<{
     );
 
     return {
-      dot: icon,
+      icon,
       content: (
         <div>
           {mainRow}
