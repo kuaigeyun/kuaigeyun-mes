@@ -3169,6 +3169,23 @@ class SalesOrderService:
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
                 deleted_at=datetime.now()
             )
+            from apps.kuaizhizao.models.quotation import Quotation
+            from apps.kuaizhizao.services.quotation_service import QuotationService
+
+            operator_id = int(current_user.id) if current_user else 0
+            linked_quotation_ids = await Quotation.filter(
+                tenant_id=tenant_id,
+                sales_order_id=sales_order_id,
+                deleted_at__isnull=True,
+            ).values_list("id", flat=True)
+            quotation_svc = QuotationService()
+            for quotation_id in linked_quotation_ids:
+                await quotation_svc._detach_quotation_if_downstream_sales_order_deleted(
+                    tenant_id,
+                    int(quotation_id),
+                    operator_id,
+                    transition_reason="下游销售订单已删除，自动撤回下推",
+                )
 
     async def _bulk_operation_wrapper(
         self,

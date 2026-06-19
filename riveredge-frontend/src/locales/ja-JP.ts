@@ -4374,6 +4374,7 @@ export default {
   'app.kuaizhizao.quotation.dateShortcut.1month': '1ヶ月',
   'app.kuaizhizao.quotation.dateShortcut.monthEnd': '月末',
   'app.kuaizhizao.quotation.statusFilter.draft': '下書き',
+  'app.kuaizhizao.quotation.statusFilter.pendingReview': '審査待ち',
   'app.kuaizhizao.quotation.statusFilter.sent': '引用',
   'app.kuaizhizao.quotation.statusFilter.accepted': 'お客様が確認しました',
   'app.kuaizhizao.quotation.statusFilter.converted': '注文に変換されました',

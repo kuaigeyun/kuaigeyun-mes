@@ -143,52 +143,12 @@ export function quotationBatchApproveAllowed(
   });
 }
 
-/** capabilities 未下发时，按主状态 / lifecycle 推断下推是否允许 */
-export function quotationPushAllowedFallback(
-  record: Quotation,
-  action: 'convert_to_order' | 'convert_to_contract',
-): boolean {
-  const st = (record.status || '').trim();
-  const stageKey = String(
-    (record.lifecycle as { current_stage_key?: string } | undefined)?.current_stage_key ?? '',
-  ).trim();
-  const accepted = st === '已接受' || stageKey === 'customer_confirmed';
-  const sent = st === '已发送' || stageKey === 'generated';
-  const converted = st === '已转订单' || stageKey === 'converted';
-  if (record.is_latest_in_series === false) return false;
-  const hasContract =
-    record.contract_id != null &&
-    Number(record.contract_id) > 0 &&
-    record.contract_downstream_missing !== true;
-  const hasSo =
-    record.sales_order_id != null &&
-    Number(record.sales_order_id) > 0 &&
-    record.conversion_downstream_missing !== true;
-  if (action === 'convert_to_contract') {
-    if (hasContract || hasSo || converted) return false;
-    return accepted || sent;
-  }
-  if (hasContract || st === '已拒绝') return false;
-  if (converted) return record.conversion_downstream_missing === true;
-  if (accepted) return true;
-  if (sent) return true;
-  return false;
-}
-
-/**
- * 业务态是否允许下推（capabilities 与 status/lifecycle 兜底取并集，避免 enrich 漂移锁死 UI）。
- * 最终执行仍由后端 assert_quotation_capability 校验。
- */
+/** capabilities 为唯一业务门控（与后端 derive_quotation_capabilities 一致） */
 export function quotationCapabilityAllowed(
   record: Quotation,
   key: 'convert_to_order' | 'convert_to_contract',
 ): boolean {
-  const fallback = quotationPushAllowedFallback(record, key);
-  const cap = record.capabilities?.[key];
-  if (cap?.allowed === true) return true;
-  if (fallback) return true;
-  if (cap != null) return false;
-  return false;
+  return record.capabilities?.[key]?.allowed === true;
 }
 
 /** 转销售订单 RBAC：路由映射为 update；兼容仅授予 execute 的角色 */

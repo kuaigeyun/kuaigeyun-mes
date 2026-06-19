@@ -125,6 +125,7 @@ def test_converted_downstream_missing():
     )
     assert caps.delete.allowed
     assert caps.convert_to_order.allowed
+    assert caps.convert_to_contract.allowed
     assert caps.revoke_push.allowed
 
 

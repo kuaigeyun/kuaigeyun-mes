@@ -150,24 +150,42 @@ class QuotationService:
         tenant_id: int,
         quotation_id: int,
         operator_id: int,
-    ) -> None:
+        *,
+        transition_reason: Optional[str] = "自动撤回下推",
+        log_transition: bool = True,
+    ) -> bool:
         """若下游销售订单已删除，解除报价单上的转单标记，回到可再次下推的状态（已接受）。"""
         q = await Quotation.get_or_none(
             tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
         )
         if not q:
-            return
+            return False
         missing = await QuotationService._quotation_conversion_downstream_missing(
             tenant_id, q
         )
         if not missing:
-            return
+            return False
+        from_state = (q.status or "").strip()
         await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
             status="已接受",
             sales_order_id=None,
             sales_order_code=None,
             updated_by=operator_id,
         )
+        if log_transition and from_state == "已转订单" and transition_reason:
+            from apps.common.base_service import AppBaseService
+
+            op_name = await AppBaseService().get_user_name(operator_id)
+            await self._log_quotation_state_transition(
+                tenant_id,
+                quotation_id,
+                "已转订单",
+                "已接受",
+                operator_id,
+                op_name,
+                transition_reason,
+            )
+        return True
 
     async def _log_quotation_state_transition(
         self,
@@ -1027,25 +1045,15 @@ class QuotationService:
                 raise BusinessLogicError(
                     "下游销售订单仍存在，无法撤回下推；请先作废或删除销售订单"
                 )
-        from apps.common.base_service import AppBaseService
-
-        op_name = await AppBaseService().get_user_name(operator_id)
         async with in_transaction():
-            await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
-                status="已接受",
-                sales_order_id=None,
-                sales_order_code=None,
-                updated_by=operator_id,
-            )
-            await self._log_quotation_state_transition(
+            detached = await self._detach_quotation_if_downstream_sales_order_deleted(
                 tenant_id,
                 quotation_id,
-                "已转订单",
-                "已接受",
                 operator_id,
-                op_name,
-                "撤回下推",
+                transition_reason="撤回下推",
             )
+            if not detached:
+                raise BusinessLogicError("当前状态无法撤回下推")
         return await self.get_quotation_by_id(tenant_id, quotation_id, include_items=True)
 
     async def get_quotation_by_id(
@@ -1068,8 +1076,17 @@ class QuotationService:
                 user=current_user,
                 resource="kuaizhizao:quotation",
             )
+        operator_id = quotation.updated_by or 0
         if await self._detach_quotation_if_contract_deleted(
-            tenant_id, quotation_id, quotation.updated_by or 0
+            tenant_id, quotation_id, operator_id
+        ):
+            quotation = await Quotation.get_or_none(
+                tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+            )
+            if not quotation:
+                raise NotFoundError(f"报价单不存在: {quotation_id}")
+        if await self._detach_quotation_if_downstream_sales_order_deleted(
+            tenant_id, quotation_id, operator_id
         ):
             quotation = await Quotation.get_or_none(
                 tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
@@ -1141,6 +1158,7 @@ class QuotationService:
         customer_name: Optional[str] = None,
         quotation_series_code: Optional[str] = None,
         list_scope: Optional[str] = None,
+        pullable_only: Optional[bool] = None,
         current_user: Optional[User] = None,
     ) -> QuotationListResponse:
         """获取报价单列表"""
@@ -1167,6 +1185,8 @@ class QuotationService:
             query = query.filter(quotation_code__icontains=quotation_code.strip())
         if customer_name and customer_name.strip():
             query = query.filter(customer_name__icontains=customer_name.strip())
+        if pullable_only:
+            query = query.filter(sales_order_id__isnull=True).exclude(status="已转订单")
         total = await query.count()
         quotations = await query.offset(skip).limit(limit).order_by("-updated_at")
         from apps.kuaizhizao.services.document_lifecycle_service import get_quotation_lifecycle
@@ -1216,6 +1236,21 @@ class QuotationService:
                     q.contract_id = None
                     q.contract_code = None
                     contract_missing_by_id[int(q.id)] = False
+        stale_so_q_ids = [qid for qid, missing in missing_by_id.items() if missing]
+        if stale_so_q_ids:
+            await Quotation.filter(
+                tenant_id=tenant_id, id__in=stale_so_q_ids
+            ).update(
+                status="已接受",
+                sales_order_id=None,
+                sales_order_code=None,
+            )
+            for q in quotations:
+                if int(q.id) in stale_so_q_ids:
+                    q.sales_order_id = None
+                    q.sales_order_code = None
+                    q.status = "已接受"
+                    missing_by_id[int(q.id)] = False
         data = []
         for q in quotations:
             r = self._quotation_to_response(q)
@@ -1611,7 +1646,7 @@ class QuotationService:
         返回 (sales_order_response, quotation_response)
         """
         await self._detach_quotation_if_downstream_sales_order_deleted(
-            tenant_id, quotation_id, created_by
+            tenant_id, quotation_id, created_by, log_transition=False
         )
         await self._detach_quotation_if_contract_deleted(
             tenant_id, quotation_id, created_by

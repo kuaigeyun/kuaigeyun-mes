@@ -122,6 +122,8 @@ export interface QuotationListParams {
   quotation_series_code?: string;
   /** 数据范围：all 全部 / mine 我的 / department 我的部门 */
   list_scope?: 'all' | 'mine' | 'department';
+  /** 仅可上拉建销售订单：未关联销售订单且非已转订单 */
+  pullable_only?: boolean;
 }
 
 export interface QuotationListResponse {

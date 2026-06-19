@@ -28,6 +28,8 @@ import {
 
   theme,
 
+  Flex,
+
 } from 'antd';
 
 import {
@@ -52,6 +54,7 @@ import UniAuditAdvancedActionModal, { type AdvancedActionState } from './UniAudi
 import type { UniAuditAction } from './types';
 import { useGlobalStore } from '../../stores';
 import { formatDateTimeBySiteSetting } from '../../utils/format';
+import { useTranslation } from 'react-i18next';
 
 
 
@@ -158,13 +161,13 @@ const EXECUTION_ACTION_LABEL: Record<string, string> = {
   approved: '审核通过',
   reject: '驳回',
   rejected: '驳回',
-  cancel: '撤回',
-  cancelled: '撤回',
-  canceled: '撤回',
+  cancel: '撤回审核',
+  cancelled: '撤回审核',
+  canceled: '撤回审核',
   transfer: '转交',
   transferred: '转交',
-  withdraw: '撤回',
-  withdrawn: '撤回',
+  withdraw: '撤回审核',
+  withdrawn: '撤回审核',
   submit: '提交',
   submitted: '提交',
   pending: '待处理',
@@ -605,6 +608,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
 }) => {
 
+  const { t } = useTranslation();
   const [reason, setReason] = useState('');
 
   const [confirming, setConfirming] = useState(false);
@@ -853,7 +857,9 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
         {effectiveHubActions.length > 0 ? (
 
-          <Space wrap>
+          <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
+
+            <Space wrap>
 
             {effectiveHubActions.map((item) => (
 
@@ -893,11 +899,25 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
             ))}
 
-          </Space>
+            </Space>
+
+            <Button onClick={onCancel}>{t('common.close')}</Button>
+
+          </Flex>
 
         ) : (
 
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前阶段没有可执行的审核操作" />
+          <>
+
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前阶段没有可执行的审核操作" />
+
+            <Flex justify="flex-end" style={{ marginTop: 12 }}>
+
+              <Button onClick={onCancel}>{t('common.close')}</Button>
+
+            </Flex>
+
+          </>
 
         )}
 

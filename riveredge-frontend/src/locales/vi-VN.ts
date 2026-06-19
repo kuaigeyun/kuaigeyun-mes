@@ -4359,6 +4359,7 @@ export default {
   'app.kuaizhizao.quotation.dateShortcut.1month': '1 tháng',
   'app.kuaizhizao.quotation.dateShortcut.monthEnd': 'Cuối tháng',
   'app.kuaizhizao.quotation.statusFilter.draft': 'Bản nháp',
+  'app.kuaizhizao.quotation.statusFilter.pendingReview': 'Chờ duyệt',
   'app.kuaizhizao.quotation.statusFilter.sent': 'Đã trích dẫn',
   'app.kuaizhizao.quotation.statusFilter.accepted': 'Khách hàng xác nhận',
   'app.kuaizhizao.quotation.statusFilter.converted': 'Đã chuyển đổi thành đơn đặt hàng',

@@ -79,6 +79,7 @@ import {
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
@@ -581,12 +582,6 @@ const SalesOrdersPage: React.FC = () => {
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
   const [followUpPreset, setFollowUpPreset] = useState<CustomerFollowUpPreset | null>(null);
-  const [pullFromQuotationVisible, setPullFromQuotationVisible] = useState(false);
-  const [pullQuotationLoading, setPullQuotationLoading] = useState(false);
-  const [pullQuotationSubmitting, setPullQuotationSubmitting] = useState(false);
-  const [pullQuotationKeyword, setPullQuotationKeyword] = useState('');
-  const [selectedPullQuotationId, setSelectedPullQuotationId] = useState<number | undefined>(undefined);
-  const [pullQuotationCandidates, setPullQuotationCandidates] = useState<PullQuotationCandidate[]>([]);
   /** 与客户跟进列表一致：交货逾期行浅色警示背景 */
   const [highlightDeliveryOverdue, setHighlightDeliveryOverdue] = useState(false);
   /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
@@ -1658,78 +1653,186 @@ const SalesOrdersPage: React.FC = () => {
     );
   };
 
-  const loadPullQuotationCandidates = async (keyword: string = '') => {
-    setPullQuotationLoading(true);
-    try {
-      const result = await listQuotations({
-        skip: 0,
-        limit: 30,
-        keyword: keyword.trim() || undefined,
-      });
-      const rows: Quotation[] = Array.isArray(result) ? result : (result as any).data || [];
-      const candidates: PullQuotationCandidate[] = rows
-        .filter((q) => q.id && q.quotation_code)
-        .map((q) => ({
-          id: Number(q.id),
-          quotation_code: String(q.quotation_code),
-          customer_name: q.customer_name || '',
-          quotation_date: q.quotation_date || '',
-          delivery_date: q.delivery_date || '',
-          total_amount: q.total_amount != null ? Number(q.total_amount) : undefined,
-          status: q.status || '',
-          review_status: q.review_status || '',
-          salesman_name: q.salesman_name || '',
-          sales_order_id: q.sales_order_id ? Number(q.sales_order_id) : undefined,
-          sales_order_code: q.sales_order_code || '',
-        }));
-      setPullQuotationCandidates(candidates);
-    } catch (error: any) {
-      messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.loadQuotationsFailed')));
-      setPullQuotationCandidates([]);
-    } finally {
-      setPullQuotationLoading(false);
-    }
-  };
+  const mapPullQuotationRows = useCallback((rows: Quotation[]): PullQuotationCandidate[] => {
+    return rows
+      .filter((q) => q.id && q.quotation_code)
+      .map((q) => ({
+        id: Number(q.id),
+        quotation_code: String(q.quotation_code),
+        customer_name: q.customer_name || '',
+        quotation_date: q.quotation_date || '',
+        delivery_date: q.delivery_date || '',
+        total_amount: q.total_amount != null ? Number(q.total_amount) : undefined,
+        status: q.status || '',
+        review_status: q.review_status || '',
+        salesman_name: q.salesman_name || '',
+        sales_order_id: q.sales_order_id ? Number(q.sales_order_id) : undefined,
+        sales_order_code: q.sales_order_code || '',
+      }));
+  }, []);
+
+  const pullFromQuotationScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
+  const pullFromQuotationQuery = useUniPullQuery<PullQuotationCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    scopeOptions: pullFromQuotationScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => record.status === '已转订单' || !!record.sales_order_id,
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const result = await listQuotations({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+          pullable_only: scope === 'pullable',
+        });
+        const rows: Quotation[] = Array.isArray(result) ? result : result.data || [];
+        return {
+          data: mapPullQuotationRows(rows),
+          total: Array.isArray(result) ? rows.length : Number(result.total ?? rows.length),
+        };
+      } catch (error: any) {
+        messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.loadQuotationsFailed')));
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys, rows) => {
+      const selectedId = Number(keys[0]);
+      const selected = rows[0];
+      if (!selectedId || selectedId <= 0) {
+        messageApi.warning(t('app.kuaizhizao.salesOrder.selectQuotationFirst'));
+        return;
+      }
+      if (selected && (selected.status === '已转订单' || selected.sales_order_id)) {
+        messageApi.warning(
+          t('app.kuaizhizao.salesOrder.pullDuplicateBlocked', {
+            source: pullFromQuotationAction.sourceLabel,
+            target: pullFromQuotationAction.targetLabel,
+          }),
+        );
+        return;
+      }
+      try {
+        const result = await pullSalesOrderFromQuotation(selectedId);
+        messageApi.success(
+          result?.message ||
+            t('app.kuaizhizao.salesOrder.createdFromQuotation', {
+              code: result?.sales_order?.order_code || '',
+            }),
+        );
+        pullFromQuotationQuery.closeModal();
+        invalidateMenuBadge();
+        invalidateOrdersCache();
+        actionRef.current?.reload();
+        if (result?.sales_order?.id) {
+          refreshDrawerOrder(result.sales_order.id);
+        }
+      } catch (error: any) {
+        messageApi.error(
+          salesOrderCatchMessage(
+            error,
+            t('app.kuaizhizao.salesOrder.pullCreateFailed', {
+              source: pullFromQuotationAction.sourceLabel,
+              target: pullFromQuotationAction.targetLabel,
+            }),
+          ),
+        );
+        throw error;
+      }
+    },
+  });
+
+  const pullQuotationColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.quotation.import.code'), dataIndex: 'quotation_code', width: 180 },
+      {
+        title: t('app.kuaizhizao.salesOrder.customerName'),
+        dataIndex: 'customer_name',
+        width: 180,
+        ellipsis: true,
+        render: (v: string) => v || '-',
+      },
+      {
+        title: t('app.kuaizhizao.quotation.colQuotationDate'),
+        dataIndex: 'quotation_date',
+        width: 120,
+        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.deliveryDate'),
+        dataIndex: 'delivery_date',
+        width: 120,
+        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
+        dataIndex: 'total_amount',
+        width: 130,
+        align: 'right' as const,
+        render: (v: number | undefined) =>
+          v != null
+            ? Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.status'),
+        dataIndex: 'status',
+        width: 120,
+        render: (v: string) => {
+          let color: string = 'blue';
+          if (v === '已转订单') color = 'gold';
+          else if (v === '已接受') color = 'green';
+          else if (v === '已拒绝') color = 'red';
+          return <Tag color={color}>{v || t('app.kuaizhizao.salesOrder.unknownStatus')}</Tag>;
+        },
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.reviewStatus'),
+        dataIndex: 'review_status',
+        width: 100,
+        render: (v: string) => {
+          const approved = v === 'APPROVED' || v === '已通过' || v === '审核通过';
+          const rejected = v === 'REJECTED' || v === '已驳回';
+          return <Tag color={approved ? 'green' : rejected ? 'red' : 'default'}>{v || '-'}</Tag>;
+        },
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.salesman'),
+        dataIndex: 'salesman_name',
+        width: 120,
+        ellipsis: true,
+        render: (v: string) => v || '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.duplicateGuardHint'),
+        width: 260,
+        render: (_: unknown, record: PullQuotationCandidate) =>
+          record.status === '已转订单' || record.sales_order_id
+            ? t('app.kuaizhizao.salesOrder.alreadyCreated', {
+                code: record.sales_order_code || record.sales_order_id || '-',
+              })
+            : t('app.kuaizhizao.salesOrder.canCreate'),
+      },
+    ],
+    [t],
+  );
+
+  const selectedPullQuotation = pullFromQuotationQuery.selectedRows[0];
+  const selectedPullQuotationDuplicated = !!(
+    selectedPullQuotation &&
+    (selectedPullQuotation.status === '已转订单' || selectedPullQuotation.sales_order_id)
+  );
 
   /** 打开“从报价单创建销售订单”弹窗 */
   const handlePullFromQuotation = () => {
-    setSelectedPullQuotationId(undefined);
-    setPullQuotationKeyword('');
-    setPullQuotationCandidates([]);
-    setPullFromQuotationVisible(true);
-    loadPullQuotationCandidates('');
-  };
-
-  const selectedPullQuotation = pullQuotationCandidates.find((item) => item.id === selectedPullQuotationId);
-  const selectedPullQuotationDuplicated = !!(
-    selectedPullQuotation && (selectedPullQuotation.status === '已转订单' || selectedPullQuotation.sales_order_id)
-  );
-
-  const handlePullFromQuotationConfirm = async () => {
-    if (!selectedPullQuotationId || selectedPullQuotationId <= 0) {
-      messageApi.warning(t('app.kuaizhizao.salesOrder.selectQuotationFirst'));
-      return;
-    }
-    if (selectedPullQuotationDuplicated) {
-      messageApi.warning(t('app.kuaizhizao.salesOrder.pullDuplicateBlocked', { source: pullFromQuotationAction.sourceLabel, target: pullFromQuotationAction.targetLabel }));
-      return;
-    }
-    try {
-      setPullQuotationSubmitting(true);
-      const result = await pullSalesOrderFromQuotation(selectedPullQuotationId);
-      messageApi.success(result?.message || t('app.kuaizhizao.salesOrder.createdFromQuotation', { code: result?.sales_order?.order_code || '' }));
-      setPullFromQuotationVisible(false);
-      invalidateMenuBadge();
-      invalidateOrdersCache();
-      actionRef.current?.reload();
-      if (result?.sales_order?.id) {
-        refreshDrawerOrder(result.sales_order.id);
-      }
-    } catch (error: any) {
-      messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.pullCreateFailed', { source: pullFromQuotationAction.sourceLabel, target: pullFromQuotationAction.targetLabel })));
-    } finally {
-      setPullQuotationSubmitting(false);
-    }
+    pullFromQuotationQuery.openModal();
   };
 
   /** 打开提醒弹窗 */
@@ -4053,128 +4156,61 @@ const SalesOrdersPage: React.FC = () => {
         </SalesOrderDetailProvider>
       ) : null}
 
-      <Modal
+      <UniPullQueryModal<PullQuotationCandidate>
         title={pullFromQuotationAction.label}
-        open={pullFromQuotationVisible}
-        width={1280}
+        open={pullFromQuotationQuery.open}
         zIndex={elevatedModalZIndex}
-        onCancel={() => setPullFromQuotationVisible(false)}
-        onOk={handlePullFromQuotationConfirm}
+        onCancel={pullFromQuotationQuery.closeModal}
+        onOk={pullFromQuotationQuery.handleConfirm}
         okText={t('app.kuaizhizao.salesOrder.create')}
-        cancelText={t('common.cancel')}
-        okButtonProps={{ disabled: !selectedPullQuotationId || selectedPullQuotationDuplicated || pullQuotationLoading }}
-        confirmLoading={pullQuotationSubmitting}
-        destroyOnHidden
-      >
-        <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }} size={12}>
-          <Input.Search
-            allowClear
-            value={pullQuotationKeyword}
-            placeholder={t('app.kuaizhizao.salesOrder.searchQuotationPlaceholder')}
-            enterButton={t('common.search')}
-            onChange={(e) => setPullQuotationKeyword(e.target.value)}
-            onSearch={(value) => {
-              const keyword = value?.trim?.() || '';
-              setPullQuotationKeyword(keyword);
-              loadPullQuotationCandidates(keyword);
-            }}
-          />
-          <Table<PullQuotationCandidate>
-            rowKey="id"
-            loading={pullQuotationLoading}
-            size="small"
-            pagination={false}
-            locale={{ emptyText: pullQuotationKeyword ? t('app.kuaizhizao.salesOrder.quotationNotFound') : t('app.kuaizhizao.salesOrder.noQuotationAvailable') }}
-            rowSelection={{
-              type: 'radio',
-              selectedRowKeys: selectedPullQuotationId ? [selectedPullQuotationId] : [],
-              onChange: (keys) => {
-                const key = keys?.[0];
-                setSelectedPullQuotationId(key != null ? Number(key) : undefined);
-              },
-              getCheckboxProps: (record) => ({
-                disabled: record.status === '已转订单' || !!record.sales_order_id,
-              }),
-            }}
-            onRow={(record) => ({
-              onClick: () => {
-                if (record.status === '已转订单' || record.sales_order_id) return;
-                setSelectedPullQuotationId(record.id);
-              },
-            })}
-            columns={[
-              { title: t('app.kuaizhizao.quotation.import.code'), dataIndex: 'quotation_code', width: 180 },
-              { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name', width: 180, ellipsis: true, render: (v: string) => v || '-' },
-              {
-                title: t('app.kuaizhizao.quotation.colQuotationDate'),
-                dataIndex: 'quotation_date',
-                width: 120,
-                render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
-              },
-              {
-                title: t('app.kuaizhizao.salesOrder.deliveryDate'),
-                dataIndex: 'delivery_date',
-                width: 120,
-                render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
-              },
-              {
-                title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
-                dataIndex: 'total_amount',
-                width: 130,
-                align: 'right',
-                render: (v: number | undefined) => (v != null ? Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'),
-              },
-              {
-                title: t('app.kuaizhizao.salesOrder.status'),
-                dataIndex: 'status',
-                width: 120,
-                render: (v: string) => {
-                  let color: string = 'blue';
-                  if (v === '已转订单') color = 'gold';
-                  else if (v === '已接受') color = 'green';
-                  else if (v === '已拒绝') color = 'red';
-                  return <Tag color={color}>{v || t('app.kuaizhizao.salesOrder.unknownStatus')}</Tag>;
-                },
-              },
-              {
-                title: t('app.kuaizhizao.salesOrder.reviewStatus'),
-                dataIndex: 'review_status',
-                width: 100,
-                render: (v: string) => {
-                  const approved = v === 'APPROVED' || v === '已通过' || v === '审核通过';
-                  const rejected = v === 'REJECTED' || v === '已驳回';
-                  return <Tag color={approved ? 'green' : rejected ? 'red' : 'default'}>{v || '-'}</Tag>;
-                },
-              },
-              {
-                title: t('app.kuaizhizao.salesOrder.salesman'),
-                dataIndex: 'salesman_name',
-                width: 120,
-                ellipsis: true,
-                render: (v: string) => v || '-',
-              },
-              {
-                title: t('app.kuaizhizao.salesOrder.duplicateGuardHint'),
-                width: 260,
-                render: (_: unknown, record: PullQuotationCandidate) =>
-                  record.status === '已转订单' || record.sales_order_id
-                    ? t('app.kuaizhizao.salesOrder.alreadyCreated', { code: record.sales_order_code || record.sales_order_id || '-' })
-                    : t('app.kuaizhizao.salesOrder.canCreate'),
-              },
-            ]}
-            dataSource={pullQuotationCandidates}
-            scroll={{ x: 1180, y: 260 }}
-          />
-          {selectedPullQuotationDuplicated && (
-            <Alert
-              type="warning"
-              showIcon
-              message={t('app.kuaizhizao.salesOrder.pullDuplicateAlert', { source: pullFromQuotationAction.sourceLabel, target: pullFromQuotationAction.targetLabel })}
-              description={t('app.kuaizhizao.salesOrder.linkedSalesOrder', { code: selectedPullQuotation?.sales_order_code || selectedPullQuotation?.sales_order_id || '-' })}
-            />
-          )}
-        </Space>
-      </Modal>
+        rowKey="id"
+        columns={pullQuotationColumns}
+        dataSource={pullFromQuotationQuery.dataSource}
+        loading={pullFromQuotationQuery.loading}
+        confirmLoading={pullFromQuotationQuery.confirmLoading}
+        selectionType={pullFromQuotationQuery.selectionType}
+        selectedRowKeys={pullFromQuotationQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromQuotationQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromQuotationQuery.isRowDisabled}
+        searchDraft={pullFromQuotationQuery.searchDraft}
+        onSearchDraftChange={pullFromQuotationQuery.setSearchDraft}
+        onSearchApply={pullFromQuotationQuery.handleSearchApply}
+        onSearchClear={pullFromQuotationQuery.handleSearchClear}
+        appliedKeyword={pullFromQuotationQuery.appliedKeyword}
+        page={pullFromQuotationQuery.page}
+        pageSize={pullFromQuotationQuery.pageSize}
+        total={pullFromQuotationQuery.total}
+        onPageChange={pullFromQuotationQuery.handlePageChange}
+        scopeOptions={pullFromQuotationQuery.scopeOptions}
+        scope={pullFromQuotationQuery.scope}
+        onScopeChange={pullFromQuotationQuery.handleScopeChange}
+        searchPlaceholder={t('app.kuaizhizao.salesOrder.searchQuotationPlaceholder')}
+        emptyText={t('app.kuaizhizao.salesOrder.noQuotationAvailable')}
+        emptySearchText={t('app.kuaizhizao.salesOrder.quotationNotFound')}
+        okButtonProps={{
+          disabled:
+            pullFromQuotationQuery.selectedRowKeys.length === 0 ||
+            selectedPullQuotationDuplicated ||
+            pullFromQuotationQuery.loading,
+        }}
+        alert={
+          selectedPullQuotationDuplicated
+            ? (
+              <Alert
+                type="warning"
+                showIcon
+                message={t('app.kuaizhizao.salesOrder.pullDuplicateAlert', {
+                  source: pullFromQuotationAction.sourceLabel,
+                  target: pullFromQuotationAction.targetLabel,
+                })}
+                description={t('app.kuaizhizao.salesOrder.linkedSalesOrder', {
+                  code: selectedPullQuotation?.sales_order_code || selectedPullQuotation?.sales_order_id || '-',
+                })}
+              />
+            )
+            : undefined
+        }
+      />
 
       <SyncFromDatasetModal
         open={syncModalVisible}

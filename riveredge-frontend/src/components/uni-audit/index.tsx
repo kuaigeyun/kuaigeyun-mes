@@ -295,7 +295,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const hubActions = useMemo((): UniAuditHubAction[] => {
     const items: UniAuditHubAction[] = [];
     if (showWithdraw && channelByAction.withdraw) {
-      items.push({ action: 'withdraw', title: '撤回', canExecute: canExecuteByAction.withdraw });
+      items.push({ action: 'withdraw', title: '撤回审核', canExecute: canExecuteByAction.withdraw });
     }
     if (showApprove && channelByAction.approve) {
       items.push({
@@ -373,7 +373,8 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     if (action === 'add_sign') return '加签';
     if (action === 'delegate') return '委托';
     if (action === 'urge') return '催办';
-    return '撤回';
+    if (action === 'withdraw') return '撤回审核';
+    return '操作';
   };
 
   const canRunAction = (action: UniAuditAction): boolean => {

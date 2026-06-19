@@ -1440,15 +1440,27 @@ def get_finished_goods_inspection_lifecycle(
 
 
 # ---------------------------------------------------------------------------
-# 报价单生命周期（统一主轴）
-# 草稿 → 已报价 → 客户确认 → 已转订单
+# 报价单生命周期
+# 启用审核：草稿 → 待审核 → 已报价 → 客户确认 → 已转订单
+# 关闭审核：草稿 → 已报价 → 客户确认 → 已转订单（提交后视同已审核）
 # ---------------------------------------------------------------------------
-QUOTATION_MAIN_STAGES = [
+QUOTATION_MAIN_STAGES_AUDIT = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "pending_review", "label": "待审核"},
+    {"key": "generated", "label": "已报价"},
+    {"key": "customer_confirmed", "label": "客户确认"},
+    {"key": "converted", "label": "已转订单"},
+]
+
+QUOTATION_MAIN_STAGES_NO_AUDIT = [
     {"key": "draft", "label": "草稿"},
     {"key": "generated", "label": "已报价"},
     {"key": "customer_confirmed", "label": "客户确认"},
     {"key": "converted", "label": "已转订单"},
 ]
+
+# 兼容旧引用
+QUOTATION_MAIN_STAGES = QUOTATION_MAIN_STAGES_NO_AUDIT
 
 
 def _quotation_review_pending(review_status: Optional[str]) -> bool:
@@ -1569,6 +1581,10 @@ def get_quotation_lifecycle(
         conversion_downstream_missing=converted_sales_order_missing,
     )
 
+    stage_defs = (
+        QUOTATION_MAIN_STAGES_AUDIT if audit_required else QUOTATION_MAIN_STAGES_NO_AUDIT
+    )
+
     def _ret(
         key: str,
         stage_name: str,
@@ -1580,7 +1596,7 @@ def get_quotation_lifecycle(
             "current_stage_key": key,
             "current_stage_name": stage_name,
             "status": st,
-            "main_stages": _build_main_stages(QUOTATION_MAIN_STAGES, key, is_exception=exc),
+            "main_stages": _build_main_stages(stage_defs, key, is_exception=exc),
             "sub_stages": None,
             "next_step_suggestions": suggestions if suggestions is not None else cap_suggestions,
             "milestones": milestones,
@@ -1591,16 +1607,17 @@ def get_quotation_lifecycle(
             quotation,
             _ret(
                 "converted",
-                "已转订单（下游销售订单已删除）",
-                "normal",
+                "下推单据已删除",
+                "warning",
             ),
         )
 
     if status in ("已拒绝", "rejected") or _is_rejected(review_status):
+        reject_key = "pending_review" if audit_required else "generated"
         return _merge_quotation_version_meta(
             quotation,
             _ret(
-                "generated",
+                reject_key,
                 "已驳回",
                 "exception",
                 exc=True,
@@ -1628,21 +1645,12 @@ def get_quotation_lifecycle(
         )
 
     if status == "已发送":
-        if _quotation_review_pending(review_status):
+        if audit_required and _quotation_review_pending(review_status):
             return _merge_quotation_version_meta(
                 quotation,
                 _ret(
-                    "generated",
-                    "已报价（待审核）",
-                    "normal",
-                ),
-            )
-        if _is_approved(review_status):
-            return _merge_quotation_version_meta(
-                quotation,
-                _ret(
-                    "generated",
-                    "已报价",
+                    "pending_review",
+                    "待审核",
                     "normal",
                 ),
             )
@@ -1650,7 +1658,7 @@ def get_quotation_lifecycle(
             quotation,
             _ret(
                 "generated",
-                "已报价（待审核）",
+                "已报价",
                 "normal",
             ),
         )

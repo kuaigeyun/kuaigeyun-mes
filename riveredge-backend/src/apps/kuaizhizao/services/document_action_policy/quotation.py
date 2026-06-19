@@ -163,7 +163,10 @@ def derive_quotation_capabilities(
     elif linked_so:
         convert_contract_reason = "quotation.convert_contract.linked_sales_order"
     elif st == "已转订单":
-        convert_contract_reason = "quotation.convert_contract.not_allowed"
+        if conversion_downstream_missing:
+            convert_contract_allowed = True
+        else:
+            convert_contract_reason = "quotation.convert_contract.not_allowed"
     elif st == "已接受":
         convert_contract_allowed = True
     elif _sent_allows_business_action(st, audit_required, rs):

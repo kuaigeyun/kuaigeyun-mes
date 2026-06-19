@@ -4378,6 +4378,7 @@ export default {
   'app.kuaizhizao.quotation.dateShortcut.1month': '一個月',
   'app.kuaizhizao.quotation.dateShortcut.monthEnd': '月底',
   'app.kuaizhizao.quotation.statusFilter.draft': '草稿',
+  'app.kuaizhizao.quotation.statusFilter.pendingReview': '待審核',
   'app.kuaizhizao.quotation.statusFilter.sent': '已報價',
   'app.kuaizhizao.quotation.statusFilter.accepted': '客戶確認',
   'app.kuaizhizao.quotation.statusFilter.converted': '已轉訂單',

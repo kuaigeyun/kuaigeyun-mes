@@ -1857,7 +1857,14 @@ const QuotationsPage: React.FC = () => {
       const contractBizAllowed = quotationCapabilityAllowed(record, 'convert_to_contract');
       const convertible = orderBizAllowed && quotationPerms.canUpdate;
       const contractConvertible = contractBizAllowed;
-      const hasContract = record.contract_id != null && Number(record.contract_id) > 0;
+      const hasContract =
+        record.contract_id != null &&
+        Number(record.contract_id) > 0 &&
+        record.contract_downstream_missing !== true;
+      const hasLiveSalesOrder =
+        record.sales_order_id != null &&
+        Number(record.sales_order_id) > 0 &&
+        record.conversion_downstream_missing !== true;
       const notLatest = record.is_latest_in_series === false;
       const orderPushTitle = superseded
         ? t('app.kuaizhizao.quotation.supersededConvertHint')
@@ -1877,7 +1884,7 @@ const QuotationsPage: React.FC = () => {
         ? t('app.kuaizhizao.quotation.supersededConvertHint')
         : hasContract
           ? t('app.kuaizhizao.quotation.alreadyLinkedContract')
-          : record.sales_order_id != null && Number(record.sales_order_id) > 0
+          : hasLiveSalesOrder
             ? t('app.kuaizhizao.quotation.alreadyLinkedSalesOrder')
             : !contractConvertible
               ? quotationCapabilityReasonMessage(record.capabilities?.convert_to_contract?.reason, t) ||
