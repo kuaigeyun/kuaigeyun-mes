@@ -269,7 +269,9 @@ class WorkGroupService:
         success_records = []
         failed_records = []
 
-        for work_group_uuid in work_group_uuids:
+        unique_uuids = list(dict.fromkeys(work_group_uuids))
+
+        for work_group_uuid in unique_uuids:
             try:
                 work_group = await WorkGroup.filter(
                     tenant_id=tenant_id,
@@ -278,10 +280,7 @@ class WorkGroupService:
                 ).first()
 
                 if not work_group:
-                    failed_records.append({
-                        "uuid": work_group_uuid,
-                        "reason": "工作小组不存在"
-                    })
+                    # 幂等删除：记录不存在时视作已完成，无需计入失败
                     continue
 
                 work_group.deleted_at = timezone.now()

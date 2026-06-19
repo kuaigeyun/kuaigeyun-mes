@@ -439,7 +439,9 @@ class WarehouseService:
         success_records = []
         failed_records = []
         
-        for warehouse_uuid in warehouse_uuids:
+        unique_uuids = list(dict.fromkeys(warehouse_uuids))
+
+        for warehouse_uuid in unique_uuids:
             try:
                 warehouse = await Warehouse.filter(
                     tenant_id=tenant_id,
@@ -448,10 +450,7 @@ class WarehouseService:
                 ).first()
                 
                 if not warehouse:
-                    failed_records.append({
-                        "uuid": warehouse_uuid,
-                        "reason": f"仓库 {warehouse_uuid} 不存在"
-                    })
+                    # 幂等删除：记录不存在时视作已完成，无需计入失败
                     continue
                 
                 # 检查是否有关联的库区
@@ -794,7 +793,9 @@ class WarehouseService:
         success_records = []
         failed_records = []
         
-        for storage_area_uuid in storage_area_uuids:
+        unique_uuids = list(dict.fromkeys(storage_area_uuids))
+
+        for storage_area_uuid in unique_uuids:
             try:
                 storage_area = await StorageArea.filter(
                     tenant_id=tenant_id,
@@ -803,10 +804,7 @@ class WarehouseService:
                 ).first()
                 
                 if not storage_area:
-                    failed_records.append({
-                        "uuid": storage_area_uuid,
-                        "reason": f"库区 {storage_area_uuid} 不存在"
-                    })
+                    # 幂等删除：记录不存在时视作已完成，无需计入失败
                     continue
                 
                 # 检查是否有关联的库位
@@ -1138,7 +1136,9 @@ class WarehouseService:
         success_records = []
         failed_records = []
         
-        for storage_location_uuid in storage_location_uuids:
+        unique_uuids = list(dict.fromkeys(storage_location_uuids))
+
+        for storage_location_uuid in unique_uuids:
             try:
                 storage_location = await StorageLocation.filter(
                     tenant_id=tenant_id,
@@ -1147,10 +1147,7 @@ class WarehouseService:
                 ).first()
                 
                 if not storage_location:
-                    failed_records.append({
-                        "uuid": storage_location_uuid,
-                        "reason": f"库位 {storage_location_uuid} 不存在"
-                    })
+                    # 幂等删除：记录不存在时视作已完成，无需计入失败
                     continue
                 
                 # 软删除（库位没有下级关联，可以直接删除）

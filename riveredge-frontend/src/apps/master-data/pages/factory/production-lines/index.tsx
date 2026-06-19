@@ -153,7 +153,8 @@ const ProductionLinesPage: React.FC = () => {
     }
 
     try {
-      const uuids = targetKeys.map(key => String(key));
+      // 去重，避免重复 key 导致后端出现“首个删除成功、后续同 key 报不存在”的误判。
+      const uuids = Array.from(new Set(targetKeys.map((key) => String(key))));
       const result = await productionLineApi.batchDelete(uuids);
       
       if (result.success) {

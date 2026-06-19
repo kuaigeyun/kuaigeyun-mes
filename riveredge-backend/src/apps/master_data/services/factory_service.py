@@ -391,7 +391,9 @@ class FactoryService:
         success_records = []
         failed_records = []
         
-        for plant_uuid in plant_uuids:
+        unique_uuids = list(dict.fromkeys(plant_uuids))
+
+        for plant_uuid in unique_uuids:
             try:
                 # 查找厂区
                 plant = await Plant.filter(
@@ -401,10 +403,7 @@ class FactoryService:
                 ).first()
                 
                 if not plant:
-                    failed_records.append({
-                        "uuid": plant_uuid,
-                        "reason": f"厂区 {plant_uuid} 不存在"
-                    })
+                    # 幂等删除：记录不存在时视作已完成，无需计入失败
                     continue
                 
                 # 检查是否有关联的车间
@@ -805,7 +804,9 @@ class FactoryService:
         success_records = []
         failed_records = []
         
-        for workshop_uuid in workshop_uuids:
+        unique_uuids = list(dict.fromkeys(workshop_uuids))
+
+        for workshop_uuid in unique_uuids:
             try:
                 # 查找车间
                 workshop = await Workshop.filter(
@@ -815,10 +816,7 @@ class FactoryService:
                 ).first()
                 
                 if not workshop:
-                    failed_records.append({
-                        "uuid": workshop_uuid,
-                        "reason": f"车间 {workshop_uuid} 不存在"
-                    })
+                    # 幂等删除：记录不存在时视作已完成，无需计入失败
                     continue
                 
                 # 检查是否有关联的产线
@@ -1242,7 +1240,11 @@ class FactoryService:
         success_records = []
         failed_records = []
         
-        for production_line_uuid in production_line_uuids:
+        # 批量删除按“幂等”语义处理：重复 UUID 或已不存在记录不视为失败，
+        # 避免前端在“实际已删完”时仍收到“部分删除失败”。
+        unique_uuids = list(dict.fromkeys(production_line_uuids))
+
+        for production_line_uuid in unique_uuids:
             try:
                 # 查找产线
                 production_line = await ProductionLine.filter(
@@ -1252,10 +1254,7 @@ class FactoryService:
                 ).first()
                 
                 if not production_line:
-                    failed_records.append({
-                        "uuid": production_line_uuid,
-                        "reason": f"产线 {production_line_uuid} 不存在"
-                    })
+                    # 幂等删除：记录不存在时视作已完成，无需计入失败
                     continue
                 
                 # 检查是否有关联的工位
@@ -1667,7 +1666,9 @@ class FactoryService:
         success_records = []
         failed_records = []
         
-        for workstation_uuid in workstation_uuids:
+        unique_uuids = list(dict.fromkeys(workstation_uuids))
+
+        for workstation_uuid in unique_uuids:
             try:
                 # 查找工位
                 workstation = await Workstation.filter(
@@ -1677,10 +1678,7 @@ class FactoryService:
                 ).first()
                 
                 if not workstation:
-                    failed_records.append({
-                        "uuid": workstation_uuid,
-                        "reason": f"工位 {workstation_uuid} 不存在"
-                    })
+                    # 幂等删除：记录不存在时视作已完成，无需计入失败
                     continue
                 
                 # 软删除（工位没有下级关联，可以直接删除）
@@ -1940,7 +1938,9 @@ class FactoryService:
         success_records = []
         failed_records = []
 
-        for work_center_uuid in work_center_uuids:
+        unique_uuids = list(dict.fromkeys(work_center_uuids))
+
+        for work_center_uuid in unique_uuids:
             try:
                 work_center = await WorkCenter.filter(
                     tenant_id=tenant_id,
@@ -1949,10 +1949,7 @@ class FactoryService:
                 ).first()
 
                 if not work_center:
-                    failed_records.append({
-                        "uuid": work_center_uuid,
-                        "reason": f"工作中心 {work_center_uuid} 不存在"
-                    })
+                    # 幂等删除：记录不存在时视作已完成，无需计入失败
                     continue
 
                 await Workstation.filter(work_center_id=work_center.id).update(

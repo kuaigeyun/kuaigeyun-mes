@@ -1383,7 +1383,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const handleBatchDeleteConfirm = useCallback(
     async (keys: React.Key[]) => {
       if (!onDelete) return
-      await Promise.resolve(onDelete(keys))
+      // 统一去重，避免上游选中态出现重复 key 时触发“前端一次、后端多次删同一记录”误报。
+      const uniqueKeys = Array.from(new Set(keys))
+      await Promise.resolve(onDelete(uniqueKeys))
       clearAllRowSelection()
     },
     [onDelete, clearAllRowSelection],
