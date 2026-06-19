@@ -182,12 +182,6 @@ import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../..
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
-import { useDocumentCreateFormDraft } from '../../../../../hooks/useDocumentCreateFormDraft';
-import {
-  buildDocumentCreateDraftKey,
-  clearDocumentFormDraft,
-  getDocumentFormDraft,
-} from '../../../../../utils/documentFormDraftCache';
 
 /** API 异常 detail 可能是字符串或 { message, trace_id }，不能直接交给 message.error 渲染 */
 function salesOrderCatchMessage(error: unknown, fallback: string): string {
@@ -412,7 +406,6 @@ const SalesOrdersPage: React.FC = () => {
   const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
   const isFormPage = isCreatePage || isEditPage;
   const formPageInitializedRef = useRef(false);
-  const salesOrderCreateDraftRestoredRef = useRef(false);
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
@@ -445,29 +438,9 @@ const SalesOrdersPage: React.FC = () => {
   const tableSearchFormRef = useRef<any>(null);
   const rowKeyToOrderIdRef = useRef<Map<string, number>>(new Map());
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const salesOrderCreateDraftKey = useMemo(
-    () =>
-      isCreatePage
-        ? buildDocumentCreateDraftKey('kuaizhizao:sales-order', location.pathname, location.search)
-        : null,
-    [isCreatePage, location.pathname, location.search],
-  );
-  const clearSalesOrderCreateDraft = useCallback(() => {
-    if (!salesOrderCreateDraftKey) return;
-    clearDocumentFormDraft(salesOrderCreateDraftKey);
-    salesOrderCreateDraftRestoredRef.current = false;
-  }, [salesOrderCreateDraftKey]);
-  const persistSalesOrderCreateDraft = useDocumentCreateFormDraft(
-    isCreatePage,
-    salesOrderCreateDraftKey,
-    formRef,
-  );
   const leaveSalesOrderFormPage = useCallback(() => {
-    if (isCreatePage) {
-      clearSalesOrderCreateDraft();
-    }
     navigate(SALES_ORDER_LIST_PATH);
-  }, [isCreatePage, clearSalesOrderCreateDraft, navigate]);
+  }, [navigate]);
 
   /** 视图切换缓存：始终请求 include_items=true，切换视图时从缓存转换，避免重复请求 */
   const lastOrdersCacheRef = useRef<{ orders: SalesOrder[]; total: number; paramsKey: string } | null>(null);
@@ -715,10 +688,6 @@ const SalesOrdersPage: React.FC = () => {
   const defaultOrderItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '', required_quantity: 1, delivery_date: dayjs(), unit_price: 0, tax_rate: 0, variant_attributes: '', notes: '' };
 
   async function initSalesOrderCreateForm(options?: { customerId?: number }) {
-    const cachedDraft =
-      salesOrderCreateDraftKey != null
-        ? getDocumentFormDraft<Record<string, unknown>>(salesOrderCreateDraftKey)
-        : null;
     setFormEditOrder(null);
     resetSalesOrderFormFieldValues();
     formRef.current?.resetFields();
@@ -728,13 +697,6 @@ const SalesOrdersPage: React.FC = () => {
         items: [defaultOrderItem],
         order_date: dayjs(),
       });
-      if (cachedDraft) {
-        formRef.current?.setFieldsValue(cachedDraft);
-        if (!salesOrderCreateDraftRestoredRef.current) {
-          salesOrderCreateDraftRestoredRef.current = true;
-          messageApi.info(t('app.kuaizhizao.salesOrder.draftRestored'));
-        }
-      }
       lastPriceTypeRef.current = 'tax_exclusive';
       const prefillCustomerId = options?.customerId;
       if (prefillCustomerId != null) {
@@ -782,9 +744,6 @@ const SalesOrdersPage: React.FC = () => {
     } else {
       setPreviewCode(null);
       setEffectiveRuleCode(null);
-    }
-    if (cachedDraft) {
-      formRef.current?.setFieldsValue(cachedDraft);
     }
   }
 
@@ -1311,9 +1270,6 @@ const SalesOrdersPage: React.FC = () => {
 
       setPreviewCode(null);
       setEffectiveRuleCode(null);
-      if (isCreatePage) {
-        clearSalesOrderCreateDraft();
-      }
       invalidateOrdersCache();
       invalidateMenuBadge();
       invalidateStatistics();
@@ -3478,7 +3434,6 @@ const SalesOrdersPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
-                onValuesChange={persistSalesOrderCreateDraft}
                 onFinish={async () => {
                   setModalSubmitting(true);
                   try {

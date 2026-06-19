@@ -15,12 +15,6 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
-import { useDocumentCreateFormDraft } from '../../../../../hooks/useDocumentCreateFormDraft';
-import {
-  buildDocumentCreateDraftKey,
-  clearDocumentFormDraft,
-  getDocumentFormDraft,
-} from '../../../../../utils/documentFormDraftCache';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { toApiDateString } from '../../../../../utils/formDate';
@@ -363,7 +357,6 @@ const SalesContractsPage: React.FC = () => {
   const isFormPage = isCreatePage || isEditPage;
 
   const formPageInitializedRef = useRef(false);
-  const salesContractCreateDraftRestoredRef = useRef(false);
 
   const { message: messageApi } = App.useApp();
 
@@ -500,29 +493,9 @@ const SalesContractsPage: React.FC = () => {
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const tableRowsRef = useRef<SalesContract[]>([]);
-  const salesContractCreateDraftKey = useMemo(
-    () =>
-      isCreatePage
-        ? buildDocumentCreateDraftKey('kuaizhizao:sales-contract', location.pathname, location.search)
-        : null,
-    [isCreatePage, location.pathname, location.search],
-  );
-  const clearSalesContractCreateDraft = useCallback(() => {
-    if (!salesContractCreateDraftKey) return;
-    clearDocumentFormDraft(salesContractCreateDraftKey);
-    salesContractCreateDraftRestoredRef.current = false;
-  }, [salesContractCreateDraftKey]);
-  const persistSalesContractCreateDraft = useDocumentCreateFormDraft(
-    isCreatePage,
-    salesContractCreateDraftKey,
-    formRef,
-  );
   const leaveSalesContractFormPage = useCallback(() => {
-    if (isCreatePage) {
-      clearSalesContractCreateDraft();
-    }
     navigate(SALES_CONTRACT_LIST_PATH);
-  }, [isCreatePage, clearSalesContractCreateDraft, navigate]);
+  }, [navigate]);
 
   const termPlaceholderKeys = useMemo(
     () => extractPlaceholdersFromTerms(termTemplateTerms),
@@ -1009,10 +982,6 @@ const SalesContractsPage: React.FC = () => {
 
 
   async function initSalesContractCreateForm() {
-    const cachedDraft =
-      salesContractCreateDraftKey != null
-        ? getDocumentFormDraft<Record<string, unknown>>(salesContractCreateDraftKey)
-        : null;
     setEditingId(null);
     setPreviewCode(null);
     setEffectiveRuleCode(null);
@@ -1033,13 +1002,6 @@ const SalesContractsPage: React.FC = () => {
       setTermTemplateTerms([]);
       setTermPlaceholderValues({});
       setTermsPreview([]);
-      if (cachedDraft) {
-        formRef.current?.setFieldsValue(cachedDraft);
-        if (!salesContractCreateDraftRestoredRef.current) {
-          salesContractCreateDraftRestoredRef.current = true;
-          messageApi.info(t('app.kuaizhizao.salesContract.restoredDraft'));
-        }
-      }
     }, 100);
     const applyPreviewCode = async (ruleCode: string, contractDate?: dayjs.Dayjs) => {
       try {
@@ -1064,9 +1026,6 @@ const SalesContractsPage: React.FC = () => {
       if (autoGen && ruleCode) {
         await applyPreviewCode(ruleCode, dayjs());
       }
-      if (cachedDraft) {
-        formRef.current?.setFieldsValue(cachedDraft);
-      }
     } catch {
       const ruleCode = getPageRuleCode('kuaizhizao-sales-contract');
       const autoGen = isAutoGenerateEnabled('kuaizhizao-sales-contract');
@@ -1074,9 +1033,6 @@ const SalesContractsPage: React.FC = () => {
       setEffectiveAutoGen(autoGen);
       if (autoGen && ruleCode) {
         await applyPreviewCode(ruleCode, dayjs());
-      }
-      if (cachedDraft) {
-        formRef.current?.setFieldsValue(cachedDraft);
       }
     }
   }
@@ -1229,9 +1185,6 @@ const SalesContractsPage: React.FC = () => {
       }
 
       if (isFormPage) {
-        if (isCreatePage) {
-          clearSalesContractCreateDraft();
-        }
         navigate(SALES_CONTRACT_LIST_PATH);
       } else {
         setEditingId(null);
@@ -2758,7 +2711,6 @@ const SalesContractsPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
-                onValuesChange={persistSalesContractCreateDraft}
                 onFinish={(values) => handleFormSubmit(values, { asDraft: false })}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];

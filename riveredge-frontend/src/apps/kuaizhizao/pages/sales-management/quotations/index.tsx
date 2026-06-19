@@ -129,13 +129,7 @@ import {
 } from '../../../components/document-detail-table/documentDetailTable';
 import { RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
-import { useDocumentCreateFormDraft } from '../../../../../hooks/useDocumentCreateFormDraft';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
-import {
-  buildDocumentCreateDraftKey,
-  clearDocumentFormDraft,
-  getDocumentFormDraft,
-} from '../../../../../utils/documentFormDraftCache';
 import {
   alignDescriptionColumns,
   alignProColumns,
@@ -562,7 +556,6 @@ const QuotationsPage: React.FC = () => {
   const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
   const isFormPage = isCreatePage || isEditPage;
   const formPageInitializedRef = useRef(false);
-  const quotationCreateDraftRestoredRef = useRef(false);
   const { message: messageApi } = App.useApp();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal({
     onAfterPrint: async (target) => {
@@ -705,29 +698,9 @@ const QuotationsPage: React.FC = () => {
   const [linkedSalesOrderDrawerOpen, setLinkedSalesOrderDrawerOpen] = useState(false);
   const [linkedSalesOrder, setLinkedSalesOrder] = useState<SalesOrder | null>(null);
   const [linkedSalesOrderLoading, setLinkedSalesOrderLoading] = useState(false);
-  const quotationCreateDraftKey = useMemo(
-    () =>
-      isCreatePage
-        ? buildDocumentCreateDraftKey('kuaizhizao:quotation', location.pathname, location.search)
-        : null,
-    [isCreatePage, location.pathname, location.search],
-  );
-  const clearQuotationCreateDraft = useCallback(() => {
-    if (!quotationCreateDraftKey) return;
-    clearDocumentFormDraft(quotationCreateDraftKey);
-    quotationCreateDraftRestoredRef.current = false;
-  }, [quotationCreateDraftKey]);
-  const persistQuotationCreateDraft = useDocumentCreateFormDraft(
-    isCreatePage,
-    quotationCreateDraftKey,
-    formRef,
-  );
   const leaveQuotationFormPage = useCallback(() => {
-    if (isCreatePage) {
-      clearQuotationCreateDraft();
-    }
     navigate(QUOTATION_LIST_PATH);
-  }, [isCreatePage, clearQuotationCreateDraft, navigate]);
+  }, [navigate]);
 
   const handleListScopeFilterChange = useCallback((v: QuotationListScope) => {
     if (v === listScopeFilterRef.current) return;
@@ -1988,10 +1961,6 @@ const QuotationsPage: React.FC = () => {
   };
 
   async function initQuotationCreateForm(options?: { customerId?: number }) {
-    const cachedDraft =
-      quotationCreateDraftKey != null
-        ? getDocumentFormDraft<Record<string, unknown>>(quotationCreateDraftKey)
-        : null;
     const prefillCustomerId = options?.customerId;
     formRef.current?.resetFields();
     setEditingId(null);
@@ -2013,13 +1982,6 @@ const QuotationsPage: React.FC = () => {
         price_type: 'tax_exclusive',
         quotation_date: dayjs(),
       });
-      if (cachedDraft) {
-        formRef.current?.setFieldsValue(cachedDraft);
-        if (!quotationCreateDraftRestoredRef.current) {
-          quotationCreateDraftRestoredRef.current = true;
-          messageApi.info(t('app.kuaizhizao.quotation.draftRestored'));
-        }
-      }
       if (prefillCustomerId != null) {
         const applied = applyCustomerById(prefillCustomerId);
         if (!applied) {
@@ -2048,9 +2010,6 @@ const QuotationsPage: React.FC = () => {
       } else {
         setPreviewCode(null);
       }
-      if (cachedDraft) {
-        formRef.current?.setFieldsValue(cachedDraft);
-      }
     } catch {
       const ruleCode = getPageRuleCode('kuaizhizao-quotation');
       setEffectiveRuleCode(ruleCode ?? null);
@@ -2067,9 +2026,6 @@ const QuotationsPage: React.FC = () => {
         }
       } else {
         setPreviewCode(null);
-      }
-      if (cachedDraft) {
-        formRef.current?.setFieldsValue(cachedDraft);
       }
     }
   }
@@ -2188,7 +2144,6 @@ const QuotationsPage: React.FC = () => {
     messageApi.success(options?.asDraft ? t('app.kuaizhizao.quotation.savedDraft') : t('common.createSuccess'));
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
-    clearQuotationCreateDraft();
     invalidateMenuBadgeCounts();
 
     if (isFormPage) {
@@ -2522,9 +2477,8 @@ const QuotationsPage: React.FC = () => {
           }
         }
       }
-      persistQuotationCreateDraft(changed, all);
     },
-    [customerList, userList, persistQuotationCreateDraft],
+    [customerList, userList],
   );
 
   const triggerQuotationFormSubmit = useCallback(() => {

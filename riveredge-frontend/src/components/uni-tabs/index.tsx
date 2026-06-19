@@ -30,6 +30,7 @@ import {
 } from '../../services/menu';
 import { RouteTransition } from '../route-transition';
 import { TabRouteCache } from './TabRouteCache';
+import { isCreateTabKey } from './isCreateTabKey';
 import { readUniTabsBorderRadius } from '../../utils/themeBorderRadius';
 
 function isTenantDefaultHomePath(p: string): boolean {
@@ -1069,15 +1070,23 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
   const isBusinessBoardAnalysisPage = location.pathname.replace(/\/$/, '') === '/system/dashboard/analysis';
 
-
-
-  const openTabKeys = useMemo(() => tabs.map((tab) => tab.key), [tabs]);
-
-  const renderCachedRouteContent = (content: React.ReactNode) => (
-    <TabRouteCache activeKey={activeKey} openTabKeys={openTabKeys} refreshToken={refreshKey}>
-      {content}
-    </TabRouteCache>
+  const createTabKeys = useMemo(
+    () => tabs.map((tab) => tab.key).filter(isCreateTabKey),
+    [tabs],
   );
+
+  const renderRouteContent = (content: React.ReactNode) =>
+    createTabKeys.length > 0 ? (
+      <TabRouteCache
+        activeKey={activeKey}
+        createTabKeys={createTabKeys}
+        refreshToken={refreshKey}
+      >
+        {content}
+      </TabRouteCache>
+    ) : (
+      <RouteTransition>{content}</RouteTransition>
+    );
 
   // 如果没有标签，直接渲染子组件
   if (tabs.length === 0) {
@@ -2056,17 +2065,18 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         </div>
         <div
           className={`uni-tabs-content${isDashboardScrollPage ? ' uni-tabs-content-dashboard' : ''}${isBusinessBoardAnalysisPage ? ' uni-tabs-content-business-board' : ''}`}
+          key={`content-refresh-${refreshKey}`}
         >
           {isHMIPage ? (
             <div className="uni-tabs-content-hmi-container">
               <div className="uni-tabs-content-hmi-inner">
-                {renderCachedRouteContent(children)}
+                {renderRouteContent(children)}
               </div>
             </div>
           ) : isBusinessBoardAnalysisPage ? (
             <div className="uni-tabs-content-board-outer">
               <div className="uni-tabs-content-board-inner">
-                {renderCachedRouteContent(children)}
+                {renderRouteContent(children)}
               </div>
             </div>
           ) : (
@@ -2074,7 +2084,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
               className={`uni-tabs-content-page-outer${isFlushDashboardOuter ? ' uni-tabs-content-page-outer--flush' : ''}`}
             >
               <div className="uni-tabs-content-page-inner">
-                {renderCachedRouteContent(children)}
+                {renderRouteContent(children)}
               </div>
             </div>
           )}

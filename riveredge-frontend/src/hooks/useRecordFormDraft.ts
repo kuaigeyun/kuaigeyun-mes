@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef } from 'react';
 import { clearDocumentFormDraft, setDocumentFormDraft } from '../utils/documentFormDraftCache';
 
 /**
- * 非 ProForm 页面草稿：state 变更时 persistNow + 卸载时再快照（TAB 切换保活）。
+ * 仓库 pull-entry 等非 ProForm 页面的 state 快照（非 `/new` 路由）。
+ * `/new` 与 `/create` 标签 keep-alive 由 TabRouteCache 负责，勿用本 hook。
  */
 export function useRecordFormDraft(draftKey: string | null) {
   const snapshotRef = useRef<() => Record<string, unknown>>(() => ({}));

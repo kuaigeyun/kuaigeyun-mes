@@ -1192,9 +1192,14 @@ class QuotationService:
         contract_missing_by_id: dict[int, bool] = {}
         for q in quotations:
             qid = int(q.id)
-            missing_by_id[qid] = await self._quotation_conversion_downstream_missing(
-                tenant_id, q, alive_sales_order_ids=alive_so
-            )
+            st = (q.status or "").strip()
+            so_id = q.sales_order_id
+            if st != "已转订单" and not so_id:
+                missing_by_id[qid] = False
+            elif so_id is not None:
+                missing_by_id[qid] = int(so_id) not in alive_so
+            else:
+                missing_by_id[qid] = st == "已转订单"
             if q.contract_id:
                 contract_missing_by_id[qid] = int(q.contract_id) not in alive_contract
             else:

@@ -1,3 +1,7 @@
+/**
+ * UniTabs `/new` 与 `/create` 标签的 keep-alive 由 TabRouteCache 负责。
+ * 本模块为仓库 pull-entry 等非 `/new` 路由提供进程内表单快照（与 useRecordFormDraft 配合）。
+ */
 import dayjs from 'dayjs';
 import { coerceFormDate } from './formDate';
 import { normalizeFormListItems } from './formListItems';

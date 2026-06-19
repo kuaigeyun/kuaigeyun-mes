@@ -55,12 +55,6 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
-import {
-  buildDocumentCreateDraftKey,
-  clearDocumentFormDraft,
-  getDocumentFormDraft,
-} from '../../../../../utils/documentFormDraftCache';
-import { useDocumentCreateFormDraft } from '../../../../../hooks/useDocumentCreateFormDraft';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
@@ -299,7 +293,6 @@ const PurchaseOrdersPage: React.FC = () => {
   const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
   const isFormPage = isCreatePage || isEditPage;
   const formPageInitializedRef = useRef(false);
-  const purchaseOrderCreateDraftRestoredRef = useRef(false);
   const { message: messageApi } = App.useApp();
   const pullFromRequisitionAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order.pull_from_requisition');
   const queryClient = useQueryClient();
@@ -352,24 +345,9 @@ const PurchaseOrdersPage: React.FC = () => {
 
   const tableSearchFormRef = useRef<any>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const purchaseOrderCreateDraftKey = useMemo(
-    () =>
-      isCreatePage
-        ? buildDocumentCreateDraftKey('kuaizhizao:purchase-order', location.pathname, location.search)
-        : null,
-    [isCreatePage, location.pathname, location.search],
-  );
-  const clearPurchaseOrderCreateDraft = useCallback(() => {
-    if (!purchaseOrderCreateDraftKey) return;
-    clearDocumentFormDraft(purchaseOrderCreateDraftKey);
-    purchaseOrderCreateDraftRestoredRef.current = false;
-  }, [purchaseOrderCreateDraftKey]);
   const leavePurchaseOrderFormPage = useCallback(() => {
-    if (isCreatePage) {
-      clearPurchaseOrderCreateDraft();
-    }
     navigate(PURCHASE_ORDER_LIST_PATH);
-  }, [isCreatePage, clearPurchaseOrderCreateDraft, navigate]);
+  }, [navigate]);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
 
@@ -378,11 +356,6 @@ const PurchaseOrdersPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<PurchaseOrder | null>(null);
   const formRef = useRef<any>(null);
-  const persistPurchaseOrderCreateDraft = useDocumentCreateFormDraft(
-    isCreatePage,
-    purchaseOrderCreateDraftKey,
-    formRef,
-  );
 
   const {
     customFields: purchaseOrderFormCustomFields,
@@ -1517,23 +1490,12 @@ const PurchaseOrdersPage: React.FC = () => {
   }
 
   function initPurchaseOrderCreateForm() {
-    const cachedDraft =
-      purchaseOrderCreateDraftKey != null
-        ? getDocumentFormDraft<Record<string, unknown>>(purchaseOrderCreateDraftKey)
-        : null;
     setIsEdit(false);
     setCurrentOrder(null);
     resetPurchaseOrderFormFieldValues();
     formRef.current?.resetFields();
     window.setTimeout(() => {
       formRef.current?.setFieldsValue({ items: [defaultOrderItem], price_type: 'tax_exclusive' });
-      if (cachedDraft) {
-        formRef.current?.setFieldsValue(cachedDraft);
-        if (!purchaseOrderCreateDraftRestoredRef.current) {
-          purchaseOrderCreateDraftRestoredRef.current = true;
-          messageApi.info(t('app.kuaizhizao.salesOrder.draftRestored'));
-        }
-      }
     }, 0);
   }
 
@@ -1807,9 +1769,6 @@ const PurchaseOrdersPage: React.FC = () => {
           messageApi.warning(t('app.kuaizhizao.purchaseOrder.saveSubmitFailed', { message: submitErr?.message || t('common.operationFailed') }));
         }
         submitAfterSaveRef.current = false;
-      }
-      if (isCreatePage) {
-        clearPurchaseOrderCreateDraft();
       }
 
       if (isFormPage) {
@@ -2560,7 +2519,6 @@ const PurchaseOrdersPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
-                onValuesChange={persistPurchaseOrderCreateDraft}
                 onFinish={handleFormSubmit}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];

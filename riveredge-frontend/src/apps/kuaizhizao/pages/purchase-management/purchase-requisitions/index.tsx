@@ -35,12 +35,6 @@ import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDraw
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
-import {
-  buildDocumentCreateDraftKey,
-  clearDocumentFormDraft,
-  getDocumentFormDraft,
-} from '../../../../../utils/documentFormDraftCache';
-import { useDocumentCreateFormDraft } from '../../../../../hooks/useDocumentCreateFormDraft';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
@@ -163,7 +157,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const isFormPage = isCreatePage || isEditPage;
   const editingId = isEditPage ? editRouteId : null;
   const formPageInitKeyRef = useRef<string | null>(null);
-  const purchaseRequisitionCreateDraftRestoredRef = useRef(false);
   const { token } = theme.useToken();
   const prqDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi, modal: modalApi } = App.useApp();
@@ -171,24 +164,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const lastRequisitionsCacheRef = useRef<PurchaseRequisition[]>([]);
   const deepLinkHandledRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const purchaseRequisitionCreateDraftKey = useMemo(
-    () =>
-      isCreatePage
-        ? buildDocumentCreateDraftKey('kuaizhizao:purchase-requisition', location.pathname, location.search)
-        : null,
-    [isCreatePage, location.pathname, location.search],
-  );
-  const clearPurchaseRequisitionCreateDraft = useCallback(() => {
-    if (!purchaseRequisitionCreateDraftKey) return;
-    clearDocumentFormDraft(purchaseRequisitionCreateDraftKey);
-    purchaseRequisitionCreateDraftRestoredRef.current = false;
-  }, [purchaseRequisitionCreateDraftKey]);
   const leavePurchaseRequisitionFormPage = useCallback(() => {
-    if (isCreatePage) {
-      clearPurchaseRequisitionCreateDraft();
-    }
     navigate(PURCHASE_REQUISITION_LIST_PATH);
-  }, [isCreatePage, clearPurchaseRequisitionCreateDraft, navigate]);
+  }, [navigate]);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailVisible, setDetailVisible] = useState(false);
   const [currentReq, setCurrentReq] = useState<PurchaseRequisition | null>(null);
@@ -200,11 +178,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [pullComputationCandidates, setPullComputationCandidates] = useState<PullDemandComputationCandidate[]>([]);
   const [selectedPullComputationId, setSelectedPullComputationId] = useState<number | null>(null);
   const createFormRef = useRef<any>(null);
-  const persistPurchaseRequisitionCreateDraft = useDocumentCreateFormDraft(
-    isCreatePage,
-    purchaseRequisitionCreateDraftKey,
-    createFormRef,
-  );
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
@@ -389,18 +362,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
   );
 
   const initPurchaseRequisitionCreateForm = useCallback(async () => {
-    const cachedDraft =
-      purchaseRequisitionCreateDraftKey != null
-        ? getDocumentFormDraft<Record<string, unknown>>(purchaseRequisitionCreateDraftKey)
-        : null;
-    const applyCachedDraft = () => {
-      if (!cachedDraft) return;
-      createFormRef.current?.setFieldsValue(cachedDraft);
-      if (!purchaseRequisitionCreateDraftRestoredRef.current) {
-        purchaseRequisitionCreateDraftRestoredRef.current = true;
-        messageApi.info(t('app.kuaizhizao.salesOrder.draftRestored'));
-      }
-    };
     void ensureSupplierList();
     setPreviewCode(null);
     setEffectiveRuleCode(null);
@@ -423,7 +384,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
               requisition_date: dayjs(),
               items: initialCreateItems,
             });
-            applyCachedDraft();
           }, 100);
         } catch (e) {
           console.warn('采购申请编号预生成失败:', e);
@@ -433,7 +393,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
               requisition_date: dayjs(),
               items: initialCreateItems,
             });
-            applyCachedDraft();
           }, 100);
         }
       } else {
@@ -443,7 +402,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
             requisition_date: dayjs(),
             items: initialCreateItems,
           });
-          applyCachedDraft();
         }, 100);
       }
     } catch {
@@ -461,7 +419,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 requisition_date: dayjs(),
                 items: initialCreateItems,
               });
-              applyCachedDraft();
             }, 100);
           })
           .catch((e) => {
@@ -472,7 +429,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 requisition_date: dayjs(),
                 items: initialCreateItems,
               });
-              applyCachedDraft();
             }, 100);
           });
       } else {
@@ -482,11 +438,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
             requisition_date: dayjs(),
             items: initialCreateItems,
           });
-          applyCachedDraft();
         }, 100);
       }
     }
-  }, [ensureSupplierList, purchaseRequisitionCreateDraftKey, messageApi, t]);
+  }, [ensureSupplierList]);
 
   const handleCreate = () => {
     navigate(PURCHASE_REQUISITION_CREATE_PATH);
@@ -724,9 +679,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
       setEffectiveAutoGen(null);
       createFormRef.current?.resetFields();
       invalidateMenuBadgeCounts();
-      if (isCreatePage) {
-        clearPurchaseRequisitionCreateDraft();
-      }
       if (isFormPage) {
         navigate(PURCHASE_REQUISITION_LIST_PATH);
       }
@@ -1605,7 +1557,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
-                onValuesChange={persistPurchaseRequisitionCreateDraft}
                 onFinish={handleModalSubmit}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];
