@@ -1617,6 +1617,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return 'var(--ant-colorText)';
   }, [storeSiderBg, isDarkMode]);
 
+  // 浅色模式 + 深色侧栏：菜单统一白字
+  const isLightModeDarkSider = React.useMemo(
+    () => !isDarkMode && siderTextColor === '#ffffff',
+    [isDarkMode, siderTextColor],
+  );
+
   /** 底栏统一判定：深色模式或深色侧栏（白字） */
   const isDarkSiderFooter = React.useMemo(
     () => isDarkMode || siderTextColor === '#ffffff',
@@ -1631,6 +1637,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       }),
     [isDarkSiderFooter, token.colorPrimary],
   );
+  /** 开始菜单圆角：跟随系统 token，保底 4px */
+  const startMenuBaseRadius = React.useMemo(
+    () => Math.max(4, Number(token.borderRadius ?? 6)),
+    [token.borderRadius],
+  );
+  const startMenuPanelRadius = React.useMemo(
+    () => Math.max(4, Number(token.borderRadiusLG ?? token.borderRadius ?? 8)),
+    [token.borderRadiusLG, token.borderRadius],
+  );
 
   /** 开始菜单（底栏入口 + 浮层）三层磨砂：托盘 blur → 分组半透明卡片 → 图标磁贴 */
   const startMenuTheme = React.useMemo(() => {
@@ -1641,7 +1656,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         settingsBtnBgHover: 'rgba(255, 255, 255, 0.12)',
         settingsBtnBgActive: 'rgba(255, 255, 255, 0.16)',
         settingsBtnBorder: 'rgba(255, 255, 255, 0.14)',
-        settingsBtnColor: primary,
+        settingsBtnColor: '#ffffff',
         /** L1 托盘：唯一 backdrop-filter（与 L2 配色对调试验） */
         panelBg: `color-mix(in srgb, ${primary} 8%, rgba(255, 255, 255, 0.05))`,
         panelBgFallback: '#1f2128',
@@ -2989,10 +3004,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           font-weight: normal !important;
         }
         
-        /* 优化菜单标题内容，防止文字与箭头重叠（仅展开态：calc(100%-32px) 给箭头留位；
-           收起态项很窄会算成≈0 + overflow:hidden 把图标整块裁没，故排除收起态） */
+        /* 优化菜单标题内容：AntD 6.4 下避免 max-width 计算导致的右侧挤出 */
         .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content {
-          max-width: calc(100% - 32px) !important; /* 为箭头预留32px空间 */
+          max-width: calc(100% - 28px) !important; /* 为右侧箭头预留空间，避免重叠 */
           overflow: hidden !important;
           text-overflow: ellipsis !important;
           white-space: nowrap !important;
@@ -3003,7 +3017,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 一级菜单项的文字内容也需要优化（同上，仅展开态） */
         .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-item .ant-menu-title-content,
         .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content {
-          max-width: calc(100% - 32px) !important; /* 为箭头预留32px空间 */
           overflow: hidden !important;
           text-overflow: ellipsis !important;
           white-space: nowrap !important;
@@ -3035,12 +3048,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           padding-inline: 0 !important;
           justify-content: center !important;
         }
-        
-        /* 确保下拉箭头有足够的空间 */
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-submenu-arrow {
-          flex-shrink: 0 !important;
-          margin-left: 8px !important; /* 增加箭头与文字的间距 */
+        /* 收起态：激活菜单使用主题色背景，图标白色 */
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-inline-collapsed > .ant-menu-item.ant-menu-item-selected,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-inline-collapsed > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title {
+          background-color: var(--riveredge-menu-primary-color) !important;
+          color: #fff !important;
         }
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-inline-collapsed > .ant-menu-item.ant-menu-item-selected .anticon,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-inline-collapsed > .ant-menu-item.ant-menu-item-selected svg,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-inline-collapsed > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title .anticon,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-inline-collapsed > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title svg,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-inline-collapsed > .ant-menu-item.ant-menu-item-selected .ant-pro-base-menu-inline-item-icon,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-inline-collapsed > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title .ant-pro-base-menu-inline-item-icon {
+          color: #fff !important;
+        }
+        
         /* 子菜单标题悬浮状态 */
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title:hover {
           background-color: var(--ant-colorFillTertiary) !important;
@@ -3213,7 +3235,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .riveredge-footer-settings-btn,
         .riveredge-footer-collapse-btn {
           width: 100% !important;
-          border-radius: ${Number(token.borderRadius ?? 6)}px !important;
+          border-radius: ${startMenuBaseRadius}px !important;
         }
         /* 系统设置入口：深色侧栏中性底 + 主题色字；浅色侧栏主色浅底 */
         .riveredge-footer-settings-btn {
@@ -3271,7 +3293,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           bottom: 52px;
           width: min(var(--riveredge-system-panel-width, 940px), calc(100vw - 24px));
           max-height: min(86vh, 860px);
-          border-radius: ${Number(token.borderRadiusLG || 8)}px;
+          border-radius: ${startMenuPanelRadius}px;
           border: 1px solid ${startMenuTheme.panelBorder};
           background: ${startMenuTheme.panelBg};
           ${startMenuTheme.panelBlur ? `backdrop-filter: blur(${startMenuTheme.panelBlurAmount}) saturate(${startMenuTheme.panelBlurSaturate}); -webkit-backdrop-filter: blur(${startMenuTheme.panelBlurAmount}) saturate(${startMenuTheme.panelBlurSaturate});` : ''}
@@ -3353,7 +3375,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           min-width: 0;
         }
         .riveredge-system-settings-group {
-          border-radius: ${Number(token.borderRadiusLG || 8)}px;
+          border-radius: ${startMenuPanelRadius}px;
           padding: 12px;
           background: ${startMenuTheme.panelGroupBg};
           border: 1px solid ${startMenuTheme.panelGroupBorder};
@@ -3382,7 +3404,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           gap: 10px;
           color: ${startMenuTheme.panelItemColor};
           padding: 10px 8px;
-          border-radius: ${Number(token.borderRadius ?? 6)}px;
+          border-radius: ${startMenuBaseRadius}px;
           min-height: 76px;
           height: auto;
           cursor: pointer;
@@ -3401,7 +3423,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .riveredge-system-settings-item-icon {
           width: 44px;
           height: 44px;
-          border-radius: ${Number(token.borderRadiusLG || 8)}px;
+          border-radius: ${startMenuPanelRadius}px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -3681,33 +3703,90 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           margin-top: auto !important;
           flex-shrink: 0 !important;
         }
-        /* 一级菜单激活状态 - 使用主题色背景，白色文字 */
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected {
+        ${!isDarkMode ? `
+        /* 浅色模式：激活菜单统一主题色背景（含浅色侧栏与深色侧栏） */
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-submenu-title {
+          margin-inline: 6px !important;
+          width: calc(100% - 24px) !important;
+          box-sizing: border-box !important;
+          overflow: hidden !important;
+          /* 二级菜单文字与一级菜单文字起始线对齐 */
+          padding-inline-start: 40px !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected {
           background-color: var(--riveredge-menu-primary-color) !important;
           border-right: none !important;
           box-shadow: none !important;
           color: #fff !important;
         }
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content > a,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content > span,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-title-content a,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-title-content span {
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content > a,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content > span,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .ant-menu-title-content a,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .ant-menu-title-content span {
           color: #fff !important;
           font-weight: normal !important;
         }
-        /* （选中项图标白色由 currentColor 继承自选中项 color:#fff，无需单独 .anticon 规则，已清理） */
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected::after {
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected::after {
           display: none !important;
         }
-        /* 一级子菜单标题激活状态 - 只有文字颜色，无背景色 */
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title {
-          background-color: transparent !important;
+        ` : ''}
+        ${isLightModeDarkSider ? `
+        /* 浅色模式 + 深色侧栏：所有菜单层级统一白色文字 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > a,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > span,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > a,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > span,
+        .ant-menu-item[data-menu-id*='app-group-'],
+        .ant-menu-item[class*='menu-group-title-app'] {
+          color: #fff !important;
         }
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title > .ant-menu-title-content {
-          color: var(--riveredge-menu-primary-color) !important;
+        .ant-menu-item[data-menu-id*='app-group-']:hover,
+        .ant-menu-item[class*='menu-group-title-app']:hover,
+        .ant-menu-item[data-menu-id*='app-group-'] .ant-menu-title-content,
+        .ant-menu-item[class*='menu-group-title-app'] .ant-menu-title-content {
+          color: #fff !important;
         }
+        ` : ''}
+        ${(isDarkMode || isLightModeDarkSider) ? `
+        /* 收起态二级弹层（submenu popup）：浅色+深色侧栏场景使用白底 80% 透明，提高可读性 */
+        .ant-menu-submenu-popup > .ant-menu {
+          background: ${isLightModeDarkSider ? 'rgba(255, 255, 255, 0.8)' : 'rgba(11, 23, 42, 0.9)'} !important;
+          border: 1px solid ${isLightModeDarkSider ? 'rgba(15, 23, 42, 0.14)' : 'rgba(255, 255, 255, 0.14)'} !important;
+          box-shadow:
+            ${isLightModeDarkSider ? '0 14px 32px rgba(15, 23, 42, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.55)' : '0 14px 32px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.08)'} !important;
+          backdrop-filter: ${isLightModeDarkSider ? 'blur(14px) saturate(145%)' : 'blur(16px) saturate(155%)'} !important;
+          -webkit-backdrop-filter: ${isLightModeDarkSider ? 'blur(14px) saturate(145%)' : 'blur(16px) saturate(155%)'} !important;
+        }
+        .ant-menu-submenu-popup > .ant-menu .ant-menu-item,
+        .ant-menu-submenu-popup > .ant-menu .ant-menu-submenu-title,
+        .ant-menu-submenu-popup > .ant-menu .ant-menu-title-content,
+        .ant-menu-submenu-popup > .ant-menu .ant-menu-title-content > a,
+        .ant-menu-submenu-popup > .ant-menu .ant-menu-title-content > span {
+          color: ${isLightModeDarkSider ? 'rgba(0, 0, 0, 0.88)' : 'rgba(255, 255, 255, 0.92)'} !important;
+        }
+        .ant-menu-submenu-popup > .ant-menu .ant-menu-item:hover,
+        .ant-menu-submenu-popup > .ant-menu .ant-menu-submenu-title:hover {
+          background: ${isLightModeDarkSider ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.12)'} !important;
+          color: ${isLightModeDarkSider ? 'rgba(0, 0, 0, 0.92)' : '#fff'} !important;
+        }
+        .ant-menu-submenu-popup > .ant-menu .ant-menu-item-selected,
+        .ant-menu-submenu-popup > .ant-menu .ant-menu-submenu-selected > .ant-menu-submenu-title {
+          background: var(--riveredge-menu-primary-color) !important;
+          color: #fff !important;
+        }
+        .ant-menu-submenu-popup > .ant-menu .ant-menu-submenu-arrow::before,
+        .ant-menu-submenu-popup > .ant-menu .ant-menu-submenu-arrow::after {
+          background: ${isLightModeDarkSider ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.75)'} !important;
+        }
+        ` : ''}
         
         /* 二级及以下菜单恢复 antd/pro-layout 原生样式：不再覆写颜色、选中态、缩进与过渡。 */
         /* ==================== 侧栏菜单动效：更短、更利落（仅作用于侧栏，不影响主题切换全局 0s 规则） ==================== */

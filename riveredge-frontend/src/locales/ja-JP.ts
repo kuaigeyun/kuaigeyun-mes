@@ -4958,6 +4958,7 @@ export default {
   'app.kuaizhizao.menu.reports.three-way-match': '3ウェイマッチ',
   'app.kuaizhizao.menu.reports.plan-fulfillment-rate': '計画の履行',
   'app.kuaizhizao.menu.reports.production-delay-analysis': '遅延解析',
+  'app.kuaizhizao.menu.reports.production-delay-warning': '生産遅延警告',
   'app.kuaizhizao.menu.reports.purchase-cost-trend': 'コストの傾向',
   'app.kuaizhizao.menu.reports.supplier-lead-time': 'リードタイム分析',
   'app.kuaizhizao.menu.reports.scrap-defect-analysis': 'スクラップと欠陥',

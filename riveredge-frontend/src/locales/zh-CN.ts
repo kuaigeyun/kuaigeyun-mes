@@ -5071,6 +5071,7 @@ export default {
   'app.kuaizhizao.menu.reports.three-way-match': '三单匹配',
   'app.kuaizhizao.menu.reports.plan-fulfillment-rate': '计划达成率分析',
   'app.kuaizhizao.menu.reports.production-delay-analysis': '生产延期分析',
+  'app.kuaizhizao.menu.reports.production-delay-warning': '生产延期预警',
   'app.kuaizhizao.menu.reports.purchase-cost-trend': '采购成本趋势',
   'app.kuaizhizao.menu.reports.supplier-lead-time': '供货周期分析',
   'app.kuaizhizao.menu.reports.scrap-defect-analysis': '报废不良分析',

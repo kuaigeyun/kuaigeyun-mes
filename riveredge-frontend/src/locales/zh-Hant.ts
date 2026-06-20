@@ -4840,6 +4840,7 @@ export default {
   'app.kuaizhizao.menu.reports.three-way-match': '三單匹配',
   'app.kuaizhizao.menu.reports.plan-fulfillment-rate': '計劃達成率分析',
   'app.kuaizhizao.menu.reports.production-delay-analysis': '生產延期分析',
+  'app.kuaizhizao.menu.reports.production-delay-warning': '生產延期預警',
   'app.kuaizhizao.menu.reports.purchase-cost-trend': '採購成本趨勢',
   'app.kuaizhizao.menu.reports.supplier-lead-time': '供貨週期分析',
   'app.kuaizhizao.menu.reports.scrap-defect-analysis': '報廢不良分析',

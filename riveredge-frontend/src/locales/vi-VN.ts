@@ -4943,6 +4943,7 @@ export default {
   'app.kuaizhizao.menu.reports.three-way-match': 'Trận đấu 3 chiều',
   'app.kuaizhizao.menu.reports.plan-fulfillment-rate': 'Hoàn thành kế hoạch',
   'app.kuaizhizao.menu.reports.production-delay-analysis': 'Phân tích độ trễ',
+  'app.kuaizhizao.menu.reports.production-delay-warning': 'Cảnh báo trễ sản xuất',
   'app.kuaizhizao.menu.reports.purchase-cost-trend': 'Xu hướng chi phí',
   'app.kuaizhizao.menu.reports.supplier-lead-time': 'Phân tích thời gian thực hiện',
   'app.kuaizhizao.menu.reports.scrap-defect-analysis': 'Phế liệu & khiếm khuyết',

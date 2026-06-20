@@ -5149,6 +5149,7 @@ export default {
   'app.kuaizhizao.menu.reports.three-way-match': '3-Way Match',
   'app.kuaizhizao.menu.reports.plan-fulfillment-rate': 'Plan Fulfillment',
   'app.kuaizhizao.menu.reports.production-delay-analysis': 'Delay Analysis',
+  'app.kuaizhizao.menu.reports.production-delay-warning': 'Production Delay Warning',
   'app.kuaizhizao.menu.reports.purchase-cost-trend': 'Cost Trend',
   'app.kuaizhizao.menu.reports.supplier-lead-time': 'Lead Time Analysis',
   'app.kuaizhizao.menu.reports.scrap-defect-analysis': 'Scrap & Defect',
