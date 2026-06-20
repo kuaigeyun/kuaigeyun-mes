@@ -12,6 +12,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { DefectLedgerItem, qualityImprovementApi } from '../../../services/quality-improvement';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { nonconformingLedgerRowGates } from '../../../../../hooks/useDocumentCapabilities';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -57,7 +58,8 @@ const NonconformingLedgerPage: React.FC = () => {
   const [currentRow, setCurrentRow] = useState<DefectLedgerItem | null>(null);
   const [open, setOpen] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const { canUpdate } = useResourcePermissions(NC_RESOURCE);
+  const ncPerms = useResourcePermissions(NC_RESOURCE);
+  const { canUpdate } = ncPerms;
   const { canCreate: canStart8d } = useResourcePermissions(EIGHT_D_RESOURCE);
 
   const initialFilter = useMemo(
@@ -150,13 +152,17 @@ const NonconformingLedgerPage: React.FC = () => {
         title: t('app.kuaizhizao.quality.common.columns.actions'),
         valueType: 'option',
         width: 180,
-        render: (_, row) => (
+        render: (_, row) => {
+          const gates = nonconformingLedgerRowGates(row, ncPerms, canStart8d, t);
+          return (
           <Space>
-            {canUpdate && (
+            {gates.updateDisposition.allowed && (
               <Button
                 {...rowActionKind('execute')}
                 key="execute"
                 type="link"
+                disabled={gates.updateDisposition.disabled}
+                title={gates.updateDisposition.title}
                 onClick={() => {
                   setCurrentRow(row);
                   setOpen(true);
@@ -174,16 +180,23 @@ const NonconformingLedgerPage: React.FC = () => {
                 {t('app.kuaizhizao.quality.nc.actions.updateDisposition')}
               </Button>
             )}
-            {canStart8d && (
-              <Button key="start8d" {...rowActionKind('execute')} onClick={() => handleStart8d(row)}>
+            {gates.start8d.allowed && (
+              <Button
+                key="start8d"
+                {...rowActionKind('execute')}
+                disabled={gates.start8d.disabled}
+                title={gates.start8d.title}
+                onClick={() => handleStart8d(row)}
+              >
                 {t('app.kuaizhizao.quality.nc.actions.start8d')}
               </Button>
             )}
           </Space>
-        ),
+          );
+        },
       },
     ],
-    [t, canUpdate, canStart8d, navigate],
+    [t, ncPerms, canStart8d, navigate],
   );
 
   return (

@@ -37,9 +37,11 @@ import {
 } from './outboundEntryShared';
 import { getOutboundIssueTypeLabel } from './outboundHubTypes';
 import { OUTBOUND_LIST_PATH, outboundSalesOrderEntryPath } from './outboundPaths';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 const OutboundSalesOrderPullEntryPage: React.FC = () => {
   const { t } = useTranslation();
+  const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_delivery.pull_from_sales_order');
   const { soId: soIdParam } = useParams<{ soId: string }>();
   const salesOrderId = Number(soIdParam);
   const navigate = useNavigate();
@@ -66,8 +68,8 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
     Number.isFinite(salesOrderId) && salesOrderId > 0 ? outboundSalesOrderEntryPath(salesOrderId) : OUTBOUND_LIST_PATH;
   const orderCode = String(order?.order_code ?? order?.code ?? '');
   const pageTitle = orderCode
-    ? `${t('app.kuaizhizao.warehouseOutbound.entry.salesDelivery')} — ${orderCode}`
-    : t('app.kuaizhizao.warehouseOutbound.entry.salesDelivery');
+    ? `${pullFromSalesOrderAction.label} — ${orderCode}`
+    : pullFromSalesOrderAction.label;
 
   const totalQty = useMemo(
     () => items.reduce((sum, it) => sum + Number(quantities[it.id!] ?? 0), 0),

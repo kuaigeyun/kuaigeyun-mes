@@ -29,6 +29,8 @@ from datetime import datetime, date
 from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from apps.kuaizhizao.services.document_action_policy.types import DemandComputationCapabilities
+
 
 class DemandComputationItemBase(BaseModel):
     """需求计算明细基础Schema"""
@@ -174,6 +176,10 @@ class DemandComputationResponse(DemandComputationBase):
     updated_by: Optional[int]
     items: Optional[List[DemandComputationItemResponse]] = Field(default_factory=list)
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    capabilities: Optional[DemandComputationCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（不含 RBAC）",
+    )
 
     class Config:
         from_attributes = True

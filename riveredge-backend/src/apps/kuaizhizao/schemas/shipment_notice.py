@@ -7,10 +7,15 @@ Author: RiverEdge Team
 Date: 2026-02-22
 """
 
+from __future__ import annotations
+
 from datetime import datetime, date
 from typing import Optional, List
+
 from pydantic import Field
 from core.schemas.base import BaseSchema
+
+from apps.kuaizhizao.services.document_action_policy.types import ShipmentNoticeCapabilities
 
 
 # === 发货通知单 ===
@@ -53,6 +58,10 @@ class ShipmentNoticeResponse(ShipmentNoticeBase):
     total_quantity: float = Field(0, description="总数量")
     total_amount: float = Field(0, description="总金额")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycle/Stepper 展示）")
+    capabilities: Optional[ShipmentNoticeCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
+    )
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 

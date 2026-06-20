@@ -29,6 +29,12 @@ export interface Quality8DReport {
   next_step_suggestions?: string[];
   created_at?: string;
   updated_at?: string;
+  capabilities?: {
+    update?: { allowed?: boolean; reason?: string };
+    delete?: { allowed?: boolean; reason?: string };
+    transition?: { allowed?: boolean; reason?: string };
+    close?: { allowed?: boolean; reason?: string };
+  };
 }
 
 export interface Quality8DHistoryEntry {
@@ -64,6 +70,10 @@ export interface DefectLedgerItem {
   finished_goods_inspection_id?: number;
   finished_goods_inspection_code?: string;
   attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
+  capabilities?: {
+    update_disposition?: { allowed?: boolean; reason?: string };
+    start_8d?: { allowed?: boolean; reason?: string };
+  };
 }
 
 export interface OQCInspection {
@@ -88,6 +98,10 @@ export interface OQCInspection {
   other_checks?: Record<string, unknown>;
   attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
   created_at?: string;
+  capabilities?: {
+    conduct?: { allowed?: boolean; reason?: string };
+    delete?: { allowed?: boolean; reason?: string };
+  };
 }
 
 export interface SPCSample {

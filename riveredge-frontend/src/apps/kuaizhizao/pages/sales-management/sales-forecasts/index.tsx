@@ -20,6 +20,12 @@ import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint'
 import { theme as AntdTheme } from 'antd'
 import { StatCardTrendArea } from '../../../../../components/common/StatCardTrendArea'
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired'
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions'
+import {
+  salesForecastCapabilityReasonMessage,
+  salesForecastHasToolbarPushActions,
+  useSalesForecastCapabilities,
+} from '../../../../../hooks/useDocumentCapabilities'
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
 import {
   ListPageTemplate,
@@ -37,7 +43,7 @@ import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut'
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts'
 import { UniTable } from '../../../../../components/uni-table'
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
   UniTableStackedPrimaryCell,
@@ -57,6 +63,7 @@ const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 )
 
+const SALES_FORECAST_RESOURCE = 'kuaizhizao:sales-forecast'
 const SALES_FORECAST_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-forecasts'
 const SALES_FORECAST_CREATE_PATH = `${SALES_FORECAST_LIST_PATH}/new`
 const salesForecastEditPath = (id: number) => `${SALES_FORECAST_LIST_PATH}/${id}/edit`
@@ -96,40 +103,11 @@ import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/Wa
 import { downloadFile } from '../../../services/common'
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField'
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments'
-
-/** 是否已下推需求计算（列表/按钮门禁） */
-function isForecastComputationPushed(record: Record<string, unknown>): boolean {
-  const p = record.planning_pushed_to_computation ?? record.pushed_to_computation
-  return p === true || p === 'true' || p === 1
-}
-
-/** 需求计算节点开启时列表/抽屉始终露出「下推」；禁用时配合 Tooltip（溢出列见 data-row-action-visible-when-disabled） */
-function getSalesForecastPushComputationUiState(
-  record: Record<string, unknown> | null | undefined,
-  opts: { demandComputationEnabled: boolean; auditEnabled: boolean; t: (key: string) => string },
-): { visible: boolean; clickable: boolean; disabledTip?: string } {
-  if (!opts.demandComputationEnabled || !record) return { visible: false, clickable: false }
-  const status = String((record as SalesForecast).status ?? '').trim()
-  const blockedStages = ['草稿', '待审核', '已驳回', '已取消', '已完成']
-  if (isForecastComputationPushed(record)) {
-    return {
-      visible: true,
-      clickable: false,
-      disabledTip: opts.t('app.kuaizhizao.salesForecast.pushDisabledAlreadyPushed'),
-    }
-  }
-  if (blockedStages.includes(status)) {
-    return {
-      visible: true,
-      clickable: false,
-      disabledTip: opts.t('app.kuaizhizao.salesForecast.pushDisabledLifecycle'),
-    }
-  }
-  return { visible: true, clickable: true }
-}
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 export default function SalesForecastsPage() {
   const { t } = useTranslation();
+  const pushToComputationAction = resolveKuaizhizaoDocumentAction(t, 'demand_computation.pull_from_sales_forecast');
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const { message: messageApi, modal: modalApi } = App.useApp()
   const navigate = useNavigate();
@@ -195,6 +173,9 @@ export default function SalesForecastsPage() {
   const [matrixMonths, setMatrixMonths] = useState<dayjs.Dayjs[]>([])
   const [matrixRows, setMatrixRows] = useState<any[]>([])
   const auditEnabled = useAuditRequired('sales_forecast', false)
+  const forecastPerms = useResourcePermissions(SALES_FORECAST_RESOURCE)
+  const permDeniedTitle = t('common.noPermission')
+  const detailCapabilityGates = useSalesForecastCapabilities(currentForecast, forecastPerms, t, permDeniedTitle)
   const salesNodesEnabled = {
     sales_forecast: true,
     demand_computation: true,
@@ -802,7 +783,7 @@ export default function SalesForecastsPage() {
       return
     }
     modalApi.confirm({
-      title: t('app.kuaizhizao.salesForecast.pushToComputation'),
+      title: pushToComputationAction.label,
       content: t('app.kuaizhizao.salesForecast.pushToComputationConfirm'),
       onOk: async () => {
         try {
@@ -1082,9 +1063,9 @@ export default function SalesForecastsPage() {
         const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
         if (!isFirst && dataViewMode === 'detail') return { children: null, props: { rowSpan: 0 } };
         
-        const lifecycle = getSalesForecastLifecycle(record, auditEnabled);
-        const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '');
-        const canDelete = ['草稿', '待审核'].includes(lifecycle.stageName ?? '');
+        const canEdit = record.capabilities?.update?.allowed === true && forecastPerms.canUpdate
+        const canDelete = record.capabilities?.delete?.allowed === true && forecastPerms.canDelete
+        const canPrintRow = record.capabilities?.print?.allowed === true && forecastPerms.canPrint
         const parts: React.ReactNode[] = [
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
             {t('common.detail')}
@@ -1132,7 +1113,7 @@ export default function SalesForecastsPage() {
             }}
           />
         );
-        if (record.id) {
+        if (record.id && canPrintRow) {
           parts.push(
             <Button
               key="print"
@@ -1188,23 +1169,26 @@ export default function SalesForecastsPage() {
     return tableRowsRef.current.find((row) => String(row.id ?? row._rowKey ?? '') === selectedKey) ?? null;
   }, [selectedRowKeys]);
 
-  const toolbarPushUiState = useMemo(
+  const selectedForecastsForBatch = useMemo(
     () =>
-      selectedForecastForToolbar
-        ? getSalesForecastPushComputationUiState(selectedForecastForToolbar as Record<string, unknown>, {
-            demandComputationEnabled: salesNodesEnabled.demand_computation,
-            auditEnabled,
-            t,
-          })
-        : { visible: false, clickable: false },
-    [auditEnabled, salesNodesEnabled.demand_computation, selectedForecastForToolbar, t],
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id ?? row._rowKey ?? '') === String(key)))
+        .filter((row): row is ForecastTableRow => row != null),
+    [selectedRowKeys],
   );
+
+  const toolbarPushDisabledReason = useMemo(() => {
+    if (!selectedForecastForToolbar) return '';
+    const cap = selectedForecastForToolbar.capabilities?.push_computation;
+    if (!cap || cap.allowed) return '';
+    return salesForecastCapabilityReasonMessage(cap.reason, t);
+  }, [selectedForecastForToolbar, t]);
 
   const canUseToolbarPush =
     selectedRowKeys.length === 1 &&
     !!selectedForecastForToolbar?.id &&
-    !!toolbarPushUiState.visible &&
-    !!toolbarPushUiState.clickable;
+    salesNodesEnabled.demand_computation &&
+    salesForecastHasToolbarPushActions(selectedForecastForToolbar);
 
   /** 较昨日对比：显示 +x / -x 格式 */
   const renderDOD = (today?: number, yesterday?: number) => {
@@ -1769,10 +1753,11 @@ export default function SalesForecastsPage() {
             <UniPushToolbarButton
               key={`sales-forecast-push-toolbar-${selectedRowKeys.join('-') || 'none'}`}
               disabled={!canUseToolbarPush}
+              disabledTip={toolbarPushDisabledReason || undefined}
               menuItems={buildUniPushMenuItems([
                 {
                   key: 'push-to-computation',
-                  label: t('app.kuaizhizao.salesForecast.pushToComputation'),
+                  label: pushToComputationAction.label,
                   onClick: () => {
                     if (!selectedForecastForToolbar?.id) {
                       messageApi.warning(t('app.kuaizhizao.salesForecast.selectOne'));
@@ -1788,39 +1773,27 @@ export default function SalesForecastsPage() {
           onDelete={executeDeleteByKeys}
           deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
           toolBarActionsAfterDelete={[
-            <UniBatchMenuButton
+            <UniAuditBatchMenuButton
               key="sales-forecast-batch-menu"
               selectedRowKeys={selectedRowKeys}
-              menuItems={[
-                {
-                  key: 'submit',
-                  label: t('app.kuaizhizao.salesForecast.batchSubmit'),
-                  onClick: async () => {
-                    if (selectedRowKeys.length === 0) return;
-                    let success = 0;
-                    let failed = 0;
-                    for (const k of selectedRowKeys) {
-                      const raw = rowKeyToOrderIdRef.current.get(String(k));
-                      const id = raw ?? Number(k);
-                      if (!Number.isFinite(id) || id <= 0) {
-                        failed += 1;
-                        continue;
-                      }
-                      try {
-                        await submitSalesForecast(id);
-                        success += 1;
-                      } catch {
-                        failed += 1;
-                      }
-                    }
-                    if (success > 0) messageApi.success(t('app.kuaizhizao.salesForecast.batchSubmitSuccess', { count: success }));
-                    if (failed > 0) messageApi.warning(t('app.kuaizhizao.salesForecast.batchSubmitFailed', { count: failed }));
-                    setSelectedRowKeys([]);
-                    invalidateForecastCache();
-                    actionRef.current?.reload();
-                  },
-                },
-              ]}
+              selectedRecords={selectedForecastsForBatch}
+              auditEnabled={auditEnabled}
+              permGates={forecastPerms}
+              handlers={{
+                submit: submitSalesForecast,
+                approve: approveSalesForecast,
+                revoke: withdrawSalesForecastApproval,
+              }}
+              resolveIdFromKey={(key) => {
+                const raw = rowKeyToOrderIdRef.current.get(String(key));
+                const id = raw ?? Number(key);
+                return Number.isFinite(id) && id > 0 ? id : null;
+              }}
+              onSuccess={() => {
+                setSelectedRowKeys([]);
+                invalidateForecastCache();
+                actionRef.current?.reload();
+              }}
               toolBarButtonSize="middle"
             />,
           ]}
@@ -1850,43 +1823,38 @@ export default function SalesForecastsPage() {
         extra={
           currentForecast && (
             <Space size="small">
-              {(() => {
-                const lifecycle = getSalesForecastLifecycle(currentForecast, auditEnabled);
-                const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '');
-                const canDelete = ['草稿', '待审核'].includes(lifecycle.stageName ?? '');
-                const fid = currentForecast.id;
-                return (
-                  <>
-                    <Tooltip title={!canEdit ? t('app.kuaizhizao.salesForecast.editDisabledTip') : undefined}>
-                      <span>
-                        <Button
-                          icon={<EditOutlined />}
-                          disabled={!canEdit || fid == null}
-                          onClick={() => {
-                            if (!canEdit || fid == null) return;
-                            setDrawerVisible(false);
-                            navigate(salesForecastEditPath(fid));
-                          }}
-                        >
-                          {t('common.edit')}
-                        </Button>
-                      </span>
-                    </Tooltip>
-                    <Tooltip title={!canDelete ? t('app.kuaizhizao.salesForecast.deleteDisabledTip') : undefined}>
-                      <span>
-                        <Button
-                          danger
-                          icon={<DeleteOutlined />}
-                          disabled={!canDelete || fid == null}
-                          onClick={() => fid != null && canDelete && handleDelete([fid])}
-                        >
-                          {t('common.delete')}
-                        </Button>
-                      </span>
-                    </Tooltip>
-                  </>
-                );
-              })()}
+              <Tooltip title={detailCapabilityGates.update.title}>
+                <span>
+                  <Button
+                    icon={<EditOutlined />}
+                    disabled={detailCapabilityGates.update.disabled || currentForecast.id == null}
+                    onClick={() => {
+                      const fid = currentForecast.id;
+                      if (detailCapabilityGates.update.disabled || fid == null) return;
+                      setDrawerVisible(false);
+                      navigate(salesForecastEditPath(fid));
+                    }}
+                  >
+                    {t('common.edit')}
+                  </Button>
+                </span>
+              </Tooltip>
+              <Tooltip title={detailCapabilityGates.delete.title}>
+                <span>
+                  <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    disabled={detailCapabilityGates.delete.disabled || currentForecast.id == null}
+                    onClick={() => {
+                      const fid = currentForecast.id;
+                      if (detailCapabilityGates.delete.disabled || fid == null) return;
+                      handleDelete([fid]);
+                    }}
+                  >
+                    {t('common.delete')}
+                  </Button>
+                </span>
+              </Tooltip>
               <UniWorkflowActions {...rowActionKind('skip')}
                 record={currentForecast}
                 entityName={t('app.kuaizhizao.salesForecast.title')}
@@ -1907,7 +1875,7 @@ export default function SalesForecastsPage() {
                   setDrawerVisible(false);
                 }}
               />
-              {currentForecast.id != null && (
+              {currentForecast.id != null && !detailCapabilityGates.print.disabled && (
                 <Button
                   icon={<PrinterOutlined />}
                   onClick={() => openPrint({ documentType: 'sales_forecast', documentId: currentForecast.id! })}

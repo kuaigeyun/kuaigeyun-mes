@@ -36,8 +36,53 @@ class ActionCapability(BaseModel):
 
 ## 试点范围
 
-- **Phase 1**：报价单（`derive_quotation_capabilities`）
-- Phase 2+：销售合同、销售订单等按同一契约增量注册
+| Phase | 单据 | policy 模块 | 状态 |
+|-------|------|-------------|------|
+| 1 | 报价单 | `quotation.py` | 已完成 |
+| 2 | 销售订单 | `sales_order.py` | 已完成 |
+| 3 | 销售变更单 | `sales_order_change.py` | 已完成 |
+| 3 | 销售合同 | `sales_contract.py` | 已完成 |
+| 4 | 销售预测 | `sales_forecast.py` | 已完成 |
+| 5 | 发货通知 | `shipment_notice.py` | 已完成 |
+| 6 | 销售退货 | `sales_return.py` | 已完成 |
+
+审核类动作（submit/approve/reject/withdraw）在 capabilities 中表达**业务态是否允许**；行级审核按钮以 `UniWorkflowActions` + `record.audit` 为门控，并与 capabilities 合成 disabled。
+
+### 批量审核操作（与行级对称）
+
+| 层 | 约定 |
+|----|------|
+| UI 组件 | `UniAuditBatchMenuButton`（`components/uni-batch`），内部挂 `UniBatchMenuButton` |
+| 业务门控 | `record.capabilities`：`submit` / `withdraw_submit` / `approve` / `revoke_approval` |
+| RBAC | `submit`→`canAction('submit')`；撤回/反审→`canAction('revoke')`；审核→`canAction('audit')` |
+| 执行 | 无 bulk API 时组件内逐条调用页面传入的 `handlers`；有 bulk API 时传 `bulkHandlers` |
+| 文案 | 默认 `components.uniBatch.audit.*`，禁止每页再写一套 batchSubmit/batchWithdraw |
+
+**菜单语义（固定，禁止用 `withdraw` 冒充反审核）**：
+
+| 菜单 key | 含义 | capability | RBAC |
+|----------|------|------------|------|
+| `submit` | 批量提交 | `submit` | `submit` |
+| `withdraw` | 批量撤回**提交** | `withdraw_submit` | `revoke` |
+| `approve` | 批量审核通过 | `approve` | `audit` |
+| `revoke` | 批量**反审核** | `revoke_approval` | `revoke` |
+
+页面仅在 `handlers` / `bulkHandlers` 中声明该单据**实际存在**的动作；无 `withdraw_submit` 能力时不传 `withdraw` handler 即可。
+
+**禁止**：各列表页手写四套 `handleBatchSubmit` + 独立 i18n；禁止 `preset` / `capabilityKeys` / `actionOverrides` 等映射层。
+
+非审核类 capabilities 批量（客户确认、发货通知、关单等）使用 `UniCapabilityBatchButton` 放在 `toolBarActionsAfterBatch`（菜单外层），支持单条/多条文案混合；禁止放入审核批量下拉内。
+
+```tsx
+<UniAuditBatchMenuButton
+  selectedRowKeys={selectedRowKeys}
+  selectedRecords={selectedRows}
+  auditEnabled={auditRequired}
+  permGates={perms}
+  handlers={{ submit, withdraw, approve, revoke }}
+  onSuccess={() => actionRef.current?.reload()}
+/>
+```
 
 ## CI
 

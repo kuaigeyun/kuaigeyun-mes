@@ -34,6 +34,12 @@ export interface DemandComputation {
   created_at?: string;
   updated_at?: string;
   items?: DemandComputationItem[];
+  capabilities?: {
+    execute?: { allowed: boolean; reason?: string | null };
+    recompute?: { allowed: boolean; reason?: string | null };
+    compare?: { allowed: boolean; reason?: string | null };
+    export?: { allowed: boolean; reason?: string | null };
+  };
 }
 
 /**
@@ -312,15 +318,6 @@ export interface GenerateOrdersResponse {
 }
 
 /**
- * 下推到生产计划
- */
-export async function pushToProductionPlan(id: number): Promise<{ success: boolean; message: string; target_document?: { id: number; code: string } }> {
-  return apiRequest(`/apps/kuaizhizao/demand-computations/${id}/push-to-production-plan`, {
-    method: 'POST',
-  });
-}
-
-/**
  * 下推到采购申请（仅采购件）
  */
 export async function pushToPurchaseRequisition(id: number): Promise<{ success: boolean; message: string; target_document?: { id: number; code: string } }> {
@@ -359,9 +356,9 @@ export interface PushOptions {
   purchase_items_with_supplier: number
   purchase_items_without_supplier: number
   can_direct_work_order: boolean
-  default_production: 'plan' | 'work_order'
+  default_production: 'work_order'
   default_purchase: 'requisition' | 'purchase_order'
-  production_choices: ('plan' | 'work_order')[]
+  production_choices: 'work_order'[]
   purchase_choices: ('requisition' | 'purchase_order')[]
 }
 
@@ -389,7 +386,7 @@ export interface PushPreview {
 
 export async function getPushPreview(
   id: number,
-  params?: { production?: string; purchase?: string; outsource_only?: boolean }
+  params?: { production?: 'work_order'; purchase?: 'requisition' | 'purchase_order'; outsource_only?: boolean }
 ): Promise<PushPreview> {
   return apiRequest<PushPreview>(`/apps/kuaizhizao/demand-computations/${id}/push-preview`, {
     method: 'GET',
@@ -400,7 +397,7 @@ export async function getPushPreview(
 /** 一键下推 */
 export async function pushAll(
   id: number,
-  body: { production?: string; purchase?: string; include_outsource?: boolean }
+  body: { production?: 'work_order'; purchase?: 'requisition' | 'purchase_order'; include_outsource?: boolean }
 ): Promise<{ success: boolean; message: string; results: Record<string, any> }> {
   return apiRequest(`/apps/kuaizhizao/demand-computations/${id}/push-all`, {
     method: 'POST',

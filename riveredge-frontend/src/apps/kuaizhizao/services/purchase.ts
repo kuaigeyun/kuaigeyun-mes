@@ -16,6 +16,20 @@ function clampPurchaseOrderListLimit(limit: unknown): number | undefined {
   return Math.max(1, Math.min(PURCHASE_ORDER_LIST_LIMIT_MAX, Math.trunc(limit)));
 }
 
+export interface ActionCapability {
+  allowed: boolean;
+  reason?: string | null;
+}
+
+export interface PurchaseOrderCapabilities {
+  update?: ActionCapability;
+  delete?: ActionCapability;
+  submit?: ActionCapability;
+  withdraw_submit?: ActionCapability;
+  approve?: ActionCapability;
+  push_receipt_notice?: ActionCapability;
+}
+
 /**
  * 采购订单接口定义
  */
@@ -78,6 +92,7 @@ export interface PurchaseOrderItem {
   landing_cost?: number;
   /** 杂费明细 (V2) */
   additional_fees_details?: LandingCostFeeItem[];
+  capabilities?: PurchaseOrderCapabilities;
 }
 
 export interface PurchaseOrderListParams {
@@ -319,6 +334,17 @@ export async function pushPurchaseOrderToPurchaseReturn(data: {
   return_quantities?: Record<number, number>;
 }): Promise<{ id: number; return_code?: string }> {
   return apiRequest<{ id: number; return_code?: string }>('/apps/kuaizhizao/purchase-returns/pull-from-purchase-order', {
+    method: 'POST',
+    data,
+  });
+}
+
+export async function pullPurchaseOrderFromInquiry(data: {
+  inquiry_id: number;
+  item_ids?: number[];
+  persist_default_supplier_to_material?: boolean;
+}): Promise<{ purchase_orders?: Array<{ purchase_order_id: number; purchase_order_code: string; supplier_id: number }> }> {
+  return apiRequest('/apps/kuaizhizao/purchase-orders/pull-from-inquiry', {
     method: 'POST',
     data,
   });

@@ -985,15 +985,8 @@ async def delete_sales_forecast(
     返回删除结果。
     """
     service = SalesForecastService()
-    # 验证预测存在
-    await service.get_sales_forecast_by_id(tenant_id, forecast_id)
-    # 删除预测（硬删除）
-    from apps.kuaizhizao.models.sales_forecast import SalesForecast
-    deleted = await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).delete()
-    if deleted:
-        return JSONResponse(content={"message": "销售预测删除成功"}, status_code=http_status.HTTP_200_OK)
-    else:
-        return JSONResponse(content={"message": "销售预测删除失败"}, status_code=http_status.HTTP_400_BAD_REQUEST)
+    await service.delete_sales_forecast(tenant_id, forecast_id)
+    return JSONResponse(content={"message": "销售预测删除成功"}, status_code=http_status.HTTP_200_OK)
 
 
 @router.post("/sales-forecasts/{forecast_id}/submit", response_model=SalesForecastResponse, summary="Submit sales forecast")
@@ -1374,8 +1367,9 @@ async def batch_delete_sales_forecasts(
     """
     def validate_sales_forecast(forecast):
         """验证销售预测是否可以删除"""
-        if forecast.status != "草稿":
-            raise BusinessLogicError(f"销售预测 {forecast.id} 状态为 {forecast.status}，无法删除。只有草稿状态的销售预测才能删除。")
+        from apps.kuaizhizao.services.document_action_policy.sales_forecast import assert_sales_forecast_capability
+
+        assert_sales_forecast_capability(forecast, "delete")
     
     result = await BatchOperationService().batch_delete(
         tenant_id=tenant_id,
@@ -1386,7 +1380,7 @@ async def batch_delete_sales_forecasts(
     
     return BatchResponse(
         success=result["failed_count"] == 0,
-        message=f"成功删除 {result['success_count']} 个销售预测，失败 {result['failure_count']} 个",
+        message=f"成功删除 {result['success_count']} 个销售预测，失败 {result['failed_count']} 个",
         data=result
     )
 
@@ -1633,6 +1627,20 @@ async def submit_production_plan(
     )
 
 
+@router.post("/production-plans/{plan_id}/withdraw", response_model=ProductionPlanResponse, summary="Withdraw production plan submission")
+async def withdraw_production_plan(
+    plan_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPlanResponse:
+    """撤回生产计划提交（待审核 → 草稿）"""
+    return await ProductionPlanningService().withdraw_production_plan(
+        tenant_id=tenant_id,
+        plan_id=plan_id,
+        withdrawn_by=current_user.id,
+    )
+
+
 @router.post("/production-plans/{plan_id}/approve", response_model=ProductionPlanResponse, summary="Approve production plan")
 async def approve_production_plan(
     plan_id: int,
@@ -1719,6 +1727,31 @@ async def push_production_plan_to_work_orders(
     """
     try:
         from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
+        from apps.kuaizhizao.models.production_plan import ProductionPlan
+        from apps.kuaizhizao.services.document_action_policy.production_plan import (
+            assert_production_plan_capability,
+        )
+        from infra.services.business_config_service import BusinessConfigService
+
+        plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True)
+        if not plan:
+            from infra.exceptions.exceptions import NotFoundError
+            raise NotFoundError(f"生产计划不存在: {plan_id}")
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "production_plan")
+        from apps.kuaizhizao.models.production_plan_item import ProductionPlanItem
+        prod_items = await ProductionPlanItem.filter(
+            tenant_id=tenant_id,
+            plan_id=plan_id,
+            suggested_action="生产",
+        ).all()
+        has_prod = any(float(i.work_order_quantity or 0) > 0 for i in prod_items)
+        assert_production_plan_capability(
+            plan,
+            "push_work_order",
+            audit_required=audit_required,
+            has_production_items=has_prod,
+        )
+
         service = DocumentPushPullService()
         result = await service.push_document(
             tenant_id=tenant_id,

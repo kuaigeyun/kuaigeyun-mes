@@ -4,6 +4,7 @@
  * 推荐组合：
  * - `UniBatchDeleteButton` — 独立批量删除（带确认）
  * - `UniBatchMenuButton` — 其它批量能力收拢到一个下拉按钮
+ * - `UniAuditBatchMenuButton` — 审核流批量（提交/撤回/审核/反审），与行级 UniWorkflowActions 对称
  * - `UniBatchSplitToolbar` — 上述两者并排（兼容旧页，内部已按新形态拆分）
  *
  * 任意「依赖选中行」的批量能力可共用 `UniBatchButton` 基座。
@@ -264,3 +265,32 @@ export const UniBatchSplitToolbar: React.FC<UniBatchSplitToolbarProps> = ({
     </Space>
   );
 };
+
+export {
+  UniAuditBatchMenuButton,
+  DEFAULT_AUDIT_BATCH_CAPABILITY_KEYS,
+  DEFAULT_AUDIT_BATCH_PERMISSION_ACTIONS,
+  buildAuditBatchMenuItems,
+  defaultAuditBatchAllowed,
+  pickCapability,
+  useAuditBatchRunner,
+} from './auditBatchMenu';
+export type {
+  AuditBatchAction,
+  AuditBatchCapabilityKeys,
+  AuditBatchHandlers,
+  BulkAuditBatchHandlers,
+  BulkAuditBatchResult,
+  BuildAuditBatchMenuItemsOptions,
+  UniAuditBatchMenuButtonProps,
+} from './auditBatchMenu';
+export {
+  UniCapabilityBatchButton,
+  runCapabilityBatchLoop,
+  runCapabilityBatchBulk,
+} from './capabilityBatchButton';
+export type {
+  BulkCapabilityResult,
+  CapabilityBatchLabels,
+  UniCapabilityBatchButtonProps,
+} from './capabilityBatchButton';

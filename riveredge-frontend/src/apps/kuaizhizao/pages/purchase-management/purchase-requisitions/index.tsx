@@ -7,7 +7,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Dropdown, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker, Modal, Card, theme } from 'antd';
+import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker, Modal, Card, theme } from 'antd';
 import {
   EyeOutlined,
   CheckOutlined,
@@ -19,7 +19,6 @@ import {
   PlusOutlined,
   SendOutlined,
   AppstoreAddOutlined,
-  DownOutlined,
   ArrowLeftOutlined,
   ImportOutlined,
 } from '@ant-design/icons';
@@ -29,8 +28,10 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE, PAGE_SPACING } from '../../../../../components/layout-templates';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
@@ -85,6 +86,8 @@ import { ROUTES } from '../../../constants/routes';
 import { useTranslation } from 'react-i18next';
 import { useGlobalStore } from '../../../../../stores';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
@@ -139,14 +142,20 @@ function canPushPurchaseRequisition(record: PurchaseRequisition): boolean {
   ].includes(s);
 }
 
+const PURCHASE_REQUISITION_RESOURCE = 'kuaizhizao:purchase-requisition';
+
 const PURCHASE_REQUISITION_LIST_PATH = '/apps/kuaizhizao/purchase-management/purchase-requisitions';
 const PURCHASE_REQUISITION_CREATE_PATH = `${PURCHASE_REQUISITION_LIST_PATH}/new`;
 const purchaseRequisitionEditPath = (id: number | string) => `${PURCHASE_REQUISITION_LIST_PATH}/${id}/edit`;
 
 const PurchaseRequisitionsPage: React.FC = () => {
   const { t } = useTranslation();
+  const pushToPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order.pull_from_requisition');
+  const pushToInquiryAction = resolveKuaizhizaoDocumentAction(t, 'purchase_inquiry.pull_from_requisition');
+  const pullFromDemandComputationAction = resolveKuaizhizaoDocumentAction(t, 'purchase_requisition.pull_from_demand_computation');
   const currentUser = useGlobalStore((s) => s.currentUser);
   const purchaseRequestAuditEnabled = useAuditRequired('purchase_request', false);
+  const purchaseRequisitionPerms = useResourcePermissions(PURCHASE_REQUISITION_RESOURCE);
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -161,22 +170,39 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const prqDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const lastRequisitionsCacheRef = useRef<PurchaseRequisition[]>([]);
+  const tableRowsRef = useRef<PurchaseRequisition[]>([]);
   const deepLinkHandledRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const selectedRequisitionsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is PurchaseRequisition => row != null),
+    [selectedRowKeys],
+  );
+
+  const purchaseRequisitionAuditBatchHandlers = useMemo(
+    () => ({
+      submit: (id: number) => submitPurchaseRequisition(id),
+      approve: (id: number) => approvePurchaseRequisition(id, { approved: true, review_remarks: '' }),
+      revoke: (id: number) => withdrawPurchaseRequisition(id),
+    }),
+    [],
+  );
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+
+  const handlePurchaseRequisitionAuditBatchSuccess = useCallback(() => {
+    setSelectedRowKeys([]);
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+  }, [invalidateMenuBadgeCounts]);
   const leavePurchaseRequisitionFormPage = useCallback(() => {
     navigate(PURCHASE_REQUISITION_LIST_PATH);
   }, [navigate]);
-  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailVisible, setDetailVisible] = useState(false);
   const [currentReq, setCurrentReq] = useState<PurchaseRequisition | null>(null);
   const [supplierList, setSupplierList] = useState<Array<{ id: number; code?: string; name: string }>>([]);
-  const [pullFromComputationVisible, setPullFromComputationVisible] = useState(false);
-  const [pullComputationLoading, setPullComputationLoading] = useState(false);
-  const [pullComputationSubmitting, setPullComputationSubmitting] = useState(false);
-  const [pullComputationKeyword, setPullComputationKeyword] = useState('');
-  const [pullComputationCandidates, setPullComputationCandidates] = useState<PullDemandComputationCandidate[]>([]);
-  const [selectedPullComputationId, setSelectedPullComputationId] = useState<number | null>(null);
   const createFormRef = useRef<any>(null);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
@@ -484,9 +510,43 @@ const PurchaseRequisitionsPage: React.FC = () => {
     }
   }, [isFormPage, isCreatePage, editRouteId, initPurchaseRequisitionCreateForm, loadPurchaseRequisitionEditForm]);
 
-  const loadPullComputationCandidates = useCallback(
-    async (keyword: string = '') => {
-      setPullComputationLoading(true);
+  const pullFromComputationColumns: ProColumns<PullDemandComputationCandidate>[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.purchaseRequisition.pull.computationCode'), dataIndex: 'computation_code', width: 220, ellipsis: true },
+      { title: t('app.kuaizhizao.purchaseRequisition.pull.businessMode'), dataIndex: 'business_mode', width: 110, align: 'center' },
+      { title: t('app.kuaizhizao.purchaseRequisition.pull.computationStatus'), dataIndex: 'computation_status', width: 110, align: 'center' },
+      {
+        title: t('common.createdAt'),
+        dataIndex: 'created_at',
+        width: 180,
+        render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at',
+        width: 180,
+        render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseRequisition.pull.convertStatus'),
+        key: 'convert_status',
+        width: 180,
+        align: 'center',
+        render: (_, record) =>
+          record.can_push_requisition === false ? (
+            <Tag color="gold">{record.disabled_reason || t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate')}</Tag>
+          ) : (
+            <Tag color="success">{t('app.kuaizhizao.purchaseRequisition.pull.canCreate')}</Tag>
+          ),
+      },
+    ],
+    [t],
+  );
+
+  const pullFromComputationQuery = useUniPullQuery<PullDemandComputationCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
       try {
         const kw = keyword.trim();
         const listRes = await listDemandComputations({
@@ -513,9 +573,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   disabledReason = t('app.kuaizhizao.purchaseRequisition.pull.requisitionExists');
                 }
               } catch {
-                // 能力探测失败时保持可选，由后端最终校验
+                // capability probe failure should not block selectable rows
               }
-
               return {
                 id: row.id!,
                 computation_code: row.computation_code,
@@ -529,46 +588,32 @@ const PurchaseRequisitionsPage: React.FC = () => {
               } as PullDemandComputationCandidate;
             }),
         );
-        setPullComputationCandidates(candidates);
-      } finally {
-        setPullComputationLoading(false);
+        const start = (page - 1) * pageSize;
+        return { data: candidates.slice(start, start + pageSize), total: candidates.length };
+      } catch (error: any) {
+        messageApi.error(error?.response?.data?.detail || error?.message || t('app.kuaizhizao.purchaseRequisition.pull.failed'));
+        return { data: [], total: 0 };
       }
     },
-    [t],
-  );
-
-  const handlePullFromComputation = useCallback(async () => {
-    setPullFromComputationVisible(true);
-    setPullComputationKeyword('');
-    setSelectedPullComputationId(null);
-    await loadPullComputationCandidates('');
-  }, [loadPullComputationCandidates]);
-
-  const handlePullFromComputationConfirm = useCallback(async () => {
-    if (!selectedPullComputationId) {
-      messageApi.warning(t('app.kuaizhizao.purchaseRequisition.pull.selectComputation'));
-      return;
-    }
-    const selected = pullComputationCandidates.find((i) => i.id === selectedPullComputationId);
-    if (selected && selected.can_push_requisition === false) {
-      messageApi.warning(selected.disabled_reason || t('app.kuaizhizao.purchaseRequisition.pull.computationUnavailable'));
-      return;
-    }
-
-    setPullComputationSubmitting(true);
-    try {
-      const res = await pushToPurchaseRequisition(selectedPullComputationId);
+    isRowDisabled: (record) => record.can_push_requisition === false,
+    onConfirm: async (keys, rows) => {
+      const selectedId = Number(keys[0]);
+      const selected = rows[0];
+      if (!selectedId || selectedId <= 0) {
+        messageApi.warning(t('app.kuaizhizao.purchaseRequisition.pull.selectComputation'));
+        return;
+      }
+      if (selected && selected.can_push_requisition === false) {
+        messageApi.warning(selected.disabled_reason || t('app.kuaizhizao.purchaseRequisition.pull.computationUnavailable'));
+        return;
+      }
+      const res = await pushToPurchaseRequisition(selectedId);
       messageApi.success(res?.message || t('app.kuaizhizao.purchaseRequisition.pull.success'));
-      setPullFromComputationVisible(false);
-      setSelectedPullComputationId(null);
       actionRef.current?.reload();
       invalidateMenuBadgeCounts();
-    } catch (e: any) {
-      messageApi.error(e?.response?.data?.detail || t('app.kuaizhizao.purchaseRequisition.pull.failed'));
-    } finally {
-      setPullComputationSubmitting(false);
-    }
-  }, [actionRef, invalidateMenuBadgeCounts, messageApi, pullComputationCandidates, selectedPullComputationId]);
+      pullFromComputationQuery.closeModal();
+    },
+  });
 
   const mapItemsForApi = (
     validItems: Array<{
@@ -747,7 +792,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     if (selectedRowKeys.length !== 1) return null;
     const id = Number(selectedRowKeys[0]);
     if (!Number.isFinite(id) || id <= 0) return null;
-    return lastRequisitionsCacheRef.current.find((row) => row.id === id) ?? null;
+    return tableRowsRef.current.find((row) => row.id === id) ?? null;
   }, [selectedRowKeys]);
 
   const canUseToolbarPush = selectedRequisitionForToolbar
@@ -766,84 +811,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
     } catch (e: any) {
       messageApi.error(e?.response?.data?.detail || t('common.deleteFailed'));
     }
-  };
-
-  const handleBatchSubmit = async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      messageApi.warning(t('app.kuaizhizao.purchaseRequisition.selectFirst'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await submitPurchaseRequisition(id);
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) messageApi.success(t('app.kuaizhizao.purchaseRequisition.batchSubmitSuccess', { count: success }));
-    if (failed > 0) messageApi.warning(t('app.kuaizhizao.purchaseRequisition.batchSubmitPartial', { count: failed }));
-    setSelectedRowKeys([]);
-    actionRef.current?.reload();
-  };
-
-  const handleBatchApprove = async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      messageApi.warning(t('app.kuaizhizao.purchaseRequisition.selectFirst'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await approvePurchaseRequisition(id, { approved: true, review_remarks: '' });
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) messageApi.success(t('app.kuaizhizao.purchaseRequisition.batchApproveSuccess', { count: success }));
-    if (failed > 0) messageApi.warning(t('app.kuaizhizao.purchaseRequisition.batchApprovePartial', { count: failed }));
-    setSelectedRowKeys([]);
-    actionRef.current?.reload();
-  };
-
-  const handleBatchWithdraw = async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      messageApi.warning(t('app.kuaizhizao.purchaseRequisition.selectFirst'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await withdrawPurchaseRequisition(id);
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) messageApi.success(t('app.kuaizhizao.purchaseRequisition.batchWithdrawSuccess', { count: success }));
-    if (failed > 0) messageApi.warning(t('app.kuaizhizao.purchaseRequisition.batchWithdrawPartial', { count: failed }));
-    setSelectedRowKeys([]);
-    actionRef.current?.reload();
   };
 
   const handleConvert = async (record: PurchaseRequisition) => {
@@ -1048,7 +1015,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         ? buildUniPushMenuItems([
             {
               key: 'push-purchase-order',
-              label: t('app.kuaizhizao.purchaseRequisition.pushPO'),
+              label: pushToPurchaseOrderAction.label,
               icon: <SwapOutlined />,
               onClick: () => {
                 void handleConvert(selectedRequisitionForToolbar);
@@ -1056,7 +1023,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             },
             {
               key: 'push-inquiry',
-              label: t('app.kuaizhizao.purchaseRequisition.pushInquiry'),
+              label: pushToInquiryAction.label,
               icon: <FileSearchOutlined />,
               onClick: () => {
                 void handleCreateInquiry(selectedRequisitionForToolbar);
@@ -1064,7 +1031,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             },
           ])
         : [],
-    [selectedRequisitionForToolbar, canUseToolbarPush, t],
+    [selectedRequisitionForToolbar, canUseToolbarPush, pushToPurchaseOrderAction.label, pushToInquiryAction.label],
   );
 
   const handleDeleteOne = (record: PurchaseRequisition) => {
@@ -1613,12 +1580,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
               required_date_from: s.required_date_from,
               required_date_to: s.required_date_to,
             });
-            lastRequisitionsCacheRef.current = res.data || [];
+            tableRowsRef.current = res.data || [];
             return {
               data: res.data || [],
               total: res.total || 0,
               success: res.success ?? true,
             };
+          }}
+          onTableDataChange={(rows) => {
+            tableRowsRef.current = rows;
           }}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
@@ -1630,27 +1600,21 @@ const PurchaseRequisitionsPage: React.FC = () => {
           createButtonText={t('app.kuaizhizao.menu.purchase-management.purchase-requisitions.new')}
           onCreate={handleCreate}
           toolBarRender={() => [
-            <Space.Compact key="create-purchase-requisition-with-pull">
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-                {t('app.kuaizhizao.menu.purchase-management.purchase-requisitions.new')}
-              </Button>
-              <Dropdown {...rowActionKind('skip')}
-                trigger={['click']}
-                menu={{
-                  items: [
-                    {
-                      key: 'pull-from-demand-computation',
-                      label: t('app.kuaizhizao.purchaseRequisition.createFromComputation'),
-                      onClick: () => {
-                        void handlePullFromComputation();
-                      },
-                    },
-                  ],
-                }}
-              >
-                <Button type="primary" icon={<DownOutlined />} />
-              </Dropdown>
-            </Space.Compact>,
+            <UniPullCreateToolbar
+              compactKey="create-purchase-requisition-with-pull"
+              createIcon={<PlusOutlined />}
+              createLabel={t('app.kuaizhizao.menu.purchase-management.purchase-requisitions.new')}
+              onCreate={handleCreate}
+              menuItems={[
+                {
+                  key: 'pull-from-demand-computation',
+                  label: pullFromDemandComputationAction.label,
+                  onClick: () => {
+                    pullFromComputationQuery.openModal();
+                  },
+                },
+              ]}
+            />,
             <UniPushToolbarButton
               key={`purchase-requisition-push-${selectedRequisitionForToolbar?.id ?? 'none'}`}
               menuItems={toolbarPushMenuItems}
@@ -1662,33 +1626,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.purchaseRequisition.confirmBatchDelete', { count })}
           toolBarActionsAfterDelete={[
-            <UniBatchMenuButton
+            <UniAuditBatchMenuButton
               key="purchase-requisition-batch-menu"
               selectedRowKeys={selectedRowKeys}
-              menuItems={[
-                {
-                  key: 'submit',
-                  label: t('app.kuaizhizao.purchaseRequisition.batchSubmit'),
-                  icon: <SendOutlined />,
-                  onClick: handleBatchSubmit,
-                },
-                ...(purchaseRequestAuditEnabled
-                  ? [
-                      {
-                        key: 'approve',
-                        label: t('app.kuaizhizao.purchaseRequisition.batchApprove'),
-                        icon: <CheckOutlined />,
-                        onClick: handleBatchApprove,
-                      },
-                    ]
-                  : []),
-                {
-                  key: 'withdraw',
-                  label: t('app.kuaizhizao.purchaseRequisition.batchWithdraw'),
-                  icon: <EditOutlined />,
-                  onClick: handleBatchWithdraw,
-                },
-              ]}
+              selectedRecords={selectedRequisitionsForBatch}
+              auditEnabled={purchaseRequestAuditEnabled}
+              permGates={purchaseRequisitionPerms}
+              handlers={purchaseRequisitionAuditBatchHandlers}
+              onSuccess={handlePurchaseRequisitionAuditBatchSuccess}
+              toolBarButtonSize="middle"
             />,
           ]}
           showExportButton
@@ -1715,93 +1661,33 @@ const PurchaseRequisitionsPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <Modal
-        title={t('app.kuaizhizao.purchaseRequisition.pull.title')}
-        open={pullFromComputationVisible}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        onCancel={() => {
-          if (pullComputationSubmitting) return;
-          setPullFromComputationVisible(false);
-          setSelectedPullComputationId(null);
-        }}
-        onOk={() => {
-          void handlePullFromComputationConfirm();
-        }}
+      <UniPullQueryModal<PullDemandComputationCandidate>
+        open={pullFromComputationQuery.open}
+        title={pullFromDemandComputationAction.label}
+        onCancel={pullFromComputationQuery.closeModal}
+        onOk={pullFromComputationQuery.handleConfirm}
+        rowKey="id"
+        columns={pullFromComputationColumns}
+        dataSource={pullFromComputationQuery.dataSource}
+        loading={pullFromComputationQuery.loading}
+        confirmLoading={pullFromComputationQuery.confirmLoading}
+        selectionType={pullFromComputationQuery.selectionType}
+        selectedRowKeys={pullFromComputationQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromComputationQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromComputationQuery.isRowDisabled}
+        searchDraft={pullFromComputationQuery.searchDraft}
+        onSearchDraftChange={pullFromComputationQuery.setSearchDraft}
+        onSearchApply={pullFromComputationQuery.handleSearchApply}
+        onSearchClear={pullFromComputationQuery.handleSearchClear}
+        appliedKeyword={pullFromComputationQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.purchaseRequisition.pull.searchPlaceholder')}
+        page={pullFromComputationQuery.page}
+        pageSize={pullFromComputationQuery.pageSize}
+        total={pullFromComputationQuery.total}
+        onPageChange={pullFromComputationQuery.handlePageChange}
         okText={t('app.kuaizhizao.purchaseRequisition.pull.ok')}
-        confirmLoading={pullComputationSubmitting}
-        destroyOnHidden
-      >
-        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-          <Input.Search
-            allowClear
-            placeholder={t('app.kuaizhizao.purchaseRequisition.pull.searchPlaceholder')}
-            value={pullComputationKeyword}
-            onChange={(e) => setPullComputationKeyword(e.target.value)}
-            onSearch={(value) => {
-              setPullComputationKeyword(value);
-              void loadPullComputationCandidates(value);
-            }}
-            enterButton={t('common.search')}
-          />
-          <Table<PullDemandComputationCandidate>
-            rowKey="id"
-            loading={pullComputationLoading}
-            dataSource={pullComputationCandidates}
-            pagination={false}
-            scroll={{ x: 1100, y: 360 }}
-            rowSelection={{
-              type: 'radio',
-              selectedRowKeys: selectedPullComputationId ? [selectedPullComputationId] : [],
-              onChange: (keys) => {
-                const next = Number(keys?.[0]);
-                if (Number.isFinite(next)) {
-                  setSelectedPullComputationId(next);
-                } else {
-                  setSelectedPullComputationId(null);
-                }
-              },
-              getCheckboxProps: (record) => ({
-                disabled: record.can_push_requisition === false,
-              }),
-            }}
-            onRow={(record) => ({
-              onClick: () => {
-                if (record.can_push_requisition === false) return;
-                setSelectedPullComputationId(record.id);
-              },
-            })}
-            columns={[
-              { title: t('app.kuaizhizao.purchaseRequisition.pull.computationCode'), dataIndex: 'computation_code', width: 220, ellipsis: true },
-              { title: t('app.kuaizhizao.purchaseRequisition.pull.businessMode'), dataIndex: 'business_mode', width: 110, align: 'center' },
-              { title: t('app.kuaizhizao.purchaseRequisition.pull.computationStatus'), dataIndex: 'computation_status', width: 110, align: 'center' },
-              {
-                title: t('common.createdAt'),
-                dataIndex: 'created_at',
-                width: 180,
-                render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
-              },
-              {
-                title: t('common.updatedAt'),
-                dataIndex: 'updated_at',
-                width: 180,
-                render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
-              },
-              {
-                title: t('app.kuaizhizao.purchaseRequisition.pull.convertStatus'),
-                key: 'convert_status',
-                width: 180,
-                align: 'center',
-                render: (_, record) =>
-                  record.can_push_requisition === false ? (
-                    <Tag color="gold">{record.disabled_reason || t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate')}</Tag>
-                  ) : (
-                    <Tag color="success">{t('app.kuaizhizao.purchaseRequisition.pull.canCreate')}</Tag>
-                  ),
-              },
-            ]}
-          />
-        </Space>
-      </Modal>
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+      />
 
 
       <DetailDrawerTemplate
@@ -1884,7 +1770,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   visible: canPushPurchaseRequisition(currentReq),
                   render: () => (
                     <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(currentReq)}>
-                      {t('app.kuaizhizao.purchaseRequisition.pushPO')}
+                      {pushToPurchaseOrderAction.label}
                     </Button>
                   ),
                 },
@@ -1893,7 +1779,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   visible: canPushPurchaseRequisition(currentReq),
                   render: () => (
                     <Button type="link" size="small" icon={<FileSearchOutlined />} onClick={() => handleCreateInquiry(currentReq)}>
-                      {t('app.kuaizhizao.purchaseRequisition.pushInquiry')}
+                      {pushToInquiryAction.label}
                     </Button>
                   ),
                 },

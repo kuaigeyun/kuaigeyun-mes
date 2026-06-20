@@ -15,3 +15,21 @@
     z-index: 1;
   }
 }
+
+/**
+ * uni-pull 分裂按钮：Dropdown 触发器外层 span 会打断 Compact 拼接，统一抹平包装层
+ */
+.uni-pull-create-toolbar.ant-space-compact {
+  > span {
+    display: contents;
+  }
+
+  /* 覆盖 antd compact 的 solid 连接伪元素：保留分割线，但不允许 -1px 溢出 */
+  .ant-btn-compact-item.ant-btn-variant-solid:not([disabled]) + .ant-btn-compact-item.ant-btn-variant-solid:not([disabled])::before {
+    content: '' !important;
+    display: block !important;
+    inset-block: 0 !important;
+    inset-inline-start: 0 !important;
+    width: 1px !important;
+  }
+}

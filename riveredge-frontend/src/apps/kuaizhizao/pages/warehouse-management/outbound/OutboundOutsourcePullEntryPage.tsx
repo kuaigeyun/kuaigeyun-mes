@@ -37,6 +37,7 @@ import {
 } from './outboundEntryShared';
 import { getOutboundIssueTypeLabel } from './outboundHubTypes';
 import { OUTBOUND_LIST_PATH, outboundOutsourceEntryPath } from './outboundPaths';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import {
   draftOptionalNumber,
   mergeMaterialIssueQuantities,
@@ -55,6 +56,7 @@ type IssueLine = {
 
 const OutboundOutsourcePullEntryPage: React.FC = () => {
   const { t } = useTranslation();
+  const pullFromOutsourceWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'outbound.pull_from_outsource_work_order');
   const { woId: woIdParam } = useParams<{ woId: string }>();
   const woId = Number(woIdParam);
   const navigate = useNavigate();
@@ -77,8 +79,8 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
   const pagePath = Number.isFinite(woId) && woId > 0 ? outboundOutsourceEntryPath(woId) : OUTBOUND_LIST_PATH;
   const woCode = String(workOrder?.code ?? '');
   const pageTitle = woCode
-    ? `${t('app.kuaizhizao.warehouseOutbound.entry.outsourceIssue')} — ${woCode}`
-    : t('app.kuaizhizao.warehouseOutbound.entry.outsourceIssue');
+    ? `${pullFromOutsourceWorkOrderAction.label} — ${woCode}`
+    : pullFromOutsourceWorkOrderAction.label;
 
   const totalIssueQty = useMemo(
     () => issueLines.reduce((sum, line) => sum + Number(line.issueQuantity || 0), 0),

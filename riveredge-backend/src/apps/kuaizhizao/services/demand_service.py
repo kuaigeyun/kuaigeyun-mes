@@ -340,6 +340,7 @@ class DemandService(AppBaseService[Demand]):
             forecast_map = {f.id: f for f in forecasts}
         
         from apps.kuaizhizao.services.document_lifecycle_service import get_demand_lifecycle
+        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_demand_capabilities_on_response
         data = []
         for demand in demands:
             item = DemandListResponse.model_validate(demand)
@@ -361,6 +362,7 @@ class DemandService(AppBaseService[Demand]):
                 "demand_type": getattr(demand, "demand_type", None),
             })()
             item.lifecycle = get_demand_lifecycle(demand_view, items=None)
+            item = enrich_demand_capabilities_on_response(demand_view, item)
             data.append(item.model_dump())
 
         from core.services.approval.audit_record_enricher import enrich_data_payload

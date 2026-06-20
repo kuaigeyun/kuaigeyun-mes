@@ -1,6 +1,23 @@
 import { apiRequest } from '../../../services/api';
 import type { ChangeImpactPreview, OrderChangeItem } from './sales-order-change';
 
+export interface ActionCapability {
+  allowed: boolean;
+  reason?: string | null;
+}
+
+export interface PurchaseOrderChangeCapabilities {
+  update?: ActionCapability;
+  delete?: ActionCapability;
+  submit?: ActionCapability;
+  withdraw_submit?: ActionCapability;
+  approve?: ActionCapability;
+  apply?: ActionCapability;
+  preview_impact?: ActionCapability;
+  print?: ActionCapability;
+  reopen?: ActionCapability;
+}
+
 export interface PurchaseOrderChange {
   id?: number;
   change_code?: string;
@@ -25,6 +42,7 @@ export interface PurchaseOrderChange {
   lifecycle?: Record<string, unknown>;
   header_changes?: Record<string, unknown>;
   notes?: string;
+  capabilities?: PurchaseOrderChangeCapabilities;
 }
 
 export async function listPurchaseOrderChanges(params: {

@@ -745,7 +745,12 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             query = query.filter(work_order_id=filters['work_order_id'])
 
         pickings = await query.offset(skip).limit(limit).order_by('-created_at')
-        rows = [ProductionPickingListResponse.model_validate(picking) for picking in pickings]
+        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
+        rows = enrich_outbound_hub_list_capabilities(
+            pickings,
+            [ProductionPickingListResponse.model_validate(picking) for picking in pickings],
+            "production_picking",
+        )
 
         if rows:
             from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
@@ -1415,7 +1420,9 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
             query = query.filter(picking_id=filters["picking_id"])
 
         rets = await query.offset(skip).limit(limit).order_by("-created_at")
-        return [ProductionReturnListResponse.model_validate(r) for r in rets]
+        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
+        responses = [ProductionReturnListResponse.model_validate(r) for r in rets]
+        return enrich_inbound_hub_list_capabilities(rets, responses, "production_return")
 
     async def update_production_return(
         self,
@@ -1830,7 +1837,9 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             query = query.filter(work_order_id=filters['work_order_id'])
 
         receipts = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [FinishedGoodsReceiptResponse.model_validate(receipt) for receipt in receipts]
+        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
+        responses = [FinishedGoodsReceiptResponse.model_validate(receipt) for receipt in receipts]
+        return enrich_inbound_hub_list_capabilities(receipts, responses, "finished_goods")
 
     async def confirm_receipt(
         self,
@@ -2864,7 +2873,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             )
 
         deliveries = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [SalesDeliveryResponse.model_validate(delivery) for delivery in deliveries]
+        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
+        responses = [SalesDeliveryResponse.model_validate(delivery) for delivery in deliveries]
+        return enrich_outbound_hub_list_capabilities(deliveries, responses, "sales_delivery")
 
     async def update_sales_delivery(
         self,
@@ -4457,7 +4468,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             # 列表与详情共用生命周期计算，避免前端仅按 status 兜底时与「已入库」不一致
             resp.lifecycle = get_purchase_receipt_lifecycle(receipt, milestones=[])
             out.append(resp)
-        return out
+        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
+        return enrich_inbound_hub_list_capabilities(receipts, out, "purchase")
 
     async def confirm_receipt(
         self,
@@ -5218,6 +5230,34 @@ class SalesReturnService(AppBaseService[SalesReturn]):
     def __init__(self):
         super().__init__(SalesReturn)
 
+    async def _return_has_items_map(self, tenant_id: int, return_ids: List[int]) -> dict[int, bool]:
+        if not return_ids:
+            return {}
+        from tortoise.functions import Count
+
+        rows = await SalesReturnItem.filter(
+            tenant_id=tenant_id,
+            return_id__in=return_ids,
+        ).annotate(cnt=Count("id")).group_by("return_id").values("return_id", "cnt")
+        return {int(r["return_id"]): int(r["cnt"] or 0) > 0 for r in rows}
+
+    async def _enrich_return_response(
+        self,
+        tenant_id: int,
+        return_obj: SalesReturn,
+        response: SalesReturnResponse,
+    ) -> SalesReturnResponse:
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_sales_return_capabilities_on_response,
+        )
+
+        item_count = await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_obj.id).count()
+        return enrich_sales_return_capabilities_on_response(
+            return_obj,
+            response,
+            has_items=item_count > 0,
+        )
+
     async def create_sales_return(self, tenant_id: int, return_data: SalesReturnCreate, created_by: int) -> SalesReturnResponse:
         """创建销售退货单"""
         async with in_transaction():
@@ -5389,7 +5429,11 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 except Exception as e:
                     logger.warning("建立销售出库→销售退货 单据关联失败: %s", e)
             
-            return SalesReturnResponse.model_validate(return_obj)
+            return await self._enrich_return_response(
+                tenant_id,
+                return_obj,
+                SalesReturnResponse.model_validate(return_obj),
+            )
 
     async def get_sales_order_return_preview(
         self,
@@ -5560,7 +5604,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_return_lifecycle, get_document_milestones
         milestones = await get_document_milestones(tenant_id, "sales_return", return_id)
         response.lifecycle = get_sales_return_lifecycle(return_obj, milestones=milestones)
-        return response
+        return await self._enrich_return_response(tenant_id, return_obj, response)
 
     async def list_sales_returns(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[SalesReturnResponse]:
         """获取销售退货单列表"""
@@ -5575,13 +5619,20 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             query = query.filter(customer_id=filters['customer_id'])
 
         returns = await query.offset(skip).limit(limit).order_by('-created_at')
+        return_ids = [int(r.id) for r in returns]
+        has_items_by_id = await self._return_has_items_map(tenant_id, return_ids)
+        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_sales_return_list_capabilities
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_return_lifecycle
-        out: List[SalesReturnResponse] = []
+        list_responses: List[SalesReturnResponse] = []
         for return_obj in returns:
             resp = SalesReturnResponse.model_validate(return_obj)
             resp.lifecycle = get_sales_return_lifecycle(return_obj)
-            out.append(resp)
-        return out
+            list_responses.append(resp)
+        return enrich_sales_return_list_capabilities(
+            returns,
+            list_responses,
+            has_items_by_id=has_items_by_id,
+        )
 
     async def confirm_return(
         self,
@@ -5596,8 +5647,10 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             if not return_obj:
                 raise NotFoundError(f"销售退货单不存在: {return_id}")
 
-            if return_obj.status != '待退货':
-                raise BusinessLogicError("只有待退货状态的销售退货单才能确认退货")
+            from apps.kuaizhizao.services.document_action_policy.sales_return import assert_sales_return_capability
+
+            item_count = await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_id).count()
+            assert_sales_return_capability(return_obj, "confirm", has_items=item_count > 0)
 
             # 1. 更新确认数据
             if confirmation_data:
@@ -5785,8 +5838,9 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             )
             if not return_obj:
                 raise NotFoundError(f"销售退货单不存在: {return_id}")
-            if return_obj.status not in ("待退货", "草稿"):
-                raise BusinessLogicError("仅「待退货」或「草稿」状态的销售退货单可编辑")
+            from apps.kuaizhizao.services.document_action_policy.sales_return import assert_sales_return_capability
+
+            assert_sales_return_capability(return_obj, "update")
 
             if not isinstance(return_data, SalesReturnUpdate):
                 return_data = SalesReturnUpdate.model_validate(return_data)
@@ -5867,8 +5921,9 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         return_obj = await SalesReturn.get_or_none(tenant_id=tenant_id, id=return_id, deleted_at__isnull=True)
         if not return_obj:
             raise NotFoundError(f"销售退货单不存在: {return_id}")
-        if return_obj.status != "待退货":
-            raise BusinessLogicError("只有待退货状态的销售退货单才能删除")
+        from apps.kuaizhizao.services.document_action_policy.sales_return import assert_sales_return_capability
+
+        assert_sales_return_capability(return_obj, "delete")
         await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
             deleted_at=datetime.now()
         )
@@ -5880,8 +5935,9 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             return_obj = await SalesReturn.get_or_none(tenant_id=tenant_id, id=return_id, deleted_at__isnull=True)
             if not return_obj:
                 raise NotFoundError(f"销售退货单不存在: {return_id}")
-            if return_obj.status != "已退货":
-                raise BusinessLogicError("只有已退货状态的销售退货单才能撤回")
+            from apps.kuaizhizao.services.document_action_policy.sales_return import assert_sales_return_capability
+
+            assert_sales_return_capability(return_obj, "withdraw")
 
             from apps.kuaizhizao.services.inventory_service import InventoryService
             items = await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
@@ -5915,6 +5971,34 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
 
     def __init__(self):
         super().__init__(PurchaseReturn)
+
+    async def _purchase_return_has_items_map(self, tenant_id: int, return_ids: List[int]) -> dict[int, bool]:
+        if not return_ids:
+            return {}
+        from tortoise.functions import Count
+
+        rows = await PurchaseReturnItem.filter(
+            tenant_id=tenant_id,
+            return_id__in=return_ids,
+        ).annotate(cnt=Count("id")).group_by("return_id").values("return_id", "cnt")
+        return {int(r["return_id"]): int(r["cnt"] or 0) > 0 for r in rows}
+
+    async def _enrich_purchase_return_response(
+        self,
+        tenant_id: int,
+        return_obj: PurchaseReturn,
+        response: PurchaseReturnResponse,
+    ) -> PurchaseReturnResponse:
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_purchase_return_capabilities_on_response,
+        )
+
+        item_count = await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id=return_obj.id).count()
+        return enrich_purchase_return_capabilities_on_response(
+            return_obj,
+            response,
+            has_items=item_count > 0,
+        )
 
     async def create_purchase_return(self, tenant_id: int, return_data: PurchaseReturnCreate, created_by: int) -> PurchaseReturnResponse:
         """创建采购退货单"""
@@ -6163,7 +6247,8 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         return_obj = await PurchaseReturn.get_or_none(tenant_id=tenant_id, id=return_id)
         if not return_obj:
             raise NotFoundError(f"采购退货单不存在: {return_id}")
-        return PurchaseReturnResponse.model_validate(return_obj)
+        response = PurchaseReturnResponse.model_validate(return_obj)
+        return await self._enrich_purchase_return_response(tenant_id, return_obj, response)
 
     async def get_purchase_return_statistics(self, tenant_id: int) -> Dict[str, Any]:
         """采购退货列表页指标：状态计数 + 近 7 日按创建日分布（用于趋势图）"""
@@ -6214,15 +6299,32 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             query = query.filter(supplier_id=filters['supplier_id'])
 
         returns = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [PurchaseReturnResponse.model_validate(return_obj) for return_obj in returns]
+        return_list = list(returns)
+        return_ids = [int(r.id) for r in return_list if r.id is not None]
+        has_items_by_id = await self._purchase_return_has_items_map(tenant_id, return_ids)
+        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_purchase_return_list_capabilities
+
+        responses = [PurchaseReturnResponse.model_validate(r) for r in return_list]
+        return enrich_purchase_return_list_capabilities(
+            return_list,
+            responses,
+            has_items_by_id=has_items_by_id,
+        )
 
     async def confirm_return(self, tenant_id: int, return_id: int, confirmed_by: int) -> PurchaseReturnResponse:
         """确认退货"""
         async with in_transaction():
-            return_obj = await self.get_purchase_return_by_id(tenant_id, return_id)
+            return_obj = await PurchaseReturn.get_or_none(
+                tenant_id=tenant_id, id=return_id, deleted_at__isnull=True
+            )
+            if not return_obj:
+                raise NotFoundError(f"采购退货单不存在: {return_id}")
+            from apps.kuaizhizao.services.document_action_policy.purchase_return import (
+                assert_purchase_return_capability,
+            )
 
-            if return_obj.status != '待退货':
-                raise BusinessLogicError("只有待退货状态的采购退货单才能确认退货")
+            item_count = await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id=return_id).count()
+            assert_purchase_return_capability(return_obj, "confirm", has_items=item_count > 0)
 
             returner_name = await self.get_user_name(confirmed_by)
 
@@ -6443,8 +6545,11 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             return_obj = await PurchaseReturn.get_or_none(tenant_id=tenant_id, id=return_id, deleted_at__isnull=True)
             if not return_obj:
                 raise NotFoundError(f"采购退货单不存在: {return_id}")
-            if return_obj.status != "已退货":
-                raise BusinessLogicError("只有已退货状态的采购退货单才能撤回")
+            from apps.kuaizhizao.services.document_action_policy.purchase_return import (
+                assert_purchase_return_capability,
+            )
+
+            assert_purchase_return_capability(return_obj, "withdraw")
 
             from apps.kuaizhizao.services.inventory_service import InventoryService
             items = await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
@@ -6610,7 +6715,9 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             query = query.filter(id__in=filters["scoped_ids"])
 
         inbounds = await query.offset(skip).limit(limit).order_by("-created_at")
-        return [OtherInboundListResponse.model_validate(r) for r in inbounds]
+        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
+        responses = [OtherInboundListResponse.model_validate(r) for r in inbounds]
+        return enrich_inbound_hub_list_capabilities(inbounds, responses, "other_inbound")
 
     async def update_other_inbound(
         self,
@@ -7045,7 +7152,9 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             query = query.filter(id__in=filters["scoped_ids"])
 
         outbounds = await query.offset(skip).limit(limit).order_by("-created_at")
-        return [OtherOutboundListResponse.model_validate(r) for r in outbounds]
+        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
+        responses = [OtherOutboundListResponse.model_validate(r) for r in outbounds]
+        return enrich_outbound_hub_list_capabilities(outbounds, responses, "other_outbound")
 
     async def update_other_outbound(
         self,
@@ -7347,7 +7456,9 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
             query = query.filter(id__in=filters["scoped_ids"])
 
         borrows = await query.offset(skip).limit(limit).order_by("-created_at")
-        return [MaterialBorrowListResponse.model_validate(r) for r in borrows]
+        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
+        responses = [MaterialBorrowListResponse.model_validate(r) for r in borrows]
+        return enrich_outbound_hub_list_capabilities(borrows, responses, "material_borrow")
 
     async def update_material_borrow(
         self,
@@ -7631,7 +7742,9 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
             query = query.filter(id__in=filters["scoped_ids"])
 
         returns = await query.offset(skip).limit(limit).order_by("-created_at")
-        return [MaterialReturnListResponse.model_validate(r) for r in returns]
+        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
+        responses = [MaterialReturnListResponse.model_validate(r) for r in returns]
+        return enrich_inbound_hub_list_capabilities(returns, responses, "material_return")
 
     async def update_material_return(
         self,

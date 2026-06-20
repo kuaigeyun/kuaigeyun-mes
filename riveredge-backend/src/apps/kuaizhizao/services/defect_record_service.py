@@ -344,7 +344,16 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         # 查询不良品记录
         defect_records = await DefectRecord.filter(query).order_by('-created_at').offset(skip).limit(limit).all()
 
-        return [DefectRecordListResponse.model_validate(record) for record in defect_records]
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_nonconforming_ledger_list_capabilities,
+        )
+
+        responses = [DefectRecordListResponse.model_validate(record) for record in defect_records]
+        return await enrich_nonconforming_ledger_list_capabilities(
+            tenant_id,
+            defect_records,
+            responses,
+        )
 
     async def update_disposition(
         self,
@@ -366,6 +375,22 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             )
             if not defect_record:
                 raise NotFoundError(f"不良品记录不存在: {defect_id}")
+
+            from apps.kuaizhizao.models.quality_8d_report import Quality8DReport
+            from apps.kuaizhizao.services.document_action_policy.nonconforming_ledger import (
+                assert_nonconforming_ledger_capability,
+            )
+
+            has_8d = await Quality8DReport.filter(
+                tenant_id=tenant_id,
+                defect_record_id=defect_id,
+                deleted_at__isnull=True,
+            ).exists()
+            assert_nonconforming_ledger_capability(
+                defect_record,
+                "update_disposition",
+                has_linked_8d_report=has_8d,
+            )
 
             user_info = await self.get_user_info(updated_by)
             previous_disposition = defect_record.disposition
@@ -546,12 +571,10 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             if not inspection:
                 raise NotFoundError(f"来料检验单不存在: {inspection_id}")
 
-            # 验证检验单状态（必须是已检验且不合格）
-            if inspection.status != '已检验':
-                raise BusinessLogicError(f"只有已检验状态的检验单才能创建不合格品记录，当前状态：{inspection.status}")
-
-            if inspection.quality_status != '不合格':
-                raise BusinessLogicError(f"只有不合格的检验单才能创建不合格品记录，当前质量状态：{inspection.quality_status}")
+            from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+                assert_quality_inspection_capability,
+            )
+            assert_quality_inspection_capability(inspection, "create_defect")
 
             # 验证不合格数量
             if defect_data.defect_quantity > inspection.unqualified_quantity:
@@ -644,12 +667,10 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             if not inspection:
                 raise NotFoundError(f"过程检验单不存在: {inspection_id}")
 
-            # 验证检验单状态（必须是已检验且不合格）
-            if inspection.status != '已检验':
-                raise BusinessLogicError(f"只有已检验状态的检验单才能创建不合格品记录，当前状态：{inspection.status}")
-
-            if inspection.quality_status != '不合格':
-                raise BusinessLogicError(f"只有不合格的检验单才能创建不合格品记录，当前质量状态：{inspection.quality_status}")
+            from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+                assert_quality_inspection_capability,
+            )
+            assert_quality_inspection_capability(inspection, "create_defect")
 
             # 验证不合格数量
             if defect_data.defect_quantity > inspection.unqualified_quantity:
@@ -747,12 +768,10 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             if not inspection:
                 raise NotFoundError(f"成品检验单不存在: {inspection_id}")
 
-            # 验证检验单状态（必须是已检验且不合格）
-            if inspection.status != '已检验':
-                raise BusinessLogicError(f"只有已检验状态的检验单才能创建不合格品记录，当前状态：{inspection.status}")
-
-            if inspection.quality_status != '不合格':
-                raise BusinessLogicError(f"只有不合格的检验单才能创建不合格品记录，当前质量状态：{inspection.quality_status}")
+            from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+                assert_quality_inspection_capability,
+            )
+            assert_quality_inspection_capability(inspection, "create_defect")
 
             # 验证不合格数量
             if defect_data.defect_quantity > inspection.unqualified_quantity:

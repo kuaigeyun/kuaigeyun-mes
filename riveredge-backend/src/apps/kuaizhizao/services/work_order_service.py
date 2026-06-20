@@ -23,6 +23,13 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.models.delivery_delay_exception import DeliveryDelayException
 from apps.kuaizhizao.models.sales_order import SalesOrder
+from apps.kuaizhizao.services.document_action_policy.work_order import (
+    assert_work_order_capability,
+    derive_work_order_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.enricher import (
+    enrich_work_order_capabilities_on_response,
+)
 from apps.kuaizhizao.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
@@ -1139,7 +1146,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         response = response.model_copy(
             update=WorkOrderTrackingService.tracking_fields_for_response(work_order)
         )
-        return response
+        return enrich_work_order_capabilities_on_response(work_order, response)
 
     async def compute_split_remaining_quantity(
         self,
@@ -1519,6 +1526,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     if gid in group_name_map:
                         item_dict["group_name"] = group_name_map[gid]
 
+                item_dict["capabilities"] = derive_work_order_capabilities(wo)
+
                 result_dicts.append(item_dict)
             except Exception as e:
                 logger.error(f"处理工单 {wo.id} 数据失败: {str(e)}")
@@ -1639,6 +1648,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
             update_data = work_order_data.model_dump(exclude_unset=True)
+            if update_data.get("status") == "cancelled":
+                assert_work_order_capability(work_order, "cancel")
             old_score_values = {f: getattr(work_order, f, None) for f in score_recalc_fields}
 
             if "process_route_id" in update_data:
@@ -2107,6 +2118,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+            assert_work_order_capability(work_order, "delete")
 
             if work_order.parent_work_order_id is not None:
                 if work_order.status == "released":
@@ -2264,6 +2276,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+            assert_work_order_capability(work_order, "release")
 
             if (work_order.status or "") == "split":
                 raise BusinessLogicError("已拆分主工单不可下达，请将剩余数量拆分为子工单后由子工单执行")
@@ -3583,6 +3596,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+            assert_work_order_capability(work_order, "freeze")
 
             # 检查工单是否已冻结
             if work_order.is_frozen:
@@ -3630,6 +3644,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+            assert_work_order_capability(work_order, "unfreeze")
 
             # 检查工单是否已冻结
             if not work_order.is_frozen:
@@ -3677,6 +3692,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 raise BusinessLogicError("当前组织未开启工单优先级能力，请在参数设置中开启“工单优先级”")
 
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+            assert_work_order_capability(work_order, "set_priority")
 
             # 验证优先级值
             valid_priorities = ['low', 'normal', 'high', 'urgent']

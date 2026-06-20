@@ -305,7 +305,9 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
 
         alerts = await query.order_by('-triggered_at').offset(skip).limit(limit)
 
-        return [InventoryAlertListResponse.model_validate(alert) for alert in alerts]
+        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inventory_alert_list_capabilities
+        responses = [InventoryAlertListResponse.model_validate(alert) for alert in alerts]
+        return enrich_inventory_alert_list_capabilities(alerts, responses)
 
     async def get_alert_by_id(
         self,
@@ -447,6 +449,14 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
 
             if not alert:
                 raise NotFoundError(f"预警记录不存在: {alert_id}")
+
+            from apps.kuaizhizao.services.document_action_policy.inventory_alert import (
+                assert_inventory_alert_capability,
+            )
+            action = "resolve" if handle_data.status == "resolved" else "ignore"
+            if handle_data.status not in ("resolved", "ignored"):
+                action = "resolve"
+            assert_inventory_alert_capability(alert, action)
 
             # 获取处理人信息
             user_info = await self.get_user_info(handled_by)

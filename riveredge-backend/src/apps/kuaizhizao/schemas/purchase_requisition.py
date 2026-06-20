@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 from decimal import Decimal
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
+from apps.kuaizhizao.services.document_action_policy.types import PurchaseRequisitionCapabilities
 
 
 class PurchaseRequisitionItemBase(BaseModel):
@@ -112,6 +113,10 @@ class PurchaseRequisitionResponse(PurchaseRequisitionBase):
     updated_at: datetime
     items: List[PurchaseRequisitionItemResponse] = Field(default_factory=list)
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    capabilities: Optional[PurchaseRequisitionCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
+    )
 
 
 class PurchaseRequisitionListResponse(PurchaseRequisitionResponse):

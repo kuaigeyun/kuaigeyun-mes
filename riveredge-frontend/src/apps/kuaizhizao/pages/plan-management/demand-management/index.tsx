@@ -42,6 +42,8 @@ import {
 } from '../../../services/demand';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { createDemandComputation } from '../../../services/demand-computation';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { demandBatchMergeComputationAllowed } from '../../../../../hooks/useDocumentCapabilities';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
@@ -60,7 +62,7 @@ import {
   QuestionCircleOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -73,6 +75,7 @@ import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../..
 import dayjs from 'dayjs';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 const DEMAND_ORIGIN_SUB_KEYS = new Set(['from_forecast', 'from_order', 'manual_plan']);
 
@@ -138,6 +141,7 @@ function isDemandRejected(d: Demand): boolean {
 
 const DemandManagementPage: React.FC = () => {
   const { t } = useTranslation();
+  const pushToComputationAction = resolveKuaizhizaoDocumentAction(t, 'demand_computation.pull_from_demand');
   const { message: messageApi } = App.useApp();
 
   const formatDemandTypeLabel = useCallback(
@@ -225,6 +229,15 @@ const DemandManagementPage: React.FC = () => {
   // 需求计划页仅管理手工需求计划（demand_plan）
   const demandType = 'demand_plan' as const;
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const computationPerms = useResourcePermissions('plan-management-demand-computation');
+
+  const selectedDemandsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => demandRowsByIdRef.current.get(Number(key)))
+        .filter((row): row is Demand => row != null),
+    [selectedRowKeys],
+  );
 
   useEffect(() => {
     const loadDicts = async () => {
@@ -422,39 +435,23 @@ const DemandManagementPage: React.FC = () => {
     }
   };
 
-  const handleMergeComputation = async () => {
-    if (selectedRowKeys.length === 0) {
-      messageApi.warning(t('app.kuaizhizao.demandManagement.mergeSelectFirst'));
-      return;
+  const handleMergeComputationBulk = useCallback(async (ids: number[]) => {
+    const payload =
+      ids.length === 1
+        ? { demand_id: ids[0], computation_type: 'MRP' as const, computation_params: {} }
+        : { demand_ids: ids, computation_type: 'MRP' as const, computation_params: {} };
+    const computation = await createDemandComputation(payload);
+    invalidateStatistics();
+    actionRef.current?.reload();
+    if (computation?.id) {
+      window.location.href = `/apps/kuaizhizao/plan-management/demand-computation?highlight=${computation.id}`;
     }
-    const ids = selectedRowKeys.map(k => Number(k)).filter(n => !isNaN(n));
-    if (ids.length === 0) return;
-    Modal.confirm({
-      title: t('app.kuaizhizao.demandManagement.mergeTitle'),
-      content: t('app.kuaizhizao.demandManagement.mergeConfirm', { count: ids.length }),
-      onOk: async () => {
-        try {
-          const payload = ids.length === 1
-            ? { demand_id: ids[0], computation_type: 'MRP' as const, computation_params: {} }
-            : { demand_ids: ids, computation_type: 'MRP' as const, computation_params: {} };
-          const computation = await createDemandComputation(payload);
-          messageApi.success(t('app.kuaizhizao.demandManagement.mergeCreated'));
-          setSelectedRowKeys([]);
-          invalidateStatistics();
-          actionRef.current?.reload();
-          if (computation?.id) {
-            window.location.href = `/apps/kuaizhizao/plan-management/demand-computation?highlight=${computation.id}`;
-          }
-        } catch (error: any) {
-          messageApi.error(error?.message || t('app.kuaizhizao.demandManagement.mergeFailed'));
-        }
-      },
-    });
-  };
+    return { success_count: ids.length, failed_count: 0 };
+  }, [queryClient]);
 
   const handlePushToComputation = async (id: number) => {
     Modal.confirm({
-      title: t('app.kuaizhizao.demandManagement.pushToMrpTitle'),
+      title: pushToComputationAction.label,
       content: t('app.kuaizhizao.demandManagement.pushToMrpConfirm'),
       onOk: async () => {
         try {
@@ -639,7 +636,7 @@ const DemandManagementPage: React.FC = () => {
               icon={<ArrowDownOutlined />}
               onClick={() => handlePushToComputation(record.id!)}
             >
-              {t('app.kuaizhizao.salesOrder.push')}
+              {pushToComputationAction.label}
             </Button>
           );
         }
@@ -667,7 +664,7 @@ const DemandManagementPage: React.FC = () => {
       },
     },
   ],
-    [t, formatDemandTypeLabel, handleDelete, handleDetail, handleEdit, handlePushToComputation, handleWithdrawFromComputation]
+    [t, formatDemandTypeLabel, handleDelete, handleDetail, handleEdit, handlePushToComputation, handleWithdrawFromComputation, pushToComputationAction.label]
   );
 
   const statCards: StatCard[] = useMemo(
@@ -1011,22 +1008,30 @@ const DemandManagementPage: React.FC = () => {
           }}
           enableRowSelection={true}
           onRowSelectionChange={setSelectedRowKeys}
-          toolBarActionsAfterDelete={[
-            <UniBatchMenuButton
-              key="demand-plan-batch-menu"
-              selectedRowKeys={selectedRowKeys}
-              toolBarButtonSize="middle"
-              menuItems={[
-                {
-                  key: 'merge-computation',
-                  label: t('app.kuaizhizao.demandManagement.mergeComputation'),
-                  icon: <MergeCellsOutlined />,
-                  onClick: () => void handleMergeComputation(),
-                },
-              ]}
-            />,
-          ]}
           toolBarActionsAfterBatch={[
+            <UniCapabilityBatchButton
+              key="demand-merge-computation"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedDemandsForBatch}
+              capabilityKey="merge_computation"
+              permAllowed={computationPerms.canCreate}
+              batchAllowed={(recs, perm) => demandBatchMergeComputationAllowed(recs, perm)}
+              onRunBulk={handleMergeComputationBulk}
+              requireConfirm
+              labels={{
+                single: t('app.kuaizhizao.demandManagement.mergeComputation'),
+                batch: t('app.kuaizhizao.demandManagement.mergeComputation'),
+                batchConfirmTitle: (count) => t('app.kuaizhizao.demandManagement.mergeTitle'),
+                batchConfirmDescription: (count) => t('app.kuaizhizao.demandManagement.mergeConfirm', { count }),
+              }}
+              icon={<MergeCellsOutlined />}
+              size="middle"
+              onSuccess={() => {
+                setSelectedRowKeys([]);
+                messageApi.success(t('app.kuaizhizao.demandManagement.mergeCreated'));
+              }}
+              notAllowedMessage={t('app.kuaizhizao.demandManagement.mergeSelectFirst')}
+            />,
             <Tooltip {...rowActionKind('skip')}
               key="merge-computation-tip"
               title={t('app.kuaizhizao.demandManagement.mergeComputationTooltip')}
@@ -1353,7 +1358,7 @@ const DemandManagementPage: React.FC = () => {
                     icon={<ArrowDownOutlined />}
                     onClick={() => handlePushToComputation(currentDemand.id!)}
                   >
-                    {t('app.kuaizhizao.demandManagement.pushToMrp')}
+                    {pushToComputationAction.label}
                   </Button>
                 )
               )}

@@ -318,7 +318,9 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
 
         await self._normalize_legacy_draft_receipts(receipts)
 
-        return [OutsourceMaterialReceiptResponse.model_validate(receipt) for receipt in receipts]
+        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
+        responses = [OutsourceMaterialReceiptResponse.model_validate(receipt) for receipt in receipts]
+        return enrich_inbound_hub_list_capabilities(receipts, responses, "outsource_receipt")
 
     async def get_material_receipt(
         self,

@@ -11,6 +11,7 @@ from datetime import datetime, date
 from typing import Optional, List, Dict, Any
 from pydantic import Field
 from core.schemas.base import BaseSchema
+from apps.kuaizhizao.services.document_action_policy.types import QualityInspectionCapabilities
 
 
 # === 来料检验单 ===
@@ -83,6 +84,9 @@ class IncomingInspectionResponse(IncomingInspectionBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    capabilities: Optional[QualityInspectionCapabilities] = Field(
+        None, description="业务态 capabilities（不含 RBAC）"
+    )
 
     class Config:
         from_attributes = True
@@ -157,6 +161,9 @@ class ProcessInspectionResponse(ProcessInspectionBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    capabilities: Optional[QualityInspectionCapabilities] = Field(
+        None, description="业务态 capabilities（不含 RBAC）"
+    )
 
     class Config:
         from_attributes = True
@@ -238,6 +245,9 @@ class FinishedGoodsInspectionResponse(FinishedGoodsInspectionBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    capabilities: Optional[QualityInspectionCapabilities] = Field(
+        None, description="业务态 capabilities（不含 RBAC）"
+    )
 
     class Config:
         from_attributes = True

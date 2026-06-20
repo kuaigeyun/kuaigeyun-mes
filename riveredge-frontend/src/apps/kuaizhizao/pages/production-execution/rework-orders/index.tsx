@@ -19,10 +19,13 @@ import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { DetailDrawerActions, DetailDrawerSection, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { reworkOrderApi, workOrderApi } from '../../../services/production';
+import { qualityApi, reworkOrderApi, workOrderApi } from '../../../services/production';
+import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { getReworkOrderLifecycle } from '../../../utils/reworkOrderLifecycle';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -78,6 +81,21 @@ interface ReworkOrder {
   }>;
 }
 
+type PullFinishedGoodsInspectionCandidate = {
+  id: number;
+  inspection_code?: string;
+  work_order_code?: string;
+  material_name?: string;
+  customer_name?: string;
+  inspection_time?: string;
+  quality_status?: string;
+  status?: string;
+  unqualified_quantity?: number;
+  capabilities?: {
+    push_rework?: { allowed?: boolean; reason?: string };
+  };
+};
+
 const REWORK_TYPE_FALLBACK = (translate: (key: string) => string) => [
   { label: translate('app.kuaizhizao.reworkOrder.typeRework'), value: '返工' },
   { label: translate('app.kuaizhizao.reworkOrder.typeRepair'), value: '返修' },
@@ -86,6 +104,10 @@ const REWORK_TYPE_FALLBACK = (translate: (key: string) => string) => [
 
 const ReworkOrdersPage: React.FC = () => {
   const { t } = useTranslation();
+  const pullFromFinishedGoodsInspectionAction = resolveKuaizhizaoDocumentAction(
+    t,
+    'rework_order.pull_from_finished_goods_inspection',
+  );
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -653,6 +675,123 @@ const ReworkOrdersPage: React.FC = () => {
     }
   };
 
+  const pullFromFinishedGoodsColumns: ProColumns<PullFinishedGoodsInspectionCandidate>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.quality.common.columns.inspectionCode'),
+        dataIndex: 'inspection_code',
+        width: 160,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.workOrderCode'),
+        dataIndex: 'work_order_code',
+        width: 140,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.materialName'),
+        dataIndex: 'material_name',
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.customer'),
+        dataIndex: 'customer_name',
+        width: 160,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'),
+        dataIndex: 'unqualified_quantity',
+        width: 120,
+        align: 'right',
+        render: (v) => Number(v || 0),
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.qualityStatus'),
+        dataIndex: 'quality_status',
+        width: 120,
+        align: 'center',
+        render: (v) => v || '-',
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.inspectionStatus'),
+        dataIndex: 'status',
+        width: 120,
+        align: 'center',
+        render: (v) => v || '-',
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.inspectionTime'),
+        dataIndex: 'inspection_time',
+        width: 170,
+        render: (v) => formatDateTimeBySiteSetting(v),
+      },
+    ],
+    [t],
+  );
+
+  const pullFromFinishedGoodsQuery = useUniPullQuery<PullFinishedGoodsInspectionCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    isRowDisabled: (record) => {
+      const allowPush = record.capabilities?.push_rework?.allowed !== false;
+      const hasUnqualified = Number(record.unqualified_quantity || 0) > 0;
+      const isUnqualified = String(record.quality_status || '') === '不合格';
+      return !(allowPush && hasUnqualified && isUnqualified);
+    },
+    loadData: async ({ keyword, page, pageSize }) => {
+      try {
+        const response = await qualityApi.finishedGoodsInspection.list({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+        });
+        const list = Array.isArray(response)
+          ? response
+          : (response as { data?: unknown[]; items?: unknown[] })?.data
+            ?? (response as { items?: unknown[] })?.items
+            ?? [];
+        return {
+          data: (Array.isArray(list) ? list : []) as PullFinishedGoodsInspectionCandidate[],
+          total: Number((response as { total?: number })?.total ?? (Array.isArray(list) ? list.length : 0)),
+        };
+      } catch (error: any) {
+        messageApi.error(
+          error?.message || t('app.kuaizhizao.quality.common.messages.loadListFailed'),
+        );
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys, rows) => {
+      const selected = rows.find((x) => String(x.id) === String(keys[0]));
+      if (!selected?.id) {
+        messageApi.warning(
+          t('app.kuaizhizao.shipmentNotice.selectSource', {
+            source: pullFromFinishedGoodsInspectionAction.sourceLabel,
+          }),
+        );
+        return;
+      }
+      try {
+        const result = await qualityApi.finishedGoodsInspection.pushToRework(String(selected.id));
+        const reworkCode = (result as { rework_order_code?: string })?.rework_order_code;
+        messageApi.success(
+          reworkCode
+            ? t('app.kuaizhizao.quality.common.messages.pushReworkSuccess', { code: reworkCode })
+            : t('app.kuaizhizao.quality.common.messages.pushReworkSuccess', { code: '-' }),
+        );
+        pullFromFinishedGoodsQuery.closeModal();
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+      } catch (error: any) {
+        messageApi.error(
+          error?.message || t('app.kuaizhizao.quality.common.messages.pushReworkFailed'),
+        );
+      }
+    },
+  });
+
   return (
     <ListPageTemplate>
       <UniTable<ReworkOrder>
@@ -665,14 +804,60 @@ const ReworkOrdersPage: React.FC = () => {
         enableRowSelection={true}
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        showCreateButton={true}
+        showCreateButton={false}
         createButtonText={t('app.kuaizhizao.reworkOrder.createButton')}
         onCreate={handleCreate}
         showDeleteButton={true}
         onDelete={handleDeleteFromSelection}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.reworkOrder.deleteSelectedConfirm', { count })}
         showAdvancedSearch={true}
+        toolBarRender={() => [
+          <UniPullCreateToolbar
+            key="rework-order-create-with-pull"
+            compactKey="rework-order-create-with-pull"
+            createIcon={<PlusOutlined />}
+            createLabel={t('app.kuaizhizao.reworkOrder.createButton')}
+            onCreate={handleCreate}
+            menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
+              {
+                actionKey: 'rework_order.pull_from_finished_goods_inspection',
+                onClick: () => {
+                  pullFromFinishedGoodsQuery.openModal();
+                },
+              },
+            ])}
+          />,
+        ]}
       />
+
+      <UniPullQueryModal<PullFinishedGoodsInspectionCandidate>
+        open={pullFromFinishedGoodsQuery.open}
+        title={pullFromFinishedGoodsInspectionAction.label}
+        onCancel={pullFromFinishedGoodsQuery.closeModal}
+        onOk={() => {
+          void pullFromFinishedGoodsQuery.handleConfirm();
+        }}
+        rowKey="id"
+        columns={pullFromFinishedGoodsColumns}
+        dataSource={pullFromFinishedGoodsQuery.dataSource}
+        loading={pullFromFinishedGoodsQuery.loading}
+        confirmLoading={pullFromFinishedGoodsQuery.confirmLoading}
+        selectionType={pullFromFinishedGoodsQuery.selectionType}
+        selectedRowKeys={pullFromFinishedGoodsQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromFinishedGoodsQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromFinishedGoodsQuery.isRowDisabled}
+        searchDraft={pullFromFinishedGoodsQuery.searchDraft}
+        onSearchDraftChange={pullFromFinishedGoodsQuery.setSearchDraft}
+        onSearchApply={pullFromFinishedGoodsQuery.handleSearchApply}
+        onSearchClear={pullFromFinishedGoodsQuery.handleSearchClear}
+        appliedKeyword={pullFromFinishedGoodsQuery.appliedKeyword}
+        searchPlaceholder={t('components.uniPullQuery.searchPlaceholder')}
+        page={pullFromFinishedGoodsQuery.page}
+        pageSize={pullFromFinishedGoodsQuery.pageSize}
+        total={pullFromFinishedGoodsQuery.total}
+        onPageChange={pullFromFinishedGoodsQuery.handlePageChange}
+      />
+
       {/* 表单Modal */}
       <FormModalTemplate
         title={isEdit ? t('app.kuaizhizao.reworkOrder.editModalTitle') : t('app.kuaizhizao.reworkOrder.createModalTitle')}

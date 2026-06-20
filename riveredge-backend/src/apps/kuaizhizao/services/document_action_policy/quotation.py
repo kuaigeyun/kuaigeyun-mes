@@ -111,6 +111,33 @@ def derive_quotation_capabilities(
     submit_allowed = st in ("草稿", "draft", "已拒绝", "rejected")
     submit_cap = _cap(submit_allowed, None if submit_allowed else "quotation.update.not_draft")
 
+    # withdraw_submit — 已发送 + 待审核 → 草稿
+    withdraw_allowed = audit_required and st == "已发送" and _is_pending_review(rs)
+    withdraw_cap = _cap(
+        withdraw_allowed,
+        "quotation.withdraw_submit.not_pending" if not withdraw_allowed else None,
+    )
+
+    # approve — 已发送 + 待审核
+    approve_allowed = audit_required and st == "已发送" and _is_pending_review(rs)
+    approve_cap = _cap(
+        approve_allowed,
+        "quotation.approve.not_pending" if not approve_allowed else None,
+    )
+
+    # revoke_approval — 已发送 + 已通过（不回草稿）
+    revoke_reason = "quotation.revoke_approval.not_allowed"
+    if audit_required and st == "已发送":
+        if _is_approved(rs):
+            revoke_allowed = True
+            revoke_reason = None
+        else:
+            revoke_allowed = False
+            revoke_reason = "quotation.revoke_approval.not_approved"
+    else:
+        revoke_allowed = False
+    revoke_cap = _cap(revoke_allowed, revoke_reason if not revoke_allowed else None)
+
     # confirm_customer — 已发送；开审核时须已通过
     confirm_allowed = st == "已发送" and (not audit_required or _is_approved(rs))
     confirm_reason = (
@@ -213,6 +240,9 @@ def derive_quotation_capabilities(
         update=update_cap,
         delete=delete_cap,
         submit=submit_cap,
+        withdraw_submit=withdraw_cap,
+        approve=approve_cap,
+        revoke_approval=revoke_cap,
         confirm_customer=confirm_cap,
         cancel_customer_confirm=cancel_confirm_cap,
         convert_to_order=convert_order_cap,
@@ -242,6 +272,9 @@ def assert_quotation_capability(
         "update": caps.update,
         "delete": caps.delete,
         "submit": caps.submit,
+        "withdraw_submit": caps.withdraw_submit,
+        "approve": caps.approve,
+        "revoke_approval": caps.revoke_approval,
         "confirm_customer": caps.confirm_customer,
         "cancel_customer_confirm": caps.cancel_customer_confirm,
         "convert_to_order": caps.convert_to_order,

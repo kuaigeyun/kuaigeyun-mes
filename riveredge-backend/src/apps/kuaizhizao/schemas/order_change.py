@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
+from apps.kuaizhizao.services.document_action_policy.types import SalesOrderChangeCapabilities
 
 
 class OrderChangeItemBase(BaseModel):
@@ -89,6 +90,10 @@ class OrderChangeListResponse(BaseModel):
     created_at: Optional[datetime] = None
     lifecycle: Optional[Dict[str, Any]] = None
     partner_name: Optional[str] = None
+    capabilities: Optional[SalesOrderChangeCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（不含 RBAC）",
+    )
 
     class Config:
         from_attributes = True

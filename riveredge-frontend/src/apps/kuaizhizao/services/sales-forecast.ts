@@ -40,6 +40,24 @@ export interface SalesForecast {
   planning_computation_id?: number;
   planning_computation_code?: string;
   lifecycle?: Record<string, unknown>;
+  capabilities?: SalesForecastCapabilities;
+}
+
+export interface ActionCapability {
+  allowed: boolean;
+  reason?: string | null;
+}
+
+export interface SalesForecastCapabilities {
+  update: ActionCapability;
+  delete: ActionCapability;
+  submit: ActionCapability;
+  withdraw_submit: ActionCapability;
+  approve: ActionCapability;
+  reject: ActionCapability;
+  revoke_approval: ActionCapability;
+  print: ActionCapability;
+  push_computation: ActionCapability;
 }
 
 /** 销售预测明细创建/更新单条 payload（与后端 SalesForecastItemCreate 一致） */

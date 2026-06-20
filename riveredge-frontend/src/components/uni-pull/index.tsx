@@ -36,7 +36,7 @@ export const UniPullCreateToolbar: React.FC<UniPullCreateToolbarProps> = ({
     typeof createLabel === 'string' ? withSingleNewShortcutHint(createLabel) : createLabel;
 
   return (
-    <Space.Compact key={compactKey}>
+    <Space.Compact key={compactKey} className="uni-pull-create-toolbar">
       <Button type="primary" icon={createIcon} onClick={onCreate}>
         {createButtonLabel}
       </Button>

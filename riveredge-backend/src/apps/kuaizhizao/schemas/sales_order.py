@@ -15,6 +15,7 @@ from decimal import Decimal
 from pydantic import Field, field_validator, model_validator
 from core.schemas.base import BaseSchema
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
+from apps.kuaizhizao.services.document_action_policy.types import SalesOrderCapabilities
 
 
 # === 销售订单明细 ===
@@ -203,6 +204,10 @@ class SalesOrderResponse(SalesOrderBase):
     demand_synced: Optional[bool] = Field(None, description="本次操作是否已同步至关联需求")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供前端 UniLifecycleStepper 展示）")
     audit: Optional[dict] = Field(None, description="审核相位（唯一来源：{entity_type, phase, enabled, allowed_actions}，供 uni-audit 渲染）")
+    capabilities: Optional[SalesOrderCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
+    )
 
     class Config:
         from_attributes = True

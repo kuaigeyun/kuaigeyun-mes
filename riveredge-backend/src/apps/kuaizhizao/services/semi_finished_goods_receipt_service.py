@@ -203,7 +203,9 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
         if filters.get("work_order_id"):
             query = query.filter(work_order_id=filters["work_order_id"])
         receipts = await query.offset(skip).limit(limit).order_by("-created_at")
-        return [SemiFinishedGoodsReceiptResponse.model_validate(r) for r in receipts]
+        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
+        responses = [SemiFinishedGoodsReceiptResponse.model_validate(r) for r in receipts]
+        return enrich_inbound_hub_list_capabilities(receipts, responses, "semi_finished_goods")
 
     async def confirm_receipt(
         self,

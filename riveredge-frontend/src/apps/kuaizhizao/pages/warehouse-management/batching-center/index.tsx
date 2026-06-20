@@ -10,7 +10,7 @@
 import React, { useRef, useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ProFormSelect, ProFormTextArea, ProFormDatePicker, ProFormRadio, ProFormDependency, ProFormItem } from '@ant-design/pro-components';
+import { ProFormTextArea, ProFormDatePicker, ProFormRadio, ProFormDependency, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Table, Form as AntForm, InputNumber, Row, Col, Tooltip } from 'antd';
 import {
   PlusOutlined,
@@ -26,6 +26,7 @@ import {
 } from '@ant-design/icons';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import {
   MultiTabListPageTemplate,
   FormModalTemplate,
@@ -55,6 +56,7 @@ import { UniMaterialBatchPicker } from '../../../../../components/uni-material-b
 import type { Material } from '../../../../master-data/types/material';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 interface BatchingOrder {
   id?: number;
@@ -89,8 +91,17 @@ interface BatchingOrderItem {
   status?: string;
 }
 
+interface PullWorkOrderCandidate {
+  id: number;
+  code: string;
+  name?: string;
+  status?: string;
+  planned_quantity?: number;
+}
+
 const BatchingCenterPage: React.FC = () => {
   const { t } = useTranslation();
+  const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'batching_order.pull_from_work_order');
   const { message: messageApi } = App.useApp();
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -106,6 +117,7 @@ const BatchingCenterPage: React.FC = () => {
   const [activeTabKey, setActiveTabKey] = useState<MaterialCenterTabKey>(initialTab);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+  const [selectedPullWorkOrder, setSelectedPullWorkOrder] = useState<PullWorkOrderCandidate | null>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<BatchingOrder | null>(null);
   const formRef = useRef<any>(null);
@@ -136,10 +148,60 @@ const BatchingCenterPage: React.FC = () => {
         create_mode: 'from_work_order',
         batching_date: dayjs(),
         work_order_id: workOrderId,
+        work_order_code: '',
         items: [defaultBatchingItem],
       });
+      setSelectedPullWorkOrder(null);
     }, 0);
   };
+
+  const pullFromWorkOrderQuery = useUniPullQuery<PullWorkOrderCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
+      const response = await workOrderApi.list({ status: 'released,in_progress', limit: 200 });
+      const items = Array.isArray(response) ? response : (response as any)?.items || (response as any)?.data || [];
+      const normalized = items
+        .map((workOrder: any) => ({
+          id: Number(workOrder.id),
+          code: workOrder.code || '',
+          name: workOrder.name || '',
+          status: workOrder.status || '',
+          planned_quantity: Number(workOrder.planned_quantity ?? 0),
+        }))
+        .filter((workOrder: PullWorkOrderCandidate) => {
+          if (!keyword) {
+            return true;
+          }
+          const keywordLower = keyword.toLowerCase();
+          return (
+            workOrder.code.toLowerCase().includes(keywordLower) ||
+            (workOrder.name || '').toLowerCase().includes(keywordLower)
+          );
+        });
+      const safePage = Math.max(1, Number(page || 1));
+      const safePageSize = Math.max(1, Number(pageSize || 20));
+      const start = (safePage - 1) * safePageSize;
+      const paged = normalized.slice(start, start + safePageSize);
+      return {
+        data: paged,
+        total: normalized.length,
+      };
+    },
+    onConfirm: async (_selectedKeys, selectedRows) => {
+      const selected = selectedRows?.[0];
+      if (!selected) {
+        messageApi.warning(t('app.kuaizhizao.batchingCenter.selectWorkOrder'));
+        return;
+      }
+      setSelectedPullWorkOrder(selected);
+      formRef.current?.setFieldsValue({
+        work_order_id: selected.id,
+        work_order_code: selected.code,
+      });
+      pullFromWorkOrderQuery.closeModal();
+    },
+  });
 
   const handleCreateSubmit = async (values: any) => {
     try {
@@ -187,6 +249,7 @@ const BatchingCenterPage: React.FC = () => {
       }
       setCreateModalVisible(false);
       formRef.current?.resetFields();
+      setSelectedPullWorkOrder(null);
       invalidateMenuBadgeCounts();
     } catch (error: any) {
       if (error.message && !error.message.includes('请选择') && !error.message.includes('请添加')) {
@@ -255,6 +318,7 @@ const BatchingCenterPage: React.FC = () => {
         onClose={() => {
           setCreateModalVisible(false);
           formRef.current?.resetFields();
+          setSelectedPullWorkOrder(null);
         }}
         onFinish={handleCreateSubmit}
         formRef={formRef}
@@ -265,7 +329,7 @@ const BatchingCenterPage: React.FC = () => {
           name="create_mode"
           label={t('app.kuaizhizao.batchingCenter.createMode')}
           options={[
-            { label: t('app.kuaizhizao.batchingCenter.createFromWorkOrder'), value: 'from_work_order' },
+            { label: pullFromWorkOrderAction.label, value: 'from_work_order' },
             { label: t('app.kuaizhizao.batchingCenter.createManual'), value: 'manual' },
           ]}
           rules={[{ required: true }]}
@@ -273,25 +337,30 @@ const BatchingCenterPage: React.FC = () => {
         <ProFormDependency name={['create_mode']}>
           {({ create_mode }) =>
             create_mode === 'from_work_order' ? (
-              <ProFormSelect
-                name="work_order_id"
-                label={t('app.kuaizhizao.warehouseCommon.colWorkOrder')}
-                placeholder={t('app.kuaizhizao.batchingCenter.selectWorkOrder')}
-                rules={[{ required: true, message: t('app.kuaizhizao.batchingCenter.selectWorkOrder') }]}
-                fieldProps={{
-                  showSearch: true,
-                  filterOption: (input: string, option: any) =>
-                    option?.label?.toLowerCase().includes(input.toLowerCase()),
-                }}
-                request={async () => {
-                  const res = await workOrderApi.list({ status: 'released,in_progress', limit: 200 });
-                  const items = res?.items || res?.data || [];
-                  return items.map((wo: any) => ({
-                    label: `${wo.code || ''} - ${wo.name || ''}`,
-                    value: wo.id,
-                  }));
-                }}
-              />
+              <>
+                <ProFormItem
+                  name="work_order_id"
+                  hidden
+                  rules={[{ required: true, message: t('app.kuaizhizao.batchingCenter.selectWorkOrder') }]}
+                />
+                <ProFormItem name="work_order_code" hidden />
+                <ProFormItem
+                  label={t('app.kuaizhizao.warehouseCommon.colWorkOrder')}
+                  required
+                  extra={
+                    selectedPullWorkOrder?.name
+                      ? `${selectedPullWorkOrder.code} - ${selectedPullWorkOrder.name}`
+                      : undefined
+                  }
+                >
+                  <Space>
+                    <Button onClick={() => pullFromWorkOrderQuery.openModal()}>
+                      {t('app.kuaizhizao.batchingCenter.selectWorkOrder')}
+                    </Button>
+                    {selectedPullWorkOrder?.code ? <Tag>{selectedPullWorkOrder.code}</Tag> : null}
+                  </Space>
+                </ProFormItem>
+              </>
             ) : null
           }
         </ProFormDependency>
@@ -445,6 +514,36 @@ const BatchingCenterPage: React.FC = () => {
         open={materialPickerOpen}
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendBatchingItemsFromMaterials}
+      />
+
+      <UniPullQueryModal<PullWorkOrderCandidate>
+        open={pullFromWorkOrderQuery.open}
+        title={pullFromWorkOrderAction.label}
+        onCancel={pullFromWorkOrderQuery.closeModal}
+        onOk={pullFromWorkOrderQuery.handleConfirm}
+        columns={[
+          { title: t('app.kuaizhizao.warehouseCommon.colWorkOrderCode'), dataIndex: 'code', width: 180 },
+          { title: t('app.kuaizhizao.warehouseCommon.colWorkOrderName'), dataIndex: 'name', width: 220 },
+          { title: t('app.kuaizhizao.warehouseCommon.colStatus'), dataIndex: 'status', width: 140 },
+          { title: t('app.kuaizhizao.batchingCenter.requiredQty'), dataIndex: 'planned_quantity', width: 120 },
+        ]}
+        rowKey="id"
+        dataSource={pullFromWorkOrderQuery.dataSource}
+        loading={pullFromWorkOrderQuery.loading}
+        confirmLoading={pullFromWorkOrderQuery.confirmLoading}
+        selectionType={pullFromWorkOrderQuery.selectionType}
+        selectedRowKeys={pullFromWorkOrderQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromWorkOrderQuery.handleSelectedRowKeysChange}
+        searchDraft={pullFromWorkOrderQuery.searchDraft}
+        onSearchDraftChange={pullFromWorkOrderQuery.setSearchDraft}
+        onSearchApply={pullFromWorkOrderQuery.handleSearchApply}
+        onSearchClear={pullFromWorkOrderQuery.handleSearchClear}
+        appliedKeyword={pullFromWorkOrderQuery.appliedKeyword}
+        page={pullFromWorkOrderQuery.page}
+        pageSize={pullFromWorkOrderQuery.pageSize}
+        total={pullFromWorkOrderQuery.total}
+        onPageChange={pullFromWorkOrderQuery.handlePageChange}
+        searchPlaceholder={t('app.kuaizhizao.warehouseCommon.searchWorkOrderCodeOrName')}
       />
 
       {/* 详情 Drawer */}

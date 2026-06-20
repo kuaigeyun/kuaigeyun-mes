@@ -36,6 +36,13 @@ from apps.kuaizhizao.schemas.purchase_requisition import (
 from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
 from apps.kuaizhizao.services.purchase_service import PurchaseService
 from apps.kuaizhizao.utils.material_source_helper import SOURCE_TYPE_BUY
+from apps.kuaizhizao.services.document_action_policy.enricher import (
+    enrich_purchase_requisition_capabilities_on_response,
+    enrich_purchase_requisition_list_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.purchase_requisition import (
+    assert_purchase_requisition_capability,
+)
 
 
 class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
@@ -302,6 +309,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         resp.lifecycle = get_purchase_requisition_lifecycle(req, audit_required=audit_required)
         from core.services.approval.audit_record_enricher import enrich_record
 
+        resp = enrich_purchase_requisition_capabilities_on_response(req, resp)
         return await enrich_record(tenant_id, "purchase_request", resp)
 
     async def _batch_requisition_items_count(
@@ -431,11 +439,13 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             resp.lifecycle = get_purchase_requisition_lifecycle(
                 req, milestones=None, audit_required=audit_required
             )
-            result.append(resp.model_dump())
+            result.append(resp)
+
+        enriched = enrich_purchase_requisition_list_capabilities(reqs, result)
         from core.services.approval.audit_record_enricher import enrich_data_payload
 
         return await enrich_data_payload(tenant_id, "purchase_request", {
-            "data": result, "total": total, "success": True
+            "data": [item.model_dump() for item in enriched], "total": total, "success": True
         })
 
     async def _recalc_conversion_status(
@@ -577,8 +587,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
         logger.info("kuaizhizao_purchase_requisition_delete attempt: tenant_id={} req_id={} status={}", tenant_id, requisition_id, req.status)
-        if not is_draft_status(req.status) and not is_pending_review_status(req.status):
-            raise BusinessLogicError("只有草稿状态或待审核的采购申请可删除")
+        assert_purchase_requisition_capability(req, "delete")
         await PurchaseRequisition.filter(tenant_id=tenant_id, id=requisition_id).update(
             deleted_at=datetime.now()
         )
@@ -613,7 +622,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                         raise BusinessLogicError("单据审核中，仅已开启改单权限的当前审批人可修改")
                     approval_edit_context = edit_ctx
                 else:
-                    raise BusinessLogicError("只有草稿状态的采购申请可修改")
+                    assert_purchase_requisition_capability(req, "update")
 
         if approval_edit_context:
             from core.config.audit_editable_fields import is_field_editable
@@ -666,8 +675,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
 
 
-        if not is_draft_status(req.status):
-            raise BusinessLogicError("只有草稿状态可提交")
+        assert_purchase_requisition_capability(req, "submit")
 
         # 检查是否需要审核
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_request")
@@ -702,9 +710,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
 
-        normalized = normalize_status(req.status)
-        if normalized != DocumentStatus.PENDING_REVIEW.value:
-            raise BusinessLogicError("只有待审核状态的采购申请可审核")
+        assert_purchase_requisition_capability(req, "approve")
 
         reviewer_name = await self.get_user_name(approved_by) if approved_by else None
         if approved:
@@ -776,14 +782,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
 
-        normalized = normalize_status(req.status)
-        if normalized not in (
-            DocumentStatus.AUDITED.value,
-            DocumentStatus.CONFIRMED.value,
-            DocumentStatus.PARTIAL_CONVERTED.value,
-            DocumentStatus.FULL_CONVERTED.value,
-        ):
-            raise BusinessLogicError("只有已通过、部分转单或全部转单状态的采购申请可撤回审核")
+        assert_purchase_requisition_capability(req, "revoke_approval")
 
         req.status = "草稿"  # 撤回后回到草稿状态，允许修改或删除
         req.review_status = ReviewStatus.PENDING.value

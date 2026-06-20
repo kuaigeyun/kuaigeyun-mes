@@ -38,6 +38,10 @@ def resolve_kuaizhizao_module_action(
         return "confirm_adjustment"
     if "/dispatch" in p:
         return "dispatch"
+    if "/release" in p:
+        return "submit"
+    if "/freeze" in p or "/unfreeze" in p:
+        return "revoke"
     if "/unapprove" in p:
         return "revoke"
     if "/approve" in p:

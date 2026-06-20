@@ -39,6 +39,12 @@ from apps.kuaizhizao.schemas.sales_contract import (
 )
 from apps.kuaizhizao.schemas.sales_order import SalesOrderCreate, SalesOrderItemCreate
 from apps.kuaizhizao.services.document_lifecycle_service import _is_approved, get_sales_contract_lifecycle
+from apps.kuaizhizao.services.document_action_policy.enricher import (
+    enrich_sales_contract_capabilities_on_response,
+)
+from apps.kuaizhizao.services.document_action_policy.sales_contract import (
+    assert_sales_contract_capability,
+)
 from apps.kuaizhizao.services.sales_contract_term_service import SalesContractTermService
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.services.business_config_service import BusinessConfigService
@@ -97,6 +103,26 @@ class SalesContractService(AppBaseService[SalesContract]):
             return Decimal("0")
         total_amt = Decimal(str(item.total_amount or 0))
         return (total_amt * release_qty / contract_qty).quantize(Decimal("0.01"))
+
+    @staticmethod
+    def _contract_capability_context(
+        contract: SalesContract,
+        items: Optional[List[SalesContractItem]] = None,
+    ) -> dict[str, Any]:
+        has_items = bool(items) if items is not None else True
+        has_releasable = False
+        if items:
+            for it in items:
+                if SalesContractService._line_remaining_qty(it) > Decimal("0"):
+                    has_releasable = True
+                    break
+        rem_qty, rem_amt = SalesContractService._remaining(contract)
+        return {
+            "has_items": has_items,
+            "has_releasable_items": has_releasable,
+            "remaining_amount": rem_amt,
+            "remaining_quantity": rem_qty,
+        }
 
     def _contract_to_response(
         self,
@@ -202,7 +228,14 @@ class SalesContractService(AppBaseService[SalesContract]):
                 for m in milestones
             ]
         payload["lifecycle"] = get_sales_contract_lifecycle(contract)
-        return SalesContractResponse(**payload)
+        ctx = self._contract_capability_context(contract, items)
+        return enrich_sales_contract_capabilities_on_response(
+            contract,
+            SalesContractResponse(**payload),
+            has_items=ctx["has_items"],
+            has_releasable_items=ctx["has_releasable_items"],
+            remaining_amount=ctx["remaining_amount"],
+        )
 
     async def _generate_contract_code(self, tenant_id: int, contract_date: date) -> str:
         from core.config.code_rule_pages import CODE_RULE_PAGES
@@ -495,6 +528,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
         if not contract:
             raise NotFoundError("销售合同不存在")
+        assert_sales_contract_capability(contract, "update")
         is_draft = (contract.status or "") in ("草稿",)
         is_pending = (contract.status or "") in ("待审核",)
         if not is_draft:
@@ -605,8 +639,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
         if not contract:
             raise NotFoundError("销售合同不存在")
-        if (contract.status or "") not in ("草稿",):
-            raise BusinessLogicError("仅草稿状态合同可删除")
+        assert_sales_contract_capability(contract, "delete")
         from apps.kuaizhizao.models.sales_opportunity import SalesOpportunity
         from apps.kuaizhizao.models.document_relation import DocumentRelation
 
@@ -638,8 +671,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
         if not contract:
             raise NotFoundError("销售合同不存在")
-        if (contract.status or "") != "草稿":
-            raise BusinessLogicError("仅草稿状态可提交审核")
+        assert_sales_contract_capability(contract, "submit")
         contract.status = "待审核"
         contract.review_status = ReviewStatus.PENDING
         contract.updated_by = submitted_by
@@ -657,8 +689,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
         if not contract:
             raise NotFoundError("销售合同不存在")
-        if (contract.status or "") != "待审核":
-            raise BusinessLogicError("仅待审核合同可审批")
+        assert_sales_contract_capability(contract, "approve")
         contract.status = "已生效"
         contract.review_status = ReviewStatus.APPROVED
         contract.reviewer_id = reviewer_id
@@ -680,8 +711,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
         if not contract:
             raise NotFoundError("销售合同不存在")
-        if (contract.status or "") != "待审核":
-            raise BusinessLogicError("仅待审核合同可驳回")
+        assert_sales_contract_capability(contract, "reject")
         contract.status = "草稿"
         contract.review_status = ReviewStatus.REJECTED
         contract.reviewer_id = reviewer_id
@@ -704,11 +734,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         )
         if not contract:
             raise NotFoundError("销售合同不存在")
-        if (contract.status or "") != "待审核":
-            raise BusinessLogicError("仅待审核合同可撤回提交")
-        rs = (contract.review_status or "").strip()
-        if rs not in LEGACY_PENDING_VALUES and rs != ReviewStatus.PENDING.value:
-            raise BusinessLogicError(f"仅待审核合同可撤回提交，当前审核状态: {contract.review_status}")
+        assert_sales_contract_capability(contract, "withdraw_submit")
         contract.status = "草稿"
         contract.review_status = ReviewStatus.PENDING.value
         contract.reviewer_id = None
@@ -731,14 +757,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         )
         if not contract:
             raise NotFoundError("销售合同不存在")
-        if (contract.status or "") != "已生效":
-            raise BusinessLogicError("仅已生效且未下推的合同可撤回审核")
-        if not _is_approved(contract.review_status):
-            raise BusinessLogicError(f"仅已审核通过的合同可撤回审核，当前审核状态: {contract.review_status}")
-        rel_qty = Decimal(str(contract.released_quantity or 0))
-        rel_amt = Decimal(str(contract.released_amount or 0))
-        if rel_qty > 0 or rel_amt > 0:
-            raise BusinessLogicError("合同已有释放记录，无法撤回审核")
+        assert_sales_contract_capability(contract, "revoke_approval")
         contract.status = "待审核"
         contract.review_status = ReviewStatus.PENDING.value
         contract.reviewer_id = None
@@ -881,8 +900,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
         if not contract:
             raise NotFoundError("销售合同不存在")
-        if (contract.status or "") in ("已关闭", "已到期"):
-            raise BusinessLogicError("合同已关闭或已到期")
+        assert_sales_contract_capability(contract, "close")
         contract.status = "已关闭"
         contract.updated_by = operator_id
         if reason:
@@ -1028,9 +1046,12 @@ class SalesContractService(AppBaseService[SalesContract]):
         from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
         from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
 
+        raw_push_mode = await self.business_config_service.get_push_default_mode(tenant_id)
+        push_as_confirm = str(raw_push_mode or "").strip().lower() == "confirm"
+
         async with in_transaction():
             contract_resp = await self.create_contract(
-                tenant_id, create_data, created_by, auto_submit=False
+                tenant_id, create_data, created_by, auto_submit=push_as_confirm
             )
             await Quotation.filter(id=quotation_id).update(
                 contract_id=contract_resp.id,
@@ -1071,8 +1092,15 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
         if not contract:
             raise NotFoundError("销售合同不存在")
-        await self._ensure_contract_effective(contract)
         all_items = await SalesContractItem.filter(tenant_id=tenant_id, contract_id=contract_id).order_by("id")
+        ctx = self._contract_capability_context(contract, all_items)
+        assert_sales_contract_capability(
+            contract,
+            "push_to_sales_order",
+            has_items=ctx["has_items"],
+            has_releasable_items=ctx["has_releasable_items"],
+            remaining_amount=ctx["remaining_amount"],
+        )
         if not all_items:
             raise BusinessLogicError("合同无明细")
         plan, item_qty_map, order_qty, order_amt = self._resolve_release_plan(
@@ -1267,8 +1295,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
         if not contract:
             raise NotFoundError("销售合同不存在")
-        if (contract.status or "") not in ("已生效", "执行中"):
-            raise BusinessLogicError("仅生效中合同可发起变更")
+        assert_sales_contract_capability(contract, "create_change")
         change_code = await self._generate_change_code(tenant_id)
         row = await SalesContractChange.create(
             tenant_id=tenant_id,

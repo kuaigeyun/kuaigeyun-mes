@@ -12,6 +12,8 @@ from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
+from apps.kuaizhizao.services.document_action_policy.types import ReplenishmentSuggestionCapabilities
+
 
 class ReplenishmentSuggestionBase(BaseModel):
     """
@@ -58,6 +60,9 @@ class ReplenishmentSuggestionResponse(ReplenishmentSuggestionBase):
     processing_notes: Optional[str] = Field(None, description="处理备注")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    capabilities: Optional[ReplenishmentSuggestionCapabilities] = Field(
+        None, description="业务态 capabilities（document_action_policy）",
+    )
 
 
 class ReplenishmentSuggestionListResponse(ReplenishmentSuggestionResponse):

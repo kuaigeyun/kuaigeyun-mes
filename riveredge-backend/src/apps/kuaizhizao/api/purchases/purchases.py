@@ -29,6 +29,7 @@ from apps.kuaizhizao.schemas.purchase import (
     PurchaseReceiptPullCandidateListResponse,
 )
 from apps.kuaizhizao.services.purchase_service import PurchaseService
+from apps.kuaizhizao.services.purchase_inquiry_service import PurchaseInquiryService
 from apps.kuaizhizao.services.purchase_cost_service import PurchaseCostService
 from apps.kuaizhizao.services.print_service import DocumentPrintService
 from apps.kuaizhizao.services.demand_source_chain_service import DemandSourceChainService
@@ -228,6 +229,39 @@ async def list_purchase_receipt_pull_candidates(
         skip=skip,
         limit=limit,
         current_user=current_user,
+    )
+
+
+@router.post("/purchase-orders/pull-from-inquiry", summary="Build purchase order from inquiry")
+async def pull_purchase_order_from_inquiry(
+    request: Dict[str, Any] = Body(...),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    采购订单域取单建单：从采购询价创建采购订单（统一 pull 语义入口）。
+    """
+    inquiry_id_raw = request.get("inquiry_id")
+    if inquiry_id_raw is None:
+        raise ValidationError("必须提供询价单ID")
+    try:
+        inquiry_id = int(inquiry_id_raw)
+    except (TypeError, ValueError):
+        raise ValidationError("询价单ID格式无效")
+
+    payload: Dict[str, Any] = {}
+    if isinstance(request.get("item_ids"), list):
+        payload["item_ids"] = request.get("item_ids")
+    if request.get("persist_default_supplier_to_material") is not None:
+        payload["persist_default_supplier_to_material"] = bool(request.get("persist_default_supplier_to_material"))
+
+    from apps.kuaizhizao.schemas.purchase_inquiry import ConvertInquiryToPORequest
+
+    return await PurchaseInquiryService().convert_to_purchase_order(
+        tenant_id=tenant_id,
+        inquiry_id=inquiry_id,
+        data=ConvertInquiryToPORequest(**payload),
+        created_by=current_user.id,
     )
 
 

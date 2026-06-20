@@ -144,10 +144,31 @@ export interface SalesContract {
 
   lifecycle?: BackendLifecycle;
 
+  capabilities?: SalesContractCapabilities;
+
   created_at?: string;
 
   updated_at?: string;
 
+}
+
+export interface ActionCapability {
+  allowed: boolean;
+  reason?: string | null;
+}
+
+export interface SalesContractCapabilities {
+  update?: ActionCapability;
+  delete?: ActionCapability;
+  submit?: ActionCapability;
+  withdraw_submit?: ActionCapability;
+  approve?: ActionCapability;
+  reject?: ActionCapability;
+  revoke_approval?: ActionCapability;
+  push_to_sales_order?: ActionCapability;
+  print?: ActionCapability;
+  close?: ActionCapability;
+  create_change?: ActionCapability;
 }
 
 
@@ -274,6 +295,20 @@ export interface ConvertToOrderPayload {
 
 }
 
+export interface PullSalesContractFromQuotationResponse {
+  success: boolean;
+  message: string;
+  source_type: 'quotation';
+  source_id: number;
+  sales_contract: SalesContract;
+  quotation: {
+    id?: number;
+    quotation_code?: string;
+    status?: string;
+    [key: string]: any;
+  };
+}
+
 
 
 const BASE = '/apps/kuaizhizao/sales-contracts';
@@ -341,6 +376,21 @@ export const salesContractApi = {
       params: { contract_type: contractType },
 
     }),
+
+  pullSalesContractFromQuotation: async (quotationId: number, contractType = 'single') => {
+    const salesContract = await apiRequest<SalesContract>(`${BASE}/from-quotation/${quotationId}`, {
+      method: 'POST',
+      params: { contract_type: contractType },
+    });
+    return {
+      success: true,
+      message: '已从报价单创建销售合同',
+      source_type: 'quotation' as const,
+      source_id: quotationId,
+      sales_contract: salesContract,
+      quotation: { id: quotationId },
+    } satisfies PullSalesContractFromQuotationResponse;
+  },
 
 
 

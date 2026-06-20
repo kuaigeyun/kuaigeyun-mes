@@ -27,6 +27,13 @@ from apps.kuaizhizao.schemas.receipt_notice import (
 )
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 from infra.services.business_config_service import BusinessConfigService
+from apps.kuaizhizao.services.document_action_policy.receipt_notice import (
+    assert_receipt_notice_capability,
+)
+from apps.kuaizhizao.services.document_action_policy.enricher import (
+    enrich_receipt_notice_capabilities_on_response,
+    enrich_receipt_notice_list_capabilities,
+)
 
 
 async def _first_storage_location_for_warehouse(
@@ -59,6 +66,77 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
     def __init__(self):
         super().__init__(ReceiptNotice)
         self.business_config_service = BusinessConfigService()
+
+    async def _notice_receipt_withdrawable(self, tenant_id: int, notice: ReceiptNotice) -> bool:
+        receipt_id = getattr(notice, "purchase_receipt_id", None)
+        if not receipt_id:
+            return True
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+        receipt = await PurchaseReceipt.get_or_none(
+            tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+        )
+        if not receipt:
+            return True
+        return str(receipt.status or "").strip() in ("草稿", "draft", "DRAFT", "待入库")
+
+    async def _receipt_withdrawable_by_notice_id(
+        self, tenant_id: int, notices: List[ReceiptNotice]
+    ) -> dict[int, bool]:
+        result: dict[int, bool] = {}
+        receipt_id_by_notice: dict[int, int] = {}
+        for n in notices:
+            if str(n.status or "").strip() != "已通知":
+                continue
+            if not getattr(n, "purchase_receipt_id", None):
+                result[int(n.id)] = True
+            else:
+                receipt_id_by_notice[int(n.id)] = int(n.purchase_receipt_id)
+
+        if not receipt_id_by_notice:
+            return result
+
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+        receipt_ids = list(set(receipt_id_by_notice.values()))
+        status_by_id: dict[int, str] = {}
+        receipts = await PurchaseReceipt.filter(
+            tenant_id=tenant_id, id__in=receipt_ids, deleted_at__isnull=True
+        ).all()
+        for r in receipts:
+            status_by_id[int(r.id)] = str(r.status or "").strip()
+
+        for nid, rid in receipt_id_by_notice.items():
+            st = status_by_id.get(rid, "")
+            result[nid] = st in ("草稿", "draft", "DRAFT", "待入库") or not st
+        return result
+
+    async def _notice_has_items_map(self, tenant_id: int, notice_ids: List[int]) -> dict[int, bool]:
+        if not notice_ids:
+            return {}
+        from tortoise.functions import Count
+
+        rows = await ReceiptNoticeItem.filter(
+            tenant_id=tenant_id,
+            notice_id__in=notice_ids,
+        ).annotate(cnt=Count("id")).group_by("notice_id").values("notice_id", "cnt")
+        return {int(r["notice_id"]): int(r["cnt"] or 0) > 0 for r in rows}
+
+    async def _enrich_notice_response(
+        self,
+        tenant_id: int,
+        notice: ReceiptNotice,
+        response: ReceiptNoticeResponse | ReceiptNoticeWithItemsResponse,
+    ) -> ReceiptNoticeResponse | ReceiptNoticeWithItemsResponse:
+        item_count = await ReceiptNoticeItem.filter(tenant_id=tenant_id, notice_id=notice.id).count()
+        receipt_withdrawable = await self._notice_receipt_withdrawable(tenant_id, notice)
+        return enrich_receipt_notice_capabilities_on_response(
+            notice,
+            response,
+            has_items=item_count > 0,
+            has_warehouse=getattr(notice, "warehouse_id", None) is not None,
+            receipt_withdrawable=receipt_withdrawable,
+        )
 
     async def create_receipt_notice(
         self,
@@ -153,7 +231,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         items = await ReceiptNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).all()
         response = ReceiptNoticeWithItemsResponse.model_validate(notice)
         response.items = [ReceiptNoticeItemResponse.model_validate(i) for i in items]
-        return response
+        return await self._enrich_notice_response(tenant_id, notice, response)
 
     async def list_receipt_notices(
         self,
@@ -172,7 +250,17 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             query = query.filter(supplier_id=filters["supplier_id"])
 
         notices = await query.offset(skip).limit(limit).order_by("-created_at")
-        return [ReceiptNoticeListResponse.model_validate(r) for r in notices]
+        notice_list = list(notices)
+        notice_ids = [int(n.id) for n in notice_list if n.id is not None]
+        items_map = await self._notice_has_items_map(tenant_id, notice_ids)
+        withdraw_map = await self._receipt_withdrawable_by_notice_id(tenant_id, notice_list)
+        responses = [ReceiptNoticeListResponse.model_validate(r) for r in notice_list]
+        return enrich_receipt_notice_list_capabilities(
+            notice_list,
+            responses,
+            has_items_by_id=items_map,
+            receipt_withdrawable_by_id=withdraw_map,
+        )
 
     async def update_receipt_notice(
         self,
@@ -220,12 +308,14 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         notice = await ReceiptNotice.get_or_none(tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True)
         if not notice:
             raise NotFoundError(f"收货通知单不存在: {notice_id}")
-        if notice.status != "待收货":
-            raise BusinessLogicError("只有待收货状态的通知单才能通知仓库")
-        if notice.purchase_receipt_id:
-            raise BusinessLogicError("该收货通知单已关联采购入库单，请勿重复通知仓库")
 
         notice_items = await ReceiptNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).all()
+        assert_receipt_notice_capability(
+            notice,
+            "notify",
+            has_items=bool(notice_items),
+            has_warehouse=getattr(notice, "warehouse_id", None) is not None,
+        )
         if not notice_items:
             raise BusinessLogicError("收货通知单无明细，无法生成采购入库单")
 
@@ -331,9 +421,9 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             purchase_receipt_id=receipt.id,
             purchase_receipt_code=receipt.receipt_code,
         )
-        return ReceiptNoticeResponse.model_validate(
-            await ReceiptNotice.get(tenant_id=tenant_id, id=notice_id)
-        )
+        updated = await ReceiptNotice.get(tenant_id=tenant_id, id=notice_id)
+        resp = ReceiptNoticeResponse.model_validate(updated)
+        return await self._enrich_notice_response(tenant_id, updated, resp)
 
     async def withdraw_notice(
         self,
@@ -349,8 +439,8 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         if not notice:
             raise NotFoundError(f"收货通知单不存在: {notice_id}")
 
-        if notice.status != "已通知":
-            raise BusinessLogicError("只有已通知状态的收货通知单才能撤回")
+        receipt_withdrawable = await self._notice_receipt_withdrawable(tenant_id, notice)
+        assert_receipt_notice_capability(notice, "withdraw", receipt_withdrawable=receipt_withdrawable)
 
         allowed_receipt_statuses = ("草稿", "draft", "DRAFT", "待入库")
         if getattr(notice, "purchase_receipt_id", None):
@@ -376,4 +466,5 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             purchase_receipt_code=None,
         )
         updated = await ReceiptNotice.get(tenant_id=tenant_id, id=notice_id)
-        return ReceiptNoticeResponse.model_validate(updated)
+        resp = ReceiptNoticeResponse.model_validate(updated)
+        return await self._enrich_notice_response(tenant_id, updated, resp)

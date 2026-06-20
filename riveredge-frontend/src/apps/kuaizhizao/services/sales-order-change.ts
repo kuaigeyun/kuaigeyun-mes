@@ -46,6 +46,24 @@ export interface SalesOrderChange {
   lifecycle?: Record<string, unknown>;
   header_changes?: Record<string, unknown>;
   notes?: string;
+  capabilities?: SalesOrderChangeCapabilities;
+}
+
+export interface ActionCapability {
+  allowed: boolean;
+  reason?: string | null;
+}
+
+export interface SalesOrderChangeCapabilities {
+  update?: ActionCapability;
+  delete?: ActionCapability;
+  submit?: ActionCapability;
+  withdraw_submit?: ActionCapability;
+  approve?: ActionCapability;
+  apply?: ActionCapability;
+  preview_impact?: ActionCapability;
+  print?: ActionCapability;
+  reopen?: ActionCapability;
 }
 
 export interface ChangeImpactPreview {

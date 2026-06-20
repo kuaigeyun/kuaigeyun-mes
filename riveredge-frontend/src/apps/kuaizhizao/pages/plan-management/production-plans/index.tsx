@@ -19,7 +19,6 @@ import {
   EditOutlined,
   DeleteOutlined,
   PlayCircleOutlined,
-  SendOutlined,
   ShoppingOutlined,
   AppstoreOutlined,
   ClockCircleOutlined,
@@ -27,7 +26,7 @@ import {
   ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -69,8 +68,15 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import {
+  productionPlanBatchExecuteAllowed,
+  productionPlanBatchPushWorkOrderAllowed,
+} from '../../../../../hooks/useDocumentCapabilities';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
-const PRODUCTION_PLAN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_production_plans';
+const PRODUCTION_PLAN_RESOURCE = 'production-plan';
 
 // 生产计划接口定义
 interface ProductionPlan {
@@ -101,7 +107,19 @@ interface ProductionPlan {
   reviewer_id?: number;
   review_status?: string;
   review_remarks?: string;
+  capabilities?: {
+    update?: { allowed: boolean; reason?: string | null };
+    delete?: { allowed: boolean; reason?: string | null };
+    submit?: { allowed: boolean; reason?: string | null };
+    withdraw_submit?: { allowed: boolean; reason?: string | null };
+    approve?: { allowed: boolean; reason?: string | null };
+    revoke_approval?: { allowed: boolean; reason?: string | null };
+    execute?: { allowed: boolean; reason?: string | null };
+    push_work_order?: { allowed: boolean; reason?: string | null };
+  };
 }
+
+const PRODUCTION_PLAN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_production_plans';
 
 interface ProductionPlanItem {
   id?: number;
@@ -132,6 +150,7 @@ const { useToken } = theme;
 
 const ProductionPlansPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const pushToWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_production_plan');
 
   const planTypeFallback = useMemo(
     () => [
@@ -198,8 +217,39 @@ const ProductionPlansPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
+  const productionPlanPerms = useResourcePermissions(PRODUCTION_PLAN_RESOURCE);
+  const productionPlanAuditRequired = useAuditRequired('production_plan', false);
+  const tableRowsRef = useRef<ProductionPlan[]>([]);
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const invalidatePlanStatistics = () => {
+    queryClient.invalidateQueries({ queryKey: ['productionPlanStatistics'] });
+  };
+
+  const selectedPlansForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is ProductionPlan => row != null),
+    [selectedRowKeys],
+  );
+
+  const productionPlanAuditBatchHandlers = useMemo(
+    () => ({
+      submit: (id: number) => planningApi.productionPlan.submit(String(id)),
+      withdraw: (id: number) => planningApi.productionPlan.withdraw(String(id)),
+      approve: (id: number) => planningApi.productionPlan.approve(String(id)),
+    }),
+    [],
+  );
+
+  const handleProductionPlanAuditBatchSuccess = useCallback(() => {
+    setSelectedRowKeys([]);
+    invalidatePlanStatistics();
+    actionRef.current?.reload();
+  }, [queryClient]);
+
   const [planTypeOptions, setPlanTypeOptions] = useState<Array<{ label: string; value: string }>>(planTypeFallback);
   const [planTypeLoading, setPlanTypeLoading] = useState(false);
 
@@ -218,10 +268,6 @@ const ProductionPlansPage: React.FC = () => {
     };
     load();
   }, [planTypeFallback]);
-
-  const invalidatePlanStatistics = () => {
-    queryClient.invalidateQueries({ queryKey: ['productionPlanStatistics'] });
-  };
 
   const { data: planStatistics } = useQuery({
     queryKey: ['productionPlanStatistics'],
@@ -568,114 +614,6 @@ const ProductionPlansPage: React.FC = () => {
     }
   };
 
-  const handleBatchSubmit = async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      messageApi.warning(t('app.kuaizhizao.productionPlan.selectFirst'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await planningApi.productionPlan.submit(String(id));
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) messageApi.success(t('app.kuaizhizao.productionPlan.batchSubmitSuccess', { count: success }));
-    if (failed > 0) messageApi.warning(t('app.kuaizhizao.productionPlan.batchSubmitPartial', { count: failed }));
-    setSelectedRowKeys([]);
-    invalidatePlanStatistics();
-    actionRef.current?.reload();
-  };
-
-  const handleBatchApprove = async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      messageApi.warning(t('app.kuaizhizao.productionPlan.selectFirst'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await planningApi.productionPlan.approve(String(id));
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) messageApi.success(t('app.kuaizhizao.productionPlan.batchApproveSuccess', { count: success }));
-    if (failed > 0) messageApi.warning(t('app.kuaizhizao.productionPlan.batchApprovePartial', { count: failed }));
-    setSelectedRowKeys([]);
-    invalidatePlanStatistics();
-    actionRef.current?.reload();
-  };
-
-  const handleBatchExecute = async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      messageApi.warning(t('app.kuaizhizao.productionPlan.selectFirst'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await planningApi.productionPlan.execute(String(id));
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) messageApi.success(t('app.kuaizhizao.productionPlan.batchExecuteSuccess', { count: success }));
-    if (failed > 0) messageApi.warning(t('app.kuaizhizao.productionPlan.batchExecutePartial', { count: failed }));
-    setSelectedRowKeys([]);
-    invalidatePlanStatistics();
-    actionRef.current?.reload();
-  };
-
-  const handleBatchPushToWorkOrders = async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      messageApi.warning(t('app.kuaizhizao.productionPlan.selectFirst'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await planningApi.productionPlan.pushToWorkOrders(id);
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) messageApi.success(t('app.kuaizhizao.productionPlan.batchPushSuccess', { count: success }));
-    if (failed > 0) messageApi.warning(t('app.kuaizhizao.productionPlan.batchPushPartial', { count: failed }));
-    setSelectedRowKeys([]);
-    invalidatePlanStatistics();
-    actionRef.current?.reload();
-  };
-
   const handleListImport = async (data: any[][]) => {
     const defaultUnit = t('app.kuaizhizao.productionPlan.defaultUnit');
     if (!data || data.length < 2) {
@@ -858,36 +796,49 @@ const ProductionPlansPage: React.FC = () => {
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.productionPlan.confirmBatchDelete', { count })}
           toolBarActionsAfterDelete={[
-            <UniBatchMenuButton
+            <UniAuditBatchMenuButton
               key="production-plan-batch-menu"
               selectedRowKeys={selectedRowKeys}
-              menuItems={[
-                {
-                  key: 'submit',
-                  label: t('app.kuaizhizao.productionPlan.batchSubmit'),
-                  icon: <SendOutlined />,
-                  onClick: handleBatchSubmit,
-                },
-                {
-                  key: 'approve',
-                  label: t('app.kuaizhizao.productionPlan.batchApprove'),
-                  icon: <CheckCircleOutlined />,
-                  onClick: handleBatchApprove,
-                },
-                {
-                  key: 'execute',
-                  label: t('app.kuaizhizao.productionPlan.batchExecute'),
-                  icon: <PlayCircleOutlined />,
-                  onClick: handleBatchExecute,
-                },
-                {
-                  key: 'push-to-work-orders',
-                  label: t('app.kuaizhizao.productionPlan.batchPushWorkOrders'),
-                  icon: <AppstoreOutlined />,
-                  onClick: handleBatchPushToWorkOrders,
-                },
-              ]}
+              selectedRecords={selectedPlansForBatch}
+              auditEnabled={productionPlanAuditRequired}
+              permGates={productionPlanPerms}
+              handlers={productionPlanAuditBatchHandlers}
+              onSuccess={handleProductionPlanAuditBatchSuccess}
               toolBarButtonSize="middle"
+            />,
+          ]}
+          toolBarActionsAfterBatch={[
+            <UniCapabilityBatchButton
+              key="production-plan-batch-execute"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedPlansForBatch}
+              capabilityKey="execute"
+              permAllowed={productionPlanPerms.canAction?.('execute') ?? false}
+              batchAllowed={(recs, perm) => productionPlanBatchExecuteAllowed(recs, perm)}
+              onRun={(id) => planningApi.productionPlan.execute(String(id))}
+              labels={{
+                single: t('app.kuaizhizao.productionPlan.batchExecute'),
+                batch: t('app.kuaizhizao.productionPlan.batchExecute'),
+              }}
+              icon={<PlayCircleOutlined />}
+              size="middle"
+              onSuccess={handleProductionPlanAuditBatchSuccess}
+            />,
+            <UniCapabilityBatchButton
+              key="production-plan-batch-push-wo"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedPlansForBatch}
+              capabilityKey="push_work_order"
+              permAllowed={productionPlanPerms.canAction?.('execute') ?? false}
+              batchAllowed={(recs, perm) => productionPlanBatchPushWorkOrderAllowed(recs, perm)}
+              onRun={(id) => planningApi.productionPlan.pushToWorkOrders(id)}
+              labels={{
+                single: pushToWorkOrderAction.label,
+                batch: pushToWorkOrderAction.label,
+              }}
+              icon={<AppstoreOutlined />}
+              size="middle"
+              onSuccess={handleProductionPlanAuditBatchSuccess}
             />,
           ]}
           showImportButton
@@ -933,6 +884,7 @@ const ProductionPlansPage: React.FC = () => {
             });
             const raw = Array.isArray(list) ? list : ((list as any)?.data || []);
             const data = await enrichProductionPlanRecordsWithCustomFields(raw);
+            tableRowsRef.current = data;
             const total = (list as any)?.total ?? (Array.isArray(list) && list.length >= params.pageSize! ? (params.current! * params.pageSize! + 1) : (params.current! - 1) * params.pageSize! + data.length);
             return { data, success: true, total };
           }}

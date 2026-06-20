@@ -12,6 +12,7 @@ from typing import List, Optional
 from decimal import Decimal
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
+from apps.kuaizhizao.services.document_action_policy.types import PurchaseOrderCapabilities
 
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
 
@@ -81,6 +82,10 @@ class PurchaseOrderResponse(PurchaseOrderBase):
     updated_at: datetime = Field(..., description="更新时间")
     items: List["PurchaseOrderItemResponse"] = Field(default_factory=list, description="订单明细")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    capabilities: Optional[PurchaseOrderCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
+    )
 
 
 class PurchaseOrderListResponse(PurchaseOrderResponse):

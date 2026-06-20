@@ -11,6 +11,8 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field, ConfigDict
 
+from apps.kuaizhizao.services.document_action_policy.types import ExceptionProcessRecordCapabilities
+
 
 class ExceptionProcessRecordBase(BaseModel):
     """
@@ -76,6 +78,9 @@ class ExceptionProcessRecordResponse(ExceptionProcessRecordBase):
     inngest_run_id: Optional[str] = Field(None, description="Inngest运行ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    capabilities: Optional[ExceptionProcessRecordCapabilities] = Field(
+        None, description="业务态动作能力（document_action_policy）"
+    )
 
 
 class ExceptionProcessRecordListResponse(ExceptionProcessRecordResponse):

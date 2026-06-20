@@ -11,6 +11,7 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { qualityImprovementApi, Quality8DReport } from '../../../services/quality-improvement';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { eightDReportRowGates } from '../../../../../hooks/useDocumentCapabilities';
 import { hasModulePermission } from '../../../../../utils/permissionContract';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
@@ -200,7 +201,9 @@ const EightDReportsPage: React.FC = () => {
       valueType: 'option',
       width: 260,
       fixed: 'right',
-      render: (_, row) => (
+      render: (_, row) => {
+        const gates = eightDReportRowGates(row, canUpdate, canDelete, canClose, t);
+        return (
         <Space>
           <Button
             key="detail"
@@ -211,11 +214,13 @@ const EightDReportsPage: React.FC = () => {
           >
             {t('common.detail')}
           </Button>
-          {canUpdate && (
+          {gates.update.allowed && (
             <Button
               key="edit"
               {...rowActionKind('update')}
               icon={<EditOutlined />}
+              disabled={gates.update.disabled}
+              title={gates.update.title}
               onClick={() => {
                 openDetail(row);
               }}
@@ -223,11 +228,13 @@ const EightDReportsPage: React.FC = () => {
               {t('common.edit')}
             </Button>
           )}
-          {canDelete && (
+          {gates.delete.allowed && (
             <Button
               key="delete"
               {...rowActionKind('delete')}
               danger
+              disabled={gates.delete.disabled}
+              title={gates.delete.title}
               onClick={() => {
                 if (!row.id) return;
                 modalApi.confirm({
@@ -245,10 +252,12 @@ const EightDReportsPage: React.FC = () => {
               {t('common.delete')}
             </Button>
           )}
-          {(canUpdate || canClose) && row.status !== 'closed' && (
+          {gates.transition.allowed && (
             <Button
               key="execute"
               {...rowActionKind('execute')}
+              disabled={gates.transition.disabled}
+              title={gates.transition.title}
               onClick={() => {
                 openDetail(row);
               }}
@@ -257,7 +266,8 @@ const EightDReportsPage: React.FC = () => {
             </Button>
           )}
         </Space>
-      ),
+        );
+      },
     },
   ];
 

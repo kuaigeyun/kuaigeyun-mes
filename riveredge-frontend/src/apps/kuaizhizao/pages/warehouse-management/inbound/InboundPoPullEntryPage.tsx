@@ -56,6 +56,7 @@ import {
   mergeRecordMaps,
   usePullEntryFormDraft,
 } from '../shared/pullEntryFormDraft';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 const InboundPoPullEntryPage: React.FC = () => {
   const { poId: poIdParam } = useParams<{ poId: string }>();
@@ -63,6 +64,7 @@ const InboundPoPullEntryPage: React.FC = () => {
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
+  const pullFromPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_receipt.pull_from_purchase_order');
   const receiverHook = useInboundReceiverSelect();
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const initRef = useRef(false);
@@ -105,6 +107,9 @@ const InboundPoPullEntryPage: React.FC = () => {
     [outstandingItems, quantities],
   );
   const pagePath = Number.isFinite(poId) && poId > 0 ? inboundPoEntryPath(poId) : INBOUND_LIST_PATH;
+  const pageTitle = order?.order_code
+    ? `${pullFromPurchaseOrderAction.label} — ${order.order_code}`
+    : pullFromPurchaseOrderAction.label;
 
   const leavePage = useCallback(() => {
     clearDraft();
@@ -210,19 +215,16 @@ const InboundPoPullEntryPage: React.FC = () => {
   }, [poId, leavePage, messageApi]);
 
   useEffect(() => {
-    const title = order?.order_code
-      ? t('app.kuaizhizao.warehouseInbound.entry.purchase.titleWithCode', { code: order.order_code })
-      : t('app.kuaizhizao.warehouseInbound.entry.purchase.title');
-    setCustomPageTitle(pagePath, title);
+    setCustomPageTitle(pagePath, pageTitle);
     window.dispatchEvent(
       new CustomEvent('riveredge:update-tab-title', {
-        detail: { key: pagePath, path: pagePath, title },
+        detail: { key: pagePath, path: pagePath, title: pageTitle },
       }),
     );
     return () => {
       removeCustomPageTitle(pagePath);
     };
-  }, [order?.order_code, pagePath, t]);
+  }, [pagePath, pageTitle]);
 
   useEffect(() => {
     if (!Number.isFinite(poId) || poId <= 0 || initRef.current) return;
@@ -664,9 +666,7 @@ const InboundPoPullEntryPage: React.FC = () => {
           <Space align="center" size={8}>
             <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('app.kuaizhizao.warehouseInbound.action.back')} onClick={leavePage} />
             <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
-              {order?.order_code
-                ? t('app.kuaizhizao.warehouseInbound.entry.purchase.titleWithCode', { code: order.order_code })
-                : t('app.kuaizhizao.warehouseInbound.entry.purchase.title')}
+              {pageTitle}
             </Typography.Title>
           </Space>
           <Space wrap>

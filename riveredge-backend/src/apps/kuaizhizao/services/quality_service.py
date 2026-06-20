@@ -409,8 +409,16 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         milestones = await get_document_milestones(tenant_id, "incoming_inspection", inspection_id)
         resp = IncomingInspectionResponse.model_validate(inspection)
         resp = resp.model_copy(update={"lifecycle": get_incoming_inspection_lifecycle(inspection, milestones=milestones)})
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_quality_inspection_capabilities_on_response,
+        )
         from core.services.approval.audit_record_enricher import enrich_record
 
+        resp = enrich_quality_inspection_capabilities_on_response(
+            inspection,
+            resp,
+            supports_purchase_return=True,
+        )
         return await enrich_record(tenant_id, "incoming_inspection", resp)
 
     async def list_incoming_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
@@ -436,34 +444,52 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         
         # 获取分页数据
         inspections = await query.offset(skip).limit(limit).order_by('-created_at')
-        
-        # 返回前端期望的格式
+
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_quality_inspection_list_capabilities,
+        )
         from core.services.approval.audit_record_enricher import enrich_data_payload
 
+        inspection_models = list(inspections)
+        responses = enrich_quality_inspection_list_capabilities(
+            inspection_models,
+            [IncomingInspectionListResponse.model_validate(i) for i in inspection_models],
+            supports_purchase_return=True,
+        )
         return await enrich_data_payload(tenant_id, "incoming_inspection", {
-            "data": [IncomingInspectionListResponse.model_validate(inspection).model_dump() for inspection in inspections],
+            "data": [r.model_dump() for r in responses],
             "total": total,
             "success": True
         })
 
     async def update_incoming_inspection(self, tenant_id: int, inspection_id: int, inspection_data: IncomingInspectionUpdate, updated_by: int) -> IncomingInspectionResponse:
         """更新来料检验单"""
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+
         async with in_transaction():
-            inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
+            inspection_model = await IncomingInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+            if not inspection_model:
+                raise NotFoundError(f"来料检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(inspection_model, "update")
             update_data = inspection_data.model_dump(exclude_unset=True, exclude={'updated_by'})
             update_data['updated_by'] = updated_by
 
             await IncomingInspection.filter(tenant_id=tenant_id, id=inspection_id).update(**update_data)
-            updated_inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
-            return updated_inspection
+            return await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
 
     async def conduct_inspection(self, tenant_id: int, inspection_id: int, inspection_data: dict, inspected_by: int) -> IncomingInspectionResponse:
         """执行检验"""
-        async with in_transaction():
-            inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
 
-            if inspection.status != '待检验':
-                raise BusinessLogicError("只有待检验状态的检验单才能执行检验")
+        async with in_transaction():
+            inspection_model = await IncomingInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+            if not inspection_model:
+                raise NotFoundError(f"来料检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(inspection_model, "conduct")
 
             inspector_name = await self.get_user_name(inspected_by)
 
@@ -471,13 +497,13 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             qualified_quantity = inspection_data.get('qualified_quantity', 0)
             unqualified_quantity = inspection_data.get('unqualified_quantity', 0)
 
-            if qualified_quantity + unqualified_quantity != inspection.inspection_quantity:
+            if qualified_quantity + unqualified_quantity != inspection_model.inspection_quantity:
                 raise ValidationError("合格数量和不合格数量之和必须等于检验数量")
 
             quality_status = "合格" if unqualified_quantity == 0 else "不合格"
 
             conduct_payload = _apply_template_conduct_to_payload(
-                inspection, "other_checks", inspection_data
+                inspection_model, "other_checks", inspection_data
             )
 
             await IncomingInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
@@ -528,12 +554,20 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
 
     async def push_to_purchase_return(self, tenant_id: int, inspection_id: int, created_by: int) -> dict:
         """来料检验不合格 -> 一键生成采购退货单"""
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+
         async with in_transaction():
-            inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
-            
-            if inspection.quality_status != '不合格':
-                raise BusinessLogicError("只有不合格的来料检验单才能下推采购退货单")
-            
+            inspection = await IncomingInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+            if not inspection:
+                raise NotFoundError(f"来料检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(
+                inspection,
+                "push_purchase_return",
+                supports_purchase_return=True,
+            )
+
             if inspection.unqualified_quantity <= 0:
                 raise BusinessLogicError("不合格数量为0，无需退货")
 
@@ -600,11 +634,18 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
 
     async def approve_inspection(self, tenant_id: int, inspection_id: int, approved_by: int, rejection_reason: Optional[str] = None) -> IncomingInspectionResponse:
         """审核检验单"""
-        async with in_transaction():
-            inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
 
-            if inspection.review_status != '待审核':
-                raise BusinessLogicError("检验单审核状态不是待审核")
+        async with in_transaction():
+            inspection = await IncomingInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+            if not inspection:
+                raise NotFoundError(f"来料检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(
+                inspection,
+                "reject" if rejection_reason else "approve",
+            )
 
             approver_name = await self.get_user_name(approved_by)
 
@@ -1143,8 +1184,12 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         milestones = await get_document_milestones(tenant_id, "process_inspection", inspection_id)
         resp = ProcessInspectionResponse.model_validate(inspection)
         resp = resp.model_copy(update={"lifecycle": get_process_inspection_lifecycle(inspection, milestones=milestones)})
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_quality_inspection_capabilities_on_response,
+        )
         from core.services.approval.audit_record_enricher import enrich_record
 
+        resp = enrich_quality_inspection_capabilities_on_response(inspection, resp)
         return await enrich_record(tenant_id, "process_inspection", resp)
 
     async def list_process_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[ProcessInspectionListResponse]:
@@ -1164,18 +1209,29 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             query = query.filter(work_order_id__in=filters["scoped_work_order_ids"])
 
         inspections = await query.offset(skip).limit(limit).order_by('-created_at')
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_quality_inspection_list_capabilities,
+        )
         from core.services.approval.audit_record_enricher import enrich_items
 
-        rows = [ProcessInspectionListResponse.model_validate(inspection) for inspection in inspections]
+        inspection_models = list(inspections)
+        rows = enrich_quality_inspection_list_capabilities(
+            inspection_models,
+            [ProcessInspectionListResponse.model_validate(i) for i in inspection_models],
+        )
         return await enrich_items(tenant_id, "process_inspection", rows)
 
     async def conduct_inspection(self, tenant_id: int, inspection_id: int, inspection_data: dict, inspected_by: int) -> ProcessInspectionResponse:
         """执行过程检验"""
-        async with in_transaction():
-            inspection = await self.get_process_inspection_by_id(tenant_id, inspection_id)
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
 
-            if inspection.status != '待检验':
-                raise BusinessLogicError("只有待检验状态的检验单才能执行检验")
+        async with in_transaction():
+            inspection_model = await ProcessInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+            if not inspection_model:
+                raise NotFoundError(f"过程检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(inspection_model, "conduct")
 
             inspector_name = await self.get_user_name(inspected_by)
 
@@ -1183,13 +1239,13 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             qualified_quantity = inspection_data.get('qualified_quantity', 0)
             unqualified_quantity = inspection_data.get('unqualified_quantity', 0)
 
-            if qualified_quantity + unqualified_quantity != inspection.inspection_quantity:
+            if qualified_quantity + unqualified_quantity != inspection_model.inspection_quantity:
                 raise ValidationError("合格数量和不合格数量之和必须等于检验数量")
 
             quality_status = "合格" if unqualified_quantity == 0 else "不合格"
 
             conduct_payload = _apply_template_conduct_to_payload(
-                inspection, "quality_characteristics", inspection_data
+                inspection_model, "quality_characteristics", inspection_data
             )
 
             await ProcessInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
@@ -1227,11 +1283,11 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             )
 
             # 自动更新报工合格数
-            if inspection.work_order_id:
+            if inspection_model.work_order_id:
                 await self._update_reporting_qualified_quantity(
                     tenant_id=tenant_id,
-                    work_order_id=inspection.work_order_id,
-                    operation_id=inspection.operation_id,
+                    work_order_id=inspection_model.work_order_id,
+                    operation_id=inspection_model.operation_id,
                     qualified_quantity=qualified_quantity
                 )
             
@@ -1241,11 +1297,18 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         self, tenant_id: int, inspection_id: int, approved_by: int, rejection_reason: Optional[str] = None
     ) -> ProcessInspectionResponse:
         """审核工序检验单"""
-        async with in_transaction():
-            inspection = await self.get_process_inspection_by_id(tenant_id, inspection_id)
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
 
-            if inspection.review_status != '待审核':
-                raise BusinessLogicError("工序检验单审核状态不是待审核")
+        async with in_transaction():
+            inspection = await ProcessInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+            if not inspection:
+                raise NotFoundError(f"过程检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(
+                inspection,
+                "reject" if rejection_reason else "approve",
+            )
 
             approver_name = await self.get_user_name(approved_by)
 
@@ -1713,8 +1776,12 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         milestones = await get_document_milestones(tenant_id, "finished_goods_inspection", inspection_id)
         resp = FinishedGoodsInspectionResponse.model_validate(inspection)
         resp = resp.model_copy(update={"lifecycle": get_finished_goods_inspection_lifecycle(inspection, milestones=milestones)})
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_quality_inspection_capabilities_on_response,
+        )
         from core.services.approval.audit_record_enricher import enrich_record
 
+        resp = enrich_quality_inspection_capabilities_on_response(inspection, resp)
         return await enrich_record(tenant_id, "finished_goods_inspection", resp)
 
     async def list_finished_goods_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[FinishedGoodsInspectionListResponse]:
@@ -1734,18 +1801,29 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             query = query.filter(work_order_id__in=filters["scoped_work_order_ids"])
 
         inspections = await query.offset(skip).limit(limit).order_by('-created_at')
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_quality_inspection_list_capabilities,
+        )
         from core.services.approval.audit_record_enricher import enrich_items
 
-        rows = [FinishedGoodsInspectionListResponse.model_validate(inspection) for inspection in inspections]
+        inspection_models = list(inspections)
+        rows = enrich_quality_inspection_list_capabilities(
+            inspection_models,
+            [FinishedGoodsInspectionListResponse.model_validate(i) for i in inspection_models],
+        )
         return await enrich_items(tenant_id, "finished_goods_inspection", rows)
 
     async def conduct_inspection(self, tenant_id: int, inspection_id: int, inspection_data: dict, inspected_by: int) -> FinishedGoodsInspectionResponse:
         """执行成品检验"""
-        async with in_transaction():
-            inspection = await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
 
-            if inspection.status != '待检验':
-                raise BusinessLogicError("只有待检验状态的检验单才能执行检验")
+        async with in_transaction():
+            inspection_model = await FinishedGoodsInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+            if not inspection_model:
+                raise NotFoundError(f"成品检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(inspection_model, "conduct")
 
             inspector_name = await self.get_user_name(inspected_by)
 
@@ -1753,13 +1831,13 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             qualified_quantity = inspection_data.get('qualified_quantity', 0)
             unqualified_quantity = inspection_data.get('unqualified_quantity', 0)
 
-            if qualified_quantity + unqualified_quantity != inspection.inspection_quantity:
+            if qualified_quantity + unqualified_quantity != inspection_model.inspection_quantity:
                 raise ValidationError("合格数量和不合格数量之和必须等于检验数量")
 
             quality_status = "合格" if unqualified_quantity == 0 else "不合格"
 
             conduct_payload = _apply_template_conduct_to_payload(
-                inspection, "other_checks", inspection_data
+                inspection_model, "other_checks", inspection_data
             )
 
             await FinishedGoodsInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
@@ -1802,11 +1880,18 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         self, tenant_id: int, inspection_id: int, approved_by: int, rejection_reason: Optional[str] = None
     ) -> FinishedGoodsInspectionResponse:
         """审核成品检验单"""
-        async with in_transaction():
-            inspection = await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
 
-            if inspection.review_status != '待审核':
-                raise BusinessLogicError("成品检验单审核状态不是待审核")
+        async with in_transaction():
+            inspection = await FinishedGoodsInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+            if not inspection:
+                raise NotFoundError(f"成品检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(
+                inspection,
+                "reject" if rejection_reason else "approve",
+            )
 
             approver_name = await self.get_user_name(approved_by)
 

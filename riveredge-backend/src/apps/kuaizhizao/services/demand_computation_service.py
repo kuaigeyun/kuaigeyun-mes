@@ -405,10 +405,11 @@ class DemandComputationService:
             d = await Demand.get_or_none(tenant_id=tenant_id, id=did, deleted_at__isnull=True)
             if not d:
                 raise NotFoundError(f"需求不存在: {did}")
-            if d.status != DemandStatus.AUDITED or d.review_status != ReviewStatus.APPROVED:
-                raise BusinessLogicError(
-                    f"只能对已审核通过的需求进行计算，需求 {d.demand_code} 状态: {d.status}"
-                )
+            from apps.kuaizhizao.services.document_action_policy.demand import (
+                assert_demand_capability,
+            )
+
+            assert_demand_capability(d, "merge_computation")
             demands_preview.append(d)
 
         modes = {getattr(d, "business_mode", None) for d in demands_preview}
@@ -429,10 +430,11 @@ class DemandComputationService:
                 d = await Demand.get_or_none(tenant_id=tenant_id, id=did, deleted_at__isnull=True)
                 if not d:
                     raise NotFoundError(f"需求不存在: {did}")
-                if d.status != DemandStatus.AUDITED or d.review_status != ReviewStatus.APPROVED:
-                    raise BusinessLogicError(
-                        f"只能对已审核通过的需求进行计算，需求 {d.demand_code} 状态: {d.status}"
-                    )
+                from apps.kuaizhizao.services.document_action_policy.demand import (
+                    assert_demand_capability,
+                )
+
+                assert_demand_capability(d, "merge_computation")
                 demands.append(d)
 
             demand = demands[0]
@@ -580,7 +582,7 @@ class DemandComputationService:
 
         lifecycle = get_demand_computation_lifecycle(computation)
 
-        return DemandComputationResponse(
+        response = DemandComputationResponse(
             id=computation.id,
             uuid=str(computation.uuid),
             tenant_id=computation.tenant_id,
@@ -604,6 +606,11 @@ class DemandComputationService:
             items=item_responses,
             lifecycle=lifecycle
         )
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_demand_computation_capabilities_on_response,
+        )
+
+        return enrich_demand_computation_capabilities_on_response(computation, response)
     
     async def get_computation_by_id(
         self,
@@ -744,6 +751,12 @@ class DemandComputationService:
         computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
         if not computation:
             raise NotFoundError(f"需求计算不存在: {computation_id}")
+
+        from apps.kuaizhizao.services.document_action_policy.demand_computation import (
+            assert_demand_computation_capability,
+        )
+
+        assert_demand_computation_capability(computation, "execute")
 
         # 允许执行：进行中（待执行）或 失败（重试）
         if computation.computation_status not in ("进行中", "失败"):
@@ -1008,6 +1021,13 @@ class DemandComputationService:
             computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
             if not computation:
                 raise NotFoundError(f"需求计算不存在: {computation_id}")
+
+            from apps.kuaizhizao.services.document_action_policy.demand_computation import (
+                assert_demand_computation_capability,
+            )
+
+            assert_demand_computation_capability(computation, "recompute")
+
             if computation.computation_status not in ("完成", "失败"):
                 raise BusinessLogicError(
                     f"只能对已完成或失败的计算执行重新计算，当前状态: {computation.computation_status}"
@@ -2622,7 +2642,7 @@ class DemandComputationService:
     ) -> Dict[str, Any]:
         """
         获取下推预览（不实际执行），用于下推前展示将生成的单据数量。
-        push_config: { "production": "plan"|"work_order", "purchase": "requisition"|"purchase_order" }
+        push_config: { "production": "work_order", "purchase": "requisition"|"purchase_order" }
         """
         computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
         if not computation:
@@ -2725,10 +2745,10 @@ class DemandComputationService:
         push_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        一键下推：按配置执行生产计划/工单、采购申请/采购单、委外工单。
-        production: "plan"|"work_order"|null
+        一键下推：按配置执行工单、采购申请/采购单、委外工单。
+        production: "work_order"|null
         purchase: "requisition"|"purchase_order"|null
-        include_outsource: 委外工单是否包含（生产计划已含委外明细，工单模式会生成委外工单）
+        include_outsource: 委外工单是否包含（工单模式会生成委外工单）
         """
         computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
         if not computation:
@@ -2747,8 +2767,8 @@ class DemandComputationService:
             "purchase_orders": [],
         }
 
-        if production == "plan":
-            raise BusinessLogicError("生产计划已下线，请使用「直接生成工单」下推")
+        if production is not None and production != "work_order":
+            raise BusinessLogicError("仅支持「直接生成工单」生产路径")
 
         if production == "work_order":
             r = await self.generate_work_orders_and_purchase_orders(

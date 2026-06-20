@@ -121,13 +121,17 @@ class Quality8DService(AppBaseService[Quality8DReport]):
             suggestions.append("更新当前阶段内容并保存")
         if row.status == "d8_team_congratulation":
             suggestions.append("填写验证结果后关闭")
-        return base.model_copy(
+        resp = base.model_copy(
             update={
                 "lifecycle_stages": self._build_lifecycle_stages(row.status),
                 "next_status": next_status,
                 "next_step_suggestions": suggestions,
             }
         )
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_eight_d_report_capabilities_on_response,
+        )
+        return enrich_eight_d_report_capabilities_on_response(row, resp)
 
     def _validate_stage_completion_before_transition(
         self,
@@ -262,9 +266,14 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         return self._build_response(row)
 
     async def update_report(self, tenant_id: int, report_id: int, user_id: int, payload: Quality8DUpdate) -> Quality8DResponse:
+        from apps.kuaizhizao.services.document_action_policy.eight_d_report import (
+            assert_eight_d_report_capability,
+        )
+
         row = await Quality8DReport.get_or_none(id=report_id, tenant_id=tenant_id, deleted_at__isnull=True)
         if not row:
             raise NotFoundError("8D 报告不存在")
+        assert_eight_d_report_capability(row, "update")
         data = payload.model_dump(exclude_unset=True)
         if "status" in data and data.get("status") not in (None, row.status):
             raise BusinessLogicError("请通过“推进阶段”接口更新 8D 阶段")
@@ -273,11 +282,17 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         return self._build_response(row)
 
     async def transition(self, tenant_id: int, report_id: int, user_id: int, payload: Quality8DTransition) -> Quality8DResponse:
+        from apps.kuaizhizao.services.document_action_policy.eight_d_report import (
+            assert_eight_d_report_capability,
+        )
+
         row = await Quality8DReport.get_or_none(id=report_id, tenant_id=tenant_id, deleted_at__isnull=True)
         if not row:
             raise NotFoundError("8D 报告不存在")
         if payload.to_status not in VALID_8D_STATUS_FLOW:
             raise BusinessLogicError(f"非法 8D 阶段: {payload.to_status}")
+        action = "close" if payload.to_status == "closed" else "transition"
+        assert_eight_d_report_capability(row, action)
         self._validate_stage_completion_before_transition(row, payload.to_status, payload.verification_result)
         old_status = row.status
         row.status = payload.to_status
@@ -298,11 +313,14 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         )
 
     async def delete_report(self, tenant_id: int, report_id: int, user_id: int) -> None:
+        from apps.kuaizhizao.services.document_action_policy.eight_d_report import (
+            assert_eight_d_report_capability,
+        )
+
         row = await Quality8DReport.get_or_none(id=report_id, tenant_id=tenant_id, deleted_at__isnull=True)
         if not row:
             raise NotFoundError("8D 报告不存在")
-        if row.status == "closed":
-            raise BusinessLogicError("已关闭的 8D 报告不可删除")
+        assert_eight_d_report_capability(row, "delete")
         row.deleted_at = datetime.now()
         await row.save(update_fields=["deleted_at"])
 
@@ -340,15 +358,25 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             query = query.filter(source_type="sales_delivery", source_id=sales_delivery_id)
         total = await query.count()
         rows = await query.order_by("-created_at").offset(skip).limit(limit)
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_oqc_inspection_list_capabilities,
+        )
         from core.services.approval.audit_record_enricher import enrich_items_payload
 
+        responses = enrich_oqc_inspection_list_capabilities(
+            list(rows),
+            [OQCInspectionResponse.model_validate(row) for row in rows],
+        )
         payload = {
-            "items": [OQCInspectionResponse.model_validate(row) for row in rows],
+            "items": responses,
             "total": total,
         }
         return await enrich_items_payload(tenant_id, "oqc_inspection", payload)
 
     async def conduct(self, tenant_id: int, inspection_id: int, user_id: int, payload: OQCInspectionConduct) -> OQCInspectionResponse:
+        from apps.kuaizhizao.services.document_action_policy.oqc_inspection import (
+            assert_oqc_inspection_capability,
+        )
         from apps.kuaizhizao.services.quality_service import (
             _apply_template_conduct_to_payload,
             _maybe_create_quality_exception_from_inspection,
@@ -357,6 +385,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         row = await OQCInspection.get_or_none(id=inspection_id, tenant_id=tenant_id, deleted_at__isnull=True)
         if not row:
             raise NotFoundError("OQC 检验单不存在")
+        assert_oqc_inspection_capability(row, "conduct")
         user_info = await self.get_user_info(user_id)
         conduct_data = payload.model_dump(exclude_unset=True)
         conduct_extra = _apply_template_conduct_to_payload(row, "other_checks", conduct_data)
@@ -387,12 +416,23 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                 inspected_by=user_id,
                 problem_description=payload.notes or f"出货检验不合格：{row.inspection_code}",
             )
-        return OQCInspectionResponse.model_validate(row)
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_oqc_inspection_capabilities_on_response,
+        )
+        return enrich_oqc_inspection_capabilities_on_response(
+            row,
+            OQCInspectionResponse.model_validate(row),
+        )
 
     async def approve(self, tenant_id: int, inspection_id: int, user_id: int, approve: bool) -> OQCInspectionResponse:
+        from apps.kuaizhizao.services.document_action_policy.oqc_inspection import (
+            assert_oqc_inspection_capability,
+        )
+
         row = await OQCInspection.get_or_none(id=inspection_id, tenant_id=tenant_id, deleted_at__isnull=True)
         if not row:
             raise NotFoundError("OQC 检验单不存在")
+        assert_oqc_inspection_capability(row, "approve" if approve else "reject")
         user_info = await self.get_user_info(user_id)
         row.review_status = "已审核" if approve else "已驳回"
         row.status = "已审核" if approve else "已驳回"
@@ -400,41 +440,55 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         row.reviewer_name = user_info["name"]
         row.review_time = datetime.now()
         await row.save()
-        return OQCInspectionResponse.model_validate(row)
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_oqc_inspection_capabilities_on_response,
+        )
+        return enrich_oqc_inspection_capabilities_on_response(
+            row,
+            OQCInspectionResponse.model_validate(row),
+        )
 
     async def delete_inspection(self, tenant_id: int, inspection_id: int, user_id: int) -> None:
         from datetime import datetime
-        from infra.exceptions.exceptions import BusinessLogicError
+        from apps.kuaizhizao.services.document_action_policy.oqc_inspection import (
+            assert_oqc_inspection_capability,
+        )
 
         row = await OQCInspection.get_or_none(
             id=inspection_id, tenant_id=tenant_id, deleted_at__isnull=True
         )
         if not row:
             raise NotFoundError("OQC 检验单不存在")
-        if (row.status or "") not in ("待检验",):
-            raise BusinessLogicError("仅待检验状态的出货检验单可删除")
+        assert_oqc_inspection_capability(row, "delete")
         row.deleted_at = datetime.now()
         await row.save(update_fields=["deleted_at"])
 
     async def revoke_approval(
         self, tenant_id: int, inspection_id: int, user_id: int
     ) -> OQCInspectionResponse:
-        from infra.exceptions.exceptions import BusinessLogicError
+        from apps.kuaizhizao.services.document_action_policy.oqc_inspection import (
+            assert_oqc_inspection_capability,
+        )
 
         row = await OQCInspection.get_or_none(
             id=inspection_id, tenant_id=tenant_id, deleted_at__isnull=True
         )
         if not row:
             raise NotFoundError("OQC 检验单不存在")
-        if (row.status or "") != "已审核":
-            raise BusinessLogicError("仅已审核通过的出货检验单可撤销审核")
+        assert_oqc_inspection_capability(row, "revoke_approval")
         row.status = "已检验"
         row.review_status = "待审核"
         row.reviewer_id = None
         row.reviewer_name = None
         row.review_time = None
         await row.save()
-        return OQCInspectionResponse.model_validate(row)
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_oqc_inspection_capabilities_on_response,
+        )
+        return enrich_oqc_inspection_capabilities_on_response(
+            row,
+            OQCInspectionResponse.model_validate(row),
+        )
 
     async def create_from_shipment_notice(
         self,

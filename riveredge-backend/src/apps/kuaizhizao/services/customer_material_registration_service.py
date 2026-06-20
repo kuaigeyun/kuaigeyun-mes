@@ -167,7 +167,10 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 parsed = _parse_serial_numbers(getattr(it, "serial_numbers", None))
                 row.serial_numbers = parsed or None
                 data.items.append(row)
-        return data
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_customer_material_registration_capabilities_on_response,
+        )
+        return enrich_customer_material_registration_capabilities_on_response(registration, data)
 
     async def parse_barcode(
         self,
@@ -431,7 +434,11 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
             query = query.filter(registration_date__lte=registration_date_end)
 
         registrations = await query.order_by("-registration_date").offset(skip).limit(limit)
-        return [CustomerMaterialRegistrationListResponse.model_validate(reg) for reg in registrations]
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_customer_material_registration_list_capabilities,
+        )
+        responses = [CustomerMaterialRegistrationListResponse.model_validate(reg) for reg in registrations]
+        return enrich_customer_material_registration_list_capabilities(registrations, responses)
 
     async def get_registration_by_id(
         self,
@@ -520,6 +527,10 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
             )
             if not registration:
                 raise NotFoundError(f"代工来料单不存在: {registration_id}")
+            from apps.kuaizhizao.services.document_action_policy.customer_material_registration import (
+                assert_customer_material_registration_capability,
+            )
+            assert_customer_material_registration_capability(registration, "confirm")
             if registration.status != "pending":
                 raise BusinessLogicError(f"代工来料单状态不允许确认入库: {registration.status}")
 
@@ -565,6 +576,10 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
             )
             if not registration:
                 raise NotFoundError(f"代工来料单不存在: {registration_id}")
+            from apps.kuaizhizao.services.document_action_policy.customer_material_registration import (
+                assert_customer_material_registration_capability,
+            )
+            assert_customer_material_registration_capability(registration, "withdraw")
             if registration.status != "processed":
                 raise BusinessLogicError("仅已入库状态的代工来料单可撤回")
 
@@ -613,6 +628,10 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
             )
             if not registration:
                 raise NotFoundError(f"代工来料单不存在: {registration_id}")
+            from apps.kuaizhizao.services.document_action_policy.customer_material_registration import (
+                assert_customer_material_registration_capability,
+            )
+            assert_customer_material_registration_capability(registration, "cancel")
             if registration.status != "pending":
                 raise BusinessLogicError(f"代工来料单状态不允许取消: {registration.status}")
 
@@ -657,6 +676,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
         registration_ids: List[int],
         action: str,
         apply_fn,
+        not_found_as_success: bool = False,
     ) -> Dict[str, Any]:
         success_count = 0
         failed_ids: List[int] = []
@@ -669,7 +689,13 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
             try:
                 await apply_fn(registration_id)
                 success_count += 1
-            except (NotFoundError, ValidationError, BusinessLogicError) as exc:
+            except NotFoundError as exc:
+                if not_found_as_success:
+                    success_count += 1
+                else:
+                    failed_ids.append(registration_id)
+                    errors.append(f"{action}失败({registration_id}): {exc}")
+            except (ValidationError, BusinessLogicError) as exc:
                 failed_ids.append(registration_id)
                 errors.append(f"{action}失败({registration_id}): {exc}")
         return {
@@ -741,6 +767,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 registration_id=registration_id,
                 deleted_by=deleted_by,
             ),
+            not_found_as_success=True,
         )
 
     async def create_and_start_production(

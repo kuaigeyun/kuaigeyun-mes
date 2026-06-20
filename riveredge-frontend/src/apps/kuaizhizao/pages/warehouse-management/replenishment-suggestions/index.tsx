@@ -23,7 +23,12 @@ import {
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniBatchButton } from '../../../../../components/uni-batch';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import {
+  replenishmentBatchIgnoreAllowed,
+  replenishmentBatchProcessAllowed,
+} from '../../../../../hooks/useDocumentCapabilities';
 import { warehouseApi } from '../../../services/production';
 import { getReplenishmentSuggestionLifecycle } from '../../../utils/replenishmentSuggestionLifecycle';
 
@@ -58,6 +63,10 @@ interface ReplenishmentSuggestion {
   remarks?: string;
   created_at?: string;
   updated_at?: string;
+  capabilities?: {
+    process?: { allowed?: boolean; reason?: string };
+    ignore?: { allowed?: boolean; reason?: string };
+  };
 }
 
 const ReplenishmentSuggestionsPage: React.FC = () => {
@@ -66,6 +75,17 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const tableRowsRef = useRef<ReplenishmentSuggestion[]>([]);
+  const [listVersion, setListVersion] = useState(0);
+  const replenishmentPerms = useResourcePermissions('kuaizhizao:warehouse-management-replenishment-suggestions');
+
+  const selectedSuggestionsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is ReplenishmentSuggestion => row != null),
+    [selectedRowKeys, listVersion],
+  );
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [suggestionDetail, setSuggestionDetail] = useState<ReplenishmentSuggestion | null>(null);
@@ -422,8 +442,11 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
                 material_id: params.material_id,
                 warehouse_id: params.warehouse_id,
               });
+              const data = Array.isArray(response) ? response : response.data || [];
+              tableRowsRef.current = data;
+              setListVersion((v) => v + 1);
               return {
-                data: Array.isArray(response) ? response : response.data || [],
+                data,
                 success: true,
                 total: Array.isArray(response) ? response.length : response.total || 0,
               };
@@ -440,28 +463,28 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           toolBarActionsAfterBatch={[
-            <UniBatchMenuButton
-              key="replenishment-batch-actions"
+            <UniBatchButton
+              key="batch-processed"
               selectedRowKeys={selectedRowKeys}
-              label={t('app.kuaizhizao.warehouseCommon.batchOps')}
-              disabled={selectedRowKeys.length === 0}
-              menuItems={[
-                {
-                  key: 'batch-processed',
-                  label: t('app.kuaizhizao.warehouseCommon.batchMarkProcessed'),
-                  onClick: () => {
-                    void handleBatchProcess('processed');
-                  },
-                },
-                {
-                  key: 'batch-ignored',
-                  label: t('app.kuaizhizao.warehouseCommon.batchMarkIgnored'),
-                  onClick: () => {
-                    void handleBatchProcess('ignored');
-                  },
-                },
-              ]}
-            />,
+              disabled={
+                selectedSuggestionsForBatch.length > 0 &&
+                !replenishmentBatchProcessAllowed(selectedSuggestionsForBatch, replenishmentPerms.canUpdate)
+              }
+              onAction={() => void handleBatchProcess('processed')}
+            >
+              {t('app.kuaizhizao.warehouseCommon.batchMarkProcessed')}
+            </UniBatchButton>,
+            <UniBatchButton
+              key="batch-ignored"
+              selectedRowKeys={selectedRowKeys}
+              disabled={
+                selectedSuggestionsForBatch.length > 0 &&
+                !replenishmentBatchIgnoreAllowed(selectedSuggestionsForBatch, replenishmentPerms.canUpdate)
+              }
+              onAction={() => void handleBatchProcess('ignored')}
+            >
+              {t('app.kuaizhizao.warehouseCommon.batchMarkIgnored')}
+            </UniBatchButton>,
           ]}
           toolBarRender={() => [
             <Button

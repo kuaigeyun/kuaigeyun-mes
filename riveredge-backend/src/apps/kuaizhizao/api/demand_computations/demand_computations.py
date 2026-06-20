@@ -585,7 +585,7 @@ async def get_push_options(
 @router.get("/{computation_id:int}/push-preview", summary="Preview push targets")
 async def get_push_preview(
     computation_id: int = Path(..., description="计算ID"),
-    production: Optional[str] = Query(None, description="生产路径：plan|work_order"),
+    production: Optional[str] = Query(None, description="生产路径：work_order"),
     purchase: Optional[str] = Query(None, description="采购路径：requisition|purchase_order"),
     outsource_only: bool = Query(False, description="仅委外工单预览"),
     current_user: User = Depends(get_current_user),
@@ -676,26 +676,11 @@ async def push_to_production_plan(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """从需求计算下推到生产计划"""
-    try:
-        from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
-        service = DocumentPushPullService()
-        result = await service.push_document(
-            tenant_id=tenant_id,
-            source_type="demand_computation",
-            source_id=computation_id,
-            target_type="production_plan",
-            push_params=None,
-            created_by=current_user.id,
-        )
-        return result
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except BusinessLogicError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        logger.exception("下推到生产计划失败")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推到生产计划失败")
+    """已下线：需求计算不再直接下推生产计划。"""
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="需求计算直推生产计划已下线，请使用「直接生成工单」路径",
+    )
 
 
 @router.get("/history", summary="List demand computation history")

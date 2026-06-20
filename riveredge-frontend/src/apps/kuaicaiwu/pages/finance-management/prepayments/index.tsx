@@ -174,7 +174,7 @@ const PrepaymentsPage: React.FC = () => {
           />
           <UniTable<PrepaymentRow>
             headerTitle={t(`${P}.supplierBalance`)}
-            style={{ marginTop: 24 }}
+            style={{ marginTop: 16 }}
             enableRowSelection
             rowKey={(r) => `s-${r.partner_id}`}
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.supplier-balance"

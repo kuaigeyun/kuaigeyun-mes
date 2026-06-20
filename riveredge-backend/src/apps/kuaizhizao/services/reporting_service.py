@@ -34,6 +34,13 @@ from apps.kuaizhizao.schemas.reporting_record import (
     ReportingRecordResponse,
     ReportingRecordListResponse
 )
+from apps.kuaizhizao.services.document_action_policy.reporting_record import (
+    assert_reporting_record_capability,
+)
+from apps.kuaizhizao.services.document_action_policy.enricher import (
+    enrich_reporting_record_capabilities_on_response,
+    enrich_reporting_record_list_capabilities,
+)
 from apps.kuaizhizao.schemas.scrap_record import (
     ScrapRecordCreateFromReporting,
     ScrapRecordResponse
@@ -703,7 +710,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
         resp = ReportingRecordResponse.model_validate(record)
         from core.services.approval.audit_record_enricher import enrich_record
 
-        return await enrich_record(tenant_id, "reporting_record", resp)
+        enriched = await enrich_record(tenant_id, "reporting_record", resp)
+        return enrich_reporting_record_capabilities_on_response(record, enriched)
 
     async def list_reporting_records(
         self,
@@ -758,7 +766,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
         from core.services.approval.audit_record_enricher import enrich_items
 
         rows = [ReportingRecordListResponse.model_validate(record) for record in records]
-        return await enrich_items(tenant_id, "reporting_record", rows)
+        rows = await enrich_items(tenant_id, "reporting_record", rows)
+        return enrich_reporting_record_list_capabilities(records, rows)
 
     async def approve_reporting_record(
         self,
@@ -920,6 +929,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             if not record:
                 raise NotFoundError(f"报工记录不存在: {record_id}")
+
+            assert_reporting_record_capability(record, "revoke_approval")
 
             if record.status != 'approved':
                 raise ValidationError("只有已审核通过的报工记录才可以撤回审核")

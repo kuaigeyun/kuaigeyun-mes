@@ -33,6 +33,13 @@ from apps.kuaizhizao.schemas.exception_process_record import (
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.exception_service import ExceptionService
+from apps.kuaizhizao.services.document_action_policy.exception_process_record import (
+    assert_exception_process_record_capability,
+)
+from apps.kuaizhizao.services.document_action_policy.enricher import (
+    enrich_exception_process_record_capabilities_on_response,
+    enrich_exception_process_record_list_capabilities,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from core.tasks.dispatcher import TaskEvent, dispatch_event
 
@@ -332,6 +339,8 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
         if not process_record:
             raise NotFoundError("异常处理记录不存在")
 
+        assert_exception_process_record_capability(process_record, "cancel")
+
         if process_record.process_status in ["resolved", "cancelled"]:
             raise ValidationError("该异常处理流程已结束，无法取消")
 
@@ -438,7 +447,8 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
             query = query.filter(assigned_to=assigned_to)
 
         records = await query.order_by("-created_at").offset(skip).limit(limit)
-        return [ExceptionProcessRecordListResponse.model_validate(r) for r in records]
+        responses = [ExceptionProcessRecordListResponse.model_validate(r) for r in records]
+        return enrich_exception_process_record_list_capabilities(records, responses)
 
     async def _validate_exception_exists(
         self,

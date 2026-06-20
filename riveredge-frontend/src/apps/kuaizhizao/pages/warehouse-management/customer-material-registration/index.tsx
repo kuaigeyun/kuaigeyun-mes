@@ -35,7 +35,12 @@ import { MaterialUnitSelect } from '../../../../../components/material-unit-sele
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniBatchButton } from '../../../../../components/uni-batch';
+import {
+  customerMaterialBatchCancelAllowed,
+  customerMaterialBatchConfirmAllowed,
+  customerMaterialBatchWithdrawAllowed,
+} from '../../../../../hooks/useDocumentCapabilities';
 import dayjs from 'dayjs';
 import { coerceFormDate } from '../../../../../utils/formDate';
 import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
@@ -97,6 +102,11 @@ interface CustomerMaterialRegistration {
   items?: RegistrationItem[];
   created_at?: string;
   updated_at?: string;
+  capabilities?: {
+    confirm?: { allowed?: boolean; reason?: string };
+    withdraw?: { allowed?: boolean; reason?: string };
+    cancel?: { allowed?: boolean; reason?: string };
+  };
 }
 
 const CustomerMaterialRegistrationPage: React.FC = () => {
@@ -105,6 +115,8 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const tableRowsRef = useRef<CustomerMaterialRegistration[]>([]);
+  const [listVersion, setListVersion] = useState(0);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [entryMode, setEntryMode] = useState<'scan' | 'document'>('document');
   const formRef = useRef<any>(null);
@@ -126,6 +138,14 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
   const resourcePerms = useResourcePermissions('kuaizhizao:warehouse-management-customer-material-registration');
   const canStartProduction =
     !resourcePerms.enabled || (resourcePerms.canAction?.('execute') ?? false);
+
+  const selectedRegistrationsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is CustomerMaterialRegistration => row != null),
+    [selectedRowKeys, listVersion],
+  );
 
   const appendItemsFromMaterials = useCallback(
     async (selected: Material[]) => {
@@ -907,35 +927,49 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         onDelete={handleBatchDelete}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.customerMaterialRegistration.deleteConfirm', { count })}
         toolBarActionsAfterBatch={[
-          <UniBatchMenuButton
-            key="customer-material-batch-actions"
+          <UniBatchButton
+            key="batch-process"
             selectedRowKeys={selectedRowKeys}
-            label={t('app.kuaizhizao.warehouseCommon.batchOps')}
-            disabled={selectedRowKeys.length === 0}
-            menuItems={[
-              {
-                key: 'batch-process',
-                label: t('app.kuaizhizao.customerMaterialRegistration.batchConfirmInbound'),
-                onClick: () => {
-                  void handleBatchProcess();
-                },
-              },
-              {
-                key: 'batch-withdraw',
-                label: t('app.kuaizhizao.customerMaterialRegistration.batchWithdraw'),
-                onClick: () => {
-                  void handleBatchWithdraw();
-                },
-              },
-              {
-                key: 'batch-cancel',
-                label: t('app.kuaizhizao.customerMaterialRegistration.batchCancel'),
-                onClick: () => {
-                  void handleBatchCancel();
-                },
-              },
-            ]}
-          />,
+            disabled={
+              selectedRegistrationsForBatch.length > 0 &&
+              !customerMaterialBatchConfirmAllowed(
+                selectedRegistrationsForBatch,
+                resourcePerms.canAction?.('execute') ?? false,
+              )
+            }
+            onAction={() => void handleBatchProcess()}
+          >
+            {t('app.kuaizhizao.customerMaterialRegistration.batchConfirmInbound')}
+          </UniBatchButton>,
+          <UniBatchButton
+            key="batch-withdraw"
+            selectedRowKeys={selectedRowKeys}
+            disabled={
+              selectedRegistrationsForBatch.length > 0 &&
+              !customerMaterialBatchWithdrawAllowed(
+                selectedRegistrationsForBatch,
+                resourcePerms.canAction?.('revoke') ?? false,
+              )
+            }
+            onAction={() => void handleBatchWithdraw()}
+          >
+            {t('app.kuaizhizao.customerMaterialRegistration.batchWithdraw')}
+          </UniBatchButton>,
+          <UniBatchButton
+            key="batch-cancel"
+            selectedRowKeys={selectedRowKeys}
+            danger
+            disabled={
+              selectedRegistrationsForBatch.length > 0 &&
+              !customerMaterialBatchCancelAllowed(
+                selectedRegistrationsForBatch,
+                resourcePerms.canAction?.('reject') ?? false,
+              )
+            }
+            onAction={() => void handleBatchCancel()}
+          >
+            {t('app.kuaizhizao.customerMaterialRegistration.batchCancel')}
+          </UniBatchButton>,
         ]}
         request={async (params: any) => {
           const pageSize = params.pageSize || 20;
@@ -947,6 +981,8 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
             status: params.status,
           });
           const rows = Array.isArray(result) ? result : [];
+          tableRowsRef.current = rows;
+          setListVersion((v) => v + 1);
           const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
           return { data: rows, success: true, total };
         }}

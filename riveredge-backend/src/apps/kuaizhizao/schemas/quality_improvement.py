@@ -10,6 +10,10 @@ from typing import List, Optional
 from pydantic import Field
 
 from core.schemas.base import BaseSchema
+from apps.kuaizhizao.services.document_action_policy.types import (
+    OQCInspectionCapabilities,
+    EightDReportCapabilities,
+)
 
 
 class Quality8DBase(BaseSchema):
@@ -86,6 +90,9 @@ class Quality8DResponse(Quality8DBase):
     lifecycle_stages: List[Quality8DLifecycleStage] = Field(default_factory=list)
     next_status: Optional[str] = Field(None, description="下一合法阶段")
     next_step_suggestions: List[str] = Field(default_factory=list)
+    capabilities: Optional[EightDReportCapabilities] = Field(
+        None, description="业务态 capabilities（不含 RBAC）"
+    )
     created_at: datetime
     updated_at: datetime
 
@@ -164,6 +171,9 @@ class OQCInspectionResponse(OQCInspectionBase):
     status: str
     inspection_standard: Optional[str] = None
     other_checks: Optional[dict] = None
+    capabilities: Optional[OQCInspectionCapabilities] = Field(
+        None, description="业务态 capabilities（不含 RBAC）"
+    )
     created_at: datetime
     updated_at: datetime
 

@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next';
 import React from 'react';
 import { Tag } from 'antd';
-import { normalizeMaterialSourceType } from '../../apps/master-data/utils/materialSourceType';
+import { normalizeMaterialSourceType } from '../../master-data/utils/materialSourceType';
 
 const P = 'app.kuaicaiwu.costCommon';
 

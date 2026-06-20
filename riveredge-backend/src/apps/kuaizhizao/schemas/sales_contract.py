@@ -6,6 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
 from pydantic import BaseModel, Field
+from apps.kuaizhizao.services.document_action_policy.types import SalesContractCapabilities
 
 from apps.kuaizhizao.schemas.sales_contract_term import SalesContractTermSnapshot
 
@@ -166,6 +167,10 @@ class SalesContractResponse(BaseModel):
     items: Optional[List[SalesContractItemResponse]] = None
     milestones: Optional[List[SalesContractMilestoneResponse]] = None
     lifecycle: Optional[dict] = None
+    capabilities: Optional[SalesContractCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（不含 RBAC）",
+    )
 
     class Config:
         from_attributes = True

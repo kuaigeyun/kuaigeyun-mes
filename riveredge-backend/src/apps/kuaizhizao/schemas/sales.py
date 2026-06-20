@@ -14,6 +14,8 @@ from typing import Optional, List
 from pydantic import Field
 from core.schemas.base import BaseSchema
 
+from apps.kuaizhizao.services.document_action_policy.types import SalesForecastCapabilities
+
 
 # === 销售预测 ===
 
@@ -59,6 +61,10 @@ class SalesForecastResponse(SalesForecastBase):
     updated_at: datetime = Field(..., description="更新时间")
     demand_synced: Optional[bool] = Field(None, description="本次操作是否已同步至关联需求")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    capabilities: Optional[SalesForecastCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
+    )
     items: Optional[List[SalesForecastItemResponse]] = Field(None, description="预测明细列表")
 
     class Config:

@@ -38,6 +38,7 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -74,6 +75,7 @@ import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { qualityInspectionRowGates } from '../../../../../hooks/useDocumentCapabilities';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
@@ -88,6 +90,7 @@ import {
   renderQualityQualityStatusTag,
   getQualityDefectTypeOptions,
 } from '../components/qualityMeta';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 const PROCESS_RESOURCE = 'kuaizhizao:quality-management-process-inspection';
 const PROCESS_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_process_inspections';
@@ -162,6 +165,10 @@ interface ProcessInspection {
   created_at?: string;
   updated_at?: string;
   lifecycle?: { main_stages?: Array<unknown> };
+  capabilities?: {
+    conduct?: { allowed?: boolean; reason?: string };
+    create_defect?: { allowed?: boolean; reason?: string };
+  };
 }
 
 /**
@@ -212,6 +219,7 @@ const OperationSelect: React.FC<{
 const ProcessInspectionPage: React.FC = () => {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
+  const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'process_inspection.pull_from_work_order');
 
   const processInspectionImportTemplate = useMemo(
     () =>
@@ -249,7 +257,8 @@ const ProcessInspectionPage: React.FC = () => {
   const currentUser = useGlobalStore((s) => s.currentUser);
   const { token } = AntdTheme.useToken();
   const processInspectionDetailDrawerZIndex = token.zIndexPopupBase;
-  const { canUpdate: canRegisterDefect } = useResourcePermissions(PROCESS_RESOURCE);
+  const processPerms = useResourcePermissions(PROCESS_RESOURCE);
+  const ncPerms = useResourcePermissions(NC_RESOURCE);
   const { canRead: canReadNcLedger } = useResourcePermissions(NC_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -328,11 +337,7 @@ const ProcessInspectionPage: React.FC = () => {
     piTrackingRefreshKey,
   );
 
-  // 从工单创建Modal状态
-  const [createFromWorkOrderModalVisible, setCreateFromWorkOrderModalVisible] = useState(false);
-  const createFromWorkOrderFormRef = useRef<any>(null); // Ant Design ProForm instances often have 'any' type due to dynamic nature
-  const [workOrderOptions, setWorkOrderOptions] = useState<InspectionDropdownOption[]>([]);
-  const [workOrderOptionsLoading, setWorkOrderOptionsLoading] = useState(false);
+  const [pullOperationId, setPullOperationId] = useState<number | undefined>(undefined);
 
   // 创建不合格品记录Modal状态
   const [createDefectModalVisible, setCreateDefectModalVisible] = useState(false);
@@ -468,36 +473,48 @@ const ProcessInspectionPage: React.FC = () => {
     }
   };
 
-  // 从工单创建过程检验单
-  const handleCreateFromWorkOrder = async () => {
-    setCreateFromWorkOrderModalVisible(true);
-    createFromWorkOrderFormRef.current?.resetFields();
-    setWorkOrderOptions([]);
-    setWorkOrderOptionsLoading(true);
-    try {
-      setWorkOrderOptions(await fetchWorkOrdersForInspection());
-    } catch {
-      messageApi.error(t('app.kuaizhizao.quality.process.messages.loadWorkOrderFailed'));
-    } finally {
-      setWorkOrderOptionsLoading(false);
-    }
-  };
-
-  const handleCreateFromWorkOrderSubmit = async (values: any) => {
-    try {
-      await qualityApi.processInspection.createFromWorkOrder(
-        values.work_order_id.toString(),
-        values.operation_id.toString()
-      );
-      messageApi.success(t('app.kuaizhizao.quality.process.messages.createSuccess'));
-      setCreateFromWorkOrderModalVisible(false);
-      createFromWorkOrderFormRef.current?.resetFields();
-      invalidateStats();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.quality.process.messages.createFailed'));
-    }
-  };
+  const pullFromWorkOrderQuery = useUniPullQuery<{ id: number; code: string }>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
+      try {
+        const options = await fetchWorkOrdersForInspection();
+        const kw = keyword.trim().toLowerCase();
+        const rows = options
+          .map((it) => ({ id: Number(it.value), code: String(it.label || '') }))
+          .filter((it) => (kw ? it.code.toLowerCase().includes(kw) : true));
+        const start = (page - 1) * pageSize;
+        return { data: rows.slice(start, start + pageSize), total: rows.length };
+      } catch {
+        messageApi.error(t('app.kuaizhizao.quality.process.messages.loadWorkOrderFailed'));
+        return { data: [], total: 0 };
+      }
+    },
+    onOpen: () => setPullOperationId(undefined),
+    onConfirm: async (keys, rows) => {
+      const selected = rows.find((x) => String(x.id) === String(keys[0]));
+      if (!selected?.id) {
+        messageApi.warning(t('app.kuaizhizao.quality.process.form.selectWorkOrder'));
+        return;
+      }
+      if (!pullOperationId) {
+        messageApi.warning(t('app.kuaizhizao.quality.process.form.selectOperation'));
+        return;
+      }
+      try {
+        await qualityApi.processInspection.createFromWorkOrder(
+          String(selected.id),
+          String(pullOperationId),
+        );
+        messageApi.success(t('app.kuaizhizao.quality.process.messages.createSuccess'));
+        pullFromWorkOrderQuery.closeModal();
+        invalidateStats();
+        actionRef.current?.reload();
+      } catch (error: any) {
+        messageApi.error(error.message || t('app.kuaizhizao.quality.process.messages.createFailed'));
+      }
+    },
+  });
 
   // 处理创建不合格品记录
   const handleCreateDefect = (record: ProcessInspection) => {
@@ -624,12 +641,15 @@ const ProcessInspectionPage: React.FC = () => {
   const inspectionCustomFieldColumns = generateInspectionCustomFieldColumns();
 
   const renderProcessRowNodes = (record: ProcessInspection): React.ReactNode[] => {
-    if (record.status === '待检验' || record.inspection_result === '待检验') {
+    const gates = qualityInspectionRowGates(record, processPerms, ncPerms, t);
+    if (gates.conduct.allowed) {
       return [
         <Button {...rowActionKind('execute')}
           key="inspect"
           size="small"
           type="primary"
+          disabled={gates.conduct.disabled}
+          title={gates.conduct.title}
           onClick={(e) => {
             e.stopPropagation();
             void handleInspect(record);
@@ -681,13 +701,15 @@ const ProcessInspectionPage: React.FC = () => {
         }}
       />,
     ];
-    if (record.quality_status === '不合格' && (record.unqualified_quantity || 0) > 0) {
+    if (gates.createDefect.allowed) {
       nodes.push(
         <Button {...rowActionKind('create')}
           key="defect"
           size="small"
           type="link"
           danger
+          disabled={gates.createDefect.disabled}
+          title={gates.createDefect.title}
           onClick={(e) => {
             e.stopPropagation();
             handleCreateDefect(record);
@@ -891,8 +913,8 @@ const ProcessInspectionPage: React.FC = () => {
           }
         }}
         showCreateButton={true}
-        createButtonText={t('app.kuaizhizao.quality.process.createFromWorkOrder')}
-        onCreate={handleCreateFromWorkOrder}
+        createButtonText={pullFromWorkOrderAction.label}
+        onCreate={pullFromWorkOrderQuery.openModal}
         enableRowSelection={true}
         onRowSelectionChange={setSelectedRowKeys}
         onRow={(record) => ({
@@ -1039,53 +1061,49 @@ const ProcessInspectionPage: React.FC = () => {
         />
       </FormModalTemplate>
 
-      {/* 从工单创建Modal */}
-      <FormModalTemplate
-        title={t('app.kuaizhizao.quality.process.modal.createFromWorkOrderTitle')}
-        open={createFromWorkOrderModalVisible}
-        onClose={() => {
-          setCreateFromWorkOrderModalVisible(false);
-          createFromWorkOrderFormRef.current?.resetFields();
-        }}
-        onFinish={handleCreateFromWorkOrderSubmit}
-        width={MODAL_CONFIG.SMALL_WIDTH}
-        formRef={createFromWorkOrderFormRef}
-      >
-        <ProFormItem
-          name="work_order_id"
-          label={t('app.kuaizhizao.quality.process.form.selectWorkOrder')}
-          rules={[{ required: true, message: t('app.kuaizhizao.quality.process.form.selectWorkOrder') }]}
-        >
-          <UniDropdown
-            placeholder={t('app.kuaizhizao.quality.process.form.selectWorkOrder')}
-            showSearch
-            loading={workOrderOptionsLoading}
-            options={workOrderOptions}
-            advancedSearch={{
-              label: t('app.kuaizhizao.quality.process.form.advancedSearchWorkOrder'),
-              fields: [
-                { name: 'code', label: t('app.kuaizhizao.quality.process.form.workOrderCode'), type: 'text' },
-                { name: 'name', label: t('app.kuaizhizao.quality.process.form.workOrderName'), type: 'text' },
-              ],
-              onSearch: (params) => fetchWorkOrdersForInspection(params),
-            }}
-          />
-        </ProFormItem>
-        <ProFormDependency name={['work_order_id']}>
-          {({ work_order_id }) => (
-            <ProFormItem
-              name="operation_id"
-              label={t('app.kuaizhizao.quality.process.form.selectOperation')}
-              rules={[{ required: true, message: t('app.kuaizhizao.quality.process.form.selectOperation') }]}
-            >
-              <OperationSelect 
-                workOrderId={work_order_id} 
-                placeholder={work_order_id ? t('app.kuaizhizao.quality.process.form.selectOperation') : t('app.kuaizhizao.quality.process.form.selectWorkOrderFirst')}
-              />
-            </ProFormItem>
-          )}
-        </ProFormDependency>
-      </FormModalTemplate>
+      <UniPullQueryModal<{ id: number; code: string }>
+        open={pullFromWorkOrderQuery.open}
+        title={pullFromWorkOrderAction.label}
+        onCancel={pullFromWorkOrderQuery.closeModal}
+        onOk={pullFromWorkOrderQuery.handleConfirm}
+        rowKey="id"
+        columns={[{ title: t('app.kuaizhizao.quality.process.form.selectWorkOrder'), dataIndex: 'code', ellipsis: true }]}
+        dataSource={pullFromWorkOrderQuery.dataSource}
+        loading={pullFromWorkOrderQuery.loading}
+        confirmLoading={pullFromWorkOrderQuery.confirmLoading}
+        selectionType={pullFromWorkOrderQuery.selectionType}
+        selectedRowKeys={pullFromWorkOrderQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromWorkOrderQuery.handleSelectedRowKeysChange}
+        searchDraft={pullFromWorkOrderQuery.searchDraft}
+        onSearchDraftChange={pullFromWorkOrderQuery.setSearchDraft}
+        onSearchApply={pullFromWorkOrderQuery.handleSearchApply}
+        onSearchClear={pullFromWorkOrderQuery.handleSearchClear}
+        appliedKeyword={pullFromWorkOrderQuery.appliedKeyword}
+        searchPlaceholder={t('components.uniPullQuery.searchPlaceholder')}
+        page={pullFromWorkOrderQuery.page}
+        pageSize={pullFromWorkOrderQuery.pageSize}
+        total={pullFromWorkOrderQuery.total}
+        onPageChange={pullFromWorkOrderQuery.handlePageChange}
+        filterExtra={(
+          <ProFormItem
+            label={t('app.kuaizhizao.quality.process.form.selectOperation')}
+            required
+            style={{ marginBottom: 0 }}
+          >
+            <OperationSelect
+              workOrderId={Number(pullFromWorkOrderQuery.selectedRows?.[0]?.id) || undefined}
+              placeholder={
+                pullFromWorkOrderQuery.selectedRows?.[0]?.id
+                  ? t('app.kuaizhizao.quality.process.form.selectOperation')
+                  : t('app.kuaizhizao.quality.process.form.selectWorkOrderFirst')
+              }
+              value={pullOperationId}
+              onChange={(v) => setPullOperationId(v as number)}
+            />
+          </ProFormItem>
+        )}
+        okButtonProps={{ disabled: !pullFromWorkOrderQuery.selectedRows?.[0]?.id || !pullOperationId }}
+      />
 
       {/* 过程检验详情 Drawer */}
       <DetailDrawerTemplate
@@ -1136,7 +1154,10 @@ const ProcessInspectionPage: React.FC = () => {
                 inspection={inspectionDetail}
                 inspectionType="process"
                 onRegisterDefect={() => handleCreateDefect(inspectionDetail)}
-                canRegisterDefect={canRegisterDefect}
+                canRegisterDefect={
+                  qualityInspectionRowGates(inspectionDetail, processPerms, ncPerms, t).createDefect.allowed &&
+                  !qualityInspectionRowGates(inspectionDetail, processPerms, ncPerms, t).createDefect.disabled
+                }
               />
               <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.basicInfo')}>
                 <Descriptions

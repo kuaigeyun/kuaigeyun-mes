@@ -36,6 +36,13 @@ from apps.kuaizhizao.schemas.purchase import (
 )
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, LEGACY_AUDITED_VALUES, is_draft_status, is_pending_review_status
 from infra.services.business_config_service import BusinessConfigService
+from apps.kuaizhizao.services.document_action_policy.enricher import (
+    enrich_purchase_order_detail_capabilities,
+    enrich_purchase_order_list_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.purchase_order import (
+    assert_purchase_order_capability,
+)
 
 # 采购入库选单：与前端 inboundCreateConfig.PURCHASE_ORDER_RECEIPT_ELIGIBLE_STATUSES 一致
 PURCHASE_RECEIPT_PULL_ELIGIBLE_STATUSES = (
@@ -270,6 +277,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         response.lifecycle = get_purchase_order_lifecycle(order, milestones=milestones)
         from core.services.approval.audit_record_enricher import enrich_record
 
+        response = await enrich_purchase_order_detail_capabilities(
+            tenant_id, order, response, has_items=len(items) > 0
+        )
         return await enrich_record(tenant_id, "purchase_order", response)
 
     async def list_purchase_orders(
@@ -349,11 +359,18 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             resp.lifecycle = get_purchase_order_lifecycle(order)
             result.append(resp)
 
+        has_items_by_id = {
+            oid: items_count_by_order.get(oid, 0) > 0 for oid in order_ids
+        }
+        enriched = await enrich_purchase_order_list_capabilities(
+            tenant_id, orders, result, has_items_by_id=has_items_by_id
+        )
+
         # 返回前端期望的格式 { data, total, success }
         from core.services.approval.audit_record_enricher import enrich_data_payload
 
         return await enrich_data_payload(tenant_id, "purchase_order", {
-            "data": [item.model_dump() for item in result],
+            "data": [item.model_dump() for item in enriched],
             "total": total,
             "success": True
         })
@@ -661,8 +678,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
-        if not is_draft_status(order.status):
-            raise BusinessLogicError("只能提交草稿状态的订单")
+        assert_purchase_order_capability(order, "submit", has_items=True)
 
         # 检查业务配置：若无需审核，则提交后直接设为已审核（考虑中小企业实情）
         from infra.services.business_config_service import BusinessConfigService
@@ -714,8 +730,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
-        if not is_pending_review_status(order.status):
-            raise BusinessLogicError("只有待审核状态的采购订单可撤回提交")
+        assert_purchase_order_capability(order, "withdraw_submit")
 
         try:
             from core.services.approval.approval_instance_service import ApprovalInstanceService
@@ -767,6 +782,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
+
+        assert_purchase_order_capability(order, "approve")
 
         approver = await User.get_or_none(id=approved_by)
         approver_name = approver.name if approver else f"用户{approved_by}"
@@ -891,9 +908,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
-        # 只能删除草稿状态的订单
-        if not is_draft_status(order.status):
-            raise BusinessLogicError("只能删除草稿状态的订单")
+        assert_purchase_order_capability(order, "delete")
 
         po_code = getattr(order, "order_code", str(order_id))
 
@@ -1502,17 +1517,22 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         from apps.master_data.models.warehouse import Warehouse
         from decimal import Decimal
 
-        order = await self.get_purchase_order_by_id(tenant_id, order_id)
-        if order.status not in LEGACY_AUDITED_VALUES:
-            raise BusinessLogicError("只有已审核或已确认的采购单才能下推到收货通知")
+        order_model = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        if not order_model:
+            raise NotFoundError(f"采购订单不存在: {order_id}")
 
         order_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
+        has_outstanding = any(float(item.outstanding_quantity or 0) > 0 for item in order_items)
+        assert_purchase_order_capability(
+            order_model,
+            "push_receipt_notice",
+            has_items=bool(order_items),
+            has_outstanding=has_outstanding,
+        )
+
+        order = await self.get_purchase_order_by_id(tenant_id, order_id)
         if not order_items:
             raise BusinessLogicError("采购单没有明细，无法生成收货通知单")
-
-        has_outstanding = any(item.outstanding_quantity > 0 for item in order_items)
-        if not has_outstanding:
-            raise BusinessLogicError("采购单已全部入库，无法生成收货通知单")
 
         default_warehouse = await Warehouse.filter(tenant_id=tenant_id, is_active=True).first()
         warehouse_id = default_warehouse.id if default_warehouse else None

@@ -20,7 +20,12 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniBatchButton } from '../../../../../components/uni-batch';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import {
+  inventoryAlertBatchIgnoreAllowed,
+  inventoryAlertBatchResolveAllowed,
+} from '../../../../../hooks/useDocumentCapabilities';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { inventoryAlertApi } from '../../../services/inventory-alert';
@@ -51,6 +56,10 @@ interface InventoryAlert {
   resolved_at?: string;
   created_at?: string;
   updated_at?: string;
+  capabilities?: {
+    resolve?: { allowed?: boolean; reason?: string };
+    ignore?: { allowed?: boolean; reason?: string };
+  };
 }
 
 interface InventoryAlertRule {
@@ -80,6 +89,9 @@ const InventoryAlertPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const tableRowsRef = useRef<InventoryAlert[]>([]);
+  const [alertListVersion, setAlertListVersion] = useState(0);
+  const alertPerms = useResourcePermissions('kuaizhizao:warehouse-management-inventory-alert');
   const [activeTab, setActiveTab] = useState<'alerts' | 'rules'>('alerts');
 
   // Modal 相关状态
@@ -97,6 +109,14 @@ const InventoryAlertPage: React.FC = () => {
   // 当前编辑的规则ID
   const [currentRuleId, setCurrentRuleId] = useState<number | null>(null);
   const [currentAlertId, setCurrentAlertId] = useState<number | null>(null);
+
+  const selectedAlertsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is InventoryAlert => row != null),
+    [selectedRowKeys, alertListVersion],
+  );
 
   // 统计信息
   const [statistics, setStatistics] = useState<any>(null);
@@ -665,28 +685,30 @@ const InventoryAlertPage: React.FC = () => {
         toolBarActionsAfterBatch={
           activeTab === 'alerts'
             ? [
-                <UniBatchMenuButton
-                  key="inventory-alert-batch-actions"
+                <UniBatchButton
+                  key="batch-resolved"
                   selectedRowKeys={selectedRowKeys}
-                  label={t('app.kuaizhizao.warehouseCommon.batchOps')}
-                  disabled={selectedRowKeys.length === 0}
-                  menuItems={[
-                    {
-                      key: 'batch-resolved',
-                      label: t('app.kuaizhizao.warehouseCommon.batchMarkResolved'),
-                      onClick: () => {
-                        void handleBatchHandleAlerts('resolved');
-                      },
-                    },
-                    {
-                      key: 'batch-ignored',
-                      label: t('app.kuaizhizao.warehouseCommon.batchMarkIgnored'),
-                      onClick: () => {
-                        void handleBatchHandleAlerts('ignored');
-                      },
-                    },
-                  ]}
-                />,
+                  icon={<CheckCircleOutlined />}
+                  disabled={
+                    selectedAlertsForBatch.length > 0 &&
+                    !inventoryAlertBatchResolveAllowed(selectedAlertsForBatch, alertPerms.canUpdate)
+                  }
+                  onAction={() => void handleBatchHandleAlerts('resolved')}
+                >
+                  {t('app.kuaizhizao.warehouseCommon.batchMarkResolved')}
+                </UniBatchButton>,
+                <UniBatchButton
+                  key="batch-ignored"
+                  selectedRowKeys={selectedRowKeys}
+                  icon={<CloseCircleOutlined />}
+                  disabled={
+                    selectedAlertsForBatch.length > 0 &&
+                    !inventoryAlertBatchIgnoreAllowed(selectedAlertsForBatch, alertPerms.canUpdate)
+                  }
+                  onAction={() => void handleBatchHandleAlerts('ignored')}
+                >
+                  {t('app.kuaizhizao.warehouseCommon.batchMarkIgnored')}
+                </UniBatchButton>,
               ]
             : []
         }
@@ -711,6 +733,10 @@ const InventoryAlertPage: React.FC = () => {
                   is_enabled: params.is_enabled,
                 });
             const rows = Array.isArray(result) ? result : [];
+            if (activeTab === 'alerts') {
+              tableRowsRef.current = rows as InventoryAlert[];
+              setAlertListVersion((v) => v + 1);
+            }
             const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
             return {
               data: rows,

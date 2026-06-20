@@ -1,10 +1,11 @@
 import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDigit, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Empty, Modal, Space, Typography } from 'antd';
+import { App, Button, Empty, Space, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { MaterialStackedCell, UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
   qualifiedQuantityColumnProps,
@@ -22,9 +23,11 @@ import {
   fetchShipmentNoticesForOqc,
 } from '../components/inspectionCreateSourceUtils';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { oqcInspectionRowGates } from '../../../../../hooks/useDocumentCapabilities';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useTranslation } from 'react-i18next';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import {
   getQualityInspectionResultValueEnum,
   getQualityQualityStatusValueEnum,
@@ -36,41 +39,86 @@ const OQC_RESOURCE = 'kuaizhizao:quality-management-oqc-inspection';
 
 const OQCInspectionPage: React.FC = () => {
   const { t } = useTranslation();
+  const pullFromShipmentNoticeAction = resolveKuaizhizaoDocumentAction(t, 'oqc_inspection.pull_from_shipment_notice');
+  const pullFromSalesDeliveryAction = resolveKuaizhizaoDocumentAction(t, 'oqc_inspection.pull_from_sales_delivery');
   const { message: messageApi } = App.useApp();
-  const { canCreate, canUpdate } = useResourcePermissions(OQC_RESOURCE);
+  const oqcPerms = useResourcePermissions(OQC_RESOURCE);
+  const { canCreate, canUpdate } = oqcPerms;
   const actionRef = useRef<ActionType>(null);
   const conductFormRef = useRef<any>(null);
   const [conductVisible, setConductVisible] = useState(false);
   const [currentRow, setCurrentRow] = useState<OQCInspection | null>(null);
-  const [fromNoticeVisible, setFromNoticeVisible] = useState(false);
-  const [noticeOptions, setNoticeOptions] = useState<{ label: string; value: number }[]>([]);
-  const [selectedNoticeId, setSelectedNoticeId] = useState<number | undefined>();
-  const [creatingFromNotice, setCreatingFromNotice] = useState(false);
-  const [fromDeliveryVisible, setFromDeliveryVisible] = useState(false);
-  const [deliveryOptions, setDeliveryOptions] = useState<{ label: string; value: number }[]>([]);
-  const [selectedDeliveryId, setSelectedDeliveryId] = useState<number | undefined>();
-  const [creatingFromDelivery, setCreatingFromDelivery] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  const openFromNoticeModal = async () => {
-    try {
-      setNoticeOptions(await fetchShipmentNoticesForOqc());
-      setSelectedNoticeId(undefined);
-      setFromNoticeVisible(true);
-    } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.quality.oqc.messages.loadShipmentNoticeFailed'));
-    }
-  };
+  type PullSourceCandidate = { id: number; code: string };
 
-  const openFromDeliveryModal = async () => {
-    try {
-      setDeliveryOptions(await fetchSalesDeliveriesForOqc());
-      setSelectedDeliveryId(undefined);
-      setFromDeliveryVisible(true);
-    } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.quality.oqc.messages.loadSalesDeliveryFailed'));
-    }
-  };
+  const pullFromShipmentNoticeQuery = useUniPullQuery<PullSourceCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
+      try {
+        const options = await fetchShipmentNoticesForOqc();
+        const kw = keyword.trim().toLowerCase();
+        const rows = options
+          .map((it) => ({ id: Number(it.value), code: String(it.label || '') }))
+          .filter((it) => (kw ? it.code.toLowerCase().includes(kw) : true));
+        const start = (page - 1) * pageSize;
+        return { data: rows.slice(start, start + pageSize), total: rows.length };
+      } catch (e: any) {
+        messageApi.error(e?.message || t('app.kuaizhizao.quality.oqc.messages.loadShipmentNoticeFailed'));
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys, rows) => {
+      const selected = rows.find((x) => String(x.id) === String(keys[0]));
+      if (!selected?.id) {
+        messageApi.warning(t('app.kuaizhizao.quality.oqc.messages.selectShipmentNotice'));
+        return;
+      }
+      try {
+        const created = await qualityImprovementApi.oqc.createFromShipmentNotice(selected.id);
+        messageApi.success(t('app.kuaizhizao.quality.oqc.messages.createSuccess', { count: created.length }));
+        pullFromShipmentNoticeQuery.closeModal();
+        actionRef.current?.reload();
+      } catch (e: any) {
+        messageApi.error(e?.message || t('app.kuaizhizao.quality.oqc.messages.createFailed'));
+      }
+    },
+  });
+
+  const pullFromSalesDeliveryQuery = useUniPullQuery<PullSourceCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
+      try {
+        const options = await fetchSalesDeliveriesForOqc();
+        const kw = keyword.trim().toLowerCase();
+        const rows = options
+          .map((it) => ({ id: Number(it.value), code: String(it.label || '') }))
+          .filter((it) => (kw ? it.code.toLowerCase().includes(kw) : true));
+        const start = (page - 1) * pageSize;
+        return { data: rows.slice(start, start + pageSize), total: rows.length };
+      } catch (e: any) {
+        messageApi.error(e?.message || t('app.kuaizhizao.quality.oqc.messages.loadSalesDeliveryFailed'));
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys, rows) => {
+      const selected = rows.find((x) => String(x.id) === String(keys[0]));
+      if (!selected?.id) {
+        messageApi.warning(t('app.kuaizhizao.quality.oqc.messages.selectSalesDelivery'));
+        return;
+      }
+      try {
+        const created = await qualityImprovementApi.oqc.createFromSalesDelivery(selected.id);
+        messageApi.success(t('app.kuaizhizao.quality.oqc.messages.createSuccess', { count: created.length }));
+        pullFromSalesDeliveryQuery.closeModal();
+        actionRef.current?.reload();
+      } catch (e: any) {
+        messageApi.error(e?.message || t('app.kuaizhizao.quality.oqc.messages.createFailed'));
+      }
+    },
+  });
 
   const columns: ProColumns<OQCInspection>[] = useMemo(
     () => [
@@ -136,12 +184,16 @@ const OQCInspectionPage: React.FC = () => {
         title: t('app.kuaizhizao.quality.common.columns.actions'),
         valueType: 'option',
         width: 200,
-        render: (_, row) => (
+        render: (_, row) => {
+          const gates = oqcInspectionRowGates(row, oqcPerms, t);
+          return (
           <Space>
-            {canUpdate && row.status === '待检验' && (
+            {gates.conduct.allowed && (
               <Button
                 key="submit"
                 {...rowActionKind('submit')}
+                disabled={gates.conduct.disabled}
+                title={gates.conduct.title}
                 onClick={() => {
                   setCurrentRow(row);
                   setConductVisible(true);
@@ -179,10 +231,11 @@ const OQCInspectionPage: React.FC = () => {
               onSuccess={() => actionRef.current?.reload()}
             />
           </Space>
-        ),
+          );
+        },
       },
     ],
-    [t, canUpdate],
+    [t, oqcPerms],
   );
 
   return (
@@ -246,17 +299,17 @@ const OQCInspectionPage: React.FC = () => {
                     key="from-notice"
                     type="primary"
                     icon={<PlusOutlined />}
-                    onClick={() => void openFromNoticeModal()}
+                    onClick={pullFromShipmentNoticeQuery.openModal}
                   >
-                    {withSingleNewShortcutHint(t('app.kuaizhizao.quality.oqc.actions.createFromNotice'))}
+                    {withSingleNewShortcutHint(pullFromShipmentNoticeAction.label)}
                   </Button>,
                   <Button
                     {...rowActionKind('create')}
                     key="from-delivery"
                     icon={<PlusOutlined />}
-                    onClick={() => void openFromDeliveryModal()}
+                    onClick={pullFromSalesDeliveryQuery.openModal}
                   >
-                    {t('app.kuaizhizao.quality.oqc.actions.createFromDelivery')}
+                    {pullFromSalesDeliveryAction.label}
                   </Button>,
                 ]
               : []
@@ -273,77 +326,57 @@ const OQCInspectionPage: React.FC = () => {
           }}
         />
 
-        <Modal
-          title={t('app.kuaizhizao.quality.oqc.modal.createFromNoticeTitle')}
-          open={fromNoticeVisible}
-          confirmLoading={creatingFromNotice}
-          onCancel={() => setFromNoticeVisible(false)}
-          onOk={async () => {
-            if (!selectedNoticeId) {
-              messageApi.warning(t('app.kuaizhizao.quality.oqc.messages.selectShipmentNotice'));
-              return;
-            }
-            setCreatingFromNotice(true);
-            try {
-              const created = await qualityImprovementApi.oqc.createFromShipmentNotice(selectedNoticeId);
-              messageApi.success(t('app.kuaizhizao.quality.oqc.messages.createSuccess', { count: created.length }));
-              setFromNoticeVisible(false);
-              actionRef.current?.reload();
-            } catch (e: any) {
-              messageApi.error(e?.message || t('app.kuaizhizao.quality.oqc.messages.createFailed'));
-            } finally {
-              setCreatingFromNotice(false);
-            }
-          }}
-        >
-          <ProFormSelect
-            label={t('app.kuaizhizao.quality.oqc.form.shipmentNotice')}
-            showSearch
-            options={noticeOptions}
-            fieldProps={{
-              value: selectedNoticeId,
-              onChange: (v) => setSelectedNoticeId(v as number),
-              placeholder: t('app.kuaizhizao.quality.oqc.form.shipmentNoticePlaceholder'),
-              style: { width: '100%' },
-            }}
-          />
-        </Modal>
+        <UniPullQueryModal<PullSourceCandidate>
+          open={pullFromShipmentNoticeQuery.open}
+          title={pullFromShipmentNoticeAction.label}
+          onCancel={pullFromShipmentNoticeQuery.closeModal}
+          onOk={pullFromShipmentNoticeQuery.handleConfirm}
+          rowKey="id"
+          columns={[{ title: t('app.kuaizhizao.quality.oqc.form.shipmentNotice'), dataIndex: 'code', ellipsis: true }]}
+          dataSource={pullFromShipmentNoticeQuery.dataSource}
+          loading={pullFromShipmentNoticeQuery.loading}
+          confirmLoading={pullFromShipmentNoticeQuery.confirmLoading}
+          selectionType={pullFromShipmentNoticeQuery.selectionType}
+          selectedRowKeys={pullFromShipmentNoticeQuery.selectedRowKeys}
+          onSelectedRowKeysChange={pullFromShipmentNoticeQuery.handleSelectedRowKeysChange}
+          searchDraft={pullFromShipmentNoticeQuery.searchDraft}
+          onSearchDraftChange={pullFromShipmentNoticeQuery.setSearchDraft}
+          onSearchApply={pullFromShipmentNoticeQuery.handleSearchApply}
+          onSearchClear={pullFromShipmentNoticeQuery.handleSearchClear}
+          appliedKeyword={pullFromShipmentNoticeQuery.appliedKeyword}
+          searchPlaceholder={t('app.kuaizhizao.quality.oqc.form.shipmentNoticePlaceholder')}
+          page={pullFromShipmentNoticeQuery.page}
+          pageSize={pullFromShipmentNoticeQuery.pageSize}
+          total={pullFromShipmentNoticeQuery.total}
+          onPageChange={pullFromShipmentNoticeQuery.handlePageChange}
+          okText={t('app.kuaizhizao.quality.oqc.actions.createFromSource')}
+        />
 
-        <Modal
-          title={t('app.kuaizhizao.quality.oqc.modal.createFromDeliveryTitle')}
-          open={fromDeliveryVisible}
-          confirmLoading={creatingFromDelivery}
-          onCancel={() => setFromDeliveryVisible(false)}
-          onOk={async () => {
-            if (!selectedDeliveryId) {
-              messageApi.warning(t('app.kuaizhizao.quality.oqc.messages.selectSalesDelivery'));
-              return;
-            }
-            setCreatingFromDelivery(true);
-            try {
-              const created = await qualityImprovementApi.oqc.createFromSalesDelivery(selectedDeliveryId);
-              messageApi.success(t('app.kuaizhizao.quality.oqc.messages.createSuccess', { count: created.length }));
-              setFromDeliveryVisible(false);
-              actionRef.current?.reload();
-            } catch (e: any) {
-              messageApi.error(e?.message || t('app.kuaizhizao.quality.oqc.messages.createFailed'));
-            } finally {
-              setCreatingFromDelivery(false);
-            }
-          }}
-        >
-          <ProFormSelect
-            label={t('app.kuaizhizao.quality.oqc.form.salesDelivery')}
-            showSearch
-            options={deliveryOptions}
-            fieldProps={{
-              value: selectedDeliveryId,
-              onChange: (v) => setSelectedDeliveryId(v as number),
-              placeholder: t('app.kuaizhizao.quality.oqc.form.salesDeliveryPlaceholder'),
-              style: { width: '100%' },
-            }}
-          />
-        </Modal>
+        <UniPullQueryModal<PullSourceCandidate>
+          open={pullFromSalesDeliveryQuery.open}
+          title={pullFromSalesDeliveryAction.label}
+          onCancel={pullFromSalesDeliveryQuery.closeModal}
+          onOk={pullFromSalesDeliveryQuery.handleConfirm}
+          rowKey="id"
+          columns={[{ title: t('app.kuaizhizao.quality.oqc.form.salesDelivery'), dataIndex: 'code', ellipsis: true }]}
+          dataSource={pullFromSalesDeliveryQuery.dataSource}
+          loading={pullFromSalesDeliveryQuery.loading}
+          confirmLoading={pullFromSalesDeliveryQuery.confirmLoading}
+          selectionType={pullFromSalesDeliveryQuery.selectionType}
+          selectedRowKeys={pullFromSalesDeliveryQuery.selectedRowKeys}
+          onSelectedRowKeysChange={pullFromSalesDeliveryQuery.handleSelectedRowKeysChange}
+          searchDraft={pullFromSalesDeliveryQuery.searchDraft}
+          onSearchDraftChange={pullFromSalesDeliveryQuery.setSearchDraft}
+          onSearchApply={pullFromSalesDeliveryQuery.handleSearchApply}
+          onSearchClear={pullFromSalesDeliveryQuery.handleSearchClear}
+          appliedKeyword={pullFromSalesDeliveryQuery.appliedKeyword}
+          searchPlaceholder={t('app.kuaizhizao.quality.oqc.form.salesDeliveryPlaceholder')}
+          page={pullFromSalesDeliveryQuery.page}
+          pageSize={pullFromSalesDeliveryQuery.pageSize}
+          total={pullFromSalesDeliveryQuery.total}
+          onPageChange={pullFromSalesDeliveryQuery.handlePageChange}
+          okText={t('app.kuaizhizao.quality.oqc.actions.createFromSource')}
+        />
 
         <FormModalTemplate
           title={t('app.kuaizhizao.quality.oqc.modal.conductTitle', { code: currentRow?.inspection_code || '' })}

@@ -31,6 +31,11 @@ from apps.kuaizhizao.schemas.shipment_notice import (
     ShipmentNoticeItemResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
+from apps.kuaizhizao.services.document_action_policy.shipment_notice import assert_shipment_notice_capability
+from apps.kuaizhizao.services.document_action_policy.enricher import (
+    enrich_shipment_notice_capabilities_on_response,
+    enrich_shipment_notice_list_capabilities,
+)
 from apps.kuaizhizao.services.inspection_policy_service import assert_oqc_for_outbound_lines
 from infra.services.business_config_service import BusinessConfigService
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
@@ -68,6 +73,77 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
     def __init__(self):
         super().__init__(ShipmentNotice)
         self.business_config_service = BusinessConfigService()
+
+    async def _notice_delivery_withdrawable(self, tenant_id: int, notice: ShipmentNotice) -> bool:
+        delivery_id = getattr(notice, "sales_delivery_id", None)
+        if not delivery_id:
+            return True
+        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+
+        delivery = await SalesDelivery.get_or_none(
+            tenant_id=tenant_id, id=delivery_id, deleted_at__isnull=True
+        )
+        if not delivery:
+            return True
+        return str(delivery.status or "").strip() in ("草稿", "draft", "待出库")
+
+    async def _delivery_withdrawable_by_notice_id(
+        self, tenant_id: int, notices: List[ShipmentNotice]
+    ) -> dict[int, bool]:
+        result: dict[int, bool] = {}
+        delivery_id_by_notice: dict[int, int] = {}
+        for n in notices:
+            if str(n.status or "").strip() != "已通知":
+                continue
+            if not getattr(n, "sales_delivery_id", None):
+                result[int(n.id)] = True
+            else:
+                delivery_id_by_notice[int(n.id)] = int(n.sales_delivery_id)
+
+        if not delivery_id_by_notice:
+            return result
+
+        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+
+        delivery_ids = list(set(delivery_id_by_notice.values()))
+        status_by_id: dict[int, str] = {}
+        deliveries = await SalesDelivery.filter(
+            tenant_id=tenant_id, id__in=delivery_ids, deleted_at__isnull=True
+        ).all()
+        for d in deliveries:
+            status_by_id[int(d.id)] = str(d.status or "").strip()
+
+        for nid, did in delivery_id_by_notice.items():
+            st = status_by_id.get(did, "")
+            result[nid] = st in ("草稿", "draft", "待出库") or not st
+        return result
+
+    async def _notice_has_items_map(self, tenant_id: int, notice_ids: List[int]) -> dict[int, bool]:
+        if not notice_ids:
+            return {}
+        from tortoise.functions import Count
+
+        rows = await ShipmentNoticeItem.filter(
+            tenant_id=tenant_id,
+            notice_id__in=notice_ids,
+        ).annotate(cnt=Count("id")).group_by("notice_id").values("notice_id", "cnt")
+        return {int(r["notice_id"]): int(r["cnt"] or 0) > 0 for r in rows}
+
+    async def _enrich_notice_response(
+        self,
+        tenant_id: int,
+        notice: ShipmentNotice,
+        response: ShipmentNoticeResponse | ShipmentNoticeWithItemsResponse,
+    ) -> ShipmentNoticeResponse | ShipmentNoticeWithItemsResponse:
+        item_count = await ShipmentNoticeItem.filter(tenant_id=tenant_id, notice_id=notice.id).count()
+        delivery_withdrawable = await self._notice_delivery_withdrawable(tenant_id, notice)
+        return enrich_shipment_notice_capabilities_on_response(
+            notice,
+            response,
+            has_items=item_count > 0,
+            has_warehouse=getattr(notice, "warehouse_id", None) is not None,
+            delivery_withdrawable=delivery_withdrawable,
+        )
 
     async def _validate_not_overdelivery_on_notify(
         self,
@@ -300,7 +376,8 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                 total_amount=total_amount
             )
             notice = await ShipmentNotice.get(tenant_id=tenant_id, id=notice.id)
-            return ShipmentNoticeResponse.model_validate(notice)
+            resp = ShipmentNoticeResponse.model_validate(notice)
+            return await self._enrich_notice_response(tenant_id, notice, resp)
 
     async def get_shipment_notice_by_id(
         self,
@@ -318,7 +395,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         from apps.kuaizhizao.services.document_lifecycle_service import get_shipment_notice_lifecycle, get_document_milestones
         milestones = await get_document_milestones(tenant_id, "shipment_notice", notice_id)
         response.lifecycle = get_shipment_notice_lifecycle(notice, milestones=milestones)
-        return response
+        return await self._enrich_notice_response(tenant_id, notice, response)
 
     async def list_shipment_notices(
         self,
@@ -337,13 +414,21 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             query = query.filter(customer_id=filters["customer_id"])
 
         notices = await query.offset(skip).limit(limit).order_by("-created_at")
+        notice_ids = [int(n.id) for n in notices]
+        has_items_by_id = await self._notice_has_items_map(tenant_id, notice_ids)
+        withdrawable_by_id = await self._delivery_withdrawable_by_notice_id(tenant_id, notices)
         from apps.kuaizhizao.services.document_lifecycle_service import get_shipment_notice_lifecycle
-        out: List[ShipmentNoticeListResponse] = []
+        list_responses: List[ShipmentNoticeListResponse] = []
         for r in notices:
             resp = ShipmentNoticeListResponse.model_validate(r)
             resp.lifecycle = get_shipment_notice_lifecycle(r)
-            out.append(resp)
-        return out
+            list_responses.append(resp)
+        return enrich_shipment_notice_list_capabilities(
+            notices,
+            list_responses,
+            has_items_by_id=has_items_by_id,
+            delivery_withdrawable_by_id=withdrawable_by_id,
+        )
 
     async def update_shipment_notice(
         self,
@@ -353,25 +438,27 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         updated_by: int
     ) -> ShipmentNoticeResponse:
         """更新发货通知单"""
-        notice = await self.get_shipment_notice_by_id(tenant_id, notice_id)
-        if notice.status != "待发货":
-            raise BusinessLogicError("只能更新待发货状态的发货通知单")
+        notice_row = await ShipmentNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not notice_row:
+            raise NotFoundError(f"发货通知单不存在: {notice_id}")
+        assert_shipment_notice_capability(notice_row, "update")
 
         async with in_transaction():
             dump = notice_data.model_dump(exclude_unset=True, exclude={"notice_code"})
             dump["updated_by"] = updated_by
             await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(**dump)
-            return ShipmentNoticeResponse.model_validate(
-                await ShipmentNotice.get(tenant_id=tenant_id, id=notice_id)
-            )
+            updated = await ShipmentNotice.get(tenant_id=tenant_id, id=notice_id)
+            resp = ShipmentNoticeResponse.model_validate(updated)
+            return await self._enrich_notice_response(tenant_id, updated, resp)
 
     async def delete_shipment_notice(self, tenant_id: int, notice_id: int) -> bool:
         """删除发货通知单"""
         notice = await ShipmentNotice.get_or_none(tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True)
         if not notice:
             raise NotFoundError(f"发货通知单不存在: {notice_id}")
-        if notice.status != "待发货":
-            raise BusinessLogicError("只能删除待发货状态的发货通知单")
+        assert_shipment_notice_capability(notice, "delete")
 
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(deleted_at=datetime.now())
         return True
@@ -386,8 +473,13 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         notice = await ShipmentNotice.get_or_none(tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True)
         if not notice:
             raise NotFoundError(f"发货通知单不存在: {notice_id}")
-        if notice.status != "待发货":
-            raise BusinessLogicError("只有待发货状态的通知单才能通知仓库")
+        item_count = await ShipmentNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).count()
+        assert_shipment_notice_capability(
+            notice,
+            "notify",
+            has_items=item_count > 0,
+            has_warehouse=getattr(notice, "warehouse_id", None) is not None,
+        )
 
         await self._validate_not_overdelivery_on_notify(
             tenant_id=tenant_id,
@@ -484,9 +576,9 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             sales_delivery_code=delivery.delivery_code,
             updated_by=notified_by
         )
-        return ShipmentNoticeResponse.model_validate(
-            await ShipmentNotice.get(tenant_id=tenant_id, id=notice_id)
-        )
+        updated = await ShipmentNotice.get(tenant_id=tenant_id, id=notice_id)
+        resp = ShipmentNoticeResponse.model_validate(updated)
+        return await self._enrich_notice_response(tenant_id, updated, resp)
 
     async def withdraw_notice(
         self,
@@ -499,20 +591,23 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         if not notice:
             raise NotFoundError(f"发货通知单不存在: {notice_id}")
 
-        if notice.status != "已通知":
-            raise BusinessLogicError("只有已通知状态的发货通知单才能撤回")
+        delivery_withdrawable = await self._notice_delivery_withdrawable(tenant_id, notice)
+        assert_shipment_notice_capability(
+            notice,
+            "withdraw",
+            delivery_withdrawable=delivery_withdrawable,
+        )
         if getattr(notice, "sales_delivery_id", None):
             from apps.kuaizhizao.models.sales_delivery import SalesDelivery
             from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
-            
-            delivery = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=notice.sales_delivery_id, deleted_at__isnull=True)
-            if delivery and delivery.status not in ["草稿", "draft", "待出库"]:
-                raise BusinessLogicError(f"该通知单关联的销售出库单 ({delivery.delivery_code}) 已经在处理（{delivery.status}），无法撤回。请先作废或撤回该出库单。")
-                
+
+            delivery = await SalesDelivery.get_or_none(
+                tenant_id=tenant_id, id=notice.sales_delivery_id, deleted_at__isnull=True
+            )
             if delivery:
                 # 软删除关联的出库单
                 await SalesDelivery.filter(tenant_id=tenant_id, id=delivery.id).update(deleted_at=datetime.now())
-                
+
                 # 若需要物理删除明细则执行 .delete()，BaseModel包含 delete() 方法，这里进行物理删除即可
                 await SalesDeliveryItem.filter(tenant_id=tenant_id, delivery_id=delivery.id).delete()
 
@@ -524,4 +619,5 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             sales_delivery_code=None
         )
         updated = await ShipmentNotice.get(tenant_id=tenant_id, id=notice_id)
-        return ShipmentNoticeResponse.model_validate(updated)
+        resp = ShipmentNoticeResponse.model_validate(updated)
+        return await self._enrich_notice_response(tenant_id, updated, resp)

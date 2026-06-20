@@ -2555,8 +2555,23 @@ class ReportService:
         elif report_type in ["warehouse-transfer-tracking", "transfer"]:
             # 仓库调拨跟踪
             from apps.kuaizhizao.models.inventory_transfer import InventoryTransfer
-            items = await InventoryTransfer.filter(tenant_id=tenant_id).limit(100).values("transfer_code", "from_warehouse_name", "to_warehouse_name", "status")
-            return {"data": items, "success": True}
+            query = InventoryTransfer.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            total = await query.count()
+            items = await query.order_by("-created_at").offset(sk).limit(lim).values(
+                "code",
+                "from_warehouse_name",
+                "to_warehouse_name",
+                "status",
+                "total_quantity",
+                "transfer_date",
+            )
+            for it in items:
+                it["order_code"] = it.get("code")
+                it["from_warehouse"] = it.get("from_warehouse_name")
+                it["to_warehouse"] = it.get("to_warehouse_name")
+                it["quantity"] = float(it.get("total_quantity") or 0)
+                it.setdefault("material_name", "-")
+            return self._wrap_report_payload({"data": items, "success": True, "total": total})
         elif report_type in ["material-batch-tracking", "batch_tracking"]:
             # 物料批次追溯
             items = await MaterialBatch.filter(tenant_id=tenant_id).limit(100).values("batch_no", "material_name", "quantity", "status")

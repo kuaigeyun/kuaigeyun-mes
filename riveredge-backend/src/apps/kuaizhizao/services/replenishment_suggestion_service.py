@@ -179,7 +179,11 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
 
         suggestions = await query.order_by('-priority', '-created_at').offset(skip).limit(limit)
 
-        return [ReplenishmentSuggestionListResponse.model_validate(suggestion) for suggestion in suggestions]
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_replenishment_suggestion_list_capabilities,
+        )
+        responses = [ReplenishmentSuggestionListResponse.model_validate(suggestion) for suggestion in suggestions]
+        return enrich_replenishment_suggestion_list_capabilities(suggestions, responses)
 
     async def get_suggestion_by_id(
         self,
@@ -243,6 +247,12 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
 
             if not suggestion:
                 raise NotFoundError(f"补货建议不存在: {suggestion_id}")
+
+            from apps.kuaizhizao.services.document_action_policy.replenishment_suggestion import (
+                assert_replenishment_suggestion_capability,
+            )
+            action = "process" if process_data.status == "processed" else "ignore"
+            assert_replenishment_suggestion_capability(suggestion, action)
 
             # 获取处理人信息
             user_info = await self.get_user_info(processed_by)

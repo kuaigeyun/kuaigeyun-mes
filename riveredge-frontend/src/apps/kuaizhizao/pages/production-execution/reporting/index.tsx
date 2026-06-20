@@ -5,7 +5,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * 提供报工记录的管理和查询功能；扫码报工见移动端 kiosk。
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import type { DescriptionsProps } from 'antd';
 import {
@@ -46,7 +46,8 @@ import {
   EyeOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -77,6 +78,10 @@ import { coerceReportingCreateStrings } from '../../../utils/reportingPayload';
 import { countWithPagedRequests } from '../../../../../utils/pagedCount';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { reportingRecordBatchRevokeApprovalAllowed } from '../../../../../hooks/useDocumentCapabilities';
+
+const REPORTING_RESOURCE = 'kuaizhizao:production-execution-reporting';
 
 /** 报工记录（后端返回 snake_case） */
 interface ReportingRecord {
@@ -95,7 +100,29 @@ interface ReportingRecord {
   reported_at: string;
   remarks?: string;
   sop_parameters?: Record<string, any>;
+  capabilities?: {
+    revoke_approval?: { allowed: boolean; reason?: string | null };
+    print?: { allowed: boolean; reason?: string | null };
+  };
   [key: string]: any; // 支持索引访问
+}
+
+interface PullReportingWorkOrderCandidate {
+  id: number;
+  code?: string;
+  name?: string;
+  quantity?: number;
+  status?: string;
+  planned_start_date?: string;
+  planned_end_date?: string;
+}
+interface PullReportingOperationCandidate extends PullReportingWorkOrderCandidate {
+  pull_row_key: string;
+  work_order_id: number;
+  operation_id: number;
+  operation_code?: string;
+  operation_name?: string;
+  operation_sequence?: number | string;
 }
 
 function normalizeReportingStatus(status?: string): string {
@@ -202,12 +229,22 @@ const ReportingPage: React.FC = () => {
   const { token } = AntdTheme.useToken();
   const reportingDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
+  const tableRowsRef = useRef<ReportingRecord[]>([]);
+  const reportingPerms = useResourcePermissions(REPORTING_RESOURCE);
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [reportingDetail, setReportingDetail] = useState<ReportingRecord | null>(null);
   const [detailMaterialBindings, setDetailMaterialBindings] = useState<any[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const selectedRecordsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is ReportingRecord => row != null),
+    [selectedRowKeys],
+  );
 
   const [rpTrackingRefreshKey, setRpTrackingRefreshKey] = useState(0);
 
@@ -263,6 +300,13 @@ const ReportingPage: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: ['reportingStatistics'] });
   };
 
+  const handleReportingBatchSuccess = useCallback(() => {
+    setSelectedRowKeys([]);
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+    invalidateStatistics();
+  }, [invalidateMenuBadgeCounts, invalidateStatistics]);
+
   // 报工Modal状态
   const [reportingModalVisible, setReportingModalVisible] = useState(false);
   const formRef = useRef<any>(null);
@@ -300,6 +344,123 @@ const ReportingPage: React.FC = () => {
   );
   const createModalProxyWorkerRef = useRef<Pick<User, 'id' | 'full_name' | 'username'> | null>(null);
 
+  const openReportingCreateFromWorkOrder = useCallback(
+    async (workOrderId: number, selectedOperationId?: number) => {
+      if (!workOrderId) return;
+      formRef.current?.resetFields();
+      setReportOperations([]);
+      setReportOperationId(null);
+      try {
+        const [workOrder, operationsRes] = await Promise.all([
+          workOrderApi.get(workOrderId.toString()),
+          workOrderApi.getOperations(workOrderId.toString()),
+        ]);
+        const operations = Array.isArray(operationsRes)
+          ? operationsRes
+          : (operationsRes as any)?.data ?? (operationsRes as any)?.items ?? [];
+        if (!Array.isArray(operations) || operations.length === 0) {
+          messageApi.warning(t('app.kuaizhizao.workReporting.workOrderOrOperationMissing'));
+          return;
+        }
+        const preferredOperation =
+          operations.find((op: any) => Number(op.operation_id) === Number(selectedOperationId))
+          || operations.find((op: any) => String(op.status ?? '').toLowerCase() !== 'completed')
+          || operations[0];
+        setReportWorkOrders([workOrder]);
+        setReportWorkOrderId(workOrder.id ?? workOrderId);
+        setReportOperations(operations);
+        setReportOperationId(preferredOperation?.operation_id ?? null);
+        setReportingModalVisible(true);
+        formRef.current?.setFieldsValue({
+          work_order_id: workOrder.id ?? workOrderId,
+          operation_id: preferredOperation?.operation_id,
+        });
+      } catch (error: any) {
+        messageApi.error(error?.message || t('app.kuaizhizao.workReporting.loadWorkOrdersFailed'));
+        setReportWorkOrders([]);
+        setReportOperations([]);
+        setReportWorkOrderId(null);
+        setReportOperationId(null);
+      }
+    },
+    [messageApi, t],
+  );
+
+  const pullFromWorkOrderQuery = useUniPullQuery<PullReportingOperationCandidate>({
+    rowKey: 'pull_row_key',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
+      const normalizedKeyword = keyword.trim().toLowerCase();
+      const chunkSize = 100;
+      const maxRows = 1000;
+      const workOrders: PullReportingWorkOrderCandidate[] = [];
+      let skip = 0;
+      while (workOrders.length < maxRows) {
+        const res = await workOrderApi.list({
+          status: 'in_progress',
+          keyword: normalizedKeyword || undefined,
+          skip,
+          limit: chunkSize,
+        });
+        const chunk = Array.isArray(res) ? res : (res as any)?.data ?? (res as any)?.items ?? [];
+        if (!Array.isArray(chunk) || chunk.length === 0) break;
+        workOrders.push(...chunk);
+        if (chunk.length < chunkSize) break;
+        skip += chunkSize;
+      }
+      const rows = (
+        await Promise.all(
+          workOrders.map(async (workOrder) => {
+            if (!workOrder?.id) return [];
+            const operationsRes = await workOrderApi.getOperations(String(workOrder.id));
+            const operations = Array.isArray(operationsRes)
+              ? operationsRes
+              : (operationsRes as any)?.data ?? (operationsRes as any)?.items ?? [];
+            if (!Array.isArray(operations) || operations.length === 0) return [];
+            return operations.map((op: any) => ({
+              ...workOrder,
+              pull_row_key: `${workOrder.id}-${op.operation_id}`,
+              work_order_id: Number(workOrder.id),
+              operation_id: Number(op.operation_id),
+              operation_code: op.operation_code,
+              operation_name: op.operation_name || op.name,
+              operation_sequence: op.sequence,
+            }));
+          }),
+        )
+      ).flat();
+      const filteredRows = normalizedKeyword
+        ? rows.filter((row) => {
+          const workOrderCode = String(row.code || '').toLowerCase();
+          const workOrderName = String(row.name || '').toLowerCase();
+          const operationCode = String(row.operation_code || '').toLowerCase();
+          const operationName = String(row.operation_name || '').toLowerCase();
+          return (
+            workOrderCode.includes(normalizedKeyword)
+            || workOrderName.includes(normalizedKeyword)
+            || operationCode.includes(normalizedKeyword)
+            || operationName.includes(normalizedKeyword)
+          );
+        })
+        : rows;
+      const total = filteredRows.length;
+      const start = (page - 1) * pageSize;
+      return {
+        data: filteredRows.slice(start, start + pageSize),
+        total,
+      };
+    },
+    onConfirm: async (_selectedKeys, selectedRows) => {
+      const selected = selectedRows[0];
+      if (!selected?.work_order_id || !selected?.operation_id) {
+        messageApi.warning(t('app.kuaizhizao.workReporting.formWorkOrderRequired'));
+        return;
+      }
+      pullFromWorkOrderQuery.closeModal();
+      await openReportingCreateFromWorkOrder(selected.work_order_id, selected.operation_id);
+    },
+  });
+
   useEffect(() => {
     if (!reportingModalVisible || !canProxyReporting) {
       createModalProxyWorkerRef.current = null;
@@ -323,19 +484,7 @@ const ReportingPage: React.FC = () => {
    * 处理新建报工（打开弹窗并加载工单列表）
    */
   const handleNewReporting = async () => {
-    setReportingModalVisible(true);
-    formRef.current?.resetFields();
-    setReportOperations([]);
-    setReportWorkOrderId(null);
-    setReportOperationId(null);
-    try {
-      const workOrders = await workOrderApi.list({ status: 'in_progress', limit: 200 });
-      const list = Array.isArray(workOrders) ? workOrders : (workOrders as any)?.data ?? (workOrders as any)?.items ?? [];
-      setReportWorkOrders(Array.isArray(list) ? list : []);
-    } catch (e) {
-      messageApi.error(t('app.kuaizhizao.workReporting.loadWorkOrdersFailed'));
-      setReportWorkOrders([]);
-    }
+    pullFromWorkOrderQuery.openModal();
   };
 
   /**
@@ -1091,6 +1240,9 @@ const ReportingPage: React.FC = () => {
             return { data: [], success: false, total: 0 };
           }
         }}
+        onTableDataChange={(rows) => {
+          tableRowsRef.current = rows;
+        }}
         enableRowSelection={true}
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
@@ -1123,39 +1275,33 @@ const ReportingPage: React.FC = () => {
           style: { cursor: 'pointer' },
         })}
         toolBarActionsAfterDelete={[
-          <UniBatchMenuButton
-            key="reporting-batch-menu"
+          <UniCapabilityBatchButton
+            key="reporting-batch-revoke"
             selectedRowKeys={selectedRowKeys}
-            menuItems={[
-              {
-                key: 'batch-revoke',
-                label: t('app.kuaizhizao.workReporting.batchRevoke'),
-                icon: <RollbackOutlined />,
-                onClick: (keys) => {
-                  Modal.confirm({
-                    title: t('app.kuaizhizao.workReporting.confirmBatchRevokeTitle'),
-                    content: t('app.kuaizhizao.workReporting.confirmBatchRevokeContent', { count: keys.length }),
-                    onOk: async () => {
-                      try {
-                        const res = await reportingApi.batchRevoke(keys.map(String));
-                        if (res.success > 0) {
-                          messageApi.success(t('app.kuaizhizao.workReporting.batchRevokeSuccess', { count: res.success }));
-                        }
-                        if (res.failed > 0) {
-                          messageApi.warning(t('app.kuaizhizao.workReporting.batchRevokePartialFailed', { count: res.failed }));
-                        }
-                        invalidateMenuBadgeCounts();
-                        actionRef.current?.reload();
-                        invalidateStatistics();
-                        setSelectedRowKeys([]);
-                      } catch (error: any) {
-                        messageApi.error(error.message || t('app.kuaizhizao.workReporting.batchRevokeFailed'));
-                      }
-                    },
-                  });
-                },
-              },
-            ]}
+            selectedRecords={selectedRecordsForBatch}
+            capabilityKey="revoke_approval"
+            permAllowed={reportingPerms.canAction?.('revoke') ?? false}
+            batchAllowed={(records, perm) =>
+              reportingRecordBatchRevokeApprovalAllowed(records, perm)
+            }
+            onRunBulk={async (ids) => {
+              const res = await reportingApi.batchRevoke(ids.map(String));
+              return {
+                success_count: res.success,
+                failed_count: res.failed,
+              };
+            }}
+            labels={{
+              single: t('app.kuaizhizao.workReporting.batchRevoke'),
+              batch: t('app.kuaizhizao.workReporting.batchRevoke'),
+              batchConfirmTitle: t('app.kuaizhizao.workReporting.confirmBatchRevokeTitle'),
+              batchConfirmDescription: (count) =>
+                t('app.kuaizhizao.workReporting.confirmBatchRevokeContent', { count }),
+            }}
+            icon={<RollbackOutlined />}
+            size="middle"
+            requireConfirm
+            onSuccess={handleReportingBatchSuccess}
           />,
         ]}
       />
@@ -1290,6 +1436,56 @@ const ReportingPage: React.FC = () => {
           colProps={{ span: 24 }}
         />
       </FormModalTemplate>
+
+      <UniPullQueryModal<PullReportingOperationCandidate>
+        open={pullFromWorkOrderQuery.open}
+        title={t('app.kuaizhizao.workReporting.formWorkOrder')}
+        onCancel={pullFromWorkOrderQuery.closeModal}
+        onOk={pullFromWorkOrderQuery.handleConfirm}
+        rowKey="pull_row_key"
+        columns={[
+          { title: t('app.kuaizhizao.workReporting.colWorkOrderCode'), dataIndex: 'code', width: 180, ellipsis: true },
+          { title: t('app.kuaizhizao.workReporting.colWorkOrderName'), dataIndex: 'name', width: 220, ellipsis: true },
+          {
+            title: t('app.kuaizhizao.workReporting.formOperation'),
+            key: 'operation_display',
+            width: 220,
+            ellipsis: true,
+            render: (_, row) => `${row.operation_name || '-'} (${row.operation_code || '-'})`,
+          },
+          { title: t('app.kuaizhizao.workOrder.colPlannedQty'), dataIndex: 'quantity', width: 120, align: 'right' },
+          {
+            title: t('app.kuaizhizao.workOrder.colPlannedStart'),
+            dataIndex: 'planned_start_date',
+            width: 180,
+            render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+          },
+          {
+            title: t('app.kuaizhizao.workOrder.colPlannedEnd'),
+            dataIndex: 'planned_end_date',
+            width: 180,
+            render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+          },
+        ]}
+        dataSource={pullFromWorkOrderQuery.dataSource}
+        loading={pullFromWorkOrderQuery.loading}
+        confirmLoading={pullFromWorkOrderQuery.confirmLoading}
+        selectionType={pullFromWorkOrderQuery.selectionType}
+        selectedRowKeys={pullFromWorkOrderQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromWorkOrderQuery.handleSelectedRowKeysChange}
+        searchDraft={pullFromWorkOrderQuery.searchDraft}
+        onSearchDraftChange={pullFromWorkOrderQuery.setSearchDraft}
+        onSearchApply={pullFromWorkOrderQuery.handleSearchApply}
+        onSearchClear={pullFromWorkOrderQuery.handleSearchClear}
+        appliedKeyword={pullFromWorkOrderQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.workReporting.formWorkOrderPlaceholder')}
+        page={pullFromWorkOrderQuery.page}
+        pageSize={pullFromWorkOrderQuery.pageSize}
+        total={pullFromWorkOrderQuery.total}
+        onPageChange={pullFromWorkOrderQuery.handlePageChange}
+        okText={t('app.kuaizhizao.workReporting.createButton')}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+      />
 
 
       {/* 创建报废记录Modal */}

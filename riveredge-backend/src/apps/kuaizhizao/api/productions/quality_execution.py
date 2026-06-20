@@ -417,6 +417,29 @@ async def approve_incoming_inspection(
     )
 
 
+@router.post(
+    "/incoming-inspections/{inspection_id}/push-to-purchase-return",
+    response_model=Dict[str, Any],
+    summary="Push incoming inspection to purchase return",
+)
+async def push_incoming_inspection_to_purchase_return(
+    inspection_id: int = Path(..., description="来料检验单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """来料检验不合格下推采购退货单。"""
+    await _assert_incoming_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    return await IncomingInspectionService().push_to_purchase_return(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        created_by=current_user.id,
+    )
+
+
 @router.post("/incoming-inspections/from-purchase-receipt/{purchase_receipt_id}", response_model=List[IncomingInspectionResponse], summary="Create incoming inspection from purchase receipt")
 async def create_inspection_from_purchase_receipt(
     purchase_receipt_id: int = Path(..., description="采购入库单ID"),
@@ -1127,6 +1150,29 @@ async def create_finished_goods_inspection_from_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
         created_by=current_user.id
+    )
+
+
+@router.post(
+    "/finished-goods-inspections/{inspection_id}/push-to-rework",
+    response_model=Dict[str, Any],
+    summary="Push finished goods inspection to rework order",
+)
+async def push_finished_goods_inspection_to_rework(
+    inspection_id: int = Path(..., description="成品检验单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """成品检验不合格下推返工单。"""
+    await _assert_finished_goods_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    return await FinishedGoodsInspectionService().push_to_rework(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        created_by=current_user.id,
     )
 
 

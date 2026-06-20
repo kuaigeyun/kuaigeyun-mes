@@ -33,6 +33,13 @@ from apps.kuaizhizao.schemas.packing_binding import (
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from loguru import logger
+from apps.kuaizhizao.services.document_action_policy.packing_binding import (
+    assert_packing_binding_capability,
+)
+from apps.kuaizhizao.services.document_action_policy.enricher import (
+    enrich_packing_binding_capabilities_on_response,
+    enrich_packing_binding_list_capabilities,
+)
 
 
 class PackingBindingService(AppBaseService[PackingBinding]):
@@ -281,7 +288,8 @@ class PackingBindingService(AppBaseService[PackingBinding]):
             finished_goods_receipt_id=receipt_id,
             deleted_at__isnull=True
         ).order_by('-bound_at')
-        return [PackingBindingListResponse.model_validate(binding) for binding in bindings]
+        responses = [PackingBindingListResponse.model_validate(binding) for binding in bindings]
+        return enrich_packing_binding_list_capabilities(bindings, responses)
 
     async def get_packing_bindings_by_delivery(
         self,
@@ -294,7 +302,8 @@ class PackingBindingService(AppBaseService[PackingBinding]):
             sales_delivery_id=delivery_id,
             deleted_at__isnull=True
         ).order_by('-bound_at')
-        return [PackingBindingListResponse.model_validate(binding) for binding in bindings]
+        responses = [PackingBindingListResponse.model_validate(binding) for binding in bindings]
+        return enrich_packing_binding_list_capabilities(bindings, responses)
 
     async def delete_packing_binding(
         self,
@@ -319,6 +328,8 @@ class PackingBindingService(AppBaseService[PackingBinding]):
 
         if not binding:
             raise NotFoundError(f"装箱绑定记录不存在: {binding_id}")
+
+        assert_packing_binding_capability(binding, "delete")
 
         # 软删除
         binding.deleted_at = datetime.now()
@@ -367,7 +378,8 @@ class PackingBindingService(AppBaseService[PackingBinding]):
 
         bindings = await query.order_by('-bound_at').offset(skip).limit(limit)
 
-        return [PackingBindingListResponse.model_validate(binding) for binding in bindings]
+        responses = [PackingBindingListResponse.model_validate(binding) for binding in bindings]
+        return enrich_packing_binding_list_capabilities(bindings, responses)
 
     async def list_packing_bindings_page(
         self,
@@ -398,8 +410,12 @@ class PackingBindingService(AppBaseService[PackingBinding]):
 
         total = await query.count()
         rows = await query.order_by('-bound_at').offset(skip).limit(limit)
+        items = enrich_packing_binding_list_capabilities(
+            rows,
+            [PackingBindingListResponse.model_validate(r) for r in rows],
+        )
         return PackingBindingPageResponse(
-            items=[PackingBindingListResponse.model_validate(r) for r in rows],
+            items=items,
             total=total,
         )
 
@@ -477,7 +493,10 @@ class PackingBindingService(AppBaseService[PackingBinding]):
         if not binding:
             raise NotFoundError(f"装箱绑定记录不存在: {binding_id}")
 
-        return PackingBindingResponse.model_validate(binding)
+        return enrich_packing_binding_capabilities_on_response(
+            binding,
+            PackingBindingResponse.model_validate(binding),
+        )
 
     async def update_packing_binding(
         self,
@@ -513,6 +532,8 @@ class PackingBindingService(AppBaseService[PackingBinding]):
             if not binding:
                 raise NotFoundError(f"装箱绑定记录不存在: {binding_id}")
 
+            assert_packing_binding_capability(binding, "update")
+
             # 获取更新人信息
             user_info = await self.get_user_info(updated_by)
 
@@ -529,4 +550,7 @@ class PackingBindingService(AppBaseService[PackingBinding]):
 
             await binding.save()
 
-            return PackingBindingResponse.model_validate(binding)
+            return enrich_packing_binding_capabilities_on_response(
+                binding,
+                PackingBindingResponse.model_validate(binding),
+            )

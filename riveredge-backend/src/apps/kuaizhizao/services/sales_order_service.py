@@ -41,6 +41,12 @@ from apps.kuaizhizao.schemas.sales_order import (
     SalesOrderCreate, SalesOrderUpdate, SalesOrderResponse, SalesOrderListResponse,
     SalesOrderItemCreate, SalesOrderItemResponse,
 )
+from apps.kuaizhizao.services.document_action_policy.enricher import (
+    enrich_sales_order_capabilities_on_response,
+)
+from apps.kuaizhizao.services.document_action_policy.sales_order import (
+    assert_sales_order_capability,
+)
 from apps.kuaizhizao.constants import (
     DemandStatus,
     ReviewStatus,
@@ -701,6 +707,42 @@ class SalesOrderService:
         demand = await self._get_linked_demand(tenant_id, order.id)
         return bool(demand and demand.pushed_to_computation)
 
+    def _sales_order_capability_context(
+        self,
+        order: SalesOrder,
+        items: Optional[List[SalesOrderItem]],
+        demand: Optional[Demand],
+    ) -> dict[str, bool]:
+        item_list = items or []
+        has_items = len(item_list) > 0
+        has_line_work_orders = any(
+            int(getattr(it, "work_order_id", 0) or 0) > 0 for it in item_list
+        )
+        pushed = bool(demand and getattr(demand, "pushed_to_computation", False))
+        if getattr(order, "planning_pushed_to_computation", False):
+            pushed = True
+        return {
+            "pushed_to_computation": pushed,
+            "has_items": has_items,
+            "has_line_work_orders": has_line_work_orders,
+            "computation_pushed_blocks_withdraw": pushed,
+        }
+
+    async def _assert_sales_order_capability_for_order(
+        self,
+        tenant_id: int,
+        order: SalesOrder,
+        action: str,
+        items: Optional[List[SalesOrderItem]] = None,
+    ) -> None:
+        demand = await self._get_linked_demand(tenant_id, order.id)
+        if items is None:
+            items = await SalesOrderItem.filter(
+                tenant_id=tenant_id, sales_order_id=order.id
+            ).all()
+        ctx = self._sales_order_capability_context(order, items, demand)
+        assert_sales_order_capability(order, action, **ctx)
+
     async def _sync_demand_if_exists(self, tenant_id: int, order_id: int, operator_id: int) -> bool:
         """
         历史兼容占位：销售订单不再自动同步到需求池（Demand）。
@@ -1349,20 +1391,24 @@ class SalesOrderService:
         ).get(sales_order_id, {})
 
         audit_enabled = await self.business_config_service.check_audit_required(tenant_id, "sales_order")
-        return self._order_to_response(
+        return enrich_sales_order_capabilities_on_response(
             order,
-            items=items,
-            demand=demand,
-            duration_info=duration_info,
-            material_code_fallback=material_code_fallback,
-            material_fallback=material_fallback,
-            milestones=milestones,
-            delivery_progress=delivery_progress,
-            invoice_progress=finance.get("invoice_progress", 0.0),
-            invoice_amount_progress=finance.get("invoice_amount_progress", 0.0),
-            collection_progress=finance.get("collection_progress", 0.0),
-            shippable_hint=shippable_map.get(sales_order_id),
-            audit_enabled=audit_enabled,
+            self._order_to_response(
+                order,
+                items=items,
+                demand=demand,
+                duration_info=duration_info,
+                material_code_fallback=material_code_fallback,
+                material_fallback=material_fallback,
+                milestones=milestones,
+                delivery_progress=delivery_progress,
+                invoice_progress=finance.get("invoice_progress", 0.0),
+                invoice_amount_progress=finance.get("invoice_amount_progress", 0.0),
+                collection_progress=finance.get("collection_progress", 0.0),
+                shippable_hint=shippable_map.get(sales_order_id),
+                audit_enabled=audit_enabled,
+            ),
+            **self._sales_order_capability_context(order, items, demand),
         )
 
     async def _filter_orders_by_lifecycle_stage(
@@ -1651,21 +1697,29 @@ class SalesOrderService:
                 push_ratio = 0.0
 
             sales_orders.append(
-                self._order_to_response(
+                enrich_sales_order_capabilities_on_response(
                     order,
-                    items=items_for_response,
-                    demand=demand_by_order.get(order.id),
-                    delivery_progress=delivery_progress,
-                    invoice_progress=invoice_progress_val,
-                    invoice_amount_progress=invoice_amount_progress_val,
-                    collection_progress=collection_progress_val,
-                    pushed_work_order_quantity=pushed_qty,
-                    remaining_push_quantity=remaining_qty,
-                    work_order_push_progress=push_ratio,
-                    material_code_fallback=material_code_fallback_all.get(order.id) if include_items else None,
-                    material_fallback=material_fallback_all.get(order.id) if include_items else None,
-                    shippable_hint=shippable_map.get(order.id),
-                    audit_enabled=audit_enabled,
+                    self._order_to_response(
+                        order,
+                        items=items_for_response,
+                        demand=demand_by_order.get(order.id),
+                        delivery_progress=delivery_progress,
+                        invoice_progress=invoice_progress_val,
+                        invoice_amount_progress=invoice_amount_progress_val,
+                        collection_progress=collection_progress_val,
+                        pushed_work_order_quantity=pushed_qty,
+                        remaining_push_quantity=remaining_qty,
+                        work_order_push_progress=push_ratio,
+                        material_code_fallback=material_code_fallback_all.get(order.id) if include_items else None,
+                        material_fallback=material_fallback_all.get(order.id) if include_items else None,
+                        shippable_hint=shippable_map.get(order.id),
+                        audit_enabled=audit_enabled,
+                    ),
+                    **self._sales_order_capability_context(
+                        order,
+                        items,
+                        demand_by_order.get(order.id),
+                    ),
                 )
             )
         return SalesOrderListResponse(data=sales_orders, total=total, success=True)
@@ -1693,13 +1747,7 @@ class SalesOrderService:
                 user=current_user,
                 resource="kuaizhizao:sales-order",
             )
-        from apps.kuaizhizao.services.order_change.helpers import is_source_order_locked_for_direct_edit
-        if is_source_order_locked_for_direct_edit(order.status, order.review_status):
-            raise BusinessLogicError(
-                f"销售订单已生效或执行中，禁止直接修改，请通过销售变更单变更。当前状态: {order.status}"
-            )
-        if order.status not in (DemandStatus.DRAFT, DemandStatus.PENDING_REVIEW):
-            raise BusinessLogicError(f"只能更新草稿或待审核的销售订单，当前状态: {order.status}")
+        await self._assert_sales_order_capability_for_order(tenant_id, order, "update")
 
         if self._is_pending_review_status(order.status) and not approval_edit_context:
             submitter_id = getattr(order, "created_by", None) or getattr(order, "submitted_by", None)
@@ -2190,15 +2238,7 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        # 反审核 = 撤销审核：仅「已审核」，不含已确认/已生效
-        can_unapprove = (
-            self._is_strictly_audited_status(order.status)
-            or self._is_rejected_status(order.status)
-        )
-        if not can_unapprove:
-            raise BusinessLogicError(
-                f"只能反审核已审核或已驳回的订单，当前: status={order.status}, review_status={order.review_status}"
-            )
+        await self._assert_sales_order_capability_for_order(tenant_id, order, "revoke_approval")
 
         if self._is_strictly_audited_status(order.status) and not self._is_review_approved(order.review_status):
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
@@ -2258,9 +2298,7 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        if not self._is_audited(order.status):
-            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
-        self._assert_order_executable(order)
+        await self._assert_sales_order_capability_for_order(tenant_id, order, "push_computation")
 
         demand = await self._get_linked_demand(tenant_id, sales_order_id)
         if not demand:
@@ -2305,9 +2343,7 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        if not self._is_audited(order.status):
-            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
-        self._assert_order_executable(order)
+        await self._assert_sales_order_capability_for_order(tenant_id, order, "push_computation")
 
         items = await SalesOrderItem.filter(
             tenant_id=tenant_id, sales_order_id=sales_order_id
@@ -2591,9 +2627,7 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        if not self._is_audited(order.status):
-            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
-        self._assert_order_executable(order)
+        await self._assert_sales_order_capability_for_order(tenant_id, order, "push_work_order")
 
         items = await SalesOrderItem.filter(
             tenant_id=tenant_id, sales_order_id=sales_order_id
@@ -2916,9 +2950,7 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        if not self._is_audited(order.status):
-            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
-        self._assert_order_executable(order)
+        await self._assert_sales_order_capability_for_order(tenant_id, order, "push_work_order")
 
         items = await SalesOrderItem.filter(
             tenant_id=tenant_id, sales_order_id=sales_order_id
@@ -3062,6 +3094,12 @@ class SalesOrderService:
         sales_order_id: int,
     ) -> SalesOrderResponse:
         """撤回销售订单的需求计算"""
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        await self._assert_sales_order_capability_for_order(tenant_id, order, "withdraw_computation")
         demand = await self._get_linked_demand(tenant_id, sales_order_id)
         if not demand:
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
@@ -3084,13 +3122,7 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        if not self._can_withdraw_submitted_order(order):
-            raise BusinessLogicError(
-                f"只能撤回已提交且未审核的订单（待审核或已生效），当前: {order.status}"
-            )
-        self._assert_order_executable(order)
-        if await self._is_order_pushed_to_computation(tenant_id, order):
-            raise BusinessLogicError("订单已下推需求计算，请先在「下推」菜单中撤回计算后再撤回提交")
+        await self._assert_sales_order_capability_for_order(tenant_id, order, "withdraw_submit")
 
         prev_status = order.status
         async with in_transaction():
@@ -3143,13 +3175,7 @@ class SalesOrderService:
                 user=current_user,
                 resource="kuaizhizao:sales-order",
             )
-        deletable = (
-            self._is_draft(order.status)
-            or self._is_pending_review_status(order.status)
-            or str(order.status or "").strip() == "已提交"
-        )
-        if not deletable:
-            raise BusinessLogicError(f"只能删除草稿或待审核状态的订单，当前: {order.status}")
+        await self._assert_sales_order_capability_for_order(tenant_id, order, "delete")
 
         demand = await self._get_linked_demand(tenant_id, sales_order_id)
         if demand:
@@ -3273,7 +3299,7 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        self._validate_can_close_sales_order(order)
+        await self._assert_sales_order_capability_for_order(tenant_id, order, "close")
 
         from apps.common.base_service import AppBaseService
         closer_name = await AppBaseService().get_user_name(closed_by)
@@ -3375,6 +3401,38 @@ class SalesOrderService:
             "quotation": quotation.model_dump() if hasattr(quotation, "model_dump") else quotation,
         }
 
+    async def pull_sales_order_from_sales_contract(
+        self,
+        tenant_id: int,
+        contract_id: int,
+        created_by: int,
+        selected_item_ids: Optional[List[int]] = None,
+        release_lines: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """
+        销售订单域上拉建单：从销售合同创建销售订单。
+        """
+        if contract_id <= 0:
+            raise ValidationError("销售合同ID无效")
+
+        from apps.kuaizhizao.services.sales_contract_service import SalesContractService
+
+        sales_order, contract = await SalesContractService().convert_to_sales_order(
+            tenant_id=tenant_id,
+            contract_id=contract_id,
+            released_by=created_by,
+            selected_item_ids=selected_item_ids,
+            release_lines=release_lines,
+        )
+        return {
+            "success": True,
+            "message": "已从销售合同创建销售订单",
+            "source_type": "sales_contract",
+            "source_id": contract_id,
+            "sales_order": sales_order.model_dump() if hasattr(sales_order, "model_dump") else sales_order,
+            "sales_contract": contract.model_dump() if hasattr(contract, "model_dump") else contract,
+        }
+
     async def push_sales_order_to_delivery(
         self,
         tenant_id: int,
@@ -3385,6 +3443,13 @@ class SalesOrderService:
         warehouse_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """下推销售订单到销售出库"""
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        await self._assert_sales_order_capability_for_order(tenant_id, order, "push_sales_delivery")
+
         from apps.kuaizhizao.services.warehouse_service import SalesDeliveryService
         from apps.master_data.models.warehouse import Warehouse
 
@@ -3412,6 +3477,45 @@ class SalesOrderService:
             "delivery_code": delivery.delivery_code,
         }
 
+    async def push_sales_order_to_sales_return(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+        warehouse_id: int,
+        warehouse_name: Optional[str] = None,
+        return_quantities: Optional[Dict[int, float]] = None,
+        return_code: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """下推销售订单到销售退货单。"""
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        await self._assert_sales_order_capability_for_order(tenant_id, order, "push_sales_return")
+
+        if warehouse_id <= 0:
+            raise ValidationError("必须提供有效的退货仓库ID")
+
+        from apps.kuaizhizao.services.warehouse_service import SalesReturnService
+
+        sales_return = await SalesReturnService().pull_from_sales_order(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            created_by=created_by,
+            warehouse_id=warehouse_id,
+            warehouse_name=warehouse_name,
+            return_quantities=return_quantities if isinstance(return_quantities, dict) else None,
+            return_code=return_code if return_code else None,
+        )
+        return {
+            "success": True,
+            "message": "已生成销售退货单",
+            "return_id": sales_return.id,
+            "return_code": sales_return.return_code,
+        }
+
     async def push_sales_order_to_shipment_notice(
         self,
         tenant_id: int,
@@ -3426,9 +3530,7 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        if not self._is_audited(order.status):
-            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
-        self._assert_order_executable(order)
+        await self._assert_sales_order_capability_for_order(tenant_id, order, "push_shipment_notice")
 
         items = await SalesOrderItem.filter(
             tenant_id=tenant_id, sales_order_id=sales_order_id
@@ -3606,9 +3708,7 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        if not self._is_audited(order.status):
-            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
-        self._assert_order_executable(order)
+        await self._assert_sales_order_capability_for_order(tenant_id, order, "push_invoice")
 
         items = await SalesOrderItem.filter(
             tenant_id=tenant_id, sales_order_id=sales_order_id

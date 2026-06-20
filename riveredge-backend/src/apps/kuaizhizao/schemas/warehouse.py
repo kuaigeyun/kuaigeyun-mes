@@ -12,6 +12,13 @@ from typing import Optional, List, Literal
 from pydantic import Field
 from core.schemas.base import BaseSchema
 
+from apps.kuaizhizao.services.document_action_policy.types import (
+    SalesReturnCapabilities,
+    PurchaseReturnCapabilities,
+    InboundHubCapabilities,
+    OutboundHubCapabilities,
+)
+
 
 # === 生产领料单 ===
 
@@ -50,6 +57,9 @@ class ProductionPickingResponse(ProductionPickingBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    capabilities: Optional[OutboundHubCapabilities] = Field(
+        None, description="业务态 capabilities（出库 Hub，document_action_policy）",
+    )
 
     class Config:
         from_attributes = True
@@ -153,6 +163,9 @@ class ProductionReturnResponse(ProductionReturnBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    capabilities: Optional[InboundHubCapabilities] = Field(
+        None, description="业务态 capabilities（入库 Hub，document_action_policy）",
+    )
 
     class Config:
         from_attributes = True
@@ -288,6 +301,9 @@ class FinishedGoodsReceiptResponse(FinishedGoodsReceiptBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    capabilities: Optional[InboundHubCapabilities] = Field(
+        None, description="业务态 capabilities（入库 Hub，document_action_policy）",
+    )
     inbound_doc_kind: Literal["finished_goods", "semi_finished_goods"] = Field(
         "finished_goods",
         description="生产入库单据形态（成品/半成品），与物理表一致时下推接口可能返回 semi 以兼容旧客户端",
@@ -387,6 +403,9 @@ class SemiFinishedGoodsReceiptResponse(SemiFinishedGoodsReceiptBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    capabilities: Optional[InboundHubCapabilities] = Field(
+        None, description="业务态 capabilities（入库 Hub，document_action_policy）",
+    )
     inbound_doc_kind: Literal["finished_goods", "semi_finished_goods"] = Field(
         "semi_finished_goods",
         description="固定为半成品入库单",
@@ -502,6 +521,9 @@ class SalesDeliveryResponse(SalesDeliveryBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    capabilities: Optional[OutboundHubCapabilities] = Field(
+        None, description="业务态 capabilities（出库 Hub，document_action_policy）",
+    )
 
     class Config:
         from_attributes = True
@@ -692,6 +714,9 @@ class PurchaseReceiptResponse(PurchaseReceiptBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    capabilities: Optional[InboundHubCapabilities] = Field(
+        None, description="业务态 capabilities（入库 Hub，document_action_policy）",
+    )
 
     class Config:
         from_attributes = True
@@ -760,6 +785,11 @@ class SalesReturnResponse(SalesReturnBase):
     """销售退货单响应schema"""
     id: int = Field(..., description="退货单ID")
     tenant_id: int = Field(..., description="租户ID")
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    capabilities: Optional[SalesReturnCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
+    )
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 
@@ -876,6 +906,10 @@ class PurchaseReturnResponse(PurchaseReturnBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    capabilities: Optional[PurchaseReturnCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
+    )
 
     class Config:
         from_attributes = True
@@ -977,6 +1011,9 @@ class OtherInboundResponse(OtherInboundBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    capabilities: Optional[InboundHubCapabilities] = Field(
+        None, description="业务态 capabilities（入库 Hub，document_action_policy）",
+    )
 
     class Config:
         from_attributes = True
@@ -1081,6 +1118,9 @@ class OtherOutboundResponse(OtherOutboundBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    capabilities: Optional[OutboundHubCapabilities] = Field(
+        None, description="业务态 capabilities（出库 Hub，document_action_policy）",
+    )
 
     class Config:
         from_attributes = True
@@ -1182,6 +1222,9 @@ class MaterialBorrowResponse(MaterialBorrowBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    capabilities: Optional[OutboundHubCapabilities] = Field(
+        None, description="业务态 capabilities（出库 Hub，document_action_policy）",
+    )
 
     class Config:
         from_attributes = True
@@ -1282,6 +1325,9 @@ class MaterialReturnResponse(MaterialReturnBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    capabilities: Optional[InboundHubCapabilities] = Field(
+        None, description="业务态 capabilities（入库 Hub，document_action_policy）",
+    )
 
     class Config:
         from_attributes = True

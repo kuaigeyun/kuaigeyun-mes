@@ -11,7 +11,7 @@ import { App, Button, Col, DatePicker, Descriptions, Empty, Form, Input, InputNu
 import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FormOutlined, PlusOutlined, SwapOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -19,6 +19,7 @@ import {
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, FORM_LAYOUT, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
@@ -26,6 +27,7 @@ import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleSt
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import {
   approvePurchaseInquiry,
@@ -98,14 +100,18 @@ function canUseRequisitionForInquiryPull(status: string): boolean {
   ].includes(s);
 }
 
+const PURCHASE_INQUIRY_RESOURCE = 'kuaizhizao:purchase-inquiry';
+
 const PurchaseInquiriesPage: React.FC = () => {
   const { t } = useTranslation();
   const { message, modal } = App.useApp();
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>();
-  const lastInquiriesCacheRef = useRef<PurchaseInquiry[]>([]);
+  const tableRowsRef = useRef<PurchaseInquiry[]>([]);
   const auditEnabled = useAuditRequired('kuaizhizao', 'purchase-inquiry');
+  const purchaseInquiryPerms = useResourcePermissions(PURCHASE_INQUIRY_RESOURCE);
   const pullFromRequisitionAction = resolveKuaizhizaoDocumentAction(t, 'purchase_inquiry.pull_from_requisition');
+  const pushToPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order.pull_from_inquiry');
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<PurchaseInquiry | null>(null);
@@ -115,8 +121,6 @@ const PurchaseInquiriesPage: React.FC = () => {
   const [editItems, setEditItems] = useState<PurchaseInquiryItem[]>([]);
   const [editVendors, setEditVendors] = useState<PurchaseInquiryVendor[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createForm] = Form.useForm();
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [quoteForm] = Form.useForm();
   const [pendingQuoteFormValues, setPendingQuoteFormValues] = useState<Record<string, unknown> | null>(null);
@@ -126,12 +130,29 @@ const PurchaseInquiriesPage: React.FC = () => {
   const [awardSelection, setAwardSelection] = useState<Record<number, number>>({});
   const [supplierOptions, setSupplierOptions] = useState<Array<{ id: number; name: string; code?: string }>>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [pullFromRequisitionVisible, setPullFromRequisitionVisible] = useState(false);
-  const [pullRequisitionLoading, setPullRequisitionLoading] = useState(false);
-  const [pullRequisitionSubmitting, setPullRequisitionSubmitting] = useState(false);
-  const [pullRequisitionKeyword, setPullRequisitionKeyword] = useState('');
-  const [pullRequisitionLineCandidates, setPullRequisitionLineCandidates] = useState<PullPurchaseRequisitionLineCandidate[]>([]);
-  const [selectedPullRequisitionLineKeys, setSelectedPullRequisitionLineKeys] = useState<React.Key[]>([]);
+
+  const selectedInquiriesForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is PurchaseInquiry => row != null),
+    [selectedRowKeys],
+  );
+
+  const purchaseInquiryAuditBatchHandlers = useMemo(
+    () => ({
+      submit: (id: number) => submitPurchaseInquiry(id),
+      approve: (id: number) => approvePurchaseInquiry(id, true),
+      revoke: (id: number) => withdrawPurchaseInquiryApproval(id),
+    }),
+    [],
+  );
+
+  const handlePurchaseInquiryAuditBatchSuccess = useCallback(() => {
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  }, []);
+
   const [addVendorModalOpen, setAddVendorModalOpen] = useState(false);
   const [selectedSupplierIdsForAdd, setSelectedSupplierIdsForAdd] = useState<number[]>([]);
 
@@ -171,7 +192,7 @@ const PurchaseInquiriesPage: React.FC = () => {
 
   const handleSaveEdit = async () => {
     const values = await editForm.validateFields();
-    await updatePurchaseInquiry(editingId!, {
+    const payload = {
       inquiry_name: values.inquiry_name,
       inquiry_date: values.inquiry_date?.format('YYYY-MM-DD'),
       quote_deadline: values.quote_deadline?.format('YYYY-MM-DD'),
@@ -193,27 +214,29 @@ const PurchaseInquiriesPage: React.FC = () => {
         supplier_name: v.supplier_name!,
         notes: v.notes,
       })),
-    });
-    message.success(t('common.updateSuccess'));
+    };
+    if (editingId) {
+      await updatePurchaseInquiry(editingId, payload);
+      message.success(t('common.updateSuccess'));
+    } else {
+      const doc = await createPurchaseInquiry(payload);
+      message.success(t('app.kuaizhizao.purchaseInquiry.created', { code: doc.inquiry_code }));
+    }
     setEditOpen(false);
     setPendingEditFormValues(null);
     actionRef.current?.reload();
   };
 
-  const handleCreate = async () => {
-    const values = await createForm.validateFields();
-    const doc = await createPurchaseInquiry({
-      inquiry_name: values.inquiry_name,
-      inquiry_date: values.inquiry_date?.format('YYYY-MM-DD'),
-      quote_deadline: values.quote_deadline?.format('YYYY-MM-DD'),
-      notes: values.notes,
-      items: [],
-      vendors: [],
+  const handleCreate = () => {
+    setEditingId(null);
+    setEditItems([]);
+    setEditVendors([]);
+    setPendingEditFormValues({
+      inquiry_date: dayjs(),
+      attachments: [],
+      __inquiry_edit_item: [],
     });
-    message.success(t('app.kuaizhizao.purchaseInquiry.created', { code: doc.inquiry_code }));
-    setCreateOpen(false);
-    actionRef.current?.reload();
-    await openEdit(doc);
+    setEditOpen(true);
   };
 
   const openQuoteEntry = (inquiry: PurchaseInquiry, supplierId: number) => {
@@ -295,7 +318,7 @@ const PurchaseInquiriesPage: React.FC = () => {
 
   const handleConvertPO = async (inquiry: PurchaseInquiry) => {
     modal.confirm({
-      title: t('app.kuaizhizao.purchaseInquiry.pushPurchaseOrder'),
+      title: pushToPurchaseOrderAction.label,
       content: t('app.kuaizhizao.purchaseInquiry.pushPurchaseOrderConfirm'),
       onOk: async () => {
         const res = await convertInquiryToPurchaseOrder(inquiry.id!);
@@ -306,127 +329,119 @@ const PurchaseInquiriesPage: React.FC = () => {
     });
   };
 
-  const loadPullRequisitionCandidates = async (keyword: string = '') => {
-    setPullRequisitionLoading(true);
-    try {
-      const result = await listPurchaseRequisitions({
-        skip: 0,
-        limit: 30,
-        keyword: keyword.trim() || undefined,
-      });
-      const rows = result.data ?? [];
-      const details = await Promise.all(
-        rows
-          .filter((row) => row.id && row.requisition_code)
-          .slice(0, 30)
-          .map(async (row) => {
-            try {
-              const detail = await getPurchaseRequisition(Number(row.id));
-              const status = detail.status || '';
-              if (!canUseRequisitionForInquiryPull(status)) return [] as PullPurchaseRequisitionLineCandidate[];
-              return (detail.items ?? [])
-                .filter((item) => item.id != null)
-                .map((item) => ({
-                  key: `${detail.id}-${item.id}`,
-                  requisition_id: Number(detail.id),
-                  requisition_code: detail.requisition_code || '',
-                  requisition_name: detail.requisition_name || '',
-                  applicant_name: detail.applicant_name || '',
-                  requisition_date: detail.requisition_date || '',
-                  requisition_status: status,
-                  review_status: detail.review_status || '',
-                  item_id: Number(item.id),
-                  material_code: item.material_code || '',
-                  material_name: item.material_name || '',
-                  material_spec: item.material_spec || '',
-                  unit: item.unit || '',
-                  quantity: Number(item.quantity || 0),
-                  required_date: item.required_date || detail.required_date || '',
-                  purchase_order_id: item.purchase_order_id ?? undefined,
-                  converted: !!item.purchase_order_id,
-                }));
-            } catch {
-              return [] as PullPurchaseRequisitionLineCandidate[];
-            }
-          }),
-      );
-      setPullRequisitionLineCandidates(details.flat());
-    } catch (e: unknown) {
-      const err = e as { message?: string };
-      message.error(err?.message || t('app.kuaizhizao.purchaseInquiry.loadRequisitionsFailed'));
-      setPullRequisitionLineCandidates([]);
-    } finally {
-      setPullRequisitionLoading(false);
-    }
-  };
-
-  const handlePullFromRequisition = () => {
-    setPullRequisitionKeyword('');
-    setSelectedPullRequisitionLineKeys([]);
-    setPullRequisitionLineCandidates([]);
-    setPullFromRequisitionVisible(true);
-    void loadPullRequisitionCandidates('');
-  };
-
-  const handlePullFromRequisitionConfirm = async () => {
-    const selectedLines = pullRequisitionLineCandidates.filter((line) => selectedPullRequisitionLineKeys.includes(line.key));
-    if (!selectedLines.length) {
-      message.warning(t('app.kuaizhizao.purchaseInquiry.selectRequisitionLinesFirst'));
-      return;
-    }
-    try {
-      setPullRequisitionSubmitting(true);
-      const grouped = selectedLines.reduce<Record<number, PullPurchaseRequisitionLineCandidate[]>>((acc, line) => {
-        if (!acc[line.requisition_id]) acc[line.requisition_id] = [];
-        acc[line.requisition_id].push(line);
-        return acc;
-      }, {});
-
-      const createdCodes: string[] = [];
-      let lastId: number | undefined;
-      for (const [ridText, lines] of Object.entries(grouped)) {
-        const requisitionId = Number(ridText);
-        const doc = await createInquiryFromRequisition(requisitionId, {
-          item_ids: lines.map((line) => line.item_id),
+  const pullFromRequisitionQuery = useUniPullQuery<PullPurchaseRequisitionLineCandidate>({
+    rowKey: 'key',
+    selectionType: 'checkbox',
+    loadData: async ({ keyword, page, pageSize }) => {
+      try {
+        const result = await listPurchaseRequisitions({
+          skip: 0,
+          limit: 30,
+          keyword: keyword.trim() || undefined,
         });
-        if (doc.inquiry_code) createdCodes.push(doc.inquiry_code);
-        lastId = doc.id;
-      }
-      message.success(
-        createdCodes.length
-          ? t('app.kuaizhizao.purchaseInquiry.createdFromPullWithCodes', {
-              target: pullFromRequisitionAction.targetLabel,
-              codes: createdCodes.join('、'),
-            })
-          : t('app.kuaizhizao.purchaseInquiry.createdFromPull', {
-              source: pullFromRequisitionAction.sourceLabel,
-              target: pullFromRequisitionAction.targetLabel,
+        const rows = result.data ?? [];
+        const details = await Promise.all(
+          rows
+            .filter((row) => row.id && row.requisition_code)
+            .slice(0, 30)
+            .map(async (row) => {
+              try {
+                const detail = await getPurchaseRequisition(Number(row.id));
+                const status = detail.status || '';
+                if (!canUseRequisitionForInquiryPull(status)) return [] as PullPurchaseRequisitionLineCandidate[];
+                return (detail.items ?? [])
+                  .filter((item) => item.id != null)
+                  .map((item) => ({
+                    key: `${detail.id}-${item.id}`,
+                    requisition_id: Number(detail.id),
+                    requisition_code: detail.requisition_code || '',
+                    requisition_name: detail.requisition_name || '',
+                    applicant_name: detail.applicant_name || '',
+                    requisition_date: detail.requisition_date || '',
+                    requisition_status: status,
+                    review_status: detail.review_status || '',
+                    item_id: Number(item.id),
+                    material_code: item.material_code || '',
+                    material_name: item.material_name || '',
+                    material_spec: item.material_spec || '',
+                    unit: item.unit || '',
+                    quantity: Number(item.quantity || 0),
+                    required_date: item.required_date || detail.required_date || '',
+                    purchase_order_id: item.purchase_order_id ?? undefined,
+                    converted: !!item.purchase_order_id,
+                  }));
+              } catch {
+                return [] as PullPurchaseRequisitionLineCandidate[];
+              }
             }),
-      );
-      setPullFromRequisitionVisible(false);
-      actionRef.current?.reload();
-      if (lastId) {
-        const full = await getPurchaseInquiry(lastId);
-        await openEdit(full);
+        );
+        const all = details.flat();
+        const start = (page - 1) * pageSize;
+        return { data: all.slice(start, start + pageSize), total: all.length };
+      } catch (e: unknown) {
+        const err = e as { message?: string };
+        message.error(err?.message || t('app.kuaizhizao.purchaseInquiry.loadRequisitionsFailed'));
+        return { data: [], total: 0 };
       }
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string | { message?: string } } }; message?: string };
-      const detail = err?.response?.data?.detail;
-      const detailMsg = typeof detail === 'string' ? detail : detail?.message;
-      message.error(detailMsg || err?.message || t('app.kuaizhizao.purchaseInquiry.createFromPullFailed', {
-        source: pullFromRequisitionAction.sourceLabel,
-        target: pullFromRequisitionAction.targetLabel,
-      }));
-    } finally {
-      setPullRequisitionSubmitting(false);
-    }
-  };
+    },
+    isRowDisabled: (record) => record.converted,
+    onConfirm: async (keys, rows) => {
+      const selectedLines = rows.filter((line) => keys.includes(line.key));
+      if (!selectedLines.length) {
+        message.warning(t('app.kuaizhizao.purchaseInquiry.selectRequisitionLinesFirst'));
+        return;
+      }
+      try {
+        const grouped = selectedLines.reduce<Record<number, PullPurchaseRequisitionLineCandidate[]>>((acc, line) => {
+          if (!acc[line.requisition_id]) acc[line.requisition_id] = [];
+          acc[line.requisition_id].push(line);
+          return acc;
+        }, {});
+
+        const createdCodes: string[] = [];
+        let lastId: number | undefined;
+        for (const [ridText, lines] of Object.entries(grouped)) {
+          const requisitionId = Number(ridText);
+          const doc = await createInquiryFromRequisition(requisitionId, {
+            item_ids: lines.map((line) => line.item_id),
+          });
+          if (doc.inquiry_code) createdCodes.push(doc.inquiry_code);
+          lastId = doc.id;
+        }
+        message.success(
+          createdCodes.length
+            ? t('app.kuaizhizao.purchaseInquiry.createdFromPullWithCodes', {
+                target: pullFromRequisitionAction.targetLabel,
+                codes: createdCodes.join('、'),
+              })
+            : t('app.kuaizhizao.purchaseInquiry.createdFromPull', {
+                source: pullFromRequisitionAction.sourceLabel,
+                target: pullFromRequisitionAction.targetLabel,
+              }),
+        );
+        actionRef.current?.reload();
+        pullFromRequisitionQuery.closeModal();
+        if (lastId) {
+          const full = await getPurchaseInquiry(lastId);
+          await openEdit(full);
+        }
+      } catch (e: unknown) {
+        const err = e as { response?: { data?: { detail?: string | { message?: string } } }; message?: string };
+        const detail = err?.response?.data?.detail;
+        const detailMsg = typeof detail === 'string' ? detail : detail?.message;
+        message.error(detailMsg || err?.message || t('app.kuaizhizao.purchaseInquiry.createFromPullFailed', {
+          source: pullFromRequisitionAction.sourceLabel,
+          target: pullFromRequisitionAction.targetLabel,
+        }));
+      }
+    },
+  });
 
   const selectedInquiryForToolbar = useMemo(() => {
     if (selectedRowKeys.length !== 1) return null;
     const id = Number(selectedRowKeys[0]);
     if (!Number.isFinite(id) || id <= 0) return null;
-    return lastInquiriesCacheRef.current.find((row) => row.id === id) ?? null;
+    return tableRowsRef.current.find((row) => row.id === id) ?? null;
   }, [selectedRowKeys]);
 
   const handleBatchDelete = async (keys: React.Key[]) => {
@@ -452,84 +467,6 @@ const PurchaseInquiriesPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
-  const handleBatchSubmit = async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      message.warning(t('app.kuaizhizao.purchaseInquiry.selectInquiriesFirst'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await submitPurchaseInquiry(id);
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) message.success(t('app.kuaizhizao.purchaseInquiry.batchSubmitSuccess', { count: success }));
-    if (failed > 0) message.warning(t('app.kuaizhizao.purchaseInquiry.batchSubmitPartial', { count: failed }));
-    setSelectedRowKeys([]);
-    actionRef.current?.reload();
-  };
-
-  const handleBatchApprove = async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      message.warning(t('app.kuaizhizao.purchaseInquiry.selectInquiriesFirst'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await approvePurchaseInquiry(id, true);
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) message.success(t('app.kuaizhizao.purchaseInquiry.batchApproveSuccess', { count: success }));
-    if (failed > 0) message.warning(t('app.kuaizhizao.purchaseInquiry.batchApprovePartial', { count: failed }));
-    setSelectedRowKeys([]);
-    actionRef.current?.reload();
-  };
-
-  const handleBatchWithdraw = async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      message.warning(t('app.kuaizhizao.purchaseInquiry.selectInquiriesFirst'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await withdrawPurchaseInquiryApproval(id);
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) message.success(t('app.kuaizhizao.purchaseInquiry.batchWithdrawSuccess', { count: success }));
-    if (failed > 0) message.warning(t('app.kuaizhizao.purchaseInquiry.batchWithdrawPartial', { count: failed }));
-    setSelectedRowKeys([]);
-    actionRef.current?.reload();
-  };
-
   const canUseToolbarPush = selectedInquiryForToolbar ? isInquiryAwarded(selectedInquiryForToolbar) : false;
 
   const toolbarPushMenuItems = useMemo(
@@ -538,7 +475,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         ? buildUniPushMenuItems([
             {
               key: 'push-purchase-order',
-              label: t('app.kuaizhizao.purchaseInquiry.pushPurchaseOrder'),
+              label: pushToPurchaseOrderAction.label,
               icon: <SwapOutlined />,
               onClick: () => {
                 void handleConvertPO(selectedInquiryForToolbar);
@@ -546,7 +483,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             },
           ])
         : [],
-    [selectedInquiryForToolbar, canUseToolbarPush, t],
+    [selectedInquiryForToolbar, canUseToolbarPush, pushToPurchaseOrderAction.label],
   );
 
   useEffect(() => {
@@ -637,7 +574,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       lifecycle_stage: apiParams.lifecycle_stage,
       keyword: params.keyword as string | undefined,
     });
-    lastInquiriesCacheRef.current = list.data ?? [];
+    tableRowsRef.current = list.data ?? [];
     return { data: list.data ?? [], success: true, total: list.total ?? list.data?.length ?? 0 };
   }, []);
 
@@ -973,6 +910,9 @@ const PurchaseInquiriesPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         request={request}
+        onTableDataChange={(rows) => {
+          tableRowsRef.current = rows;
+        }}
         columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-inquiries"
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
         pinnedTabsValueEnum={purchaseInquiryLifecycleValueEnum}
@@ -983,33 +923,15 @@ const PurchaseInquiriesPage: React.FC = () => {
         onDelete={handleBatchDelete}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.purchaseInquiry.confirmBatchDelete', { count })}
         toolBarActionsAfterDelete={[
-          <UniBatchMenuButton
+          <UniAuditBatchMenuButton
             key="purchase-inquiry-batch-menu"
             selectedRowKeys={selectedRowKeys}
-            menuItems={[
-              {
-                key: 'submit',
-                label: t('app.kuaizhizao.purchaseInquiry.batchSubmit'),
-                icon: <ThunderboltOutlined />,
-                onClick: handleBatchSubmit,
-              },
-              ...(auditEnabled
-                ? [
-                    {
-                      key: 'approve',
-                      label: t('app.kuaizhizao.purchaseInquiry.batchApprove'),
-                      icon: <CheckOutlined />,
-                      onClick: handleBatchApprove,
-                    },
-                  ]
-                : []),
-              {
-                key: 'withdraw',
-                label: t('app.kuaizhizao.purchaseInquiry.batchWithdrawReview'),
-                icon: <EditOutlined />,
-                onClick: handleBatchWithdraw,
-              },
-            ]}
+            selectedRecords={selectedInquiriesForBatch}
+            auditEnabled={auditEnabled}
+            permGates={purchaseInquiryPerms}
+            handlers={purchaseInquiryAuditBatchHandlers}
+            onSuccess={handlePurchaseInquiryAuditBatchSuccess}
+            toolBarButtonSize="middle"
           />,
         ]}
         toolBarRender={() => [
@@ -1018,12 +940,12 @@ const PurchaseInquiriesPage: React.FC = () => {
             compactKey="create-purchase-inquiry-with-pull"
             createIcon={<PlusOutlined />}
             createLabel={t('app.kuaizhizao.purchaseInquiry.createInquiry')}
-            onCreate={() => { createForm.resetFields(); setCreateOpen(true); }}
+            onCreate={handleCreate}
             menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
               {
                 key: 'pull-from-requisition',
                 actionKey: 'purchase_inquiry.pull_from_requisition',
-                onClick: handlePullFromRequisition,
+                onClick: pullFromRequisitionQuery.openModal,
               },
             ])}
           />,
@@ -1035,39 +957,8 @@ const PurchaseInquiriesPage: React.FC = () => {
         ]}
       />
 
-      <Modal title={t('app.kuaizhizao.purchaseInquiry.createModalTitle')} open={createOpen} onCancel={() => setCreateOpen(false)} onOk={() => void handleCreate()} {...MODAL_CONFIG}>
-        <Form form={createForm} layout="vertical">
-          <Row gutter={16}>
-            <Col span={10}>
-              <Form.Item name="inquiry_name" label={t('app.kuaizhizao.purchaseInquiry.inquiryName')} rules={[{ required: true }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={7}>
-              <Form.Item name="inquiry_date" label={t('app.kuaizhizao.purchaseInquiry.inquiryDate')} initialValue={dayjs()}>
-                <DatePicker style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-            <Col span={7}>
-              <Form.Item name="quote_deadline" label={t('app.kuaizhizao.purchaseInquiry.quoteDeadline')}>
-                <FutureDatePicker
-                  style={{ width: '100%' }}
-                  getForm={() => createForm}
-                  baseFieldName="inquiry_date"
-                  fieldName="quote_deadline"
-                  t={t}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item name="notes" label={t('app.kuaizhizao.purchaseInquiry.notes')}>
-            <Input.TextArea rows={2} />
-          </Form.Item>
-        </Form>
-      </Modal>
-
       <FormModalTemplate
-        title={t('app.kuaizhizao.purchaseInquiry.editTitle')}
+        title={editingId ? t('app.kuaizhizao.purchaseInquiry.editTitle') : t('app.kuaizhizao.purchaseInquiry.createModalTitle')}
         open={editOpen}
         onClose={() => setEditOpen(false)}
         afterOpenChange={(open) => {
@@ -1241,7 +1132,7 @@ const PurchaseInquiriesPage: React.FC = () => {
                 <Button onClick={() => void openCompare(detail)}>{t('app.kuaizhizao.purchaseInquiry.compareAward')}</Button>
               )}
               {isInquiryAwarded(detail) && (
-                <Button icon={<SwapOutlined />} onClick={() => void handleConvertPO(detail)}>{t('app.kuaizhizao.purchaseInquiry.pushPurchaseOrder')}</Button>
+                <Button icon={<SwapOutlined />} onClick={() => void handleConvertPO(detail)}>{pushToPurchaseOrderAction.label}</Button>
               )}
               <UniWorkflowActions {...rowActionKind('skip')}
                 record={detail}
@@ -1394,69 +1285,40 @@ const PurchaseInquiriesPage: React.FC = () => {
         />
       </Modal>
 
-      <Modal
+      <UniPullQueryModal<PullPurchaseRequisitionLineCandidate>
+        open={pullFromRequisitionQuery.open}
         title={pullFromRequisitionAction.label}
-        open={pullFromRequisitionVisible}
-        width={1280}
-        onCancel={() => setPullFromRequisitionVisible(false)}
-        onOk={() => void handlePullFromRequisitionConfirm()}
+        onCancel={pullFromRequisitionQuery.closeModal}
+        onOk={pullFromRequisitionQuery.handleConfirm}
+        rowKey="key"
+        columns={pullRequisitionColumns}
+        dataSource={pullFromRequisitionQuery.dataSource}
+        loading={pullFromRequisitionQuery.loading}
+        confirmLoading={pullFromRequisitionQuery.confirmLoading}
+        selectionType={pullFromRequisitionQuery.selectionType}
+        selectedRowKeys={pullFromRequisitionQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromRequisitionQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromRequisitionQuery.isRowDisabled}
+        searchDraft={pullFromRequisitionQuery.searchDraft}
+        onSearchDraftChange={pullFromRequisitionQuery.setSearchDraft}
+        onSearchApply={pullFromRequisitionQuery.handleSearchApply}
+        onSearchClear={pullFromRequisitionQuery.handleSearchClear}
+        appliedKeyword={pullFromRequisitionQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.purchaseInquiry.searchRequisitionPlaceholder')}
+        emptyText={t('app.kuaizhizao.purchaseInquiry.emptyNoRequisitionLines')}
+        emptySearchText={t('app.kuaizhizao.purchaseInquiry.emptyNoRequisitionSearchResults')}
+        page={pullFromRequisitionQuery.page}
+        pageSize={pullFromRequisitionQuery.pageSize}
+        total={pullFromRequisitionQuery.total}
+        onPageChange={pullFromRequisitionQuery.handlePageChange}
         okText={t('app.kuaizhizao.purchaseInquiry.createInquiryOk')}
-        cancelText={t('common.cancel')}
-        okButtonProps={{ disabled: selectedPullRequisitionLineKeys.length === 0 || pullRequisitionLoading }}
-        confirmLoading={pullRequisitionSubmitting}
-        destroyOnHidden
-      >
-        <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }} size={12}>
-          <Input.Search
-            allowClear
-            value={pullRequisitionKeyword}
-            placeholder={t('app.kuaizhizao.purchaseInquiry.searchRequisitionPlaceholder')}
-            enterButton={t('common.search')}
-            onChange={(e) => setPullRequisitionKeyword(e.target.value)}
-            onSearch={(value) => {
-              const keyword = value?.trim?.() || '';
-              setPullRequisitionKeyword(keyword);
-              void loadPullRequisitionCandidates(keyword);
-            }}
-          />
-          <Table<PullPurchaseRequisitionLineCandidate>
-            rowKey="key"
-            loading={pullRequisitionLoading}
-            size="small"
-            pagination={false}
-            locale={{
-              emptyText: pullRequisitionKeyword
-                ? t('app.kuaizhizao.purchaseInquiry.emptyNoRequisitionSearchResults')
-                : t('app.kuaizhizao.purchaseInquiry.emptyNoRequisitionLines'),
-            }}
-            rowSelection={{
-              type: 'checkbox',
-              selectedRowKeys: selectedPullRequisitionLineKeys,
-              onChange: (keys) => {
-                setSelectedPullRequisitionLineKeys(keys);
-              },
-              getCheckboxProps: (record) => ({
-                disabled: record.converted,
-              }),
-            }}
-            onRow={(record) => ({
-              onClick: () => {
-                if (record.converted) return;
-                const selected = selectedPullRequisitionLineKeys.includes(record.key);
-                setSelectedPullRequisitionLineKeys((prev) =>
-                  selected ? prev.filter((k) => k !== record.key) : [...prev, record.key],
-                );
-              },
-            })}
-            columns={pullRequisitionColumns}
-            dataSource={pullRequisitionLineCandidates}
-            scroll={{ x: 1400, y: 320 }}
-          />
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        footerHint={(
           <Typography.Text type="secondary">
-            {t('app.kuaizhizao.purchaseInquiry.pullSelectionHint', { count: selectedPullRequisitionLineKeys.length })}
+            {t('app.kuaizhizao.purchaseInquiry.pullSelectionHint', { count: pullFromRequisitionQuery.selectedCount })}
           </Typography.Text>
-        </Space>
-      </Modal>
+        )}
+      />
     </ListPageTemplate>
   );
 };

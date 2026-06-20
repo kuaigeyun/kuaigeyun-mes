@@ -25,7 +25,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
-import { UniBatchButton, UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniBatchButton, UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import {
@@ -108,7 +108,6 @@ import { useGlobalStore } from '../../../../../stores';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import {
   isQuotationRowSelectable,
-  quotationBatchApproveAllowed,
   quotationBatchDeleteAllowed,
   quotationCanPushToSalesOrder,
   quotationCapabilityAllowed,
@@ -139,6 +138,7 @@ import {
 } from '../shared/documentFieldAlignment';
 import { buildDescriptionItemsFromColumns } from '../shared/descriptionItems';
 import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 const QUOTATION_LIST_PATH = '/apps/kuaizhizao/sales-management/quotations';
 const QUOTATION_TABLE_CACHE_ID = 'apps.kuaizhizao.pages.sales-management.quotations';
@@ -540,6 +540,8 @@ const salesContractEditPath = (id: number) => `${SALES_CONTRACT_LIST_PATH}/${id}
 
 const QuotationsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const pushToSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_quotation');
+  const pushToSalesContractAction = resolveKuaizhizaoDocumentAction(t, 'sales_contract.pull_from_quotation');
   const salesCommonFormLabels = useMemo(() => getSalesCommonFormLabels(t), [t]);
   const quotationStatusFilterEnum = useMemo(() => getQuotationStatusFilterEnum(t), [t]);
   const { token } = AntdTheme.useToken();
@@ -1236,8 +1238,6 @@ const QuotationsPage: React.FC = () => {
     clearTableSelection();
   };
 
-  const handleBatchApprove = (keys: React.Key[]) =>
-    handleBatchOperation(keys, t('app.kuaizhizao.quotation.batchApprove'), (id) => approveQuotation(id));
   const resolveQuotationByRowKey = useCallback(
     (key: React.Key): Quotation | null => {
       const id = Number(key);
@@ -1251,6 +1251,21 @@ const QuotationsPage: React.FC = () => {
     [tableQuotationsFlat],
   );
 
+  const quotationAuditBatchHandlers = useMemo(
+    () => ({
+      submit: submitQuotation,
+      withdraw: withdrawQuotation,
+      approve: approveQuotation,
+      revoke: revokeReviewQuotation,
+    }),
+    [],
+  );
+
+  const handleQuotationAuditBatchSuccess = useCallback(() => {
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+    clearTableSelection();
+  }, [invalidateMenuBadgeCounts, clearTableSelection]);
   const handleBatchConfirmCustomer = (keys: React.Key[]) => {
     const confirmableKeys = keys.filter((key) => {
       const q = resolveQuotationByRowKey(key);
@@ -1823,15 +1838,6 @@ const QuotationsPage: React.FC = () => {
     [selectedQuotationsForToolbar, quotationPerms.canDelete],
   );
 
-  const canToolbarBatchApprove = useMemo(
-    () =>
-      quotationBatchApproveAllowed(
-        selectedQuotationsForToolbar,
-        quotationPerms.canAction?.('approve') === true,
-      ),
-    [selectedQuotationsForToolbar, quotationPerms],
-  );
-
   const canToolbarCreateRevision = useMemo(() => {
     if (selectedQuotationsForToolbar.length !== 1) return false;
     const q = selectedQuotationsForToolbar[0];
@@ -1897,7 +1903,7 @@ const QuotationsPage: React.FC = () => {
       return buildUniPushMenuItems([
         {
           key: 'sales-order',
-          label: t('app.kuaizhizao.quotation.convertToSalesOrder'),
+          label: pushToSalesOrderAction.label,
           icon: <SwapOutlined />,
           disabled: superseded || !convertible,
           title: orderPushTitle,
@@ -1915,7 +1921,7 @@ const QuotationsPage: React.FC = () => {
         },
         {
           key: 'sales-contract',
-          label: t('app.kuaizhizao.quotation.pushToSalesContract'),
+          label: pushToSalesContractAction.label,
           icon: <FileTextOutlined />,
           disabled: superseded || !contractConvertible || !salesContractPerms.canCreate,
           title: contractPushTitle,
@@ -1940,6 +1946,8 @@ const QuotationsPage: React.FC = () => {
       quotationPerms.canUpdate,
       salesContractPerms.canCreate,
       permDeniedTitle,
+      pushToSalesContractAction.label,
+      pushToSalesOrderAction.label,
       t,
     ],
   );
@@ -3197,18 +3205,14 @@ const QuotationsPage: React.FC = () => {
           toolBarActionsAfterDelete={
             quotationAuditRequired
               ? [
-                  <UniBatchMenuButton
+                  <UniAuditBatchMenuButton
                     key="quotation-batch-menu"
                     selectedRowKeys={selectedRowKeys}
-                    disabled={!canToolbarBatchApprove}
-                    menuItems={[
-                      {
-                        key: 'approve',
-                        label: t('app.kuaizhizao.quotation.batchApprove'),
-                        icon: <CheckOutlined />,
-                        onClick: handleBatchApprove,
-                      },
-                    ]}
+                    selectedRecords={selectedQuotationsForToolbar}
+                    auditEnabled={quotationAuditRequired}
+                    permGates={quotationPerms}
+                    handlers={quotationAuditBatchHandlers}
+                    onSuccess={handleQuotationAuditBatchSuccess}
                     toolBarButtonSize="middle"
                   />,
                 ]

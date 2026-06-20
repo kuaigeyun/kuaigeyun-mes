@@ -675,10 +675,7 @@ class QuotationService:
         )
         if not quotation:
             raise NotFoundError(f"报价单不存在: {quotation_id}")
-        if quotation.status != "草稿":
-            raise BusinessLogicError(
-                f"仅草稿状态可提交，当前状态: {quotation.status}"
-            )
+        await self._assert_quotation_capability(tenant_id, quotation, "submit")
         await self._submit_quotation_with_audit(tenant_id, quotation_id, submitted_by)
         return await self.get_quotation_by_id(
             tenant_id, quotation_id, include_items=True
@@ -696,15 +693,7 @@ class QuotationService:
         )
         if not quotation:
             raise NotFoundError(f"报价单不存在: {quotation_id}")
-        if quotation.status != "已发送":
-            raise BusinessLogicError(
-                f"只能撤回「已发送」且待审核的报价单，当前状态: {quotation.status}"
-            )
-        rs = (quotation.review_status or "").strip()
-        if rs not in LEGACY_PENDING_VALUES:
-            raise BusinessLogicError(
-                f"只能撤回待审核的报价单，当前审核状态: {quotation.review_status}"
-            )
+        await self._assert_quotation_capability(tenant_id, quotation, "withdraw_submit")
         from apps.common.base_service import AppBaseService
 
         op_name = await AppBaseService().get_user_name(withdrawn_by)
@@ -754,11 +743,7 @@ class QuotationService:
         )
         if not quotation:
             raise NotFoundError(f"报价单不存在: {quotation_id}")
-        if quotation.status != "已发送":
-            raise BusinessLogicError(f"仅待审核中的报价单可审核通过，当前状态: {quotation.status}")
-        rs = (quotation.review_status or "").strip()
-        if rs not in LEGACY_PENDING_VALUES and rs != "":
-            raise BusinessLogicError(f"仅待审核的报价单可审核通过，当前审核状态: {quotation.review_status}")
+        await self._assert_quotation_capability(tenant_id, quotation, "approve")
 
         from core.services.approval.uni_audit_service import UniAuditService
 
@@ -872,12 +857,7 @@ class QuotationService:
         )
         if not quotation:
             raise NotFoundError(f"报价单不存在: {quotation_id}")
-        if quotation.status != "已发送":
-            raise BusinessLogicError(f"仅已发送且已审核通过的报价单可撤回审核，当前状态: {quotation.status}")
-        if not _is_approved(quotation.review_status):
-            raise BusinessLogicError(
-                f"仅已审核通过的报价单可撤回审核，当前审核状态: {quotation.review_status}"
-            )
+        await self._assert_quotation_capability(tenant_id, quotation, "revoke_approval")
         from apps.common.base_service import AppBaseService
 
         op_name = await AppBaseService().get_user_name(operator_id)
@@ -1159,6 +1139,7 @@ class QuotationService:
         quotation_series_code: Optional[str] = None,
         list_scope: Optional[str] = None,
         pullable_only: Optional[bool] = None,
+        pull_target: Optional[str] = None,
         current_user: Optional[User] = None,
     ) -> QuotationListResponse:
         """获取报价单列表"""
@@ -1185,8 +1166,19 @@ class QuotationService:
             query = query.filter(quotation_code__icontains=quotation_code.strip())
         if customer_name and customer_name.strip():
             query = query.filter(customer_name__icontains=customer_name.strip())
+        audit_required = await self._quotation_audit_required(tenant_id)
         if pullable_only:
-            query = query.filter(sales_order_id__isnull=True).exclude(status="已转订单")
+            normalized_pull_target = (pull_target or "sales_order").strip().lower()
+            if normalized_pull_target == "sales_contract":
+                query = query.filter(contract_id__isnull=True)
+            else:
+                query = query.filter(sales_order_id__isnull=True).exclude(status="已转订单")
+            query = query.exclude(status__in=["已拒绝", "草稿", "draft"])
+            if audit_required:
+                approved_review = ("APPROVED", "已通过", "审核通过", "通过")
+                query = query.exclude(
+                    Q(status="已发送") & ~Q(review_status__in=approved_review)
+                )
         total = await query.count()
         quotations = await query.offset(skip).limit(limit).order_by("-updated_at")
         from apps.kuaizhizao.services.document_lifecycle_service import get_quotation_lifecycle
@@ -1207,7 +1199,6 @@ class QuotationService:
             ).values_list("id", flat=True)
             alive_contract = set(alive_contract_rows)
 
-        audit_required = await self._quotation_audit_required(tenant_id)
         missing_by_id: dict[int, bool] = {}
         contract_missing_by_id: dict[int, bool] = {}
         for q in quotations:

@@ -9,7 +9,121 @@ from infra.services.business_config_service import BusinessConfigService
 from apps.kuaizhizao.services.document_action_policy.quotation import (
     derive_quotation_capabilities,
 )
-from apps.kuaizhizao.services.document_action_policy.types import QuotationCapabilities
+from apps.kuaizhizao.services.document_action_policy.sales_order import (
+    derive_sales_order_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.sales_order_change import (
+    derive_sales_order_change_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.sales_contract import (
+    derive_sales_contract_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.sales_forecast import (
+    derive_sales_forecast_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.shipment_notice import (
+    derive_shipment_notice_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.sales_return import (
+    derive_sales_return_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.production_plan import (
+    derive_production_plan_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.demand_computation import (
+    derive_demand_computation_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.demand import (
+    derive_demand_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.purchase_requisition import (
+    derive_purchase_requisition_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.purchase_inquiry import (
+    derive_purchase_inquiry_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.purchase_order import (
+    derive_purchase_order_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.purchase_order_change import (
+    derive_purchase_order_change_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.receipt_notice import (
+    derive_receipt_notice_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.purchase_return import (
+    derive_purchase_return_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.work_order import (
+    derive_work_order_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.reporting_record import (
+    derive_reporting_record_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.exception_process_record import (
+    derive_exception_process_record_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.packing_binding import (
+    derive_packing_binding_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
+    derive_inbound_hub_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.warehouse_outbound_hub import (
+    derive_outbound_hub_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.customer_material_registration import (
+    derive_customer_material_registration_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.inventory_alert import (
+    derive_inventory_alert_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.replenishment_suggestion import (
+    derive_replenishment_suggestion_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+    derive_quality_inspection_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.oqc_inspection import (
+    derive_oqc_inspection_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.eight_d_report import (
+    derive_eight_d_report_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.nonconforming_ledger import (
+    derive_nonconforming_ledger_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.types import (
+    QuotationCapabilities,
+    SalesContractCapabilities,
+    SalesForecastCapabilities,
+    ShipmentNoticeCapabilities,
+    SalesReturnCapabilities,
+    SalesOrderCapabilities,
+    SalesOrderChangeCapabilities,
+    ProductionPlanCapabilities,
+    DemandComputationCapabilities,
+    DemandCapabilities,
+    PurchaseRequisitionCapabilities,
+    PurchaseInquiryCapabilities,
+    PurchaseOrderCapabilities,
+    PurchaseOrderChangeCapabilities,
+    ReceiptNoticeCapabilities,
+    PurchaseReturnCapabilities,
+    WorkOrderCapabilities,
+    ReportingRecordCapabilities,
+    ExceptionProcessRecordCapabilities,
+    PackingBindingCapabilities,
+    InboundHubCapabilities,
+    OutboundHubCapabilities,
+    CustomerMaterialRegistrationCapabilities,
+    InventoryAlertCapabilities,
+    ReplenishmentSuggestionCapabilities,
+    QualityInspectionCapabilities,
+    OQCInspectionCapabilities,
+    EightDReportCapabilities,
+    NonconformingLedgerCapabilities,
+)
 
 T = TypeVar("T")
 
@@ -78,3 +192,931 @@ def get_quotation_capabilities_from_record(
         conversion_downstream_missing=conversion_downstream_missing,
         contract_downstream_missing=contract_downstream_missing,
     )
+
+
+def enrich_sales_order_capabilities_on_response(
+    order_model: Any,
+    response: T,
+    *,
+    pushed_to_computation: bool = False,
+    has_items: bool = True,
+    has_line_work_orders: bool = False,
+    computation_pushed_blocks_withdraw: bool = False,
+) -> T:
+    caps = derive_sales_order_capabilities(
+        order_model,
+        pushed_to_computation=pushed_to_computation,
+        has_items=has_items,
+        has_line_work_orders=has_line_work_orders,
+        computation_pushed_blocks_withdraw=computation_pushed_blocks_withdraw,
+    )
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_sales_order_list_capabilities(
+    orders: List[Any],
+    responses: List[T],
+    *,
+    pushed_to_computation_by_id: Optional[dict[int, bool]] = None,
+    has_items_by_id: Optional[dict[int, bool]] = None,
+    has_line_work_orders_by_id: Optional[dict[int, bool]] = None,
+    computation_blocks_withdraw_by_id: Optional[dict[int, bool]] = None,
+) -> List[T]:
+    pushed_map = pushed_to_computation_by_id or {}
+    items_map = has_items_by_id or {}
+    wo_map = has_line_work_orders_by_id or {}
+    blocks_map = computation_blocks_withdraw_by_id or {}
+    out: List[T] = []
+    for order_model, resp in zip(orders, responses):
+        oid = int(getattr(order_model, "id", 0) or 0)
+        caps = derive_sales_order_capabilities(
+            order_model,
+            pushed_to_computation=pushed_map.get(oid, False),
+            has_items=items_map.get(oid, True),
+            has_line_work_orders=wo_map.get(oid, False),
+            computation_pushed_blocks_withdraw=blocks_map.get(oid, False),
+        )
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def get_sales_order_capabilities_from_record(
+    order: Any,
+    *,
+    pushed_to_computation: bool = False,
+    has_items: bool = True,
+    has_line_work_orders: bool = False,
+    computation_pushed_blocks_withdraw: bool = False,
+) -> SalesOrderCapabilities:
+    return derive_sales_order_capabilities(
+        order,
+        pushed_to_computation=pushed_to_computation,
+        has_items=has_items,
+        has_line_work_orders=has_line_work_orders,
+        computation_pushed_blocks_withdraw=computation_pushed_blocks_withdraw,
+    )
+
+
+def enrich_sales_order_change_capabilities_on_response(
+    doc: Any,
+    response: T,
+    *,
+    has_change_content: bool = True,
+) -> T:
+    caps = derive_sales_order_change_capabilities(doc, has_change_content=has_change_content)
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_sales_contract_capabilities_on_response(
+    contract: Any,
+    response: T,
+    *,
+    has_items: bool = True,
+    has_releasable_items: bool = False,
+    remaining_amount: Optional[Any] = None,
+) -> T:
+    caps = derive_sales_contract_capabilities(
+        contract,
+        has_items=has_items,
+        has_releasable_items=has_releasable_items,
+        remaining_amount=remaining_amount,
+    )
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def get_sales_order_change_capabilities_from_record(
+    doc: Any,
+    *,
+    has_change_content: bool = True,
+) -> SalesOrderChangeCapabilities:
+    return derive_sales_order_change_capabilities(doc, has_change_content=has_change_content)
+
+
+def get_sales_contract_capabilities_from_record(
+    contract: Any,
+    *,
+    has_items: bool = True,
+    has_releasable_items: bool = False,
+    remaining_amount: Optional[Any] = None,
+) -> SalesContractCapabilities:
+    return derive_sales_contract_capabilities(
+        contract,
+        has_items=has_items,
+        has_releasable_items=has_releasable_items,
+        remaining_amount=remaining_amount,
+    )
+
+
+def enrich_sales_forecast_capabilities_on_response(
+    forecast: Any,
+    response: T,
+    *,
+    pushed_to_computation: bool = False,
+    has_downstream: bool = False,
+    has_items: bool = True,
+) -> T:
+    caps = derive_sales_forecast_capabilities(
+        forecast,
+        pushed_to_computation=pushed_to_computation,
+        has_downstream=has_downstream,
+        has_items=has_items,
+    )
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_sales_forecast_list_capabilities(
+    forecasts: List[Any],
+    responses: List[T],
+    *,
+    pushed_by_id: Optional[dict[int, bool]] = None,
+    downstream_by_id: Optional[dict[int, bool]] = None,
+    has_items_by_id: Optional[dict[int, bool]] = None,
+) -> List[T]:
+    pushed_map = pushed_by_id or {}
+    downstream_map = downstream_by_id or {}
+    items_map = has_items_by_id or {}
+    out: List[T] = []
+    for forecast_model, resp in zip(forecasts, responses):
+        fid = int(getattr(forecast_model, "id", 0) or 0)
+        caps = derive_sales_forecast_capabilities(
+            forecast_model,
+            pushed_to_computation=pushed_map.get(fid, False),
+            has_downstream=downstream_map.get(fid, False),
+            has_items=items_map.get(fid, True),
+        )
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def get_sales_forecast_capabilities_from_record(
+    forecast: Any,
+    *,
+    pushed_to_computation: bool = False,
+    has_downstream: bool = False,
+    has_items: bool = True,
+) -> SalesForecastCapabilities:
+    return derive_sales_forecast_capabilities(
+        forecast,
+        pushed_to_computation=pushed_to_computation,
+        has_downstream=has_downstream,
+        has_items=has_items,
+    )
+
+
+def enrich_shipment_notice_capabilities_on_response(
+    notice: Any,
+    response: T,
+    *,
+    has_items: bool = True,
+    has_warehouse: bool = True,
+    delivery_withdrawable: bool = True,
+) -> T:
+    caps = derive_shipment_notice_capabilities(
+        notice,
+        has_items=has_items,
+        has_warehouse=has_warehouse,
+        delivery_withdrawable=delivery_withdrawable,
+    )
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_shipment_notice_list_capabilities(
+    notices: List[Any],
+    responses: List[T],
+    *,
+    has_items_by_id: Optional[dict[int, bool]] = None,
+    delivery_withdrawable_by_id: Optional[dict[int, bool]] = None,
+) -> List[T]:
+    items_map = has_items_by_id or {}
+    withdraw_map = delivery_withdrawable_by_id or {}
+    out: List[T] = []
+    for notice_model, resp in zip(notices, responses):
+        nid = int(getattr(notice_model, "id", 0) or 0)
+        wh_id = getattr(notice_model, "warehouse_id", None)
+        caps = derive_shipment_notice_capabilities(
+            notice_model,
+            has_items=items_map.get(nid, True),
+            has_warehouse=wh_id is not None,
+            delivery_withdrawable=withdraw_map.get(nid, True),
+        )
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def get_shipment_notice_capabilities_from_record(
+    notice: Any,
+    *,
+    has_items: bool = True,
+    has_warehouse: bool = True,
+    delivery_withdrawable: bool = True,
+) -> ShipmentNoticeCapabilities:
+    return derive_shipment_notice_capabilities(
+        notice,
+        has_items=has_items,
+        has_warehouse=has_warehouse,
+        delivery_withdrawable=delivery_withdrawable,
+    )
+
+
+def enrich_sales_return_capabilities_on_response(
+    return_doc: Any,
+    response: T,
+    *,
+    has_items: bool = True,
+) -> T:
+    caps = derive_sales_return_capabilities(return_doc, has_items=has_items)
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_sales_return_list_capabilities(
+    return_docs: List[Any],
+    responses: List[T],
+    *,
+    has_items_by_id: Optional[dict[int, bool]] = None,
+) -> List[T]:
+    items_map = has_items_by_id or {}
+    out: List[T] = []
+    for doc, resp in zip(return_docs, responses):
+        rid = int(getattr(doc, "id", 0) or 0)
+        caps = derive_sales_return_capabilities(doc, has_items=items_map.get(rid, True))
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def get_sales_return_capabilities_from_record(
+    return_doc: Any,
+    *,
+    has_items: bool = True,
+) -> SalesReturnCapabilities:
+    return derive_sales_return_capabilities(return_doc, has_items=has_items)
+
+
+async def _production_plan_audit_required(tenant_id: int) -> bool:
+    return await BusinessConfigService().check_audit_required(tenant_id, "production_plan")
+
+
+async def _production_plan_has_production_items(tenant_id: int, plan_id: int) -> bool:
+    from apps.kuaizhizao.models.production_plan_item import ProductionPlanItem
+
+    items = await ProductionPlanItem.filter(
+        tenant_id=tenant_id,
+        plan_id=plan_id,
+        suggested_action="生产",
+    ).all()
+    return any(float(i.work_order_quantity or 0) > 0 for i in items)
+
+
+async def _production_plan_has_production_items_by_ids(
+    tenant_id: int,
+    plan_ids: List[int],
+) -> dict[int, bool]:
+    from apps.kuaizhizao.models.production_plan_item import ProductionPlanItem
+
+    if not plan_ids:
+        return {}
+    items = await ProductionPlanItem.filter(
+        tenant_id=tenant_id,
+        plan_id__in=plan_ids,
+        suggested_action="生产",
+    ).all()
+    result: dict[int, bool] = {pid: False for pid in plan_ids}
+    for item in items:
+        if float(item.work_order_quantity or 0) > 0:
+            result[int(item.plan_id)] = True
+    return result
+
+
+def enrich_production_plan_capabilities_on_response(
+    plan: Any,
+    response: T,
+    *,
+    audit_required: bool = False,
+    has_production_items: bool = False,
+) -> T:
+    caps = derive_production_plan_capabilities(
+        plan,
+        audit_required=audit_required,
+        has_production_items=has_production_items,
+    )
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+async def enrich_production_plan_list_capabilities(
+    tenant_id: int,
+    plans: List[Any],
+    responses: List[T],
+) -> List[T]:
+    audit_required = await _production_plan_audit_required(tenant_id)
+    plan_ids = [int(getattr(p, "id", 0) or 0) for p in plans]
+    has_prod_map = await _production_plan_has_production_items_by_ids(tenant_id, plan_ids)
+    out: List[T] = []
+    for plan_model, resp in zip(plans, responses):
+        pid = int(getattr(plan_model, "id", 0) or 0)
+        caps = derive_production_plan_capabilities(
+            plan_model,
+            audit_required=audit_required,
+            has_production_items=has_prod_map.get(pid, False),
+        )
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+async def enrich_production_plan_detail_capabilities(
+    tenant_id: int,
+    plan: Any,
+    response: T,
+) -> T:
+    audit_required = await _production_plan_audit_required(tenant_id)
+    has_items = await _production_plan_has_production_items(tenant_id, int(plan.id))
+    return enrich_production_plan_capabilities_on_response(
+        plan,
+        response,
+        audit_required=audit_required,
+        has_production_items=has_items,
+    )
+
+
+def enrich_demand_computation_capabilities_on_response(
+    computation: Any,
+    response: T,
+) -> T:
+    caps = derive_demand_computation_capabilities(computation)
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_demand_computation_list_capabilities(
+    computations: List[Any],
+    responses: List[T],
+) -> List[T]:
+    out: List[T] = []
+    for comp_model, resp in zip(computations, responses):
+        caps = derive_demand_computation_capabilities(comp_model)
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_demand_capabilities_on_response(demand: Any, response: T) -> T:
+    caps = derive_demand_capabilities(demand)
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_demand_list_capabilities(
+    demands: List[Any],
+    responses: List[T],
+) -> List[T]:
+    out: List[T] = []
+    for demand_model, resp in zip(demands, responses):
+        caps = derive_demand_capabilities(demand_model)
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_purchase_requisition_capabilities_on_response(req: Any, response: T) -> T:
+    caps = derive_purchase_requisition_capabilities(req)
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_purchase_requisition_list_capabilities(
+    reqs: List[Any],
+    responses: List[T],
+) -> List[T]:
+    out: List[T] = []
+    for req_model, resp in zip(reqs, responses):
+        caps = derive_purchase_requisition_capabilities(req_model)
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_purchase_inquiry_capabilities_on_response(inquiry: Any, response: T) -> T:
+    caps = derive_purchase_inquiry_capabilities(inquiry)
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_purchase_inquiry_list_capabilities(
+    inquiries: List[Any],
+    responses: List[T],
+) -> List[T]:
+    out: List[T] = []
+    for inquiry_model, resp in zip(inquiries, responses):
+        caps = derive_purchase_inquiry_capabilities(inquiry_model)
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+async def _purchase_order_has_outstanding(tenant_id: int, order_id: int) -> bool:
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+    items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
+    return any(float(i.outstanding_quantity or 0) > 0 for i in items)
+
+
+async def _purchase_order_outstanding_by_ids(tenant_id: int, order_ids: List[int]) -> dict[int, bool]:
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+    if not order_ids:
+        return {}
+    items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id__in=order_ids).all()
+    result: dict[int, bool] = {oid: False for oid in order_ids}
+    for item in items:
+        if float(item.outstanding_quantity or 0) > 0:
+            result[int(item.order_id)] = True
+    return result
+
+
+def enrich_purchase_order_capabilities_on_response(
+    order: Any,
+    response: T,
+    *,
+    has_items: bool = True,
+    has_outstanding: bool = False,
+) -> T:
+    caps = derive_purchase_order_capabilities(
+        order,
+        has_items=has_items,
+        has_outstanding=has_outstanding,
+    )
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+async def enrich_purchase_order_detail_capabilities(
+    tenant_id: int,
+    order: Any,
+    response: T,
+    *,
+    has_items: bool = True,
+) -> T:
+    has_outstanding = await _purchase_order_has_outstanding(tenant_id, int(order.id))
+    return enrich_purchase_order_capabilities_on_response(
+        order,
+        response,
+        has_items=has_items,
+        has_outstanding=has_outstanding,
+    )
+
+
+async def enrich_purchase_order_list_capabilities(
+    tenant_id: int,
+    orders: List[Any],
+    responses: List[T],
+    *,
+    has_items_by_id: Optional[dict[int, bool]] = None,
+) -> List[T]:
+    order_ids = [int(getattr(o, "id", 0) or 0) for o in orders]
+    outstanding_map = await _purchase_order_outstanding_by_ids(tenant_id, order_ids)
+    items_map = has_items_by_id or {}
+    out: List[T] = []
+    for order_model, resp in zip(orders, responses):
+        oid = int(getattr(order_model, "id", 0) or 0)
+        caps = derive_purchase_order_capabilities(
+            order_model,
+            has_items=items_map.get(oid, True),
+            has_outstanding=outstanding_map.get(oid, False),
+        )
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_purchase_order_change_capabilities_on_response(
+    doc: Any,
+    response: T,
+    *,
+    has_change_content: bool = True,
+) -> T:
+    caps = derive_purchase_order_change_capabilities(doc, has_change_content=has_change_content)
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_receipt_notice_capabilities_on_response(
+    notice: Any,
+    response: T,
+    *,
+    has_items: bool = True,
+    has_warehouse: bool = True,
+    receipt_withdrawable: bool = True,
+) -> T:
+    caps = derive_receipt_notice_capabilities(
+        notice,
+        has_items=has_items,
+        has_warehouse=has_warehouse,
+        receipt_withdrawable=receipt_withdrawable,
+    )
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_receipt_notice_list_capabilities(
+    notices: List[Any],
+    responses: List[T],
+    *,
+    has_items_by_id: Optional[dict[int, bool]] = None,
+    receipt_withdrawable_by_id: Optional[dict[int, bool]] = None,
+) -> List[T]:
+    items_map = has_items_by_id or {}
+    withdraw_map = receipt_withdrawable_by_id or {}
+    out: List[T] = []
+    for notice_model, resp in zip(notices, responses):
+        nid = int(getattr(notice_model, "id", 0) or 0)
+        wh_id = getattr(notice_model, "warehouse_id", None)
+        caps = derive_receipt_notice_capabilities(
+            notice_model,
+            has_items=items_map.get(nid, True),
+            has_warehouse=wh_id is not None,
+            receipt_withdrawable=withdraw_map.get(nid, True),
+        )
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_purchase_return_capabilities_on_response(
+    return_doc: Any,
+    response: T,
+    *,
+    has_items: bool = True,
+) -> T:
+    caps = derive_purchase_return_capabilities(return_doc, has_items=has_items)
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_purchase_return_list_capabilities(
+    return_docs: List[Any],
+    responses: List[T],
+    *,
+    has_items_by_id: Optional[dict[int, bool]] = None,
+) -> List[T]:
+    items_map = has_items_by_id or {}
+    out: List[T] = []
+    for doc, resp in zip(return_docs, responses):
+        rid = int(getattr(doc, "id", 0) or 0)
+        caps = derive_purchase_return_capabilities(doc, has_items=items_map.get(rid, True))
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_work_order_capabilities_on_response(wo: Any, response: T) -> T:
+    caps = derive_work_order_capabilities(wo)
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_work_order_list_capabilities(
+    work_orders: List[Any],
+    responses: List[T],
+) -> List[T]:
+    out: List[T] = []
+    for wo, resp in zip(work_orders, responses):
+        caps = derive_work_order_capabilities(wo)
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_work_order_list_item_dicts(item_dicts: List[dict]) -> List[dict]:
+    for item in item_dicts:
+        caps = derive_work_order_capabilities(item)
+        item["capabilities"] = caps
+    return item_dicts
+
+
+def enrich_reporting_record_capabilities_on_response(record: Any, response: T) -> T:
+    caps = derive_reporting_record_capabilities(record)
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_reporting_record_list_capabilities(
+    records: List[Any],
+    responses: List[T],
+) -> List[T]:
+    out: List[T] = []
+    for record, resp in zip(records, responses):
+        caps = derive_reporting_record_capabilities(record)
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_exception_process_record_capabilities_on_response(record: Any, response: T) -> T:
+    caps = derive_exception_process_record_capabilities(record)
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_exception_process_record_list_capabilities(
+    records: List[Any],
+    responses: List[T],
+) -> List[T]:
+    out: List[T] = []
+    for record, resp in zip(records, responses):
+        caps = derive_exception_process_record_capabilities(record)
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_packing_binding_capabilities_on_response(binding: Any, response: T) -> T:
+    caps = derive_packing_binding_capabilities(binding)
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_packing_binding_list_capabilities(
+    bindings: List[Any],
+    responses: List[T],
+) -> List[T]:
+    out: List[T] = []
+    for binding, resp in zip(bindings, responses):
+        caps = derive_packing_binding_capabilities(binding)
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_inbound_hub_list_capabilities(
+    records: List[Any],
+    responses: List[T],
+    receipt_type: str,
+) -> List[T]:
+    out: List[T] = []
+    for record, resp in zip(records, responses):
+        caps = derive_inbound_hub_capabilities(record, receipt_type=receipt_type)
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_outbound_hub_list_capabilities(
+    records: List[Any],
+    responses: List[T],
+    outbound_type: str,
+) -> List[T]:
+    out: List[T] = []
+    for record, resp in zip(records, responses):
+        caps = derive_outbound_hub_capabilities(record, outbound_type=outbound_type)
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_customer_material_registration_capabilities_on_response(
+    registration: Any,
+    response: T,
+) -> T:
+    caps = derive_customer_material_registration_capabilities(registration)
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_customer_material_registration_list_capabilities(
+    registrations: List[Any],
+    responses: List[T],
+) -> List[T]:
+    out: List[T] = []
+    for registration, resp in zip(registrations, responses):
+        caps = derive_customer_material_registration_capabilities(registration)
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_inventory_alert_list_capabilities(
+    alerts: List[Any],
+    responses: List[T],
+) -> List[T]:
+    out: List[T] = []
+    for alert, resp in zip(alerts, responses):
+        caps = derive_inventory_alert_capabilities(alert)
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_replenishment_suggestion_list_capabilities(
+    suggestions: List[Any],
+    responses: List[T],
+) -> List[T]:
+    out: List[T] = []
+    for suggestion, resp in zip(suggestions, responses):
+        caps = derive_replenishment_suggestion_capabilities(suggestion)
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_quality_inspection_capabilities_on_response(
+    inspection: Any,
+    response: T,
+    *,
+    supports_purchase_return: bool = False,
+) -> T:
+    caps = derive_quality_inspection_capabilities(
+        inspection,
+        supports_purchase_return=supports_purchase_return,
+    )
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_quality_inspection_list_capabilities(
+    inspections: List[Any],
+    responses: List[T],
+    *,
+    supports_purchase_return: bool = False,
+) -> List[T]:
+    out: List[T] = []
+    for inspection, resp in zip(inspections, responses):
+        caps = derive_quality_inspection_capabilities(
+            inspection,
+            supports_purchase_return=supports_purchase_return,
+        )
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_oqc_inspection_capabilities_on_response(inspection: Any, response: T) -> T:
+    caps = derive_oqc_inspection_capabilities(inspection)
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_oqc_inspection_list_capabilities(
+    inspections: List[Any],
+    responses: List[T],
+) -> List[T]:
+    out: List[T] = []
+    for inspection, resp in zip(inspections, responses):
+        caps = derive_oqc_inspection_capabilities(inspection)
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_eight_d_report_capabilities_on_response(report: Any, response: T) -> T:
+    caps = derive_eight_d_report_capabilities(report)
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+def enrich_eight_d_report_list_capabilities(
+    reports: List[Any],
+    responses: List[T],
+) -> List[T]:
+    out: List[T] = []
+    for report, resp in zip(reports, responses):
+        caps = derive_eight_d_report_capabilities(report)
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out
+
+
+async def _linked_8d_report_by_defect_ids(
+    tenant_id: int,
+    defect_ids: List[int],
+) -> dict[int, bool]:
+    from apps.kuaizhizao.models.quality_8d_report import Quality8DReport
+
+    if not defect_ids:
+        return {}
+    rows = await Quality8DReport.filter(
+        tenant_id=tenant_id,
+        defect_record_id__in=defect_ids,
+        deleted_at__isnull=True,
+    ).values_list("defect_record_id", flat=True)
+    linked = {int(did): False for did in defect_ids}
+    for defect_id in rows:
+        if defect_id is not None:
+            linked[int(defect_id)] = True
+    return linked
+
+
+def enrich_nonconforming_ledger_capabilities_on_response(
+    record: Any,
+    response: T,
+    *,
+    has_linked_8d_report: bool = False,
+) -> T:
+    caps = derive_nonconforming_ledger_capabilities(
+        record,
+        has_linked_8d_report=has_linked_8d_report,
+    )
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update={"capabilities": caps})
+    return response
+
+
+async def enrich_nonconforming_ledger_list_capabilities(
+    tenant_id: int,
+    records: List[Any],
+    responses: List[T],
+) -> List[T]:
+    defect_ids = [int(getattr(r, "id", 0) or 0) for r in records]
+    linked_map = await _linked_8d_report_by_defect_ids(tenant_id, defect_ids)
+    out: List[T] = []
+    for record, resp in zip(records, responses):
+        rid = int(getattr(record, "id", 0) or 0)
+        caps = derive_nonconforming_ledger_capabilities(
+            record,
+            has_linked_8d_report=linked_map.get(rid, False),
+        )
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update={"capabilities": caps}))
+        else:
+            out.append(resp)
+    return out

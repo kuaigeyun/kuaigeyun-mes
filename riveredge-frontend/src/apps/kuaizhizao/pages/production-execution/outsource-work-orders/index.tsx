@@ -16,6 +16,8 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
+import { inboundOutsourceEntryPath } from '../../warehouse-management/inbound/inboundPaths';
+import { outboundOutsourceEntryPath } from '../../warehouse-management/outbound/outboundPaths';
 import {
   ActionType,
   ProColumns,
@@ -83,6 +85,7 @@ import {
 } from '../../../../../components/custom-fields';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 const OUTSOURCE_WORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_work_orders';
 
@@ -192,6 +195,8 @@ const OWO_STAT_SPARK_3 = [3, 4, 5, 6, 5, 7, 8];
 export const OutsourceWorkOrdersTable: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const pushToInboundAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_outsource_work_order');
+  const pushToOutboundAction = resolveKuaizhizaoDocumentAction(t, 'outbound.pull_from_outsource_work_order');
   const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
   const outsourceWorkOrderDetailDrawerZIndex = token.zIndexPopupBase;
@@ -932,6 +937,16 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     }
   };
 
+  const handlePushToInboundEntry = (record: OutsourceWorkOrder) => {
+    if (!record.id) return;
+    navigate(inboundOutsourceEntryPath(record.id, 'outsource_receipt'));
+  };
+
+  const handlePushToOutboundEntry = (record: OutsourceWorkOrder) => {
+    if (!record.id) return;
+    navigate(outboundOutsourceEntryPath(record.id));
+  };
+
   /**
    * 处理提交委外收货
    */
@@ -1040,6 +1055,34 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           }}
         >
           {t('app.kuaizhizao.outsourceWorkOrder.actionReceipt')}
+        </Button>
+      );
+      nodes.push(
+        <Button
+          {...rowActionKind('audit')}
+          key="push-inbound"
+          type="link"
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            handlePushToInboundEntry(record);
+          }}
+        >
+          {pushToInboundAction.label}
+        </Button>
+      );
+      nodes.push(
+        <Button
+          {...rowActionKind('audit')}
+          key="push-outbound"
+          type="link"
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            handlePushToOutboundEntry(record);
+          }}
+        >
+          {pushToOutboundAction.label}
         </Button>
       );
     }

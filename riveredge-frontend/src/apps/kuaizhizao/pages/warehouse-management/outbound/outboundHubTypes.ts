@@ -42,6 +42,11 @@ export interface OutboundHubOrder {
   attachments?: { uid?: string; name?: string; url?: string }[];
   created_at?: string;
   updated_at?: string;
+  capabilities?: {
+    confirm?: { allowed?: boolean; reason?: string };
+    withdraw?: { allowed?: boolean; reason?: string };
+    print?: { allowed?: boolean; reason?: string };
+  };
   [key: string]: unknown;
 }
 
@@ -85,13 +90,11 @@ export const OUTBOUND_ISSUE_TYPE_LABELS: Record<OutboundIssueType, string> = {
 };
 
 export function isOutboundConfirmable(record: OutboundHubOrder): boolean {
-  const status = String(record.status || '');
-  return OUTBOUND_PENDING_STATUSES.has(status);
+  return record.capabilities?.confirm?.allowed === true;
 }
 
 export function isOutboundWithdrawable(record: OutboundHubOrder): boolean {
-  const status = String(record.status || '');
-  return OUTBOUND_POSTED_STATUSES.has(status) && record.outbound_type !== 'outsource_issue';
+  return record.capabilities?.withdraw?.allowed === true;
 }
 
 export function outboundDocumentCode(record: OutboundHubOrder): string {

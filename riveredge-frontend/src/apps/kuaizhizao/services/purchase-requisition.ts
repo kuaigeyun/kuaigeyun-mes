@@ -4,6 +4,19 @@
 
 import { apiRequest } from '../../../services/api';
 
+export interface ActionCapability {
+  allowed: boolean;
+  reason?: string | null;
+}
+
+export interface PurchaseRequisitionCapabilities {
+  update?: ActionCapability;
+  delete?: ActionCapability;
+  submit?: ActionCapability;
+  approve?: ActionCapability;
+  revoke_approval?: ActionCapability;
+}
+
 export interface PurchaseRequisitionItem {
   id?: number;
   material_id?: number;
@@ -41,6 +54,7 @@ export interface PurchaseRequisition {
   items?: PurchaseRequisitionItem[];
   created_at?: string;
   updated_at?: string;
+  capabilities?: PurchaseRequisitionCapabilities;
 }
 
 export async function listPurchaseRequisitions(params: {

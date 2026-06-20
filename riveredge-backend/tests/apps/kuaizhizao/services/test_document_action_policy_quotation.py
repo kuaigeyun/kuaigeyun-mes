@@ -40,8 +40,21 @@ def test_sent_pending_delete_and_update_allowed():
     )
     assert caps.delete.allowed
     assert caps.update.allowed
+    assert caps.withdraw_submit.allowed
+    assert caps.approve.allowed
+    assert not caps.revoke_approval.allowed
     assert not caps.confirm_customer.allowed
     assert not caps.convert_to_order.allowed
+
+
+def test_sent_approved_revoke_approval_allowed():
+    caps = derive_quotation_capabilities(
+        _q(status="已发送", review_status="审核通过"),
+        audit_required=True,
+    )
+    assert caps.revoke_approval.allowed
+    assert not caps.withdraw_submit.allowed
+    assert not caps.approve.allowed
 
 
 def test_sent_approved_convert_and_confirm():

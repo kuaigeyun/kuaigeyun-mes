@@ -45,6 +45,7 @@ import {
   mergeKeyedLineQuantities,
   usePullEntryFormDraft,
 } from '../shared/pullEntryFormDraft';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 const PULL_TYPE_TO_RECEIPT_TYPE: Record<InboundOutsourcePullType, InboundReceiptType> = {
   outsource_receipt: 'outsource_receipt',
@@ -77,6 +78,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
+  const pullFromOutsourceWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_outsource_work_order');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const receiverHook = useInboundReceiverSelect();
   const initRef = useRef(false);
@@ -99,7 +101,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
   const pagePath = Number.isFinite(woId) && woId > 0 ? inboundOutsourceEntryPath(woId, pullType) : INBOUND_LIST_PATH;
   const woCode = String(workOrder?.code || woId || '');
   const needsWarehouse = pullType === 'outsource_receipt' || pullType === 'outsource_material_return';
-  const pageTitle = woCode ? `${inboundTypeLabel} — ${woCode}` : inboundTypeLabel;
+  const pageTitle = woCode ? `${pullFromOutsourceWorkOrderAction.label} — ${woCode}` : pullFromOutsourceWorkOrderAction.label;
 
   const pullTypeOptions = useMemo(
     () => [

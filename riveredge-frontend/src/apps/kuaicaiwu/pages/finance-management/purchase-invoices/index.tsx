@@ -4,7 +4,7 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Typography, Space, Dropdown, Modal, Input, Table, Tag } from 'antd';
+import { App, Button, Typography, Space, Dropdown, Tag } from 'antd';
 import { EyeOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { apiRequest } from '../../../../../services/api';
@@ -16,6 +16,7 @@ import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
@@ -55,13 +56,7 @@ type PullPurchaseInvoiceCandidate = {
 const PurchaseInvoiceList: React.FC = () => {
     const actionRef = useRef<ActionType>();
     const [createModalVisible, setCreateModalVisible] = useState(false);
-    const [pullVisible, setPullVisible] = useState(false);
-    const [pullLoading, setPullLoading] = useState(false);
     const [pullSubmitting, setPullSubmitting] = useState(false);
-    const [pullKeyword, setPullKeyword] = useState('');
-    const [pullSourceType, setPullSourceType] = useState<'purchase_order' | 'purchase_receipt'>('purchase_order');
-    const [pullCandidates, setPullCandidates] = useState<PullPurchaseInvoiceCandidate[]>([]);
-    const [selectedPullSourceId, setSelectedPullSourceId] = useState<number | null>(null);
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
     const [pullFormVisible, setPullFormVisible] = useState(false);
     const [pullSelectedSource, setPullSelectedSource] = useState<PullPurchaseInvoiceCandidate | null>(null);
@@ -164,85 +159,81 @@ const PurchaseInvoiceList: React.FC = () => {
         return notes;
     };
 
-    const loadPullCandidates = async (sourceType: 'purchase_order' | 'purchase_receipt', keyword = '') => {
-        setPullLoading(true);
-        try {
-            const kw = keyword.trim().toLowerCase();
-
-            if (sourceType === 'purchase_order') {
-                const invoicePoIdSet = await fetchExistingPurchaseOrderIdsFromInvoices();
-                const poRes = await listPurchaseOrders({ skip: 0, limit: 200, keyword: kw || undefined });
-                const rows = (poRes?.data || []).map((po: any) => {
-                    const code = String(po.order_code || po.code || po.id || '');
-                    return {
-                        source_type: 'purchase_order' as const,
-                        source_id: Number(po.id),
-                        source_code: code,
-                        supplier_id: po.supplier_id,
-                        supplier_name: po.supplier_name,
-                        purchase_order_id: Number(po.id),
-                        purchase_order_code: code,
-                        source_date: po.order_date,
-                        source_status: po.status,
-                        amount: Number(po.total_amount || 0),
-                        converted: invoicePoIdSet.has(Number(po.id)),
-                    };
-                });
-                setPullCandidates(rows.filter((r: PullPurchaseInvoiceCandidate) => (kw ? `${r.source_code} ${r.supplier_name || ''}`.toLowerCase().includes(kw) : true)));
-            } else {
-                const invoiceNotes = await fetchExistingReceiptNotesFromInvoices();
-                const receiptRes: any = await warehouseApi.purchaseReceipt.list({ skip: 0, limit: 200, keyword: kw || undefined });
-                const receiptList = Array.isArray(receiptRes) ? receiptRes : (receiptRes?.data || []);
-                const rows = receiptList.map((pr: any) => {
-                    const receiptCode = String(pr.receipt_code || pr.code || pr.id || '');
-                    const poId = Number(pr.purchase_order_id || 0);
-                    const noteHit = invoiceNotes.some((n: string) => n.includes(receiptCode));
-                    return {
-                        source_type: 'purchase_receipt' as const,
-                        source_id: Number(pr.id),
-                        source_code: receiptCode,
-                        supplier_id: pr.supplier_id,
-                        supplier_name: pr.supplier_name,
-                        purchase_order_id: poId || undefined,
-                        purchase_order_code: pr.purchase_order_code,
-                        source_date: pr.receipt_time || pr.receipt_date || pr.created_at,
-                        source_status: pr.status,
-                        amount: Number(pr.total_amount || 0),
-                        converted: noteHit,
-                    };
-                });
-                setPullCandidates(rows.filter((r: PullPurchaseInvoiceCandidate) => (kw ? `${r.source_code} ${r.supplier_name || ''}`.toLowerCase().includes(kw) : true)));
-            }
-        } catch (e: any) {
-            setPullCandidates([]);
-            messageApi.error(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`));
-        } finally {
-            setPullLoading(false);
+    const loadPullCandidatesBySource = async (
+        sourceType: 'purchase_order' | 'purchase_receipt',
+        keyword: string,
+        page: number,
+        pageSize: number,
+    ): Promise<{ data: PullPurchaseInvoiceCandidate[]; total: number }> => {
+        const kw = keyword.trim().toLowerCase();
+        if (sourceType === 'purchase_order') {
+            const invoicePoIdSet = await fetchExistingPurchaseOrderIdsFromInvoices();
+            const poRes = await listPurchaseOrders({ skip: 0, limit: 200, keyword: kw || undefined });
+            const rows = (poRes?.data || []).map((po: any) => {
+                const code = String(po.order_code || po.code || po.id || '');
+                return {
+                    source_type: 'purchase_order' as const,
+                    source_id: Number(po.id),
+                    source_code: code,
+                    supplier_id: po.supplier_id,
+                    supplier_name: po.supplier_name,
+                    purchase_order_id: Number(po.id),
+                    purchase_order_code: code,
+                    source_date: po.order_date,
+                    source_status: po.status,
+                    amount: Number(po.total_amount || 0),
+                    converted: invoicePoIdSet.has(Number(po.id)),
+                };
+            });
+            const filtered = rows.filter((r: PullPurchaseInvoiceCandidate) => (kw ? `${r.source_code} ${r.supplier_name || ''}`.toLowerCase().includes(kw) : true));
+            const start = (page - 1) * pageSize;
+            return { data: filtered.slice(start, start + pageSize), total: filtered.length };
         }
+
+        const invoiceNotes = await fetchExistingReceiptNotesFromInvoices();
+        const receiptRes: any = await warehouseApi.purchaseReceipt.list({ skip: 0, limit: 200, keyword: kw || undefined });
+        const receiptList = Array.isArray(receiptRes) ? receiptRes : (receiptRes?.data || []);
+        const rows = receiptList.map((pr: any) => {
+            const receiptCode = String(pr.receipt_code || pr.code || pr.id || '');
+            const poId = Number(pr.purchase_order_id || 0);
+            const noteHit = invoiceNotes.some((n: string) => n.includes(receiptCode));
+            return {
+                source_type: 'purchase_receipt' as const,
+                source_id: Number(pr.id),
+                source_code: receiptCode,
+                supplier_id: pr.supplier_id,
+                supplier_name: pr.supplier_name,
+                purchase_order_id: poId || undefined,
+                purchase_order_code: pr.purchase_order_code,
+                source_date: pr.receipt_time || pr.receipt_date || pr.created_at,
+                source_status: pr.status,
+                amount: Number(pr.total_amount || 0),
+                converted: noteHit,
+            };
+        });
+        const filtered = rows.filter((r: PullPurchaseInvoiceCandidate) => (kw ? `${r.source_code} ${r.supplier_name || ''}`.toLowerCase().includes(kw) : true));
+        const start = (page - 1) * pageSize;
+        return { data: filtered.slice(start, start + pageSize), total: filtered.length };
     };
 
-    const openPullModal = async (sourceType: 'purchase_order' | 'purchase_receipt') => {
-        setPullSourceType(sourceType);
-        setPullKeyword('');
-        setSelectedPullSourceId(null);
-        setPullVisible(true);
-        await loadPullCandidates(sourceType, '');
-    };
-
-    const handlePullNext = () => {
-        if (!selectedPullSourceId) {
+    const openPullFormFromRows = (
+        sourceType: 'purchase_order' | 'purchase_receipt',
+        keys: React.Key[],
+        rows: PullPurchaseInvoiceCandidate[],
+        closeModal: () => void,
+    ) => {
+        const selected = rows.find((x) => String(x.source_id) === String(keys[0]));
+        if (!selected) {
             messageApi.warning(t('app.kuaicaiwu.common.selectSource', {
-                source: pullSourceType === 'purchase_order'
+                source: sourceType === 'purchase_order'
                     ? pullFromPurchaseOrderAction.sourceLabel
                     : pullFromPurchaseReceiptAction.sourceLabel,
             }));
             return;
         }
-        const selected = pullCandidates.find((x) => x.source_id === selectedPullSourceId);
-        if (!selected) return;
         if (selected.converted) {
             messageApi.warning(t(`${P}.sourceConverted`, {
-                source: pullSourceType === 'purchase_order'
+                source: sourceType === 'purchase_order'
                     ? pullFromPurchaseOrderAction.sourceLabel
                     : pullFromPurchaseReceiptAction.sourceLabel,
                 target: pullFromPurchaseOrderAction.targetLabel,
@@ -255,9 +246,43 @@ const PurchaseInvoiceList: React.FC = () => {
             return;
         }
         setPullSelectedSource(selected);
-        setPullVisible(false);
+        closeModal();
         setPullFormVisible(true);
     };
+
+    const pullFromPurchaseOrderQuery = useUniPullQuery<PullPurchaseInvoiceCandidate>({
+        rowKey: 'source_id',
+        selectionType: 'radio',
+        isRowDisabled: (record) => !!record.converted,
+        loadData: async ({ keyword, page, pageSize }) => {
+            try {
+                return await loadPullCandidatesBySource('purchase_order', keyword, page, pageSize);
+            } catch (e: any) {
+                messageApi.error(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`));
+                return { data: [], total: 0 };
+            }
+        },
+        onConfirm: async (keys, rows) => {
+            openPullFormFromRows('purchase_order', keys, rows, pullFromPurchaseOrderQuery.closeModal);
+        },
+    });
+
+    const pullFromPurchaseReceiptQuery = useUniPullQuery<PullPurchaseInvoiceCandidate>({
+        rowKey: 'source_id',
+        selectionType: 'radio',
+        isRowDisabled: (record) => !!record.converted,
+        loadData: async ({ keyword, page, pageSize }) => {
+            try {
+                return await loadPullCandidatesBySource('purchase_receipt', keyword, page, pageSize);
+            } catch (e: any) {
+                messageApi.error(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`));
+                return { data: [], total: 0 };
+            }
+        },
+        onConfirm: async (keys, rows) => {
+            openPullFormFromRows('purchase_receipt', keys, rows, pullFromPurchaseReceiptQuery.closeModal);
+        },
+    });
 
     const handlePullCreateSubmit = async (values: any) => {
         if (!pullSelectedSource) return false;
@@ -531,77 +556,73 @@ const PurchaseInvoiceList: React.FC = () => {
                             {
                                 key: 'pull-from-po',
                                 actionKey: 'purchase_invoice.pull_from_purchase_order',
-                                onClick: () => {
-                                    void openPullModal('purchase_order');
-                                },
+                                onClick: pullFromPurchaseOrderQuery.openModal,
                             },
                             {
                                 key: 'pull-from-pr',
                                 actionKey: 'purchase_invoice.pull_from_purchase_receipt',
-                                onClick: () => {
-                                    void openPullModal('purchase_receipt');
-                                },
+                                onClick: pullFromPurchaseReceiptQuery.openModal,
                             },
                         ])}
                     />,
                 ]}
             />
 
-            <Modal
-                title={pullSourceType === 'purchase_order' ? pullFromPurchaseOrderAction.label : pullFromPurchaseReceiptAction.label}
-                open={pullVisible}
-                width={1180}
-                onCancel={() => {
-                    if (pullSubmitting) return;
-                    setPullVisible(false);
-                    setSelectedPullSourceId(null);
-                }}
-                onOk={() => {
-                    void handlePullNext();
-                }}
+            <UniPullQueryModal<PullPurchaseInvoiceCandidate>
+                open={pullFromPurchaseOrderQuery.open}
+                title={pullFromPurchaseOrderAction.label}
+                onCancel={pullFromPurchaseOrderQuery.closeModal}
+                onOk={pullFromPurchaseOrderQuery.handleConfirm}
+                rowKey="source_id"
+                columns={pullTableColumns}
+                dataSource={pullFromPurchaseOrderQuery.dataSource}
+                loading={pullFromPurchaseOrderQuery.loading}
+                confirmLoading={pullFromPurchaseOrderQuery.confirmLoading}
+                selectionType={pullFromPurchaseOrderQuery.selectionType}
+                selectedRowKeys={pullFromPurchaseOrderQuery.selectedRowKeys}
+                onSelectedRowKeysChange={pullFromPurchaseOrderQuery.handleSelectedRowKeysChange}
+                isRowDisabled={pullFromPurchaseOrderQuery.isRowDisabled}
+                searchDraft={pullFromPurchaseOrderQuery.searchDraft}
+                onSearchDraftChange={pullFromPurchaseOrderQuery.setSearchDraft}
+                onSearchApply={pullFromPurchaseOrderQuery.handleSearchApply}
+                onSearchClear={pullFromPurchaseOrderQuery.handleSearchClear}
+                appliedKeyword={pullFromPurchaseOrderQuery.appliedKeyword}
+                searchPlaceholder={t(`${P}.pull.searchPlaceholder`)}
+                page={pullFromPurchaseOrderQuery.page}
+                pageSize={pullFromPurchaseOrderQuery.pageSize}
+                total={pullFromPurchaseOrderQuery.total}
+                onPageChange={pullFromPurchaseOrderQuery.handlePageChange}
                 okText={t('common.next')}
-                confirmLoading={false}
-                destroyOnHidden
-            >
-                <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-                    <Input.Search
-                        allowClear
-                        placeholder={t(`${P}.pull.searchPlaceholder`)}
-                        value={pullKeyword}
-                        onChange={(e) => setPullKeyword(e.target.value)}
-                        onSearch={(value) => {
-                            setPullKeyword(value);
-                            void loadPullCandidates(pullSourceType, value);
-                        }}
-                        enterButton={t('common.search')}
-                    />
-                    <Table<PullPurchaseInvoiceCandidate>
-                        rowKey={(r) => `${r.source_type}-${r.source_id}`}
-                        loading={pullLoading}
-                        dataSource={pullCandidates}
-                        pagination={false}
-                        scroll={{ x: 1100, y: 360 }}
-                        rowSelection={{
-                            type: 'radio',
-                            selectedRowKeys: selectedPullSourceId ? [`${pullSourceType}-${selectedPullSourceId}`] : [],
-                            onChange: (keys) => {
-                                const key = String(keys?.[0] || '');
-                                const id = Number(key.split('-').slice(-1)[0]);
-                                if (Number.isFinite(id)) setSelectedPullSourceId(id);
-                                else setSelectedPullSourceId(null);
-                            },
-                            getCheckboxProps: (record) => ({ disabled: !!record.converted }),
-                        }}
-                        onRow={(record) => ({
-                            onClick: () => {
-                                if (record.converted) return;
-                                setSelectedPullSourceId(record.source_id);
-                            },
-                        })}
-                        columns={pullTableColumns}
-                    />
-                </Space>
-            </Modal>
+                width={1180}
+            />
+
+            <UniPullQueryModal<PullPurchaseInvoiceCandidate>
+                open={pullFromPurchaseReceiptQuery.open}
+                title={pullFromPurchaseReceiptAction.label}
+                onCancel={pullFromPurchaseReceiptQuery.closeModal}
+                onOk={pullFromPurchaseReceiptQuery.handleConfirm}
+                rowKey="source_id"
+                columns={pullTableColumns}
+                dataSource={pullFromPurchaseReceiptQuery.dataSource}
+                loading={pullFromPurchaseReceiptQuery.loading}
+                confirmLoading={pullFromPurchaseReceiptQuery.confirmLoading}
+                selectionType={pullFromPurchaseReceiptQuery.selectionType}
+                selectedRowKeys={pullFromPurchaseReceiptQuery.selectedRowKeys}
+                onSelectedRowKeysChange={pullFromPurchaseReceiptQuery.handleSelectedRowKeysChange}
+                isRowDisabled={pullFromPurchaseReceiptQuery.isRowDisabled}
+                searchDraft={pullFromPurchaseReceiptQuery.searchDraft}
+                onSearchDraftChange={pullFromPurchaseReceiptQuery.setSearchDraft}
+                onSearchApply={pullFromPurchaseReceiptQuery.handleSearchApply}
+                onSearchClear={pullFromPurchaseReceiptQuery.handleSearchClear}
+                appliedKeyword={pullFromPurchaseReceiptQuery.appliedKeyword}
+                searchPlaceholder={t(`${P}.pull.searchPlaceholder`)}
+                page={pullFromPurchaseReceiptQuery.page}
+                pageSize={pullFromPurchaseReceiptQuery.pageSize}
+                total={pullFromPurchaseReceiptQuery.total}
+                onPageChange={pullFromPurchaseReceiptQuery.handlePageChange}
+                okText={t('common.next')}
+                width={1180}
+            />
 
             <ModalForm
                 title={t(`${P}.pullFormTitle`)}
@@ -611,7 +632,6 @@ const PurchaseInvoiceList: React.FC = () => {
                     setPullFormVisible(open);
                     if (!open) {
                         setPullSelectedSource(null);
-                        setSelectedPullSourceId(null);
                     }
                 }}
                 onFinish={handlePullCreateSubmit}

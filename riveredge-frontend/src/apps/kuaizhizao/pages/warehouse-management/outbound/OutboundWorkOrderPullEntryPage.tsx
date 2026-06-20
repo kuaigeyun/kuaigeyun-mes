@@ -28,9 +28,11 @@ import {
 import { getOutboundIssueTypeLabel } from './outboundHubTypes';
 import { OUTBOUND_LIST_PATH, outboundWorkOrderEntryPath } from './outboundPaths';
 import { draftOptionalNumber, usePullEntryFormDraft } from '../shared/pullEntryFormDraft';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const { t } = useTranslation();
+  const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'outbound.pull_from_work_order');
   const { woId: woIdParam } = useParams<{ woId: string }>();
   const woId = Number(woIdParam);
   const navigate = useNavigate();
@@ -52,8 +54,8 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const pagePath = Number.isFinite(woId) && woId > 0 ? outboundWorkOrderEntryPath(woId) : OUTBOUND_LIST_PATH;
   const woCode = String(workOrder?.code ?? workOrder?.work_order_code ?? '');
   const pageTitle = woCode
-    ? `${t('app.kuaizhizao.warehouseOutbound.entry.productionPicking')} — ${woCode}`
-    : t('app.kuaizhizao.warehouseOutbound.entry.productionPicking');
+    ? `${pullFromWorkOrderAction.label} — ${woCode}`
+    : pullFromWorkOrderAction.label;
 
   const leavePage = useCallback(() => {
     clearDraft();

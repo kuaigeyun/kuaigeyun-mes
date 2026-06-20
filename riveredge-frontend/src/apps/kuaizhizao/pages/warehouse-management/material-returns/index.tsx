@@ -93,9 +93,19 @@ const MaterialReturnsPage: React.FC = () => {
       if (!createModalVisible) return;
       setBorrowLoading(true);
       try {
-        const res = await warehouseApi.materialBorrow.list({ status: '已借出', limit: 500 });
-        const data = Array.isArray(res) ? res : (res as any)?.items || (res as any)?.data || [];
-        setBorrowList(data);
+        const chunkSize = 100;
+        const maxRows = 500;
+        const rows: any[] = [];
+        let skip = 0;
+        while (rows.length < maxRows) {
+          const res = await warehouseApi.materialBorrow.list({ status: '已借出', skip, limit: chunkSize });
+          const chunk = Array.isArray(res) ? res : (res as any)?.items || (res as any)?.data || [];
+          if (!Array.isArray(chunk) || chunk.length === 0) break;
+          rows.push(...chunk);
+          if (chunk.length < chunkSize) break;
+          skip += chunkSize;
+        }
+        setBorrowList(rows.slice(0, maxRows));
       } catch {
         setBorrowList([]);
       } finally {

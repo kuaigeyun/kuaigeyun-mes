@@ -39,6 +39,7 @@ import {
   mergeRecordMaps,
   usePullEntryFormDraft,
 } from '../shared/pullEntryFormDraft';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 type PreviewLine = {
   sales_order_item_id?: number;
@@ -67,6 +68,7 @@ const InboundSalesReturnPullEntryPage: React.FC = () => {
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
+  const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_sales_order');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const receiverHook = useInboundReceiverSelect();
   const initRef = useRef(false);
@@ -90,8 +92,8 @@ const InboundSalesReturnPullEntryPage: React.FC = () => {
   const pagePath =
     Number.isFinite(salesOrderId) && salesOrderId > 0 ? inboundSalesReturnEntryPath(salesOrderId) : INBOUND_LIST_PATH;
   const pageTitle = preview?.sales_order_code
-    ? t('app.kuaizhizao.warehouseInbound.entry.salesReturn.titleWithCode', { code: preview.sales_order_code })
-    : t('app.kuaizhizao.warehouseInbound.entry.salesReturn.title');
+    ? `${pullFromSalesOrderAction.label} — ${preview.sales_order_code}`
+    : pullFromSalesOrderAction.label;
 
   const totalReturnQty = useMemo(
     () =>

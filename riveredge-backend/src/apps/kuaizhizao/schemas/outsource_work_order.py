@@ -14,6 +14,8 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
+from apps.kuaizhizao.services.document_action_policy.types import InboundHubCapabilities
+
 
 class OutsourceWorkOrderBase(BaseModel):
     """
@@ -278,6 +280,9 @@ class OutsourceMaterialReceiptResponse(OutsourceMaterialReceiptBase):
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    capabilities: Optional[InboundHubCapabilities] = Field(
+        None, description="入库 Hub capabilities（document_action_policy）",
+    )
 
 
 # ==================== 委外协同 Schema ====================
@@ -407,6 +412,9 @@ class OutsourceMaterialReturnResponse(OutsourceMaterialReturnBase):
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    capabilities: Optional[InboundHubCapabilities] = Field(
+        None, description="入库 Hub capabilities（document_action_policy）",
+    )
 
 
 class OutsourceMaterialReturnPreviewLine(BaseModel):
@@ -471,6 +479,9 @@ class OutsourceProductReturnResponse(OutsourceProductReturnBase):
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    capabilities: Optional[InboundHubCapabilities] = Field(
+        None, description="入库 Hub capabilities（document_action_policy）",
+    )
 
 
 class OutsourceProductReturnPreviewLine(BaseModel):

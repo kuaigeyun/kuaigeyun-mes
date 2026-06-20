@@ -7,11 +7,12 @@ import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Form, Input, Modal, Space } from 'antd';
+import { App, Button, Descriptions, Form, Input, Space } from 'antd';
 import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, RollbackOutlined, SendOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -21,6 +22,10 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import {
+  useSalesOrderChangeCapabilities,
+} from '../../../../../hooks/useDocumentCapabilities';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import {
@@ -35,51 +40,76 @@ import {
   withdrawSalesOrderChange,
   type SalesOrderChange,
 } from '../../../services/sales-order-change';
+import { getSalesOrder, listSalesOrders, type SalesOrder } from '../../../services/sales-order';
 import {
   buildOrderChangeLifecycleValueEnum,
   getOrderChangeLifecycle,
-  isOrderChangeDraft,
   resolveOrderChangeListLifecycleParams,
 } from '../../../utils/orderChangeLifecycle';
 import { formatOrderChangeCategory } from '../../../utils/orderChangeCategory';
 import { OrderChangeItemsTable } from '../../../components/order-change/OrderChangeItemsTable';
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
-import { OrderChangeSourceOrderPickerModal } from '../../../components/order-change/OrderChangeSourceOrderPickerModal';
-import type { OrderChangeSourceOrderOption } from '../../../utils/orderChangeSourceOrder';
+import { isSourceOrderEligibleForChange } from '../../../utils/orderChangeSourceOrder';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import {
+  resolveKuaizhizaoDocumentAction,
+} from '../../../constants/documentActionRegistry';
+
+const SALES_ORDER_CHANGE_RESOURCE = 'kuaizhizao:sales-order-change';
+type PullSalesOrderCandidate = {
+  id: number;
+  order_code: string;
+  customer_name?: string;
+  order_date?: string;
+  delivery_date?: string;
+  total_amount?: number;
+  status?: string;
+  review_status?: string;
+  salesman_name?: string;
+};
+
+const isPullSalesOrderSelectable = (record: PullSalesOrderCandidate): boolean =>
+  isSourceOrderEligibleForChange(record.status, record.review_status);
 
 const SalesOrderChangesPage: React.FC = () => {
   const { t } = useTranslation();
   const { message, modal } = App.useApp();
+  const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(
+    t,
+    'sales_order_change.pull_from_sales_order',
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>();
   const auditEnabled = useAuditRequired('kuaizhizao', 'sales-order-change');
+  const changePerms = useResourcePermissions(SALES_ORDER_CHANGE_RESOURCE);
+  const permDeniedTitle = t('common.noPermission');
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<SalesOrderChange | null>(null);
+  const detailCapabilityGates = useSalesOrderChangeCapabilities(detail, changePerms, t, permDeniedTitle);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm] = Form.useForm();
   const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
   const [editItems, setEditItems] = useState<SalesOrderChange['items']>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [selectedSourceOrder, setSelectedSourceOrder] = useState<OrderChangeSourceOrderOption | null>(null);
+  const [creatingSourceOrderId, setCreatingSourceOrderId] = useState<number | null>(null);
   const [createReason, setCreateReason] = useState(() => t('app.kuaizhizao.salesOrderChange.defaultReason'));
   const [impactOpen, setImpactOpen] = useState(false);
   const [impactLoading, setImpactLoading] = useState(false);
   const [impactData, setImpactData] = useState<Awaited<ReturnType<typeof previewSalesOrderChangeImpact>> | null>(null);
   const [pendingSubmitId, setPendingSubmitId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const tableRowsRef = useRef<SalesOrderChange[]>([]);
 
-  const openCreate = useCallback(() => {
-    setSelectedSourceOrder(null);
-    setCreateReason(t('app.kuaizhizao.salesOrderChange.defaultReason'));
-    setCreateOpen(true);
-  }, [t]);
-  useNewShortcut(openCreate);
+  const selectedChangesForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is SalesOrderChange => row != null),
+    [selectedRowKeys],
+  );
 
   const openDetail = async (record: SalesOrderChange) => {
     const full = await getSalesOrderChange(record.id!);
@@ -90,6 +120,7 @@ const SalesOrderChangesPage: React.FC = () => {
   const openEdit = async (record: SalesOrderChange) => {
     const full = await getSalesOrderChange(record.id!);
     setEditingId(full.id!);
+    setCreatingSourceOrderId(null);
     setEditItems(full.items ?? []);
     setPendingEditFormValues({
       change_reason: full.change_reason,
@@ -101,7 +132,7 @@ const SalesOrderChangesPage: React.FC = () => {
 
   const handleSaveEdit = async () => {
     const values = await editForm.validateFields();
-    await updateSalesOrderChange(editingId!, {
+    const payload = {
       change_reason: values.change_reason,
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
@@ -123,25 +154,177 @@ const SalesOrderChangesPage: React.FC = () => {
         after_delivery_date: item.after_delivery_date,
         notes: item.notes,
       })),
-    });
-    message.success(t('common.updateSuccess'));
+    };
+    if (editingId) {
+      await updateSalesOrderChange(editingId, payload);
+      message.success(t('common.updateSuccess'));
+    } else {
+      if (!creatingSourceOrderId) {
+        message.error(t('app.kuaizhizao.salesOrderChange.selectSalesOrder'));
+        return;
+      }
+      const created = await createSalesOrderChangeFromOrder(
+        creatingSourceOrderId,
+        values.change_reason || t('app.kuaizhizao.salesOrderChange.defaultReason'),
+      );
+      await updateSalesOrderChange(created.id!, payload);
+      message.success(t('app.kuaizhizao.salesOrderChange.created', { code: created.change_code }));
+    }
     setEditOpen(false);
     setPendingEditFormValues(null);
+    setCreatingSourceOrderId(null);
     actionRef.current?.reload();
   };
 
-  const handleCreateFromOrder = async (orderId: number, reason: string) => {
-    const doc = await createSalesOrderChangeFromOrder(orderId, reason);
-    message.success(t('app.kuaizhizao.salesOrderChange.created', { code: doc.change_code }));
-    setCreateOpen(false);
-    actionRef.current?.reload();
-    await openEdit(doc);
+  const openCreateFromOrder = async (orderId: number, reason: string) => {
+    const order = await getSalesOrder(orderId, true);
+    setEditingId(null);
+    setCreatingSourceOrderId(orderId);
+    setEditItems(
+      (order.items ?? []).map((item, idx) => ({
+        line_no: idx + 1,
+        source_item_id: item.id,
+        change_type: 'QUANTITY',
+        material_id: item.material_id,
+        material_code: item.material_code,
+        material_name: item.material_name,
+        material_spec: item.material_spec,
+        material_unit: item.material_unit,
+        before_quantity: item.required_quantity,
+        after_quantity: item.required_quantity,
+        before_unit_price: item.unit_price,
+        after_unit_price: item.unit_price,
+        before_delivery_date: item.delivery_date,
+        after_delivery_date: item.delivery_date,
+        notes: item.notes,
+      })),
+    );
+    setPendingEditFormValues({
+      change_reason: reason || t('app.kuaizhizao.salesOrderChange.defaultReason'),
+      notes: '',
+      attachments: [],
+    });
+    setEditOpen(true);
   };
+
+  const mapPullSalesOrderRows = useCallback((rows: SalesOrder[]): PullSalesOrderCandidate[] => {
+    return rows
+      .filter((order) => order.id && order.order_code)
+      .map((order) => ({
+        id: Number(order.id),
+        order_code: String(order.order_code),
+        customer_name: order.customer_name || '',
+        order_date: order.order_date || '',
+        delivery_date: order.delivery_date || '',
+        total_amount: order.total_amount != null ? Number(order.total_amount) : undefined,
+        status: order.status || '',
+        review_status: order.review_status || '',
+        salesman_name: order.salesman_name || '',
+      }));
+  }, []);
+
+  const pullFromSalesOrderScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
+  const pullFromSalesOrderQuery = useUniPullQuery<PullSalesOrderCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    scopeOptions: pullFromSalesOrderScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullSalesOrderSelectable(record),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const result = await listSalesOrders({
+          skip: 0,
+          limit: 200,
+          keyword: keyword.trim() || undefined,
+          include_items: false,
+        });
+        const rows = mapPullSalesOrderRows(result.data || []);
+        const filtered = scope === 'pullable' ? rows.filter(isPullSalesOrderSelectable) : rows;
+        const begin = (page - 1) * pageSize;
+        const end = begin + pageSize;
+        return {
+          data: filtered.slice(begin, end),
+          total: filtered.length,
+        };
+      } catch (error: any) {
+        message.error(error?.message ?? t('app.kuaizhizao.orderChange.loadSalesOrdersFailed'));
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys, rows) => {
+      const selectedId = Number(keys[0]);
+      const selected = rows[0];
+      if (!selectedId || selectedId <= 0) {
+        message.warning(t('app.kuaizhizao.salesOrderChange.selectSalesOrder'));
+        return;
+      }
+      if (selected && !isPullSalesOrderSelectable(selected)) {
+        message.warning(t('app.kuaizhizao.salesOrderChange.selectSalesOrder'));
+        return;
+      }
+      await openCreateFromOrder(selectedId, createReason || t('app.kuaizhizao.salesOrderChange.defaultReason'));
+      pullFromSalesOrderQuery.closeModal();
+    },
+  });
+
+  const pullSalesOrderColumns: ProColumns<PullSalesOrderCandidate>[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.orderChange.colOrderCode'), dataIndex: 'order_code', width: 160 },
+      {
+        title: t('path.customers'),
+        dataIndex: 'customer_name',
+        ellipsis: true,
+        render: (value: string) => value || '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.orderDate'),
+        dataIndex: 'order_date',
+        width: 120,
+        render: (value: string) => (value ? dayjs(value).format('YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.deliveryDate'),
+        dataIndex: 'delivery_date',
+        width: 120,
+        render: (value: string) => (value ? dayjs(value).format('YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.orderChange.colAmount'),
+        dataIndex: 'total_amount',
+        width: 120,
+        align: 'right',
+        render: (value: number | undefined) =>
+          value != null
+            ? Number(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : '-',
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        width: 100,
+        render: (value: string) => value || '-',
+      },
+    ],
+    [t],
+  );
+
+  const openCreate = useCallback(() => {
+    setCreateReason(t('app.kuaizhizao.salesOrderChange.defaultReason'));
+    pullFromSalesOrderQuery.openModal();
+  }, [pullFromSalesOrderQuery, t]);
+  useNewShortcut(openCreate);
 
   useEffect(() => {
     const sourceId = searchParams.get('source_order_id');
     if (sourceId) {
-      handleCreateFromOrder(Number(sourceId), t('app.kuaizhizao.salesOrderChange.defaultReason')).finally(() => {
+      openCreateFromOrder(Number(sourceId), t('app.kuaizhizao.salesOrderChange.defaultReason')).finally(() => {
         searchParams.delete('source_order_id');
         setSearchParams(searchParams, { replace: true });
       });
@@ -232,12 +415,12 @@ const SalesOrderChangesPage: React.FC = () => {
             <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record)}>
               {t('common.detail')}
             </Button>,
-            isOrderChangeDraft(record) ? (
+            record.capabilities?.update?.allowed && changePerms.canUpdate ? (
               <Button {...rowActionKind('update')} key="edit" onClick={() => openEdit(record)}>
                 {t('common.edit')}
               </Button>
             ) : null,
-            isOrderChangeDraft(record) ? (
+            record.capabilities?.delete?.allowed && changePerms.canDelete ? (
               <Button {...rowActionKind('delete')} key="del" onClick={() => {
                 modal.confirm({
                   title: t('app.kuaizhizao.salesOrderChange.confirmDelete'),
@@ -292,83 +475,19 @@ const SalesOrderChangesPage: React.FC = () => {
     actionRef.current?.reload();
   }, [message, t]);
 
-  const handleBatchSubmit = useCallback(async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      message.warning(t('app.kuaizhizao.salesOrderChange.selectToSubmit'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await submitSalesOrderChange(id);
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) message.success(t('app.kuaizhizao.salesOrderChange.batchSubmitSuccess', { count: success }));
-    if (failed > 0) message.warning(t('app.kuaizhizao.salesOrderChange.batchSubmitPartial', { count: failed }));
-    setSelectedRowKeys([]);
-    actionRef.current?.reload();
-  }, [message, t]);
+  const changeAuditBatchHandlers = useMemo(
+    () => ({
+      submit: submitSalesOrderChange,
+      withdraw: withdrawSalesOrderChange,
+      approve: (id: number) => approveSalesOrderChange(id, true),
+    }),
+    [],
+  );
 
-  const handleBatchApprove = useCallback(async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      message.warning(t('app.kuaizhizao.salesOrderChange.selectToApprove'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await approveSalesOrderChange(id, true);
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) message.success(t('app.kuaizhizao.salesOrderChange.batchApproveSuccess', { count: success }));
-    if (failed > 0) message.warning(t('app.kuaizhizao.salesOrderChange.batchApprovePartial', { count: failed }));
+  const handleChangeAuditBatchSuccess = useCallback(() => {
     setSelectedRowKeys([]);
     actionRef.current?.reload();
-  }, [message, t]);
-
-  const handleBatchWithdraw = useCallback(async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      message.warning(t('app.kuaizhizao.salesOrderChange.selectToWithdraw'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await withdrawSalesOrderChange(id);
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) message.success(t('app.kuaizhizao.salesOrderChange.batchWithdrawSuccess', { count: success }));
-    if (failed > 0) message.warning(t('app.kuaizhizao.salesOrderChange.batchWithdrawPartial', { count: failed }));
-    setSelectedRowKeys([]);
-    actionRef.current?.reload();
-  }, [message, t]);
+  }, []);
 
   return (
     <ListPageTemplate>
@@ -380,104 +499,102 @@ const SalesOrderChangesPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         columns={columns}
         request={request}
+        onTableDataChange={(rows) => {
+          tableRowsRef.current = rows;
+        }}
         columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-order-changes"
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
         pinnedTabsValueEnum={orderChangeLifecycleValueEnum}
         toolBarRender={() => [
-          <Button {...rowActionKind('create')}
-            key="create"
+          <Button
+            {...rowActionKind('create')}
+            key="create-sales-order-change-with-pull"
             type="primary"
             icon={<PlusOutlined />}
             onClick={openCreate}
           >
-            {t('app.kuaizhizao.salesOrderChange.createFromOrder') + NEW_SHORTCUT_HINT}
+            {pullFromSalesOrderAction.label + NEW_SHORTCUT_HINT}
           </Button>,
         ]}
         showDeleteButton
         onDelete={handleBatchDelete}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.salesOrderChange.confirmBatchDelete', { count })}
         toolBarActionsAfterDelete={[
-          <UniBatchMenuButton
+          <UniAuditBatchMenuButton
             key="sales-order-change-batch-menu"
             selectedRowKeys={selectedRowKeys}
-            menuItems={[
-              {
-                key: 'submit',
-                label: t('app.kuaizhizao.salesOrderChange.batchSubmit'),
-                icon: <SendOutlined />,
-                onClick: handleBatchSubmit,
-              },
-              ...(auditEnabled
-                ? [
-                    {
-                      key: 'approve',
-                      label: t('app.kuaizhizao.salesOrderChange.batchApprove'),
-                      icon: <CheckOutlined />,
-                      onClick: handleBatchApprove,
-                    },
-                  ]
-                : []),
-              {
-                key: 'withdraw',
-                label: t('app.kuaizhizao.salesOrderChange.batchWithdraw'),
-                icon: <RollbackOutlined />,
-                onClick: handleBatchWithdraw,
-              },
-            ]}
+            selectedRecords={selectedChangesForBatch}
+            auditEnabled={auditEnabled}
+            permGates={changePerms}
+            handlers={changeAuditBatchHandlers}
+            onSuccess={handleChangeAuditBatchSuccess}
           />,
         ]}
       />
 
-      <Modal
-        title={t('app.kuaizhizao.salesOrderChange.createModalTitle')}
-        open={createOpen}
-        onCancel={() => setCreateOpen(false)}
-        onOk={async () => {
-          if (!selectedSourceOrder?.id) {
-            message.warning(t('app.kuaizhizao.salesOrderChange.selectSalesOrder'));
-            return;
-          }
-          await handleCreateFromOrder(selectedSourceOrder.id, createReason);
+      <UniPullQueryModal<PullSalesOrderCandidate>
+        title={pullFromSalesOrderAction.label}
+        open={pullFromSalesOrderQuery.open}
+        onCancel={pullFromSalesOrderQuery.closeModal}
+        onOk={pullFromSalesOrderQuery.handleConfirm}
+        okText={t('common.create')}
+        rowKey="id"
+        columns={pullSalesOrderColumns}
+        dataSource={pullFromSalesOrderQuery.dataSource}
+        loading={pullFromSalesOrderQuery.loading}
+        confirmLoading={pullFromSalesOrderQuery.confirmLoading}
+        selectionType={pullFromSalesOrderQuery.selectionType}
+        selectedRowKeys={pullFromSalesOrderQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromSalesOrderQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromSalesOrderQuery.isRowDisabled}
+        searchDraft={pullFromSalesOrderQuery.searchDraft}
+        onSearchDraftChange={pullFromSalesOrderQuery.setSearchDraft}
+        onSearchApply={pullFromSalesOrderQuery.handleSearchApply}
+        onSearchClear={pullFromSalesOrderQuery.handleSearchClear}
+        appliedKeyword={pullFromSalesOrderQuery.appliedKeyword}
+        page={pullFromSalesOrderQuery.page}
+        pageSize={pullFromSalesOrderQuery.pageSize}
+        total={pullFromSalesOrderQuery.total}
+        onPageChange={pullFromSalesOrderQuery.handlePageChange}
+        scopeOptions={pullFromSalesOrderQuery.scopeOptions}
+        scope={pullFromSalesOrderQuery.scope}
+        onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
+        searchPlaceholder={t('app.kuaizhizao.orderChange.searchOrderPlaceholder', {
+          orderLabel: t('app.kuaizhizao.salesOrderChange.salesOrderLabel'),
+          partnerLabel: t('path.customers'),
+        })}
+        emptyText={t('app.kuaizhizao.orderChange.emptyNoEligibleOrders', {
+          orderLabel: t('app.kuaizhizao.salesOrderChange.salesOrderLabel'),
+        })}
+        emptySearchText={t('app.kuaizhizao.orderChange.emptyNoSearchResults', {
+          orderLabel: t('app.kuaizhizao.salesOrderChange.salesOrderLabel'),
+        })}
+        okButtonProps={{
+          disabled:
+            pullFromSalesOrderQuery.selectedRowKeys.length === 0 ||
+            pullFromSalesOrderQuery.hasDisabledSelection ||
+            pullFromSalesOrderQuery.loading,
         }}
-        {...MODAL_CONFIG}
-      >
-        <Form layout="vertical">
-          <Form.Item label={t('app.kuaizhizao.salesOrderChange.salesOrderLabel')} required>
-            <Space.Compact style={{ width: '100%' }}>
-              <Input
-                readOnly
-                placeholder={t('app.kuaizhizao.salesOrderChange.selectSalesOrderPlaceholder')}
-                value={
-                  selectedSourceOrder
-                    ? `${selectedSourceOrder.order_code}${selectedSourceOrder.partner_name ? ` - ${selectedSourceOrder.partner_name}` : ''}`
-                    : ''
-                }
+        alert={
+          <Form layout="vertical">
+            <Form.Item label={t('app.kuaizhizao.salesOrderChange.colChangeReason')} required style={{ marginBottom: 0 }}>
+              <Input.TextArea
+                rows={2}
+                value={createReason}
+                onChange={(e) => setCreateReason(e.target.value)}
               />
-              <Button type="primary" onClick={() => setPickerOpen(true)}>
-                {t('app.kuaizhizao.salesOrderChange.select')}
-              </Button>
-            </Space.Compact>
-          </Form.Item>
-          <Form.Item label={t('app.kuaizhizao.salesOrderChange.colChangeReason')} required>
-            <Input.TextArea rows={2} value={createReason} onChange={(e) => setCreateReason(e.target.value)} />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <OrderChangeSourceOrderPickerModal
-        open={pickerOpen}
-        docType="sales"
-        onCancel={() => setPickerOpen(false)}
-        onSelect={(order) => {
-          setSelectedSourceOrder(order);
-          setPickerOpen(false);
-        }}
+            </Form.Item>
+          </Form>
+        }
       />
 
       <FormModalTemplate
         title={t('app.kuaizhizao.salesOrderChange.editTitle')}
         open={editOpen}
-        onClose={() => setEditOpen(false)}
+        onClose={() => {
+          setEditOpen(false);
+          setCreatingSourceOrderId(null);
+        }}
         afterOpenChange={(open) => {
           if (open) {
             if (pendingEditFormValues) {
@@ -506,10 +623,10 @@ const SalesOrderChangesPage: React.FC = () => {
         extra={
           detail ? (
             <Space>
-              {isOrderChangeDraft(detail) && (
+              {!detailCapabilityGates.update.disabled && (
                 <Button icon={<EditOutlined />} onClick={() => { setDetailOpen(false); openEdit(detail); }}>{t('common.edit')}</Button>
               )}
-              {isOrderChangeDraft(detail) && (
+              {!detailCapabilityGates.submit.disabled && (
                 <Button icon={<ThunderboltOutlined />} onClick={() => runSubmitWithPreview(detail.id!)}>{t('app.kuaizhizao.salesOrderChange.submit')}</Button>
               )}
               <UniWorkflowActions {...rowActionKind('skip')}

@@ -10,7 +10,7 @@ import { App, Tag, Space, Modal, Table, Card, Row, Col, Statistic, Divider } fro
 import { DiffOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { MaterialStackedCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import {
@@ -22,6 +22,11 @@ import {
   ComputationCompareResult,
 } from '../../../services/demand-computation';
 import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../../../utils/businessMode';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import {
+  demandComputationBatchCompareAllowed,
+  demandComputationBatchExportAllowed,
+} from '../../../../../hooks/useDocumentCapabilities';
 
 const ComputationHistoryPage: React.FC = () => {
   const { t } = useTranslation();
@@ -31,6 +36,16 @@ const ComputationHistoryPage: React.FC = () => {
   const [compareModalVisible, setCompareModalVisible] = useState(false);
   const [compareResult, setCompareResult] = useState<ComputationCompareResult | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const tableRowsRef = useRef<DemandComputation[]>([]);
+  const computationPerms = useResourcePermissions('plan-management-demand-computation');
+
+  const selectedComputationsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is DemandComputation => row != null),
+    [selectedRowKeys],
+  );
 
   const statusMap = useMemo(
     () => ({
@@ -41,58 +56,6 @@ const ComputationHistoryPage: React.FC = () => {
     }),
     [t]
   );
-
-  const handleCompare = async (keys: React.Key[]) => {
-    if (keys.length !== 2) {
-      messageApi.warning(t('app.kuaizhizao.computationHistory.compareSelectTwo'));
-      return;
-    }
-
-    const id1 = Number(keys[0]);
-    const id2 = Number(keys[1]);
-
-    try {
-      const result = await compareComputations(id1, id2);
-      setCompareResult(result);
-      setCompareModalVisible(true);
-    } catch {
-      messageApi.error(t('app.kuaizhizao.computationHistory.compareFailed'));
-    }
-  };
-
-  const handleExport = async (keys: React.Key[]) => {
-    if (keys.length === 0) {
-      messageApi.warning(t('app.kuaizhizao.computationHistory.exportSelect'));
-      return;
-    }
-    try {
-      const items: DemandComputation[] = [];
-      for (const k of keys) {
-        const id = Number(k);
-        if (isNaN(id)) continue;
-        try {
-          const detail = await getDemandComputation(id, true);
-          items.push(detail);
-        } catch {
-          // skip failed records
-        }
-      }
-      if (items.length === 0) {
-        messageApi.warning(t('app.kuaizhizao.computationHistory.exportNoData'));
-        return;
-      }
-      const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `computation-history-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      messageApi.success(t('app.kuaizhizao.computationHistory.exportSuccess', { count: items.length }));
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.computationHistory.exportFailed'));
-    }
-  };
 
   const handleBatchDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) return;
@@ -191,6 +154,7 @@ const ComputationHistoryPage: React.FC = () => {
         start_date: params.start_date,
         end_date: params.end_date,
       });
+      tableRowsRef.current = response.data || [];
       return {
         data: response.data,
         success: true,
@@ -291,27 +255,62 @@ const ComputationHistoryPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.computationHistory.deleteConfirm', { count })}
-          toolBarActionsAfterDelete={[
-            <UniBatchMenuButton
-              key="computation-history-batch-menu"
+          toolBarActionsAfterBatch={[
+            <UniCapabilityBatchButton
+              key="computation-history-compare"
               selectedRowKeys={selectedRowKeys}
-              menuItems={[
-                {
-                  key: 'compare',
-                  label: t('app.kuaizhizao.computationHistory.action.compareSelected'),
-                  icon: <DiffOutlined />,
-                  disabled: selectedRowKeys.length !== 2,
-                  onClick: (keys) => void handleCompare(keys),
-                },
-                {
-                  key: 'export',
-                  label: t('app.kuaizhizao.computationHistory.action.exportSelected'),
-                  icon: <DownloadOutlined />,
-                  disabled: selectedRowKeys.length === 0,
-                  onClick: (keys) => void handleExport(keys),
-                },
-              ]}
-              toolBarButtonSize="middle"
+              selectedRecords={selectedComputationsForBatch}
+              capabilityKey="compare"
+              permAllowed={computationPerms.canRead}
+              batchAllowed={(recs, perm) => demandComputationBatchCompareAllowed(recs, perm)}
+              onRunBulk={async (ids) => {
+                const result = await compareComputations(ids[0], ids[1]);
+                setCompareResult(result);
+                setCompareModalVisible(true);
+                return { success_count: ids.length, failed_count: 0 };
+              }}
+              labels={{
+                single: t('app.kuaizhizao.computationHistory.action.compareSelected'),
+                batch: t('app.kuaizhizao.computationHistory.action.compareSelected'),
+              }}
+              icon={<DiffOutlined />}
+              size="middle"
+            />,
+            <UniCapabilityBatchButton
+              key="computation-history-export"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedComputationsForBatch}
+              capabilityKey="export"
+              permAllowed={computationPerms.canExport}
+              batchAllowed={(recs, perm) => demandComputationBatchExportAllowed(recs, perm)}
+              onRunBulk={async (ids) => {
+                const items: DemandComputation[] = [];
+                for (const id of ids) {
+                  try {
+                    items.push(await getDemandComputation(id, true));
+                  } catch {
+                    // skip
+                  }
+                }
+                if (items.length === 0) {
+                  throw new Error(t('app.kuaizhizao.computationHistory.exportNoData'));
+                }
+                const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `computation-history-${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                messageApi.success(t('app.kuaizhizao.computationHistory.exportSuccess', { count: items.length }));
+                return { success_count: items.length, failed_count: ids.length - items.length };
+              }}
+              labels={{
+                single: t('app.kuaizhizao.computationHistory.action.exportSelected'),
+                batch: t('app.kuaizhizao.computationHistory.action.exportSelected'),
+              }}
+              icon={<DownloadOutlined />}
+              size="middle"
             />,
           ]}
         />

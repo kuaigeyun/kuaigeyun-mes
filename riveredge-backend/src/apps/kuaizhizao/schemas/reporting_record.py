@@ -9,6 +9,8 @@ from typing import Optional, Any
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
+from apps.kuaizhizao.services.document_action_policy.types import ReportingRecordCapabilities
+
 
 class ReportingRecordBase(BaseModel):
     """
@@ -88,6 +90,9 @@ class ReportingRecordResponse(ReportingRecordBase):
     sop_parameters: Optional[Any] = Field(None, description="SOP参数数据（JSON格式）")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    capabilities: Optional[ReportingRecordCapabilities] = Field(
+        None, description="业务态动作能力（document_action_policy）"
+    )
 
 
 class ReportingRecordListResponse(BaseModel):
@@ -112,6 +117,9 @@ class ReportingRecordListResponse(BaseModel):
     status: str = Field(..., description="审核状态")
     reported_at: datetime = Field(..., description="报工时间")
     created_at: datetime = Field(..., description="创建时间")
+    capabilities: Optional[ReportingRecordCapabilities] = Field(
+        None, description="业务态动作能力（document_action_policy）"
+    )
 
 
 class ReportingStatisticsTrendsResponse(BaseModel):

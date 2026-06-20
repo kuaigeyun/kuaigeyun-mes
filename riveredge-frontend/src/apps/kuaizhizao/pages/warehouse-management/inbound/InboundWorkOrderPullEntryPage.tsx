@@ -32,6 +32,7 @@ import { inboundReceiptTypeLabel } from './inboundHubTypes';
 import { INBOUND_LIST_PATH, inboundWorkOrderEntryPath } from './inboundPaths';
 import type { InboundReceiptType } from './inboundHubTypes';
 import { draftDayjs, draftOptionalNumber, usePullEntryFormDraft } from '../shared/pullEntryFormDraft';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 type PreviewLine = {
   material_id: number;
@@ -59,6 +60,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
+  const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_work_order');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const receiverHook = useInboundReceiverSelect();
   const initRef = useRef(false);
@@ -81,6 +83,9 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
   const inboundTypeLabel = inboundReceiptTypeLabel(t, receiptType);
   const pagePath = Number.isFinite(woId) && woId > 0 ? inboundWorkOrderEntryPath(woId) : INBOUND_LIST_PATH;
   const maxQty = Number(line?.source_pending_quantity ?? 0);
+  const pageTitle = preview?.work_order_code
+    ? `${pullFromWorkOrderAction.label} — ${preview.work_order_code}`
+    : pullFromWorkOrderAction.label;
 
   const leavePage = useCallback(() => {
     clearDraft();
@@ -116,17 +121,16 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
   }, [woId, leavePage, messageApi, t]);
 
   useEffect(() => {
-    const title = preview?.work_order_code ? `${inboundTypeLabel} — ${preview.work_order_code}` : inboundTypeLabel;
-    setCustomPageTitle(pagePath, title);
+    setCustomPageTitle(pagePath, pageTitle);
     window.dispatchEvent(
       new CustomEvent('riveredge:update-tab-title', {
-        detail: { key: pagePath, path: pagePath, title },
+        detail: { key: pagePath, path: pagePath, title: pageTitle },
       }),
     );
     return () => {
       removeCustomPageTitle(pagePath);
     };
-  }, [preview?.work_order_code, pagePath, inboundTypeLabel]);
+  }, [pagePath, pageTitle]);
 
   useEffect(() => {
     if (!Number.isFinite(woId) || woId <= 0 || initRef.current) return;
@@ -345,7 +349,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
           <Space align="center" size={8}>
             <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('app.kuaizhizao.warehouseInbound.action.back')} onClick={leavePage} />
             <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
-              {preview?.work_order_code ? `${inboundTypeLabel} — ${preview.work_order_code}` : inboundTypeLabel}
+              {pageTitle}
             </Typography.Title>
           </Space>
           <Space wrap>

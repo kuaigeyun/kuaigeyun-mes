@@ -37,7 +37,7 @@ import {
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, AppstoreAddOutlined, ImportOutlined, DownOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -58,11 +58,17 @@ import {
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { SimpleSparkline } from '../../../../../components';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
-import { receiptNoticeApi } from '../../../services/receipt-notice';
+import { receiptNoticeApi, type ReceiptNotice } from '../../../services/receipt-notice';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import {
+  receiptNoticeBatchNotifyAllowed,
+  receiptNoticeBatchWithdrawAllowed,
+} from '../../../../../hooks/useDocumentCapabilities';
 import { getReceiptNoticeLifecycle } from '../../../utils/receiptNoticeLifecycle';
 import { listPurchaseOrders, getPurchaseOrder } from '../../../services/purchase';
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
@@ -70,33 +76,10 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/cod
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { useTranslation } from 'react-i18next';
 import { ROUTES } from '../../../constants/routes';
+import { inboundReceiptNoticeEntryPath } from '../../warehouse-management/inbound/inboundPaths';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-
-interface ReceiptNotice {
-  id?: number;
-  notice_code?: string;
-  purchase_order_id?: number;
-  purchase_order_code?: string;
-  supplier_id?: number;
-  supplier_name?: string;
-  supplier_contact?: string;
-  supplier_phone?: string;
-  warehouse_id?: number;
-  warehouse_name?: string;
-  planned_receipt_date?: string;
-  status?: string;
-  notified_at?: string;
-  purchase_receipt_id?: number;
-  purchase_receipt_code?: string;
-  total_quantity?: number;
-  total_amount?: number;
-  notes?: string;
-  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
-  created_at?: string;
-  updated_at?: string;
-}
 
 interface ReceiptNoticeDetail extends ReceiptNotice {
   items?: { id?: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price?: number; total_amount?: number }[];
@@ -154,6 +137,8 @@ function renderReceiptNoticeRowActions(nodes: React.ReactNode[], keyPrefix: stri
   return nodes;
 }
 
+const RECEIPT_NOTICE_RESOURCE = 'kuaizhizao:receipt-notice';
+
 const ReceiptNoticesPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -161,6 +146,7 @@ const ReceiptNoticesPage: React.FC = () => {
   const receiptNoticeDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
   const pullFromPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'receipt_notice.pull_from_purchase_order');
+  const pushToPurchaseReceiptAction = resolveKuaizhizaoDocumentAction(t, 'purchase_receipt.pull_from_receipt_notice');
   const defaultUnit = t('app.kuaizhizao.shipmentNotice.defaultUnit');
   const defaultReceiptItem = useMemo(
     () => ({
@@ -182,6 +168,8 @@ const ReceiptNoticesPage: React.FC = () => {
     [t, i18n.language],
   );
   const actionRef = useRef<ActionType>(null);
+  const tableRowsRef = useRef<ReceiptNotice[]>([]);
+  const receiptNoticePerms = useResourcePermissions(RECEIPT_NOTICE_RESOURCE);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [statsVersion, setStatsVersion] = useState(0);
   const [localStats, setLocalStats] = useState({ total: 0, pending: 0, notified: 0, received: 0 });
@@ -215,15 +203,18 @@ const ReceiptNoticesPage: React.FC = () => {
   );
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [pullFromPurchaseOrderVisible, setPullFromPurchaseOrderVisible] = useState(false);
-  const [pullPurchaseOrderLoading, setPullPurchaseOrderLoading] = useState(false);
-  const [pullPurchaseOrderSubmitting, setPullPurchaseOrderSubmitting] = useState(false);
-  const [pullPurchaseOrderKeyword, setPullPurchaseOrderKeyword] = useState('');
-  const [pullPurchaseOrderCandidates, setPullPurchaseOrderCandidates] = useState<PullPurchaseOrderCandidate[]>([]);
-  const [selectedPullPurchaseOrderId, setSelectedPullPurchaseOrderId] = useState<number | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const selectedNoticesForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is ReceiptNotice => row != null),
+    [selectedRowKeys],
+  );
+
   const createFormRef = useRef<any>(null);
   const editFormRef = useRef<any>(null);
   const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
@@ -353,6 +344,11 @@ const ReceiptNoticesPage: React.FC = () => {
     });
   };
 
+  const handlePushToInboundEntry = (record: ReceiptNotice) => {
+    if (!record.id) return;
+    navigate(inboundReceiptNoticeEntryPath(record.id));
+  };
+
   const handleDelete = (record: ReceiptNotice) => {
     Modal.confirm({
       title: t('app.kuaizhizao.receiptNotice.deleteModalTitle'),
@@ -390,60 +386,6 @@ const ReceiptNoticesPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error?.message || t('common.batchDeleteFailed'));
     }
-  };
-
-  const handleBatchNotify = async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      messageApi.warning(t('app.kuaizhizao.receiptNotice.selectNoticeFirst'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await receiptNoticeApi.notify(String(id));
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) messageApi.success(t('app.kuaizhizao.receiptNotice.batchNotifySuccess', { count: success }));
-    if (failed > 0) messageApi.warning(t('app.kuaizhizao.receiptNotice.batchNotifyPartial', { count: failed }));
-    setSelectedRowKeys([]);
-    invalidateMenuBadgeCounts();
-    actionRef.current?.reload();
-  };
-
-  const handleBatchWithdraw = async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      messageApi.warning(t('app.kuaizhizao.receiptNotice.selectNoticeFirst'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await receiptNoticeApi.withdraw(String(id));
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) messageApi.success(t('app.kuaizhizao.receiptNotice.batchWithdrawSuccess', { count: success }));
-    if (failed > 0) messageApi.warning(t('app.kuaizhizao.shipmentNotice.batchWithdrawPartial', { count: failed }));
-    setSelectedRowKeys([]);
-    invalidateMenuBadgeCounts();
-    actionRef.current?.reload();
   };
 
   const columns: ProColumns<ReceiptNotice>[] = useMemo(
@@ -605,6 +547,22 @@ const ReceiptNoticesPage: React.FC = () => {
                 {t('app.kuaizhizao.shipmentNotice.withdrawNotify')}
               </Button>
             );
+            if (!record.purchase_receipt_id) {
+              parts.push(
+                <Button
+                  {...rowActionKind('audit')}
+                  key="push-inbound"
+                  type="link"
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePushToInboundEntry(record);
+                  }}
+                >
+                  {pushToPurchaseReceiptAction.label}
+                </Button>
+              );
+            }
           }
           if (record.purchase_receipt_id) {
             parts.push(
@@ -625,7 +583,7 @@ const ReceiptNoticesPage: React.FC = () => {
         },
       },
     ],
-    [handleDelete, handleDetail, handleEdit, handleNotify, handleWithdraw, navigate, t, i18n.language],
+    [handleDelete, handleDetail, handleEdit, handleNotify, handlePushToInboundEntry, handleWithdraw, navigate, t, i18n.language],
   );
 
   const pullPurchaseOrderColumns = useMemo(
@@ -790,110 +748,105 @@ const ReceiptNoticesPage: React.FC = () => {
     }
   };
 
-  const loadPullPurchaseOrderCandidates = useCallback(async (keyword: string = '') => {
-    setPullPurchaseOrderLoading(true);
-    try {
-      const kw = keyword.trim();
-      const [poRes, noticeRes] = await Promise.all([
-        listPurchaseOrders({ skip: 0, limit: 200, keyword: kw || undefined }),
-        receiptNoticeApi.list({ skip: 0, limit: 5000 }),
-      ]);
-      const orders = poRes?.data || [];
-      const notices = Array.isArray(noticeRes) ? noticeRes : (noticeRes as any)?.data ?? (noticeRes as any)?.items ?? [];
-      const noticeByOrderId = new Map<number, any>();
-      notices.forEach((n: any) => {
-        if (n?.purchase_order_id != null && !noticeByOrderId.has(Number(n.purchase_order_id))) {
-          noticeByOrderId.set(Number(n.purchase_order_id), n);
-        }
-      });
-      const candidates: PullPurchaseOrderCandidate[] = (orders as any[]).map((o: any) => {
-        const linked = noticeByOrderId.get(Number(o.id));
-        return {
-          id: Number(o.id),
-          order_code: o.order_code ?? o.purchase_order_code,
-          supplier_id: o.supplier_id,
-          supplier_name: o.supplier_name,
-          status: o.status,
-          order_date: o.order_date,
-          updated_at: o.updated_at,
-          notice_id: linked?.id,
-          converted: !!linked,
-        };
-      });
-      setPullPurchaseOrderCandidates(candidates);
-    } finally {
-      setPullPurchaseOrderLoading(false);
-    }
-  }, []);
-
-  const handlePullFromPurchaseOrder = useCallback(async () => {
-    setPullFromPurchaseOrderVisible(true);
-    setPullPurchaseOrderKeyword('');
-    setSelectedPullPurchaseOrderId(null);
-    await loadPullPurchaseOrderCandidates('');
-  }, [loadPullPurchaseOrderCandidates]);
-
-  const handlePullFromPurchaseOrderConfirm = useCallback(async () => {
-    if (!selectedPullPurchaseOrderId) {
-      messageApi.warning(t('app.kuaizhizao.shipmentNotice.selectSource', { source: pullFromPurchaseOrderAction.sourceLabel }));
-      return;
-    }
-    const selected = pullPurchaseOrderCandidates.find((i) => i.id === selectedPullPurchaseOrderId);
-    if (selected?.converted) {
-      messageApi.warning(t('app.kuaizhizao.shipmentNotice.sourceAlreadyConverted', {
-        source: pullFromPurchaseOrderAction.sourceLabel,
-        target: pullFromPurchaseOrderAction.targetLabel,
-      }));
-      return;
-    }
-    setPullPurchaseOrderSubmitting(true);
-    try {
-      const detail: any = await getPurchaseOrder(selectedPullPurchaseOrderId);
-      const itemRows = Array.isArray(detail?.items) ? detail.items : [];
-      const validItems = itemRows
-        .filter((it: any) => (Number(it.ordered_quantity ?? it.quantity ?? 0) || 0) > 0)
-        .map((it: any) => ({
-          material_id: it.material_id ?? it.materialId,
-          material_code: it.material_code ?? it.materialCode ?? '',
-          material_name: it.material_name ?? it.materialName ?? '',
-          material_unit: it.unit ?? it.material_unit ?? it.materialUnit ?? defaultUnit,
-          notice_quantity: Number(it.ordered_quantity ?? it.quantity ?? 0) || 0,
-          unit_price: Number(it.unit_price ?? it.unitPrice ?? 0) || 0,
+  const pullFromPurchaseOrderQuery = useUniPullQuery<PullPurchaseOrderCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
+      try {
+        const kw = keyword.trim();
+        const [poRes, noticeRes] = await Promise.all([
+          listPurchaseOrders({ skip: 0, limit: 200, keyword: kw || undefined }),
+          receiptNoticeApi.list({ skip: 0, limit: 5000 }),
+        ]);
+        const orders = poRes?.data || [];
+        const notices = Array.isArray(noticeRes) ? noticeRes : (noticeRes as any)?.data ?? (noticeRes as any)?.items ?? [];
+        const noticeByOrderId = new Map<number, any>();
+        notices.forEach((n: any) => {
+          if (n?.purchase_order_id != null && !noticeByOrderId.has(Number(n.purchase_order_id))) {
+            noticeByOrderId.set(Number(n.purchase_order_id), n);
+          }
+        });
+        const candidates: PullPurchaseOrderCandidate[] = (orders as any[]).map((o: any) => {
+          const linked = noticeByOrderId.get(Number(o.id));
+          return {
+            id: Number(o.id),
+            order_code: o.order_code ?? o.purchase_order_code,
+            supplier_id: o.supplier_id,
+            supplier_name: o.supplier_name,
+            status: o.status,
+            order_date: o.order_date,
+            updated_at: o.updated_at,
+            notice_id: linked?.id,
+            converted: !!linked,
+          };
+        });
+        const start = (page - 1) * pageSize;
+        return { data: candidates.slice(start, start + pageSize), total: candidates.length };
+      } catch (e: any) {
+        messageApi.error(e?.message || t('app.kuaizhizao.receiptNotice.loadPurchaseOrdersFailed'));
+        return { data: [], total: 0 };
+      }
+    },
+    isRowDisabled: (record) => !!record.converted,
+    onConfirm: async (keys, rows) => {
+      const selectedId = Number(keys[0]);
+      if (!selectedId) {
+        messageApi.warning(t('app.kuaizhizao.shipmentNotice.selectSource', { source: pullFromPurchaseOrderAction.sourceLabel }));
+        return;
+      }
+      const selected = rows[0];
+      if (selected?.converted) {
+        messageApi.warning(t('app.kuaizhizao.shipmentNotice.sourceAlreadyConverted', {
+          source: pullFromPurchaseOrderAction.sourceLabel,
+          target: pullFromPurchaseOrderAction.targetLabel,
         }));
-      if (validItems.length === 0) {
-        throw new Error(t('app.kuaizhizao.receiptNotice.sourceMissingItems', {
+        return;
+      }
+      try {
+        const detail: any = await getPurchaseOrder(selectedId);
+        const itemRows = Array.isArray(detail?.items) ? detail.items : [];
+        const validItems = itemRows
+          .filter((it: any) => (Number(it.ordered_quantity ?? it.quantity ?? 0) || 0) > 0)
+          .map((it: any) => ({
+            material_id: it.material_id ?? it.materialId,
+            material_code: it.material_code ?? it.materialCode ?? '',
+            material_name: it.material_name ?? it.materialName ?? '',
+            material_unit: it.unit ?? it.material_unit ?? it.materialUnit ?? defaultUnit,
+            notice_quantity: Number(it.ordered_quantity ?? it.quantity ?? 0) || 0,
+            unit_price: Number(it.unit_price ?? it.unitPrice ?? 0) || 0,
+          }));
+        if (validItems.length === 0) {
+          throw new Error(t('app.kuaizhizao.receiptNotice.sourceMissingItems', {
+            source: pullFromPurchaseOrderAction.sourceLabel,
+            target: pullFromPurchaseOrderAction.targetLabel,
+          }));
+        }
+        await receiptNoticeApi.create({
+          purchase_order_id: detail.id ?? selectedId,
+          purchase_order_code: detail.order_code ?? selected?.order_code,
+          supplier_id: detail.supplier_id ?? selected?.supplier_id,
+          supplier_name: detail.supplier_name ?? selected?.supplier_name,
+          supplier_contact: detail.supplier_contact,
+          supplier_phone: detail.supplier_phone,
+          planned_receipt_date: detail.delivery_date,
+          items: validItems,
+        });
+        messageApi.success(t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
+          source: pullFromPurchaseOrderAction.sourceLabel,
+          target: pullFromPurchaseOrderAction.targetLabel,
+        }));
+        setStatsVersion((v) => v + 1);
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+        pullFromPurchaseOrderQuery.closeModal();
+      } catch (e: any) {
+        messageApi.error(e?.response?.data?.detail || e?.message || t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
           source: pullFromPurchaseOrderAction.sourceLabel,
           target: pullFromPurchaseOrderAction.targetLabel,
         }));
       }
-      await receiptNoticeApi.create({
-        purchase_order_id: detail.id ?? selectedPullPurchaseOrderId,
-        purchase_order_code: detail.order_code ?? selected?.order_code,
-        supplier_id: detail.supplier_id ?? selected?.supplier_id,
-        supplier_name: detail.supplier_name ?? selected?.supplier_name,
-        supplier_contact: detail.supplier_contact,
-        supplier_phone: detail.supplier_phone,
-        planned_receipt_date: detail.delivery_date,
-        items: validItems,
-      });
-      messageApi.success(t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
-        source: pullFromPurchaseOrderAction.sourceLabel,
-        target: pullFromPurchaseOrderAction.targetLabel,
-      }));
-      setPullFromPurchaseOrderVisible(false);
-      setSelectedPullPurchaseOrderId(null);
-      setStatsVersion((v) => v + 1);
-      invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
-    } catch (e: any) {
-      messageApi.error(e?.response?.data?.detail || e?.message || t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
-        source: pullFromPurchaseOrderAction.sourceLabel,
-        target: pullFromPurchaseOrderAction.targetLabel,
-      }));
-    } finally {
-      setPullPurchaseOrderSubmitting(false);
-    }
-  }, [actionRef, invalidateMenuBadgeCounts, messageApi, pullPurchaseOrderCandidates, selectedPullPurchaseOrderId]);
+    },
+  });
 
   const onPurchaseOrderSelect = async (orderId: number) => {
     let order = purchaseOrderList.find((o: any) => (o.id ?? o.purchase_order_id) === orderId);
@@ -1262,7 +1215,7 @@ const ReceiptNoticesPage: React.FC = () => {
                   key: 'pull-from-purchase-order',
                   actionKey: 'receipt_notice.pull_from_purchase_order',
                   onClick: () => {
-                    void handlePullFromPurchaseOrder();
+                    pullFromPurchaseOrderQuery.openModal();
                   },
                 },
               ])}
@@ -1274,26 +1227,61 @@ const ReceiptNoticesPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.receiptNotice.confirmBatchDelete', { count })}
-          toolBarActionsAfterDelete={[
-            <UniBatchMenuButton
-              key="receipt-notice-batch-menu"
+          toolBarActionsAfterBatch={[
+            <UniCapabilityBatchButton
+              key="receipt-notice-notify"
               selectedRowKeys={selectedRowKeys}
-              menuItems={[
-                {
-                  key: 'notify',
-                  label: t('app.kuaizhizao.shipmentNotice.batchNotifyWarehouse'),
-                  icon: <SendOutlined />,
-                  onClick: handleBatchNotify,
-                },
-                {
-                  key: 'withdraw',
-                  label: t('app.kuaizhizao.shipmentNotice.batchWithdrawNotify'),
-                  icon: <AppstoreAddOutlined />,
-                  onClick: handleBatchWithdraw,
-                },
-              ]}
+              selectedRecords={selectedNoticesForBatch}
+              capabilityKey="notify"
+              permAllowed={receiptNoticePerms.canAction?.('submit') ?? false}
+              batchAllowed={receiptNoticeBatchNotifyAllowed}
+              onRun={(id) => receiptNoticeApi.notify(String(id))}
+              notAllowedMessage={t('app.kuaizhizao.shipmentNotice.batchNotifyNotAllowed')}
+              onSuccess={() => {
+                setSelectedRowKeys([]);
+                setStatsVersion((v) => v + 1);
+                invalidateMenuBadgeCounts();
+                actionRef.current?.reload();
+              }}
+              requireConfirm
+              labels={{
+                single: t('app.kuaizhizao.receiptNotice.notifyWarehouse'),
+                batch: t('app.kuaizhizao.shipmentNotice.batchNotifyWarehouse'),
+              }}
+              icon={<SendOutlined />}
+              size="middle"
+              color="green"
+              variant="solid"
+            />,
+            <UniCapabilityBatchButton
+              key="receipt-notice-withdraw"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedNoticesForBatch}
+              capabilityKey="withdraw"
+              permAllowed={receiptNoticePerms.canAction?.('revoke') ?? false}
+              batchAllowed={receiptNoticeBatchWithdrawAllowed}
+              onRun={(id) => receiptNoticeApi.withdraw(String(id))}
+              notAllowedMessage={t('app.kuaizhizao.shipmentNotice.batchWithdrawNotAllowed')}
+              onSuccess={() => {
+                setSelectedRowKeys([]);
+                setStatsVersion((v) => v + 1);
+                invalidateMenuBadgeCounts();
+                actionRef.current?.reload();
+              }}
+              requireConfirm
+              labels={{
+                single: t('app.kuaizhizao.shipmentNotice.withdrawNotify'),
+                batch: t('app.kuaizhizao.shipmentNotice.batchWithdrawNotify'),
+              }}
+              icon={<AppstoreAddOutlined />}
+              size="middle"
+              color="orange"
+              variant="solid"
             />,
           ]}
+          onTableDataChange={(rows) => {
+            tableRowsRef.current = rows;
+          }}
           request={async (params) => {
             try {
               const response = await receiptNoticeApi.list({
@@ -1320,60 +1308,33 @@ const ReceiptNoticesPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <Modal
+      <UniPullQueryModal<PullPurchaseOrderCandidate>
+        open={pullFromPurchaseOrderQuery.open}
         title={pullFromPurchaseOrderAction.label}
-        open={pullFromPurchaseOrderVisible}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        onCancel={() => {
-          if (pullPurchaseOrderSubmitting) return;
-          setPullFromPurchaseOrderVisible(false);
-          setSelectedPullPurchaseOrderId(null);
-        }}
-        onOk={() => {
-          void handlePullFromPurchaseOrderConfirm();
-        }}
+        onCancel={pullFromPurchaseOrderQuery.closeModal}
+        onOk={pullFromPurchaseOrderQuery.handleConfirm}
+        rowKey="id"
+        columns={pullPurchaseOrderColumns}
+        dataSource={pullFromPurchaseOrderQuery.dataSource}
+        loading={pullFromPurchaseOrderQuery.loading}
+        confirmLoading={pullFromPurchaseOrderQuery.confirmLoading}
+        selectionType={pullFromPurchaseOrderQuery.selectionType}
+        selectedRowKeys={pullFromPurchaseOrderQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromPurchaseOrderQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromPurchaseOrderQuery.isRowDisabled}
+        searchDraft={pullFromPurchaseOrderQuery.searchDraft}
+        onSearchDraftChange={pullFromPurchaseOrderQuery.setSearchDraft}
+        onSearchApply={pullFromPurchaseOrderQuery.handleSearchApply}
+        onSearchClear={pullFromPurchaseOrderQuery.handleSearchClear}
+        appliedKeyword={pullFromPurchaseOrderQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.receiptNotice.pullSearchPlaceholder')}
+        page={pullFromPurchaseOrderQuery.page}
+        pageSize={pullFromPurchaseOrderQuery.pageSize}
+        total={pullFromPurchaseOrderQuery.total}
+        onPageChange={pullFromPurchaseOrderQuery.handlePageChange}
         okText={t('app.kuaizhizao.shipmentNotice.createTarget', { target: pullFromPurchaseOrderAction.targetLabel })}
-        confirmLoading={pullPurchaseOrderSubmitting}
-        destroyOnHidden
-      >
-        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-          <Input.Search
-            allowClear
-            placeholder={t('app.kuaizhizao.receiptNotice.pullSearchPlaceholder')}
-            value={pullPurchaseOrderKeyword}
-            onChange={(e) => setPullPurchaseOrderKeyword(e.target.value)}
-            onSearch={(value) => {
-              setPullPurchaseOrderKeyword(value);
-              void loadPullPurchaseOrderCandidates(value);
-            }}
-            enterButton={t('common.search')}
-          />
-          <Table<PullPurchaseOrderCandidate>
-            rowKey="id"
-            loading={pullPurchaseOrderLoading}
-            dataSource={pullPurchaseOrderCandidates}
-            pagination={false}
-            scroll={{ x: 1080, y: 360 }}
-            rowSelection={{
-              type: 'radio',
-              selectedRowKeys: selectedPullPurchaseOrderId ? [selectedPullPurchaseOrderId] : [],
-              onChange: (keys) => {
-                const next = Number(keys?.[0]);
-                if (Number.isFinite(next)) setSelectedPullPurchaseOrderId(next);
-                else setSelectedPullPurchaseOrderId(null);
-              },
-              getCheckboxProps: (record) => ({ disabled: !!record.converted }),
-            }}
-            onRow={(record) => ({
-              onClick: () => {
-                if (record.converted) return;
-                setSelectedPullPurchaseOrderId(record.id);
-              },
-            })}
-            columns={pullPurchaseOrderColumns}
-          />
-        </Space>
-      </Modal>
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+      />
 
       <DetailDrawerTemplate
         title={t('app.kuaizhizao.receiptNotice.detailTitle', {

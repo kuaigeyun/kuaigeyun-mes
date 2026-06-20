@@ -12,6 +12,8 @@ from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
+from apps.kuaizhizao.services.document_action_policy.types import InventoryAlertCapabilities
+
 
 class InventoryAlertRuleBase(BaseModel):
     """
@@ -126,6 +128,9 @@ class InventoryAlertResponse(InventoryAlertBase):
     resolved_at: Optional[datetime] = Field(None, description="解决时间")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    capabilities: Optional[InventoryAlertCapabilities] = Field(
+        None, description="业务态 capabilities（document_action_policy）",
+    )
 
 
 class InventoryAlertListResponse(InventoryAlertResponse):

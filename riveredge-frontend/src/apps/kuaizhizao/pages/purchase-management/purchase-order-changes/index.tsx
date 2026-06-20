@@ -7,11 +7,12 @@ import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Form, Input, Modal, Space, Tag } from 'antd';
+import { App, Button, Descriptions, Form, Input, Space, Tag } from 'antd';
 import { CheckOutlined, DeleteOutlined, EditOutlined, PlusOutlined, RollbackOutlined, SendOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -22,6 +23,7 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import {
@@ -36,6 +38,7 @@ import {
   withdrawPurchaseOrderChange,
   type PurchaseOrderChange,
 } from '../../../services/purchase-order-change';
+import { getPurchaseOrder, listPurchaseOrders, type PurchaseOrder } from '../../../services/purchase';
 import {
   buildOrderChangeLifecycleValueEnum,
   getOrderChangeLifecycle,
@@ -45,17 +48,37 @@ import {
 import { formatOrderChangeCategory } from '../../../utils/orderChangeCategory';
 import { OrderChangeItemsTable } from '../../../components/order-change/OrderChangeItemsTable';
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
-import { OrderChangeSourceOrderPickerModal } from '../../../components/order-change/OrderChangeSourceOrderPickerModal';
-import type { OrderChangeSourceOrderOption } from '../../../utils/orderChangeSourceOrder';
+import { isSourceOrderEligibleForChange } from '../../../utils/orderChangeSourceOrder';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+
+const PURCHASE_ORDER_CHANGE_RESOURCE = 'kuaizhizao:purchase-order-change';
+
+type PullPurchaseOrderCandidate = {
+  id: number;
+  order_code: string;
+  supplier_name?: string;
+  order_date?: string;
+  delivery_date?: string;
+  total_amount?: number;
+  status?: string;
+  review_status?: string;
+  buyer_name?: string;
+};
+
+const isPullPurchaseOrderSelectable = (record: PullPurchaseOrderCandidate): boolean =>
+  isSourceOrderEligibleForChange(record.status, record.review_status);
 
 const PurchaseOrderChangesPage: React.FC = () => {
   const { t } = useTranslation();
   const { message, modal } = App.useApp();
+  const pullFromPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order_change.pull_from_purchase_order');
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>();
+  const tableRowsRef = useRef<PurchaseOrderChange[]>([]);
   const auditEnabled = useAuditRequired('kuaizhizao', 'purchase-order-change');
+  const purchaseOrderChangePerms = useResourcePermissions(PURCHASE_ORDER_CHANGE_RESOURCE);
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<PurchaseOrderChange | null>(null);
@@ -64,9 +87,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
   const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
   const [editItems, setEditItems] = useState<PurchaseOrderChange['items']>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [selectedSourceOrder, setSelectedSourceOrder] = useState<OrderChangeSourceOrderOption | null>(null);
+  const [creatingSourceOrderId, setCreatingSourceOrderId] = useState<number | null>(null);
   const [createReason, setCreateReason] = useState(() => t('app.kuaizhizao.purchaseOrderChange.defaultReason'));
   const [impactOpen, setImpactOpen] = useState(false);
   const [impactLoading, setImpactLoading] = useState(false);
@@ -74,12 +95,27 @@ const PurchaseOrderChangesPage: React.FC = () => {
   const [pendingSubmitId, setPendingSubmitId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  const openCreate = useCallback(() => {
-    setSelectedSourceOrder(null);
-    setCreateReason(t('app.kuaizhizao.purchaseOrderChange.defaultReason'));
-    setCreateOpen(true);
-  }, [t]);
-  useNewShortcut(openCreate);
+  const selectedChangesForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is PurchaseOrderChange => row != null),
+    [selectedRowKeys],
+  );
+
+  const purchaseOrderChangeAuditBatchHandlers = useMemo(
+    () => ({
+      submit: (id: number) => submitPurchaseOrderChange(id),
+      withdraw: (id: number) => withdrawPurchaseOrderChange(id),
+      approve: (id: number) => approvePurchaseOrderChange(id, true),
+    }),
+    [],
+  );
+
+  const handlePurchaseOrderChangeAuditBatchSuccess = useCallback(() => {
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  }, []);
 
   const openDetail = async (record: PurchaseOrderChange) => {
     const full = await getPurchaseOrderChange(record.id!);
@@ -90,6 +126,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
   const openEdit = async (record: PurchaseOrderChange) => {
     const full = await getPurchaseOrderChange(record.id!);
     setEditingId(full.id!);
+    setCreatingSourceOrderId(null);
     setEditItems(full.items ?? []);
     setPendingEditFormValues({
       change_reason: full.change_reason,
@@ -101,7 +138,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
 
   const handleSaveEdit = async () => {
     const values = await editForm.validateFields();
-    await updatePurchaseOrderChange(editingId!, {
+    const payload = {
       change_reason: values.change_reason,
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
@@ -123,25 +160,179 @@ const PurchaseOrderChangesPage: React.FC = () => {
         after_delivery_date: item.after_delivery_date,
         notes: item.notes,
       })),
-    });
-    message.success(t('common.updateSuccess'));
+    };
+    if (editingId) {
+      await updatePurchaseOrderChange(editingId, payload);
+      message.success(t('common.updateSuccess'));
+    } else {
+      if (!creatingSourceOrderId) {
+        message.error(t('app.kuaizhizao.purchaseOrderChange.selectPurchaseOrder'));
+        return;
+      }
+      const created = await createPurchaseOrderChangeFromOrder(
+        creatingSourceOrderId,
+        values.change_reason || t('app.kuaizhizao.purchaseOrderChange.defaultReason'),
+      );
+      await updatePurchaseOrderChange(created.id!, payload);
+      message.success(t('app.kuaizhizao.purchaseOrderChange.created', { code: created.change_code }));
+    }
     setEditOpen(false);
     setPendingEditFormValues(null);
+    setCreatingSourceOrderId(null);
     actionRef.current?.reload();
   };
 
-  const handleCreateFromOrder = async (orderId: number, reason: string) => {
-    const doc = await createPurchaseOrderChangeFromOrder(orderId, reason);
-    message.success(t('app.kuaizhizao.purchaseOrderChange.created', { code: doc.change_code }));
-    setCreateOpen(false);
-    actionRef.current?.reload();
-    await openEdit(doc);
+  const openCreateFromOrder = async (orderId: number, reason: string) => {
+    const order = await getPurchaseOrder(orderId);
+    setEditingId(null);
+    setCreatingSourceOrderId(orderId);
+    setEditItems(
+      (order.items ?? []).map((item, idx) => ({
+        line_no: idx + 1,
+        source_item_id: item.id,
+        change_type: 'QUANTITY',
+        material_id: item.material_id,
+        material_code: item.material_code,
+        material_name: item.material_name,
+        material_spec: item.material_spec,
+        material_unit: item.unit,
+        before_quantity: item.ordered_quantity,
+        after_quantity: item.ordered_quantity,
+        before_unit_price: item.unit_price,
+        after_unit_price: item.unit_price,
+        before_delivery_date: item.required_date,
+        after_delivery_date: item.required_date,
+        notes: item.notes,
+      })),
+    );
+    setPendingEditFormValues({
+      change_reason: reason || t('app.kuaizhizao.purchaseOrderChange.defaultReason'),
+      notes: '',
+      attachments: [],
+    });
+    setEditOpen(true);
   };
+
+  const mapPullPurchaseOrderRows = useCallback((rows: PurchaseOrder[]): PullPurchaseOrderCandidate[] => {
+    return rows
+      .filter((order) => order.id && order.order_code)
+      .map((order) => ({
+        id: Number(order.id),
+        order_code: String(order.order_code),
+        supplier_name: order.supplier_name || '',
+        order_date: order.order_date || '',
+        delivery_date: order.delivery_date || '',
+        total_amount: order.total_amount != null ? Number(order.total_amount) : undefined,
+        status: order.status || '',
+        review_status: order.review_status || '',
+        buyer_name: order.buyer_name || '',
+      }));
+  }, []);
+
+  const pullFromPurchaseOrderScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
+  const pullFromPurchaseOrderQuery = useUniPullQuery<PullPurchaseOrderCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    scopeOptions: pullFromPurchaseOrderScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullPurchaseOrderSelectable(record),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const result = await listPurchaseOrders({
+          skip: 0,
+          limit: 100,
+          keyword: keyword.trim() || undefined,
+        });
+        const rows = mapPullPurchaseOrderRows(result.data || []);
+        const filtered = scope === 'pullable' ? rows.filter(isPullPurchaseOrderSelectable) : rows;
+        const begin = (page - 1) * pageSize;
+        const end = begin + pageSize;
+        return {
+          data: filtered.slice(begin, end),
+          total: filtered.length,
+        };
+      } catch (error: any) {
+        message.error(error?.message ?? t('app.kuaizhizao.orderChange.loadPurchaseOrdersFailed'));
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys, rows) => {
+      const selectedId = Number(keys[0]);
+      const selected = rows[0];
+      if (!selectedId || selectedId <= 0) {
+        message.warning(t('app.kuaizhizao.purchaseOrderChange.selectPurchaseOrder'));
+        return;
+      }
+      if (selected && !isPullPurchaseOrderSelectable(selected)) {
+        message.warning(t('app.kuaizhizao.purchaseOrderChange.selectPurchaseOrder'));
+        return;
+      }
+      await openCreateFromOrder(
+        selectedId,
+        createReason || t('app.kuaizhizao.purchaseOrderChange.defaultReason'),
+      );
+      pullFromPurchaseOrderQuery.closeModal();
+    },
+  });
+
+  const pullPurchaseOrderColumns: ProColumns<PullPurchaseOrderCandidate>[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.orderChange.colOrderCode'), dataIndex: 'order_code', width: 160 },
+      {
+        title: t('path.suppliers'),
+        dataIndex: 'supplier_name',
+        ellipsis: true,
+        render: (value: string) => value || '-',
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.col.orderDate'),
+        dataIndex: 'order_date',
+        width: 120,
+        render: (value: string) => (value ? dayjs(value).format('YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.col.deliveryDate'),
+        dataIndex: 'delivery_date',
+        width: 120,
+        render: (value: string) => (value ? dayjs(value).format('YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.orderChange.colAmount'),
+        dataIndex: 'total_amount',
+        width: 120,
+        align: 'right',
+        render: (value: number | undefined) =>
+          value != null
+            ? Number(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : '-',
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        width: 100,
+        render: (value: string) => value || '-',
+      },
+    ],
+    [t],
+  );
+
+  const openCreate = useCallback(() => {
+    setCreateReason(t('app.kuaizhizao.purchaseOrderChange.defaultReason'));
+    pullFromPurchaseOrderQuery.openModal();
+  }, [pullFromPurchaseOrderQuery, t]);
+  useNewShortcut(openCreate);
 
   useEffect(() => {
     const sourceId = searchParams.get('source_order_id');
     if (sourceId) {
-      handleCreateFromOrder(Number(sourceId), t('app.kuaizhizao.purchaseOrderChange.defaultReason')).finally(() => {
+      openCreateFromOrder(Number(sourceId), t('app.kuaizhizao.purchaseOrderChange.defaultReason')).finally(() => {
         searchParams.delete('source_order_id');
         setSearchParams(searchParams, { replace: true });
       });
@@ -299,84 +490,6 @@ const PurchaseOrderChangesPage: React.FC = () => {
     actionRef.current?.reload();
   }, [message, t]);
 
-  const handleBatchSubmit = useCallback(async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      message.warning(t('app.kuaizhizao.purchaseOrderChange.selectToSubmit'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await submitPurchaseOrderChange(id);
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) message.success(t('app.kuaizhizao.purchaseOrderChange.batchSubmitSuccess', { count: success }));
-    if (failed > 0) message.warning(t('app.kuaizhizao.purchaseOrderChange.batchSubmitPartial', { count: failed }));
-    setSelectedRowKeys([]);
-    actionRef.current?.reload();
-  }, [message, t]);
-
-  const handleBatchApprove = useCallback(async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      message.warning(t('app.kuaizhizao.purchaseOrderChange.selectToApprove'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await approvePurchaseOrderChange(id, true);
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) message.success(t('app.kuaizhizao.purchaseOrderChange.batchApproveSuccess', { count: success }));
-    if (failed > 0) message.warning(t('app.kuaizhizao.purchaseOrderChange.batchApprovePartial', { count: failed }));
-    setSelectedRowKeys([]);
-    actionRef.current?.reload();
-  }, [message, t]);
-
-  const handleBatchWithdraw = useCallback(async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      message.warning(t('app.kuaizhizao.purchaseOrderChange.selectToWithdraw'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      if (!Number.isFinite(id) || id <= 0) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await withdrawPurchaseOrderChange(id);
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) message.success(t('app.kuaizhizao.purchaseOrderChange.batchWithdrawSuccess', { count: success }));
-    if (failed > 0) message.warning(t('app.kuaizhizao.purchaseOrderChange.batchWithdrawPartial', { count: failed }));
-    setSelectedRowKeys([]);
-    actionRef.current?.reload();
-  }, [message, t]);
-
   return (
     <ListPageTemplate>
       <UniTable<PurchaseOrderChange>
@@ -387,6 +500,9 @@ const PurchaseOrderChangesPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         columns={columns}
         request={request}
+        onTableDataChange={(rows) => {
+          tableRowsRef.current = rows;
+        }}
         columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-order-changes"
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
         pinnedTabsValueEnum={orderChangeLifecycleValueEnum}
@@ -397,94 +513,89 @@ const PurchaseOrderChangesPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={openCreate}
           >
-            {t('app.kuaizhizao.purchaseOrderChange.createFromOrder') + NEW_SHORTCUT_HINT}
+            {pullFromPurchaseOrderAction.label + NEW_SHORTCUT_HINT}
           </Button>,
         ]}
         showDeleteButton
         onDelete={handleBatchDelete}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.purchaseOrderChange.confirmBatchDelete', { count })}
         toolBarActionsAfterDelete={[
-          <UniBatchMenuButton
+          <UniAuditBatchMenuButton
             key="purchase-order-change-batch-menu"
             selectedRowKeys={selectedRowKeys}
-            menuItems={[
-              {
-                key: 'submit',
-                label: t('app.kuaizhizao.purchaseOrderChange.batchSubmit'),
-                icon: <SendOutlined />,
-                onClick: handleBatchSubmit,
-              },
-              ...(auditEnabled
-                ? [
-                    {
-                      key: 'approve',
-                      label: t('app.kuaizhizao.purchaseOrderChange.batchApprove'),
-                      icon: <CheckOutlined />,
-                      onClick: handleBatchApprove,
-                    },
-                  ]
-                : []),
-              {
-                key: 'withdraw',
-                label: t('app.kuaizhizao.purchaseOrderChange.batchWithdraw'),
-                icon: <RollbackOutlined />,
-                onClick: handleBatchWithdraw,
-              },
-            ]}
+            selectedRecords={selectedChangesForBatch}
+            auditEnabled={auditEnabled}
+            permGates={purchaseOrderChangePerms}
+            handlers={purchaseOrderChangeAuditBatchHandlers}
+            onSuccess={handlePurchaseOrderChangeAuditBatchSuccess}
+            toolBarButtonSize="middle"
           />,
         ]}
       />
 
-      <Modal
-        title={t('app.kuaizhizao.purchaseOrderChange.createModalTitle')}
-        open={createOpen}
-        onCancel={() => setCreateOpen(false)}
-        onOk={async () => {
-          if (!selectedSourceOrder?.id) {
-            message.warning(t('app.kuaizhizao.purchaseOrderChange.selectPurchaseOrder'));
-            return;
-          }
-          await handleCreateFromOrder(selectedSourceOrder.id, createReason);
+      <UniPullQueryModal<PullPurchaseOrderCandidate>
+        title={pullFromPurchaseOrderAction.label}
+        open={pullFromPurchaseOrderQuery.open}
+        onCancel={pullFromPurchaseOrderQuery.closeModal}
+        onOk={pullFromPurchaseOrderQuery.handleConfirm}
+        okText={t('common.create')}
+        rowKey="id"
+        columns={pullPurchaseOrderColumns}
+        dataSource={pullFromPurchaseOrderQuery.dataSource}
+        loading={pullFromPurchaseOrderQuery.loading}
+        confirmLoading={pullFromPurchaseOrderQuery.confirmLoading}
+        selectionType={pullFromPurchaseOrderQuery.selectionType}
+        selectedRowKeys={pullFromPurchaseOrderQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromPurchaseOrderQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromPurchaseOrderQuery.isRowDisabled}
+        searchDraft={pullFromPurchaseOrderQuery.searchDraft}
+        onSearchDraftChange={pullFromPurchaseOrderQuery.setSearchDraft}
+        onSearchApply={pullFromPurchaseOrderQuery.handleSearchApply}
+        onSearchClear={pullFromPurchaseOrderQuery.handleSearchClear}
+        appliedKeyword={pullFromPurchaseOrderQuery.appliedKeyword}
+        page={pullFromPurchaseOrderQuery.page}
+        pageSize={pullFromPurchaseOrderQuery.pageSize}
+        total={pullFromPurchaseOrderQuery.total}
+        onPageChange={pullFromPurchaseOrderQuery.handlePageChange}
+        scopeOptions={pullFromPurchaseOrderQuery.scopeOptions}
+        scope={pullFromPurchaseOrderQuery.scope}
+        onScopeChange={pullFromPurchaseOrderQuery.handleScopeChange}
+        searchPlaceholder={t('app.kuaizhizao.orderChange.searchOrderPlaceholder', {
+          orderLabel: t('app.kuaizhizao.purchaseOrderChange.purchaseOrderLabel'),
+          partnerLabel: t('path.suppliers'),
+        })}
+        emptyText={t('app.kuaizhizao.orderChange.emptyNoEligibleOrders', {
+          orderLabel: t('app.kuaizhizao.purchaseOrderChange.purchaseOrderLabel'),
+        })}
+        emptySearchText={t('app.kuaizhizao.orderChange.emptyNoSearchResults', {
+          orderLabel: t('app.kuaizhizao.purchaseOrderChange.purchaseOrderLabel'),
+        })}
+        okButtonProps={{
+          disabled:
+            pullFromPurchaseOrderQuery.selectedRowKeys.length === 0 ||
+            pullFromPurchaseOrderQuery.hasDisabledSelection ||
+            pullFromPurchaseOrderQuery.loading,
         }}
-        {...MODAL_CONFIG}
-      >
-        <Form layout="vertical">
-          <Form.Item label={t('app.kuaizhizao.purchaseOrderChange.purchaseOrderLabel')} required>
-            <Space.Compact style={{ width: '100%' }}>
-              <Input
-                readOnly
-                placeholder={t('app.kuaizhizao.purchaseOrderChange.selectPurchaseOrderPlaceholder')}
-                value={
-                  selectedSourceOrder
-                    ? `${selectedSourceOrder.order_code}${selectedSourceOrder.partner_name ? ` - ${selectedSourceOrder.partner_name}` : ''}`
-                    : ''
-                }
+        alert={
+          <Form layout="vertical">
+            <Form.Item label={t('app.kuaizhizao.purchaseOrderChange.colChangeReason')} required style={{ marginBottom: 0 }}>
+              <Input.TextArea
+                rows={2}
+                value={createReason}
+                onChange={(e) => setCreateReason(e.target.value)}
               />
-              <Button type="primary" onClick={() => setPickerOpen(true)}>
-                {t('app.kuaizhizao.purchaseOrderChange.select')}
-              </Button>
-            </Space.Compact>
-          </Form.Item>
-          <Form.Item label={t('app.kuaizhizao.purchaseOrderChange.colChangeReason')} required>
-            <Input.TextArea rows={2} value={createReason} onChange={(e) => setCreateReason(e.target.value)} />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <OrderChangeSourceOrderPickerModal
-        open={pickerOpen}
-        docType="purchase"
-        onCancel={() => setPickerOpen(false)}
-        onSelect={(order) => {
-          setSelectedSourceOrder(order);
-          setPickerOpen(false);
-        }}
+            </Form.Item>
+          </Form>
+        }
       />
 
       <FormModalTemplate
         title={t('app.kuaizhizao.purchaseOrderChange.editTitle')}
         open={editOpen}
-        onClose={() => setEditOpen(false)}
+        onClose={() => {
+          setEditOpen(false);
+          setCreatingSourceOrderId(null);
+        }}
         afterOpenChange={(open) => {
           if (open) {
             if (pendingEditFormValues) {

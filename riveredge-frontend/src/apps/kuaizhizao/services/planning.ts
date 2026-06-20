@@ -35,6 +35,7 @@ export const planningApi = {
       apiRequest(`/apps/kuaizhizao/production-plans/${id}`, { method: 'PUT', data }),
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/production-plans/${id}`, { method: 'DELETE' }),
     submit: async (id: string) => apiRequest(`/apps/kuaizhizao/production-plans/${id}/submit`, { method: 'POST' }),
+    withdraw: async (id: string) => apiRequest(`/apps/kuaizhizao/production-plans/${id}/withdraw`, { method: 'POST' }),
     approve: async (id: string, params?: { rejection_reason?: string }) =>
       apiRequest(`/apps/kuaizhizao/production-plans/${id}/approve`, { method: 'POST', params }),
   },

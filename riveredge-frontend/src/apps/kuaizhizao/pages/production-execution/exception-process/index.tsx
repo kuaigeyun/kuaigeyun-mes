@@ -18,11 +18,15 @@ import { EyeOutlined, UserOutlined, ArrowRightOutlined, CheckCircleOutlined, Clo
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { exceptionApi } from '../../../services/production';
 import { getExceptionProcessLifecycle } from '../../../utils/exceptionProcessLifecycle';
 import { apiRequest } from '../../../../../services/api';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { exceptionProcessBatchCancelAllowed } from '../../../../../hooks/useDocumentCapabilities';
+
+const EXCEPTION_PROCESS_RESOURCE = 'kuaizhizao:production-execution-reporting';
 import dayjs from 'dayjs';
 
 const P = 'app.kuaizhizao.productionException';
@@ -43,6 +47,9 @@ interface ExceptionProcessRecord {
   remarks?: string;
   created_at?: string;
   histories?: ExceptionProcessHistory[];
+  capabilities?: {
+    cancel?: { allowed: boolean; reason?: string | null };
+  };
 }
 
 interface ExceptionProcessHistory {
@@ -60,6 +67,8 @@ const ExceptionProcessPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const tableRowsRef = useRef<ExceptionProcessRecord[]>([]);
+  const exceptionProcessPerms = useResourcePermissions(EXCEPTION_PROCESS_RESOURCE);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<ExceptionProcessRecord | null>(null);
@@ -69,6 +78,20 @@ const ExceptionProcessPage: React.FC = () => {
   const [resolveModalVisible, setResolveModalVisible] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [exceptionList, setExceptionList] = useState<any[]>([]);
+
+  const selectedRecordsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is ExceptionProcessRecord => row != null),
+    [selectedRowKeys],
+  );
+
+  const handleExceptionProcessBatchSuccess = useCallback(() => {
+    setSelectedRowKeys([]);
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+  }, [invalidateMenuBadgeCounts]);
 
   const getStatusTag = useCallback(
     (status?: string) => {
@@ -485,6 +508,9 @@ const ExceptionProcessPage: React.FC = () => {
               };
             }
           }}
+          onTableDataChange={(rows) => {
+            tableRowsRef.current = rows;
+          }}
           rowKey="id"
           showAdvancedSearch={true}
           showCreateButton={true}
@@ -508,46 +534,21 @@ const ExceptionProcessPage: React.FC = () => {
           }}
           deleteConfirmTitle={(count) => t(`${PROC}.confirm.batchCancel`, { count })}
           toolBarActionsAfterDelete={[
-            <UniBatchMenuButton
-              key="exception-process-batch-menu"
+            <UniCapabilityBatchButton
+              key="exception-process-batch-cancel"
               selectedRowKeys={selectedRowKeys}
-              menuItems={[
-                {
-                  key: 'cancel',
-                  label: t(`${PROC}.batch.cancel`),
-                  icon: <RollbackOutlined />,
-                  onClick: async (keys) => {
-                    if (!keys || keys.length === 0) {
-                      messageApi.warning(t(`${PROC}.message.selectFirst`));
-                      return;
-                    }
-                    let success = 0;
-                    let failed = 0;
-                    for (const key of keys) {
-                      const id = Number(key);
-                      if (!Number.isFinite(id) || id <= 0) {
-                        failed += 1;
-                        continue;
-                      }
-                      try {
-                        await exceptionApi.process.cancel(String(id));
-                        success += 1;
-                      } catch {
-                        failed += 1;
-                      }
-                    }
-                    if (success > 0) {
-                      messageApi.success(t(`${PROC}.message.batchCancelPartialSuccess`, { success }));
-                    }
-                    if (failed > 0) {
-                      messageApi.warning(t(`${PROC}.message.batchCancelPartialFailed`, { failed }));
-                    }
-                    setSelectedRowKeys([]);
-                    invalidateMenuBadgeCounts();
-                    actionRef.current?.reload();
-                  },
-                },
-              ]}
+              selectedRecords={selectedRecordsForBatch}
+              capabilityKey="cancel"
+              permAllowed={exceptionProcessPerms.canAction?.('revoke') ?? false}
+              batchAllowed={(records, perm) => exceptionProcessBatchCancelAllowed(records, perm)}
+              onRun={(id) => exceptionApi.process.cancel(String(id))}
+              labels={{
+                single: t(`${PROC}.batch.cancel`),
+                batch: t(`${PROC}.batch.cancel`),
+              }}
+              icon={<RollbackOutlined />}
+              size="middle"
+              onSuccess={handleExceptionProcessBatchSuccess}
             />,
           ]}
           searchFormItems={[

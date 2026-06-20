@@ -17,6 +17,7 @@ from decimal import Decimal
 from pydantic import Field, field_validator, model_validator
 from core.schemas.base import BaseSchema
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
+from apps.kuaizhizao.services.document_action_policy.types import DemandCapabilities
 
 
 # === 统一需求 ===
@@ -239,6 +240,10 @@ class DemandListResponse(BaseSchema):
     source_type: Optional[str] = Field(None, description="来源类型（sales_order/sales_forecast）")
     source_id: Optional[int] = Field(None, description="来源ID")
     source_code: Optional[str] = Field(None, description="来源编码")
+    capabilities: Optional[DemandCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（不含 RBAC）",
+    )
 
     class Config:
         from_attributes = True

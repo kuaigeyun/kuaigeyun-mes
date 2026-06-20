@@ -54,6 +54,13 @@ from apps.master_data.models import Supplier
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.services.business_config_service import BusinessConfigService
 from loguru import logger
+from apps.kuaizhizao.services.document_action_policy.enricher import (
+    enrich_purchase_inquiry_capabilities_on_response,
+    enrich_purchase_inquiry_list_capabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.purchase_inquiry import (
+    assert_purchase_inquiry_capability,
+)
 
 
 class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
@@ -95,13 +102,14 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
 
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_inquiry")
         lifecycle = get_purchase_inquiry_lifecycle(inquiry, audit_required=audit_required)
-        return PurchaseInquiryResponse.model_validate({
+        resp = PurchaseInquiryResponse.model_validate({
             **{k: getattr(inquiry, k) for k in inquiry._meta.fields_map if hasattr(inquiry, k)},
             "items": [PurchaseInquiryItemResponse.model_validate(i) for i in items],
             "vendors": [PurchaseInquiryVendorResponse.model_validate(v) for v in vendors],
             "quotes": quote_resps,
             "lifecycle": lifecycle,
         })
+        return enrich_purchase_inquiry_capabilities_on_response(inquiry, resp)
 
     async def get_inquiry_by_id(self, tenant_id: int, inquiry_id: int) -> PurchaseInquiryResponse:
         inquiry = await PurchaseInquiry.get_or_none(
@@ -148,9 +156,10 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                     continue
             resp = await self._build_response(tenant_id, inquiry)
             out.append(resp)
+        enriched = enrich_purchase_inquiry_list_capabilities(rows, out)
         from core.services.approval.audit_record_enricher import enrich_items
 
-        return await enrich_items(tenant_id, "purchase_inquiry", out)
+        return await enrich_items(tenant_id, "purchase_inquiry", enriched)
 
     async def create_inquiry(
         self, tenant_id: int, data: PurchaseInquiryCreate, created_by: int
@@ -832,8 +841,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         )
         if not inquiry:
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
-        if inquiry.status != PurchaseInquiryStatus.DRAFT.value:
-            raise BusinessLogicError("只有草稿状态可提交")
+        assert_purchase_inquiry_capability(inquiry, "submit")
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_inquiry")
         if not audit_required:
             await inquiry.update_from_dict({
@@ -856,11 +864,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         )
         if not inquiry:
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
-        if inquiry.status != PurchaseInquiryStatus.DRAFT.value:
-            raise BusinessLogicError("只有草稿状态的询价单可撤回提交")
-        rs = normalize_status(inquiry.review_status or "")
-        if rs not in (DocumentStatus.PENDING_REVIEW.value, "待审核"):
-            raise BusinessLogicError("只有已提交待审核的询价单可撤回")
+        assert_purchase_inquiry_capability(inquiry, "withdraw_submit")
 
         try:
             from core.services.approval.approval_instance_service import ApprovalInstanceService
@@ -892,6 +896,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         )
         if not inquiry:
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
+        assert_purchase_inquiry_capability(inquiry, "approve")
         reviewer_name = await self.get_user_name(user_id)
         await inquiry.update_from_dict({
             "review_status": ReviewStatus.APPROVED.value if approved else ReviewStatus.REJECTED.value,
@@ -909,6 +914,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         )
         if not inquiry:
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
+        assert_purchase_inquiry_capability(inquiry, "revoke_approval")
         await inquiry.update_from_dict({
             "review_status": ReviewStatus.PENDING.value,
             "reviewer_id": None,

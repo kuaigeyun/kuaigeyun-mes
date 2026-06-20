@@ -69,6 +69,8 @@ export const qualityApi = {
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/conduct`, { method: 'POST', data }),
     approve: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/approve`, { method: 'POST', data }),
+    pushToPurchaseReturn: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/push-to-purchase-return`, { method: 'POST' }),
     createFromPurchaseReceipt: async (purchaseReceiptId: string) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/from-purchase-receipt/${purchaseReceiptId}`, { method: 'POST' }),
     createFromCustomerMaterial: async (registrationId: string) =>
@@ -117,6 +119,8 @@ export const qualityApi = {
       apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/conduct`, { method: 'POST', data }),
     approve: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/approve`, { method: 'POST', data }),
+    pushToRework: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/push-to-rework`, { method: 'POST' }),
     certificate: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/certificate`, { method: 'POST', data }),
     createFromWorkOrder: async (workOrderId: string) =>

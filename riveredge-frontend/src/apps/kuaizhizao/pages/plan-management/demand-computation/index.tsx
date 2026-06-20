@@ -57,7 +57,7 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { UniTable } from '../../../../../components/uni-table'
-import { UniBatchMenuButton } from '../../../../../components/uni-batch'
+import { UniCapabilityBatchButton } from '../../../../../components/uni-batch'
 import { MaterialStackedCell } from '../../../../../components/uni-table/stackedPrimaryColumn'
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
 import {
@@ -71,6 +71,7 @@ import {
   type StatCard,
 } from '../../../../../components/layout-templates'
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull'
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query'
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push'
 import {
   DocumentTrackingTimelineBody,
@@ -107,6 +108,12 @@ import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../..
 import { getDemandTypeLabel, getDemandTypeTagProps } from '../../../utils/demandType'
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag'
 import { listDemands, getDemand, pushDemandToComputation, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
+import {
+  listSalesOrders as listSalesOrdersForPull,
+  pushSalesOrderToComputation,
+  type SalesOrder as PullSalesOrder,
+} from '../../../services/sales-order'
+import { listSalesForecasts, pushSalesForecastToComputation, type SalesForecast } from '../../../services/sales-forecast'
 import { getBusinessConfig } from '../../../../../services/businessConfig'
 import { bomApi } from '../../../../master-data/services/material'
 import { warehouseApi } from '../../../../master-data/services/warehouse'
@@ -118,6 +125,15 @@ import { ThemedSegmented } from '../../../../../components/themed-segmented'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry'
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions'
+import {
+  demandComputationBatchExecuteAllowed,
+  demandComputationBatchRecomputeAllowed,
+  salesForecastCapabilityReasonMessage,
+  salesOrderCapabilityReasonMessage,
+} from '../../../../../hooks/useDocumentCapabilities'
+
+const DEMAND_COMPUTATION_RESOURCE = 'plan-management-demand-computation'
 
 function getMrpSuggestionSegmentedOptions(t: TFunction) {
   return [
@@ -149,6 +165,30 @@ type PullDemandCandidate = {
   status?: string
   updated_at?: string
   pushed_to_computation?: boolean
+}
+
+type PullSalesOrderCandidate = {
+  id: number
+  order_code?: string
+  customer_name?: string
+  status?: string
+  review_status?: string
+  delivery_date?: string
+  updated_at?: string
+  pushed_to_computation?: boolean
+  capabilities?: PullSalesOrder['capabilities']
+}
+
+type PullSalesForecastCandidate = {
+  id: number
+  forecast_code?: string
+  forecast_name?: string
+  forecast_period?: string
+  status?: string
+  review_status?: string
+  updated_at?: string
+  planning_pushed_to_computation?: boolean
+  capabilities?: SalesForecast['capabilities']
 }
 
 /** 详情明细表最小宽度（外层横滚） */
@@ -633,6 +673,9 @@ const DemandComputationPage: React.FC = () => {
   const navigate = useNavigate()
   const { message: messageApi, modal: modalApi } = App.useApp()
   const pullFromDemandAction = resolveKuaizhizaoDocumentAction(t, 'demand_computation.pull_from_demand')
+  const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'demand_computation.pull_from_sales_order')
+  const pullFromSalesForecastAction = resolveKuaizhizaoDocumentAction(t, 'demand_computation.pull_from_sales_forecast')
+  const pushToWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_demand_computation')
   const queryClient = useQueryClient()
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -640,10 +683,25 @@ const DemandComputationPage: React.FC = () => {
   const formRef = useRef<any>(null)
   const lastComputationsCacheRef = useRef<DemandComputation[]>([])
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  const computationPerms = useResourcePermissions(DEMAND_COMPUTATION_RESOURCE)
+
+  const selectedComputationsForBatch = React.useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => lastComputationsCacheRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is DemandComputation => row != null),
+    [selectedRowKeys],
+  )
 
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['demandComputationStatistics'] })
   }
+
+  const handleComputationBatchSuccess = useCallback(() => {
+    setSelectedRowKeys([])
+    invalidateStatistics()
+    actionRef.current?.reload()
+  }, [queryClient])
   const { data: statistics } = useQuery({
     queryKey: ['demandComputationStatistics'],
     queryFn: getDemandComputationStatistics,
@@ -677,12 +735,6 @@ const DemandComputationPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false)
   const [createSubmitting, setCreateSubmitting] = useState(false)
   const [selectedDemandIds, setSelectedDemandIds] = useState<number[]>([])
-  const [pullFromDemandVisible, setPullFromDemandVisible] = useState(false)
-  const [pullDemandLoading, setPullDemandLoading] = useState(false)
-  const [pullDemandSubmitting, setPullDemandSubmitting] = useState(false)
-  const [pullDemandKeyword, setPullDemandKeyword] = useState('')
-  const [pullDemandCandidates, setPullDemandCandidates] = useState<PullDemandCandidate[]>([])
-  const [selectedPullDemandId, setSelectedPullDemandId] = useState<number | null>(null)
 
   // 执行计算 Modal 相关状态
   const [executeModalVisible, setExecuteModalVisible] = useState(false)
@@ -926,70 +978,209 @@ const DemandComputationPage: React.FC = () => {
     }
   }
 
-  const loadPullDemandCandidates = useCallback(async (keyword: string = '') => {
-    setPullDemandLoading(true)
-    try {
-      const kw = keyword.trim().toLowerCase()
-      const demandsRes = await listDemands({
-        status: DemandStatus.AUDITED,
-        review_status: ReviewStatus.APPROVED,
-        pushed_to_computation: false,
-        limit: 200,
-      })
-      const rows = (demandsRes.data || [])
-        .filter((d) => d.id != null)
-        .filter((d) => {
-          if (!kw) return true
-          const text = `${d.demand_code || ''} ${d.demand_name || ''}`.toLowerCase()
-          return text.includes(kw)
+  const pullFromDemandQuery = useUniPullQuery<PullDemandCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
+      try {
+        const kw = keyword.trim().toLowerCase()
+        const demandsRes = await listDemands({
+          status: DemandStatus.AUDITED,
+          review_status: ReviewStatus.APPROVED,
+          pushed_to_computation: false,
+          limit: 100,
         })
-        .map((d) => ({
-          id: d.id!,
-          demand_code: d.demand_code,
-          demand_name: d.demand_name,
-          demand_type: d.demand_type,
-          business_mode: d.business_mode,
-          status: d.status,
-          updated_at: d.updated_at,
-          pushed_to_computation: d.pushed_to_computation,
+        const rows = (demandsRes.data || [])
+          .filter((d) => d.id != null)
+          .filter((d) => {
+            if (!kw) return true
+            const text = `${d.demand_code || ''} ${d.demand_name || ''}`.toLowerCase()
+            return text.includes(kw)
+          })
+          .map((d) => ({
+            id: d.id!,
+            demand_code: d.demand_code,
+            demand_name: d.demand_name,
+            demand_type: d.demand_type,
+            business_mode: d.business_mode,
+            status: d.status,
+            updated_at: d.updated_at,
+            pushed_to_computation: d.pushed_to_computation,
+          }))
+        const start = (page - 1) * pageSize
+        return { data: rows.slice(start, start + pageSize), total: rows.length }
+      } catch {
+        messageApi.error(t('app.kuaizhizao.demandComputation.loadDemandListFailed'))
+        return { data: [], total: 0 }
+      }
+    },
+    isRowDisabled: (record) => !!record.pushed_to_computation,
+    onConfirm: async (keys, rows) => {
+      const selectedId = Number(keys[0])
+      if (!selectedId) {
+        messageApi.warning(t('app.kuaizhizao.demandComputation.selectSource', { source: pullFromDemandAction.sourceLabel }))
+        return
+      }
+      const selected = rows[0]
+      if (selected?.pushed_to_computation) {
+        messageApi.warning(t('app.kuaizhizao.demandComputation.alreadyPushed', { source: pullFromDemandAction.sourceLabel, target: pullFromDemandAction.targetLabel }))
+        return
+      }
+      try {
+        const res = await pushDemandToComputation(selectedId)
+        messageApi.success(res?.computation_code ? t('app.kuaizhizao.demandComputation.createdTarget', { target: pullFromDemandAction.targetLabel, code: res.computation_code }) : t('app.kuaizhizao.demandComputation.createdFromSource', { source: pullFromDemandAction.sourceLabel, target: pullFromDemandAction.targetLabel }))
+        invalidateStatistics()
+        actionRef.current?.reload()
+        pullFromDemandQuery.closeModal()
+      } catch (error: any) {
+        messageApi.error(error?.response?.data?.detail || t('app.kuaizhizao.demandComputation.createFromSourceFailed', { source: pullFromDemandAction.sourceLabel, target: pullFromDemandAction.targetLabel }))
+      }
+    },
+  })
+
+  const pullFromSalesOrderQuery = useUniPullQuery<PullSalesOrderCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
+      try {
+        const result = await listSalesOrdersForPull({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+        })
+        const rows = Array.isArray(result) ? result : (result.data ?? [])
+        const candidates = rows.map((row) => ({
+          id: Number(row.id),
+          order_code: row.order_code,
+          customer_name: row.customer_name,
+          status: row.status,
+          review_status: row.review_status,
+          delivery_date: row.delivery_date,
+          updated_at: row.updated_at,
+          pushed_to_computation: !!row.pushed_to_computation,
+          capabilities: row.capabilities,
         }))
-      setPullDemandCandidates(rows)
-    } finally {
-      setPullDemandLoading(false)
-    }
-  }, [])
+        return {
+          data: candidates,
+          total: Array.isArray(result) ? candidates.length : (result.total ?? candidates.length),
+        }
+      } catch {
+        messageApi.error(t('app.kuaizhizao.salesOrder.listFailed'))
+        return { data: [], total: 0 }
+      }
+    },
+    isRowDisabled: (record) => {
+      if (record.pushed_to_computation) return true
+      return record.capabilities?.push_computation?.allowed === false
+    },
+    onConfirm: async (keys, rows) => {
+      const selectedId = Number(keys[0])
+      if (!selectedId) {
+        messageApi.warning(t('app.kuaizhizao.demandComputation.selectSource', { source: pullFromSalesOrderAction.sourceLabel }))
+        return
+      }
+      const selected = rows[0]
+      if (selected?.pushed_to_computation || selected?.capabilities?.push_computation?.allowed === false) {
+        messageApi.warning(
+          salesOrderCapabilityReasonMessage(selected?.capabilities?.push_computation?.reason, t)
+            || t('app.kuaizhizao.demandComputation.alreadyPushed', { source: pullFromSalesOrderAction.sourceLabel, target: pullFromSalesOrderAction.targetLabel }),
+        )
+        return
+      }
+      try {
+        const res = await pushSalesOrderToComputation(selectedId)
+        messageApi.success(
+          res?.computation_code
+            ? t('app.kuaizhizao.demandComputation.createdTarget', { target: pullFromSalesOrderAction.targetLabel, code: res.computation_code })
+            : t('app.kuaizhizao.demandComputation.createdFromSource', { source: pullFromSalesOrderAction.sourceLabel, target: pullFromSalesOrderAction.targetLabel }),
+        )
+        invalidateStatistics()
+        actionRef.current?.reload()
+        pullFromSalesOrderQuery.closeModal()
+      } catch (error: any) {
+        messageApi.error(
+          error?.response?.data?.detail
+          || t('app.kuaizhizao.demandComputation.createFromSourceFailed', { source: pullFromSalesOrderAction.sourceLabel, target: pullFromSalesOrderAction.targetLabel }),
+        )
+      }
+    },
+  })
 
-  const handlePullFromDemand = useCallback(async () => {
-    setPullFromDemandVisible(true)
-    setPullDemandKeyword('')
-    setSelectedPullDemandId(null)
-    await loadPullDemandCandidates('')
-  }, [loadPullDemandCandidates])
-
-  const handlePullFromDemandConfirm = useCallback(async () => {
-    if (!selectedPullDemandId) {
-      messageApi.warning(t('app.kuaizhizao.demandComputation.selectSource', { source: pullFromDemandAction.sourceLabel }))
-      return
-    }
-    const selected = pullDemandCandidates.find((i) => i.id === selectedPullDemandId)
-    if (selected?.pushed_to_computation) {
-      messageApi.warning(t('app.kuaizhizao.demandComputation.alreadyPushed', { source: pullFromDemandAction.sourceLabel, target: pullFromDemandAction.targetLabel }))
-      return
-    }
-    setPullDemandSubmitting(true)
-    try {
-      const res = await pushDemandToComputation(selectedPullDemandId)
-      messageApi.success(res?.computation_code ? t('app.kuaizhizao.demandComputation.createdTarget', { target: pullFromDemandAction.targetLabel, code: res.computation_code }) : t('app.kuaizhizao.demandComputation.createdFromSource', { source: pullFromDemandAction.sourceLabel, target: pullFromDemandAction.targetLabel }))
-      setPullFromDemandVisible(false)
-      setSelectedPullDemandId(null)
-      invalidateStatistics()
-      actionRef.current?.reload()
-    } catch (error: any) {
-      messageApi.error(error?.response?.data?.detail || t('app.kuaizhizao.demandComputation.createFromSourceFailed', { source: pullFromDemandAction.sourceLabel, target: pullFromDemandAction.targetLabel }))
-    } finally {
-      setPullDemandSubmitting(false)
-    }
-  }, [actionRef, messageApi, pullFromDemandAction, pullDemandCandidates, selectedPullDemandId, t])
+  const pullFromSalesForecastQuery = useUniPullQuery<PullSalesForecastCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
+      try {
+        const result = await listSalesForecasts({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+        })
+        const rows = result?.data ?? []
+        const candidates = rows.map((row) => ({
+          id: Number(row.id),
+          forecast_code: row.forecast_code,
+          forecast_name: row.forecast_name,
+          forecast_period: row.forecast_period,
+          status: row.status,
+          review_status: row.review_status,
+          updated_at: row.updated_at,
+          planning_pushed_to_computation: !!row.planning_pushed_to_computation,
+          capabilities: row.capabilities,
+        }))
+        return {
+          data: candidates,
+          total: Number(result?.total ?? candidates.length),
+        }
+      } catch {
+        messageApi.error(t('app.kuaizhizao.salesForecast.listLoadFailed'))
+        return { data: [], total: 0 }
+      }
+    },
+    isRowDisabled: (record) => {
+      if (record.planning_pushed_to_computation) return true
+      return record.capabilities?.push_computation?.allowed === false
+    },
+    onConfirm: async (keys, rows) => {
+      const selectedId = Number(keys[0])
+      if (!selectedId) {
+        messageApi.warning(
+          t('app.kuaizhizao.demandComputation.selectSource', { source: pullFromSalesForecastAction.sourceLabel }),
+        )
+        return
+      }
+      const selected = rows[0]
+      if (selected?.planning_pushed_to_computation || selected?.capabilities?.push_computation?.allowed === false) {
+        messageApi.warning(
+          salesForecastCapabilityReasonMessage(selected?.capabilities?.push_computation?.reason, t)
+            || t('app.kuaizhizao.demandComputation.alreadyPushed', {
+              source: pullFromSalesForecastAction.sourceLabel,
+              target: pullFromSalesForecastAction.targetLabel,
+            }),
+        )
+        return
+      }
+      try {
+        const res = await pushSalesForecastToComputation(selectedId)
+        messageApi.success(
+          res?.computation_code
+            ? t('app.kuaizhizao.demandComputation.createdTarget', { target: pullFromSalesForecastAction.targetLabel, code: res.computation_code })
+            : t('app.kuaizhizao.demandComputation.createdFromSource', { source: pullFromSalesForecastAction.sourceLabel, target: pullFromSalesForecastAction.targetLabel }),
+        )
+        invalidateStatistics()
+        actionRef.current?.reload()
+        pullFromSalesForecastQuery.closeModal()
+      } catch (error: any) {
+        messageApi.error(
+          error?.response?.data?.detail
+          || t('app.kuaizhizao.demandComputation.createFromSourceFailed', {
+            source: pullFromSalesForecastAction.sourceLabel,
+            target: pullFromSalesForecastAction.targetLabel,
+          }),
+        )
+      }
+    },
+  })
 
   /**
    * 处理详情查看
@@ -1542,74 +1733,13 @@ const DemandComputationPage: React.FC = () => {
         ? buildUniPushMenuItems([
             {
               key: 'push-documents',
-              label: t('app.kuaizhizao.demandComputation.pushDocuments'),
+              label: pushToWorkOrderAction.label,
               onClick: () => handleOpenPushPanel(selectedComputationForToolbar),
             },
           ])
         : [],
-    [selectedComputationForToolbar, canUseToolbarPush, handleOpenPushPanel, t],
+    [selectedComputationForToolbar, canUseToolbarPush, handleOpenPushPanel, pushToWorkOrderAction.label],
   )
-
-  const handleBatchExecute = useCallback(async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      messageApi.warning(t('app.kuaizhizao.demandComputation.selectComputationFirst'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      const row = lastComputationsCacheRef.current.find((item) => item.id === id);
-      if (!Number.isFinite(id) || id <= 0 || !row || !canExecuteComputation(row.computation_status)) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await executeDemandComputation(id);
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) messageApi.success(t('app.kuaizhizao.demandComputation.batchExecuteSuccess', { count: success }));
-    if (failed > 0) messageApi.warning(t('app.kuaizhizao.demandComputation.batchExecuteFailed', { count: failed }));
-    setSelectedRowKeys([]);
-    invalidateStatistics();
-    actionRef.current?.reload();
-  }, [messageApi, invalidateStatistics, t]);
-
-  const handleBatchRecompute = useCallback(async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) {
-      messageApi.warning(t('app.kuaizhizao.demandComputation.selectComputationFirst'));
-      return;
-    }
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
-      const id = Number(key);
-      const row = lastComputationsCacheRef.current.find((item) => item.id === id);
-      if (!Number.isFinite(id) || id <= 0 || !row) {
-        failed += 1;
-        continue;
-      }
-      const canRecompute = isComputationCompleted(row.computation_status) || isComputationFailed(row.computation_status);
-      if (!canRecompute) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await recomputeDemandComputation(id);
-        success += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-    if (success > 0) messageApi.success(t('app.kuaizhizao.demandComputation.batchRecomputeSuccess', { count: success }));
-    if (failed > 0) messageApi.warning(t('app.kuaizhizao.demandComputation.batchRecomputeFailed', { count: failed }));
-    setSelectedRowKeys([]);
-    invalidateStatistics();
-    actionRef.current?.reload();
-  }, [messageApi, invalidateStatistics, t]);
 
   const statCards: StatCard[] = useMemo(
     () =>
@@ -1752,7 +1882,21 @@ const DemandComputationPage: React.FC = () => {
                   key: 'pull-from-demand',
                   actionKey: 'demand_computation.pull_from_demand',
                   onClick: () => {
-                    void handlePullFromDemand()
+                    pullFromDemandQuery.openModal()
+                  },
+                },
+                {
+                  key: 'pull-from-sales-order',
+                  actionKey: 'demand_computation.pull_from_sales_order',
+                  onClick: () => {
+                    pullFromSalesOrderQuery.openModal()
+                  },
+                },
+                {
+                  key: 'pull-from-sales-forecast',
+                  actionKey: 'demand_computation.pull_from_sales_forecast',
+                  onClick: () => {
+                    pullFromSalesForecastQuery.openModal()
                   },
                 },
               ])}
@@ -1766,112 +1910,204 @@ const DemandComputationPage: React.FC = () => {
             ),
           ]
         }}
-        toolBarActionsAfterDelete={[
-          <UniBatchMenuButton
-            key="demand-computation-batch-menu"
-            selectedRowKeys={selectedRowKeys}
-            menuItems={[
-              {
-                key: 'execute',
-                label: t('app.kuaizhizao.demandComputation.batchExecute'),
-                icon: <PlayCircleOutlined />,
-                onClick: handleBatchExecute,
-              },
-              {
-                key: 'recompute',
-                label: t('app.kuaizhizao.demandComputation.batchRecompute'),
-                icon: <ReloadOutlined />,
-                onClick: handleBatchRecompute,
-              },
-            ]}
-            toolBarButtonSize="middle"
-          />,
-        ]}
+        toolBarActionsAfterDelete={[]}
         toolBarActionsAfterBatch={[
-          <MrpParametersCustomerGuideTrigger key="mrp-params-guide" size="small" />,
+          <UniCapabilityBatchButton
+            key="demand-computation-batch-execute"
+            selectedRowKeys={selectedRowKeys}
+            selectedRecords={selectedComputationsForBatch}
+            capabilityKey="execute"
+            permAllowed={computationPerms.canAction?.('submit') ?? false}
+            batchAllowed={(recs, perm) => demandComputationBatchExecuteAllowed(recs, perm)}
+            onRun={(id) => executeDemandComputation(id)}
+            labels={{
+              single: t('app.kuaizhizao.demandComputation.batchExecute'),
+              batch: t('app.kuaizhizao.demandComputation.batchExecute'),
+            }}
+            icon={<PlayCircleOutlined />}
+            size="middle"
+            onSuccess={handleComputationBatchSuccess}
+          />,
+          <UniCapabilityBatchButton
+            key="demand-computation-batch-recompute"
+            selectedRowKeys={selectedRowKeys}
+            selectedRecords={selectedComputationsForBatch}
+            capabilityKey="recompute"
+            permAllowed={computationPerms.canUpdate}
+            batchAllowed={(recs, perm) => demandComputationBatchRecomputeAllowed(recs, perm)}
+            onRun={(id) => recomputeDemandComputation(id)}
+            labels={{
+              single: t('app.kuaizhizao.demandComputation.batchRecompute'),
+              batch: t('app.kuaizhizao.demandComputation.batchRecompute'),
+            }}
+            icon={<ReloadOutlined />}
+            size="middle"
+            onSuccess={handleComputationBatchSuccess}
+          />,
           <Button
             key="open-replan-dashboard"
-            onClick={() => navigate('/apps/kuaizhizao/plan-management/demand-replan-dashboard')}
+            color="orange"
+            variant="solid"
+            onClick={() => navigate('/apps/kuaizhizao/plan-management/demand-change')}
           >
-            {t('app.kuaizhizao.demandComputation.replanDashboard')}
+            {t('app.kuaizhizao.menu.plan-management.demand-change')}
           </Button>,
+          <MrpParametersCustomerGuideTrigger key="mrp-params-guide" size="small" />,
         ]}
       />
 
-      <Modal
+      <UniPullQueryModal<PullDemandCandidate>
+        open={pullFromDemandQuery.open}
         title={pullFromDemandAction.label}
-        open={pullFromDemandVisible}
-        width={1200}
-        onCancel={() => {
-          if (pullDemandSubmitting) return
-          setPullFromDemandVisible(false)
-          setSelectedPullDemandId(null)
-        }}
-        onOk={() => {
-          void handlePullFromDemandConfirm()
-        }}
+        onCancel={pullFromDemandQuery.closeModal}
+        onOk={pullFromDemandQuery.handleConfirm}
+        rowKey="id"
+        columns={[
+          { title: t('app.kuaizhizao.demandComputation.colDemandCode'), dataIndex: 'demand_code', width: 180, ellipsis: true },
+          { title: t('app.kuaizhizao.demandComputation.colDemandName'), dataIndex: 'demand_name', width: 220, ellipsis: true },
+          { title: t('app.kuaizhizao.demandComputation.colDemandType'), dataIndex: 'demand_type', width: 130, align: 'center' },
+          { title: t('app.kuaizhizao.demandComputation.colBusinessMode'), dataIndex: 'business_mode', width: 110, align: 'center' },
+          { title: t('app.kuaizhizao.demandComputation.colStatus'), dataIndex: 'status', width: 120, align: 'center' },
+          {
+            title: t('app.kuaizhizao.demandComputation.colUpdatedAt'),
+            dataIndex: 'updated_at',
+            width: 180,
+            render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+          },
+          {
+            title: t('app.kuaizhizao.demandComputation.colConvertStatus'),
+            key: 'convert_status',
+            width: 150,
+            align: 'center',
+            render: (_, r) =>
+              r.pushed_to_computation ? <Tag color="gold">{t('app.kuaizhizao.demandComputation.convertPushed')}</Tag> : <Tag color="success">{t('app.kuaizhizao.demandComputation.convertCreatable')}</Tag>,
+          },
+        ]}
+        dataSource={pullFromDemandQuery.dataSource}
+        loading={pullFromDemandQuery.loading}
+        confirmLoading={pullFromDemandQuery.confirmLoading}
+        selectionType={pullFromDemandQuery.selectionType}
+        selectedRowKeys={pullFromDemandQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromDemandQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromDemandQuery.isRowDisabled}
+        searchDraft={pullFromDemandQuery.searchDraft}
+        onSearchDraftChange={pullFromDemandQuery.setSearchDraft}
+        onSearchApply={pullFromDemandQuery.handleSearchApply}
+        onSearchClear={pullFromDemandQuery.handleSearchClear}
+        appliedKeyword={pullFromDemandQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.demandComputation.searchDemandPlaceholder')}
+        page={pullFromDemandQuery.page}
+        pageSize={pullFromDemandQuery.pageSize}
+        total={pullFromDemandQuery.total}
+        onPageChange={pullFromDemandQuery.handlePageChange}
         okText={t('app.kuaizhizao.demandComputation.createComputation')}
-        confirmLoading={pullDemandSubmitting}
-        destroyOnHidden
-      >
-        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-          <Input.Search
-            allowClear
-            placeholder={t('app.kuaizhizao.demandComputation.searchDemandPlaceholder')}
-            value={pullDemandKeyword}
-            onChange={(e) => setPullDemandKeyword(e.target.value)}
-            onSearch={(value) => {
-              setPullDemandKeyword(value)
-              void loadPullDemandCandidates(value)
-            }}
-            enterButton={t('common.search')}
-          />
-          <Table<PullDemandCandidate>
-            rowKey="id"
-            loading={pullDemandLoading}
-            dataSource={pullDemandCandidates}
-            pagination={false}
-            scroll={{ x: 1080, y: 360 }}
-            rowSelection={{
-              type: 'radio',
-              selectedRowKeys: selectedPullDemandId ? [selectedPullDemandId] : [],
-              onChange: (keys) => {
-                const next = Number(keys?.[0])
-                if (Number.isFinite(next)) setSelectedPullDemandId(next)
-                else setSelectedPullDemandId(null)
-              },
-              getCheckboxProps: (record) => ({ disabled: !!record.pushed_to_computation }),
-            }}
-            onRow={(record) => ({
-              onClick: () => {
-                if (record.pushed_to_computation) return
-                setSelectedPullDemandId(record.id)
-              },
-            })}
-            columns={[
-              { title: t('app.kuaizhizao.demandComputation.colDemandCode'), dataIndex: 'demand_code', width: 180, ellipsis: true },
-              { title: t('app.kuaizhizao.demandComputation.colDemandName'), dataIndex: 'demand_name', width: 220, ellipsis: true },
-              { title: t('app.kuaizhizao.demandComputation.colDemandType'), dataIndex: 'demand_type', width: 130, align: 'center' },
-              { title: t('app.kuaizhizao.demandComputation.colBusinessMode'), dataIndex: 'business_mode', width: 110, align: 'center' },
-              { title: t('app.kuaizhizao.demandComputation.colStatus'), dataIndex: 'status', width: 120, align: 'center' },
-              {
-                title: t('app.kuaizhizao.demandComputation.colUpdatedAt'),
-                dataIndex: 'updated_at',
-                width: 180,
-                render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
-              },
-              {
-                title: t('app.kuaizhizao.demandComputation.colConvertStatus'),
-                key: 'convert_status',
-                width: 150,
-                align: 'center',
-                render: (_, r) =>
-                  r.pushed_to_computation ? <Tag color="gold">{t('app.kuaizhizao.demandComputation.convertPushed')}</Tag> : <Tag color="success">{t('app.kuaizhizao.demandComputation.convertCreatable')}</Tag>,
-              },
-            ]}
-          />
-        </Space>
-      </Modal>
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+      />
+
+      <UniPullQueryModal<PullSalesOrderCandidate>
+        open={pullFromSalesOrderQuery.open}
+        title={pullFromSalesOrderAction.label}
+        onCancel={pullFromSalesOrderQuery.closeModal}
+        onOk={pullFromSalesOrderQuery.handleConfirm}
+        rowKey="id"
+        columns={[
+          { title: t('app.kuaizhizao.salesOrder.orderCode'), dataIndex: 'order_code', width: 180, ellipsis: true },
+          { title: t('app.kuaizhizao.quotation.form.customer'), dataIndex: 'customer_name', width: 200, ellipsis: true },
+          { title: t('app.kuaizhizao.salesOrder.status'), dataIndex: 'status', width: 120, align: 'center' },
+          { title: t('app.kuaizhizao.salesOrder.reviewStatus'), dataIndex: 'review_status', width: 120, align: 'center' },
+          {
+            title: t('app.kuaizhizao.salesOrder.deliveryDate'),
+            dataIndex: 'delivery_date',
+            width: 130,
+            render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+          },
+          {
+            title: t('common.updatedAt'),
+            dataIndex: 'updated_at',
+            width: 180,
+            render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+          },
+          {
+            title: t('app.kuaizhizao.demandComputation.colConvertStatus'),
+            key: 'convert_status',
+            width: 170,
+            align: 'center',
+            render: (_, r) =>
+              r.pushed_to_computation || r.capabilities?.push_computation?.allowed === false
+                ? <Tag color="gold">{salesOrderCapabilityReasonMessage(r.capabilities?.push_computation?.reason, t) || t('app.kuaizhizao.demandComputation.convertPushed')}</Tag>
+                : <Tag color="success">{t('app.kuaizhizao.demandComputation.convertCreatable')}</Tag>,
+          },
+        ]}
+        dataSource={pullFromSalesOrderQuery.dataSource}
+        loading={pullFromSalesOrderQuery.loading}
+        confirmLoading={pullFromSalesOrderQuery.confirmLoading}
+        selectionType={pullFromSalesOrderQuery.selectionType}
+        selectedRowKeys={pullFromSalesOrderQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromSalesOrderQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromSalesOrderQuery.isRowDisabled}
+        searchDraft={pullFromSalesOrderQuery.searchDraft}
+        onSearchDraftChange={pullFromSalesOrderQuery.setSearchDraft}
+        onSearchApply={pullFromSalesOrderQuery.handleSearchApply}
+        onSearchClear={pullFromSalesOrderQuery.handleSearchClear}
+        appliedKeyword={pullFromSalesOrderQuery.appliedKeyword}
+        searchPlaceholder={t('components.uniPullQuery.searchPlaceholder')}
+        page={pullFromSalesOrderQuery.page}
+        pageSize={pullFromSalesOrderQuery.pageSize}
+        total={pullFromSalesOrderQuery.total}
+        onPageChange={pullFromSalesOrderQuery.handlePageChange}
+        okText={t('app.kuaizhizao.demandComputation.createComputation')}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+      />
+
+      <UniPullQueryModal<PullSalesForecastCandidate>
+        open={pullFromSalesForecastQuery.open}
+        title={pullFromSalesForecastAction.label}
+        onCancel={pullFromSalesForecastQuery.closeModal}
+        onOk={pullFromSalesForecastQuery.handleConfirm}
+        rowKey="id"
+        columns={[
+          { title: t('app.kuaizhizao.salesForecast.forecastCode'), dataIndex: 'forecast_code', width: 180, ellipsis: true },
+          { title: t('app.kuaizhizao.salesForecast.forecastName'), dataIndex: 'forecast_name', width: 220, ellipsis: true },
+          { title: t('app.kuaizhizao.salesForecast.forecastPeriod'), dataIndex: 'forecast_period', width: 120, align: 'center' },
+          { title: t('app.kuaizhizao.salesForecast.status'), dataIndex: 'status', width: 120, align: 'center' },
+          { title: t('app.kuaizhizao.salesForecast.reviewStatus'), dataIndex: 'review_status', width: 120, align: 'center' },
+          {
+            title: t('common.updatedAt'),
+            dataIndex: 'updated_at',
+            width: 180,
+            render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+          },
+          {
+            title: t('app.kuaizhizao.demandComputation.colConvertStatus'),
+            key: 'convert_status',
+            width: 170,
+            align: 'center',
+            render: (_, r) =>
+              r.planning_pushed_to_computation || r.capabilities?.push_computation?.allowed === false
+                ? <Tag color="gold">{salesForecastCapabilityReasonMessage(r.capabilities?.push_computation?.reason, t) || t('app.kuaizhizao.demandComputation.convertPushed')}</Tag>
+                : <Tag color="success">{t('app.kuaizhizao.demandComputation.convertCreatable')}</Tag>,
+          },
+        ]}
+        dataSource={pullFromSalesForecastQuery.dataSource}
+        loading={pullFromSalesForecastQuery.loading}
+        confirmLoading={pullFromSalesForecastQuery.confirmLoading}
+        selectionType={pullFromSalesForecastQuery.selectionType}
+        selectedRowKeys={pullFromSalesForecastQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromSalesForecastQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromSalesForecastQuery.isRowDisabled}
+        searchDraft={pullFromSalesForecastQuery.searchDraft}
+        onSearchDraftChange={pullFromSalesForecastQuery.setSearchDraft}
+        onSearchApply={pullFromSalesForecastQuery.handleSearchApply}
+        onSearchClear={pullFromSalesForecastQuery.handleSearchClear}
+        appliedKeyword={pullFromSalesForecastQuery.appliedKeyword}
+        searchPlaceholder={t('components.uniPullQuery.searchPlaceholder')}
+        page={pullFromSalesForecastQuery.page}
+        pageSize={pullFromSalesForecastQuery.pageSize}
+        total={pullFromSalesForecastQuery.total}
+        onPageChange={pullFromSalesForecastQuery.handlePageChange}
+        okText={t('app.kuaizhizao.demandComputation.createComputation')}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+      />
 
       {/* 新建计算：FormModalTemplate（UI_Standard 新建/编辑 Modal） */}
       <FormModalTemplate

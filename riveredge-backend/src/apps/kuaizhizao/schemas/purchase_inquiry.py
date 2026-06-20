@@ -10,6 +10,7 @@ from decimal import Decimal
 from typing import Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from apps.kuaizhizao.services.document_action_policy.types import PurchaseInquiryCapabilities
 
 
 class PurchaseInquiryItemBase(BaseModel):
@@ -167,6 +168,10 @@ class PurchaseInquiryResponse(BaseModel):
     vendors: List[PurchaseInquiryVendorResponse] = Field(default_factory=list)
     quotes: List[PurchaseSupplierQuoteResponse] = Field(default_factory=list)
     lifecycle: Optional[dict] = None
+    capabilities: Optional[PurchaseInquiryCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
+    )
 
 
 class CreateFromRequisitionRequest(BaseModel):

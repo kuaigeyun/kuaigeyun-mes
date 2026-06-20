@@ -4,6 +4,20 @@
 
 import { apiRequest } from '../../../services/api';
 
+export interface ActionCapability {
+  allowed: boolean;
+  reason?: string | null;
+}
+
+export interface PurchaseInquiryCapabilities {
+  update?: ActionCapability;
+  delete?: ActionCapability;
+  submit?: ActionCapability;
+  withdraw_submit?: ActionCapability;
+  approve?: ActionCapability;
+  revoke_approval?: ActionCapability;
+}
+
 export interface PurchaseInquiryItem {
   id?: number;
   inquiry_id?: number;
@@ -74,6 +88,7 @@ export interface PurchaseInquiry {
   vendors?: PurchaseInquiryVendor[];
   quotes?: PurchaseSupplierQuote[];
   lifecycle?: Record<string, unknown>;
+  capabilities?: PurchaseInquiryCapabilities;
 }
 
 export interface ComparisonCell {
@@ -129,7 +144,7 @@ export async function createInquiryFromRequisition(
   requisitionId: number,
   data: { item_ids: number[]; supplier_ids?: number[]; inquiry_name?: string; quote_deadline?: string; notes?: string },
 ): Promise<PurchaseInquiry> {
-  return apiRequest(`/apps/kuaizhizao/purchase-inquiries/from-requisition/${requisitionId}`, { method: 'POST', data });
+  return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${requisitionId}/push-to-purchase-inquiry`, { method: 'POST', data });
 }
 
 export async function publishPurchaseInquiry(id: number): Promise<PurchaseInquiry> {

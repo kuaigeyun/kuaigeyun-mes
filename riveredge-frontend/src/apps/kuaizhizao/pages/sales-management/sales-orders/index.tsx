@@ -51,7 +51,7 @@ import {
 } from '../shared/documentFieldAlignment';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
-import { getSalesOrderLifecycle, isSalesOrderDeliveryOverdue, isSalesOrderLineDeliveryOverdue, buildSalesOrderLifecycleValueEnum, resolveSalesOrderListLifecycleParams, isSalesOrderClosed, canWithdrawSalesOrderRecord, canUnapproveSalesOrderRecord } from '../../../utils/salesOrderLifecycle';
+import { getSalesOrderLifecycle, isSalesOrderDeliveryOverdue, isSalesOrderLineDeliveryOverdue, buildSalesOrderLifecycleValueEnum, resolveSalesOrderListLifecycleParams } from '../../../utils/salesOrderLifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import {
   isAuditedStatus,
@@ -80,7 +80,7 @@ import {
 } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
@@ -119,6 +119,7 @@ import {
   pushSalesOrderToInvoice,
   pushSalesOrderToSalesReturn,
   pullSalesOrderFromQuotation,
+  pullSalesOrderFromSalesContract,
   withdrawSalesOrderFromComputation,
   createSalesOrderReminder,
   bulkDeleteSalesOrders,
@@ -135,14 +136,18 @@ import {
   ReviewStatus,
   type PushPreviewResponse,
 } from '../../../services/sales-order';
-import { listQuotations, type Quotation } from '../../../services/quotation';
+import { listQuotations, type Quotation, type QuotationCapabilities } from '../../../services/quotation';
+import { salesContractApi, type SalesContract, type SalesContractCapabilities } from '../../../services/sales-contract';
+import {
+  quotationCapabilityAllowed,
+  quotationCapabilityReasonMessage,
+  useSalesOrderCapabilities,
+  salesOrderBatchCloseAllowed,
+  salesOrderCapabilityReasonMessage,
+  salesOrderHasToolbarPushActions,
+} from '../../../../../hooks/useDocumentCapabilities';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
-/** 已审核状态值集合（与后端 document_lifecycle _is_approved 一致，用于按钮显示） */
-const APPROVED_STATUS_VALUES = ['已审核', SalesOrderStatus.AUDITED, ReviewStatus.APPROVED, '审核通过', '通过', '已通过'] as const;
-const isApprovedRecord = (r: SalesOrder) => APPROVED_STATUS_VALUES.some((v) => r.status === v || r.review_status === v);
-/** 是否允许下推：已确认/已生效（CONFIRMED）与已审核等价，且排除已关闭 */
-const canPushDownSalesOrder = (r: SalesOrder) =>
-  !isSalesOrderClosed(r) && (isAuditedStatus(r.status) || isApprovedRecord(r));
 import { materialApi } from '../../../../master-data/services/material';
 import type { Material } from '../../../../master-data/types/material';
 import { customerApi } from '../../../../master-data/services/supply-chain';
@@ -181,6 +186,8 @@ import { rowActionKind, rowActionAddFollowUpFromDocument } from '../../../../../
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { inboundSalesReturnEntryPath } from '../../warehouse-management/inbound/inboundPaths';
+import { outboundSalesOrderEntryPath } from '../../warehouse-management/outbound/outboundPaths';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 
@@ -231,12 +238,27 @@ type PullQuotationCandidate = {
   salesman_name?: string;
   sales_order_id?: number;
   sales_order_code?: string;
+  capabilities?: QuotationCapabilities;
 };
 
-/** 明细行是否已挂工单（直推工单路径与需求计算路径互斥） */
-function orderHasLineWorkOrders(order: SalesOrder | null | undefined): boolean {
-  return !!(order?.items?.some((it) => it?.work_order_id != null && Number(it.work_order_id) > 0));
-}
+type PullSalesContractCandidate = {
+  id: number;
+  contract_code: string;
+  customer_name?: string;
+  contract_date?: string;
+  valid_to?: string;
+  total_amount?: number;
+  status?: string;
+  review_status?: string;
+  salesman_name?: string;
+  capabilities?: SalesContractCapabilities;
+};
+
+const isPullQuotationSelectable = (record: PullQuotationCandidate): boolean =>
+  quotationCapabilityAllowed(record as Quotation, 'convert_to_order');
+
+const isPullSalesContractSelectable = (record: PullSalesContractCandidate): boolean =>
+  record.capabilities?.push_to_sales_order?.allowed === true;
 
 const toSafeNumber = (value: unknown): number => {
   const n = Number(value);
@@ -336,6 +358,7 @@ function getDefaultPaymentTermsOptions(t: (key: string) => string) {
 const SALES_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_orders';
 
 const SALES_ORDER_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-orders';
+const SALES_ORDER_RESOURCE = 'kuaizhizao:sales-order';
 const SALES_ORDER_CREATE_PATH = `${SALES_ORDER_LIST_PATH}/new`;
 const salesOrderEditPath = (id: number) => `${SALES_ORDER_LIST_PATH}/${id}/edit`;
 
@@ -398,6 +421,16 @@ const SalesOrdersPage: React.FC = () => {
   });
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const pullFromQuotationAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_quotation');
+  const pullFromSalesContractAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_sales_contract');
+  const pushToDemandComputationAction = resolveKuaizhizaoDocumentAction(t, 'demand_computation.pull_from_sales_order');
+  const pushToWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_sales_order');
+  const pushToSalesInvoiceAction = resolveKuaizhizaoDocumentAction(t, 'sales_invoice.pull_from_sales_order');
+  const pushToShipmentNoticeAction = resolveKuaizhizaoDocumentAction(t, 'shipment_notice.pull_from_sales_order');
+  const pushToSalesDeliveryAction = resolveKuaizhizaoDocumentAction(t, 'sales_delivery.pull_from_sales_order');
+  const pushToSalesReturnAction = resolveKuaizhizaoDocumentAction(t, 'sales_return.pull_from_sales_order');
+  const pushToOutboundEntryAction = resolveKuaizhizaoDocumentAction(t, 'outbound.pull_from_sales_order');
+  const pushToSalesReturnInboundEntryAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_sales_order');
+  const pushToSalesOrderChangeAction = resolveKuaizhizaoDocumentAction(t, 'sales_order_change.pull_from_sales_order');
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -519,6 +552,8 @@ const SalesOrdersPage: React.FC = () => {
   }, []);
 
   const auditEnabled = useAuditRequired('sales_order', false);
+  const salesOrderPerms = useResourcePermissions(SALES_ORDER_RESOURCE);
+  const permDeniedTitle = t('common.noPermission');
   const auditEnabledRef = useRef(auditEnabled);
   useEffect(() => {
     if (auditEnabledRef.current === auditEnabled) return;
@@ -560,6 +595,12 @@ const SalesOrdersPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentSalesOrder, setCurrentSalesOrder] = useState<SalesOrder | null>(null);
+  const detailCapabilityGates = useSalesOrderCapabilities(
+    currentSalesOrder,
+    salesOrderPerms,
+    t,
+    permDeniedTitle,
+  );
   const [trackingRefreshKey, setTrackingRefreshKey] = useState(0);
 
   // 提醒弹窗状态
@@ -953,81 +994,33 @@ const SalesOrdersPage: React.FC = () => {
   );
 
   /**
-   * 通用批量操作处理器
+   * 通用批量操作处理器（关单等非审核 capabilities）
    */
-  const handleBatchOperation = async (
-    keys: React.Key[],
-    actionName: string,
-    operationApi: (ids: number[]) => Promise<any>,
-  ) => {
-    const orderIds = resolveOrderIdsFromRowKeys(keys);
-    const count = orderIds.length;
-    if (count === 0) {
-      messageApi.warning(t('common.noRecordsSelected'));
-      return;
-    }
+  const handleBulkCapabilityBatchSuccess = useCallback(() => {
+    invalidateOrdersCache();
+    invalidateMenuBadge();
+    invalidateStatistics();
+    actionRef.current?.reload();
+    if (actionRef.current?.clearSelected) actionRef.current.clearSelected();
+    setSelectedRowKeys([]);
+  }, [invalidateMenuBadge, invalidateOrdersCache, invalidateStatistics]);
 
-    try {
-      const res = await operationApi(orderIds);
-      if (res.failed_count === 0) {
-        messageApi.success(t('app.kuaizhizao.salesOrder.batchActionAllSuccess', { action: actionName, count: res.success_count }));
-      } else {
-        const firstReason = res.failed_items?.[0]?.reason;
-        messageApi.warning(
-          firstReason
-            ? t('app.kuaizhizao.salesOrder.batchActionPartialWithReason', { action: actionName, success: res.success_count, failed: res.failed_count, reason: firstReason })
-            : t('app.kuaizhizao.salesOrder.batchActionPartial', { action: actionName, success: res.success_count, failed: res.failed_count }),
-        );
-        if (res.failed_items?.length > 0) {
-          console.error(t('app.kuaizhizao.salesOrder.batchActionFailedDetails', { action: actionName }), res.failed_items);
-        }
-      }
-      invalidateOrdersCache();
-      invalidateMenuBadge();
-      invalidateStatistics();
+  const salesOrderAuditBulkHandlers = useMemo(
+    () => ({
+      submit: bulkSubmitSalesOrders,
+      withdraw: bulkWithdrawSalesOrders,
+      approve: bulkApproveSalesOrders,
+      revoke: bulkUnapproveSalesOrders,
+    }),
+    [],
+  );
 
-          actionRef.current?.reload();
-      if (actionRef.current?.clearSelected) actionRef.current.clearSelected();
-      // ⚠️ 关键：受控模式下手动清空选中状态，确保下拉按钮状态刷新
-      setSelectedRowKeys([]);
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.salesOrder.batchActionFailed', { action: actionName }));
-    }
-  };
-
-  const handleBatchSubmit = (keys: React.Key[]) => handleBatchOperation(keys, t('app.kuaizhizao.salesOrder.batchSubmit'), bulkSubmitSalesOrders);
-  const handleBatchApprove = (keys: React.Key[]) => handleBatchOperation(keys, t('app.kuaizhizao.salesOrder.batchApprove'), bulkApproveSalesOrders);
-  const handleBatchWithdraw = (keys: React.Key[]) => {
-    const orderIds = resolveOrderIdsFromRowKeys(keys);
-    if (orderIds.length === 0) {
-      messageApi.warning(t('common.noRecordsSelected'));
-      return;
-    }
-    const orders = resolveSelectedOrders(keys);
-    if (orders.length > 0 && !orders.some((o) => canWithdrawSalesOrderRecord(o, auditEnabled))) {
-      messageApi.warning(
-        t('app.kuaizhizao.salesOrder.batchWithdrawNotAllowed'),
-      );
-      return;
-    }
-    handleBatchOperation(keys, t('app.kuaizhizao.salesOrder.batchWithdraw'), bulkWithdrawSalesOrders);
-  };
-  const handleBatchUnapprove = (keys: React.Key[]) => {
-    const orderIds = resolveOrderIdsFromRowKeys(keys);
-    if (orderIds.length === 0) {
-      messageApi.warning(t('common.noRecordsSelected'));
-      return;
-    }
-    const orders = resolveSelectedOrders(keys);
-    if (orders.length > 0 && !orders.some((o) => canUnapproveSalesOrderRecord(o, auditEnabled))) {
-      messageApi.warning(
-        t('app.kuaizhizao.salesOrder.batchUnapproveOnlyAudited'),
-      );
-      return;
-    }
-    handleBatchOperation(keys, t('app.kuaizhizao.salesOrder.batchUnapprove'), bulkUnapproveSalesOrders);
-  };
-  const handleBatchClose = (keys: React.Key[]) => handleBatchOperation(keys, t('app.kuaizhizao.salesOrder.batchClose'), bulkCloseSalesOrders);
+  const resolveSalesOrderBatchId = useCallback((key: React.Key) => {
+    const mapped = rowKeyToOrderIdRef.current.get(String(key));
+    if (mapped != null && Number.isFinite(mapped) && mapped > 0) return mapped;
+    const id = Number(key);
+    return Number.isFinite(id) && id > 0 ? id : null;
+  }, []);
 
   /**
    * 处理删除销售订单（单条，草稿或待审核）
@@ -1504,16 +1497,11 @@ const SalesOrdersPage: React.FC = () => {
    * 处理下推到需求计算（含预览）
    */
   const handlePushToComputation = async (id: number, order?: SalesOrder | null) => {
-    if (!salesNodeEnabled.demand_computation) {
-      messageApi.warning(t('app.kuaizhizao.salesOrder.nodeComputationDisabled'));
-      return;
-    }
-    if (order?.pushed_to_computation) {
-      messageApi.warning(t('app.kuaizhizao.salesOrder.computationAlreadyPushed'));
-      return;
-    }
-    if (orderHasLineWorkOrders(order)) {
-      messageApi.warning(t('app.kuaizhizao.salesOrder.pushMutualExclusiveComputationBlocked'));
+    if (!order?.capabilities?.push_computation?.allowed) {
+      messageApi.warning(
+        salesOrderCapabilityReasonMessage(order?.capabilities?.push_computation?.reason, t) ||
+          t('app.kuaizhizao.salesOrder.pushRequiresApproved'),
+      );
       return;
     }
     showPushPreviewModal(
@@ -1545,7 +1533,7 @@ const SalesOrdersPage: React.FC = () => {
       return;
     }
     modalApi.confirm({
-      title: t('app.kuaizhizao.salesOrder.pushToInvoiceTitle'),
+      title: pushToSalesInvoiceAction.label,
       content: t('app.kuaizhizao.salesOrder.pushToInvoiceConfirm'),
       zIndex: elevatedModalZIndex,
       onOk: async () => {
@@ -1563,7 +1551,7 @@ const SalesOrdersPage: React.FC = () => {
   /** 处理下推到销售出库 */
   const handlePushToDelivery = async (id: number) => {
     modalApi.confirm({
-      title: t('app.kuaizhizao.salesOrder.pushToDeliveryTitle'),
+      title: pushToSalesDeliveryAction.label,
       content: t('app.kuaizhizao.salesOrder.pushToDeliveryConfirm'),
       zIndex: elevatedModalZIndex,
       onOk: async () => {
@@ -1599,6 +1587,18 @@ const SalesOrdersPage: React.FC = () => {
     }
   };
 
+  const handlePushToOutboundEntry = (id: number) => {
+    navigate(outboundSalesOrderEntryPath(id));
+  };
+
+  const handlePushToSalesReturnInboundEntry = (id: number) => {
+    navigate(inboundSalesReturnEntryPath(id));
+  };
+
+  const handlePushToSalesOrderChange = (id: number) => {
+    navigate(`/apps/kuaizhizao/sales-management/sales-order-changes?source_order_id=${id}`);
+  };
+
   /** 确认下推销售退货 */
   const handlePushToSalesReturnConfirm = async () => {
     if (!pushToReturnOrder?.id) return;
@@ -1619,8 +1619,7 @@ const SalesOrdersPage: React.FC = () => {
     }
     setPushToReturnLoading(true);
     try {
-      const result = await pushSalesOrderToSalesReturn({
-        sales_order_id: pushToReturnOrder.id,
+      const result = await pushSalesOrderToSalesReturn(pushToReturnOrder.id, {
         warehouse_id: pushToReturnWarehouseId,
         warehouse_name: pushToReturnWarehouseName || undefined,
         return_quantities: pushToReturnQuantities,
@@ -1668,6 +1667,7 @@ const SalesOrdersPage: React.FC = () => {
         salesman_name: q.salesman_name || '',
         sales_order_id: q.sales_order_id ? Number(q.sales_order_id) : undefined,
         sales_order_code: q.sales_order_code || '',
+        capabilities: q.capabilities,
       }));
   }, []);
 
@@ -1684,7 +1684,7 @@ const SalesOrdersPage: React.FC = () => {
     selectionType: 'radio',
     scopeOptions: pullFromQuotationScopeOptions,
     defaultScope: 'pullable',
-    isRowDisabled: (record) => record.status === '已转订单' || !!record.sales_order_id,
+    isRowDisabled: (record) => !isPullQuotationSelectable(record),
     loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const result = await listQuotations({
@@ -1710,13 +1710,11 @@ const SalesOrdersPage: React.FC = () => {
         messageApi.warning(t('app.kuaizhizao.salesOrder.selectQuotationFirst'));
         return;
       }
-      if (selected && (selected.status === '已转订单' || selected.sales_order_id)) {
-        messageApi.warning(
-          t('app.kuaizhizao.salesOrder.pullDuplicateBlocked', {
-            source: pullFromQuotationAction.sourceLabel,
-            target: pullFromQuotationAction.targetLabel,
-          }),
-        );
+      if (selected && !isPullQuotationSelectable(selected)) {
+        const reason =
+          quotationCapabilityReasonMessage(selected.capabilities?.convert_to_order?.reason, t) ||
+          t('app.kuaizhizao.salesOrder.pullQuotationNotAllowed');
+        messageApi.warning(reason);
         return;
       }
       try {
@@ -1741,6 +1739,96 @@ const SalesOrdersPage: React.FC = () => {
             t('app.kuaizhizao.salesOrder.pullCreateFailed', {
               source: pullFromQuotationAction.sourceLabel,
               target: pullFromQuotationAction.targetLabel,
+            }),
+          ),
+        );
+        throw error;
+      }
+    },
+  });
+
+  const mapPullSalesContractRows = useCallback((rows: SalesContract[]): PullSalesContractCandidate[] => {
+    return rows
+      .filter((row) => row.id && row.contract_code)
+      .map((row) => ({
+        id: Number(row.id),
+        contract_code: String(row.contract_code),
+        customer_name: row.customer_name || '',
+        contract_date: row.contract_date || '',
+        valid_to: row.valid_to || '',
+        total_amount: row.total_amount != null ? Number(row.total_amount) : undefined,
+        status: row.status || '',
+        review_status: row.review_status || '',
+        salesman_name: row.salesman_name || '',
+        capabilities: row.capabilities,
+      }));
+  }, []);
+
+  const pullFromSalesContractScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
+  const pullFromSalesContractQuery = useUniPullQuery<PullSalesContractCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    scopeOptions: pullFromSalesContractScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullSalesContractSelectable(record),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const result = await salesContractApi.list({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+        });
+        const rows = mapPullSalesContractRows(result.items || []);
+        const filtered = scope === 'pullable' ? rows.filter(isPullSalesContractSelectable) : rows;
+        return {
+          data: filtered,
+          total: Number(result.total ?? filtered.length),
+        };
+      } catch (error: any) {
+        messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.pullContract.loadFailed')));
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys, rows) => {
+      const selectedId = Number(keys[0]);
+      const selected = rows[0];
+      if (!selectedId || selectedId <= 0) {
+        messageApi.warning(t('app.kuaizhizao.salesOrder.pullContract.selectFirst'));
+        return;
+      }
+      if (selected && !isPullSalesContractSelectable(selected)) {
+        messageApi.warning(selected.capabilities?.push_to_sales_order?.reason || t('app.kuaizhizao.salesOrder.pullContract.notAllowed'));
+        return;
+      }
+      try {
+        const result = await pullSalesOrderFromSalesContract(selectedId);
+        messageApi.success(
+          result?.message ||
+            t('app.kuaizhizao.salesOrder.pullContract.success', {
+              code: result?.sales_order?.order_code || '',
+            }),
+        );
+        pullFromSalesContractQuery.closeModal();
+        invalidateMenuBadge();
+        invalidateOrdersCache();
+        actionRef.current?.reload();
+        if (result?.sales_order?.id) {
+          refreshDrawerOrder(result.sales_order.id);
+        }
+      } catch (error: any) {
+        messageApi.error(
+          salesOrderCatchMessage(
+            error,
+            t('app.kuaizhizao.salesOrder.pullCreateFailed', {
+              source: pullFromSalesContractAction.sourceLabel,
+              target: pullFromSalesContractAction.targetLabel,
             }),
           ),
         );
@@ -1813,26 +1901,109 @@ const SalesOrdersPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesOrder.duplicateGuardHint'),
         width: 260,
-        render: (_: unknown, record: PullQuotationCandidate) =>
-          record.status === '已转订单' || record.sales_order_id
-            ? t('app.kuaizhizao.salesOrder.alreadyCreated', {
-                code: record.sales_order_code || record.sales_order_id || '-',
-              })
-            : t('app.kuaizhizao.salesOrder.canCreate'),
+        render: (_: unknown, record: PullQuotationCandidate) => {
+          if (isPullQuotationSelectable(record)) {
+            return t('app.kuaizhizao.salesOrder.canCreate');
+          }
+          if (record.status === '已转订单' || record.sales_order_id) {
+            return t('app.kuaizhizao.salesOrder.alreadyCreated', {
+              code: record.sales_order_code || record.sales_order_id || '-',
+            });
+          }
+          const reason = quotationCapabilityReasonMessage(
+            record.capabilities?.convert_to_order?.reason,
+            t,
+          );
+          return reason || t('app.kuaizhizao.salesOrder.pullQuotationNotAllowed');
+        },
+      },
+    ],
+    [t],
+  );
+
+  const pullSalesContractColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.salesContract.contractCode'), dataIndex: 'contract_code', width: 180 },
+      {
+        title: t('app.kuaizhizao.salesOrder.customerName'),
+        dataIndex: 'customer_name',
+        width: 180,
+        ellipsis: true,
+        render: (v: string) => v || '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesContract.contractDate'),
+        dataIndex: 'contract_date',
+        width: 120,
+        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.salesContract.validUntil'),
+        dataIndex: 'valid_to',
+        width: 120,
+        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
+        dataIndex: 'total_amount',
+        width: 130,
+        align: 'right' as const,
+        render: (v: number | undefined) =>
+          v != null
+            ? Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.status'),
+        dataIndex: 'status',
+        width: 120,
+        render: (v: string) => <Tag color={v?.includes('关闭') ? 'default' : 'blue'}>{v || '-'}</Tag>,
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.reviewStatus'),
+        dataIndex: 'review_status',
+        width: 100,
+        render: (v: string) => {
+          const approved = v === 'APPROVED' || v === '已通过' || v === '审核通过';
+          const rejected = v === 'REJECTED' || v === '已驳回';
+          return <Tag color={approved ? 'green' : rejected ? 'red' : 'default'}>{v || '-'}</Tag>;
+        },
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.salesman'),
+        dataIndex: 'salesman_name',
+        width: 120,
+        ellipsis: true,
+        render: (v: string) => v || '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.duplicateGuardHint'),
+        width: 260,
+        render: (_: unknown, record: PullSalesContractCandidate) =>
+          isPullSalesContractSelectable(record)
+            ? t('app.kuaizhizao.salesOrder.canCreate')
+            : record.capabilities?.push_to_sales_order?.reason || t('app.kuaizhizao.salesOrder.pullContract.notAllowed'),
       },
     ],
     [t],
   );
 
   const selectedPullQuotation = pullFromQuotationQuery.selectedRows[0];
-  const selectedPullQuotationDuplicated = !!(
-    selectedPullQuotation &&
-    (selectedPullQuotation.status === '已转订单' || selectedPullQuotation.sales_order_id)
+  const selectedPullQuotationNotPullable = !!(
+    selectedPullQuotation && !isPullQuotationSelectable(selectedPullQuotation)
+  );
+  const selectedPullSalesContract = pullFromSalesContractQuery.selectedRows[0];
+  const selectedPullSalesContractNotPullable = !!(
+    selectedPullSalesContract && !isPullSalesContractSelectable(selectedPullSalesContract)
   );
 
   /** 打开“从报价单创建销售订单”弹窗 */
   const handlePullFromQuotation = () => {
     pullFromQuotationQuery.openModal();
+  };
+
+  const handlePullFromSalesContract = () => {
+    pullFromSalesContractQuery.openModal();
   };
 
   /** 打开提醒弹窗 */
@@ -2235,54 +2406,61 @@ const SalesOrdersPage: React.FC = () => {
   );
 
   const buildToolbarPushMenuItems = useCallback((record: SalesOrder) => {
-    const pushEnabledBase = canPushDownSalesOrder(record);
-    const computationDisabledReason =
-      !pushEnabledBase
-        ? t('app.kuaizhizao.salesOrder.pushRequiresApproved')
-        : !salesNodeEnabled.demand_computation
-        ? t('app.kuaizhizao.salesOrder.nodeComputationDisabled')
-        : record.pushed_to_computation
-        ? t('app.kuaizhizao.salesOrder.computationAlreadyPushed')
-        : orderHasLineWorkOrders(record)
-        ? t('app.kuaizhizao.salesOrder.pushMutualExclusiveComputationBlocked')
-        : undefined;
-    const workOrderDisabledReason =
-      !pushEnabledBase
-        ? t('app.kuaizhizao.salesOrder.pushRequiresApproved')
-        : !salesNodeEnabled.work_order
-        ? t('app.kuaizhizao.salesOrder.nodeWorkOrderDisabled')
-        : undefined;
-    const invoiceDisabledReason =
-      !pushEnabledBase
-        ? t('app.kuaizhizao.salesOrder.pushRequiresApproved')
-        : !salesNodeEnabled.invoice
-        ? t('app.kuaizhizao.salesOrder.nodeInvoiceDisabled')
-        : undefined;
-    const shipmentDisabledReason =
-      !pushEnabledBase
-        ? t('app.kuaizhizao.salesOrder.pushRequiresApproved')
-        : !salesNodeEnabled.shipment_notice
-        ? t('app.kuaizhizao.salesOrder.nodeShipmentDisabled')
-        : undefined;
-    const deliveryDisabledReason =
-      !pushEnabledBase
-        ? t('app.kuaizhizao.salesOrder.pushRequiresApproved')
-        : !salesNodeEnabled.shipment_notice
-        ? t('app.kuaizhizao.salesOrder.nodeDeliveryDisabled')
-        : undefined;
+    const resolvePushReason = (
+      cap: { allowed?: boolean; reason?: string | null } | undefined,
+      permGate: { disabled: boolean; title?: string },
+      nodeDisabled?: string,
+    ): string | undefined => {
+      if (permGate.disabled) return permGate.title ?? permDeniedTitle;
+      if (!cap?.allowed) return salesOrderCapabilityReasonMessage(cap?.reason, t);
+      if (nodeDisabled) return nodeDisabled;
+      return undefined;
+    };
+
+    const computationDisabledReason = resolvePushReason(
+      record.capabilities?.push_computation,
+      { disabled: !salesOrderPerms.canUpdate, title: permDeniedTitle },
+      !salesNodeEnabled.demand_computation ? t('app.kuaizhizao.salesOrder.nodeComputationDisabled') : undefined,
+    );
+    const workOrderDisabledReason = resolvePushReason(
+      record.capabilities?.push_work_order,
+      { disabled: !salesOrderPerms.canUpdate, title: permDeniedTitle },
+      !salesNodeEnabled.work_order ? t('app.kuaizhizao.salesOrder.nodeWorkOrderDisabled') : undefined,
+    );
+    const invoiceDisabledReason = resolvePushReason(
+      record.capabilities?.push_invoice,
+      { disabled: !salesOrderPerms.canUpdate, title: permDeniedTitle },
+      !salesNodeEnabled.invoice ? t('app.kuaizhizao.salesOrder.nodeInvoiceDisabled') : undefined,
+    );
+    const shipmentDisabledReason = resolvePushReason(
+      record.capabilities?.push_shipment_notice,
+      { disabled: !salesOrderPerms.canUpdate, title: permDeniedTitle },
+      !salesNodeEnabled.shipment_notice ? t('app.kuaizhizao.salesOrder.nodeShipmentDisabled') : undefined,
+    );
+    const deliveryDisabledReason = resolvePushReason(
+      record.capabilities?.push_sales_delivery,
+      { disabled: !salesOrderPerms.canUpdate, title: permDeniedTitle },
+      !salesNodeEnabled.shipment_notice ? t('app.kuaizhizao.salesOrder.nodeDeliveryDisabled') : undefined,
+    );
     const canPushComputation = !computationDisabledReason;
     const canPushWorkOrder = !workOrderDisabledReason;
     const canPushShipment = !shipmentDisabledReason;
     const canPushDelivery = !deliveryDisabledReason;
     const canPushInvoice = !invoiceDisabledReason;
-    const canPushSalesReturn = pushEnabledBase;
-    const canWithdrawComputation = pushEnabledBase && !!record.pushed_to_computation;
+    const canPushSalesReturn =
+      salesOrderPerms.canUpdate && record.capabilities?.push_sales_return?.allowed === true;
+    const withdrawComputationDisabledReason = !salesOrderPerms.canUpdate
+      ? permDeniedTitle
+      : !record.capabilities?.withdraw_computation?.allowed
+      ? salesOrderCapabilityReasonMessage(record.capabilities?.withdraw_computation?.reason, t)
+      : undefined;
+    const canWithdrawComputation = !withdrawComputationDisabledReason;
 
     return buildUniPushMenuItems([
       {
         key: 'computation',
         label: renderPushItemLabelWithReason(
-          t('app.kuaizhizao.salesOrder.demandComputation'),
+          pushToDemandComputationAction.label,
           computationDisabledReason,
         ),
         className: getPushMenuItemClassName(computationDisabledReason),
@@ -2291,7 +2469,7 @@ const SalesOrdersPage: React.FC = () => {
       {
         key: 'workorder',
         label: renderPushItemLabelWithReason(
-          t('app.kuaizhizao.salesOrder.pushToWorkOrder'),
+          pushToWorkOrderAction.label,
           workOrderDisabledReason,
         ),
         className: getPushMenuItemClassName(workOrderDisabledReason),
@@ -2301,7 +2479,7 @@ const SalesOrdersPage: React.FC = () => {
       {
         key: 'invoice',
         label: renderPushItemLabelWithReason(
-          t('app.kuaizhizao.salesOrder.salesInvoice'),
+          pushToSalesInvoiceAction.label,
           invoiceDisabledReason,
         ),
         className: getPushMenuItemClassName(invoiceDisabledReason),
@@ -2310,7 +2488,7 @@ const SalesOrdersPage: React.FC = () => {
       {
         key: 'shipment',
         label: renderPushItemLabelWithReason(
-          t('app.kuaizhizao.salesOrder.shipmentNotice'),
+          pushToShipmentNoticeAction.label,
           shipmentDisabledReason,
         ),
         className: getPushMenuItemClassName(shipmentDisabledReason),
@@ -2319,19 +2497,40 @@ const SalesOrdersPage: React.FC = () => {
       {
         key: 'delivery',
         label: renderPushItemLabelWithReason(
-          t('app.kuaizhizao.salesOrder.salesDelivery'),
+          pushToSalesDeliveryAction.label,
           deliveryDisabledReason,
         ),
         className: getPushMenuItemClassName(deliveryDisabledReason),
         onClick: () => canPushDelivery && handlePushToDelivery(record.id!),
       },
       {
+        key: 'delivery-entry',
+        label: renderPushItemLabelWithReason(
+          pushToOutboundEntryAction.label,
+          deliveryDisabledReason,
+        ),
+        className: getPushMenuItemClassName(deliveryDisabledReason),
+        onClick: () => canPushDelivery && handlePushToOutboundEntry(record.id!),
+      },
+      {
         key: 'sales-return',
-        label: t('app.kuaizhizao.salesOrder.salesReturn'),
+        label: pushToSalesReturnAction.label,
         disabled: !canPushSalesReturn,
         onClick: () => canPushSalesReturn && handlePushToSalesReturn(record.id!),
       },
-      ...(record.pushed_to_computation
+      {
+        key: 'sales-return-inbound-entry',
+        label: pushToSalesReturnInboundEntryAction.label,
+        disabled: !canPushSalesReturn,
+        onClick: () => canPushSalesReturn && handlePushToSalesReturnInboundEntry(record.id!),
+      },
+      {
+        key: 'sales-order-change',
+        label: pushToSalesOrderChangeAction.label,
+        disabled: !salesOrderPerms.canUpdate,
+        onClick: () => salesOrderPerms.canUpdate && handlePushToSalesOrderChange(record.id!),
+      },
+      ...(record.pushed_to_computation || record.capabilities?.withdraw_computation?.allowed
         ? [
             { type: 'divider' as const },
             {
@@ -2343,13 +2542,13 @@ const SalesOrdersPage: React.FC = () => {
           ]
         : []),
     ]);
-  }, [getPushMenuItemClassName, handlePushToComputation, handlePushToDelivery, handlePushToInvoice, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, renderPushItemLabelWithReason, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, t]);
+  }, [getPushMenuItemClassName, handlePushToComputation, handlePushToDelivery, handlePushToInvoice, handlePushToOutboundEntry, handlePushToSalesOrderChange, handlePushToSalesReturn, handlePushToSalesReturnInboundEntry, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, permDeniedTitle, pushToDemandComputationAction.label, pushToOutboundEntryAction.label, pushToSalesDeliveryAction.label, pushToSalesInvoiceAction.label, pushToSalesOrderChangeAction.label, pushToSalesReturnAction.label, pushToSalesReturnInboundEntryAction.label, pushToShipmentNoticeAction.label, pushToWorkOrderAction.label, renderPushItemLabelWithReason, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, salesOrderPerms.canUpdate, t]);
   const toolbarPushMenuItems = useMemo(
     () => (selectedOrderForToolbar ? buildToolbarPushMenuItems(selectedOrderForToolbar) : []),
     [buildToolbarPushMenuItems, selectedOrderForToolbar]
   );
   const canUseToolbarPush =
-    selectedOrderForToolbar != null && canPushDownSalesOrder(selectedOrderForToolbar);
+    selectedOrderForToolbar != null && salesOrderHasToolbarPushActions(selectedOrderForToolbar);
 
   const salesOrderToolbarRenderItems = useMemo(
     () => [
@@ -2365,6 +2564,11 @@ const SalesOrdersPage: React.FC = () => {
             actionKey: 'sales_order.pull_from_quotation',
             onClick: handlePullFromQuotation,
           },
+          {
+            key: 'pull-from-sales-contract',
+            actionKey: 'sales_order.pull_from_sales_contract',
+            onClick: handlePullFromSalesContract,
+          },
         ])}
       />,
       <UniPushToolbarButton
@@ -2376,6 +2580,7 @@ const SalesOrdersPage: React.FC = () => {
     [
       canUseToolbarPush,
       handleCreate,
+      handlePullFromSalesContract,
       handlePullFromQuotation,
       selectedOrderForToolbar,
       selectedRowKeys,
@@ -2526,9 +2731,9 @@ const SalesOrdersPage: React.FC = () => {
       fixed: 'right' as const,
       valueType: 'option',
       render: (_: any, record: SalesOrder) => {
-        const lifecycle = getSalesOrderLifecycle(record, auditEnabled);
-        const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '') && !isSalesOrderClosed(record);
-        const canDelete = (['草稿', '待审核'].includes(lifecycle.stageName ?? '') || record.status === SalesOrderStatus.DRAFT || record.status === 'PENDING_REVIEW') && !isSalesOrderClosed(record);
+        const canEdit = record.capabilities?.update?.allowed === true && salesOrderPerms.canUpdate;
+        const canDelete = record.capabilities?.delete?.allowed === true && salesOrderPerms.canDelete;
+        const canPrintRow = record.capabilities?.print?.allowed === true && salesOrderPerms.canPrint;
         const parts: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail([record.id!])} />,
         ];
@@ -2553,7 +2758,7 @@ const SalesOrdersPage: React.FC = () => {
             confirmMessages={{ submit: auditEnabled ? t('app.kuaizhizao.salesOrder.submitConfirmAudit') : t('app.kuaizhizao.salesOrder.submitConfirmAuto') }}
           />
         );
-        if (record.id) {
+        if (record.id && canPrintRow) {
           parts.push(
             <Button
               {...rowActionKind('print')}
@@ -3770,55 +3975,42 @@ const SalesOrdersPage: React.FC = () => {
           deleteConfirmTitle={t('app.kuaizhizao.salesOrder.confirmDelete')}
           deleteConfirmDescription={(count) => t('app.kuaizhizao.salesOrder.deleteConfirm', { count })}
           toolBarActionsAfterDelete={[
-            <UniBatchMenuButton
+            <UniAuditBatchMenuButton
               key="sales-order-batch-menu"
               selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedOrdersForBatch}
+              auditEnabled={auditEnabled}
+              permGates={salesOrderPerms}
+              bulkHandlers={salesOrderAuditBulkHandlers}
+              resolveIdFromKey={resolveSalesOrderBatchId}
+              onSuccess={handleBulkCapabilityBatchSuccess}
               toolBarButtonSize="middle"
-              menuItems={[
-                {
-                  key: 'submit',
-                  label: t('app.kuaizhizao.salesOrder.batchSubmit'),
-                  icon: <SendOutlined />,
-                  onClick: handleBatchSubmit,
-                },
-                {
-                  key: 'withdraw',
-                  label: t('app.kuaizhizao.salesOrder.batchWithdraw'),
-                  icon: <RollbackOutlined />,
-                  disabled:
-                    selectedOrdersForBatch.length > 0 &&
-                    !selectedOrdersForBatch.some((o) => canWithdrawSalesOrderRecord(o, auditEnabled)),
-                  onClick: handleBatchWithdraw,
-                },
-                {
-                  key: 'approve',
-                  label: t('app.kuaizhizao.salesOrder.batchApprove'),
-                  icon: <FileTextOutlined />,
-                  onClick: handleBatchApprove,
-                },
-                {
-                  key: 'unapprove',
-                  label: t('app.kuaizhizao.salesOrder.batchUnapprove'),
-                  icon: <RollbackOutlined />,
-                  disabled:
-                    selectedOrdersForBatch.length > 0 &&
-                    !selectedOrdersForBatch.some((o) => canUnapproveSalesOrderRecord(o, auditEnabled)),
-                  onClick: handleBatchUnapprove,
-                },
-                {
-                  key: 'close',
-                  label: t('app.kuaizhizao.salesOrder.batchClose'),
-                  icon: <StopOutlined />,
-                  requireConfirm: true,
-                  confirmTitle: t('app.kuaizhizao.salesOrder.batchCloseConfirmTitle'),
-                  confirmDescription: (count) =>
-                    t('app.kuaizhizao.salesOrder.batchCloseConfirmDescription', { count }),
-                  onClick: handleBatchClose,
-                },
-              ]}
             />,
           ]}
           toolBarActionsAfterBatch={[
+            <UniCapabilityBatchButton
+              key="sales-order-batch-close"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedOrdersForBatch}
+              capabilityKey="close"
+              permAllowed={salesOrderPerms.canUpdate}
+              batchAllowed={(records, perm) => salesOrderBatchCloseAllowed(records, perm)}
+              onRunBulk={bulkCloseSalesOrders}
+              onSuccess={handleBulkCapabilityBatchSuccess}
+              resolveId={(key) => resolveSalesOrderBatchId(key)}
+              notAllowedMessage={t('app.kuaizhizao.salesOrder.batchCloseNotAllowed')}
+              requireConfirm
+              labels={{
+                single: t('app.kuaizhizao.salesOrder.batchClose'),
+                batch: t('app.kuaizhizao.salesOrder.batchClose'),
+                singleConfirmTitle: t('app.kuaizhizao.salesOrder.batchCloseConfirmTitle'),
+                batchConfirmTitle: t('app.kuaizhizao.salesOrder.batchCloseConfirmTitle'),
+                batchConfirmDescription: (c) =>
+                  t('app.kuaizhizao.salesOrder.batchCloseConfirmDescription', { count: c }),
+              }}
+              icon={<StopOutlined />}
+              size="middle"
+            />,
             <Space key="highlight-overdue-switch" align="center">
               <Switch checked={highlightDeliveryOverdue} onChange={setHighlightDeliveryOverdue} />
               <span style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
@@ -3968,47 +4160,31 @@ const SalesOrdersPage: React.FC = () => {
                 <Button icon={<BellOutlined />} onClick={handleOpenReminder}>
                   {t('app.kuaizhizao.salesOrder.reminder')}
                 </Button>
-                {(() => {
-                  const lifecycle = getSalesOrderLifecycle(currentSalesOrder, auditEnabled);
-                  const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '') && !isSalesOrderClosed(currentSalesOrder);
-                  const canDelete =
-                    (['草稿', '待审核'].includes(lifecycle.stageName ?? '') ||
-                    currentSalesOrder.status === SalesOrderStatus.DRAFT ||
-                    currentSalesOrder.status === 'PENDING_REVIEW') && !isSalesOrderClosed(currentSalesOrder);
-                  return (
-                    <>
-                      {canEdit && (
-                        <Button
-                          icon={<EditOutlined />}
-                          onClick={() => {
-                            setDrawerVisible(false);
-                            handleEdit([currentSalesOrder.id!]);
-                          }}
-                        >
-                          {t('app.kuaizhizao.salesOrder.editAction')}
-                        </Button>
-                      )}
-                      {canDelete && (
-                        <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteSingle(currentSalesOrder.id!)}>
-                          {t('app.kuaizhizao.salesOrder.delete')}
-                        </Button>
-                      )}
-                      {!canEdit && canPushDownSalesOrder(currentSalesOrder) && (
-                        <Button
-                          icon={<EditOutlined />}
-                          onClick={() =>
-                            navigate(
-                              `/apps/kuaizhizao/sales-management/sales-order-changes?source_order_id=${currentSalesOrder.id}`,
-                            )
-                          }
-                        >
-                          {t('app.kuaizhizao.salesOrder.createChangeOrder')}
-                        </Button>
-                      )}
-                    </>
-                  );
-                })()}
-                {currentSalesOrder.id != null && (
+                {!detailCapabilityGates.update.disabled && (
+                  <Button
+                    icon={<EditOutlined />}
+                    onClick={() => {
+                      setDrawerVisible(false);
+                      handleEdit([currentSalesOrder.id!]);
+                    }}
+                  >
+                    {t('app.kuaizhizao.salesOrder.editAction')}
+                  </Button>
+                )}
+                {!detailCapabilityGates.delete.disabled && (
+                  <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteSingle(currentSalesOrder.id!)}>
+                    {t('app.kuaizhizao.salesOrder.delete')}
+                  </Button>
+                )}
+                {!detailCapabilityGates.createChangeOrder.disabled && (
+                  <Button
+                    icon={<EditOutlined />}
+                    onClick={() => handlePushToSalesOrderChange(currentSalesOrder.id!)}
+                  >
+                    {pushToSalesOrderChangeAction.label}
+                  </Button>
+                )}
+                {currentSalesOrder.id != null && !detailCapabilityGates.print.disabled && (
                   <Button
                     icon={<PrinterOutlined />}
                     onClick={() => openPrint({ documentType: 'sales_order', documentId: currentSalesOrder.id! })}
@@ -4035,110 +4211,10 @@ const SalesOrdersPage: React.FC = () => {
                       : t('app.kuaizhizao.salesOrder.submitConfirmAuto'),
                   }}
                 />
-                {canPushDownSalesOrder(currentSalesOrder) && (
-                  <Dropdown {...rowActionKind('skip')}
-                    menu={{
-                      items: buildUniPushMenuItems([
-                        (() => {
-                          const computationDisabledReason = !salesNodeEnabled.demand_computation
-                            ? t('app.kuaizhizao.salesOrder.nodeComputationDisabled')
-                            : (currentSalesOrder as SalesOrder)?.pushed_to_computation
-                            ? t('app.kuaizhizao.salesOrder.computationAlreadyPushed')
-                            : orderHasLineWorkOrders(currentSalesOrder as SalesOrder)
-                            ? t('app.kuaizhizao.salesOrder.pushMutualExclusiveComputationBlocked')
-                            : undefined;
-                          return {
-                            key: 'computation',
-                            label: renderPushItemLabelWithReason(
-                              t('app.kuaizhizao.salesOrder.demandComputation'),
-                              computationDisabledReason,
-                            ),
-                            icon: <ArrowDownOutlined />,
-                            className: getPushMenuItemClassName(computationDisabledReason),
-                            onClick: () =>
-                              !computationDisabledReason &&
-                              handlePushToComputation(currentSalesOrder.id!, currentSalesOrder as SalesOrder),
-                          };
-                        })(),
-                        (() => {
-                          const workOrderDisabledReason = !salesNodeEnabled.work_order
-                            ? t('app.kuaizhizao.salesOrder.nodeWorkOrderDisabled')
-                            : undefined;
-                          return {
-                            key: 'workorder',
-                            label: renderPushItemLabelWithReason(
-                              t('app.kuaizhizao.salesOrder.pushToWorkOrder'),
-                              workOrderDisabledReason,
-                            ),
-                            icon: <ArrowDownOutlined />,
-                            className: getPushMenuItemClassName(workOrderDisabledReason),
-                            onClick: () =>
-                              !workOrderDisabledReason &&
-                              handlePushToWorkOrder(currentSalesOrder.id!, currentSalesOrder as SalesOrder),
-                          };
-                        })(),
-                        { type: 'divider' },
-                        (() => {
-                          const invoiceDisabledReason = !salesNodeEnabled.invoice
-                            ? t('app.kuaizhizao.salesOrder.nodeInvoiceDisabled')
-                            : undefined;
-                          return {
-                            key: 'invoice',
-                            label: renderPushItemLabelWithReason(
-                              t('app.kuaizhizao.salesOrder.salesInvoice'),
-                              invoiceDisabledReason,
-                            ),
-                            icon: <FileTextOutlined />,
-                            className: getPushMenuItemClassName(invoiceDisabledReason),
-                            onClick: () => !invoiceDisabledReason && handlePushToInvoice(currentSalesOrder.id!),
-                          };
-                        })(),
-                        (() => {
-                          const shipmentDisabledReason = !salesNodeEnabled.shipment_notice
-                            ? t('app.kuaizhizao.salesOrder.nodeShipmentDisabled')
-                            : undefined;
-                          return {
-                            key: 'shipment',
-                            label: renderPushItemLabelWithReason(
-                              t('app.kuaizhizao.salesOrder.shipmentNotice'),
-                              shipmentDisabledReason,
-                            ),
-                            icon: <SendOutlined />,
-                            className: getPushMenuItemClassName(shipmentDisabledReason),
-                            onClick: () => !shipmentDisabledReason && handlePushToShipmentNotice(currentSalesOrder.id!),
-                          };
-                        })(),
-                        (() => {
-                          const deliveryDisabledReason = !salesNodeEnabled.shipment_notice
-                            ? t('app.kuaizhizao.salesOrder.nodeDeliveryDisabled')
-                            : undefined;
-                          return {
-                            key: 'delivery',
-                            label: renderPushItemLabelWithReason(
-                              t('app.kuaizhizao.salesOrder.salesDelivery'),
-                              deliveryDisabledReason,
-                            ),
-                            icon: <SendOutlined />,
-                            className: getPushMenuItemClassName(deliveryDisabledReason),
-                            onClick: () => !deliveryDisabledReason && handlePushToDelivery(currentSalesOrder.id!),
-                          };
-                        })(),
-                        {
-                          key: 'sales-return',
-                          label: t('app.kuaizhizao.salesOrder.salesReturn'),
-                          icon: <RollbackOutlined />,
-                          onClick: () => handlePushToSalesReturn(currentSalesOrder.id!),
-                        },
-                      ]),
-                    }}
-                  >
+                {salesOrderHasToolbarPushActions(currentSalesOrder) && (
+                  <Dropdown {...rowActionKind('skip')} menu={{ items: buildToolbarPushMenuItems(currentSalesOrder) }}>
                     <Button icon={<ArrowDownOutlined />}>{t('app.kuaizhizao.salesOrder.push')}</Button>
                   </Dropdown>
-                )}
-                {canPushDownSalesOrder(currentSalesOrder) && currentSalesOrder.pushed_to_computation && (
-                  <Button icon={<RollbackOutlined />} onClick={() => handleWithdrawFromComputation(currentSalesOrder.id!)}>
-                    {t('app.kuaizhizao.salesOrder.withdrawComputation')}
-                  </Button>
                 )}
               </Space>
             }
@@ -4190,22 +4266,89 @@ const SalesOrdersPage: React.FC = () => {
         okButtonProps={{
           disabled:
             pullFromQuotationQuery.selectedRowKeys.length === 0 ||
-            selectedPullQuotationDuplicated ||
+            selectedPullQuotationNotPullable ||
             pullFromQuotationQuery.loading,
         }}
         alert={
-          selectedPullQuotationDuplicated
+          selectedPullQuotationNotPullable && selectedPullQuotation
             ? (
               <Alert
                 type="warning"
                 showIcon
-                message={t('app.kuaizhizao.salesOrder.pullDuplicateAlert', {
-                  source: pullFromQuotationAction.sourceLabel,
-                  target: pullFromQuotationAction.targetLabel,
-                })}
-                description={t('app.kuaizhizao.salesOrder.linkedSalesOrder', {
-                  code: selectedPullQuotation?.sales_order_code || selectedPullQuotation?.sales_order_id || '-',
-                })}
+                message={
+                  selectedPullQuotation.status === '已转订单' || selectedPullQuotation.sales_order_id
+                    ? t('app.kuaizhizao.salesOrder.pullDuplicateAlert', {
+                        source: pullFromQuotationAction.sourceLabel,
+                        target: pullFromQuotationAction.targetLabel,
+                      })
+                    : quotationCapabilityReasonMessage(
+                        selectedPullQuotation.capabilities?.convert_to_order?.reason,
+                        t,
+                      ) || t('app.kuaizhizao.salesOrder.pullQuotationNotAllowed')
+                }
+                description={
+                  selectedPullQuotation.status === '已转订单' || selectedPullQuotation.sales_order_id
+                    ? t('app.kuaizhizao.salesOrder.linkedSalesOrder', {
+                        code:
+                          selectedPullQuotation.sales_order_code ||
+                          selectedPullQuotation.sales_order_id ||
+                          '-',
+                      })
+                    : undefined
+                }
+              />
+            )
+            : undefined
+        }
+      />
+
+      <UniPullQueryModal<PullSalesContractCandidate>
+        title={pullFromSalesContractAction.label}
+        open={pullFromSalesContractQuery.open}
+        zIndex={elevatedModalZIndex}
+        onCancel={pullFromSalesContractQuery.closeModal}
+        onOk={pullFromSalesContractQuery.handleConfirm}
+        okText={t('app.kuaizhizao.salesOrder.create')}
+        rowKey="id"
+        columns={pullSalesContractColumns}
+        dataSource={pullFromSalesContractQuery.dataSource}
+        loading={pullFromSalesContractQuery.loading}
+        confirmLoading={pullFromSalesContractQuery.confirmLoading}
+        selectionType={pullFromSalesContractQuery.selectionType}
+        selectedRowKeys={pullFromSalesContractQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromSalesContractQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromSalesContractQuery.isRowDisabled}
+        searchDraft={pullFromSalesContractQuery.searchDraft}
+        onSearchDraftChange={pullFromSalesContractQuery.setSearchDraft}
+        onSearchApply={pullFromSalesContractQuery.handleSearchApply}
+        onSearchClear={pullFromSalesContractQuery.handleSearchClear}
+        appliedKeyword={pullFromSalesContractQuery.appliedKeyword}
+        page={pullFromSalesContractQuery.page}
+        pageSize={pullFromSalesContractQuery.pageSize}
+        total={pullFromSalesContractQuery.total}
+        onPageChange={pullFromSalesContractQuery.handlePageChange}
+        scopeOptions={pullFromSalesContractQuery.scopeOptions}
+        scope={pullFromSalesContractQuery.scope}
+        onScopeChange={pullFromSalesContractQuery.handleScopeChange}
+        searchPlaceholder={t('components.uniPullQuery.searchPlaceholder')}
+        emptyText={t('components.uniPullQuery.empty')}
+        emptySearchText={t('components.uniPullQuery.emptySearch')}
+        okButtonProps={{
+          disabled:
+            pullFromSalesContractQuery.selectedRowKeys.length === 0 ||
+            selectedPullSalesContractNotPullable ||
+            pullFromSalesContractQuery.loading,
+        }}
+        alert={
+          selectedPullSalesContractNotPullable && selectedPullSalesContract
+            ? (
+              <Alert
+                type="warning"
+                showIcon
+                message={
+                  selectedPullSalesContract.capabilities?.push_to_sales_order?.reason ||
+                  t('app.kuaizhizao.salesOrder.pullContract.notAllowed')
+                }
               />
             )
             : undefined
@@ -4272,7 +4415,7 @@ const SalesOrdersPage: React.FC = () => {
       </Modal>
 
       <Modal
-        title={t('app.kuaizhizao.salesOrder.pushReturnTitle')}
+        title={pushToSalesReturnAction.label}
         open={pushToReturnVisible}
         zIndex={elevatedModalZIndex}
         onCancel={() => {

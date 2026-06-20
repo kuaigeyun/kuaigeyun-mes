@@ -22,7 +22,12 @@ from apps.kuaizhizao.schemas.purchase_requisition import (
     PurchaseRequisitionListResponse, ConvertToPurchaseOrderRequest,
     ApproveRequisitionRequest,
 )
+from apps.kuaizhizao.schemas.purchase_inquiry import (
+    CreateFromRequisitionRequest,
+    PurchaseInquiryResponse,
+)
 from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
+from apps.kuaizhizao.services.purchase_inquiry_service import PurchaseInquiryService
 
 router = APIRouter(
     tags=["App · Kuaige Zhizao · Purchase Requisition Management"],
@@ -222,6 +227,26 @@ async def convert_to_purchase_order(
         raise HTTPException(status_code=404, detail=str(e))
     except BusinessLogicError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post(
+    "/purchase-requisitions/{requisition_id}/push-to-purchase-inquiry",
+    response_model=PurchaseInquiryResponse,
+    summary="Push to purchase inquiry",
+)
+async def push_to_purchase_inquiry(
+    data: CreateFromRequisitionRequest,
+    requisition_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """将采购申请下推为采购询价单（统一 push-to 语义入口）。"""
+    return await PurchaseInquiryService().create_from_requisition(
+        tenant_id=tenant_id,
+        requisition_id=requisition_id,
+        data=data,
+        created_by=current_user.id,
+    )
 
 
 @router.post("/purchase-requisitions/{requisition_id}/fix-status", response_model=PurchaseRequisitionResponse, summary="Fix purchase requisition status")

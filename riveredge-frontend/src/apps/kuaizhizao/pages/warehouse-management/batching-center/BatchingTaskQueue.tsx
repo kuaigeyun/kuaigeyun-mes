@@ -33,6 +33,7 @@ import { batchingOrderApi } from '../../../services/batching-order';
 import { getBatchingOrderStageName } from '../../../utils/batchingOrderLifecycle';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { getBatchingTaskTypeLabel, type BatchingTaskTabKey } from './materialCenterTabs';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 type BatchPickOption = { value: string; label: string };
 
@@ -112,6 +113,7 @@ type Props = {
 
 const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatchingDetail, onRefreshBatchingList }) => {
   const { t } = useTranslation();
+  const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'batching_order.pull_from_work_order');
   const { message: messageApi } = App.useApp();
   const taskTypeLabel = useMemo(() => getBatchingTaskTypeLabel(t), [t]);
   const taskTypeMap = useMemo(
@@ -488,7 +490,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
         if (record.task_type === 'proactive_prep') {
           actions.push(
             <Button key="create-batching" type="link" size="small" onClick={() => handleProactivePrep(record)}>
-              {t('app.kuaizhizao.batchingCenter.generateBatchingOrder')}
+              {pullFromWorkOrderAction.label}
             </Button>,
           );
           return <Space>{actions}</Space>;
@@ -581,7 +583,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
       },
     },
   ],
-    [t, taskTypeLabel, taskTypeMap, onOpenBatchingDetail],
+    [t, taskTypeLabel, taskTypeMap, onOpenBatchingDetail, pullFromWorkOrderAction.label],
   );
 
   const completeItems: any[] =

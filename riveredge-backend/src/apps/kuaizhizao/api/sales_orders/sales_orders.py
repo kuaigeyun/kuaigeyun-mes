@@ -137,6 +137,45 @@ async def pull_sales_order_from_quotation(
         )
 
 
+@router.post("/pull-from-sales-contract", response_model=Dict[str, Any], summary="Build sales order from sales contract")
+async def pull_sales_order_from_sales_contract(
+    body: Dict[str, Any] = Body(..., description="contract_id 必填；selected_item_ids/release_lines 可选"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """销售订单域上拉建单：从销售合同创建销售订单。"""
+    contract_id_raw = body.get("contract_id")
+    if contract_id_raw is None:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, "必须提供销售合同ID", "/sales-orders/pull-from-sales-contract", tenant_id)
+    try:
+        contract_id = int(contract_id_raw)
+    except (TypeError, ValueError):
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, "销售合同ID格式无效", "/sales-orders/pull-from-sales-contract", tenant_id)
+
+    selected_item_ids = body.get("selected_item_ids")
+    release_lines = body.get("release_lines")
+    try:
+        return await sales_order_service.pull_sales_order_from_sales_contract(
+            tenant_id=tenant_id,
+            contract_id=contract_id,
+            created_by=current_user.id,
+            selected_item_ids=selected_item_ids if isinstance(selected_item_ids, list) else None,
+            release_lines=release_lines if isinstance(release_lines, list) else None,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/pull-from-sales-contract", tenant_id)
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/pull-from-sales-contract", tenant_id)
+    except Exception as e:
+        logger.error(f"从销售合同上拉生成销售订单失败: {e}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "从销售合同上拉生成销售订单失败",
+            "/sales-orders/pull-from-sales-contract",
+            tenant_id,
+        )
+
+
 # 销售订单可排序字段白名单（防止注入）
 SALES_ORDER_SORTABLE_FIELDS = frozenset({
     "order_code", "customer_name", "order_date", "delivery_date",
@@ -1117,6 +1156,65 @@ async def push_sales_order_to_delivery(
     except Exception as e:
         logger.error(f"下推销售出库失败: {e}")
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "下推销售出库失败", "/sales-orders/{sales_order_id}/push-to-delivery", tenant_id)
+
+
+@router.post("/{sales_order_id}/push-to-sales-return", response_model=Dict[str, Any], summary="Push to sales return")
+async def push_sales_order_to_sales_return(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    body: Optional[Dict[str, Any]] = Body(
+        default=None,
+        description="必填：warehouse_id；可选：warehouse_name、return_quantities={\"item_id\": qty}、return_code",
+    ),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """从销售订单下推到销售退货单。"""
+    payload = body or {}
+    warehouse_id_raw = payload.get("warehouse_id")
+    if warehouse_id_raw is None:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST,
+            "必须提供退货仓库ID",
+            "/sales-orders/{sales_order_id}/push-to-sales-return",
+            tenant_id,
+        )
+    try:
+        warehouse_id = int(warehouse_id_raw)
+    except (TypeError, ValueError):
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST,
+            "退货仓库ID格式无效",
+            "/sales-orders/{sales_order_id}/push-to-sales-return",
+            tenant_id,
+        )
+
+    return_quantities_raw = payload.get("return_quantities")
+    return_quantities = None
+    if isinstance(return_quantities_raw, dict):
+        return_quantities = {}
+        for k, v in return_quantities_raw.items():
+            try:
+                return_quantities[int(k)] = float(v)
+            except Exception:
+                continue
+
+    try:
+        return await sales_order_service.push_sales_order_to_sales_return(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            created_by=current_user.id,
+            warehouse_id=warehouse_id,
+            warehouse_name=payload.get("warehouse_name"),
+            return_quantities=return_quantities,
+            return_code=payload.get("return_code"),
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-sales-return", tenant_id)
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-sales-return", tenant_id)
+    except Exception as e:
+        logger.error(f"下推销售退货单失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "下推销售退货单失败", "/sales-orders/{sales_order_id}/push-to-sales-return", tenant_id)
 
 
 

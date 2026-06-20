@@ -46,6 +46,10 @@ export interface InboundHubOrder {
   returner_name?: string;
   created_at?: string;
   updated_at?: string;
+  capabilities?: {
+    confirm?: { allowed?: boolean; reason?: string };
+    print?: { allowed?: boolean; reason?: string };
+  };
   [key: string]: unknown;
 }
 
@@ -102,8 +106,7 @@ export function inboundReceiptTypeValueEnum(
 }
 
 export function isInboundConfirmable(record: InboundHubOrder): boolean {
-  const status = String(record.status || '');
-  return INBOUND_PENDING_STATUSES.has(status);
+  return record.capabilities?.confirm?.allowed === true;
 }
 
 export function inboundSourceDocNo(record: InboundHubOrder): string {

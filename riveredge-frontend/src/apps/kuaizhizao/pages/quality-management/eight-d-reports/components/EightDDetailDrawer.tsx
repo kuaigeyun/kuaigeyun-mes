@@ -8,6 +8,7 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { EightDHistoryTimeline } from './EightDHistoryTimeline';
 import { EightDStageEditor } from './EightDStageEditor';
 import { buildEightDStepperSteps, getEightDNextStatus, getEightDSeverityText, getEightDStatusText } from './eightDMeta';
+import { eightDReportRowGates } from '../../../../../../hooks/useDocumentCapabilities';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -74,14 +75,17 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
   }, [report, form]);
 
   const nextStatus = useMemo(() => getEightDNextStatus(report?.status), [report?.status]);
+  const reportGates = eightDReportRowGates(report, canUpdate, false, canClose, t);
   const canTransitionToNext = useMemo(() => {
     if (!report || !nextStatus) return false;
-    if (nextStatus === 'closed') return canClose;
-    return canUpdate;
-  }, [report, nextStatus, canClose, canUpdate]);
+    if (nextStatus === 'closed') {
+      return reportGates.close.allowed && !reportGates.close.disabled;
+    }
+    return reportGates.transition.allowed && !reportGates.transition.disabled;
+  }, [report, nextStatus, reportGates]);
 
   const handleSave = async (values: Record<string, unknown>) => {
-    if (!report?.id || !canUpdate) return;
+    if (!report?.id || !reportGates.update.allowed || reportGates.update.disabled) return;
     setSaving(true);
     try {
       const payload = {

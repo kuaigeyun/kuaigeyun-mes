@@ -23,6 +23,13 @@ from apps.kuaizhizao.schemas.order_change import (
     SalesOrderChangeWithItemsResponse,
 )
 from apps.kuaizhizao.services.document_lifecycle_service import get_sales_order_change_lifecycle
+from apps.kuaizhizao.services.document_action_policy.enricher import (
+    enrich_sales_order_change_capabilities_on_response,
+)
+from apps.kuaizhizao.services.document_action_policy.sales_order_change import (
+    assert_sales_order_change_capability,
+    derive_sales_order_change_capabilities,
+)
 from apps.kuaizhizao.services.order_change.helpers import (
     infer_change_category,
     is_source_order_locked_for_direct_edit,
@@ -40,6 +47,19 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
 
     async def _generate_code(self, tenant_id: int) -> str:
         return await self.generate_code(tenant_id, "SALES_ORDER_CHANGE_CODE", prefix="SOC")
+
+    async def _has_change_content(self, tenant_id: int, doc: SalesOrderChangeOrder) -> bool:
+        items = await SalesOrderChangeItem.filter(tenant_id=tenant_id, change_order_id=doc.id).all()
+        if Decimal(str(doc.delta_amount or 0)) != 0:
+            return True
+        if doc.header_changes:
+            return True
+        for i in items:
+            if i.change_type in (OrderChangeLineType.LINE_ADD.value, OrderChangeLineType.LINE_CANCEL.value):
+                return True
+            if Decimal(str(i.delta_amount or 0)) != 0:
+                return True
+        return False
 
     async def _next_version(self, tenant_id: int, source_order_id: int) -> int:
         count = await SalesOrderChangeOrder.filter(
@@ -85,7 +105,8 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
     async def _to_detail(self, doc: SalesOrderChangeOrder) -> SalesOrderChangeWithItemsResponse:
         items = await SalesOrderChangeItem.filter(tenant_id=doc.tenant_id, change_order_id=doc.id).order_by("line_no")
         lifecycle = get_sales_order_change_lifecycle(doc.status, doc.review_status, doc.applied_at)
-        return SalesOrderChangeWithItemsResponse(
+        has_content = await self._has_change_content(doc.tenant_id, doc)
+        resp = SalesOrderChangeWithItemsResponse(
             id=doc.id,
             change_code=doc.change_code,
             source_order_id=doc.source_order_id,
@@ -112,6 +133,9 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             review_remarks=doc.review_remarks,
             lifecycle=lifecycle,
             items=[self._item_to_response(i) for i in items],
+        )
+        return enrich_sales_order_change_capabilities_on_response(
+            doc, resp, has_change_content=has_content
         )
 
     async def _validate_source_order(self, tenant_id: int, order_id: int) -> SalesOrder:
@@ -326,6 +350,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         doc = await SalesOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"销售变更单不存在: {change_id}")
+        assert_sales_order_change_capability(doc, "update")
         is_draft = is_draft_status(doc.status)
         is_pending = normalize_status(doc.status) == DocumentStatus.PENDING_REVIEW.value
         if not is_draft:
@@ -396,13 +421,34 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         if status:
             qs = qs.filter(status=status)
         docs = await qs.order_by("-created_at").offset(skip).limit(limit)
+        change_ids = [d.id for d in docs]
+        all_items = await SalesOrderChangeItem.filter(
+            tenant_id=tenant_id, change_order_id__in=change_ids
+        ).all() if change_ids else []
+        items_by_change: Dict[int, List[SalesOrderChangeItem]] = {}
+        for it in all_items:
+            items_by_change.setdefault(it.change_order_id, []).append(it)
+
         result = []
         for doc in docs:
             lifecycle = get_sales_order_change_lifecycle(doc.status, doc.review_status, doc.applied_at)
             if lifecycle_stage and lifecycle.get("current_stage_key") != lifecycle_stage:
                 continue
-            result.append(
-                SalesOrderChangeListResponse(
+            doc_items = items_by_change.get(doc.id, [])
+            has_content = False
+            if Decimal(str(doc.delta_amount or 0)) != 0:
+                has_content = True
+            elif doc.header_changes:
+                has_content = True
+            else:
+                for i in doc_items:
+                    if i.change_type in (OrderChangeLineType.LINE_ADD.value, OrderChangeLineType.LINE_CANCEL.value):
+                        has_content = True
+                        break
+                    if Decimal(str(i.delta_amount or 0)) != 0:
+                        has_content = True
+                        break
+            row = SalesOrderChangeListResponse(
                     id=doc.id,
                     change_code=doc.change_code,
                     source_order_id=doc.source_order_id,
@@ -421,6 +467,10 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
                     customer_id=doc.customer_id,
                     customer_name=doc.customer_name,
                     partner_name=doc.customer_name,
+                )
+            result.append(
+                enrich_sales_order_change_capabilities_on_response(
+                    doc, row, has_change_content=has_content
                 )
             )
         from core.services.approval.audit_record_enricher import enrich_items
@@ -443,8 +493,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         doc = await SalesOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"销售变更单不存在: {change_id}")
-        if not is_draft_status(doc.status):
-            raise BusinessLogicError("仅草稿状态可删除")
+        assert_sales_order_change_capability(doc, "delete")
         doc.deleted_at = datetime.now()
         await doc.save()
 
@@ -452,17 +501,8 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         doc = await SalesOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"销售变更单不存在: {change_id}")
-        if not is_draft_status(doc.status):
-            raise BusinessLogicError("仅草稿可提交")
-        if doc.delta_amount == 0 and not doc.header_changes:
-            items = await SalesOrderChangeItem.filter(tenant_id=tenant_id, change_order_id=doc.id).all()
-            has_line_change = any(
-                (i.change_type in (OrderChangeLineType.LINE_ADD.value, OrderChangeLineType.LINE_CANCEL.value))
-                or (i.delta_amount or 0) != 0
-                for i in items
-            )
-            if not has_line_change:
-                raise BusinessLogicError("变更单无任何变更内容，无法提交")
+        has_content = await self._has_change_content(tenant_id, doc)
+        assert_sales_order_change_capability(doc, "submit", has_change_content=has_content)
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "sales_order_change")
         if audit_required:
             doc.status = DocumentStatus.PENDING_REVIEW.value
@@ -482,8 +522,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         doc = await SalesOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"销售变更单不存在: {change_id}")
-        if normalize_status(doc.status) != DocumentStatus.PENDING_REVIEW.value:
-            raise BusinessLogicError("仅待审核状态可审批")
+        assert_sales_order_change_capability(doc, "approve")
         doc.reviewer_id = operator_id
         doc.reviewer_name = await self.get_user_name(operator_id)
         doc.review_time = datetime.now()
@@ -504,8 +543,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         doc = await SalesOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"销售变更单不存在: {change_id}")
-        if normalize_status(doc.status) != DocumentStatus.PENDING_REVIEW.value:
-            raise BusinessLogicError("仅待审核状态可撤回")
+        assert_sales_order_change_capability(doc, "withdraw_submit")
         doc.status = DocumentStatus.DRAFT.value
         doc.review_status = ReviewStatus.PENDING.value
         doc.updated_by = operator_id
@@ -537,9 +575,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             raise NotFoundError(f"销售变更单不存在: {change_id}")
         if doc.status == OrderChangeApplyStatus.APPLIED.value:
             return await self._to_detail(doc)
-        if normalize_status(doc.status) not in (DocumentStatus.AUDITED.value,):
-            if doc.review_status != ReviewStatus.APPROVED.value:
-                raise BusinessLogicError("变更单未审核通过，无法生效")
+        assert_sales_order_change_capability(doc, "apply")
 
         order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=doc.source_order_id, deleted_at__isnull=True)
         if not order:

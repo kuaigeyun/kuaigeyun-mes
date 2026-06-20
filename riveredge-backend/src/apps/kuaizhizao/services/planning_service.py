@@ -19,6 +19,13 @@ from apps.kuaizhizao.schemas.planning import (
     ProductionPlanResponse, ProductionPlanListResponse,
     ProductionPlanItemResponse,
 )
+from apps.kuaizhizao.services.document_action_policy.production_plan import (
+    assert_production_plan_capability,
+)
+from apps.kuaizhizao.services.document_action_policy.enricher import (
+    enrich_production_plan_detail_capabilities,
+    enrich_production_plan_list_capabilities,
+)
 
 from core.services.base import BaseService
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
@@ -58,7 +65,24 @@ class ProductionPlanningService(BaseService):
                     tenant_id=tenant_id
                 )
             
-            return ProductionPlanResponse.model_validate(plan)
+            return await enrich_production_plan_detail_capabilities(
+                tenant_id,
+                plan,
+                ProductionPlanResponse.model_validate(plan),
+            )
+
+    async def _audit_required_for_plan(self, tenant_id: int) -> bool:
+        from infra.services.business_config_service import BusinessConfigService
+
+        return await BusinessConfigService().check_audit_required(tenant_id, "production_plan")
+
+    async def _has_production_items(self, tenant_id: int, plan_id: int) -> bool:
+        items = await ProductionPlanItem.filter(
+            tenant_id=tenant_id,
+            plan_id=plan_id,
+            suggested_action="生产",
+        ).all()
+        return any(float(i.work_order_quantity or 0) > 0 for i in items)
 
     async def get_production_plan_by_id(self, tenant_id: int, plan_id: int) -> ProductionPlanResponse:
         """根据ID获取生产计划"""
@@ -70,6 +94,7 @@ class ProductionPlanningService(BaseService):
         resp.lifecycle = get_production_plan_lifecycle(plan)
         from core.services.approval.audit_record_enricher import enrich_record
 
+        resp = await enrich_production_plan_detail_capabilities(tenant_id, plan, resp)
         return await enrich_record(tenant_id, "production_plan", resp)
 
     async def approve_production_plan(
@@ -79,6 +104,9 @@ class ProductionPlanningService(BaseService):
         plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True)
         if not plan:
             raise NotFoundError(f"生产计划不存在: {plan_id}")
+        audit_required = await self._audit_required_for_plan(tenant_id)
+        assert_production_plan_capability(plan, "approve", audit_required=audit_required)
+
         if plan.execution_status == "已执行":
             raise BusinessLogicError("已执行的生产计划不允许审核")
 
@@ -113,6 +141,9 @@ class ProductionPlanningService(BaseService):
         plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True)
         if not plan:
             raise NotFoundError(f"生产计划不存在: {plan_id}")
+        audit_required = await self._audit_required_for_plan(tenant_id)
+        assert_production_plan_capability(plan, "submit", audit_required=audit_required)
+
         if plan.status != "已驳回":
             raise BusinessLogicError("只有已驳回状态的生产计划才能重新提交")
         if plan.execution_status == "已执行":
@@ -133,6 +164,9 @@ class ProductionPlanningService(BaseService):
         plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True)
         if not plan:
             raise NotFoundError(f"生产计划不存在: {plan_id}")
+        audit_required = await self._audit_required_for_plan(tenant_id)
+        assert_production_plan_capability(plan, "withdraw_submit", audit_required=audit_required)
+
         if (plan.status or "").strip() != "待审核":
             raise BusinessLogicError("只有待审核状态的生产计划可撤回提交")
         if plan.execution_status == "已执行":
@@ -175,6 +209,9 @@ class ProductionPlanningService(BaseService):
         if not plan:
             raise NotFoundError(f"生产计划不存在: {plan_id}")
 
+        audit_required = await self._audit_required_for_plan(tenant_id)
+        assert_production_plan_capability(plan, "update", audit_required=audit_required)
+
         if plan.execution_status == "已执行":
             raise BusinessLogicError("已执行的生产计划不允许修改")
 
@@ -215,7 +252,10 @@ class ProductionPlanningService(BaseService):
         plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True)
         if not plan:
             raise NotFoundError(f"生产计划不存在: {plan_id}")
-            
+
+        audit_required = await self._audit_required_for_plan(tenant_id)
+        assert_production_plan_capability(plan, "delete", audit_required=audit_required)
+
         if plan.execution_status == "已执行":
             raise BusinessLogicError("已执行的生产计划不允许删除")
 
@@ -243,6 +283,7 @@ class ProductionPlanningService(BaseService):
             resp = ProductionPlanListResponse.model_validate(plan)
             resp.lifecycle = get_production_plan_lifecycle(plan)
             result.append(resp)
+        result = await enrich_production_plan_list_capabilities(tenant_id, list(plans), result)
         return await enrich_items(tenant_id, "production_plan", result)
 
     async def get_production_plan_count(self, tenant_id: int, **filters) -> int:
@@ -320,6 +361,13 @@ class ProductionPlanningService(BaseService):
             plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=plan_id)
             if not plan:
                 raise NotFoundError(f"生产计划不存在: {plan_id}")
+
+            audit_required = await self._audit_required_for_plan(tenant_id)
+            assert_production_plan_capability(
+                plan,
+                "execute",
+                audit_required=audit_required,
+            )
 
             if plan.execution_status == '已执行':
                 raise BusinessLogicError("该生产计划已执行，请勿重复操作")

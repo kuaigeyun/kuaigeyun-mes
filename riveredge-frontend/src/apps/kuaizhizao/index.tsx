@@ -239,7 +239,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="plan-management/demand-management" element={withPageSuspense(DemandManagementPage)} />
       <Route path="plan-management/demand-computation" element={withPageSuspense(DemandComputationPage)} />
       <Route path="plan-management/demand-change" element={withPageSuspense(DemandReplanDashboardPage)} />
-      <Route path="plan-management/demand-replan-dashboard" element={withPageSuspense(DemandReplanDashboardPage)} />
       <Route path="plan-management/dashboard" element={withPageSuspense(ProductionControlTower)} />
       <Route path="plan-management/production-control-tower" element={withPageSuspense(ProductionControlTower)} />
       <Route path="plan-management/scheduling" element={withPageSuspense(SchedulingPage)} />

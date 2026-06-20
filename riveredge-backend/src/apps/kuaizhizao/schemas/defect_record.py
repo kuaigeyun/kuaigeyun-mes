@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
+from apps.kuaizhizao.services.document_action_policy.types import NonconformingLedgerCapabilities
 
 
 class DefectRecordBase(BaseModel):
@@ -124,6 +125,9 @@ class DefectRecordResponse(DefectRecordBase):
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    capabilities: Optional[NonconformingLedgerCapabilities] = Field(
+        None, description="业务态 capabilities（不含 RBAC）"
+    )
 
 
 class DefectRecordListResponse(BaseModel):
@@ -147,4 +151,7 @@ class DefectRecordListResponse(BaseModel):
     status: str = Field(..., description="状态")
     created_at: datetime = Field(..., description="创建时间")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    capabilities: Optional[NonconformingLedgerCapabilities] = Field(
+        None, description="业务态 capabilities（不含 RBAC）"
+    )
 

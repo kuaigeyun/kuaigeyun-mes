@@ -36,6 +36,7 @@ import {
   mergeKeyedLineQuantities,
   usePullEntryFormDraft,
 } from '../shared/pullEntryFormDraft';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 type ReturnLine = {
   key: number;
@@ -55,6 +56,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
+  const pullFromProductionReturnAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_work_order_for_production_return');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const receiverHook = useInboundReceiverSelect();
   const initRef = useRef(false);
@@ -81,8 +83,8 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
       : INBOUND_LIST_PATH;
   const woCode = String(workOrder?.code || workOrderId || '');
   const pageTitle = woCode
-    ? t('app.kuaizhizao.warehouseInbound.entry.productionReturn.titleWithCode', { code: woCode })
-    : t('app.kuaizhizao.warehouseInbound.entry.productionReturn.title');
+    ? `${pullFromProductionReturnAction.label} — ${woCode}`
+    : pullFromProductionReturnAction.label;
 
   const totalReturnQty = useMemo(
     () => lines.reduce((sum, it) => sum + Number(it.return_quantity ?? 0), 0),

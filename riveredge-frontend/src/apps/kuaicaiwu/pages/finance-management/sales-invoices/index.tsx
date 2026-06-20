@@ -6,7 +6,7 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Space, Dropdown, Input, Table, Tag } from 'antd';
+import { App, Button, Modal, Typography, Space, Dropdown, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { CheckCircleOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
@@ -16,6 +16,7 @@ import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
 import {
   buildReviewStatusEnum,
@@ -96,13 +97,7 @@ const SalesInvoicesPage: React.FC = () => {
   const [editVisible, setEditVisible] = useState(false);
   const [editingRecord, setEditingRecord] = useState<SalesInvoice | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
-  const [pullVisible, setPullVisible] = useState(false);
-  const [pullLoading, setPullLoading] = useState(false);
   const [pullSubmitting, setPullSubmitting] = useState(false);
-  const [pullKeyword, setPullKeyword] = useState('');
-  const [pullSourceType, setPullSourceType] = useState<'sales_order' | 'sales_delivery'>('sales_order');
-  const [pullCandidates, setPullCandidates] = useState<PullInvoiceCandidate[]>([]);
-  const [selectedPullSourceId, setSelectedPullSourceId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [pullFormVisible, setPullFormVisible] = useState(false);
   const [pullSelectedSource, setPullSelectedSource] = useState<PullInvoiceCandidate | null>(null);
@@ -172,77 +167,73 @@ const SalesInvoicesPage: React.FC = () => {
     return codes;
   };
 
-  const loadPullCandidates = async (sourceType: 'sales_order' | 'sales_delivery', keyword = '') => {
-    setPullLoading(true);
-    try {
-      const kw = keyword.trim().toLowerCase();
-      const existedCodes = await fetchExistingSourceCodesFromInvoices();
-
-      if (sourceType === 'sales_order') {
-        const orderRes = await listSalesOrders({ skip: 0, limit: 200, keyword: kw || undefined });
-        const rows = (orderRes?.data || []).map((row: any) => {
-          const code = String(row.order_code || row.code || row.id || '');
-          const amount = Number(row.total_amount || 0);
-          return {
-            source_type: 'sales_order' as const,
-            source_id: Number(row.id),
-            source_code: code,
-            customer_id: row.customer_id,
-            customer_name: row.customer_name,
-            source_date: row.order_date,
-            source_status: row.status,
-            amount,
-            converted: existedCodes.has(code),
-          };
-        });
-        setPullCandidates(rows.filter((r: PullInvoiceCandidate) => (kw ? `${r.source_code} ${r.customer_name || ''}`.toLowerCase().includes(kw) : true)));
-      } else {
-        const deliveryRes: any = await warehouseApi.salesDelivery.list({ skip: 0, limit: 200, keyword: kw || undefined });
-        const rows = (Array.isArray(deliveryRes) ? deliveryRes : (deliveryRes?.data || [])).map((row: any) => {
-          const code = String(row.delivery_code || row.code || row.id || '');
-          const amount = Number(row.total_amount || 0);
-          return {
-            source_type: 'sales_delivery' as const,
-            source_id: Number(row.id),
-            source_code: code,
-            customer_id: row.customer_id,
-            customer_name: row.customer_name,
-            source_date: row.delivery_date || row.delivery_time,
-            source_status: row.status,
-            amount,
-            converted: existedCodes.has(code),
-          };
-        });
-        setPullCandidates(rows.filter((r: PullInvoiceCandidate) => (kw ? `${r.source_code} ${r.customer_name || ''}`.toLowerCase().includes(kw) : true)));
-      }
-    } catch (e: any) {
-      setPullCandidates([]);
-      messageApi.error(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`));
-    } finally {
-      setPullLoading(false);
+  const loadPullCandidatesBySource = async (
+    sourceType: 'sales_order' | 'sales_delivery',
+    keyword: string,
+    page: number,
+    pageSize: number,
+  ): Promise<{ data: PullInvoiceCandidate[]; total: number }> => {
+    const kw = keyword.trim().toLowerCase();
+    const existedCodes = await fetchExistingSourceCodesFromInvoices();
+    if (sourceType === 'sales_order') {
+      const orderRes = await listSalesOrders({ skip: 0, limit: 200, keyword: kw || undefined });
+      const rows = (orderRes?.data || []).map((row: any) => {
+        const code = String(row.order_code || row.code || row.id || '');
+        const amount = Number(row.total_amount || 0);
+        return {
+          source_type: 'sales_order' as const,
+          source_id: Number(row.id),
+          source_code: code,
+          customer_id: row.customer_id,
+          customer_name: row.customer_name,
+          source_date: row.order_date,
+          source_status: row.status,
+          amount,
+          converted: existedCodes.has(code),
+        };
+      });
+      const filtered = rows.filter((r: PullInvoiceCandidate) => (kw ? `${r.source_code} ${r.customer_name || ''}`.toLowerCase().includes(kw) : true));
+      const start = (page - 1) * pageSize;
+      return { data: filtered.slice(start, start + pageSize), total: filtered.length };
     }
+    const deliveryRes: any = await warehouseApi.salesDelivery.list({ skip: 0, limit: 200, keyword: kw || undefined });
+    const rows = (Array.isArray(deliveryRes) ? deliveryRes : (deliveryRes?.data || [])).map((row: any) => {
+      const code = String(row.delivery_code || row.code || row.id || '');
+      const amount = Number(row.total_amount || 0);
+      return {
+        source_type: 'sales_delivery' as const,
+        source_id: Number(row.id),
+        source_code: code,
+        customer_id: row.customer_id,
+        customer_name: row.customer_name,
+        source_date: row.delivery_date || row.delivery_time,
+        source_status: row.status,
+        amount,
+        converted: existedCodes.has(code),
+      };
+    });
+    const filtered = rows.filter((r: PullInvoiceCandidate) => (kw ? `${r.source_code} ${r.customer_name || ''}`.toLowerCase().includes(kw) : true));
+    const start = (page - 1) * pageSize;
+    return { data: filtered.slice(start, start + pageSize), total: filtered.length };
   };
 
-  const openPullModal = async (sourceType: 'sales_order' | 'sales_delivery') => {
-    setPullSourceType(sourceType);
-    setPullKeyword('');
-    setSelectedPullSourceId(null);
-    setPullVisible(true);
-    await loadPullCandidates(sourceType, '');
-  };
-
-  const handlePullNext = () => {
-    if (!selectedPullSourceId) {
+  const openPullFormFromRows = (
+    sourceType: 'sales_order' | 'sales_delivery',
+    keys: React.Key[],
+    rows: PullInvoiceCandidate[],
+    closeModal: () => void,
+  ) => {
+    const selected = rows.find((x) => String(x.source_id) === String(keys[0]));
+    if (!selected) {
       messageApi.warning(t(`${P}.selectSource`, {
-        label: pullSourceType === 'sales_order' ? pullFromSalesOrderAction.sourceLabel : pullFromSalesDeliveryAction.sourceLabel,
+        label: sourceType === 'sales_order' ? pullFromSalesOrderAction.sourceLabel : pullFromSalesDeliveryAction.sourceLabel,
       }));
       return;
     }
-    const selected = pullCandidates.find((x) => x.source_id === selectedPullSourceId);
     if (!selected) return;
     if (selected.converted) {
       messageApi.warning(t(`${P}.sourceConverted`, {
-        source: pullSourceType === 'sales_order' ? pullFromSalesOrderAction.sourceLabel : pullFromSalesDeliveryAction.sourceLabel,
+        source: sourceType === 'sales_order' ? pullFromSalesOrderAction.sourceLabel : pullFromSalesDeliveryAction.sourceLabel,
         target: pullFromSalesOrderAction.targetLabel,
       }));
       return;
@@ -253,9 +244,43 @@ const SalesInvoicesPage: React.FC = () => {
       return;
     }
     setPullSelectedSource(selected);
-    setPullVisible(false);
+    closeModal();
     setPullFormVisible(true);
   };
+
+  const pullFromSalesOrderQuery = useUniPullQuery<PullInvoiceCandidate>({
+    rowKey: 'source_id',
+    selectionType: 'radio',
+    isRowDisabled: (record) => !!record.converted,
+    loadData: async ({ keyword, page, pageSize }) => {
+      try {
+        return await loadPullCandidatesBySource('sales_order', keyword, page, pageSize);
+      } catch (e: any) {
+        messageApi.error(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`));
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys, rows) => {
+      openPullFormFromRows('sales_order', keys, rows, pullFromSalesOrderQuery.closeModal);
+    },
+  });
+
+  const pullFromSalesDeliveryQuery = useUniPullQuery<PullInvoiceCandidate>({
+    rowKey: 'source_id',
+    selectionType: 'radio',
+    isRowDisabled: (record) => !!record.converted,
+    loadData: async ({ keyword, page, pageSize }) => {
+      try {
+        return await loadPullCandidatesBySource('sales_delivery', keyword, page, pageSize);
+      } catch (e: any) {
+        messageApi.error(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`));
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys, rows) => {
+      openPullFormFromRows('sales_delivery', keys, rows, pullFromSalesDeliveryQuery.closeModal);
+    },
+  });
 
   const handlePullCreateSubmit = async (values: any) => {
     if (!pullSelectedSource) return false;
@@ -294,7 +319,6 @@ const SalesInvoicesPage: React.FC = () => {
       messageApi.success(t(`${P}.pullCreateSuccess`, { target: pullFromSalesOrderAction.targetLabel }));
       setPullFormVisible(false);
       setPullSelectedSource(null);
-      setSelectedPullSourceId(null);
       actionRef.current?.reload();
       return true;
     } catch (e: any) {
@@ -638,14 +662,14 @@ const SalesInvoicesPage: React.FC = () => {
                 key: 'pull-from-sales-order',
                 actionKey: 'sales_invoice.pull_from_sales_order',
                 onClick: () => {
-                  void openPullModal('sales_order');
+                  pullFromSalesOrderQuery.openModal();
                 },
               },
               {
                 key: 'pull-from-sales-delivery',
                 actionKey: 'sales_invoice.pull_from_sales_delivery',
                 onClick: () => {
-                  void openPullModal('sales_delivery');
+                  pullFromSalesDeliveryQuery.openModal();
                 },
               },
             ])}
@@ -669,59 +693,63 @@ const SalesInvoicesPage: React.FC = () => {
         columns={columns}
       />
 
-      <Modal
-        title={pullSourceType === 'sales_order' ? pullFromSalesOrderAction.label : pullFromSalesDeliveryAction.label}
-        open={pullVisible}
-        width={1180}
-        onCancel={() => {
-          if (pullSubmitting) return;
-          setPullVisible(false);
-          setSelectedPullSourceId(null);
+      <UniPullQueryModal<PullInvoiceCandidate>
+        open={pullFromSalesOrderQuery.open}
+        title={pullFromSalesOrderAction.label}
+        onCancel={pullFromSalesOrderQuery.closeModal}
+        onOk={() => {
+          void pullFromSalesOrderQuery.handleConfirm();
         }}
-        onOk={handlePullNext}
+        rowKey="source_id"
+        columns={pullTableColumns}
+        dataSource={pullFromSalesOrderQuery.dataSource}
+        loading={pullFromSalesOrderQuery.loading}
+        confirmLoading={pullFromSalesOrderQuery.confirmLoading}
+        selectionType={pullFromSalesOrderQuery.selectionType}
+        selectedRowKeys={pullFromSalesOrderQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromSalesOrderQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromSalesOrderQuery.isRowDisabled}
+        searchDraft={pullFromSalesOrderQuery.searchDraft}
+        onSearchDraftChange={pullFromSalesOrderQuery.setSearchDraft}
+        onSearchApply={pullFromSalesOrderQuery.handleSearchApply}
+        onSearchClear={pullFromSalesOrderQuery.handleSearchClear}
+        appliedKeyword={pullFromSalesOrderQuery.appliedKeyword}
+        searchPlaceholder={t(`${P}.pull.searchPlaceholder`)}
+        page={pullFromSalesOrderQuery.page}
+        pageSize={pullFromSalesOrderQuery.pageSize}
+        total={pullFromSalesOrderQuery.total}
+        onPageChange={pullFromSalesOrderQuery.handlePageChange}
         okText={t('components.uniLifecycle.nextStep')}
-        confirmLoading={false}
-        destroyOnHidden
-      >
-        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-          <Input.Search
-            allowClear
-            placeholder={t(`${P}.pull.searchPlaceholder`)}
-            value={pullKeyword}
-            onChange={(e) => setPullKeyword(e.target.value)}
-            onSearch={(value) => {
-              setPullKeyword(value);
-              void loadPullCandidates(pullSourceType, value);
-            }}
-            enterButton={t('common.search')}
-          />
-          <Table<PullInvoiceCandidate>
-            rowKey={(r) => `${r.source_type}-${r.source_id}`}
-            loading={pullLoading}
-            dataSource={pullCandidates}
-            pagination={false}
-            scroll={{ x: 1100, y: 360 }}
-            rowSelection={{
-              type: 'radio',
-              selectedRowKeys: selectedPullSourceId ? [`${pullSourceType}-${selectedPullSourceId}`] : [],
-              onChange: (keys) => {
-                const key = String(keys?.[0] || '');
-                const id = Number(key.split('-').slice(-1)[0]);
-                if (Number.isFinite(id)) setSelectedPullSourceId(id);
-                else setSelectedPullSourceId(null);
-              },
-              getCheckboxProps: (record) => ({ disabled: !!record.converted }),
-            }}
-            onRow={(record) => ({
-              onClick: () => {
-                if (record.converted) return;
-                setSelectedPullSourceId(record.source_id);
-              },
-            })}
-            columns={pullTableColumns}
-          />
-        </Space>
-      </Modal>
+      />
+
+      <UniPullQueryModal<PullInvoiceCandidate>
+        open={pullFromSalesDeliveryQuery.open}
+        title={pullFromSalesDeliveryAction.label}
+        onCancel={pullFromSalesDeliveryQuery.closeModal}
+        onOk={() => {
+          void pullFromSalesDeliveryQuery.handleConfirm();
+        }}
+        rowKey="source_id"
+        columns={pullTableColumns}
+        dataSource={pullFromSalesDeliveryQuery.dataSource}
+        loading={pullFromSalesDeliveryQuery.loading}
+        confirmLoading={pullFromSalesDeliveryQuery.confirmLoading}
+        selectionType={pullFromSalesDeliveryQuery.selectionType}
+        selectedRowKeys={pullFromSalesDeliveryQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromSalesDeliveryQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromSalesDeliveryQuery.isRowDisabled}
+        searchDraft={pullFromSalesDeliveryQuery.searchDraft}
+        onSearchDraftChange={pullFromSalesDeliveryQuery.setSearchDraft}
+        onSearchApply={pullFromSalesDeliveryQuery.handleSearchApply}
+        onSearchClear={pullFromSalesDeliveryQuery.handleSearchClear}
+        appliedKeyword={pullFromSalesDeliveryQuery.appliedKeyword}
+        searchPlaceholder={t(`${P}.pull.searchPlaceholder`)}
+        page={pullFromSalesDeliveryQuery.page}
+        pageSize={pullFromSalesDeliveryQuery.pageSize}
+        total={pullFromSalesDeliveryQuery.total}
+        onPageChange={pullFromSalesDeliveryQuery.handlePageChange}
+        okText={t('components.uniLifecycle.nextStep')}
+      />
 
       <ModalForm
         title={t(`${P}.pullFormTitle`)}
@@ -731,7 +759,6 @@ const SalesInvoicesPage: React.FC = () => {
           setPullFormVisible(open);
           if (!open) {
             setPullSelectedSource(null);
-            setSelectedPullSourceId(null);
           }
         }}
         onFinish={handlePullCreateSubmit}

@@ -12,6 +12,8 @@ from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
+from apps.kuaizhizao.services.document_action_policy.types import PackingBindingCapabilities
+
 
 class PackingBindingBase(BaseModel):
     """
@@ -113,6 +115,9 @@ class PackingBindingResponse(PackingBindingBase):
     bound_by_name: str = Field(..., description="绑定人姓名")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    capabilities: Optional[PackingBindingCapabilities] = Field(
+        None, description="业务态操作能力（由 document_action_policy 派生）"
+    )
 
 
 class PackingBindingListResponse(BaseModel):
@@ -139,6 +144,9 @@ class PackingBindingListResponse(BaseModel):
     bound_at: datetime = Field(..., description="绑定时间")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    capabilities: Optional[PackingBindingCapabilities] = Field(
+        None, description="业务态操作能力（由 document_action_policy 派生）"
+    )
 
 
 class PackingBindingPageResponse(BaseModel):

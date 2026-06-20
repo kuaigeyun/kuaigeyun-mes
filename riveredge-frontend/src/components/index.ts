@@ -26,6 +26,31 @@ export type {
   UniBatchSplitToolbarProps,
   UniBatchSplitMenuItem,
 } from './uni-batch';
+export {
+  UniAuditBatchMenuButton,
+  DEFAULT_AUDIT_BATCH_CAPABILITY_KEYS,
+  DEFAULT_AUDIT_BATCH_PERMISSION_ACTIONS,
+  buildAuditBatchMenuItems,
+  defaultAuditBatchAllowed,
+  pickCapability,
+  useAuditBatchRunner,
+  UniCapabilityBatchButton,
+  runCapabilityBatchLoop,
+  runCapabilityBatchBulk,
+} from './uni-batch';
+export type {
+  AuditBatchAction,
+  AuditBatchCapabilityKeys,
+  AuditBatchActionOverride,
+  AuditBatchHandlers,
+  BulkAuditBatchHandlers,
+  BulkAuditBatchResult,
+  BuildAuditBatchMenuItemsOptions,
+  UniAuditBatchMenuButtonProps,
+  BulkCapabilityResult,
+  CapabilityBatchLabels,
+  UniCapabilityBatchButtonProps,
+} from './uni-batch';
 export { UniPushToolbarButton, buildUniPushMenuItems } from './uni-push';
 export type { UniPushToolbarButtonProps, UniPushMenuItem } from './uni-push';
 export { UniTable, default as UniTableDefault, generateImportConfigFromColumns } from './uni-table';

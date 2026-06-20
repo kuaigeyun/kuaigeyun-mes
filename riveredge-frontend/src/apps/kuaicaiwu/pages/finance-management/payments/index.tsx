@@ -6,7 +6,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Space, Input, Table, Tag, Drawer, Descriptions, Spin } from 'antd';
+import { App, Button, Modal, Typography, Tag, Drawer, Descriptions, Spin } from 'antd';
 import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
@@ -17,6 +17,7 @@ import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import dayjs from 'dayjs';
 import { getFinanceVoucherLifecycle } from '../../../utils/financeLifecycle';
 import { payableService } from '../../../services/finance/payable';
@@ -68,12 +69,7 @@ const P = 'app.kuaicaiwu.payment';
 const PaymentsPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [pullVisible, setPullVisible] = useState(false);
-  const [pullLoading, setPullLoading] = useState(false);
   const [pullSubmitting, setPullSubmitting] = useState(false);
-  const [pullKeyword, setPullKeyword] = useState('');
-  const [pullCandidates, setPullCandidates] = useState<PullPayableCandidate[]>([]);
-  const [selectedPullPayableId, setSelectedPullPayableId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [pullFormVisible, setPullFormVisible] = useState(false);
   const [pullSelectedPayable, setPullSelectedPayable] = useState<PullPayableCandidate | null>(null);
@@ -161,48 +157,38 @@ const PaymentsPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
-  const loadPullPayableCandidates = async (keyword = '') => {
-    setPullLoading(true);
-    try {
-      const kw = keyword.trim().toLowerCase();
-      const res = await payableService.listPayables({ skip: 0, limit: 200, pending_settlement: true });
-      const rows = (res?.items || [])
-        .map((r: any) => ({
-          id: Number(r.id),
-          payable_code: String(r.payable_code || ''),
-          supplier_id: Number(r.supplier_id),
-          supplier_name: String(r.supplier_name || ''),
-          due_date: r.due_date,
-          review_status: r.review_status,
-          status: r.status,
-          remaining_amount: Number(r.remaining_amount || 0),
-        }))
-        .filter((r: PullPayableCandidate) => {
-          if (!kw) return true;
-          return `${r.payable_code} ${r.supplier_name}`.toLowerCase().includes(kw);
-        });
-      setPullCandidates(rows);
-    } catch (e: any) {
-      setPullCandidates([]);
-      messageApi.error(e?.response?.data?.detail || e?.message || t(`${P}.loadPayableFailed`));
-    } finally {
-      setPullLoading(false);
-    }
+  const loadPullPayableCandidates = async (
+    keyword: string,
+    page: number,
+    pageSize: number,
+  ): Promise<{ data: PullPayableCandidate[]; total: number }> => {
+    const kw = keyword.trim().toLowerCase();
+    const res = await payableService.listPayables({ skip: 0, limit: 200, pending_settlement: true });
+    const rows = (res?.items || [])
+      .map((r: any) => ({
+        id: Number(r.id),
+        payable_code: String(r.payable_code || ''),
+        supplier_id: Number(r.supplier_id),
+        supplier_name: String(r.supplier_name || ''),
+        due_date: r.due_date,
+        review_status: r.review_status,
+        status: r.status,
+        remaining_amount: Number(r.remaining_amount || 0),
+      }))
+      .filter((r: PullPayableCandidate) => {
+        if (!kw) return true;
+        return `${r.payable_code} ${r.supplier_name}`.toLowerCase().includes(kw);
+      });
+    const start = (page - 1) * pageSize;
+    return { data: rows.slice(start, start + pageSize), total: rows.length };
   };
 
-  const handleOpenPullFromPayable = async () => {
-    setPullKeyword('');
-    setSelectedPullPayableId(null);
-    setPullVisible(true);
-    await loadPullPayableCandidates('');
-  };
-
-  const handlePullNext = () => {
-    if (!selectedPullPayableId) {
+  const openPullFormFromRows = (keys: React.Key[], rows: PullPayableCandidate[], closeModal: () => void) => {
+    const selected = rows.find((x) => String(x.id) === String(keys[0]));
+    if (!selected) {
       messageApi.warning(t('app.kuaicaiwu.common.selectSource', { source: pullFromPayableAction.sourceLabel }));
       return;
     }
-    const selected = pullCandidates.find((x) => x.id === selectedPullPayableId);
     if (!selected) return;
     if (selected.remaining_amount <= 0) {
       messageApi.warning(t('app.kuaicaiwu.common.sourceNoRemaining', {
@@ -212,9 +198,26 @@ const PaymentsPage: React.FC = () => {
       return;
     }
     setPullSelectedPayable(selected);
-    setPullVisible(false);
+    closeModal();
     setPullFormVisible(true);
   };
+
+  const pullFromPayableQuery = useUniPullQuery<PullPayableCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
+      try {
+        return await loadPullPayableCandidates(keyword, page, pageSize);
+      } catch (e: any) {
+        messageApi.error(e?.response?.data?.detail || e?.message || t(`${P}.loadPayableFailed`));
+        return { data: [], total: 0 };
+      }
+    },
+    isRowDisabled: (record) => Number(record.remaining_amount || 0) <= 0,
+    onConfirm: async (keys, rows) => {
+      openPullFormFromRows(keys, rows, pullFromPayableQuery.closeModal);
+    },
+  });
 
   const handlePullCreateSubmit = async (values: any) => {
     if (!pullSelectedPayable) return false;
@@ -251,7 +254,6 @@ const PaymentsPage: React.FC = () => {
       }));
       setPullFormVisible(false);
       setPullSelectedPayable(null);
-      setSelectedPullPayableId(null);
       actionRef.current?.reload();
       return true;
     } catch (e: any) {
@@ -529,9 +531,7 @@ const PaymentsPage: React.FC = () => {
               {
                 key: 'pull-from-payable',
                 actionKey: 'payment.pull_from_payable',
-                onClick: () => {
-                  void handleOpenPullFromPayable();
-                },
+                onClick: pullFromPayableQuery.openModal,
               },
             ])}
           />,
@@ -554,52 +554,34 @@ const PaymentsPage: React.FC = () => {
         columns={columns}
       />
 
-      <Modal
+      <UniPullQueryModal<PullPayableCandidate>
+        open={pullFromPayableQuery.open}
         title={pullFromPayableAction.label}
-        open={pullVisible}
-        width={1100}
-        onCancel={() => {
-          if (pullSubmitting) return;
-          setPullVisible(false);
-          setSelectedPullPayableId(null);
-        }}
+        onCancel={pullFromPayableQuery.closeModal}
         onOk={() => {
-          void handlePullNext();
+          void pullFromPayableQuery.handleConfirm();
         }}
+        rowKey="id"
+        columns={pullTableColumns}
+        dataSource={pullFromPayableQuery.dataSource}
+        loading={pullFromPayableQuery.loading}
+        confirmLoading={pullFromPayableQuery.confirmLoading}
+        selectionType={pullFromPayableQuery.selectionType}
+        selectedRowKeys={pullFromPayableQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromPayableQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromPayableQuery.isRowDisabled}
+        searchDraft={pullFromPayableQuery.searchDraft}
+        onSearchDraftChange={pullFromPayableQuery.setSearchDraft}
+        onSearchApply={pullFromPayableQuery.handleSearchApply}
+        onSearchClear={pullFromPayableQuery.handleSearchClear}
+        appliedKeyword={pullFromPayableQuery.appliedKeyword}
+        searchPlaceholder={t(`${P}.pullSearchPlaceholder`)}
+        page={pullFromPayableQuery.page}
+        pageSize={pullFromPayableQuery.pageSize}
+        total={pullFromPayableQuery.total}
+        onPageChange={pullFromPayableQuery.handlePageChange}
         okText={t('components.uniLifecycle.nextStep')}
-        confirmLoading={false}
-        destroyOnHidden
-      >
-        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-          <Input.Search
-            allowClear
-            placeholder={t(`${P}.pullSearchPlaceholder`)}
-            value={pullKeyword}
-            onChange={(e) => setPullKeyword(e.target.value)}
-            onSearch={(value) => {
-              setPullKeyword(value);
-              void loadPullPayableCandidates(value);
-            }}
-            enterButton={t('common.search')}
-          />
-          <Table<PullPayableCandidate>
-            rowKey="id"
-            loading={pullLoading}
-            dataSource={pullCandidates}
-            pagination={false}
-            scroll={{ x: 980, y: 360 }}
-            rowSelection={{
-              type: 'radio',
-              selectedRowKeys: selectedPullPayableId ? [selectedPullPayableId] : [],
-              onChange: (keys) => setSelectedPullPayableId(Number(keys?.[0]) || null),
-            }}
-            onRow={(record) => ({
-              onClick: () => setSelectedPullPayableId(record.id),
-            })}
-            columns={pullTableColumns}
-          />
-        </Space>
-      </Modal>
+      />
 
       <ModalForm
         title={t(`${P}.fillInfoTitle`)}
@@ -609,7 +591,6 @@ const PaymentsPage: React.FC = () => {
           setPullFormVisible(open);
           if (!open) {
             setPullSelectedPayable(null);
-            setSelectedPullPayableId(null);
           }
         }}
         onFinish={handlePullCreateSubmit}

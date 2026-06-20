@@ -14,6 +14,8 @@ from datetime import datetime, date
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
+from apps.kuaizhizao.services.document_action_policy.types import ProductionPlanCapabilities
+
 # 导入BaseSchema用于兼容性
 from core.schemas.base import BaseSchema
 
@@ -108,6 +110,10 @@ class ProductionPlanResponse(ProductionPlanBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    capabilities: Optional[ProductionPlanCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
+    )
 
     class Config:
         from_attributes = True

@@ -90,7 +90,6 @@ import {
 } from '@ant-design/icons'
 import { UniTable } from '../../../../../components/uni-table'
 import { UniBatchButton, UniBatchMenuButton } from '../../../../../components/uni-batch'
-import type { UniBatchMenuItem } from '../../../../../components/uni-batch'
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -119,10 +118,21 @@ import {
   type StatCard,
 } from '../../../../../components/layout-templates'
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull'
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query'
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel'
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter'
 import { useCustomFields } from '../../../../../hooks/useCustomFields'
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList'
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions'
+import {
+  workOrderBatchCancelAllowed,
+  workOrderBatchFreezeAllowed,
+  workOrderBatchPrintAllowed,
+  workOrderBatchReleaseAllowed,
+  workOrderBatchSetPriorityAllowed,
+} from '../../../../../hooks/useDocumentCapabilities'
+
+const WORK_ORDER_RESOURCE = 'kuaizhizao:work-order'
 import {
   CustomFieldsFormSection,
   CustomFieldsDetailSection,
@@ -142,7 +152,12 @@ import {
 } from '../../../services/production'
 import { UniDropdown } from '../../../../../components/uni-dropdown'
 import { listSalesOrders } from '../../../services/sales'
-import { getSalesOrder } from '../../../services/sales-order'
+import {
+  getSalesOrder,
+  listSalesOrders as listSalesOrdersForPull,
+  pushSalesOrderToWorkOrder,
+  type SalesOrder as PullSalesOrder,
+} from '../../../services/sales-order'
 import {
   listSalesForecasts,
   getSalesForecast,
@@ -165,6 +180,8 @@ import { warehouseApi } from '../../../services/warehouse-execution'
 import { materialApi } from '../../../../master-data/services/material'
 import { OperationPickPanel } from '../../../../master-data/components/OperationSequenceEditor'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { inboundProductionReturnEntryPath, inboundWorkOrderEntryPath } from '../../warehouse-management/inbound/inboundPaths'
+import { outboundWorkOrderEntryPath } from '../../warehouse-management/outbound/outboundPaths'
 import dayjs from 'dayjs'
 import CodeField from '../../../../../components/code-field'
 import { searchUserDisplay, type User } from '../../../../../services/user'
@@ -420,6 +437,13 @@ interface WorkOrder {
   batch_rule_id?: number | null
   serial_rule_id?: number | null
   serial_split_child_count?: number | null
+  capabilities?: {
+    release?: { allowed: boolean; reason?: string | null }
+    freeze?: { allowed: boolean; reason?: string | null }
+    cancel?: { allowed: boolean; reason?: string | null }
+    set_priority?: { allowed: boolean; reason?: string | null }
+    print?: { allowed: boolean; reason?: string | null }
+  }
 }
 
 type PullDemandComputationCandidate = {
@@ -444,6 +468,18 @@ type PullProductionPlanCandidate = {
   updated_at?: string
   can_push_work_order?: boolean
   disabled_reason?: string
+}
+
+type PullSalesOrderCandidate = {
+  id: number
+  order_code?: string
+  customer_name?: string
+  status?: string
+  review_status?: string
+  delivery_date?: string
+  updated_at?: string
+  remaining_push_quantity?: number
+  capabilities?: PullSalesOrder['capabilities']
 }
 
 /** 报工数量框：失焦时若为空则视为未填写，需恢复打开弹窗时的默认值 */
@@ -1175,6 +1211,7 @@ function WorkOrderPlannedRangeCell({ record }: { record: WorkOrder }) {
 const WorkOrdersPage: React.FC = () => {
   const { t, i18n } = useTranslation()
   const { message: messageApi } = App.useApp()
+  const workOrderPerms = useResourcePermissions(WORK_ORDER_RESOURCE)
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal()
 
   const workOrderImportTemplate = useMemo(
@@ -1212,6 +1249,13 @@ const WorkOrdersPage: React.FC = () => {
   )
   const pullFromDemandComputationAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_demand_computation')
   const pullFromProductionPlanAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_production_plan')
+  const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_sales_order')
+  const pushToOutboundAction = resolveKuaizhizaoDocumentAction(t, 'outbound.pull_from_work_order')
+  const pushToInboundAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_work_order')
+  const pushToProductionReturnInboundAction = resolveKuaizhizaoDocumentAction(
+    t,
+    'inbound.pull_from_work_order_for_production_return',
+  )
   const { token } = theme.useToken()
   const workOrderDetailDrawerZIndex = token.zIndexPopupBase
   const queryClient = useQueryClient()
@@ -1239,18 +1283,6 @@ const WorkOrdersPage: React.FC = () => {
     actionRef.current?.reload?.()
   }, [])
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
-  const [pullFromComputationVisible, setPullFromComputationVisible] = useState(false)
-  const [pullComputationLoading, setPullComputationLoading] = useState(false)
-  const [pullComputationSubmitting, setPullComputationSubmitting] = useState(false)
-  const [pullComputationKeyword, setPullComputationKeyword] = useState('')
-  const [pullComputationCandidates, setPullComputationCandidates] = useState<PullDemandComputationCandidate[]>([])
-  const [selectedPullComputationId, setSelectedPullComputationId] = useState<number | null>(null)
-  const [pullFromProductionPlanVisible, setPullFromProductionPlanVisible] = useState(false)
-  const [pullProductionPlanLoading, setPullProductionPlanLoading] = useState(false)
-  const [pullProductionPlanSubmitting, setPullProductionPlanSubmitting] = useState(false)
-  const [pullProductionPlanKeyword, setPullProductionPlanKeyword] = useState('')
-  const [pullProductionPlanCandidates, setPullProductionPlanCandidates] = useState<PullProductionPlanCandidate[]>([])
-  const [selectedPullProductionPlanId, setSelectedPullProductionPlanId] = useState<number | null>(null)
 
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['workOrderStatistics'] })
@@ -1299,6 +1331,14 @@ const WorkOrdersPage: React.FC = () => {
   const selectedWorkOrderIds = useMemo(
     () => resolveWorkOrderIdsFromListRowKeys(selectedRowKeys, workOrderRowByKeyRef.current),
     [selectedRowKeys, workOrderListRowIndexVersion]
+  )
+
+  const selectedWorkOrdersForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => workOrderRowByKeyRef.current.get(String(key)))
+        .filter((row): row is WorkOrder => row != null && (row.row_kind ?? 'work_order') === 'work_order'),
+    [selectedRowKeys, workOrderListRowIndexVersion],
   )
 
   const {
@@ -2135,9 +2175,10 @@ const WorkOrdersPage: React.FC = () => {
     // 不需要用 setTimeout 等 ref 就绪再 resetFields
   }
 
-  const loadPullComputationCandidates = useCallback(async (keyword: string = '') => {
-    setPullComputationLoading(true)
-    try {
+  const pullFromComputationQuery = useUniPullQuery<PullDemandComputationCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
       const kw = keyword.trim()
       const listRes = await listDemandComputations({
         skip: 0,
@@ -2175,49 +2216,38 @@ const WorkOrdersPage: React.FC = () => {
             } as PullDemandComputationCandidate
           }),
       )
-      setPullComputationCandidates(candidates)
-    } finally {
-      setPullComputationLoading(false)
-    }
-  }, [])
+      const start = (page - 1) * pageSize
+      return { data: candidates.slice(start, start + pageSize), total: candidates.length }
+    },
+    isRowDisabled: (record) => record.can_push_work_order === false,
+    onConfirm: async (keys, rows) => {
+      const selectedId = Number(keys[0])
+      if (!selectedId) {
+        messageApi.warning(`请选择${pullFromDemandComputationAction.sourceLabel}`)
+        return
+      }
+      const selected = rows[0]
+      if (selected?.can_push_work_order === false) {
+        messageApi.warning(selected.disabled_reason || '该需求运算单当前不可用于创建工单')
+        return
+      }
+      try {
+        const res = await generateOrdersFromComputation(selectedId, 'work_order_only')
+        const count = Number(res?.work_order_count ?? res?.work_orders?.length ?? 0)
+        messageApi.success(count > 0 ? `已从${pullFromDemandComputationAction.sourceLabel}创建 ${count} 张${pullFromDemandComputationAction.targetLabel}` : `已从${pullFromDemandComputationAction.sourceLabel}创建${pullFromDemandComputationAction.targetLabel}`)
+        actionRef.current?.reload()
+        invalidateStatistics()
+        pullFromComputationQuery.closeModal()
+      } catch (e: any) {
+        messageApi.error(e?.response?.data?.detail || `从${pullFromDemandComputationAction.sourceLabel}创建${pullFromDemandComputationAction.targetLabel}失败`)
+      }
+    },
+  })
 
-  const handlePullFromComputation = useCallback(async () => {
-    setPullFromComputationVisible(true)
-    setPullComputationKeyword('')
-    setSelectedPullComputationId(null)
-    await loadPullComputationCandidates('')
-  }, [loadPullComputationCandidates])
-
-  const handlePullFromComputationConfirm = useCallback(async () => {
-    if (!selectedPullComputationId) {
-      messageApi.warning(`请选择${pullFromDemandComputationAction.sourceLabel}`)
-      return
-    }
-    const selected = pullComputationCandidates.find((i) => i.id === selectedPullComputationId)
-    if (selected?.can_push_work_order === false) {
-      messageApi.warning(selected.disabled_reason || '该需求运算单当前不可用于创建工单')
-      return
-    }
-
-    setPullComputationSubmitting(true)
-    try {
-      const res = await generateOrdersFromComputation(selectedPullComputationId, 'work_order_only')
-      const count = Number(res?.work_order_count ?? res?.work_orders?.length ?? 0)
-      messageApi.success(count > 0 ? `已从${pullFromDemandComputationAction.sourceLabel}创建 ${count} 张${pullFromDemandComputationAction.targetLabel}` : `已从${pullFromDemandComputationAction.sourceLabel}创建${pullFromDemandComputationAction.targetLabel}`)
-      setPullFromComputationVisible(false)
-      setSelectedPullComputationId(null)
-      actionRef.current?.reload()
-      invalidateStatistics()
-    } catch (e: any) {
-      messageApi.error(e?.response?.data?.detail || `从${pullFromDemandComputationAction.sourceLabel}创建${pullFromDemandComputationAction.targetLabel}失败`)
-    } finally {
-      setPullComputationSubmitting(false)
-    }
-  }, [actionRef, invalidateStatistics, messageApi, pullComputationCandidates, selectedPullComputationId])
-
-  const loadPullProductionPlanCandidates = useCallback(async (keyword: string = '') => {
-    setPullProductionPlanLoading(true)
-    try {
+  const pullFromProductionPlanQuery = useUniPullQuery<PullProductionPlanCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
       const kw = keyword.trim().toLowerCase()
       const listRes: any = await planningApi.productionPlan.list({
         skip: 0,
@@ -2254,52 +2284,103 @@ const WorkOrdersPage: React.FC = () => {
             disabled_reason: disabledReason,
           } as PullProductionPlanCandidate
         })
-      setPullProductionPlanCandidates(filtered)
-    } finally {
-      setPullProductionPlanLoading(false)
-    }
-  }, [])
+      const start = (page - 1) * pageSize
+      return { data: filtered.slice(start, start + pageSize), total: filtered.length }
+    },
+    isRowDisabled: (record) => record.can_push_work_order === false,
+    onConfirm: async (keys, rows) => {
+      const selectedId = Number(keys[0])
+      if (!selectedId) {
+        messageApi.warning(`请选择${pullFromProductionPlanAction.sourceLabel}`)
+        return
+      }
+      const selected = rows[0]
+      if (selected?.can_push_work_order === false) {
+        messageApi.warning(selected.disabled_reason || '该生产计划当前不可用于创建工单')
+        return
+      }
+      try {
+        const res: any = await planningApi.productionPlan.pushToWorkOrders(selectedId)
+        const count = Number(
+          res?.work_order_count ??
+          res?.created_count ??
+          res?.created_documents?.work_order?.length ??
+          0,
+        )
+        messageApi.success(count > 0 ? `已从${pullFromProductionPlanAction.sourceLabel}创建 ${count} 张${pullFromProductionPlanAction.targetLabel}` : `已从${pullFromProductionPlanAction.sourceLabel}创建${pullFromProductionPlanAction.targetLabel}`)
+        actionRef.current?.reload()
+        invalidateStatistics()
+        pullFromProductionPlanQuery.closeModal()
+      } catch (e: any) {
+        const detail = e?.response?.data?.detail
+        const msg = typeof detail === 'string' ? detail : detail?.message
+        messageApi.error(msg || `从${pullFromProductionPlanAction.sourceLabel}创建${pullFromProductionPlanAction.targetLabel}失败`)
+      }
+    },
+  })
 
-  const handlePullFromProductionPlan = useCallback(async () => {
-    setPullFromProductionPlanVisible(true)
-    setPullProductionPlanKeyword('')
-    setSelectedPullProductionPlanId(null)
-    await loadPullProductionPlanCandidates('')
-  }, [loadPullProductionPlanCandidates])
-
-  const handlePullFromProductionPlanConfirm = useCallback(async () => {
-    if (!selectedPullProductionPlanId) {
-      messageApi.warning(`请选择${pullFromProductionPlanAction.sourceLabel}`)
-      return
-    }
-    const selected = pullProductionPlanCandidates.find((i) => i.id === selectedPullProductionPlanId)
-    if (selected?.can_push_work_order === false) {
-      messageApi.warning(selected.disabled_reason || '该生产计划当前不可用于创建工单')
-      return
-    }
-
-    setPullProductionPlanSubmitting(true)
-    try {
-      const res: any = await planningApi.productionPlan.pushToWorkOrders(selectedPullProductionPlanId)
-      const count = Number(
-        res?.work_order_count ??
-        res?.created_count ??
-        res?.created_documents?.work_order?.length ??
-        0,
-      )
-      messageApi.success(count > 0 ? `已从${pullFromProductionPlanAction.sourceLabel}创建 ${count} 张${pullFromProductionPlanAction.targetLabel}` : `已从${pullFromProductionPlanAction.sourceLabel}创建${pullFromProductionPlanAction.targetLabel}`)
-      setPullFromProductionPlanVisible(false)
-      setSelectedPullProductionPlanId(null)
-      actionRef.current?.reload()
-      invalidateStatistics()
-    } catch (e: any) {
-      const detail = e?.response?.data?.detail
-      const msg = typeof detail === 'string' ? detail : detail?.message
-      messageApi.error(msg || `从${pullFromProductionPlanAction.sourceLabel}创建${pullFromProductionPlanAction.targetLabel}失败`)
-    } finally {
-      setPullProductionPlanSubmitting(false)
-    }
-  }, [actionRef, invalidateStatistics, messageApi, pullProductionPlanCandidates, selectedPullProductionPlanId])
+  const pullFromSalesOrderQuery = useUniPullQuery<PullSalesOrderCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
+      try {
+        const result = await listSalesOrdersForPull({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+        })
+        const rows = Array.isArray(result) ? result : (result.data ?? [])
+        const candidates = rows.map((row) => ({
+          id: Number(row.id),
+          order_code: row.order_code,
+          customer_name: row.customer_name,
+          status: row.status,
+          review_status: row.review_status,
+          delivery_date: row.delivery_date,
+          updated_at: row.updated_at,
+          remaining_push_quantity: Number(row.remaining_push_quantity ?? 0),
+          capabilities: row.capabilities,
+        }))
+        return {
+          data: candidates,
+          total: Array.isArray(result) ? candidates.length : (result.total ?? candidates.length),
+        }
+      } catch {
+        messageApi.error(t('app.kuaizhizao.salesOrder.listFailed'))
+        return { data: [], total: 0 }
+      }
+    },
+    isRowDisabled: (record) =>
+      record.remaining_push_quantity <= 0 || record.capabilities?.push_work_order?.allowed === false,
+    onConfirm: async (keys, rows) => {
+      const selectedId = Number(keys[0])
+      if (!selectedId) {
+        messageApi.warning(`请选择${pullFromSalesOrderAction.sourceLabel}`)
+        return
+      }
+      const selected = rows[0]
+      if (selected?.remaining_push_quantity <= 0 || selected?.capabilities?.push_work_order?.allowed === false) {
+        messageApi.warning(selected?.capabilities?.push_work_order?.reason || '该销售订单当前不可用于创建工单')
+        return
+      }
+      try {
+        const res: any = await pushSalesOrderToWorkOrder(selectedId)
+        const count = Number(res?.target_documents?.length ?? 0)
+        messageApi.success(
+          count > 0
+            ? `已从${pullFromSalesOrderAction.sourceLabel}创建 ${count} 张${pullFromSalesOrderAction.targetLabel}`
+            : `已从${pullFromSalesOrderAction.sourceLabel}创建${pullFromSalesOrderAction.targetLabel}`,
+        )
+        actionRef.current?.reload()
+        invalidateStatistics()
+        pullFromSalesOrderQuery.closeModal()
+      } catch (e: any) {
+        const detail = e?.response?.data?.detail
+        const msg = typeof detail === 'string' ? detail : detail?.message
+        messageApi.error(msg || `从${pullFromSalesOrderAction.sourceLabel}创建${pullFromSalesOrderAction.targetLabel}失败`)
+      }
+    },
+  })
 
   /**
    * 处理编辑工单
@@ -4329,6 +4410,21 @@ const WorkOrdersPage: React.FC = () => {
     })
   }
 
+  const handlePushToProductionReturnInbound = (record: WorkOrder) => {
+    if (!record.id) return
+    navigate(inboundProductionReturnEntryPath(record.id))
+  }
+
+  const handlePushToFinishedGoodsInbound = (record: WorkOrder) => {
+    if (!record.id) return
+    navigate(inboundWorkOrderEntryPath(record.id))
+  }
+
+  const handlePushToProductionPickingOutbound = (record: WorkOrder) => {
+    if (!record.id) return
+    navigate(outboundWorkOrderEntryPath(record.id))
+  }
+
   /**
    * 处理提交工序委外表单
    */
@@ -4687,43 +4783,6 @@ const WorkOrdersPage: React.FC = () => {
     [selectedRowKeys, workOrderListRowIndexVersion]
   )
 
-  const workOrderBatchMenuItems = useMemo<UniBatchMenuItem[]>(() => {
-    return [
-      {
-        key: 'batch-qrcode',
-        icon: <QrcodeOutlined />,
-        label: t('app.kuaizhizao.workOrder.batchGenerateQrcode'),
-        onClick: () => handleBatchGenerateQRCode(),
-      },
-      {
-        key: 'batchPriority',
-        label: t('app.kuaizhizao.workOrder.batchSetPriority'),
-        icon: <FlagOutlined />,
-        onClick: () => handleBatchSetPriority(),
-      },
-      {
-        key: 'batchFreeze',
-        label: t('app.kuaizhizao.workOrder.batchFreeze'),
-        icon: <LockOutlined />,
-        onClick: () => handleBatchFreeze(),
-      },
-      {
-        key: 'batchCancel',
-        label: t('app.kuaizhizao.workOrder.batchCancel'),
-        icon: <CloseCircleOutlined />,
-        onClick: () => handleBatchCancel(),
-      },
-    ]
-  }, [
-    selectedRowKeys,
-    handleBatchGenerateQRCode,
-    handleBatchSetPriority,
-    handleBatchFreeze,
-    handleBatchCancel,
-    messageApi,
-    t,
-  ])
-
   const workOrderToolBarActionsAfterDelete = useMemo(
     () => [
       ...(selectedRowKeys.length > 0
@@ -4773,11 +4832,50 @@ const WorkOrdersPage: React.FC = () => {
           ]
         : []),
       <UniBatchMenuButton
-        key="work-order-batch-menu"
+        key="work-order-batch-more-actions"
         selectedRowKeys={selectedRowKeys}
-        menuItems={workOrderBatchMenuItems}
         toolBarButtonSize="middle"
-        buttonText={t('components.uniBatch.batchActions')}
+        menuItems={[
+          {
+            key: 'batch-qrcode',
+            label: t('app.kuaizhizao.workOrder.batchGenerateQrcode'),
+            icon: <QrcodeOutlined />,
+            disabled:
+              selectedWorkOrdersForBatch.length > 0 &&
+              !workOrderBatchPrintAllowed(selectedWorkOrdersForBatch, workOrderPerms.canPrint),
+            onClick: () => void handleBatchGenerateQRCode(),
+          },
+          {
+            key: 'batch-set-priority',
+            label: t('app.kuaizhizao.workOrder.batchSetPriority'),
+            icon: <FlagOutlined />,
+            disabled:
+              selectedWorkOrdersForBatch.length > 0 &&
+              !workOrderBatchSetPriorityAllowed(selectedWorkOrdersForBatch, workOrderPerms.canUpdate),
+            onClick: () => handleBatchSetPriority(),
+          },
+          {
+            key: 'batch-freeze',
+            label: t('app.kuaizhizao.workOrder.batchFreeze'),
+            icon: <LockOutlined />,
+            disabled:
+              selectedWorkOrdersForBatch.length > 0 &&
+              !workOrderBatchFreezeAllowed(
+                selectedWorkOrdersForBatch,
+                workOrderPerms.canAction?.('revoke') ?? false,
+              ),
+            onClick: () => handleBatchFreeze(),
+          },
+          {
+            key: 'batch-cancel',
+            label: t('app.kuaizhizao.workOrder.batchCancel'),
+            icon: <CloseCircleOutlined />,
+            disabled:
+              selectedWorkOrdersForBatch.length > 0 &&
+              !workOrderBatchCancelAllowed(selectedWorkOrdersForBatch, workOrderPerms.canUpdate),
+            onClick: () => void handleBatchCancel(),
+          },
+        ]}
       />,
       <UniBatchButton
         key="batch-release"
@@ -4785,6 +4883,13 @@ const WorkOrdersPage: React.FC = () => {
         type="primary"
         size="middle"
         icon={<SendOutlined />}
+        disabled={
+          selectedWorkOrdersForBatch.length > 0 &&
+          !workOrderBatchReleaseAllowed(
+            selectedWorkOrdersForBatch,
+            workOrderPerms.canAction?.('submit') ?? false,
+          )
+        }
         onAction={() => void handleBatchRelease()}
       >
         {t('app.kuaizhizao.workOrder.actionBatchRelease')}
@@ -4792,15 +4897,20 @@ const WorkOrdersPage: React.FC = () => {
     ],
     [
       selectedRowKeys,
+      selectedWorkOrdersForBatch,
       mergeableWorkOrderIds,
       dissolvableWorkOrderGroupIds,
       dissolveGroupLoading,
-      workOrderBatchMenuItems,
+      workOrderPerms,
       handleDissolveGroups,
-      messageApi,
+      handleBatchGenerateQRCode,
+      handleBatchSetPriority,
+      handleBatchFreeze,
+      handleBatchCancel,
       handleBatchRelease,
+      messageApi,
       t,
-    ]
+    ],
   )
 
   /**
@@ -5711,6 +5821,16 @@ const WorkOrdersPage: React.FC = () => {
           derivedItems.push(
             makeItem('rework', t('app.kuaizhizao.workOrder.actionCreateRework'), () => handleCreateRework(record), { icon: <RetweetOutlined /> }),
           )
+          if (isReleased || isInProgress) {
+            derivedItems.push(
+              makeItem(
+                'pushProductionPickingOutbound',
+                pushToOutboundAction.label,
+                () => handlePushToProductionPickingOutbound(record),
+                { icon: <SendOutlined /> },
+              ),
+            )
+          }
           if (isCompleted) {
             derivedItems.push(
               makeItem(
@@ -5719,6 +5839,22 @@ const WorkOrdersPage: React.FC = () => {
                 () => {
                   void handleNotifyInbound(record)
                 },
+                { icon: <InboxOutlined /> },
+              ),
+            )
+            derivedItems.push(
+              makeItem(
+                'pushFinishedGoodsInbound',
+                pushToInboundAction.label,
+                () => handlePushToFinishedGoodsInbound(record),
+                { icon: <InboxOutlined /> },
+              ),
+            )
+            derivedItems.push(
+              makeItem(
+                'pushProductionReturnInbound',
+                pushToProductionReturnInboundAction.label,
+                () => handlePushToProductionReturnInbound(record),
                 { icon: <InboxOutlined /> },
               ),
             )
@@ -6175,16 +6311,17 @@ const WorkOrdersPage: React.FC = () => {
                 {
                   key: 'pull-from-demand-computation',
                   actionKey: 'work_order.pull_from_demand_computation',
-                  onClick: () => {
-                    void handlePullFromComputation()
-                  },
+                  onClick: pullFromComputationQuery.openModal,
                 },
                 {
                   key: 'pull-from-production-plan',
                   actionKey: 'work_order.pull_from_production_plan',
-                  onClick: () => {
-                    void handlePullFromProductionPlan()
-                  },
+                  onClick: pullFromProductionPlanQuery.openModal,
+                },
+                {
+                  key: 'pull-from-sales-order',
+                  actionKey: 'work_order.pull_from_sales_order',
+                  onClick: pullFromSalesOrderQuery.openModal,
                 },
               ])}
             />,
@@ -6215,62 +6352,13 @@ const WorkOrdersPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <Modal
+      <UniPullQueryModal<PullDemandComputationCandidate>
+        open={pullFromComputationQuery.open}
         title={pullFromDemandComputationAction.label}
-        open={pullFromComputationVisible}
-        width={1280}
-        onCancel={() => {
-          if (pullComputationSubmitting) return
-          setPullFromComputationVisible(false)
-          setSelectedPullComputationId(null)
-        }}
-        onOk={() => {
-          void handlePullFromComputationConfirm()
-        }}
-        okText="创建工单"
-        confirmLoading={pullComputationSubmitting}
-        destroyOnHidden
-      >
-        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-          <Input.Search
-            allowClear
-            placeholder="按运算单号搜索"
-            value={pullComputationKeyword}
-            onChange={(e) => setPullComputationKeyword(e.target.value)}
-            onSearch={(value) => {
-              setPullComputationKeyword(value)
-              void loadPullComputationCandidates(value)
-            }}
-            enterButton="搜索"
-          />
-          <Table<PullDemandComputationCandidate>
-            rowKey="id"
-            loading={pullComputationLoading}
-            dataSource={pullComputationCandidates}
-            pagination={false}
-            scroll={{ x: 1100, y: 360 }}
-            rowSelection={{
-              type: 'radio',
-              selectedRowKeys: selectedPullComputationId ? [selectedPullComputationId] : [],
-              onChange: (keys) => {
-                const next = Number(keys?.[0])
-                if (Number.isFinite(next)) {
-                  setSelectedPullComputationId(next)
-                } else {
-                  setSelectedPullComputationId(null)
-                }
-              },
-              getCheckboxProps: (record) => ({
-                disabled: record.can_push_work_order === false,
-              }),
-            }}
-            onRow={(record) => ({
-              onClick: () => {
-                if (record.can_push_work_order === false) return
-                setSelectedPullComputationId(record.id)
-              },
-            })}
-            columns={[
+        onCancel={pullFromComputationQuery.closeModal}
+        onOk={pullFromComputationQuery.handleConfirm}
+        rowKey="id"
+        columns={[
               { title: t('app.kuaizhizao.workOrder.colComputationCode'), dataIndex: 'computation_code', width: 220, ellipsis: true },
               { title: t('app.kuaizhizao.workOrder.colBusinessMode'), dataIndex: 'business_mode', width: 110, align: 'center' },
               { title: t('app.kuaizhizao.workOrder.colComputationStatus'), dataIndex: 'computation_status', width: 110, align: 'center' },
@@ -6299,63 +6387,34 @@ const WorkOrdersPage: React.FC = () => {
                   ),
               },
             ]}
-          />
-        </Space>
-      </Modal>
-
-      <Modal
-        title={pullFromProductionPlanAction.label}
-        open={pullFromProductionPlanVisible}
-        width={1280}
-        onCancel={() => {
-          if (pullProductionPlanSubmitting) return
-          setPullFromProductionPlanVisible(false)
-          setSelectedPullProductionPlanId(null)
-        }}
-        onOk={() => {
-          void handlePullFromProductionPlanConfirm()
-        }}
+        dataSource={pullFromComputationQuery.dataSource}
+        loading={pullFromComputationQuery.loading}
+        confirmLoading={pullFromComputationQuery.confirmLoading}
+        selectionType={pullFromComputationQuery.selectionType}
+        selectedRowKeys={pullFromComputationQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromComputationQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromComputationQuery.isRowDisabled}
+        searchDraft={pullFromComputationQuery.searchDraft}
+        onSearchDraftChange={pullFromComputationQuery.setSearchDraft}
+        onSearchApply={pullFromComputationQuery.handleSearchApply}
+        onSearchClear={pullFromComputationQuery.handleSearchClear}
+        appliedKeyword={pullFromComputationQuery.appliedKeyword}
+        searchPlaceholder="按运算单号搜索"
+        page={pullFromComputationQuery.page}
+        pageSize={pullFromComputationQuery.pageSize}
+        total={pullFromComputationQuery.total}
+        onPageChange={pullFromComputationQuery.handlePageChange}
         okText="创建工单"
-        confirmLoading={pullProductionPlanSubmitting}
-        destroyOnHidden
-      >
-        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-          <Input.Search
-            allowClear
-            placeholder="按计划编号/计划名称搜索"
-            value={pullProductionPlanKeyword}
-            onChange={(e) => setPullProductionPlanKeyword(e.target.value)}
-            onSearch={(value) => {
-              setPullProductionPlanKeyword(value)
-              void loadPullProductionPlanCandidates(value)
-            }}
-            enterButton="搜索"
-          />
-          <Table<PullProductionPlanCandidate>
-            rowKey="id"
-            loading={pullProductionPlanLoading}
-            dataSource={pullProductionPlanCandidates}
-            pagination={false}
-            scroll={{ x: 1200, y: 360 }}
-            rowSelection={{
-              type: 'radio',
-              selectedRowKeys: selectedPullProductionPlanId ? [selectedPullProductionPlanId] : [],
-              onChange: (keys) => {
-                const next = Number(keys?.[0])
-                if (Number.isFinite(next)) setSelectedPullProductionPlanId(next)
-                else setSelectedPullProductionPlanId(null)
-              },
-              getCheckboxProps: (record) => ({
-                disabled: record.can_push_work_order === false,
-              }),
-            }}
-            onRow={(record) => ({
-              onClick: () => {
-                if (record.can_push_work_order === false) return
-                setSelectedPullProductionPlanId(record.id)
-              },
-            })}
-            columns={[
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+      />
+
+      <UniPullQueryModal<PullProductionPlanCandidate>
+        open={pullFromProductionPlanQuery.open}
+        title={pullFromProductionPlanAction.label}
+        onCancel={pullFromProductionPlanQuery.closeModal}
+        onOk={pullFromProductionPlanQuery.handleConfirm}
+        rowKey="id"
+        columns={[
               { title: t('app.kuaizhizao.workOrder.colPlanCode'), dataIndex: 'plan_code', width: 180, ellipsis: true },
               { title: t('app.kuaizhizao.workOrder.colPlanName'), dataIndex: 'plan_name', width: 260, ellipsis: true },
               { title: t('app.kuaizhizao.workOrder.colPlanStatus'), dataIndex: 'status', width: 120, align: 'center' },
@@ -6388,9 +6447,90 @@ const WorkOrdersPage: React.FC = () => {
                   ),
               },
             ]}
-          />
-        </Space>
-      </Modal>
+        dataSource={pullFromProductionPlanQuery.dataSource}
+        loading={pullFromProductionPlanQuery.loading}
+        confirmLoading={pullFromProductionPlanQuery.confirmLoading}
+        selectionType={pullFromProductionPlanQuery.selectionType}
+        selectedRowKeys={pullFromProductionPlanQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromProductionPlanQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromProductionPlanQuery.isRowDisabled}
+        searchDraft={pullFromProductionPlanQuery.searchDraft}
+        onSearchDraftChange={pullFromProductionPlanQuery.setSearchDraft}
+        onSearchApply={pullFromProductionPlanQuery.handleSearchApply}
+        onSearchClear={pullFromProductionPlanQuery.handleSearchClear}
+        appliedKeyword={pullFromProductionPlanQuery.appliedKeyword}
+        searchPlaceholder="按计划编号/计划名称搜索"
+        page={pullFromProductionPlanQuery.page}
+        pageSize={pullFromProductionPlanQuery.pageSize}
+        total={pullFromProductionPlanQuery.total}
+        onPageChange={pullFromProductionPlanQuery.handlePageChange}
+        okText="创建工单"
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+      />
+
+      <UniPullQueryModal<PullSalesOrderCandidate>
+        open={pullFromSalesOrderQuery.open}
+        title={pullFromSalesOrderAction.label}
+        onCancel={pullFromSalesOrderQuery.closeModal}
+        onOk={pullFromSalesOrderQuery.handleConfirm}
+        rowKey="id"
+        columns={[
+          { title: t('app.kuaizhizao.salesOrder.orderCode'), dataIndex: 'order_code', width: 180, ellipsis: true },
+          { title: t('app.kuaizhizao.quotation.form.customer'), dataIndex: 'customer_name', width: 220, ellipsis: true },
+          { title: t('app.kuaizhizao.salesOrder.status'), dataIndex: 'status', width: 120, align: 'center' },
+          { title: t('app.kuaizhizao.salesOrder.reviewStatus'), dataIndex: 'review_status', width: 120, align: 'center' },
+          {
+            title: t('app.kuaizhizao.salesOrder.deliveryDate'),
+            dataIndex: 'delivery_date',
+            width: 130,
+            render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+          },
+          {
+            title: t('app.kuaizhizao.reports.remainingQuantity'),
+            dataIndex: 'remaining_push_quantity',
+            width: 140,
+            align: 'right',
+            render: (v) => Number(v ?? 0),
+          },
+          {
+            title: t('common.updatedAt'),
+            dataIndex: 'updated_at',
+            width: 180,
+            render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+          },
+          {
+            title: t('app.kuaizhizao.workOrder.colConvertStatus'),
+            key: 'convert_status',
+            width: 180,
+            align: 'center',
+            render: (_, record) =>
+              record.remaining_push_quantity <= 0 || record.capabilities?.push_work_order?.allowed === false ? (
+                <Tag color="gold">{record.capabilities?.push_work_order?.reason || '不可创建'}</Tag>
+              ) : (
+                <Tag color="success">{t('app.kuaizhizao.workOrder.tagCanCreate')}</Tag>
+              ),
+          },
+        ]}
+        dataSource={pullFromSalesOrderQuery.dataSource}
+        loading={pullFromSalesOrderQuery.loading}
+        confirmLoading={pullFromSalesOrderQuery.confirmLoading}
+        selectionType={pullFromSalesOrderQuery.selectionType}
+        selectedRowKeys={pullFromSalesOrderQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromSalesOrderQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromSalesOrderQuery.isRowDisabled}
+        searchDraft={pullFromSalesOrderQuery.searchDraft}
+        onSearchDraftChange={pullFromSalesOrderQuery.setSearchDraft}
+        onSearchApply={pullFromSalesOrderQuery.handleSearchApply}
+        onSearchClear={pullFromSalesOrderQuery.handleSearchClear}
+        appliedKeyword={pullFromSalesOrderQuery.appliedKeyword}
+        searchPlaceholder={t('components.uniPullQuery.searchPlaceholder')}
+        page={pullFromSalesOrderQuery.page}
+        pageSize={pullFromSalesOrderQuery.pageSize}
+        total={pullFromSalesOrderQuery.total}
+        onPageChange={pullFromSalesOrderQuery.handlePageChange}
+        okText="创建工单"
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+      />
 
       {PrintModal}
 

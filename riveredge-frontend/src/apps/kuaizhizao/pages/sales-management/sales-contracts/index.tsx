@@ -99,6 +99,8 @@ import {
 
   StopOutlined,
 
+  SendOutlined,
+
   ArrowLeftOutlined,
 
   ImportOutlined,
@@ -139,8 +141,10 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 
@@ -158,9 +162,17 @@ import { DictionaryLabel } from '../../../../../components/dictionary-label';
 
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE as SC } from '../../../constants/fieldPermissionResources';
-import { useGlobalStore } from '../../../../../stores';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { hasModulePermission, hasReviewPermission } from '../../../../../utils/permissionContract';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import {
+  salesContractCapabilityReasonMessage,
+  salesContractHasToolbarPushActions,
+  salesContractBatchDeleteAllowed,
+  salesContractBatchPrintAllowed,
+  quotationCapabilityAllowed,
+  quotationCapabilityReasonMessage,
+  useSalesContractCapabilities,
+} from '../../../../../hooks/useDocumentCapabilities';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -198,6 +210,7 @@ import salesContractApi, {
   type SalesContractPaymentSummary,
 
 } from '../../../services/sales-contract';
+import { listQuotations, type Quotation, type QuotationCapabilities } from '../../../services/quotation';
 
 import { SalesContractItemsFormTable } from './SalesContractItemsFormTable';
 import {
@@ -223,6 +236,10 @@ import {
   salesContractTermApi,
   type SalesContractTermSnapshot,
 } from '../../../services/sales-contract-term';
+import {
+  buildKuaizhizaoPullCreateMenuItems,
+  resolveKuaizhizaoDocumentAction,
+} from '../../../constants/documentActionRegistry';
 
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
@@ -243,41 +260,6 @@ import {
 const SALES_CONTRACT_RESOURCE = SC;
 
 const CONTRACT_ITEMS_REQUIRED = 'contract_items_required';
-
-const PENDING_REVIEW_STATUSES = new Set(['待审核', 'PENDING', 'PENDING_REVIEW']);
-
-function isApprovedReview(rs: string | undefined): boolean {
-  const r = (rs || '').trim();
-  return ['已通过', 'APPROVED', '审核通过', '通过', '已审核'].includes(r);
-}
-
-function canWithdrawContract(c: SalesContract): boolean {
-  return (c.status || '') === '待审核' && PENDING_REVIEW_STATUSES.has((c.review_status || '').trim());
-}
-
-function canApproveContract(c: SalesContract): boolean {
-  if ((c.status || '') !== '待审核') return false;
-  const rs = (c.review_status || '').trim();
-  return PENDING_REVIEW_STATUSES.has(rs) || rs === '';
-}
-
-function canRejectContract(c: SalesContract): boolean {
-  return canApproveContract(c);
-}
-
-function canRevokeContractApproval(c: SalesContract): boolean {
-  if ((c.status || '') !== '已生效') return false;
-  if (!isApprovedReview(c.review_status)) return false;
-  const relQty = Number(c.released_quantity ?? 0);
-  const relAmt = Number(c.released_amount ?? 0);
-  return relQty <= 0 && relAmt <= 0;
-}
-
-function canPrintContract(c: SalesContract): boolean {
-  const st = (c.status || '').trim();
-  if (!['已生效', '执行中', '已关闭'].includes(st)) return false;
-  return isApprovedReview(c.review_status);
-}
 
 
 
@@ -342,6 +324,24 @@ const SALES_CONTRACT_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-contra
 const SALES_CONTRACT_CREATE_PATH = `${SALES_CONTRACT_LIST_PATH}/new`;
 const salesContractEditPath = (id: number) => `${SALES_CONTRACT_LIST_PATH}/${id}/edit`;
 
+type PullQuotationCandidate = {
+  id: number;
+  quotation_code: string;
+  customer_name?: string;
+  quotation_date?: string;
+  delivery_date?: string;
+  total_amount?: number;
+  status?: string;
+  review_status?: string;
+  salesman_name?: string;
+  contract_id?: number;
+  contract_code?: string;
+  capabilities?: QuotationCapabilities;
+};
+
+const isPullQuotationSelectable = (record: PullQuotationCandidate): boolean =>
+  quotationCapabilityAllowed(record as Quotation, 'convert_to_contract');
+
 const SalesContractsPage: React.FC = () => {
 
   const navigate = useNavigate();
@@ -361,6 +361,8 @@ const SalesContractsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
 
   const { t } = useTranslation();
+  const pullFromQuotationAction = resolveKuaizhizaoDocumentAction(t, 'sales_contract.pull_from_quotation');
+  const pushToSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_sales_contract');
   const salesCommonLabels = useMemo(() => getSalesCommonFormLabels(t), [t]);
   const contractTypeLabels = useMemo(
     () => ({
@@ -422,10 +424,8 @@ const SalesContractsPage: React.FC = () => {
   );
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
 
-  const currentUser = useGlobalStore((s) => s.currentUser);
   const contractPerms = useResourcePermissions(SALES_CONTRACT_RESOURCE);
-  const canRevokeContract = hasModulePermission(currentUser ?? undefined, SALES_CONTRACT_RESOURCE, 'revoke');
-  const canReviewContract = hasReviewPermission(currentUser ?? undefined, SALES_CONTRACT_RESOURCE);
+  const contractAuditRequired = useAuditRequired('sales_contract', false);
 
   const actionRef = useRef<ActionType>();
 
@@ -452,6 +452,8 @@ const SalesContractsPage: React.FC = () => {
   const [detailOpen, setDetailOpen] = useState(false);
 
   const [detail, setDetail] = useState<SalesContract | null>(null);
+  const permDeniedTitle = t('common.noPermission');
+  const detailCapabilityGates = useSalesContractCapabilities(detail, contractPerms, t, permDeniedTitle);
 
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -493,6 +495,14 @@ const SalesContractsPage: React.FC = () => {
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const tableRowsRef = useRef<SalesContract[]>([]);
+
+  const selectedContractsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is SalesContract => row != null),
+    [selectedRowKeys],
+  );
   const leaveSalesContractFormPage = useCallback(() => {
     navigate(SALES_CONTRACT_LIST_PATH);
   }, [navigate]);
@@ -1084,6 +1094,193 @@ const SalesContractsPage: React.FC = () => {
 
   const handleCreate = () => {
     navigate(SALES_CONTRACT_CREATE_PATH);
+  };
+
+  const mapPullQuotationRows = useCallback((rows: Quotation[]): PullQuotationCandidate[] => {
+    return rows
+      .filter((q) => q.id && q.quotation_code)
+      .map((q) => ({
+        id: Number(q.id),
+        quotation_code: String(q.quotation_code),
+        customer_name: q.customer_name || '',
+        quotation_date: q.quotation_date || '',
+        delivery_date: q.delivery_date || '',
+        total_amount: q.total_amount != null ? Number(q.total_amount) : undefined,
+        status: q.status || '',
+        review_status: q.review_status || '',
+        salesman_name: q.salesman_name || '',
+        contract_id: q.contract_id ? Number(q.contract_id) : undefined,
+        contract_code: q.contract_code || '',
+        capabilities: q.capabilities,
+      }));
+  }, []);
+
+  const pullFromQuotationScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
+  const pullFromQuotationQuery = useUniPullQuery<PullQuotationCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    scopeOptions: pullFromQuotationScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullQuotationSelectable(record),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const result = await listQuotations({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+          pullable_only: scope === 'pullable',
+          pull_target: 'sales_contract',
+        });
+        const rows: Quotation[] = Array.isArray(result) ? result : result.data || [];
+        return {
+          data: mapPullQuotationRows(rows),
+          total: Array.isArray(result) ? rows.length : Number(result.total ?? rows.length),
+        };
+      } catch (error: any) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.salesOrder.loadQuotationsFailed')));
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys, rows) => {
+      const selectedId = Number(keys[0]);
+      const selected = rows[0];
+      if (!selectedId || selectedId <= 0) {
+        messageApi.warning(t('app.kuaizhizao.salesOrder.selectQuotationFirst'));
+        return;
+      }
+      if (selected && !isPullQuotationSelectable(selected)) {
+        const reason =
+          quotationCapabilityReasonMessage(selected.capabilities?.convert_to_contract?.reason, t) ||
+          t('app.kuaizhizao.salesOrder.pullQuotationNotAllowed');
+        messageApi.warning(reason);
+        return;
+      }
+      try {
+        const result = await salesContractApi.pullSalesContractFromQuotation(selectedId);
+        messageApi.success(
+          result?.message ||
+            t('app.kuaizhizao.salesOrder.createdFromQuotation', {
+              code: result?.sales_contract?.contract_code || '',
+            }),
+        );
+        pullFromQuotationQuery.closeModal();
+        actionRef.current?.reload();
+        if (result?.sales_contract?.id) {
+          void openDetail(Number(result.sales_contract.id));
+        }
+      } catch (error: any) {
+        messageApi.error(
+          getApiErrorMessage(
+            error,
+            t('app.kuaizhizao.salesOrder.pullCreateFailed', {
+              source: pullFromQuotationAction.sourceLabel,
+              target: pullFromQuotationAction.targetLabel,
+            }),
+          ),
+        );
+        throw error;
+      }
+    },
+  });
+
+  const pullQuotationColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.quotation.import.code'), dataIndex: 'quotation_code', width: 180 },
+      {
+        title: t('app.kuaizhizao.salesOrder.customerName'),
+        dataIndex: 'customer_name',
+        width: 180,
+        ellipsis: true,
+        render: (v: string) => v || '-',
+      },
+      {
+        title: t('app.kuaizhizao.quotation.colQuotationDate'),
+        dataIndex: 'quotation_date',
+        width: 120,
+        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.deliveryDate'),
+        dataIndex: 'delivery_date',
+        width: 120,
+        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
+        dataIndex: 'total_amount',
+        width: 130,
+        align: 'right' as const,
+        render: (v: number | undefined) =>
+          v != null
+            ? Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.status'),
+        dataIndex: 'status',
+        width: 120,
+        render: (v: string) => {
+          let color: string = 'blue';
+          if (v === '已转订单') color = 'gold';
+          else if (v === '已接受') color = 'green';
+          else if (v === '已拒绝') color = 'red';
+          return <Tag color={color}>{v || t('app.kuaizhizao.salesOrder.unknownStatus')}</Tag>;
+        },
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.reviewStatus'),
+        dataIndex: 'review_status',
+        width: 100,
+        render: (v: string) => {
+          const approved = v === 'APPROVED' || v === '已通过' || v === '审核通过';
+          const rejected = v === 'REJECTED' || v === '已驳回';
+          return <Tag color={approved ? 'green' : rejected ? 'red' : 'default'}>{v || '-'}</Tag>;
+        },
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.salesman'),
+        dataIndex: 'salesman_name',
+        width: 120,
+        ellipsis: true,
+        render: (v: string) => v || '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.duplicateGuardHint'),
+        width: 260,
+        render: (_: unknown, record: PullQuotationCandidate) => {
+          if (isPullQuotationSelectable(record)) {
+            return t('app.kuaizhizao.salesOrder.canCreate');
+          }
+          if (record.contract_id) {
+            return t('app.kuaizhizao.salesOrder.alreadyCreated', {
+              code: record.contract_code || record.contract_id || '-',
+            });
+          }
+          const reason = quotationCapabilityReasonMessage(
+            record.capabilities?.convert_to_contract?.reason,
+            t,
+          );
+          return reason || t('app.kuaizhizao.salesOrder.pullQuotationNotAllowed');
+        },
+      },
+    ],
+    [t],
+  );
+
+  const selectedPullQuotation = pullFromQuotationQuery.selectedRows[0];
+  const selectedPullQuotationNotPullable = !!(
+    selectedPullQuotation && !isPullQuotationSelectable(selectedPullQuotation)
+  );
+
+  const handlePullFromQuotation = () => {
+    pullFromQuotationQuery.openModal();
   };
 
   const handleEdit = (record: SalesContract) => {
@@ -1879,28 +2076,34 @@ const SalesContractsPage: React.FC = () => {
     openPrint({ documentType: 'sales_contract', documentId: record.id });
   };
 
-  const handleToolbarPrint = async (keys: React.Key[]) => {
-    if (!keys || keys.length !== 1) return;
-    const numericId = Number(keys[0]);
-    if (!Number.isFinite(numericId) || numericId <= 0) {
-      messageApi.warning(t('app.kuaizhizao.salesContract.selectValidRecord'));
-      return;
-    }
-    try {
-      const latest = await salesContractApi.get(numericId, false);
-      if (!canPrintContract(latest)) {
-        messageApi.warning(t('app.kuaizhizao.salesContract.printNotAllowed'));
-        return;
-      }
-      await handlePrint(latest);
-    } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.salesContract.loadContractFailed'));
-    }
-  };
+  const contractAuditBatchHandlers = useMemo(
+    () => ({
+      submit: (id: number) => salesContractApi.submit(id),
+      withdraw: (id: number) => salesContractApi.withdraw(id),
+      approve: (id: number) => salesContractApi.approve(id),
+      revoke: (id: number) => salesContractApi.revokeReview(id),
+    }),
+    [],
+  );
+
+  const handleContractAuditBatchSuccess = useCallback(() => {
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  }, []);
 
   const handleBatchDeleteDrafts = useCallback(async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
       messageApi.warning(t('app.kuaizhizao.salesContract.selectToDelete'));
+      return;
+    }
+    const selected = keys
+      .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+      .filter((row): row is SalesContract => row != null);
+    if (
+      selected.length > 0 &&
+      !salesContractBatchDeleteAllowed(selected, contractPerms.canDelete)
+    ) {
+      messageApi.warning(t('app.kuaizhizao.salesContract.batchDeleteNotAllowed'));
       return;
     }
     let success = 0;
@@ -1922,7 +2125,7 @@ const SalesContractsPage: React.FC = () => {
     if (failed > 0) messageApi.warning(t('app.kuaizhizao.salesContract.batchDeletePartial', { count: failed }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
-  }, [messageApi, t]);
+  }, [contractPerms.canDelete, messageApi, t]);
 
   const handleCloseContract = async () => {
 
@@ -2078,7 +2281,7 @@ const SalesContractsPage: React.FC = () => {
   }, [selectedRowKeys]);
 
   const canUseToolbarPush =
-    !!selectedContractForPush && ['已生效', '执行中'].includes(selectedContractForPush.status || '');
+    !!selectedContractForPush && salesContractHasToolbarPushActions(selectedContractForPush);
 
   const handleToolbarPushToOrder = useCallback(async () => {
     const record = selectedContractForPush;
@@ -2086,12 +2289,54 @@ const SalesContractsPage: React.FC = () => {
       messageApi.warning(t('app.kuaizhizao.salesContract.selectContract'));
       return;
     }
-    if (!['已生效', '执行中'].includes(record.status || '')) {
-      messageApi.warning(t('app.kuaizhizao.salesContract.pushOrderStatusRequired'));
+    if (!record.capabilities?.push_to_sales_order?.allowed) {
+      messageApi.warning(
+        salesContractCapabilityReasonMessage(record.capabilities?.push_to_sales_order?.reason, t) ||
+          t('app.kuaizhizao.salesContract.pushOrderStatusRequired'),
+      );
       return;
     }
     await openReleaseModal(record);
   }, [messageApi, openReleaseModal, selectedContractForPush]);
+
+  const salesContractToolbarRenderItems = useMemo(
+    () => [
+      <UniPullCreateToolbar
+        key="create-sales-contract-with-pull"
+        compactKey="create-sales-contract-with-pull"
+        createIcon={<PlusOutlined />}
+        createLabel={t('app.kuaizhizao.salesContract.create')}
+        onCreate={handleCreate}
+        menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
+          {
+            key: 'pull-from-quotation',
+            actionKey: 'sales_contract.pull_from_quotation',
+            onClick: handlePullFromQuotation,
+          },
+        ])}
+      />,
+      <UniPushToolbarButton
+        key={`sales-contract-push-toolbar-${selectedRowKeys.join('-') || 'none'}`}
+        disabled={selectedRowKeys.length !== 1 || !canUseToolbarPush}
+        menuItems={buildUniPushMenuItems([
+          {
+            key: 'push-to-sales-order',
+            label: pushToSalesOrderAction.label,
+            onClick: () => void handleToolbarPushToOrder(),
+          },
+        ])}
+      />,
+    ],
+    [
+      canUseToolbarPush,
+      handleCreate,
+      handlePullFromQuotation,
+      handleToolbarPushToOrder,
+      selectedRowKeys,
+      pushToSalesOrderAction.label,
+      t,
+    ],
+  );
 
 
 
@@ -2366,25 +2611,17 @@ const SalesContractsPage: React.FC = () => {
 
               </Button>,
 
-              record.status === '草稿' ? (
-
-                contractPerms.canUpdate ? (
+              record.capabilities?.update?.allowed && contractPerms.canUpdate ? (
                   <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
                     {t('common.edit')}
                   </Button>
-                ) : null
+                ) : null,
 
-              ) : null,
-
-              record.status === '草稿' ? (
-
-                contractPerms.canDelete ? (
+              record.capabilities?.delete?.allowed && contractPerms.canDelete ? (
                   <Button {...rowActionKind('delete')} key="del" onClick={() => handleDeleteDraft(record)}>
                     {t('common.delete')}
                   </Button>
-                ) : null
-
-              ) : null,
+                ) : null,
 
               <UniWorkflowActions
                 key="contract-workflow"
@@ -2401,7 +2638,7 @@ const SalesContractsPage: React.FC = () => {
                 rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
               />,
 
-              canPrintContract(record) && contractPerms.canPrint ? (
+              record.capabilities?.print?.allowed && contractPerms.canPrint ? (
 
                 <Button {...rowActionKind('print')} key="print" onClick={() => void handlePrint(record)}>
 
@@ -2411,11 +2648,11 @@ const SalesContractsPage: React.FC = () => {
 
               ) : null,
 
-              ['已生效', '执行中'].includes(record.status || '') ? (
+              record.capabilities?.push_to_sales_order?.allowed ? (
 
                 <Button {...rowActionKind('release')} key="release" onClick={() => openReleaseModal(record)}>
 
-                  {t('app.kuaizhizao.salesContract.pushOrder')}
+                  {pushToSalesOrderAction.label}
 
                 </Button>
 
@@ -2432,8 +2669,6 @@ const SalesContractsPage: React.FC = () => {
       contractTypeLabels,
       statusLabels,
       renderContractStatus,
-      canReviewContract,
-      canRevokeContract,
       contractPerms.canDelete,
       contractPerms.canPrint,
       contractPerms.canUpdate,
@@ -2786,49 +3021,54 @@ const SalesContractsPage: React.FC = () => {
 
         }
 
-        showCreateButton
-
+        showCreateButton={false}
         createButtonText={t('app.kuaizhizao.salesContract.create')}
-
         onCreate={handleCreate}
-        toolBarActionsAfterCreate={[
-          <UniPushToolbarButton
-            key={`sales-contract-push-toolbar-${selectedRowKeys.join('-') || 'none'}`}
-            disabled={selectedRowKeys.length !== 1 || !canUseToolbarPush}
-            menuItems={buildUniPushMenuItems([
-              {
-                key: 'push-to-sales-order',
-                label: t('app.kuaizhizao.salesContract.releaseOrder'),
-                onClick: () => void handleToolbarPushToOrder(),
-              },
-            ])}
-          />,
-        ]}
+        toolBarRender={() => salesContractToolbarRenderItems}
 
         showDeleteButton={contractPerms.canDelete}
         onDelete={handleBatchDeleteDrafts}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.salesContract.batchDeleteConfirm', { count })}
-        toolBarActionsAfterDelete={
-          contractPerms.canPrint
+        toolBarActionsAfterDelete={[
+          <UniAuditBatchMenuButton
+            key="sales-contract-batch-menu"
+            selectedRowKeys={selectedRowKeys}
+            selectedRecords={selectedContractsForBatch}
+            auditEnabled={contractAuditRequired}
+            permGates={contractPerms}
+            handlers={contractAuditBatchHandlers}
+            onSuccess={handleContractAuditBatchSuccess}
+            toolBarButtonSize="middle"
+          />,
+        ]}
+        toolBarActionsAfterBatch={[
+          ...(contractPerms.canPrint
             ? [
-                <UniBatchMenuButton
-                  key="sales-contract-batch-menu"
+                <UniCapabilityBatchButton
+                  key="contract-batch-print"
                   selectedRowKeys={selectedRowKeys}
-                  menuItems={[
-                    {
-                      key: 'print',
-                      label: t('app.kuaizhizao.salesContract.printContract'),
-                      icon: <PrinterOutlined />,
-                      disabled: selectedRowKeys.length !== 1,
-                      onClick: (keys: React.Key[]) => void handleToolbarPrint(keys),
-                    },
-                  ]}
-                  toolBarButtonSize="middle"
+                  selectedRecords={selectedContractsForBatch}
+                  capabilityKey="print"
+                  permAllowed={contractPerms.canPrint}
+                  batchAllowed={(recs, perm) => salesContractBatchPrintAllowed(recs, perm)}
+                  singleOnly
+                  onRun={async (id) => {
+                    const latest = await salesContractApi.get(id, false);
+                    if (!latest.capabilities?.print?.allowed) {
+                      throw new Error(t('app.kuaizhizao.salesContract.printNotAllowed'));
+                    }
+                    await handlePrint(latest);
+                  }}
+                  notAllowedMessage={t('app.kuaizhizao.salesContract.printNotAllowed')}
+                  labels={{
+                    single: t('app.kuaizhizao.salesContract.printContract'),
+                    batch: t('app.kuaizhizao.salesContract.printContract'),
+                  }}
+                  icon={<PrinterOutlined />}
+                  size="middle"
                 />,
               ]
-            : undefined
-        }
-        toolBarActionsAfterBatch={[
+            : []),
           <Button {...rowActionKind('update')} key="terms-manage" onClick={() => setTermsManageOpen(true)}>
             {t('app.kuaizhizao.salesContract.terms.manageBtn')}
           </Button>,
@@ -2923,20 +3163,11 @@ const SalesContractsPage: React.FC = () => {
 
             <Space wrap>
 
-              {detail.status === '草稿' && (
-
-                <>
-
-                  {contractPerms.canUpdate ? (
-                    <Button icon={<EditOutlined />} onClick={() => handleEdit(detail)}>{t('common.edit')}</Button>
-                  ) : null}
-
-                  {contractPerms.canDelete ? (
-                    <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteDraft(detail)}>{t('common.delete')}</Button>
-                  ) : null}
-
-                </>
-
+              {!detailCapabilityGates.update.disabled && (
+                <Button icon={<EditOutlined />} onClick={() => handleEdit(detail)}>{t('common.edit')}</Button>
+              )}
+              {!detailCapabilityGates.delete.disabled && (
+                <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteDraft(detail)}>{t('common.delete')}</Button>
               )}
 
               <UniWorkflowActions
@@ -2958,30 +3189,22 @@ const SalesContractsPage: React.FC = () => {
                 }}
               />
 
-              {canPrintContract(detail) && contractPerms.canPrint ? (
+              {!detailCapabilityGates.print.disabled && (
                 <Button icon={<PrinterOutlined />} onClick={() => void handlePrint(detail)}>{t('app.kuaizhizao.salesOrder.printPdf')}</Button>
-              ) : null}
+              )}
 
-              {['已生效', '执行中'].includes(detail.status || '') && (
-
+              {!detailCapabilityGates.pushToSalesOrder.disabled && (
                 <Button type="primary" icon={<ShoppingOutlined />} onClick={() => openReleaseModal(detail)}>
-
-                  {t('app.kuaizhizao.salesContract.releaseOrder')}
-
+                  {pushToSalesOrderAction.label}
                 </Button>
-
               )}
 
-              {['已生效', '执行中'].includes(detail.status || '') && (
-
+              {!detailCapabilityGates.createChange.disabled && (
                 <Button icon={<FormOutlined />} onClick={openChangeDrawer}>{t('app.kuaizhizao.salesContract.contractChange')}</Button>
-
               )}
 
-              {['已生效', '执行中', '已到期'].includes(detail.status || '') && (
-
+              {!detailCapabilityGates.close.disabled && (
                 <Button icon={<StopOutlined />} onClick={() => setCloseModalOpen(true)}>{t('app.kuaizhizao.salesContract.closeContract')}</Button>
-
               )}
 
             </Space>
@@ -3351,7 +3574,7 @@ const SalesContractsPage: React.FC = () => {
 
       <Modal
 
-        title={t('app.kuaizhizao.salesContract.releaseOrder')}
+        title={pushToSalesOrderAction.label}
 
         open={releaseModalOpen}
 
@@ -3528,6 +3751,44 @@ const SalesContractsPage: React.FC = () => {
       </Modal>
 
 
+
+      <UniPullQueryModal<PullQuotationCandidate>
+        title={pullFromQuotationAction.label}
+        open={pullFromQuotationQuery.open}
+        onCancel={pullFromQuotationQuery.closeModal}
+        onOk={pullFromQuotationQuery.handleConfirm}
+        okText={t('app.kuaizhizao.salesContract.create')}
+        rowKey="id"
+        columns={pullQuotationColumns}
+        dataSource={pullFromQuotationQuery.dataSource}
+        loading={pullFromQuotationQuery.loading}
+        confirmLoading={pullFromQuotationQuery.confirmLoading}
+        selectionType={pullFromQuotationQuery.selectionType}
+        selectedRowKeys={pullFromQuotationQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromQuotationQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromQuotationQuery.isRowDisabled}
+        searchDraft={pullFromQuotationQuery.searchDraft}
+        onSearchDraftChange={pullFromQuotationQuery.setSearchDraft}
+        onSearchApply={pullFromQuotationQuery.handleSearchApply}
+        onSearchClear={pullFromQuotationQuery.handleSearchClear}
+        appliedKeyword={pullFromQuotationQuery.appliedKeyword}
+        page={pullFromQuotationQuery.page}
+        pageSize={pullFromQuotationQuery.pageSize}
+        total={pullFromQuotationQuery.total}
+        onPageChange={pullFromQuotationQuery.handlePageChange}
+        scopeOptions={pullFromQuotationQuery.scopeOptions}
+        scope={pullFromQuotationQuery.scope}
+        onScopeChange={pullFromQuotationQuery.handleScopeChange}
+        searchPlaceholder={t('app.kuaizhizao.salesOrder.searchQuotationPlaceholder')}
+        emptyText={t('app.kuaizhizao.salesOrder.noQuotationAvailable')}
+        emptySearchText={t('app.kuaizhizao.salesOrder.quotationNotFound')}
+        okButtonProps={{
+          disabled:
+            pullFromQuotationQuery.selectedRowKeys.length === 0 ||
+            selectedPullQuotationNotPullable ||
+            pullFromQuotationQuery.loading,
+        }}
+      />
 
       {PrintModal}
 

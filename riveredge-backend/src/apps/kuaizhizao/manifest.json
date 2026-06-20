@@ -669,15 +669,6 @@
             "permission": "kuaizhizao:quality-management-inspection-plans:read"
           },
           {
-            "title": "app.kuaizhizao.menu.quality-management.nonconforming-ledger",
-            "path": "/apps/kuaizhizao/quality-management/nonconforming-ledger",
-            "sort_order": 6,
-            "meta": {
-              "module": "quality"
-            },
-            "permission": "kuaizhizao:quality-management-nonconforming-ledger:read"
-          },
-          {
             "title": "app.kuaizhizao.menu.quality-management.eight-d-reports",
             "path": "/apps/kuaizhizao/quality-management/eight-d-reports",
             "sort_order": 7,
@@ -734,15 +725,21 @@
                 "permission": "kuaizhizao:quality-management-reports-quality-exception-tracking:read"
               },
               {
+                "title": "app.kuaizhizao.menu.quality-management.nonconforming-ledger",
+                "path": "/apps/kuaizhizao/quality-management/nonconforming-ledger",
+                "sort_order": 5,
+                "permission": "kuaizhizao:quality-management-nonconforming-ledger:read"
+              },
+              {
                 "title": "app.kuaizhizao.menu.reports.nonconforming-summary",
                 "path": "/apps/kuaizhizao/quality-management/reports/nonconforming-summary",
-                "sort_order": 5,
+                "sort_order": 6,
                 "permission": "kuaizhizao:quality-management-reports-nonconforming-summary:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.quality-rate-trend",
                 "path": "/apps/kuaizhizao/quality-management/reports/quality-rate-trend",
-                "sort_order": 6,
+                "sort_order": 7,
                 "permission": "kuaizhizao:quality-management-reports-quality-rate-trend:read"
               }
             ]

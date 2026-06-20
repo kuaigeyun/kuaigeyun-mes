@@ -9,6 +9,8 @@ from typing import Optional, List, TYPE_CHECKING
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
+from apps.kuaizhizao.services.document_action_policy.types import WorkOrderCapabilities
+
 if TYPE_CHECKING:
     from typing import ForwardRef
 
@@ -238,6 +240,9 @@ class WorkOrderResponse(WorkOrderBase):
     serial_split_child_count: Optional[int] = Field(
         None, description="序列号自动拆分子工单数量（仅父单）"
     )
+    capabilities: Optional[WorkOrderCapabilities] = Field(
+        None, description="业务态动作能力（document_action_policy）"
+    )
 
 
 class WorkOrderOperationMinimalForGantt(BaseModel):
@@ -291,6 +296,9 @@ class WorkOrderListResponse(BaseModel):
     planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
     planned_end_date: Optional[datetime] = Field(None, description="计划结束时间")
     completed_quantity: Decimal = Field(default=Decimal("0"), description="已完成数量")
+    is_frozen: bool = Field(default=False, description="是否冻结")
+    actual_start_date: Optional[datetime] = Field(None, description="实际开始时间")
+    manually_completed: bool = Field(default=False, description="是否指定结束")
     work_center_name: Optional[str] = Field(None, description="工作中心名称")
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
     readiness_rate: Optional[float] = Field(None, description="齐套率 (%)")
@@ -329,6 +337,9 @@ class WorkOrderListResponse(BaseModel):
     operation_steps: Optional[List[WorkOrderOperationStepSummary]] = Field(
         None,
         description="工序步骤摘要（include_operation_steps=true 时返回，与运营看板口径一致）",
+    )
+    capabilities: Optional[WorkOrderCapabilities] = Field(
+        None, description="业务态动作能力（document_action_policy）"
     )
 
 

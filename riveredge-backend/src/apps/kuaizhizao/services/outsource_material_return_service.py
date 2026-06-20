@@ -251,7 +251,9 @@ class OutsourceMaterialReturnService(AppBaseService[OutsourceMaterialReturn]):
             query &= Q(code__icontains=keyword) | Q(material_name__icontains=keyword)
 
         rows = await OutsourceMaterialReturn.filter(query).order_by("-created_at").offset(skip).limit(limit).all()
-        return [OutsourceMaterialReturnResponse.model_validate(row) for row in rows]
+        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
+        responses = [OutsourceMaterialReturnResponse.model_validate(row) for row in rows]
+        return enrich_inbound_hub_list_capabilities(rows, responses, "outsource_material_return")
 
     async def get_material_return(
         self,

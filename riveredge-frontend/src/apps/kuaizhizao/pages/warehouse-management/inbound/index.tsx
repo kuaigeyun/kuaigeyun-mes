@@ -33,7 +33,9 @@ import {
 } from '../../../../../components/custom-fields';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniBatchButton } from '../../../../../components/uni-batch';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { inboundHubBatchConfirmAllowed } from '../../../../../hooks/useDocumentCapabilities';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter';
@@ -385,6 +387,8 @@ const InboundPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const quickPullRef = useRef<InboundQuickPullModalsRef>(null);
   const listDataRef = useRef<InboundOrder[]>([]);
+  const [inboundListVersion, setInboundListVersion] = useState(0);
+  const inboundPerms = useResourcePermissions('kuaizhizao:inbound');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const handledDirectConfirmKeyRef = useRef<string | null>(null);
@@ -478,6 +482,11 @@ const InboundPage: React.FC = () => {
     ? inboundDocumentTrackingType(currentOrder)
     : undefined;
   const inboundTracking = useDocumentTracking(inboundDocTrackingType, currentOrder?.id, inboundTrackingRefreshKey);
+
+  const selectedInboundForBatch = useMemo(() => {
+    const keySet = new Set(selectedRowKeys.map(String));
+    return listDataRef.current.filter((r) => keySet.has(`${r.receipt_type}::${r.id}`));
+  }, [selectedRowKeys, inboundListVersion]);
 
   const handleBatchConfirm = useCallback(
     async (keys: React.Key[]) => {
@@ -1520,6 +1529,7 @@ const InboundPage: React.FC = () => {
               enrichProductionReturnRecordsWithCustomFields,
             });
             listDataRef.current = result.data;
+            setInboundListVersion((v) => v + 1);
             return result;
           } catch {
             messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.loadListFailed'));
@@ -1565,26 +1575,30 @@ const InboundPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         rowSelectionGetCheckboxProps={(record) => ({ disabled: !isInboundConfirmable(record) })}
         toolBarActionsAfterBatch={[
-          <UniBatchMenuButton
-            key="inbound-batch-actions"
+          <UniBatchButton
+            key="inbound-batch-confirm"
             selectedRowKeys={selectedRowKeys}
-            buttonText={t('app.kuaizhizao.warehouseInbound.action.batchActions')}
-            menuItems={[
-              {
-                key: 'batch-confirm',
-                label: t('app.kuaizhizao.warehouseInbound.action.batchConfirm'),
-                requireConfirm: true,
-                confirmTitle: (count) => t('app.kuaizhizao.warehouseInbound.confirm.batch.title', { count }),
-                confirmDescription: t('app.kuaizhizao.warehouseInbound.confirm.batch.description'),
-                onClick: handleBatchConfirm,
-              },
-            ]}
-          />,
+            type="primary"
+            icon={<CheckCircleOutlined />}
+            requireConfirm
+            confirmTitle={(count) => t('app.kuaizhizao.warehouseInbound.confirm.batch.title', { count })}
+            confirmDescription={t('app.kuaizhizao.warehouseInbound.confirm.batch.description')}
+            disabled={
+              selectedInboundForBatch.length > 0 &&
+              !inboundHubBatchConfirmAllowed(
+                selectedInboundForBatch,
+                inboundPerms.canAction?.('submit') ?? false,
+              )
+            }
+            onAction={(keys) => void handleBatchConfirm(keys)}
+          >
+            {t('app.kuaizhizao.warehouseInbound.action.batchConfirm')}
+          </UniBatchButton>,
         ]}
         toolBarRender={() => {
           const pullMenuItems = buildKuaizhizaoPullCreateMenuItems(t, [
             {
-              actionKey: 'inbound.pull_from_purchase_order',
+              actionKey: 'purchase_receipt.pull_from_purchase_order',
               onClick: () => quickPullRef.current?.open('purchase_order'),
             },
             {

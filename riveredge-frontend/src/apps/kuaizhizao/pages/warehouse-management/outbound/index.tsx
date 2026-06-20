@@ -27,7 +27,9 @@ import {
 
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniBatchButton } from '../../../../../components/uni-batch';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { outboundHubBatchConfirmAllowed } from '../../../../../hooks/useDocumentCapabilities';
 import {
   DocumentTrackingTimelineBody,
   useDocumentTracking,
@@ -40,12 +42,13 @@ import dayjs from 'dayjs';
 import { listSalesOrders } from '../../../services/sales-order';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
+import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { uploadMultipleFiles } from '../../../../../services/file';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { outboundTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintConfig';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { deliveryNoticeApi } from '../../../services/delivery-notice';
 import OutboundQuickPullModals, { type OutboundQuickPullModalsRef } from './OutboundQuickPullModals';
 import OutboundConfirmPreviewModal from './OutboundConfirmPreviewModal';
 import { fetchOutboundHubList } from './outboundListAggregate';
@@ -111,6 +114,7 @@ const PRODUCTION_PICKING_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_production_pickin
 const OutboundPage: React.FC = () => {
   const { t } = useTranslation();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
+  const pushToDeliveryNoteAction = resolveKuaizhizaoDocumentAction(t, 'delivery_note.pull_from_sales_delivery');
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = AntdTheme.useToken();
@@ -192,6 +196,9 @@ const OutboundPage: React.FC = () => {
   const [batchSubmitting, setBatchSubmitting] = useState(false);
   const [executionConfig, setExecutionConfig] = useState<any>(null);
   const [selectedOutboundKeys, setSelectedOutboundKeys] = useState<React.Key[]>([]);
+  const listDataRef = useRef<OutboundOrder[]>([]);
+  const [outboundListVersion, setOutboundListVersion] = useState(0);
+  const outboundPerms = useResourcePermissions('kuaizhizao:outbound');
   const [waveModalVisible, setWaveModalVisible] = useState(false);
   const [waveGenerating, setWaveGenerating] = useState(false);
   const [waveResult, setWaveResult] = useState<WavePickingResult | null>(null);
@@ -202,6 +209,11 @@ const OutboundPage: React.FC = () => {
 
   const outboundDocTrackingType = currentOrder ? outboundDocumentTrackingType(currentOrder) : undefined;
   const outboundTracking = useDocumentTracking(outboundDocTrackingType, currentOrder?.id, outboundTrackingRefreshKey);
+
+  const selectedOutboundForBatch = useMemo(() => {
+    const keySet = new Set(selectedOutboundKeys.map(String));
+    return listDataRef.current.filter((r) => keySet.has(`${r.outbound_type}::${r.id}`));
+  }, [selectedOutboundKeys, outboundListVersion]);
 
   useEffect(() => {
     const loadExecutionConfig = async () => {
@@ -499,12 +511,9 @@ const OutboundPage: React.FC = () => {
       messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectPendingDocs'));
       return;
     }
-    const records = keys
-      .map((key) => {
-        const [type, id] = String(key).split('::');
-        return { outbound_type: type as OutboundIssueType, id: Number(id) } as OutboundOrder;
-      })
-      .filter((r) => r.id && isOutboundConfirmable(r));
+    const records = listDataRef.current.filter((r) =>
+      keys.some((key) => String(key) === `${r.outbound_type}::${r.id}`),
+    );
     if (!records.length) {
       messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.noneConfirmable'));
       return;
@@ -556,6 +565,72 @@ const OutboundPage: React.FC = () => {
       return;
     }
     openPrint({ documentType: docType, documentId: record.id });
+  };
+
+  const handlePushToDeliveryNote = async (record: OutboundOrder) => {
+    if (record.outbound_type !== 'sales_delivery' || !record.id) return;
+    try {
+      const noticesRes = await deliveryNoticeApi.list({ skip: 0, limit: 50, sales_delivery_id: record.id });
+      const notices = Array.isArray(noticesRes) ? noticesRes : (noticesRes as any)?.items || (noticesRes as any)?.data || [];
+      const existing = notices.find((n: any) => Number(n?.sales_delivery_id) === Number(record.id));
+      if (existing) {
+        messageApi.warning(
+          t('app.kuaizhizao.deliveryNote.msg.alreadyCreated', {
+            source: pushToDeliveryNoteAction.sourceLabel,
+            target: pushToDeliveryNoteAction.targetLabel,
+          }),
+        );
+        return;
+      }
+
+      const detail: any = await warehouseApi.salesDelivery.get(String(record.id));
+      const itemRows = Array.isArray(detail?.items) ? detail.items : [];
+      const validItems = itemRows
+        .filter((it: any) => (Number(it.delivery_quantity ?? it.quantity ?? 0) || 0) > 0)
+        .map((it: any) => ({
+          material_id: it.material_id ?? it.materialId,
+          material_code: it.material_code ?? it.materialCode ?? '',
+          material_name: it.material_name ?? it.materialName ?? '',
+          material_unit: it.unit ?? it.material_unit ?? it.materialUnit ?? '',
+          notice_quantity: Number(it.delivery_quantity ?? it.quantity ?? 0) || 0,
+          unit_price: Number(it.unit_price ?? it.unitPrice ?? 0) || 0,
+        }));
+
+      if (!detail?.customer_id || validItems.length === 0) {
+        throw new Error(t('app.kuaizhizao.deliveryNote.msg.missingCustomerOrLines'));
+      }
+
+      await deliveryNoticeApi.create({
+        customer_id: detail.customer_id,
+        customer_name: detail.customer_name,
+        customer_contact: detail.customer_contact,
+        customer_phone: detail.customer_phone,
+        sales_delivery_id: detail.id ?? record.id,
+        sales_delivery_code: detail.delivery_code,
+        sales_order_id: detail.sales_order_id,
+        sales_order_code: detail.sales_order_code,
+        planned_delivery_date: detail.delivery_date,
+        shipping_address: detail.shipping_address,
+        items: validItems,
+      });
+
+      messageApi.success(
+        t('app.kuaizhizao.deliveryNote.msg.pullCreateSuccess', {
+          source: pushToDeliveryNoteAction.sourceLabel,
+          target: pushToDeliveryNoteAction.targetLabel,
+        }),
+      );
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(
+        error?.message ||
+          t('app.kuaizhizao.deliveryNote.msg.pullCreateFailed', {
+            source: pushToDeliveryNoteAction.sourceLabel,
+            target: pushToDeliveryNoteAction.targetLabel,
+          }),
+      );
+    }
   };
 
   const handleConfirm = async (record: OutboundOrder) => {
@@ -801,6 +876,15 @@ const OutboundPage: React.FC = () => {
               <Button {...rowActionKind('print')} onClick={() => handlePrint(record)} />
             ) : null;
           })()}
+          {record.outbound_type === 'sales_delivery' && record.id ? (
+            <Button
+              {...rowActionKind('audit')}
+              {...rowActionLabelKeep()}
+              onClick={() => void handlePushToDeliveryNote(record)}
+            >
+              {pushToDeliveryNoteAction.label}
+            </Button>
+          ) : null}
         </Space>
       ),
     },
@@ -812,6 +896,8 @@ const OutboundPage: React.FC = () => {
       handleConfirm,
       handleWithdraw,
       handlePrint,
+      handlePushToDeliveryNote,
+      pushToDeliveryNoteAction.label,
       salesDeliveryCustomFieldColumns,
       productionPickingCustomFieldColumns,
     ],
@@ -828,10 +914,13 @@ const OutboundPage: React.FC = () => {
         showAdvancedSearch={true}
         request={async (params) => {
           try {
-            return await fetchOutboundHubList(params as Record<string, unknown>, {
+            const result = await fetchOutboundHubList(params as Record<string, unknown>, {
               enrichProductionPickingRecordsWithCustomFields,
               enrichSalesDeliveryRecordsWithCustomFields,
             });
+            listDataRef.current = result.data;
+            setOutboundListVersion((v) => v + 1);
+            return result;
           } catch {
             messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.loadListFailed'));
             return { data: [], success: false, total: 0 };
@@ -883,7 +972,7 @@ const OutboundPage: React.FC = () => {
               },
               {
                 key: 'pull-from-sales-order',
-                actionKey: 'outbound.pull_from_sales_order',
+                actionKey: 'sales_delivery.pull_from_sales_order',
                 onClick: () => quickPullRef.current?.open('sales_order'),
               },
               {
@@ -894,24 +983,28 @@ const OutboundPage: React.FC = () => {
           />,
         ]}
         toolBarActionsAfterBatch={[
-          <UniBatchMenuButton
+          <UniBatchButton
             key="batch-confirm"
             selectedRowKeys={selectedOutboundKeys}
-            buttonText={t('app.kuaizhizao.warehouseOutbound.action.batchActions')}
-            disabled={batchConfirmSubmitting}
-            menuItems={[
-              {
-                key: 'batch-confirm',
-                label: batchConfirmSubmitting
-                  ? t('app.kuaizhizao.warehouseOutbound.action.confirming')
-                  : t('app.kuaizhizao.warehouseOutbound.action.batchConfirm'),
-                requireConfirm: true,
-                confirmTitle: (count) => t('app.kuaizhizao.warehouseOutbound.batchConfirm.title', { count }),
-                confirmDescription: t('app.kuaizhizao.warehouseOutbound.batchConfirm.description'),
-                onClick: handleBatchConfirm,
-              },
-            ]}
-          />,
+            type="primary"
+            icon={<CheckCircleOutlined />}
+            requireConfirm
+            confirmTitle={(count) => t('app.kuaizhizao.warehouseOutbound.batchConfirm.title', { count })}
+            confirmDescription={t('app.kuaizhizao.warehouseOutbound.batchConfirm.description')}
+            disabled={
+              batchConfirmSubmitting ||
+              (selectedOutboundForBatch.length > 0 &&
+                !outboundHubBatchConfirmAllowed(
+                  selectedOutboundForBatch,
+                  outboundPerms.canAction?.('submit') ?? false,
+                ))
+            }
+            onAction={(keys) => void handleBatchConfirm(keys)}
+          >
+            {batchConfirmSubmitting
+              ? t('app.kuaizhizao.warehouseOutbound.action.confirming')
+              : t('app.kuaizhizao.warehouseOutbound.action.batchConfirm')}
+          </UniBatchButton>,
         ]}
         toolBarActionsAfterDelete={[
           <Button

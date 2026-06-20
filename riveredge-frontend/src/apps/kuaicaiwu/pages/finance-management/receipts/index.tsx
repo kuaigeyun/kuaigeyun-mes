@@ -6,7 +6,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Space, Input, Table, Tag, Drawer, Descriptions, Spin } from 'antd';
+import { App, Button, Modal, Typography, Tag, Drawer, Descriptions, Spin } from 'antd';
 import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
@@ -17,6 +17,7 @@ import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import dayjs from 'dayjs';
 import { getFinanceVoucherLifecycle } from '../../../utils/financeLifecycle';
 import { receivableService } from '../../../services/finance/receivable';
@@ -67,12 +68,7 @@ const R = 'app.kuaicaiwu.receipt';
 const ReceiptsPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [pullVisible, setPullVisible] = useState(false);
-  const [pullLoading, setPullLoading] = useState(false);
   const [pullSubmitting, setPullSubmitting] = useState(false);
-  const [pullKeyword, setPullKeyword] = useState('');
-  const [pullCandidates, setPullCandidates] = useState<PullReceivableCandidate[]>([]);
-  const [selectedPullReceivableId, setSelectedPullReceivableId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
@@ -158,49 +154,50 @@ const ReceiptsPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
-  const loadPullReceivableCandidates = async (keyword = '') => {
-    setPullLoading(true);
-    try {
-      const kw = keyword.trim().toLowerCase();
-      const res = await receivableService.listReceivables({ skip: 0, limit: 200 });
-      const rows = (res?.items || [])
-        .filter((r: any) => Number(r?.remaining_amount || 0) > 0)
-        .map((r: any) => ({
-          id: Number(r.id),
-          receivable_code: String(r.receivable_code || ''),
-          customer_id: Number(r.customer_id),
-          customer_name: String(r.customer_name || ''),
-          due_date: r.due_date,
-          review_status: r.review_status,
-          status: r.status,
-          remaining_amount: Number(r.remaining_amount || 0),
-        }))
-        .filter((r: PullReceivableCandidate) => {
-          if (!kw) return true;
-          return `${r.receivable_code} ${r.customer_name}`.toLowerCase().includes(kw);
-        });
-      setPullCandidates(rows);
-    } catch {
-      setPullCandidates([]);
-    } finally {
-      setPullLoading(false);
-    }
+  const loadPullReceivableCandidates = async (
+    keyword: string,
+    page: number,
+    pageSize: number,
+  ): Promise<{ data: PullReceivableCandidate[]; total: number }> => {
+    const kw = keyword.trim().toLowerCase();
+    const res = await receivableService.listReceivables({ skip: 0, limit: 200 });
+    const rows = (res?.items || [])
+      .filter((r: any) => Number(r?.remaining_amount || 0) > 0)
+      .map((r: any) => ({
+        id: Number(r.id),
+        receivable_code: String(r.receivable_code || ''),
+        customer_id: Number(r.customer_id),
+        customer_name: String(r.customer_name || ''),
+        due_date: r.due_date,
+        review_status: r.review_status,
+        status: r.status,
+        remaining_amount: Number(r.remaining_amount || 0),
+      }))
+      .filter((r: PullReceivableCandidate) => {
+        if (!kw) return true;
+        return `${r.receivable_code} ${r.customer_name}`.toLowerCase().includes(kw);
+      });
+    const start = (page - 1) * pageSize;
+    return { data: rows.slice(start, start + pageSize), total: rows.length };
   };
 
-  const handleOpenPullFromReceivable = async () => {
-    setPullKeyword('');
-    setSelectedPullReceivableId(null);
-    setPullVisible(true);
-    await loadPullReceivableCandidates('');
-  };
-
-  const handlePullConfirm = async () => {
-    if (!selectedPullReceivableId) {
-      messageApi.warning(t('app.kuaicaiwu.common.selectSource', { source: pullFromReceivableAction.sourceLabel }));
-      return;
-    }
-    const selected = pullCandidates.find((x) => x.id === selectedPullReceivableId);
-    if (!selected) return;
+  const pullFromReceivableQuery = useUniPullQuery<PullReceivableCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
+      try {
+        return await loadPullReceivableCandidates(keyword, page, pageSize);
+      } catch {
+        return { data: [], total: 0 };
+      }
+    },
+    isRowDisabled: (record) => Number(record.remaining_amount || 0) <= 0,
+    onConfirm: async (keys, rows) => {
+      const selected = rows.find((x) => String(x.id) === String(keys[0]));
+      if (!selected) {
+        messageApi.warning(t('app.kuaicaiwu.common.selectSource', { source: pullFromReceivableAction.sourceLabel }));
+        return;
+      }
     if (selected.remaining_amount <= 0) {
       messageApi.warning(t('app.kuaicaiwu.common.sourceNoRemaining', {
         source: pullFromReceivableAction.sourceLabel,
@@ -208,35 +205,35 @@ const ReceiptsPage: React.FC = () => {
       }));
       return;
     }
-    setPullSubmitting(true);
-    try {
-      await apiRequest('/apps/kuaicaiwu/receipts', {
-        method: 'POST',
-        data: {
-          customer_id: selected.customer_id,
-          customer_name: selected.customer_name,
-          total_amount: selected.remaining_amount,
-          receipt_date: dayjs().format('YYYY-MM-DD'),
-          payment_method: '银行转账',
-          notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
-            source: pullFromReceivableAction.sourceLabel,
-            code: selected.receivable_code,
-          }),
-        },
-      });
-      messageApi.success(t('app.kuaicaiwu.common.createdFromSource', {
-        source: pullFromReceivableAction.sourceLabel,
-        target: pullFromReceivableAction.targetLabel,
-      }));
-      setPullVisible(false);
-      setSelectedPullReceivableId(null);
-      actionRef.current?.reload();
-    } catch (e: any) {
-      messageApi.error(e?.response?.data?.detail || e?.message || t('common.createFailed'));
-    } finally {
-      setPullSubmitting(false);
-    }
-  };
+      setPullSubmitting(true);
+      try {
+        await apiRequest('/apps/kuaicaiwu/receipts', {
+          method: 'POST',
+          data: {
+            customer_id: selected.customer_id,
+            customer_name: selected.customer_name,
+            total_amount: selected.remaining_amount,
+            receipt_date: dayjs().format('YYYY-MM-DD'),
+            payment_method: '银行转账',
+            notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
+              source: pullFromReceivableAction.sourceLabel,
+              code: selected.receivable_code,
+            }),
+          },
+        });
+        messageApi.success(t('app.kuaicaiwu.common.createdFromSource', {
+          source: pullFromReceivableAction.sourceLabel,
+          target: pullFromReceivableAction.targetLabel,
+        }));
+        pullFromReceivableQuery.closeModal();
+        actionRef.current?.reload();
+      } catch (e: any) {
+        messageApi.error(e?.response?.data?.detail || e?.message || t('common.createFailed'));
+      } finally {
+        setPullSubmitting(false);
+      }
+    },
+  });
 
   const handleConfirm = async (record: ReceiptVoucher) => {
     Modal.confirm({
@@ -536,9 +533,7 @@ const ReceiptsPage: React.FC = () => {
               {
                 key: 'pull-from-receivable',
                 actionKey: 'receipt.pull_from_receivable',
-                onClick: () => {
-                  void handleOpenPullFromReceivable();
-                },
+                onClick: pullFromReceivableQuery.openModal,
               },
             ])}
           />,
@@ -564,52 +559,34 @@ const ReceiptsPage: React.FC = () => {
         columns={columns}
       />
 
-      <Modal
+      <UniPullQueryModal<PullReceivableCandidate>
+        open={pullFromReceivableQuery.open}
         title={pullFromReceivableAction.label}
-        open={pullVisible}
-        width={1100}
-        onCancel={() => {
-          if (pullSubmitting) return;
-          setPullVisible(false);
-          setSelectedPullReceivableId(null);
-        }}
+        onCancel={pullFromReceivableQuery.closeModal}
         onOk={() => {
-          void handlePullConfirm();
+          void pullFromReceivableQuery.handleConfirm();
         }}
+        rowKey="id"
+        columns={pullTableColumns}
+        dataSource={pullFromReceivableQuery.dataSource}
+        loading={pullFromReceivableQuery.loading}
+        confirmLoading={pullSubmitting || pullFromReceivableQuery.confirmLoading}
+        selectionType={pullFromReceivableQuery.selectionType}
+        selectedRowKeys={pullFromReceivableQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromReceivableQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromReceivableQuery.isRowDisabled}
+        searchDraft={pullFromReceivableQuery.searchDraft}
+        onSearchDraftChange={pullFromReceivableQuery.setSearchDraft}
+        onSearchApply={pullFromReceivableQuery.handleSearchApply}
+        onSearchClear={pullFromReceivableQuery.handleSearchClear}
+        appliedKeyword={pullFromReceivableQuery.appliedKeyword}
+        searchPlaceholder={t(`${R}.pullSearchPlaceholder`)}
+        page={pullFromReceivableQuery.page}
+        pageSize={pullFromReceivableQuery.pageSize}
+        total={pullFromReceivableQuery.total}
+        onPageChange={pullFromReceivableQuery.handlePageChange}
         okText={t('app.kuaicaiwu.common.createTarget', { target: pullFromReceivableAction.targetLabel })}
-        confirmLoading={pullSubmitting}
-        destroyOnHidden
-      >
-        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-          <Input.Search
-            allowClear
-            placeholder={t(`${R}.pullSearchPlaceholder`)}
-            value={pullKeyword}
-            onChange={(e) => setPullKeyword(e.target.value)}
-            onSearch={(value) => {
-              setPullKeyword(value);
-              void loadPullReceivableCandidates(value);
-            }}
-            enterButton={t('common.search')}
-          />
-          <Table<PullReceivableCandidate>
-            rowKey="id"
-            loading={pullLoading}
-            dataSource={pullCandidates}
-            pagination={false}
-            scroll={{ x: 980, y: 360 }}
-            rowSelection={{
-              type: 'radio',
-              selectedRowKeys: selectedPullReceivableId ? [selectedPullReceivableId] : [],
-              onChange: (keys) => setSelectedPullReceivableId(Number(keys?.[0]) || null),
-            }}
-            onRow={(record) => ({
-              onClick: () => setSelectedPullReceivableId(record.id),
-            })}
-            columns={pullTableColumns}
-          />
-        </Space>
-      </Modal>
+      />
 
       <ModalForm
         title={t(`${R}.createTitle`)}

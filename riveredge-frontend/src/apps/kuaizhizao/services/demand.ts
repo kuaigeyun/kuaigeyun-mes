@@ -91,6 +91,9 @@ export interface Demand {
     duration_to_review?: number | null;
     duration_submit_to_review?: number | null;
   };
+  capabilities?: {
+    merge_computation?: { allowed: boolean; reason?: string | null };
+  };
 }
 
 /**

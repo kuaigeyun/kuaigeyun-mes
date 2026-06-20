@@ -19,6 +19,9 @@ export interface QuotationCapabilities {
   update: ActionCapability;
   delete: ActionCapability;
   submit: ActionCapability;
+  withdraw_submit: ActionCapability;
+  approve: ActionCapability;
+  revoke_approval: ActionCapability;
   confirm_customer: ActionCapability;
   cancel_customer_confirm: ActionCapability;
   convert_to_order: ActionCapability;
@@ -124,6 +127,8 @@ export interface QuotationListParams {
   list_scope?: 'all' | 'mine' | 'department';
   /** 仅可上拉建销售订单：未关联销售订单且非已转订单 */
   pullable_only?: boolean;
+  /** 上拉目标单据类型：销售订单 / 销售合同 */
+  pull_target?: 'sales_order' | 'sales_contract';
 }
 
 export interface QuotationListResponse {

@@ -39,7 +39,9 @@ import {
 } from 'antd';
 import { EyeOutlined, EditOutlined, DeleteOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniBatchButton } from '../../../../../components/uni-batch';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { packingBindingBatchPrintAllowed } from '../../../../../hooks/useDocumentCapabilities';
 import {
   ListPageTemplate,
   FormModalTemplate,
@@ -85,6 +87,11 @@ interface PackingBinding {
   attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
   updated_at?: string;
+  capabilities?: {
+    update?: { allowed?: boolean; reason?: string };
+    delete?: { allowed?: boolean; reason?: string };
+    print?: { allowed?: boolean; reason?: string };
+  };
 }
 
 interface PackingBindingPageResult {
@@ -146,6 +153,8 @@ const PB_STAT_SPARK_1 = [3, 4, 5, 4, 6, 5, 7];
 const PB_STAT_SPARK_2 = [2, 3, 2, 4, 3, 5, 4];
 const PB_STAT_SPARK_3 = [1, 2, 1, 2, 1, 2, 2];
 
+const PB_RESOURCE = 'kuaizhizao:production-execution-packing-binding';
+
 const PackingBindingPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -155,6 +164,15 @@ const PackingBindingPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const tableRowsRef = useRef<PackingBinding[]>([]);
+  const packingBindingPerms = useResourcePermissions(PB_RESOURCE);
+  const selectedBindingsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is PackingBinding => row != null),
+    [selectedRowKeys],
+  );
   const [searchParams, setSearchParams] = useSearchParams();
 
   const getBindingSourceLabel = useCallback(
@@ -706,6 +724,7 @@ const PackingBindingPage: React.FC = () => {
         uuid: params.uuid,
       })) as PackingBindingPageResult;
       const data = Array.isArray(result?.items) ? result.items : [];
+      tableRowsRef.current = data;
       return {
         data,
         success: true,
@@ -790,18 +809,22 @@ const PackingBindingPage: React.FC = () => {
             </Button>,
           ]}
           toolBarActionsAfterDelete={[
-            <UniBatchMenuButton
-              key="packing-binding-batch-menu"
+            <UniBatchButton
+              key="packing-binding-batch-qrcode"
               selectedRowKeys={selectedRowKeys}
-              menuItems={[
-                {
-                  key: 'batch-qrcode',
-                  label: t('app.kuaizhizao.packingBinding.batchGenerateQrcode'),
-                  icon: <QrcodeOutlined />,
-                  onClick: () => void handleBatchGenerateQRCode(),
-                },
-              ]}
-            />,
+              size="middle"
+              icon={<QrcodeOutlined />}
+              disabled={
+                selectedBindingsForBatch.length > 0 &&
+                !packingBindingBatchPrintAllowed(
+                  selectedBindingsForBatch,
+                  packingBindingPerms.canPrint,
+                )
+              }
+              onAction={() => void handleBatchGenerateQRCode()}
+            >
+              {t('app.kuaizhizao.packingBinding.batchGenerateQrcode')}
+            </UniBatchButton>,
           ]}
           onRow={(record) => ({
             onClick: () => void handleDetail(record),

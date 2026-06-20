@@ -72,6 +72,8 @@ interface UniMaterialSelectProps {
   mastersOnly?: boolean;
   /** 初始绑定的表单实例（通常可以从外层 ProForm / Form 自动获取，也可手动传入） */
   formItemProps?: any;
+  /** 透传给内部 Select（兼容 ProForm 风格的 fieldProps） */
+  fieldProps?: Partial<SelectProps>;
   /** 组件所在的是否是 Form.List 的子项？如果是，请传递该行的 field.name 以便计算回填路径 */
   listFieldKey?: number | string;
   /** Form.List 的 name（当在 Form.List 内时，用于 fillMapping 的 setFieldValue 完整路径） */
@@ -125,9 +127,16 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   sourceType,
   onChange,
   formItemProps,
+  fieldProps,
   ...restProps
 }) => {
   const { style: formItemStyle, ...restFormItemProps } = formItemProps || {}
+  const {
+    onChange: fieldPropsOnChange,
+    style: fieldPropsStyle,
+    getPopupContainer: fieldPropsGetPopupContainer,
+    ...restFieldProps
+  } = (fieldProps || {}) as Partial<SelectProps>;
   const form = Form.useFormInstance();
   const [materialModalVisible, setMaterialModalVisible] = useState(false);
 
@@ -259,6 +268,9 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
       numVal = Number.isFinite(n) ? n : undefined;
     }
     void handleChange(numVal, opt);
+    if (typeof fieldPropsOnChange === 'function') {
+      fieldPropsOnChange(val as any, opt as any);
+    }
   };
 
   const options = useMemo(() => {
@@ -288,12 +300,12 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
       loading={loading}
       disabled={disabled}
       size={size}
-      style={{ width: '100%' }}
+      style={{ width: '100%', ...(fieldPropsStyle as React.CSSProperties | undefined) }}
       options={options}
       filterOption={false}
       onSearch={debounceFetch}
       onChange={mergedOnChange}
-      getPopupContainer={getPopupContainer}
+      getPopupContainer={getPopupContainer ?? fieldPropsGetPopupContainer}
       quickCreate={effectiveQuickCreate}
       advancedSearch={
         showAdvancedSearch
@@ -329,6 +341,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
             }
           : undefined
       }
+      {...restFieldProps}
       {...restProps}
     />
   );

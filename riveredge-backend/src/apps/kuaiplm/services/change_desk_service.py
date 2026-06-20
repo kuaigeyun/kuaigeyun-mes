@@ -19,7 +19,7 @@ from apps.kuaiplm.schemas.change_desk import (
 from apps.master_data.services.bom_change_service import BOMChangeService
 from apps.master_data.services.process_route_change_service import ProcessRouteChangeService
 from core.services.approval.audit_record_enricher import enrich_items
-from infra.exceptions.exceptions import ValidationError
+from infra.exceptions.exceptions import ValidationError, NotFoundError
 
 
 class ChangeDeskService:
@@ -221,13 +221,20 @@ class ChangeDeskService:
         success_count = 0
         failed_items: list[ChangeBatchItem] = []
         errors: list[str] = []
+        seen: set[tuple[str, str]] = set()
         for item in items:
+            dedupe_key = (item.change_uuid, item.change_type)
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
             try:
                 await self.delete_change(
                     tenant_id=tenant_id,
                     change_uuid=item.change_uuid,
                     change_type=item.change_type,
                 )
+                success_count += 1
+            except NotFoundError:
                 success_count += 1
             except (ValueError, ValidationError) as e:
                 failed_items.append(item)

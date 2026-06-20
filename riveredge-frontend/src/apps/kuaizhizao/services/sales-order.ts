@@ -85,6 +85,33 @@ export interface SalesOrder {
   demand_synced?: boolean;
   fee_details?: any[];
   total_fee_amount?: number;
+  lifecycle?: Record<string, unknown>;
+  audit?: Record<string, unknown>;
+  capabilities?: SalesOrderCapabilities;
+}
+
+export interface ActionCapability {
+  allowed: boolean;
+  reason?: string | null;
+}
+
+export interface SalesOrderCapabilities {
+  update?: ActionCapability;
+  delete?: ActionCapability;
+  submit?: ActionCapability;
+  approve?: ActionCapability;
+  close?: ActionCapability;
+  print?: ActionCapability;
+  withdraw_submit?: ActionCapability;
+  revoke_approval?: ActionCapability;
+  push_computation?: ActionCapability;
+  withdraw_computation?: ActionCapability;
+  push_work_order?: ActionCapability;
+  push_shipment_notice?: ActionCapability;
+  push_sales_delivery?: ActionCapability;
+  push_invoice?: ActionCapability;
+  push_sales_return?: ActionCapability;
+  create_change_order?: ActionCapability;
 }
 
 /**
@@ -466,17 +493,21 @@ export async function pushSalesOrderToInvoice(salesOrderId: number): Promise<Pus
 }
 
 export interface PushToSalesReturnResponse {
-  id: number;
+  success?: boolean;
+  message?: string;
+  return_id?: number;
   return_code?: string;
 }
 
-export async function pushSalesOrderToSalesReturn(data: {
-  sales_order_id: number;
+export async function pushSalesOrderToSalesReturn(
+  salesOrderId: number,
+  data: {
   warehouse_id: number;
   warehouse_name?: string;
   return_quantities?: Record<number, number>;
+  return_code?: string;
 }): Promise<PushToSalesReturnResponse> {
-  return apiRequest<PushToSalesReturnResponse>('/apps/kuaizhizao/sales-returns/pull-from-sales-order', {
+  return apiRequest<PushToSalesReturnResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-sales-return`, {
     method: 'POST',
     data,
   });
@@ -500,6 +531,33 @@ export async function pullSalesOrderFromQuotation(quotationId: number): Promise<
   return apiRequest<PullFromQuotationResponse>('/apps/kuaizhizao/sales-orders/pull-from-quotation', {
     method: 'POST',
     data: { quotation_id: quotationId },
+  });
+}
+
+export interface PullFromSalesContractResponse {
+  success: boolean;
+  message: string;
+  source_type: 'sales_contract';
+  source_id: number;
+  sales_order: SalesOrder;
+  sales_contract: {
+    id?: number;
+    contract_code?: string;
+    status?: string;
+    [key: string]: any;
+  };
+}
+
+export async function pullSalesOrderFromSalesContract(
+  contractId: number,
+  data?: { selected_item_ids?: number[]; release_lines?: Array<Record<string, unknown>> },
+): Promise<PullFromSalesContractResponse> {
+  return apiRequest<PullFromSalesContractResponse>('/apps/kuaizhizao/sales-orders/pull-from-sales-contract', {
+    method: 'POST',
+    data: {
+      contract_id: contractId,
+      ...(data || {}),
+    },
   });
 }
 

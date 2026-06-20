@@ -262,16 +262,16 @@ class BatchOperationService:
         Returns:
             Dict: 包含成功和失败记录的字典
         """
+        unique_record_ids = list(dict.fromkeys(record_ids))
         success_records = []
         failed_records = []
 
         # 验证记录是否存在（批量查询）
         valid_ids = []
-        invalid_ids = []
-        
+
         # 分批验证
-        for i in range(0, len(record_ids), batch_size):
-            batch_ids = record_ids[i:i + batch_size]
+        for i in range(0, len(unique_record_ids), batch_size):
+            batch_ids = unique_record_ids[i:i + batch_size]
             records = await model_class.filter(
                 tenant_id=tenant_id,
                 **{f"{id_field}__in": batch_ids}
@@ -281,24 +281,13 @@ class BatchOperationService:
             for record_id in batch_ids:
                 if record_id in valid_id_set:
                     valid_ids.append(record_id)
-                else:
-                    invalid_ids.append(record_id)
-
-        # 记录无效ID
-        for index, record_id in enumerate(record_ids):
-            if record_id in invalid_ids:
-                failed_records.append({
-                    "index": index,
-                    "id": record_id,
-                    "error": "记录不存在"
-                })
 
         if not valid_ids:
             return {
                 "success_count": 0,
-                "failed_count": len(failed_records),
+                "failed_count": 0,
                 "success_records": [],
-                "failed_records": failed_records
+                "failed_records": []
             }
 
         # 批量删除
@@ -311,7 +300,7 @@ class BatchOperationService:
                 ).update(deleted_at=datetime.now())
                 
                 # 记录成功
-                for index, record_id in enumerate(record_ids):
+                for index, record_id in enumerate(unique_record_ids):
                     if record_id in valid_ids:
                         success_records.append({
                             "index": index,
@@ -319,7 +308,7 @@ class BatchOperationService:
                         })
             else:
                 # 批量硬删除（需要逐条删除，因为可能有外键约束）
-                for index, record_id in enumerate(record_ids):
+                for index, record_id in enumerate(unique_record_ids):
                     if record_id in valid_ids:
                         try:
                             record = await model_class.get(
