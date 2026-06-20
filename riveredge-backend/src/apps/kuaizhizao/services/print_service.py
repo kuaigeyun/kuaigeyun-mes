@@ -45,6 +45,11 @@ from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 from apps.kuaizhizao.models.sales_forecast import SalesForecast
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+from apps.kuaizhizao.models.sales_order_change_order import SalesOrderChangeOrder, SalesOrderChangeItem
+from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
+from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
+from apps.kuaizhizao.models.sales_return import SalesReturn
+from apps.kuaizhizao.models.sales_return_item import SalesReturnItem
 from apps.kuaizhizao.models.other_inbound import OtherInbound
 from apps.kuaizhizao.models.other_inbound_item import OtherInboundItem
 from apps.kuaizhizao.models.other_outbound import OtherOutbound
@@ -60,6 +65,7 @@ from apps.kuaizhizao.models.material_borrow import MaterialBorrow
 from apps.kuaizhizao.models.material_borrow_item import MaterialBorrowItem
 from apps.kuaizhizao.models.material_return import MaterialReturn
 from apps.kuaizhizao.models.material_return_item import MaterialReturnItem
+from core.utils.timezone_utils import to_api_isoformat
 
 _FILE_DOWNLOAD_PATH_RE = re.compile(
     r"^/?api/v\d+/core/files/(?P<uuid>[0-9a-fA-F-]{32,36})/download/?$"
@@ -915,6 +921,30 @@ class DocumentPrintService:
             if not document:
                 raise NotFoundError(f"销售订单不存在: {document_id}")
             return await self._format_sales_order_data(document)
+
+        elif document_type == "sales_order_change":
+            document = await SalesOrderChangeOrder.get_or_none(
+                tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+            )
+            if not document:
+                raise NotFoundError(f"销售变更单不存在: {document_id}")
+            return await self._format_sales_order_change_data(document)
+
+        elif document_type == "shipment_notice":
+            document = await ShipmentNotice.get_or_none(
+                tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+            )
+            if not document:
+                raise NotFoundError(f"发货通知单不存在: {document_id}")
+            return await self._format_shipment_notice_data(document)
+
+        elif document_type == "sales_return":
+            document = await SalesReturn.get_or_none(
+                tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+            )
+            if not document:
+                raise NotFoundError(f"销售退货单不存在: {document_id}")
+            return await self._format_sales_return_data(document)
         
         elif document_type == "other_inbound":
             document = await OtherInbound.get_or_none(tenant_id=tenant_id, id=document_id)
@@ -1078,8 +1108,8 @@ class DocumentPrintService:
             "workshop_name": picking.workshop_name,
             "status": picking.status,
             "picker_name": picking.picker_name,
-            "picking_time": picking.picking_time.isoformat() if picking.picking_time else None,
-            "created_at": picking.created_at.isoformat() if picking.created_at else None,
+            "picking_time": to_api_isoformat(picking.picking_time) if picking.picking_time else None,
+            "created_at": to_api_isoformat(picking.created_at) if picking.created_at else None,
             "items": items_data,
         }
 
@@ -1112,8 +1142,8 @@ class DocumentPrintService:
             "warehouse_name": ret.warehouse_name,
             "status": ret.status,
             "returner_name": ret.returner_name,
-            "return_time": ret.return_time.isoformat() if ret.return_time else None,
-            "created_at": ret.created_at.isoformat() if ret.created_at else None,
+            "return_time": to_api_isoformat(ret.return_time) if ret.return_time else None,
+            "created_at": to_api_isoformat(ret.created_at) if ret.created_at else None,
             "items": items_data,
         }
 
@@ -1147,8 +1177,8 @@ class DocumentPrintService:
             "total_quantity": str(receipt.total_quantity),
             "status": receipt.status,
             "receiver_name": receipt.receiver_name,
-            "receipt_time": receipt.receipt_time.isoformat() if receipt.receipt_time else None,
-            "created_at": receipt.created_at.isoformat() if receipt.created_at else None,
+            "receipt_time": to_api_isoformat(receipt.receipt_time) if receipt.receipt_time else None,
+            "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None,
             "items": items_data,
         }
 
@@ -1182,8 +1212,8 @@ class DocumentPrintService:
             "total_quantity": str(receipt.total_quantity),
             "status": receipt.status,
             "receiver_name": receipt.receiver_name,
-            "receipt_time": receipt.receipt_time.isoformat() if receipt.receipt_time else None,
-            "created_at": receipt.created_at.isoformat() if receipt.created_at else None,
+            "receipt_time": to_api_isoformat(receipt.receipt_time) if receipt.receipt_time else None,
+            "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None,
             "items": items_data,
         }
 
@@ -1218,8 +1248,8 @@ class DocumentPrintService:
             "total_amount": str(delivery.total_amount),
             "status": delivery.status,
             "deliverer_name": delivery.deliverer_name,
-            "delivery_time": delivery.delivery_time.isoformat() if delivery.delivery_time else None,
-            "created_at": delivery.created_at.isoformat() if delivery.created_at else None,
+            "delivery_time": to_api_isoformat(delivery.delivery_time) if delivery.delivery_time else None,
+            "created_at": to_api_isoformat(delivery.created_at) if delivery.created_at else None,
             "items": items_data,
         }
 
@@ -1239,7 +1269,7 @@ class DocumentPrintService:
                 "total_amount": str(i.total_price),
                 "received_quantity": str(i.received_quantity),
                 "outstanding_quantity": str(i.outstanding_quantity),
-                "required_date": i.required_date.isoformat() if i.required_date else None,
+                "required_date": to_api_isoformat(i.required_date) if i.required_date else None,
                 "notes": i.notes,
             }
             for i in items
@@ -1249,11 +1279,11 @@ class DocumentPrintService:
             "code": order.order_code,
             "order_name": getattr(order, "order_name", None) or order.order_code,
             "supplier_name": order.supplier_name,
-            "order_date": order.order_date.isoformat() if order.order_date else None,
-            "delivery_date": order.delivery_date.isoformat() if order.delivery_date else None,
+            "order_date": to_api_isoformat(order.order_date) if order.order_date else None,
+            "delivery_date": to_api_isoformat(order.delivery_date) if order.delivery_date else None,
             "total_amount": str(order.total_amount),
             "status": order.status,
-            "created_at": order.created_at.isoformat() if order.created_at else None,
+            "created_at": to_api_isoformat(order.created_at) if order.created_at else None,
             "items": items_data,
         }
 
@@ -1292,8 +1322,8 @@ class DocumentPrintService:
             "total_amount": str(receipt.total_amount),
             "status": receipt.status,
             "receiver_name": receipt.receiver_name,
-            "receipt_time": receipt.receipt_time.isoformat() if receipt.receipt_time else None,
-            "created_at": receipt.created_at.isoformat() if receipt.created_at else None,
+            "receipt_time": to_api_isoformat(receipt.receipt_time) if receipt.receipt_time else None,
+            "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None,
             "items": items_data,
         }
 
@@ -1305,10 +1335,10 @@ class DocumentPrintService:
             "code": forecast.forecast_code,
             "name": forecast.forecast_name,
             "forecast_type": forecast.forecast_type,
-            "start_date": forecast.start_date.isoformat() if forecast.start_date else None,
-            "end_date": forecast.end_date.isoformat() if forecast.end_date else None,
+            "start_date": to_api_isoformat(forecast.start_date) if forecast.start_date else None,
+            "end_date": to_api_isoformat(forecast.end_date) if forecast.end_date else None,
             "status": forecast.status,
-            "created_at": forecast.created_at.isoformat() if forecast.created_at else None,
+            "created_at": to_api_isoformat(forecast.created_at) if forecast.created_at else None,
         }
 
     async def _format_sales_order_data(self, order: SalesOrder) -> Dict[str, Any]:
@@ -1348,7 +1378,7 @@ class DocumentPrintService:
                     "unit_price": str(i.unit_price),
                     "tax_rate": str(i.tax_rate),
                     "total_amount": str(i.total_amount),
-                    "delivery_date": i.delivery_date.isoformat() if i.delivery_date else None,
+                    "delivery_date": to_api_isoformat(i.delivery_date) if i.delivery_date else None,
                     "delivery_status": i.delivery_status,
                     "work_order_code": i.work_order_code,
                     "notes": i.notes,
@@ -1365,12 +1395,149 @@ class DocumentPrintService:
             "code": order.order_code,
             "order_name": getattr(order, "order_name", None) or order.order_code,
             "customer_name": order.customer_name,
-            "order_date": order.order_date.isoformat() if order.order_date else None,
-            "delivery_date": order.delivery_date.isoformat() if order.delivery_date else None,
+            "order_date": to_api_isoformat(order.order_date) if order.order_date else None,
+            "delivery_date": to_api_isoformat(order.delivery_date) if order.delivery_date else None,
             "total_quantity": str(order.total_quantity),
             "total_amount": str(order.total_amount),
             "status": order.status,
-            "created_at": order.created_at.isoformat() if order.created_at else None,
+            "created_at": to_api_isoformat(order.created_at) if order.created_at else None,
+            "items": items_data,
+        }
+
+    async def _format_sales_order_change_data(self, change_order: SalesOrderChangeOrder) -> Dict[str, Any]:
+        """格式化销售变更单数据"""
+        items = await SalesOrderChangeItem.filter(
+            tenant_id=change_order.tenant_id, change_order_id=change_order.id
+        ).all()
+        items_data = [
+            {
+                "line_no": i.line_no,
+                "change_type": i.change_type,
+                "material_code": i.material_code,
+                "material_name": i.material_name,
+                "material_spec": i.material_spec,
+                "material_unit": i.material_unit,
+                "before_quantity": str(i.before_quantity or 0),
+                "after_quantity": str(i.after_quantity or 0),
+                "before_unit_price": str(i.before_unit_price or 0),
+                "after_unit_price": str(i.after_unit_price or 0),
+                "before_amount": str(i.before_amount or 0),
+                "after_amount": str(i.after_amount or 0),
+                "delta_amount": str(i.delta_amount or 0),
+                "before_delivery_date": to_api_isoformat(i.before_delivery_date) if i.before_delivery_date else None,
+                "after_delivery_date": to_api_isoformat(i.after_delivery_date) if i.after_delivery_date else None,
+                "notes": i.notes,
+            }
+            for i in items
+        ]
+        return {
+            "document_type": "sales_order_change",
+            "code": change_order.change_code,
+            "change_code": change_order.change_code,
+            "source_order_code": change_order.source_order_code,
+            "change_version": int(change_order.change_version or 1),
+            "customer_name": change_order.customer_name,
+            "change_reason": change_order.change_reason,
+            "change_category": change_order.change_category,
+            "effective_date": to_api_isoformat(change_order.effective_date) if change_order.effective_date else None,
+            "status": change_order.status,
+            "review_status": change_order.review_status,
+            "reviewer_name": change_order.reviewer_name,
+            "review_time": to_api_isoformat(change_order.review_time) if change_order.review_time else None,
+            "before_total_quantity": str(change_order.before_total_quantity or 0),
+            "after_total_quantity": str(change_order.after_total_quantity or 0),
+            "before_total_amount": str(change_order.before_total_amount or 0),
+            "after_total_amount": str(change_order.after_total_amount or 0),
+            "delta_amount": str(change_order.delta_amount or 0),
+            "applied_at": to_api_isoformat(change_order.applied_at) if change_order.applied_at else None,
+            "notes": change_order.notes,
+            "created_at": to_api_isoformat(change_order.created_at) if change_order.created_at else None,
+            "items": items_data,
+        }
+
+    async def _format_shipment_notice_data(self, notice: ShipmentNotice) -> Dict[str, Any]:
+        """格式化发货通知单数据"""
+        items = await ShipmentNoticeItem.filter(
+            tenant_id=notice.tenant_id, notice_id=notice.id
+        ).all()
+        items_data = [
+            {
+                "material_code": i.material_code,
+                "material_name": i.material_name,
+                "material_spec": i.material_spec,
+                "material_unit": i.material_unit,
+                "notice_quantity": str(i.notice_quantity or 0),
+                "unit_price": str(i.unit_price or 0),
+                "total_amount": str(i.total_amount or 0),
+                "notes": i.notes,
+            }
+            for i in items
+        ]
+        return {
+            "document_type": "shipment_notice",
+            "code": notice.notice_code,
+            "notice_code": notice.notice_code,
+            "sales_order_code": notice.sales_order_code,
+            "customer_name": notice.customer_name,
+            "customer_contact": notice.customer_contact,
+            "customer_phone": notice.customer_phone,
+            "warehouse_name": notice.warehouse_name,
+            "planned_ship_date": to_api_isoformat(notice.planned_ship_date) if notice.planned_ship_date else None,
+            "shipping_address": notice.shipping_address,
+            "status": notice.status,
+            "notified_at": to_api_isoformat(notice.notified_at) if notice.notified_at else None,
+            "sales_delivery_code": notice.sales_delivery_code,
+            "total_quantity": str(notice.total_quantity or 0),
+            "total_amount": str(notice.total_amount or 0),
+            "notes": notice.notes,
+            "created_at": to_api_isoformat(notice.created_at) if notice.created_at else None,
+            "items": items_data,
+        }
+
+    async def _format_sales_return_data(self, sales_return: SalesReturn) -> Dict[str, Any]:
+        """格式化销售退货单数据"""
+        items = await SalesReturnItem.filter(
+            tenant_id=sales_return.tenant_id, return_id=sales_return.id
+        ).all()
+        items_data = [
+            {
+                "material_code": i.material_code,
+                "material_name": i.material_name,
+                "material_spec": i.material_spec,
+                "material_unit": i.material_unit,
+                "return_quantity": str(i.return_quantity or 0),
+                "unit_price": str(i.unit_price or 0),
+                "total_amount": str(i.total_amount or 0),
+                "batch_number": i.batch_number,
+                "location_code": i.location_code,
+                "status": i.status,
+                "notes": i.notes,
+            }
+            for i in items
+        ]
+        return {
+            "document_type": "sales_return",
+            "code": sales_return.return_code,
+            "return_code": sales_return.return_code,
+            "sales_delivery_code": sales_return.sales_delivery_code,
+            "sales_order_code": sales_return.sales_order_code,
+            "customer_name": sales_return.customer_name,
+            "warehouse_name": sales_return.warehouse_name,
+            "return_time": to_api_isoformat(sales_return.return_time) if sales_return.return_time else None,
+            "returner_name": sales_return.returner_name,
+            "review_status": sales_return.review_status,
+            "reviewer_name": sales_return.reviewer_name,
+            "review_time": to_api_isoformat(sales_return.review_time) if sales_return.review_time else None,
+            "return_reason": sales_return.return_reason,
+            "return_type": sales_return.return_type,
+            "status": sales_return.status,
+            "total_quantity": str(sales_return.total_quantity or 0),
+            "total_amount": str(sales_return.total_amount or 0),
+            "shipping_method": sales_return.shipping_method,
+            "tracking_number": sales_return.tracking_number,
+            "shipping_address": sales_return.shipping_address,
+            "notes": sales_return.notes,
+            "created_at": to_api_isoformat(sales_return.created_at) if sales_return.created_at else None,
             "items": items_data,
         }
 
@@ -1400,9 +1567,9 @@ class DocumentPrintService:
             "total_amount": str(inbound.total_amount),
             "status": inbound.status,
             "receiver_name": inbound.receiver_name,
-            "receipt_time": inbound.receipt_time.isoformat() if inbound.receipt_time else None,
+            "receipt_time": to_api_isoformat(inbound.receipt_time) if inbound.receipt_time else None,
             "notes": inbound.notes,
-            "created_at": inbound.created_at.isoformat() if inbound.created_at else None,
+            "created_at": to_api_isoformat(inbound.created_at) if inbound.created_at else None,
             "items": items_data,
         }
 
@@ -1432,9 +1599,9 @@ class DocumentPrintService:
             "total_amount": str(outbound.total_amount),
             "status": outbound.status,
             "deliverer_name": outbound.deliverer_name,
-            "delivery_time": outbound.delivery_time.isoformat() if outbound.delivery_time else None,
+            "delivery_time": to_api_isoformat(outbound.delivery_time) if outbound.delivery_time else None,
             "notes": outbound.notes,
-            "created_at": outbound.created_at.isoformat() if outbound.created_at else None,
+            "created_at": to_api_isoformat(outbound.created_at) if outbound.created_at else None,
             "items": items_data,
         }
 
@@ -1503,7 +1670,7 @@ class DocumentPrintService:
                     "unit_price": str(i.unit_price),
                     "tax_rate": str(getattr(i, "tax_rate", None) or 0),
                     "total_amount": str(i.total_amount),
-                    "delivery_date": i.delivery_date.isoformat() if i.delivery_date else None,
+                    "delivery_date": to_api_isoformat(i.delivery_date) if i.delivery_date else None,
                     "notes": i.notes,
                 }
             )
@@ -1518,7 +1685,7 @@ class DocumentPrintService:
             "revision_label": f"第{vn}版",
             "is_latest_in_series": getattr(quotation, "is_latest_in_series", True),
             "formal_document_generated_at": (
-                quotation.formal_document_generated_at.isoformat()
+                to_api_isoformat(quotation.formal_document_generated_at)
                 if getattr(quotation, "formal_document_generated_at", None)
                 else None
             ),
@@ -1527,9 +1694,9 @@ class DocumentPrintService:
             "customer_name": quotation.customer_name,
             "customer_contact": quotation.customer_contact,
             "customer_phone": quotation.customer_phone,
-            "quotation_date": quotation.quotation_date.isoformat() if quotation.quotation_date else None,
-            "valid_until": quotation.valid_until.isoformat() if quotation.valid_until else None,
-            "delivery_date": quotation.delivery_date.isoformat() if quotation.delivery_date else None,
+            "quotation_date": to_api_isoformat(quotation.quotation_date) if quotation.quotation_date else None,
+            "valid_until": to_api_isoformat(quotation.valid_until) if quotation.valid_until else None,
+            "delivery_date": to_api_isoformat(quotation.delivery_date) if quotation.delivery_date else None,
             "total_quantity": str(quotation.total_quantity),
             "total_amount": str(quotation.total_amount),
             "price_type": getattr(quotation, "price_type", None) or "tax_exclusive",
@@ -1539,7 +1706,7 @@ class DocumentPrintService:
             "shipping_method": quotation.shipping_method,
             "payment_terms": quotation.payment_terms,
             "notes": quotation.notes,
-            "created_at": quotation.created_at.isoformat() if quotation.created_at else None,
+            "created_at": to_api_isoformat(quotation.created_at) if quotation.created_at else None,
             "items": items_data,
         }
 
@@ -1577,7 +1744,7 @@ class DocumentPrintService:
                     "unit_price": str(i.unit_price),
                     "tax_rate": str(getattr(i, "tax_rate", None) or 0),
                     "total_amount": str(i.total_amount),
-                    "delivery_date": i.delivery_date.isoformat() if i.delivery_date else None,
+                    "delivery_date": to_api_isoformat(i.delivery_date) if i.delivery_date else None,
                     "notes": i.notes,
                     "chinese_short_name": chinese_short_name,
                     "model_number": model_number,
@@ -1604,9 +1771,9 @@ class DocumentPrintService:
             "customer_name": contract.customer_name,
             "customer_contact": contract.customer_contact,
             "customer_phone": contract.customer_phone,
-            "contract_date": contract.contract_date.isoformat() if contract.contract_date else None,
-            "valid_from": contract.valid_from.isoformat() if contract.valid_from else None,
-            "valid_to": contract.valid_to.isoformat() if contract.valid_to else None,
+            "contract_date": to_api_isoformat(contract.contract_date) if contract.contract_date else None,
+            "valid_from": to_api_isoformat(contract.valid_from) if contract.valid_from else None,
+            "valid_to": to_api_isoformat(contract.valid_to) if contract.valid_to else None,
             "total_quantity": str(contract.total_quantity),
             "total_amount": str(contract.total_amount),
             "released_quantity": str(contract.released_quantity or 0),
@@ -1623,7 +1790,7 @@ class DocumentPrintService:
             "term_group_name": contract.term_group_name,
             "contract_terms": contract.contract_terms,
             "notes": contract.notes,
-            "created_at": contract.created_at.isoformat() if contract.created_at else None,
+            "created_at": to_api_isoformat(contract.created_at) if contract.created_at else None,
             "items": items_data,
         }
 
@@ -1649,12 +1816,12 @@ class DocumentPrintService:
             "warehouse_name": borrow.warehouse_name,
             "borrower_name": borrow.borrower_name,
             "department": borrow.department,
-            "expected_return_date": borrow.expected_return_date.isoformat() if borrow.expected_return_date else None,
-            "borrow_time": borrow.borrow_time.isoformat() if borrow.borrow_time else None,
+            "expected_return_date": to_api_isoformat(borrow.expected_return_date) if borrow.expected_return_date else None,
+            "borrow_time": to_api_isoformat(borrow.borrow_time) if borrow.borrow_time else None,
             "total_quantity": str(borrow.total_quantity),
             "status": borrow.status,
             "notes": borrow.notes,
-            "created_at": borrow.created_at.isoformat() if borrow.created_at else None,
+            "created_at": to_api_isoformat(borrow.created_at) if borrow.created_at else None,
             "items": items_data,
         }
 
@@ -1679,11 +1846,11 @@ class DocumentPrintService:
             "borrow_code": return_obj.borrow_code,
             "warehouse_name": return_obj.warehouse_name,
             "returner_name": return_obj.returner_name,
-            "return_time": return_obj.return_time.isoformat() if return_obj.return_time else None,
+            "return_time": to_api_isoformat(return_obj.return_time) if return_obj.return_time else None,
             "total_quantity": str(return_obj.total_quantity),
             "status": return_obj.status,
             "notes": return_obj.notes,
-            "created_at": return_obj.created_at.isoformat() if return_obj.created_at else None,
+            "created_at": to_api_isoformat(return_obj.created_at) if return_obj.created_at else None,
             "items": items_data,
         }
 
@@ -1712,16 +1879,16 @@ class DocumentPrintService:
             "customer_name": notice.customer_name,
             "customer_contact": notice.customer_contact,
             "customer_phone": notice.customer_phone,
-            "planned_delivery_date": notice.planned_delivery_date.isoformat() if notice.planned_delivery_date else None,
+            "planned_delivery_date": to_api_isoformat(notice.planned_delivery_date) if notice.planned_delivery_date else None,
             "carrier": notice.carrier,
             "tracking_number": notice.tracking_number,
             "shipping_address": notice.shipping_address,
             "status": notice.status,
-            "sent_at": notice.sent_at.isoformat() if notice.sent_at else None,
+            "sent_at": to_api_isoformat(notice.sent_at) if notice.sent_at else None,
             "total_quantity": str(notice.total_quantity),
             "total_amount": str(notice.total_amount),
             "notes": notice.notes,
-            "created_at": notice.created_at.isoformat() if notice.created_at else None,
+            "created_at": to_api_isoformat(notice.created_at) if notice.created_at else None,
             "items": items_data,
         }
 
@@ -1742,7 +1909,7 @@ class DocumentPrintService:
             "quality_status": inspection.quality_status,
             "inspection_result": inspection.inspection_result,
             "inspector_name": inspection.inspector_name,
-            "inspection_time": inspection.inspection_time.isoformat() if inspection.inspection_time else None,
+            "inspection_time": to_api_isoformat(inspection.inspection_time) if inspection.inspection_time else None,
             "work_order_code": inspection.work_order_code,
             "sales_order_code": inspection.sales_order_code,
             "customer_name": inspection.customer_name,

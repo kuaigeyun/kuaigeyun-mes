@@ -22,7 +22,7 @@ from apps.kuaizhizao.schemas.work_order_score import (
     WorkOrderScoreResponse,
 )
 from core.services.base import BaseService
-from core.utils.timezone_utils import make_aware, now_utc
+from core.utils.timezone_utils import make_aware, now_utc, to_api_isoformat
 from infra.services.business_config_service import BusinessConfigService
 
 SCORE_CONFIG_VERSION = "default-v1"
@@ -242,7 +242,7 @@ class WorkOrderScoreService(BaseService):
         demand_weight = weights.get("demand_urgency", 0.0)
         demand_weighted = demand_score * demand_weight
         breakdown["demand_urgency"] = {
-            "raw": demand_due.isoformat() if demand_due else None,
+            "raw": to_api_isoformat(demand_due) if demand_due else None,
             "score": round(demand_score, 2),
             "weight": round(demand_weight, 4),
             "weighted": round(demand_weighted, 2),

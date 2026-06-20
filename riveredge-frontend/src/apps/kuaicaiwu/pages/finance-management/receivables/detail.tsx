@@ -22,6 +22,7 @@ import {
 import { getReceivableLifecycle } from '../../../utils/receivableLifecycle';
 import { getPaymentMethodOptions } from '../../../utils/financeSharedOptions';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 
 const P = 'app.kuaicaiwu.receivable';
 
@@ -78,7 +79,7 @@ const ReceivableDetail: React.FC = () => {
       await receivableService.recordReceipt(Number(id), {
         receivable_id: Number(id),
         receipt_amount: values.receipt_amount,
-        receipt_date: dayjs(values.receipt_date).format('YYYY-MM-DD'),
+        receipt_date: formatDateTime(values.receipt_date, 'YYYY-MM-DD'),
         receipt_method: values.receipt_method || '银行转账',
         notes: values.notes,
       });

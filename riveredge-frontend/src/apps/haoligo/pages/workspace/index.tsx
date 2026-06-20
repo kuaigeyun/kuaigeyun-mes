@@ -56,6 +56,7 @@ import {
 } from '../../../kuaizhizao/components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../kuaizhizao/components/module-center';
 import { UniTableStackedPrimaryCell } from '../../../../components/uni-table/stackedPrimaryColumn';
+import { formatDateTime } from '../../../../utils/format';
 
 const { Text } = Typography;
 const { useToken } = theme;
@@ -84,7 +85,7 @@ function buildHazardTrendFromDailyPoints(
 ): { date: string; count: number }[] {
   const countByDay = new Map<string, number>();
   for (const p of points) {
-    const mmdd = dayjs(p.label).format('MM-DD');
+    const mmdd = formatDateTime(p.label, 'MM-DD');
     countByDay.set(mmdd, (countByDay.get(mmdd) ?? 0) + Math.round(p.value));
   }
   return last7Days.map((d) => ({ date: d, count: countByDay.get(d) ?? 0 }));
@@ -157,7 +158,7 @@ const WorkspaceMaintenanceMetricsCell: React.FC<{
         )
       : moldDominantDimensionLabel((record as MoldMaintenanceAlertRow).dominant_dimension ?? null);
   const lastAt = record.last_upkeep_at;
-  const lastLabel = lastAt ? `上次 ${dayjs(lastAt).format('MM-DD')}` : null;
+  const lastLabel = lastAt ? `上次 ${formatDateTime(lastAt, 'MM-DD')}` : null;
   const remainingLabel =
     variant === 'equipment'
       ? equipmentRemainingLabel(record as EquipmentMaintenanceAlertRow)

@@ -25,6 +25,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 import { UniTable } from '../../../../../components/uni-table';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import {
@@ -1018,7 +1019,7 @@ const EquipmentLedgerPage: React.FC = () => {
               title: t('app.haoligo.equipment.ledger.statusHistoryColTime'),
               dataIndex: 'created_at',
               width: 180,
-              render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '—'),
+              render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '—'),
             },
             {
               title: t('app.haoligo.equipment.ledger.statusHistoryColOld'),

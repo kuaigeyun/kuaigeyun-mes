@@ -11,6 +11,7 @@ import dayjs from 'dayjs';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { ensureGanttIconsCssLoaded } from '../../../utils/loadGanttIconsCss';
+import { formatDateTime } from '../../../utils/format';
 
 export interface RdProjectGanttItem {
   id: number;
@@ -45,8 +46,8 @@ function buildGanttScales(t: TFunction) {
 }
 
 function toGanttTask(t: TFunction, item: RdProjectGanttItem, index: number): GanttTask {
-  const startStr = item.planned_start_date || dayjs().format('YYYY-MM-DD');
-  const endStr = item.planned_end_date || dayjs(startStr).add(90, 'day').format('YYYY-MM-DD');
+  const startStr = item.planned_start_date || formatDateTime(dayjs(), 'YYYY-MM-DD');
+  const endStr = item.planned_end_date || formatDateTime(dayjs(startStr).add(90, 'day'), 'YYYY-MM-DD');
   const start = dayjs(startStr).toDate();
   let end = dayjs(endStr).toDate();
   if (end.getTime() <= start.getTime()) {

@@ -40,6 +40,7 @@ import {
 } from '../../components/kuaiplmMeta';
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
+import { formatDateTime } from '../../../../utils/format';
 
 const PAGE_CODE_RD = 'kuaiplm-rd-project';
 const PAGE_CODE_DELIVERY = 'kuaiplm-delivery-project';
@@ -259,14 +260,14 @@ const RdProjectsListPage: React.FC = () => {
         dataIndex: 'planned_end_date',
         width: 120,
         hideInSearch: true,
-        render: (_, row) => (row.planned_end_date ? dayjs(row.planned_end_date).format('YYYY-MM-DD') : '-'),
+        render: (_, row) => (row.planned_end_date ? formatDateTime(row.planned_end_date, 'YYYY-MM-DD') : '-'),
       },
       {
         title: t('app.kuaiplm.common.columns.updatedAt'),
         dataIndex: 'updated_at',
         width: 168,
         hideInSearch: true,
-        render: (_, row) => (row.updated_at ? dayjs(row.updated_at).format('YYYY-MM-DD HH:mm') : '-'),
+        render: (_, row) => (row.updated_at ? formatDateTime(row.updated_at, 'YYYY-MM-DD HH:mm') : '-'),
       },
       {
         title: t('app.kuaiplm.common.columns.lifecycle'),
@@ -422,10 +423,10 @@ const RdProjectsListPage: React.FC = () => {
             owner_id: selectedOwnerRef.current?.id,
             owner_name: selectedOwnerRef.current?.name,
             planned_start_date: values.planned_start_date
-              ? dayjs(values.planned_start_date).format('YYYY-MM-DD')
+              ? formatDateTime(values.planned_start_date, 'YYYY-MM-DD')
               : undefined,
             planned_end_date: values.planned_end_date
-              ? dayjs(values.planned_end_date).format('YYYY-MM-DD')
+              ? formatDateTime(values.planned_end_date, 'YYYY-MM-DD')
               : undefined,
             notes: values.notes,
           });

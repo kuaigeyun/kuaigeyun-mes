@@ -16,6 +16,7 @@ from packaging.version import InvalidVersion, Version
 from core.config.client_product_registry import DEFAULT_CLIENT_PRODUCTS
 from core.models.client_product import CoreClientProduct
 from core.models.client_release import CoreClientRelease
+from core.utils.timezone_utils import to_api_isoformat
 from infra.config.infra_config import infra_settings
 from infra.domain.timezone_utils import now
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -211,9 +212,9 @@ def _release_to_dict(row: CoreClientRelease, origin: str) -> dict[str, Any]:
         "is_active": row.is_active,
         "rollout_percent": row.rollout_percent,
         "artifact_ext": row.artifact_ext,
-        "published_at": row.published_at.isoformat() if row.published_at else None,
+        "published_at": to_api_isoformat(row.published_at) if row.published_at else None,
         "created_by": row.created_by,
-        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "created_at": to_api_isoformat(row.created_at) if row.created_at else None,
     }
     pkg = _package_payload(row, origin)
     if pkg:

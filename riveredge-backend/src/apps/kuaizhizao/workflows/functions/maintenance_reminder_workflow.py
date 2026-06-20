@@ -10,6 +10,7 @@ from loguru import logger
 from apps.kuaizhizao.services.maintenance_reminder_service import MaintenanceReminderService
 from core.tasks.dispatcher import TaskEvent, dispatch_event
 from core.tasks.event_compat import Event, TriggerEvent
+from core.utils.timezone_utils import to_api_isoformat
 from core.utils.workflow_tenant_isolation import with_tenant_isolation
 from core.workflows.client import workflow_client
 from infra.domain.tenant_context import get_current_tenant_id
@@ -21,11 +22,11 @@ async def run_maintenance_reminder_scheduler() -> Dict[str, Any]:
         await dispatch_event(
             TaskEvent(
                 name="maintenance-reminder/check",
-                data={"timestamp": now.isoformat(), "advance_days": 7},
+                data={"timestamp": to_api_isoformat(now), "advance_days": 7},
             )
         )
-        logger.info(f"已发送维护提醒检查事件: {now.isoformat()}")
-        return {"success": True, "timestamp": now.isoformat()}
+        logger.info(f"已发送维护提醒检查事件: {to_api_isoformat(now)}")
+        return {"success": True, "timestamp": to_api_isoformat(now)}
     except Exception as e:
         logger.error(f"维护提醒调度器执行失败: {e}")
         return {"success": False, "error": str(e)}

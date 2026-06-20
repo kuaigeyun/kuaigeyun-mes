@@ -8,6 +8,11 @@
 import dayjs, { Dayjs } from 'dayjs';
 import { useConfigStore } from '../stores/configStore';
 
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const DATETIME_NO_TZ_PATTERN =
+  /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?$/;
+const TZ_SUFFIX_PATTERN = /(Z|[+-]\d{2}:?\d{2})$/i;
+
 /** 从 configStore 获取日期格式 */
 function getDateFormatFromSiteSetting(): string {
   return useConfigStore.getState().getConfig('date_format', 'YYYY-MM-DD');
@@ -24,6 +29,32 @@ function getDatetimeFormatFromSiteSetting(): string {
 }
 
 /**
+ * 统一按站点时区解析：
+ * - 对不带时区的日期/时间字符串，按站点时区解释（避免被浏览器本机时区二次偏移）
+ * - 对带时区/UTC 的值，转换到站点时区展示
+ */
+function parseBySiteTimezone(
+  value: string | Date | number | Dayjs,
+  timezone: string
+): Dayjs {
+  if (dayjs.isDayjs(value)) {
+    return value.tz(timezone);
+  }
+
+  if (typeof value === 'string') {
+    const text = value.trim();
+    if (DATE_ONLY_PATTERN.test(text)) {
+      return dayjs.tz(`${text} 00:00:00`, timezone);
+    }
+    if (DATETIME_NO_TZ_PATTERN.test(text) && !TZ_SUFFIX_PATTERN.test(text)) {
+      return dayjs.tz(text.replace(' ', 'T'), timezone);
+    }
+  }
+
+  return dayjs(value).tz(timezone);
+}
+
+/**
  * 格式化日期（使用站点设置中的日期格式和时区）
  * 用于单据、表格等业务展示场景
  *
@@ -37,7 +68,7 @@ export function formatDateBySiteSetting(
 ): string {
   if (date == null || date === '') return fallback;
   const tz = getTimezoneFromSiteSetting();
-  const d = dayjs(date).tz(tz);
+  const d = parseBySiteTimezone(date, tz);
   if (!d.isValid()) return fallback;
   return d.format(getDateFormatFromSiteSetting());
 }
@@ -55,7 +86,7 @@ export function formatDateTimeBySiteSetting(
 ): string {
   if (date == null || date === '') return fallback;
   const tz = getTimezoneFromSiteSetting();
-  const d = dayjs(date).tz(tz);
+  const d = parseBySiteTimezone(date, tz);
   if (!d.isValid()) return fallback;
   return d.format(getDatetimeFormatFromSiteSetting());
 }
@@ -83,7 +114,7 @@ export function formatDateTime(
 ): string {
   if (!date) return '-';
   const tz = getTimezoneFromSiteSetting();
-  return dayjs(date).tz(tz).format(format ?? getDatetimeFormatFromSiteSetting());
+  return parseBySiteTimezone(date, tz).format(format ?? getDatetimeFormatFromSiteSetting());
 }
 
 /**
@@ -99,7 +130,7 @@ export function formatDate(
 ): string {
   if (!date) return '-';
   const tz = getTimezoneFromSiteSetting();
-  return dayjs(date).tz(tz).format(format ?? getDateFormatFromSiteSetting());
+  return parseBySiteTimezone(date, tz).format(format ?? getDateFormatFromSiteSetting());
 }
 
 /**

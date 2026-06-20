@@ -263,9 +263,15 @@ export function getQuotationLifecycle(
   if (!record) return { percent: 0, stageName: '-', mainStages: [] };
   const raw = record as Record<string, unknown>;
   const backend = (record?.lifecycle ?? raw.lifecycle) as BackendLifecycle | undefined;
-  let base = backend?.main_stages?.length
-    ? parseBackendLifecycle(backend)
-    : parseBackendLifecycle(buildFallbackLifecycle(raw, auditRequired));
+  if (!backend?.main_stages?.length) {
+    return {
+      percent: 0,
+      stageName: t ? t('common.lifecycleMissing', { defaultValue: '生命周期缺失' }) : '生命周期缺失',
+      status: 'exception',
+      mainStages: [],
+    };
+  }
+  let base = parseBackendLifecycle(backend);
 
   if (raw.conversion_downstream_missing === true) {
     base = {

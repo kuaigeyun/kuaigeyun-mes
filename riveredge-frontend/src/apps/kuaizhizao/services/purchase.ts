@@ -278,6 +278,13 @@ export async function submitPurchaseOrder(id: number): Promise<PurchaseOrder> {
   });
 }
 
+/** 撤回提交（待审核 -> 草稿），走统一审核入口 */
+export async function withdrawPurchaseOrder(id: number): Promise<PurchaseOrder> {
+  return apiRequest<PurchaseOrder>(`/core/uni-audit/purchase_order/${id}/withdraw`, {
+    method: 'POST',
+  });
+}
+
 /**
  * 下推采购入库预览（返回批号等，供弹窗展示）
  */

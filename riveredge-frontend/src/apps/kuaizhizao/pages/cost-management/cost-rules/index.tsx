@@ -25,6 +25,7 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG
 import { costRuleApi } from '../../../services/cost';
 import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface CostRule {
   id?: number;
@@ -234,7 +235,7 @@ const CostRulePage: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
-      render: (_, r) => (r.created_at ? dayjs(r.created_at as string).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (_, r) => (r.created_at ? formatDateTime(r.created_at as string, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
       title: '操作',
@@ -342,7 +343,7 @@ const CostRulePage: React.FC = () => {
       title: '创建时间',
       dataIndex: 'created_at',
       render: (_, entity) =>
-        entity.created_at ? dayjs(entity.created_at as string).format('YYYY-MM-DD HH:mm:ss') : '-',
+        entity.created_at ? formatDateTime(entity.created_at as string, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: '更新人',
@@ -352,7 +353,7 @@ const CostRulePage: React.FC = () => {
       title: '更新时间',
       dataIndex: 'updated_at',
       render: (_, entity) =>
-        entity.updated_at ? dayjs(entity.updated_at as string).format('YYYY-MM-DD HH:mm:ss') : '-',
+        entity.updated_at ? formatDateTime(entity.updated_at as string, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
   ];
 

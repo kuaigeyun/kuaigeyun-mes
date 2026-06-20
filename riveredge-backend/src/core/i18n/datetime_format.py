@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
+from infra.config.infra_config import infra_settings
 
 # 长 token 优先替换，避免 YYYY 被 YY 截断。
 _MOMENT_TO_STRFTIME: tuple[tuple[str, str], ...] = (
@@ -46,6 +48,9 @@ def format_datetime_value(value: Any, *, pattern: str) -> str:
     dt = _coerce_datetime(value)
     if dt is None:
         return str(value) if value not in (None, "") else ""
+    # 带时区的时间统一转到系统时区；无时区值保持原墙钟时间，避免误判来源时区导致二次偏移。
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(ZoneInfo(infra_settings.TIMEZONE))
     py_fmt = moment_pattern_to_strftime(pattern)
     try:
         return dt.strftime(py_fmt)

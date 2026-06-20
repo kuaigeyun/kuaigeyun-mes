@@ -70,7 +70,7 @@ import {
 import { downloadFile } from '../../../services/common';
 import { countWithPagedRequests } from '../../../../../utils/pagedCount';
 import dayjs from 'dayjs';
-import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { useGlobalStore } from '../../../../../stores/globalStore';
@@ -105,7 +105,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
     const value = dataIndex != null ? dataSource[dataIndex] : undefined;
     let content: React.ReactNode = value as React.ReactNode;
     if (col.valueType === 'dateTime' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
     }
     if (col.render && dataSource != null) {
             content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
@@ -801,7 +801,7 @@ const ProcessInspectionPage: React.FC = () => {
       width: 168,
       hideInSearch: true,
       defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     ...inspectionCustomFieldColumns,
     {

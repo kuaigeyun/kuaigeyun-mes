@@ -21,6 +21,7 @@ import {
 } from '../../../services/phase2';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
+import { formatDateTime } from '../../../../../utils/format';
 
 const DesignReviewsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -118,7 +119,7 @@ const DesignReviewsPage: React.FC = () => {
       dataIndex: 'scheduled_at',
       width: 168,
       hideInSearch: true,
-      render: (_, row) => (row.scheduled_at ? dayjs(row.scheduled_at).format('YYYY-MM-DD HH:mm') : '-'),
+      render: (_, row) => (row.scheduled_at ? formatDateTime(row.scheduled_at, 'YYYY-MM-DD HH:mm') : '-'),
     },
     {
       title: t('common.actions'),

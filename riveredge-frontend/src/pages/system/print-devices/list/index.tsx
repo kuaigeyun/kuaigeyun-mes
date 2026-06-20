@@ -31,6 +31,7 @@ import {
   PrintDevicePrintResponse,
 } from '../../../../services/printDevice';
 import { getPrintTemplateList } from '../../../../services/printTemplate';
+import { formatDateTime } from '../../../../utils/format';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -277,7 +278,7 @@ const PrintDeviceListPage: React.FC = () => {
           title: 'RiverEdge System Test Print',
           device_name: record.name,
           device_code: record.code,
-          print_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+          print_time: formatDateTime(new Date(), 'YYYY-MM-DD HH:mm:ss'),
           test_message: 'If you can see this, the printer is working correctly.',
           organization: 'RiverEdge Industrial',
         },

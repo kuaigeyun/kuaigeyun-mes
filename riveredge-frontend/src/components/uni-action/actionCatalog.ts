@@ -12,7 +12,7 @@ export function rowActionLabelKeep(): { [ROW_ACTION_LABEL_KEEP_ATTR]: true } {
   return { [ROW_ACTION_LABEL_KEEP_ATTR]: true }
 }
 
-/** 与后端 ACTION_DISPLAY_LABELS 对齐；行内 read→详情、approve→审核通过 等细化 */
+/** 与后端 ACTION_DISPLAY_LABELS 对齐；行内 read→详情、approve→审核 等细化 */
 const ROW_ACTION_LABEL_FALLBACK: Partial<Record<RowActionPermissionKind, string>> = {
   read: '详情',
   display: '展示',
@@ -24,7 +24,7 @@ const ROW_ACTION_LABEL_FALLBACK: Partial<Record<RowActionPermissionKind, string>
   print: '打印',
   submit: '提交',
   audit: '审核',
-  approve: '审核通过',
+  approve: '审核',
   reject: '驳回',
   revoke: '撤销审核',
   execute: '执行',

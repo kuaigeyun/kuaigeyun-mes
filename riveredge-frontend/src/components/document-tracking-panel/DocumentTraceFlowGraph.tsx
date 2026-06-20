@@ -346,6 +346,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
 }) => {
   const { t } = useTranslation();
   const { token } = useToken();
+  const traceCanvasRadius = Math.max(4, Number(token.borderRadiusLG ?? token.borderRadius ?? 6));
   const metaRef = useRef<Record<string, TraceGraphNodeMeta>>({});
   const onDocumentClickRef = useRef(onDocumentClick);
   onDocumentClickRef.current = onDocumentClick;
@@ -697,7 +698,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
           boxShadow: traceCanvasActive
             ? `inset 0 0 0 3px ${token.colorPrimary}40, 0 0 0 2px ${token.colorPrimary}2e`
             : undefined,
-          borderRadius: traceChartFullscreen ? 0 : token.borderRadius,
+          borderRadius: traceChartFullscreen ? 0 : traceCanvasRadius,
           overflow: 'hidden',
           background: token.colorBgContainer,
           transition: 'border-color 0.2s ease, box-shadow 0.2s ease',

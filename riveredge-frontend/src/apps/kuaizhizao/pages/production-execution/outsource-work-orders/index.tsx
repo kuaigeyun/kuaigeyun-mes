@@ -86,6 +86,7 @@ import {
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { formatDateTime } from '../../../../../utils/format';
 
 const OUTSOURCE_WORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_work_orders';
 
@@ -164,9 +165,9 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
     const value = dataIndex != null ? dataSource[dataIndex] : undefined;
     let content: React.ReactNode = value as React.ReactNode;
     if (col.valueType === 'dateTime' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
     } else if (col.valueType === 'date' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD');
+      content = formatDateTime(value as string, 'YYYY-MM-DD');
     }
     if (col.render && dataSource != null) {
             content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
@@ -506,7 +507,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         valueType: 'dateTime',
         render: (_, record) => {
           const date = record.plannedStartDate || record.planned_start_date;
-          return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
+          return date ? formatDateTime(date, 'YYYY-MM-DD HH:mm:ss') : '-';
         },
       },
       {
@@ -515,7 +516,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         valueType: 'dateTime',
         render: (_, record) => {
           const date = record.plannedEndDate || record.planned_end_date;
-          return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
+          return date ? formatDateTime(date, 'YYYY-MM-DD HH:mm:ss') : '-';
         },
       },
       {
@@ -524,7 +525,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         valueType: 'dateTime',
         render: (_, record) => {
           const date = record.actualStartDate || record.actual_start_date;
-          return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
+          return date ? formatDateTime(date, 'YYYY-MM-DD HH:mm:ss') : '-';
         },
       },
       {
@@ -533,7 +534,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         valueType: 'dateTime',
         render: (_, record) => {
           const date = record.actualEndDate || record.actual_end_date;
-          return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
+          return date ? formatDateTime(date, 'YYYY-MM-DD HH:mm:ss') : '-';
         },
       },
     ],
@@ -1217,7 +1218,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         width: 160,
         render: (_, record) => {
           const date = record.plannedStartDate || record.planned_start_date;
-          return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
+          return date ? formatDateTime(date, 'YYYY-MM-DD HH:mm:ss') : '-';
         },
       },
       {
@@ -1227,7 +1228,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         width: 160,
         render: (_, record) => {
           const date = record.plannedEndDate || record.planned_end_date;
-          return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
+          return date ? formatDateTime(date, 'YYYY-MM-DD HH:mm:ss') : '-';
         },
       },
       {
@@ -1238,7 +1239,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         defaultSortOrder: 'descend',
         render: (_, record) => {
           const d = record.updatedAt || (record as any).updated_at;
-          return d ? dayjs(d).format('YYYY-MM-DD HH:mm:ss') : '-';
+          return d ? formatDateTime(d, 'YYYY-MM-DD HH:mm:ss') : '-';
         },
       },
       {

@@ -21,6 +21,7 @@ import {
 import { handleError, handleSuccess } from '../../../utils/errorHandler';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { formatDateTimeBySiteSetting } from '../../../utils/format';
 
 dayjs.extend(relativeTime);
 
@@ -499,11 +500,11 @@ const CardView: React.FC = () => {
               )}
               {currentMessage.sent_at && (
                 <Descriptions.Item label={t('pages.personal.messages.sentTime')}>
-                  {dayjs(currentMessage.sent_at).format('YYYY-MM-DD HH:mm:ss')}
+                  {formatDateTimeBySiteSetting(currentMessage.sent_at)}
                 </Descriptions.Item>
               )}
               <Descriptions.Item label={t('pages.personal.messages.createdAt')}>
-                {dayjs(currentMessage.created_at).format('YYYY-MM-DD HH:mm:ss')}
+                {formatDateTimeBySiteSetting(currentMessage.created_at)}
               </Descriptions.Item>
             </Descriptions>
           </div>

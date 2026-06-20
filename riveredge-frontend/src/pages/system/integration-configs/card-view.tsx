@@ -19,6 +19,7 @@ import {
   TestConnectionResponse,
 } from '../../../services/integrationConfig';
 import { handleError, handleSuccess, handleWarning } from '../../../utils/errorHandler';
+import { formatDateTimeBySiteSetting } from '../../../utils/format';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -554,7 +555,7 @@ const CardView: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.integrationConfigs.lastConnectionTime')}>
               {currentIntegration.last_connected_at
-                ? dayjs(currentIntegration.last_connected_at).format('YYYY-MM-DD HH:mm:ss')
+                ? formatDateTimeBySiteSetting(currentIntegration.last_connected_at)
                 : '-'}
             </Descriptions.Item>
             {currentIntegration.last_error && (
@@ -568,10 +569,10 @@ const CardView: React.FC = () => {
               </Descriptions.Item>
             )}
             <Descriptions.Item label={t('pages.system.integrationConfigs.createdAt')}>
-              {dayjs(currentIntegration.created_at).format('YYYY-MM-DD HH:mm:ss')}
+              {formatDateTimeBySiteSetting(currentIntegration.created_at)}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.integrationConfigs.updatedAt')}>
-              {dayjs(currentIntegration.updated_at).format('YYYY-MM-DD HH:mm:ss')}
+              {formatDateTimeBySiteSetting(currentIntegration.updated_at)}
             </Descriptions.Item>
           </Descriptions>
         )}

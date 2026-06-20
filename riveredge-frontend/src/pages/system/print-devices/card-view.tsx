@@ -21,6 +21,7 @@ import {
   PrintDevicePrintResponse,
 } from '../../../services/printDevice';
 import { handleError, handleSuccess } from '../../../utils/errorHandler';
+import { formatDateTimeBySiteSetting } from '../../../utils/format';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -494,19 +495,19 @@ const CardView: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.printDevices.columnLastConnected')}>
               {currentDevice.last_connected_at
-                ? dayjs(currentDevice.last_connected_at).format('YYYY-MM-DD HH:mm:ss')
+                ? formatDateTimeBySiteSetting(currentDevice.last_connected_at)
                 : '-'}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.printDevices.columnLastUsed')}>
               {currentDevice.last_used_at
-                ? dayjs(currentDevice.last_used_at).format('YYYY-MM-DD HH:mm:ss')
+                ? formatDateTimeBySiteSetting(currentDevice.last_used_at)
                 : '-'}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.printDevices.columnCreatedAt')}>
-              {dayjs(currentDevice.created_at).format('YYYY-MM-DD HH:mm:ss')}
+              {formatDateTimeBySiteSetting(currentDevice.created_at)}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.printDevices.columnUpdatedAt')}>
-              {dayjs(currentDevice.updated_at).format('YYYY-MM-DD HH:mm:ss')}
+              {formatDateTimeBySiteSetting(currentDevice.updated_at)}
             </Descriptions.Item>
           </Descriptions>
         )}

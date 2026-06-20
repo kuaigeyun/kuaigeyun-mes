@@ -29,6 +29,7 @@ import { buildPayableStatusEnum, buildReviewStatusEnum } from '../../../utils/fi
 import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
+import { formatDateTime } from '../../../../../utils/format';
 
 const P = 'app.kuaicaiwu.payable';
 
@@ -89,7 +90,7 @@ const PayableList: React.FC = () => {
     }, []);
 
     const handleCreate = async (values: any) => {
-        const today = dayjs().format('YYYY-MM-DD');
+        const today = formatDateTime(dayjs(), 'YYYY-MM-DD');
         const data: PayableCreateData = {
             source_type: '手工',
             source_id: 0,
@@ -206,7 +207,7 @@ const PayableList: React.FC = () => {
             dataIndex: 'updated_at',
             width: 168,
             hideInSearch: true,
-            render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+            render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
         },
         {
             title: t('app.kuaicaiwu.common.lifecycle'),
@@ -360,14 +361,14 @@ const PayableList: React.FC = () => {
                         const suppId = suppOpt?.value;
                         const amount = Number(row[headerIndexMap.amount]) || 0;
                         if (!suppId || amount <= 0) continue;
-                        const today = dayjs().format('YYYY-MM-DD');
+                        const today = formatDateTime(dayjs(), 'YYYY-MM-DD');
                         const dueDate =
                             headerIndexMap.dueDate !== undefined && row[headerIndexMap.dueDate]
-                                ? dayjs(row[headerIndexMap.dueDate]).format('YYYY-MM-DD')
+                                ? formatDateTime(row[headerIndexMap.dueDate], 'YYYY-MM-DD')
                                 : today;
                         const bizDate =
                             headerIndexMap.businessDate !== undefined && row[headerIndexMap.businessDate]
-                                ? dayjs(row[headerIndexMap.businessDate]).format('YYYY-MM-DD')
+                                ? formatDateTime(row[headerIndexMap.businessDate], 'YYYY-MM-DD')
                                 : today;
                         items.push({
                             source_type: '手工',

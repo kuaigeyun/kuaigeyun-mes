@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next';
 import * as LucideIcons from 'lucide-react';
 import WeatherWidget from '../../../components/weather/WeatherWidget';
 import { getWeatherCardGradient } from '../../../components/weather/weatherBackground';
+import { formatDateTime } from '../../../utils/format';
 
 const { Title, Text } = Typography;
 
@@ -331,7 +332,7 @@ export const MobileWorkplace: React.FC<MobileWorkplaceProps> = ({
                     <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>{todo.description}</Text>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 8 }}>
                       <ClockCircleOutlined style={{ fontSize: 12, opacity: 0.5 }} />
-                      <Text type="secondary" style={{ fontSize: 11 }}>{dayjs(todo.created_at).format('MM-DD HH:mm')}</Text>
+                      <Text type="secondary" style={{ fontSize: 11 }}>{formatDateTime(todo.created_at, 'MM-DD HH:mm')}</Text>
                     </div>
                   </div>
                 </div>

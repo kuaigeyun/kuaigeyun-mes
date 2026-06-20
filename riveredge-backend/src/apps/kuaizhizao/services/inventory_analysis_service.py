@@ -17,6 +17,7 @@ from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 from apps.master_data.models.material import Material
 from apps.master_data.models.material_batch import MaterialBatch
+from core.utils.timezone_utils import to_api_isoformat
 
 
 class InventoryAnalysisService:
@@ -148,7 +149,7 @@ class InventoryAnalysisService:
         return {
             "total_turnover_rate": round(total_turnover, 2),
             "average_turnover_rate": round(total_turnover, 2),
-            "period": {"start": date_start.isoformat(), "end": date_end.isoformat()},
+            "period": {"start": to_api_isoformat(date_start), "end": to_api_isoformat(date_end)},
             "top_materials": top_materials,
         }
 
@@ -255,7 +256,7 @@ class InventoryAnalysisService:
                 "material_name": getattr(mat, "name", ""),
                 "inventory_quantity": float(qty),
                 "inventory_value": float(value),
-                "last_outbound_date": last.isoformat() if last else None,
+                "last_outbound_date": to_api_isoformat(last) if last else None,
                 "days_since_last_outbound": days_since,
             })
 
@@ -306,7 +307,7 @@ class InventoryAnalysisService:
         for row in inbound_rows:
             if not row.receipt_time:
                 continue
-            key = row.receipt_time.date().isoformat()
+            key = to_api_isoformat(row.receipt_time.date())
             qty = Decimal(str(row.receipt_quantity or 0))
             unit = Decimal(str(row.unit_price or 0))
             daily_inbound[key] = daily_inbound.get(key, Decimal("0")) + qty * unit
@@ -315,12 +316,12 @@ class InventoryAnalysisService:
         day_count = max((date_end.date() - date_start.date()).days, 0)
         running = float(total_cost)
         for i in range(day_count + 1):
-            d = (date_start.date() + timedelta(days=i)).isoformat()
+            d = to_api_isoformat(date_start.date() + timedelta(days=i))
             running += float(daily_inbound.get(d, Decimal("0")))
             trend_data.append({"date": d, "cost": round(running, 2)})
 
         return {
-            "period": {"start": date_start.isoformat(), "end": date_end.isoformat()},
+            "period": {"start": to_api_isoformat(date_start), "end": to_api_isoformat(date_end)},
             "summary": {
                 "total_cost": float(total_cost),
                 "average_cost": float(total_cost / len(inv_by_material)) if inv_by_material else 0.0,

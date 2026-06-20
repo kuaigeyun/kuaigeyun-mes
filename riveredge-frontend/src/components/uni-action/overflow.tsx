@@ -193,10 +193,10 @@ function isVisibleWhenDisabledRowAction(node: React.ReactNode): boolean {
 
 /** 不可点（disabled 或无按钮/链接）的操作默认不展示；带显式标记的可保留展示 */
 function isClickableVisibleAction(node: React.ReactNode): boolean {
-  // skip 表示组件自管交互（如 UniWorkflowActions），静态树下可能拿不到内部 Button，
-  // 不能因 findInteractiveElement 失败就误删。
-  if (readExplicitActionKind(node) === 'skip') return true
   const interactive = findInteractiveElement(node)
+  const explicitKind = readExplicitActionKind(node)
+  // skip 仅在“无可静态识别交互”的自管组件场景下直出（如 UniWorkflowActions）。
+  if (explicitKind === 'skip' && !interactive) return true
   if (!interactive) return false
   const p = (interactive.props || {}) as { disabled?: boolean }
   if (p.disabled && isVisibleWhenDisabledRowAction(node)) return true

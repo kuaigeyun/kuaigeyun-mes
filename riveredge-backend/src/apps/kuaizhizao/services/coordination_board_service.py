@@ -31,6 +31,7 @@ from apps.kuaizhizao.services.demand_computation_service import (
 )
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError
 
 
@@ -148,7 +149,7 @@ class CoordinationBoardService:
                     "demand_id": comp.demand_id,
                     "sales_order_code": so_code,
                     "incomplete_work_orders": incomplete,
-                    "updated_at": comp.updated_at.isoformat() if comp.updated_at else None,
+                    "updated_at": to_api_isoformat(comp.updated_at),
                 }
             )
             if len(items) >= limit:
@@ -164,7 +165,7 @@ class CoordinationBoardService:
                     "demand_id": comp.demand_id,
                     "sales_order_code": await self._resolve_sales_order_code(tenant_id, comp),
                     "incomplete_work_orders": 0,
-                    "updated_at": comp.updated_at.isoformat() if comp.updated_at else None,
+                    "updated_at": to_api_isoformat(comp.updated_at),
                 }
             )
 
@@ -249,13 +250,13 @@ class CoordinationBoardService:
                 {
                     "sales_order_id": so.id,
                     "sales_order_code": so.order_code,
-                    "delivery_date": delivery.isoformat() if delivery else None,
+                    "delivery_date": to_api_isoformat(delivery),
                     "computation_id": comp.id if comp else None,
                     "computation_code": comp.computation_code if comp else None,
                     "demand_id": demand.id if demand else None,
                     "bom_status": bom_status,
                     "incomplete_work_orders": incomplete_wo,
-                    "updated_at": so.updated_at.isoformat() if so.updated_at else None,
+                    "updated_at": to_api_isoformat(so.updated_at),
                 }
             )
             if len(items) >= limit:
@@ -286,13 +287,13 @@ class CoordinationBoardService:
                 {
                     "sales_order_id": so.id,
                     "sales_order_code": so.order_code,
-                    "delivery_date": delivery.isoformat() if delivery else None,
+                    "delivery_date": to_api_isoformat(delivery),
                     "computation_id": comp.id if comp else None,
                     "computation_code": comp.computation_code if comp else None,
                     "demand_id": demand.id if demand else None,
                     "bom_status": bom_status,
                     "incomplete_work_orders": 0,
-                    "updated_at": so.updated_at.isoformat() if so.updated_at else None,
+                    "updated_at": to_api_isoformat(so.updated_at),
                 }
             )
 
@@ -398,7 +399,7 @@ class CoordinationBoardService:
                 so_brief = {
                     "id": so.id,
                     "code": so.order_code,
-                    "delivery_date": delivery.isoformat() if delivery else None,
+                    "delivery_date": to_api_isoformat(delivery),
                 }
                 demand = await Demand.get_or_none(
                     tenant_id=tenant_id,
@@ -520,12 +521,8 @@ class CoordinationBoardService:
                         "extra": {
                             "product_name": wo.product_name,
                             "quantity": float(wo.quantity),
-                            "planned_start_date": wo.planned_start_date.isoformat()
-                            if wo.planned_start_date
-                            else None,
-                            "planned_end_date": wo.planned_end_date.isoformat()
-                            if wo.planned_end_date
-                            else None,
+                            "planned_start_date": to_api_isoformat(wo.planned_start_date),
+                            "planned_end_date": to_api_isoformat(wo.planned_end_date),
                             "completed_quantity": float(wo.completed_quantity or 0),
                         },
                     }
@@ -1022,7 +1019,7 @@ class CoordinationBoardService:
                 sch_blockers = [f"{w['code']} 缺计划开工日" for w in no_date[:5]]
 
         wo_query = ",".join(str(i) for i in wo_ids) if wo_ids else ""
-        next_workday_placeholder = (date.today() + timedelta(days=1)).isoformat()
+        next_workday_placeholder = to_api_isoformat(date.today() + timedelta(days=1))
         stages.append(
             self._stage(
                 "scheduling",
@@ -1180,7 +1177,7 @@ class CoordinationBoardService:
             stage["actions"] = [
                 self._nav(
                     "去滚动计划",
-                    f"/apps/kuaizhizao/plan-management/rolling-scheduling?plan_date={next_workday.isoformat()}",
+                    f"/apps/kuaizhizao/plan-management/rolling-scheduling?plan_date={to_api_isoformat(next_workday)}",
                 ),
             ]
             break
@@ -1192,7 +1189,7 @@ class CoordinationBoardService:
                 route = action.get("route") or ""
                 if action.get("type") == "nav" and "plan_date=" in route:
                     base = route.split("&plan_date=")[0]
-                    action["route"] = f"{base}&plan_date={next_workday.isoformat()}"
+                    action["route"] = f"{base}&plan_date={to_api_isoformat(next_workday)}"
             break
 
         return stages
@@ -1352,7 +1349,7 @@ class CoordinationBoardService:
                         "material_spec": item.material_spec,
                         "unit": item.material_unit or "",
                         "quantity": qty,
-                        "delivery_date": dd.isoformat() if dd else None,
+                        "delivery_date": to_api_isoformat(dd),
                     }
                 )
 
@@ -1374,7 +1371,7 @@ class CoordinationBoardService:
                         "material_spec": item.material_spec,
                         "unit": item.material_unit or "",
                         "quantity": qty,
-                        "delivery_date": dd.isoformat() if dd else None,
+                        "delivery_date": to_api_isoformat(dd),
                     }
                 )
 
@@ -1417,7 +1414,7 @@ class CoordinationBoardService:
         return {
             "id": so.id,
             "code": so.order_code,
-            "delivery_date": delivery.isoformat() if delivery else None,
+            "delivery_date": to_api_isoformat(delivery),
         }
 
     async def _get_order_line_materials(

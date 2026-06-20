@@ -29,6 +29,7 @@ import {
 import { useGlobalStore } from '../../../stores';
 import { CODE_FONT_FAMILY } from '../../../constants/fonts';
 import dayjs from 'dayjs';
+import { formatDateTimeBySiteSetting } from '../../../utils/format';
 
 /**
  * 操作日志页面组件
@@ -143,7 +144,7 @@ const OperationLogsPage: React.FC = () => {
    * 详情列定义（优化：突出有用信息，技术性字段放在后面）
    */
   const detailColumns = [
-    { title: t('pages.system.operationLogs.createdAt'), dataIndex: 'created_at', render: (_: React.ReactNode, record: OperationLog) => dayjs(record.created_at).format('YYYY-MM-DD HH:mm:ss') },
+    { title: t('pages.system.operationLogs.createdAt'), dataIndex: 'created_at', render: (_: React.ReactNode, record: OperationLog) => formatDateTimeBySiteSetting(record.created_at) },
     { title: t('pages.system.operationLogs.operationType'), dataIndex: 'operation_type', render: (_: React.ReactNode, record: OperationLog) => getOperationTypeTag(record.operation_type) },
     { title: t('pages.system.operationLogs.operationModule'), dataIndex: 'operation_module', render: (_: React.ReactNode, record: OperationLog) => formatModuleName(record.operation_module) },
     { title: t('pages.system.operationLogs.operationObjectType'), dataIndex: 'operation_object_type', render: (_: React.ReactNode, record: OperationLog) => record.operation_object_type || '-' },
@@ -221,7 +222,7 @@ const OperationLogsPage: React.FC = () => {
    * 表格列定义（优化：突出对用户有用的信息）
    */
   const columns: ProColumns<OperationLog>[] = [
-    { title: t('pages.system.operationLogs.createdAt'), dataIndex: 'created_at', key: 'created_at', valueType: 'dateTimeRange', sorter: true, render: (_: any, record: OperationLog) => dayjs(record.created_at).format('YYYY-MM-DD HH:mm:ss'), width: 180, fixed: 'left' },
+    { title: t('pages.system.operationLogs.createdAt'), dataIndex: 'created_at', key: 'created_at', valueType: 'dateTimeRange', sorter: true, render: (_: any, record: OperationLog) => formatDateTimeBySiteSetting(record.created_at), width: 180, fixed: 'left' },
     { title: t('pages.system.operationLogs.operationType'), dataIndex: 'operation_type', key: 'operation_type', valueType: 'select', valueEnum: { create: { text: t('pages.system.operationLogs.typeCreate') }, update: { text: t('pages.system.operationLogs.typeUpdate') }, delete: { text: t('pages.system.operationLogs.typeDelete') }, view: { text: t('pages.system.operationLogs.typeView') }, error: { text: t('pages.system.operationLogs.typeError') }, unknown: { text: t('pages.system.operationLogs.typeUnknown') } }, render: (_: any, record: OperationLog) => getOperationTypeTag(record.operation_type), width: 100 },
     { title: t('pages.system.operationLogs.operationModule'), dataIndex: 'operation_module', key: 'operation_module', ellipsis: true, width: 120, render: (_: React.ReactNode, record: OperationLog) => formatModuleName(record.operation_module) },
     { title: t('pages.system.operationLogs.operationObject'), dataIndex: 'operation_object_type', key: 'operation_object_type', ellipsis: true, width: 120, render: (_: React.ReactNode, record: OperationLog) => record.operation_object_type || '-' },

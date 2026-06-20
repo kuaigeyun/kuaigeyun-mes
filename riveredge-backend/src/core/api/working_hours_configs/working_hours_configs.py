@@ -20,6 +20,7 @@ from core.schemas.working_hours_config import (
 )
 from core.services.system.working_hours_config_service import WorkingHoursConfigService
 from core.api.deps.deps import get_current_tenant, get_current_user
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
@@ -168,8 +169,8 @@ async def calculate_working_hours(
             scope_id=scope_id,
         )
         return {
-            "start_time": start_time.isoformat(),
-            "end_time": end_time.isoformat(),
+            "start_time": to_api_isoformat(start_time),
+            "end_time": to_api_isoformat(end_time),
             "working_hours": float(working_hours),
             "scope_type": scope_type,
             "scope_id": scope_id,

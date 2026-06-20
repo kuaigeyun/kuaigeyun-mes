@@ -20,6 +20,7 @@ import {
 import { mesDashboardService } from '../../services/dashboard';
 import { UniDashboard } from '../../../../components/uni-dashboard';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../utils/format';
 
 const { Text, Title, Link } = Typography;
 const { useToken } = theme;
@@ -219,7 +220,7 @@ const MESDashboard: React.FC = () => {
                   mode="left" 
                   items={broadcast.items.map((item: any) => ({
                     key: item.id,
-                    label: dayjs(item.created_at).format('HH:mm'),
+                    label: formatDateTime(item.created_at, 'HH:mm'),
                     color: item.unqualified_quantity > 0 ? 'red' : 'green',
                     content: (
                       <>

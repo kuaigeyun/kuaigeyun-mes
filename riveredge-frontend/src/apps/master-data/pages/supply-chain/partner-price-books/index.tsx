@@ -54,6 +54,7 @@ import type { Material } from '../../../types/material';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { convertUnitPriceByPriceType } from '../../../utils/resolve-partner-material-price';
+import { formatDateTime } from '../../../../../utils/format';
 
 function getMaterialAllowedUnits(material?: Material | null): string[] {
   if (!material) return [];
@@ -306,8 +307,8 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         taxRate: values.taxRate,
         unit: values.unit,
         currencyCode: values.currencyCode,
-        effectiveFrom: values.effectiveFrom ? dayjs(values.effectiveFrom).format('YYYY-MM-DD') : undefined,
-        effectiveTo: values.effectiveTo ? dayjs(values.effectiveTo).format('YYYY-MM-DD') : undefined,
+        effectiveFrom: values.effectiveFrom ? formatDateTime(values.effectiveFrom, 'YYYY-MM-DD') : undefined,
+        effectiveTo: values.effectiveTo ? formatDateTime(values.effectiveTo, 'YYYY-MM-DD') : undefined,
         remark: values.remark,
         isActive: values.isActive ?? true,
       };

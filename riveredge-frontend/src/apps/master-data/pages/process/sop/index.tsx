@@ -41,6 +41,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { formatDateTime } from '../../../../../utils/format';
 
 /**
  * 标准操作SOP管理列表页面组件
@@ -608,7 +609,7 @@ const SOPPage: React.FC = () => {
         dataIndex: 'createdAt',
         render: (_: unknown, record: SOP) => {
           const v = (record as any)?.createdAt ?? (record as any)?.created_at;
-          return v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-';
+          return v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-';
         },
       },
       {
@@ -616,7 +617,7 @@ const SOPPage: React.FC = () => {
         dataIndex: 'updatedAt',
         render: (_: unknown, record: SOP) => {
           const v = (record as any)?.updatedAt ?? (record as any)?.updated_at;
-          return v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-';
+          return v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-';
         },
       },
     ],

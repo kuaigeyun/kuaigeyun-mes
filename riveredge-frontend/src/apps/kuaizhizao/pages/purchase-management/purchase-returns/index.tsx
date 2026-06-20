@@ -107,6 +107,7 @@ import {
 } from '../../../../../components/custom-fields';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { formatDateTime } from '../../../../../utils/format';
 
 const PURCHASE_RETURN_RESOURCE = 'kuaizhizao:purchase-return';
 
@@ -173,9 +174,9 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
     const value = dataIndex != null ? dataSource[dataIndex] : undefined;
     let content: React.ReactNode = value as React.ReactNode;
     if (col.valueType === 'dateTime' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
     } else if (col.valueType === 'date' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD');
+      content = formatDateTime(value as string, 'YYYY-MM-DD');
     }
     if (col.render && dataSource != null) {
             content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
@@ -1267,9 +1268,9 @@ const PurchaseReturnsPage: React.FC = () => {
       { title: t('app.kuaizhizao.purchaseOrder.col.orderCode'), dataIndex: 'order_code', width: 180, ellipsis: true },
       { title: t('app.kuaizhizao.receiptNotice.supplier'), dataIndex: 'supplier_name', width: 180, ellipsis: true },
       { title: t('common.status'), dataIndex: 'status', width: 120, align: 'center' },
-      { title: t('app.kuaizhizao.purchaseOrder.col.orderDate'), dataIndex: 'order_date', width: 130, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
-      { title: t('app.kuaizhizao.purchaseOrder.col.deliveryDate'), dataIndex: 'delivery_date', width: 130, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
-      { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-') },
+      { title: t('app.kuaizhizao.purchaseOrder.col.orderDate'), dataIndex: 'order_date', width: 130, render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-') },
+      { title: t('app.kuaizhizao.purchaseOrder.col.deliveryDate'), dataIndex: 'delivery_date', width: 130, render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-') },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-') },
       {
         title: t('app.kuaizhizao.purchaseOrder.col.convertStatus'),
         width: 160,
@@ -1294,7 +1295,7 @@ const PurchaseReturnsPage: React.FC = () => {
       { title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'), dataIndex: 'unqualified_quantity', width: 120, align: 'right', render: (v) => Number(v || 0) },
       { title: t('app.kuaizhizao.quality.common.columns.qualityStatus'), dataIndex: 'quality_status', width: 120, align: 'center', render: (v) => v || '-' },
       { title: t('app.kuaizhizao.quality.common.columns.inspectionStatus'), dataIndex: 'status', width: 120, align: 'center', render: (v) => v || '-' },
-      { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-') },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-') },
     ],
     [t],
   );

@@ -119,7 +119,7 @@ import { bomApi } from '../../../../master-data/services/material'
 import { warehouseApi } from '../../../../master-data/services/warehouse'
 import ComputationHistoryTab from './ComputationHistoryTab'
 import { MrpParametersCustomerGuideTrigger } from './MrpParametersCustomerGuide'
-import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../../../../utils/format'
+import { formatDateBySiteSetting, formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format'
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select'
 import { ThemedSegmented } from '../../../../../components/themed-segmented'
 import { useTranslation } from 'react-i18next'
@@ -1811,20 +1811,14 @@ const DemandComputationPage: React.FC = () => {
           if (searchFormValues?.computation_start_time) {
             if (Array.isArray(searchFormValues.computation_start_time)) {
               if (searchFormValues.computation_start_time[0]) {
-                apiParams.start_date = dayjs(searchFormValues.computation_start_time[0]).format(
-                  'YYYY-MM-DD'
-                )
+                apiParams.start_date = formatDateTime(searchFormValues.computation_start_time[0], 'YYYY-MM-DD')
               }
               if (searchFormValues.computation_start_time[1]) {
-                apiParams.end_date = dayjs(searchFormValues.computation_start_time[1]).format(
-                  'YYYY-MM-DD'
-                )
+                apiParams.end_date = formatDateTime(searchFormValues.computation_start_time[1], 'YYYY-MM-DD')
               }
             } else if (searchFormValues.computation_start_time) {
               // 单个日期值
-              apiParams.start_date = dayjs(searchFormValues.computation_start_time).format(
-                'YYYY-MM-DD'
-              )
+              apiParams.start_date = formatDateTime(searchFormValues.computation_start_time, 'YYYY-MM-DD')
             }
           }
 
@@ -1972,7 +1966,7 @@ const DemandComputationPage: React.FC = () => {
             title: t('app.kuaizhizao.demandComputation.colUpdatedAt'),
             dataIndex: 'updated_at',
             width: 180,
-            render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+            render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
           },
           {
             title: t('app.kuaizhizao.demandComputation.colConvertStatus'),
@@ -2019,13 +2013,13 @@ const DemandComputationPage: React.FC = () => {
             title: t('app.kuaizhizao.salesOrder.deliveryDate'),
             dataIndex: 'delivery_date',
             width: 130,
-            render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+            render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
           },
           {
             title: t('common.updatedAt'),
             dataIndex: 'updated_at',
             width: 180,
-            render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+            render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
           },
           {
             title: t('app.kuaizhizao.demandComputation.colConvertStatus'),
@@ -2075,7 +2069,7 @@ const DemandComputationPage: React.FC = () => {
             title: t('common.updatedAt'),
             dataIndex: 'updated_at',
             width: 180,
-            render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+            render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
           },
           {
             title: t('app.kuaizhizao.demandComputation.colConvertStatus'),
@@ -3108,7 +3102,7 @@ const DemandComputationPage: React.FC = () => {
                             dataIndex: 'created_at',
                             width: 176,
                             ellipsis: true,
-                            render: (createdAt: string) => (createdAt ? dayjs(createdAt).format('YYYY-MM-DD HH:mm:ss') : '—'),
+                            render: (createdAt: string) => (createdAt ? formatDateTime(createdAt, 'YYYY-MM-DD HH:mm:ss') : '—'),
                           },
                           {
                             title: t('app.kuaizhizao.demandComputation.colStatus'),

@@ -29,7 +29,7 @@ from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreServ
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.master_data.models.factory import Workstation
 from apps.master_data.models.performance import Holiday
-from core.utils.timezone_utils import make_aware
+from core.utils.timezone_utils import make_aware, to_api_isoformat
 from infra.config.infra_config import infra_settings
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -244,7 +244,7 @@ class RollingScheduleService:
 
         completion_rate = round((completed_qty / planned_qty * 100) if planned_qty > 0 else 0, 2)
         return {
-            "plan_date": plan_date.isoformat(),
+            "plan_date": to_api_isoformat(plan_date),
             "planned_count": planned_count,
             "completed_count": completed_count,
             "partial_count": partial_count,

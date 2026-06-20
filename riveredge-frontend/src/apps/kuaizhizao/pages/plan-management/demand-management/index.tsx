@@ -73,6 +73,7 @@ import { getDemandTypeTagProps, normalizeDemandTypeKey } from '../../../utils/de
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import dayjs from 'dayjs';
+import { formatDateTime as formatDateTimeValue } from '../../../../../utils/format';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
@@ -92,7 +93,7 @@ function getDictLabel(map: Record<string, Record<string, string>>, code: string,
 function formatDateTime(t: string | undefined): string {
   if (!t) return '-';
   const d = dayjs(t);
-  return d.isValid() ? d.format('YYYY-MM-DD HH:mm:ss') : t;
+  return d.isValid() ? formatDateTimeValue(d, 'YYYY-MM-DD HH:mm:ss') : t;
 }
 
 /** 详情「生命周期」区块标题：主标题 + 来源文案（无圆环、无单独来源子轨） */
@@ -178,7 +179,6 @@ const DemandManagementPage: React.FC = () => {
   const businessModeOptions = useMemo(
     () => [
       { label: t('app.kuaizhizao.demandManagement.businessModeMts'), value: 'MTS' },
-      { label: t('app.kuaizhizao.demandManagement.businessModeMto'), value: 'MTO' },
       { label: t('app.kuaizhizao.demandManagement.businessModeAto'), value: 'ATO' },
     ],
     [t]
@@ -275,13 +275,15 @@ const DemandManagementPage: React.FC = () => {
   const handleCreatePlanSubmit = async (values: any) => {
     setCreatePlanLoading(true);
     try {
+      const rawBusinessMode = String(values.business_mode ?? 'MTS').trim().toUpperCase();
+      const createBusinessMode = rawBusinessMode === 'ATO' ? 'ATO' : 'MTS';
       const items = (values.items || []).map((it: any) => ({
         material_id: it.material_id,
         material_code: it.material_code || '',
         material_name: it.material_name || '',
         material_unit: it.material_unit || 'PCS',
         required_quantity: Number(it.required_quantity) || 0,
-        delivery_date: it.delivery_date ? dayjs(it.delivery_date).format('YYYY-MM-DD') : undefined,
+        delivery_date: it.delivery_date ? formatDateTimeValue(it.delivery_date, 'YYYY-MM-DD') : undefined,
       })).filter((it: any) => it.material_id && it.required_quantity > 0);
       if (items.length === 0) {
         messageApi.warning(t('app.kuaizhizao.demandManagement.planItemsQtyRequired'));
@@ -290,9 +292,9 @@ const DemandManagementPage: React.FC = () => {
       await createDemand({
         demand_type: 'demand_plan',
         demand_name: values.demand_name,
-        business_mode: values.business_mode || 'MTS',
-        start_date: values.start_date ? dayjs(values.start_date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
-        end_date: values.end_date ? dayjs(values.end_date).format('YYYY-MM-DD') : undefined,
+        business_mode: createBusinessMode,
+        start_date: values.start_date ? formatDateTimeValue(values.start_date, 'YYYY-MM-DD') : formatDateTimeValue(dayjs(), 'YYYY-MM-DD'),
+        end_date: values.end_date ? formatDateTimeValue(values.end_date, 'YYYY-MM-DD') : undefined,
         total_quantity: 0,
         total_amount: 0,
         status: DemandStatus.DRAFT,
@@ -646,6 +648,8 @@ const DemandManagementPage: React.FC = () => {
             key="workflow-actions"
             record={record}
             entityName={t('app.kuaizhizao.demandManagement.entityName')}
+            auditNodeKey="demand"
+            workflowAuditEnabled={true}
             statusField="status"
             reviewStatusField="review_status"
             draftStatuses={[DemandStatus.DRAFT, '草稿']}
@@ -1317,6 +1321,8 @@ const DemandManagementPage: React.FC = () => {
               <UniWorkflowActions {...rowActionKind('skip')}
                 record={currentDemand}
                 entityName={t('app.kuaizhizao.demandManagement.entityName')}
+                auditNodeKey="demand"
+                workflowAuditEnabled={true}
                 statusField="status"
                 reviewStatusField="review_status"
                 draftStatuses={[DemandStatus.DRAFT, '草稿']}
@@ -1344,6 +1350,19 @@ const DemandManagementPage: React.FC = () => {
               >
                 {t('common.edit')}
               </Button>
+              {currentDemand.demand_type === 'demand_plan' &&
+                (isDemandDraft(currentDemand) || isDemandPendingReview(currentDemand)) && (
+                  <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() => {
+                      setDrawerVisible(false);
+                      void handleDelete([currentDemand.id!]);
+                    }}
+                  >
+                    {t('common.delete')}
+                  </Button>
+                )}
               {currentDemand.pushed_to_computation ? (
                 <Button
                   icon={<RollbackOutlined />}

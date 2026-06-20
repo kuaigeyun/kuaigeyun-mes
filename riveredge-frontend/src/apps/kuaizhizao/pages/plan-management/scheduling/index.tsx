@@ -27,6 +27,7 @@ import { stationResourceId } from '../../../components/GanttSchedulingChart/stat
 import { factoryListItems, workstationApi, workCenterApi } from '../../../../master-data/services/factory';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 import SchedulingHeaderBand from './components/SchedulingHeaderBand';
 import SchedulingBoardDropZone from './components/SchedulingBoardDropZone';
 import { collectWorkOrderDiagnosticIssues } from './components/schedulingPoolDiagnostics';
@@ -269,7 +270,7 @@ const SchedulingPage: React.FC = () => {
         list = list.filter(
           (wo: WorkOrderForGantt) =>
             wo.planned_start_date &&
-            dayjs(wo.planned_start_date).format('YYYY-MM-DD') === filterPlanDate,
+            formatDateTime(wo.planned_start_date, 'YYYY-MM-DD') === filterPlanDate,
         );
       }
       return list as WorkOrderForGantt[];

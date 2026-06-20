@@ -46,6 +46,7 @@ import { prefetchSystemRoute, prefetchSystemRoutes } from '../routes/systemRoute
 import dayjs from 'dayjs';
 import { DEFAULT_SITE_LOGO_URL, SITE_LOGO_FALLBACK_SVG_URL, nextSiteLogoUrlAfterImageError } from '../constants/siteAssets';
 import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
+import { formatDateTime } from '../utils/format';
 
 addCollection(fluentColorIcons);
 
@@ -1350,7 +1351,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   const systemSettingsExpiresLabel = useMemo(() => {
     if (!systemSettingsTenantExpiresAt) return '2099-12-31';
-    return dayjs(systemSettingsTenantExpiresAt).format('YYYY-MM-DD HH:mm');
+    return formatDateTime(systemSettingsTenantExpiresAt, 'YYYY-MM-DD HH:mm');
   }, [systemSettingsTenantExpiresAt]);
 
   const showSystemSettingsTenantMeta = !!currentUser?.tenant_id;
@@ -2996,9 +2997,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 子菜单标题样式（ant-menu-submenu-title）- 使用 Ant Design 原生样式 */
         /* 使用主题颜色变量，支持深色模式 */
         /* 注意：只针对侧边栏内的子菜单标题，不影响弹出菜单 */
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title {
-          /* 子菜单标题的独立样式，与普通菜单项区分开 */
-          padding-right: 4px !important; /* 增加右侧padding，为下拉箭头留出更多空间 */
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-submenu-title {
+          /* 子菜单标题的独立样式，与普通菜单项区分开；几何参数跨主题固定，避免切换时右侧抖动 */
+          margin-inline: 6px !important;
+          width: calc(100% - 24px) !important;
+          box-sizing: border-box !important;
+          padding-inline-end: 10px !important; /* 固定箭头区预留空间，避免主题切换导致右侧1-2px位移 */
           color: ${siderTextColor} !important;
           font-size: var(--ant-fontSize) !important;
           font-weight: normal !important;
@@ -3680,6 +3684,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item-group > .ant-menu-item-group-title {
           color: ${siderTextColor} !important;
         }
+        /* 统一菜单文字排版（跨主题固定），避免切换明暗模式时文字抖动 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > a,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > span,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > a,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > span {
+          font-weight: 400 !important;
+          letter-spacing: 0 !important;
+        }
         
         /* （菜单图标颜色由 currentColor 继承自上面的菜单项文字色，无需单独的 .anticon 规则，已清理） */
         
@@ -3731,6 +3745,37 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected::after {
           display: none !important;
+        }
+        ` : ''}
+        ${isDarkMode ? `
+        /* 深色模式：二级菜单基础排版与明亮模式一致，避免切换主题时文本基线位移 */
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-submenu-title {
+          margin-inline: 6px !important;
+          width: calc(100% - 24px) !important;
+          box-sizing: border-box !important;
+          overflow: hidden !important;
+          padding-inline-start: 40px !important;
+        }
+        /* 深色模式：激活菜单项宽度与明亮模式保持一致（参考明亮模式右侧留白） */
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-item.ant-menu-item-selected,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-item.ant-menu-item-selected,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title {
+          margin-inline: 6px !important;
+          width: calc(100% - 24px) !important;
+          box-sizing: border-box !important;
+          overflow: hidden !important;
+        }
+        /* 深色模式：激活态文本排版固定，避免模式切换时字宽抖动 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content > a,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content > span,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title .ant-menu-title-content > a,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title .ant-menu-title-content > span {
+          font-weight: 400 !important;
+          letter-spacing: 0 !important;
         }
         ` : ''}
         ${isLightModeDarkSider ? `
@@ -5011,8 +5056,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                                   </Typography.Paragraph>
                                   <Typography.Text type="secondary" style={{ fontSize: 11 }}>
                                     {item.sent_at
-                                      ? dayjs(item.sent_at).format('YYYY-MM-DD HH:mm')
-                                      : dayjs(item.created_at).format('YYYY-MM-DD HH:mm')}
+                                      ? formatDateTime(item.sent_at, 'YYYY-MM-DD HH:mm')
+                                      : formatDateTime(item.created_at, 'YYYY-MM-DD HH:mm')}
                                   </Typography.Text>
                                 </div>
                               </div>

@@ -39,6 +39,7 @@ import {
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { executeDatasetQuery, getDatasetByUuid, getDatasetList } from '../../../../../../services/dataset';
 import { extractSqlNamedParams } from '../../../../../../utils/extractSqlNamedParams';
+import { formatDateTime } from '../../../../../../utils/format';
 
 function normalizeDatasetParameterMap(raw: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -389,7 +390,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
         dataIndex: 'recorded_at',
         width: 150,
         hideInSearch: true,
-        render: (_, r) => (r.recorded_at ? dayjs(r.recorded_at).format('YYYY-MM-DD HH:mm') : '—'),
+        render: (_, r) => (r.recorded_at ? formatDateTime(r.recorded_at, 'YYYY-MM-DD HH:mm') : '—'),
       },
       {
         title: t('app.haoligo.equipment.documents.colEquipment'),

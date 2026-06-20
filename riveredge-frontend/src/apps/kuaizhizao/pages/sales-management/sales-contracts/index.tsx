@@ -114,6 +114,7 @@ import {
 } from '@ant-design/icons';
 
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 
 import {
 
@@ -381,6 +382,7 @@ const SalesContractsPage: React.FC = () => {
       待审核: t('app.kuaizhizao.salesContract.statusPending'),
       已生效: t('app.kuaizhizao.salesContract.statusActive'),
       执行中: t('app.kuaizhizao.salesContract.statusExecuting'),
+      已完成: t('app.kuaizhizao.salesContract.statusCompleted'),
       已关闭: t('app.kuaizhizao.salesContract.statusClosed'),
       已到期: t('app.kuaizhizao.salesContract.statusExpired'),
     }),
@@ -1204,13 +1206,13 @@ const SalesContractsPage: React.FC = () => {
         title: t('app.kuaizhizao.quotation.colQuotationDate'),
         dataIndex: 'quotation_date',
         width: 120,
-        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
       },
       {
         title: t('app.kuaizhizao.salesOrder.deliveryDate'),
         dataIndex: 'delivery_date',
         width: 120,
-        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
       },
       {
         title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
@@ -2069,7 +2071,7 @@ const SalesContractsPage: React.FC = () => {
 
 
 
-  // 统一审核动作由 UniWorkflowActions 接管（提交/撤回/通过/驳回/反审核）
+  // 统一审核动作由 UniWorkflowActions 接管（提交/撤回提交/审核/驳回/撤销审核）
 
   const handlePrint = (record: SalesContract) => {
     if (!record.id) return;
@@ -2601,9 +2603,10 @@ const SalesContractsPage: React.FC = () => {
 
         hideInSearch: true,
 
-        render: (_, record) =>
-
-          [
+        render: (_, record) => {
+          const canEdit = record.capabilities?.update?.allowed === true && contractPerms.canUpdate;
+          const canDelete = record.capabilities?.delete?.allowed === true && contractPerms.canDelete;
+          return [
 
               <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record.id!)}>
 
@@ -2611,17 +2614,13 @@ const SalesContractsPage: React.FC = () => {
 
               </Button>,
 
-              record.capabilities?.update?.allowed && contractPerms.canUpdate ? (
-                  <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
-                    {t('common.edit')}
-                  </Button>
-                ) : null,
+              <Button {...rowActionKind('update')} key="edit" disabled={!canEdit} onClick={() => canEdit && handleEdit(record)}>
+                {t('common.edit')}
+              </Button>,
 
-              record.capabilities?.delete?.allowed && contractPerms.canDelete ? (
-                  <Button {...rowActionKind('delete')} key="del" onClick={() => handleDeleteDraft(record)}>
-                    {t('common.delete')}
-                  </Button>
-                ) : null,
+              <Button {...rowActionKind('delete')} key="del" disabled={!canDelete} onClick={() => canDelete && handleDeleteDraft(record)}>
+                {t('common.delete')}
+              </Button>,
 
               <UniWorkflowActions
                 key="contract-workflow"
@@ -2638,16 +2637,6 @@ const SalesContractsPage: React.FC = () => {
                 rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
               />,
 
-              record.capabilities?.print?.allowed && contractPerms.canPrint ? (
-
-                <Button {...rowActionKind('print')} key="print" onClick={() => void handlePrint(record)}>
-
-                  {t('app.kuaizhizao.salesOrder.printPdf')}
-
-                </Button>
-
-              ) : null,
-
               record.capabilities?.push_to_sales_order?.allowed ? (
 
                 <Button {...rowActionKind('release')} key="release" onClick={() => openReleaseModal(record)}>
@@ -2658,7 +2647,8 @@ const SalesContractsPage: React.FC = () => {
 
               ) : null,
 
-            ].filter(Boolean),
+            ].filter(Boolean);
+        },
 
       },
 
@@ -3042,6 +3032,9 @@ const SalesContractsPage: React.FC = () => {
           />,
         ]}
         toolBarActionsAfterBatch={[
+          <Button {...rowActionKind('update')} key="terms-manage" onClick={() => setTermsManageOpen(true)}>
+            {t('app.kuaizhizao.salesContract.terms.manageBtn')}
+          </Button>,
           ...(contractPerms.canPrint
             ? [
                 <UniCapabilityBatchButton
@@ -3061,17 +3054,14 @@ const SalesContractsPage: React.FC = () => {
                   }}
                   notAllowedMessage={t('app.kuaizhizao.salesContract.printNotAllowed')}
                   labels={{
-                    single: t('app.kuaizhizao.salesContract.printContract'),
-                    batch: t('app.kuaizhizao.salesContract.printContract'),
+                    single: t('components.uniAction.print'),
+                    batch: t('components.uniAction.print'),
                   }}
                   icon={<PrinterOutlined />}
                   size="middle"
                 />,
               ]
             : []),
-          <Button {...rowActionKind('update')} key="terms-manage" onClick={() => setTermsManageOpen(true)}>
-            {t('app.kuaizhizao.salesContract.terms.manageBtn')}
-          </Button>,
         ]}
 
         showExportButton={contractPerms.canExport}
@@ -3189,10 +3179,6 @@ const SalesContractsPage: React.FC = () => {
                 }}
               />
 
-              {!detailCapabilityGates.print.disabled && (
-                <Button icon={<PrinterOutlined />} onClick={() => void handlePrint(detail)}>{t('app.kuaizhizao.salesOrder.printPdf')}</Button>
-              )}
-
               {!detailCapabilityGates.pushToSalesOrder.disabled && (
                 <Button type="primary" icon={<ShoppingOutlined />} onClick={() => openReleaseModal(detail)}>
                   {pushToSalesOrderAction.label}
@@ -3205,6 +3191,9 @@ const SalesContractsPage: React.FC = () => {
 
               {!detailCapabilityGates.close.disabled && (
                 <Button icon={<StopOutlined />} onClick={() => setCloseModalOpen(true)}>{t('app.kuaizhizao.salesContract.closeContract')}</Button>
+              )}
+              {!detailCapabilityGates.print.disabled && (
+                <Button icon={<PrinterOutlined />} onClick={() => void handlePrint(detail)}>{t('components.uniAction.print')}</Button>
               )}
 
             </Space>
@@ -3368,7 +3357,7 @@ const SalesContractsPage: React.FC = () => {
 
                       { title: t('app.kuaizhizao.salesContract.milestone'), dataIndex: 'milestone_name' },
 
-                      { title: t('app.kuaizhizao.salesContract.plannedDate'), dataIndex: 'planned_date', render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '—') },
+                      { title: t('app.kuaizhizao.salesContract.plannedDate'), dataIndex: 'planned_date', render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '—') },
 
                       { title: t('app.kuaizhizao.salesContract.plannedAmount'), dataIndex: 'planned_amount', render: (v) => `¥${Number(v ?? 0).toFixed(2)}` },
 

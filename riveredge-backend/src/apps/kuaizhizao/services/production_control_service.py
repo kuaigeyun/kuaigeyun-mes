@@ -20,6 +20,7 @@ from apps.master_data.models.process import ProcessRoute, Operation
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
+from core.utils.timezone_utils import to_api_isoformat
 
 
 class ProductionControlService:
@@ -81,7 +82,7 @@ class ProductionControlService:
                     "status": wo.status,
                     "readiness_rate": round(readiness_rate * 100, 2),
                     "shortage_count": shortage_vars,
-                    "planned_start_date": wo.planned_start_date.isoformat() if wo.planned_start_date else None,
+                    "planned_start_date": to_api_isoformat(wo.planned_start_date) if wo.planned_start_date else None,
                 }
             except Exception as e:
                 logger.error(f"分析工单 {wo.id} 齐套性失败: {e}")
@@ -228,8 +229,8 @@ class ProductionControlService:
                                 "work_order_code": wo.code,
                                 "product_name": wo.product_name,
                                 "status": wo.status,
-                                "planned_end_date": wo.planned_end_date.isoformat(),
-                                "so_required_date": soi.delivery_date.isoformat(),
+                                "planned_end_date": to_api_isoformat(wo.planned_end_date),
+                                "so_required_date": to_api_isoformat(soi.delivery_date),
                                 "risk_type": "delivery_clash",
                                 "risk_desc": f"晚于订单交付 {diff} 天",
                                 "delay_days": diff

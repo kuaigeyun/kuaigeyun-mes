@@ -31,6 +31,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { formatDateTime } from '../../../../../utils/format';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   resolvePresetOperationIndustryName,
@@ -620,7 +621,7 @@ const OperationsPage: React.FC = () => {
       render: (_: any, record: Operation) => {
         const val = record.createdAt ?? (record as any).created_at;
         if (val == null || val === '') return '-';
-        return dayjs(val).isValid() ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : String(val);
+        return dayjs(val).isValid() ? formatDateTime(val, 'YYYY-MM-DD HH:mm:ss') : String(val);
       },
     },
     {

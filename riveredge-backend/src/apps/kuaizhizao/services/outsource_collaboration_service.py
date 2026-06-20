@@ -15,6 +15,7 @@ from loguru import logger
 from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
 from apps.master_data.models.supplier import Supplier
 from core.services.base import BaseService
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 
@@ -87,7 +88,7 @@ class OutsourceCollaborationService(BaseService):
                 "outsource_work_order_code": outsource_work_order.code,
                 "supplier_id": supplier.id,
                 "supplier_name": supplier.name,
-                "sent_at": datetime.now().isoformat(),
+                "sent_at": to_api_isoformat(datetime.now()),
             }
     
     async def update_outsource_progress(
@@ -150,7 +151,7 @@ class OutsourceCollaborationService(BaseService):
                 "success": True,
                 "outsource_work_order_id": outsource_work_order_id,
                 "progress_percentage": progress_percentage,
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": to_api_isoformat(datetime.now()),
             }
     
     async def submit_outsource_completion(
@@ -224,7 +225,7 @@ class OutsourceCollaborationService(BaseService):
                 "completed_quantity": completed_quantity,
                 "qualified_quantity": qualified_quantity,
                 "unqualified_quantity": unqualified_quantity,
-                "submitted_at": datetime.now().isoformat(),
+                "submitted_at": to_api_isoformat(datetime.now()),
             }
     
     async def get_supplier_outsource_orders(
@@ -268,9 +269,9 @@ class OutsourceCollaborationService(BaseService):
                 "unit_price": float(order.unit_price) if order.unit_price else None,
                 "total_amount": float(order.total_amount),
                 "status": order.status,
-                "planned_start_date": order.planned_start_date.isoformat() if order.planned_start_date else None,
-                "planned_end_date": order.planned_end_date.isoformat() if order.planned_end_date else None,
-                "actual_start_date": order.actual_start_date.isoformat() if order.actual_start_date else None,
+                "planned_start_date": to_api_isoformat(order.planned_start_date) if order.planned_start_date else None,
+                "planned_end_date": to_api_isoformat(order.planned_end_date) if order.planned_end_date else None,
+                "actual_start_date": to_api_isoformat(order.actual_start_date) if order.actual_start_date else None,
                 "received_quantity": float(order.received_quantity),
                 "qualified_quantity": float(order.qualified_quantity),
                 "unqualified_quantity": float(order.unqualified_quantity),

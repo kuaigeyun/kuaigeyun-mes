@@ -19,6 +19,7 @@ import {
   type CostSelectOption,
 } from '../costSelectData';
 import { formatCalculationType, getSourceTypeTag } from '../../../utils/costUiLabels';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface PurchaseCostResult {
   material_id: number;
@@ -186,7 +187,7 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
               ),
               unit_cost: `¥${result.unit_cost?.toFixed(2)}`,
               calculation_type: formatCalculationType(result.calculation_type, t),
-              calculation_date: result.calculation_date ? dayjs(result.calculation_date).format('YYYY-MM-DD') : '-',
+              calculation_date: result.calculation_date ? formatDateTime(result.calculation_date, 'YYYY-MM-DD') : '-',
             }}
             columns={resultColumns}
           />

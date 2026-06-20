@@ -15,6 +15,7 @@ from loguru import logger
 import uuid
 from apps.kuaizhizao.models.launch_countdown import LaunchCountdown
 from apps.common.base_service import AppBaseService
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -127,14 +128,14 @@ class LaunchCountdownService(AppBaseService[LaunchCountdown]):
             countdown.progress[stage] = {
                 "status": status,
                 "completed": done,
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": to_api_isoformat(datetime.now()),
             }
         else:
             countdown.progress = {
                 stage: {
                     "status": status,
                     "completed": done,
-                    "updated_at": datetime.now().isoformat(),
+                    "updated_at": to_api_isoformat(datetime.now()),
                 }
             }
         
@@ -177,14 +178,14 @@ class LaunchCountdownService(AppBaseService[LaunchCountdown]):
         wizard_meta: Dict[str, Any] = dict(progress.get("wizard") or {})
         if wizard_step is not None:
             wizard_meta["current_step"] = wizard_step
-            wizard_meta["updated_at"] = datetime.now().isoformat()
+            wizard_meta["updated_at"] = to_api_isoformat(datetime.now())
         progress["wizard"] = wizard_meta
         valid_stages = ("inventory", "wip", "receivables_payables", "compensation")
         if stage and stage_status and stage in valid_stages:
             progress[stage] = {
                 "status": stage_status,
                 "completed": stage_status in ("completed", "skipped"),
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": to_api_isoformat(datetime.now()),
             }
         countdown.progress = progress
         countdown.updated_by = created_by

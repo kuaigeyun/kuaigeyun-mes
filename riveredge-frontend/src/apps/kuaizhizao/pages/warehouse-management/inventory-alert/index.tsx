@@ -32,6 +32,7 @@ import { inventoryAlertApi } from '../../../services/inventory-alert';
 import { getInventoryAlertLifecycle } from '../../../utils/inventoryAlertLifecycle';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface InventoryAlert {
   id?: number;
@@ -434,7 +435,7 @@ const InventoryAlertPage: React.FC = () => {
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
@@ -537,7 +538,7 @@ const InventoryAlertPage: React.FC = () => {
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colActions'),

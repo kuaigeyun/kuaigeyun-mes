@@ -28,6 +28,7 @@ import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../config/pr
 import { EMPTY_HTML_TEMPLATE } from '../../../utils/printTemplateDefaults';
 import { handleError, handleSuccess } from '../../../utils/errorHandler';
 import { CODE_FONT_FAMILY } from '../../../constants/fonts';
+import { formatDateTimeBySiteSetting } from '../../../utils/format';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -611,14 +612,14 @@ const CardView: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.printTemplates.columnLastUsed')}>
               {currentTemplate.last_used_at
-                ? dayjs(currentTemplate.last_used_at).format('YYYY-MM-DD HH:mm:ss')
+                ? formatDateTimeBySiteSetting(currentTemplate.last_used_at)
                 : '-'}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.printTemplates.columnCreatedAt')}>
-              {dayjs(currentTemplate.created_at).format('YYYY-MM-DD HH:mm:ss')}
+              {formatDateTimeBySiteSetting(currentTemplate.created_at)}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.printTemplates.columnUpdatedAt')}>
-              {dayjs(currentTemplate.updated_at).format('YYYY-MM-DD HH:mm:ss')}
+              {formatDateTimeBySiteSetting(currentTemplate.updated_at)}
             </Descriptions.Item>
           </Descriptions>
         )}

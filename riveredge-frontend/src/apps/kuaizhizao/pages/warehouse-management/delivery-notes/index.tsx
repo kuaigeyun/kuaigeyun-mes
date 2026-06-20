@@ -52,6 +52,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { resolveDeliveryNoticeQualityCertificates } from '../../../services/print';
 import { SafetyCertificateOutlined } from '@ant-design/icons';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface DeliveryNotice {
   id?: number;
@@ -195,7 +196,7 @@ const DeliveryNotesPage: React.FC = () => {
       width: 168,
       hideInSearch: true,
       defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
@@ -572,7 +573,7 @@ const DeliveryNotesPage: React.FC = () => {
         sales_delivery_code: values.sales_delivery_code,
         sales_order_id: values.sales_order_id,
         sales_order_code: values.sales_order_code,
-        planned_delivery_date: values.planned_delivery_date ? dayjs(values.planned_delivery_date).format('YYYY-MM-DD') : undefined,
+        planned_delivery_date: values.planned_delivery_date ? formatDateTime(values.planned_delivery_date, 'YYYY-MM-DD') : undefined,
         carrier: values.carrier,
         tracking_number: values.tracking_number,
         shipping_address: values.shipping_address,
@@ -616,7 +617,7 @@ const DeliveryNotesPage: React.FC = () => {
         sales_delivery_code: values.sales_delivery_code,
         sales_order_id: values.sales_order_id,
         sales_order_code: values.sales_order_code,
-        planned_delivery_date: values.planned_delivery_date ? dayjs(values.planned_delivery_date).format('YYYY-MM-DD') : undefined,
+        planned_delivery_date: values.planned_delivery_date ? formatDateTime(values.planned_delivery_date, 'YYYY-MM-DD') : undefined,
         carrier: values.carrier,
         tracking_number: values.tracking_number,
         shipping_address: values.shipping_address,
@@ -683,8 +684,8 @@ const DeliveryNotesPage: React.FC = () => {
       { title: t('app.kuaizhizao.deliveryNote.col.salesOrderCode'), dataIndex: 'sales_order_code', width: 180, ellipsis: true },
       { title: t('app.kuaizhizao.deliveryNote.field.customer'), dataIndex: 'customer_name', width: 180, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseOutbound.pull.colOutboundStatus'), dataIndex: 'status', width: 120, align: 'center' as const },
-      { title: t('app.kuaizhizao.warehouseOutbound.pull.colOutboundDate'), dataIndex: 'delivery_date', width: 130, render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-') },
+      { title: t('app.kuaizhizao.warehouseOutbound.pull.colOutboundDate'), dataIndex: 'delivery_date', width: 130, render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-') },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-') },
       {
         title: t('app.kuaizhizao.warehouseOutbound.pull.convertStatus'),
         key: 'convert_status',
@@ -1111,9 +1112,9 @@ const DeliveryNotesPage: React.FC = () => {
                       : undefined;
                     let content: React.ReactNode = value as React.ReactNode;
                     if (col.valueType === 'dateTime' && value) {
-                      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+                      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
                     } else if (col.valueType === 'date' && value) {
-                      content = dayjs(value as string).format('YYYY-MM-DD');
+                      content = formatDateTime(value as string, 'YYYY-MM-DD');
                     }
                     if (col.render && noticeDetail != null) {
                       content = col.render(content, noticeDetail, index, undefined as any, col as any) as React.ReactNode;

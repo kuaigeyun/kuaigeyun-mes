@@ -30,6 +30,7 @@ import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface Stocktaking {
   id?: number;
@@ -486,7 +487,7 @@ const StocktakingPage: React.FC = () => {
       width: 168,
       hideInSearch: true,
       defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),

@@ -21,6 +21,7 @@ from apps.kuaizhizao.schemas.equipment_status_monitor import (
 )
 from apps.kuaizhizao.services.equipment_service import EquipmentService
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -203,14 +204,14 @@ class EquipmentStatusMonitorService:
                 },
                 "status": equipment.status,  # 从设备表获取当前状态
                 "is_online": latest_status.is_online if latest_status else False,
-                "monitored_at": latest_status.monitored_at.isoformat() if latest_status else None,
+                "monitored_at": to_api_isoformat(latest_status.monitored_at) if latest_status else None,
                 "runtime_hours": float(latest_status.runtime_hours) if latest_status and latest_status.runtime_hours else None,
                 "temperature": float(latest_status.temperature) if latest_status and latest_status.temperature else None,
                 "pressure": float(latest_status.pressure) if latest_status and latest_status.pressure else None,
                 "vibration": float(latest_status.vibration) if latest_status and latest_status.vibration else None,
                 "other_parameters": latest_status.other_parameters if latest_status else None,
-                "last_maintenance_date": latest_status.last_maintenance_date.isoformat() if latest_status and latest_status.last_maintenance_date else None,
-                "next_maintenance_date": latest_status.next_maintenance_date.isoformat() if latest_status and latest_status.next_maintenance_date else None,
+                "last_maintenance_date": to_api_isoformat(latest_status.last_maintenance_date) if latest_status and latest_status.last_maintenance_date else None,
+                "next_maintenance_date": to_api_isoformat(latest_status.next_maintenance_date) if latest_status and latest_status.next_maintenance_date else None,
             }
             status_list.append(status_data)
 

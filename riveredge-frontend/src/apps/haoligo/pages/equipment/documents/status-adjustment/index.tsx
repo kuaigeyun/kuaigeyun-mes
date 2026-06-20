@@ -35,6 +35,7 @@ import {
   useEquipmentOperationalStatusLabels,
 } from '../../../../utils/equipmentOperationalStatus';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { formatDateTime } from '../../../../../../utils/format';
 
 const StatusAdjustmentDocumentsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -148,7 +149,7 @@ const StatusAdjustmentDocumentsPage: React.FC = () => {
         dataIndex: 'recorded_at',
         width: 150,
         hideInSearch: true,
-        render: (_, r) => (r.recorded_at ? dayjs(r.recorded_at).format('YYYY-MM-DD HH:mm') : '—'),
+        render: (_, r) => (r.recorded_at ? formatDateTime(r.recorded_at, 'YYYY-MM-DD HH:mm') : '—'),
       },
       {
         title: t('app.haoligo.equipment.documents.colEquipment'),

@@ -11,6 +11,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from fastapi import HTTPException, status
 from loguru import logger
+from core.utils.timezone_utils import to_api_isoformat
 
 from infra.models.tenant import Tenant
 from infra.services.tenant_service import TenantService
@@ -338,7 +339,7 @@ class InitWizardService:
         
         # 标记初始化完成
         settings["init_completed"] = True
-        settings["init_completed_at"] = datetime.now().isoformat()
+        settings["init_completed_at"] = to_api_isoformat(datetime.now())
         
         await Tenant.filter(id=tenant_id).update(settings=settings)
         

@@ -20,6 +20,7 @@ import {
   TestConnectionResponse,
 } from '../../../services/dataSource';
 import { handleError, handleSuccess, handleWarning } from '../../../utils/errorHandler';
+import { formatDateTimeBySiteSetting } from '../../../utils/format';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -474,7 +475,7 @@ const CardView: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.dataSources.detailColumnLastConnected')}>
               {currentDataSource.last_connected_at
-                ? dayjs(currentDataSource.last_connected_at).format('YYYY-MM-DD HH:mm:ss')
+                ? formatDateTimeBySiteSetting(currentDataSource.last_connected_at)
                 : '-'}
             </Descriptions.Item>
             {currentDataSource.last_error && (
@@ -488,10 +489,10 @@ const CardView: React.FC = () => {
               </Descriptions.Item>
             )}
             <Descriptions.Item label={t('pages.system.dataSources.detailColumnCreatedAt')}>
-              {dayjs(currentDataSource.created_at).format('YYYY-MM-DD HH:mm:ss')}
+              {formatDateTimeBySiteSetting(currentDataSource.created_at)}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.dataSources.detailColumnUpdatedAt')}>
-              {dayjs(currentDataSource.updated_at).format('YYYY-MM-DD HH:mm:ss')}
+              {formatDateTimeBySiteSetting(currentDataSource.updated_at)}
             </Descriptions.Item>
           </Descriptions>
         )}

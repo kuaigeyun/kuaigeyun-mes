@@ -11,6 +11,7 @@ import { buildEightDStepperSteps, getEightDNextStatus, getEightDSeverityText, ge
 import { eightDReportRowGates } from '../../../../../../hooks/useDocumentCapabilities';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { formatDateTime } from '../../../../../../utils/format';
 
 interface EightDDetailDrawerProps {
   open: boolean;
@@ -180,7 +181,7 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
                 {
                   key: 'due_date',
                   label: t('app.kuaizhizao.eightD.columns.dueDate'),
-                  children: report.due_date ? dayjs(report.due_date).format('YYYY-MM-DD HH:mm') : '-',
+                  children: report.due_date ? formatDateTime(report.due_date, 'YYYY-MM-DD HH:mm') : '-',
                 },
                 {
                   key: 'source_exception',

@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { App, Input, Modal, Space, Table, Tag } from 'antd';
-import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { listSalesOrders } from '../../services/sales-order';
 import { listPurchaseOrders } from '../../services/purchase';
@@ -8,6 +7,7 @@ import {
   isSourceOrderEligibleForChange,
   type OrderChangeSourceOrderOption,
 } from '../../utils/orderChangeSourceOrder';
+import { formatDateTime } from '../../../../utils/format';
 
 export type OrderChangeSourceDocType = 'sales' | 'purchase';
 
@@ -146,7 +146,7 @@ export const OrderChangeSourceOrderPickerModal: React.FC<OrderChangeSourceOrderP
               title: t('app.kuaizhizao.salesOrder.orderDate'),
               dataIndex: 'order_date',
               width: 120,
-              render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+              render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
             },
             {
               title: t('app.kuaizhizao.orderChange.colAmount'),

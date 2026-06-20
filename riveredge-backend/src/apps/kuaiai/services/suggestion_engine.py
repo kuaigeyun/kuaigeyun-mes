@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from loguru import logger
+from core.utils.timezone_utils import to_api_isoformat
 
 
 class SuggestionType(str, Enum):
@@ -56,7 +57,7 @@ class Suggestion:
             "action": self.action,
             "action_label": self.action_label,
             "metadata": self.metadata or {},
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": to_api_isoformat(self.created_at) if self.created_at else None,
         }
 
 

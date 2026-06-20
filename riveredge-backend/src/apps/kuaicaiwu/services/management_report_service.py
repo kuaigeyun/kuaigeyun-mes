@@ -19,6 +19,7 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.master_data.models.material import Material
 from apps.master_data.models.material_batch import MaterialBatch
 from apps.kuaicaiwu.services.finance_service import ReceivableService
+from core.utils.timezone_utils import to_api_isoformat
 
 
 def _unit_price_from_defaults(defaults: Any) -> Decimal:
@@ -236,7 +237,7 @@ class ManagementReportService:
             return {
                 "active_work_orders_count": 0,
                 "estimated_wip_value": 0.0,
-                "generated_at": date.today().isoformat(),
+                "generated_at": to_api_isoformat(date.today()),
                 "items": [],
                 "realtime_window_minutes": 10,
                 "realtime_visible_ratio": 0.0,
@@ -318,9 +319,9 @@ class ManagementReportService:
                     "reported_qualified_quantity": float(stats.get("reported_qualified_qty", Decimal("0.00"))),
                     "reported_unqualified_quantity": float(stats.get("reported_unqualified_qty", Decimal("0.00"))),
                     "reported_work_hours": float(stats.get("reported_hours", Decimal("0.00"))),
-                    "latest_reported_at": latest_reported_at.isoformat() if latest_reported_at else None,
-                    "latest_cost_calculated_at": latest_cost_at.isoformat() if latest_cost_at else None,
-                    "latest_update_at": latest_update_at.isoformat() if latest_update_at else None,
+                    "latest_reported_at": to_api_isoformat(latest_reported_at) if latest_reported_at else None,
+                    "latest_cost_calculated_at": to_api_isoformat(latest_cost_at) if latest_cost_at else None,
+                    "latest_update_at": to_api_isoformat(latest_update_at) if latest_update_at else None,
                 }
             )
 
@@ -331,7 +332,7 @@ class ManagementReportService:
         return {
             "active_work_orders_count": total_count,
             "estimated_wip_value": float(total_wip_value.quantize(Decimal("0.01"))),
-            "generated_at": now.isoformat(),
+            "generated_at": to_api_isoformat(now),
             "realtime_window_minutes": int(realtime_cutoff.total_seconds() / 60),
             "realtime_visible_ratio": round(realtime_ratio, 4),
             "items": items,

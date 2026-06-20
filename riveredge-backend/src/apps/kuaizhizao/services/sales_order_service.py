@@ -56,6 +56,7 @@ from apps.kuaizhizao.constants import (
     normalize_status,
 )
 from core.services.authorization.data_scope_service import DataScopeService
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 
@@ -1061,7 +1062,7 @@ class SalesOrderService:
         context = {}
         if order_date:
             context["order_date"] = (
-                order_date.isoformat()
+                to_api_isoformat(order_date)
                 if hasattr(order_date, "isoformat")
                 else str(order_date)
             )

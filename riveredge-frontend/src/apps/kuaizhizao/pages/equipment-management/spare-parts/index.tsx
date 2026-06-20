@@ -14,6 +14,7 @@ import { sparePartApi } from '../../../services/equipment';
 import { getSparePartInventoryLifecycle } from '../../../utils/equipmentLifecycle';
 import { App } from 'antd';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface SpareInventoryRow {
   id?: number | string;
@@ -76,7 +77,7 @@ const SparePartsPage: React.FC = () => {
         dataIndex: 'updated_at',
         width: 168,
         hideInSearch: true,
-        render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
         title: t(`${P}.col.lifecycle`),

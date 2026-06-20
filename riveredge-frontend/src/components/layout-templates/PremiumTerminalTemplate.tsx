@@ -14,8 +14,8 @@ import React, { ReactNode, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Layout, Button, Divider, theme, ConfigProvider, Tag } from 'antd';
 import { FullscreenOutlined, FullscreenExitOutlined, UserOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { formatDateTime } from '../../utils/format';
 import '../../styles/hmi.css';
 import { HMI_DESIGN_TOKENS, HMI_LAYOUT, HMI_ANTD_TOKEN_OVERRIDE } from './constants';
 
@@ -71,14 +71,14 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
   const { t } = useTranslation();
   const displayOperatorName = operatorName ?? t('components.layoutTemplates.premiumTerminal.notLoggedIn');
   const displayStationFallback = stationName ?? t('components.layoutTemplates.premiumTerminal.notBound');
-  const [time, setTime] = useState(dayjs().format('YYYY-MM-DD HH:mm:ss'));
+  const [time, setTime] = useState(formatDateTime(new Date(), 'YYYY-MM-DD HH:mm:ss'));
   const [isTerminalFullscreen, setTerminalFullscreen] = useState(false);
   const fullscreenWrapRef = useRef<HTMLDivElement>(null);
 
   // 实时时钟
   useEffect(() => {
     const timer = setInterval(() => {
-      setTime(dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      setTime(formatDateTime(new Date(), 'YYYY-MM-DD HH:mm:ss'));
     }, 1000);
     return () => clearInterval(timer);
   }, []);

@@ -31,6 +31,7 @@ import {
   buildReviewStatusEnum,
 } from '../../../utils/financeSharedOptions';
 import { canDeleteSalesInvoice } from '../../../utils/salesInvoiceUi';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface SalesInvoiceLine {
   id: number;
@@ -423,7 +424,7 @@ const SalesInvoiceDetailPage: React.FC = () => {
           {data.void_reason ? (
             <ProDescriptions.Item label={t(`${P}.voidReason`)} span={2}>
               <Typography.Text type="danger">{data.void_reason}</Typography.Text>
-              {data.voided_at ? `（${dayjs(data.voided_at).format('YYYY-MM-DD HH:mm')}）` : null}
+              {data.voided_at ? `（${formatDateTime(data.voided_at, 'YYYY-MM-DD HH:mm')}）` : null}
             </ProDescriptions.Item>
           ) : null}
         </ProDescriptions>

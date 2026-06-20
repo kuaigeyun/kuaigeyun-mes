@@ -2,11 +2,13 @@
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Path, Query, status as http_status
+from fastapi import APIRouter, Depends, Path, Query, status as http_status, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from core.api.deps import get_current_tenant, get_current_user
+from core.api.deps.access import require_permission_codes
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
-from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
 from apps.kuaizhizao.schemas.order_change import (
     ApproveChangeRequest,
@@ -148,3 +150,39 @@ async def preview_impact(
     _: None = Depends(require_kuaizhizao_module_access("sales-order-change")),
 ):
     return await service.preview_impact(tenant_id, change_id)
+
+
+@router.get(
+    "/{change_id}/print",
+    summary="Print sales order change",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-order-change:print"))],
+)
+async def print_sales_order_change(
+    change_id: int = Path(..., description="销售变更单ID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _: None = Depends(require_kuaizhizao_module_access("sales-order-change")),
+):
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="sales_order_change",
+            document_id=change_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)

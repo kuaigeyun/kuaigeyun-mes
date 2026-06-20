@@ -205,3 +205,8 @@ export async function approvePurchaseInquiry(id: number, approved: boolean, revi
 export async function withdrawPurchaseInquiryApproval(id: number): Promise<PurchaseInquiry> {
   return apiRequest(`/apps/kuaizhizao/purchase-inquiries/${id}/withdraw-approval`, { method: 'POST' });
 }
+
+/** 撤回提交（待审核 -> 草稿），走统一审核入口 */
+export async function withdrawPurchaseInquirySubmit(id: number): Promise<PurchaseInquiry> {
+  return apiRequest(`/core/uni-audit/purchase_inquiry/${id}/withdraw`, { method: 'POST' });
+}

@@ -20,6 +20,7 @@ from apps.kuaicaiwu.models.cost_calculation import CostCalculation
 from apps.kuaizhizao.services.production_cost_service import ProductionCostService
 from apps.kuaizhizao.services.purchase_cost_service import PurchaseCostService
 from apps.kuaizhizao.services.outsource_cost_service import OutsourceCostService
+from core.utils.timezone_utils import to_api_isoformat
 
 
 class CostReportService:
@@ -285,8 +286,8 @@ class CostReportService:
             "by_source_type": structure_by_source_formatted,
             "summary": {
                 "total_calculations": len(calculations),
-                "start_date": start_date.isoformat() if start_date else None,
-                "end_date": end_date.isoformat() if end_date else None,
+                "start_date": to_api_isoformat(start_date) if start_date else None,
+                "end_date": to_api_isoformat(end_date) if end_date else None,
             },
         }
 
@@ -328,7 +329,7 @@ class CostReportService:
             "end_date": end_date,
             "material_id": material_id,
             "source_type": source_type,
-            "generated_at": datetime.now().isoformat(),
+            "generated_at": to_api_isoformat(datetime.now()),
         }
         
         if report_type == "trend" or report_type == "comprehensive":

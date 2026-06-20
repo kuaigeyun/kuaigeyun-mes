@@ -32,6 +32,7 @@ from apps.kuaiplm.schemas.change_desk import DashboardSummaryResponse
 from apps.kuaiplm.utils.rd_project_progress import compute_project_progress
 from apps.master_data.models.bom_change import BOMChange
 from apps.master_data.models.process_route_change import ProcessRouteChange
+from core.utils.timezone_utils import to_api_isoformat
 
 _GATE_NAME_MAP = {
     **{g["gate_key"]: g["gate_name"] for g in DEFAULT_NPI_GATES},
@@ -112,8 +113,8 @@ class DashboardService:
                 "project_name": project.project_name,
                 "status": project.status,
                 "status_label": PROJECT_STATUS_LABELS.get(project.status, project.status),
-                "planned_start_date": start.isoformat(),
-                "planned_end_date": end.isoformat(),
+                "planned_start_date": to_api_isoformat(start),
+                "planned_end_date": to_api_isoformat(end),
                 "progress": self._project_progress(gates, tasks, deliverables),
                 "current_gate_key": project.current_gate_key,
                 "current_gate_name": self._gate_display_name(project.current_gate_key),
@@ -169,7 +170,7 @@ class DashboardService:
                 "project_name": proj.project_name,
                 "task_name": task.task_name,
                 "status": task.status,
-                "due_date": task.due_date.isoformat() if task.due_date else None,
+                "due_date": to_api_isoformat(task.due_date) if task.due_date else None,
                 "gate_name": gate.gate_name if gate else None,
                 "assignee_name": task.assignee_name,
             })
@@ -232,7 +233,7 @@ class DashboardService:
                 "project_type": p.project_type,
                 "current_gate_key": p.current_gate_key,
                 "current_gate_name": self._gate_display_name(p.current_gate_key),
-                "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+                "updated_at": to_api_isoformat(p.updated_at) if p.updated_at else None,
             }
             for p in recent
         ]

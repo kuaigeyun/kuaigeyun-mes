@@ -25,6 +25,7 @@ import {
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { assemblyTemplateApi } from '../../../services/assembly-template';
+import { formatDateTime } from '../../../../../utils/format';
 
 const ASSEMBLY_ORDERS_RESOURCE = 'kuaizhizao:warehouse-management-assembly-orders';
 
@@ -358,7 +359,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
         dataIndex: 'updated_at',
         width: 168,
         hideInSearch: true,
-        render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
         title: t('app.kuaizhizao.warehouseCommon.colActions'),

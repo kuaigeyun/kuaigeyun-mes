@@ -1,30 +1,10 @@
 /**
- * 采购申请生命周期：前端兜底，根据 status 映射。
- * 阶段：草稿→待审核→已通过/已驳回→部分转单→全部转单
+ * 采购申请生命周期：以后端 lifecycle 为唯一真源。
  */
 
 import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
-
-function norm(s: string | undefined): string {
-  return (s ?? '').trim();
-}
-
-const STATUS_TO_STAGE: Record<string, string> = {
-  草稿: '草稿',
-  待审核: '待审核',
-  已驳回: '已驳回',
-  已通过: '已通过',
-  部分转单: '部分转单',
-  全部转单: '全部转单',
-  draft: '草稿',
-  pending_review: '待审核',
-  rejected: '已驳回',
-  approved: '已通过',
-  PARTIAL_CONVERTED: '部分转单',
-  FULL_CONVERTED: '全部转单',
-};
 
 const MAIN_STAGE_KEYS_AUDIT = ['draft', 'pending_review', 'approved', 'partial', 'full'] as const;
 const MAIN_STAGE_KEYS_NO_AUDIT = ['draft', 'approved', 'partial', 'full'] as const;
@@ -62,41 +42,6 @@ function buildMainStages(currentKey: string, auditRequired: boolean): SubStage[]
     else if (idx === currentIdx) status = 'active';
     return { key, label: MAIN_STAGE_LABELS[key] ?? key, status };
   });
-}
-
-function buildFallbackLifecycle(record: Record<string, unknown>, auditRequired: boolean): BackendLifecycle {
-  const status = norm(record?.status as string);
-  let stageName = (STATUS_TO_STAGE[status] ?? status) || '草稿';
-  if (!auditRequired && (stageName === '待审核' || stageName === '已驳回')) {
-    stageName = '已通过';
-  }
-  const keyMap: Record<string, string> = {
-    草稿: 'draft',
-    待审核: 'pending_review',
-    已驳回: 'pending_review',
-    已通过: 'approved',
-    部分转单: 'partial',
-    全部转单: 'full',
-    PARTIAL_CONVERTED: 'partial',
-    FULL_CONVERTED: 'full',
-  };
-  const key = keyMap[stageName] ?? 'draft';
-
-  const nextStepSuggestions: Record<string, string[]> = {
-    draft: ['提交'],
-    pending_review: ['审核通过', '驳回'],
-    approved: ['转采购单'],
-    partial: ['转采购单'],
-    full: [],
-  };
-
-  return {
-    current_stage_key: key,
-    current_stage_name: stageName,
-    status: stageName === '已驳回' ? 'exception' : stageName === '全部转单' ? 'success' : 'normal',
-    main_stages: buildMainStages(stageName, auditRequired),
-    next_step_suggestions: nextStepSuggestions[key] ?? [],
-  };
 }
 
 export interface PurchaseRequisitionLike {
@@ -174,13 +119,12 @@ export function getPurchaseRequisitionLifecycle(
   if (!record) return { percent: 0, stageName: '-', mainStages: [] };
   const backend = (record?.lifecycle ?? (record as Record<string, unknown>).lifecycle) as BackendLifecycle | undefined;
   if (backend?.main_stages?.length) {
-    const result = parseBackendLifecycle(backend);
-    if (!auditRequired && result.stageName === '待审核') {
-      return { ...result, stageName: '已通过', mainStages: buildMainStages('已通过', false) };
-    }
-    return result;
+    return parseBackendLifecycle(backend);
   }
-  const built = buildFallbackLifecycle(record as Record<string, unknown>, auditRequired);
-  built.main_stages = buildMainStages(built.current_stage_name || '草稿', auditRequired);
-  return parseBackendLifecycle(built);
+  return {
+    percent: 0,
+    stageName: '生命周期缺失',
+    status: 'exception',
+    mainStages: [],
+  };
 }

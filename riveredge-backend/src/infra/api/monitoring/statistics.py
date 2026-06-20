@@ -24,6 +24,7 @@ from infra.domain.package_config import get_all_package_configs
 from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.models.tenant import Tenant, TenantPlan, TenantStatus
 from infra.models.user import User
+from core.utils.timezone_utils import to_api_isoformat
 
 try:
     import psutil  # type: ignore
@@ -224,7 +225,7 @@ async def get_tenant_statistics(
             "total": total_tenants,
             "by_status": by_status,
             "by_plan": by_plan,
-            "updated_at": datetime.now().isoformat()
+            "updated_at": to_api_isoformat(datetime.now())
         }
 
     except Exception as e:
@@ -343,7 +344,7 @@ async def get_users_statistics(
             "by_source": by_source,
             "by_region": by_region,
             "registration_trend": registration_trend,
-            "updated_at": datetime.now().isoformat(),
+            "updated_at": to_api_isoformat(datetime.now()),
         }
     except Exception as e:
         raise HTTPException(
@@ -457,7 +458,7 @@ async def get_access_statistics(
             "login_trend": login_trend,
             "dau_trend": dau_trend,
             "by_region": by_region,
-            "updated_at": datetime.now().isoformat(),
+            "updated_at": to_api_isoformat(datetime.now()),
         }
     except Exception as e:
         raise HTTPException(

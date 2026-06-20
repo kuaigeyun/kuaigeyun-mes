@@ -41,6 +41,7 @@ import {
   type InitialInventoryImportResponse,
 } from '../../../services/initial-data';
 import dayjs, { Dayjs } from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 
 /** 与后端 header_map 一致的默认列（CSV 模板同步） */
 const INV_HEADER_KEYS = [
@@ -424,7 +425,7 @@ const InitialDataImportPage: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = t('app.kuaizhizao.initialData.errorCsvFileName', { ts: dayjs().format('YYYYMMDD-HHmm') });
+    a.download = t('app.kuaizhizao.initialData.errorCsvFileName', { ts: formatDateTime(dayjs(), 'YYYYMMDD-HHmm') });
     a.click();
     URL.revokeObjectURL(url);
   };

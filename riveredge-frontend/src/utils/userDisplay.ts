@@ -42,6 +42,13 @@ export function formatUserDisplayLabel(item: {
   return '';
 }
 
+/** 统一人名展示：去掉尾部括号内账号/ID，如 "张三 (u005)" -> "张三" */
+export function normalizeUserDisplayName(value: unknown): string {
+  const text = String(value ?? '').trim();
+  if (!text) return '';
+  return text.replace(/\s*\([^()]*\)\s*$/, '').trim();
+}
+
 function displayItemToIdOption(item: UserDisplayItem): { label: string; value: number } {
   return { label: item.label || formatUserDisplayLabel(item), value: item.id };
 }

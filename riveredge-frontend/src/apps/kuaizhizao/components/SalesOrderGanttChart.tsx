@@ -9,6 +9,7 @@ import '@svar-ui/react-gantt/all.css';
 import './gantt-scrollbar.less';
 import dayjs from 'dayjs';
 import { ensureGanttIconsCssLoaded } from '../../../utils/loadGanttIconsCss';
+import { formatDateTime } from '../../../utils/format';
 
 export interface SalesOrderItemForGantt {
   _rowKey: string;
@@ -35,7 +36,7 @@ interface GanttTask {
 }
 
 function toGanttTask(item: SalesOrderItemForGantt, index: number): GanttTask {
-  const startStr = item.order_date || item.order_delivery_date || dayjs().format('YYYY-MM-DD');
+  const startStr = item.order_date || item.order_delivery_date || formatDateTime(dayjs(), 'YYYY-MM-DD');
   const endStr = item.delivery_date || item.order_delivery_date || startStr;
   const start = dayjs(startStr).toDate();
   let end = dayjs(endStr).toDate();

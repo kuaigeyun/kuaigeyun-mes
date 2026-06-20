@@ -19,6 +19,7 @@ import {
   DataBackupListResponse,
 } from '../../../services/dataBackup';
 import { handleError, handleSuccess } from '../../../utils/errorHandler';
+import { formatDateTime } from '../../../utils/format';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { useNavigate } from 'react-router-dom';
@@ -391,7 +392,7 @@ const CardView: React.FC = () => {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataBackups.labelStartedAt')}</Text>
                               <Text style={{ fontSize: 12 }}>
-                                {dayjs(backup.started_at).format('MM-DD HH:mm')}
+                                {formatDateTime(backup.started_at, 'MM-DD HH:mm')}
                               </Text>
                             </div>
                           )}
@@ -400,7 +401,7 @@ const CardView: React.FC = () => {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataBackups.labelCompletedAt')}</Text>
                               <Text style={{ fontSize: 12 }}>
-                                {dayjs(backup.completed_at).format('MM-DD HH:mm')}
+                                {formatDateTime(backup.completed_at, 'MM-DD HH:mm')}
                               </Text>
                             </div>
                           )}
@@ -474,12 +475,12 @@ const CardView: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.dataBackups.columnStartedAt')}>
               {currentBackup.started_at
-                ? dayjs(currentBackup.started_at).format('YYYY-MM-DD HH:mm:ss')
+                ? formatDateTime(currentBackup.started_at, 'YYYY-MM-DD HH:mm:ss')
                 : '-'}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.dataBackups.columnCompletedAt')}>
               {currentBackup.completed_at
-                ? dayjs(currentBackup.completed_at).format('YYYY-MM-DD HH:mm:ss')
+                ? formatDateTime(currentBackup.completed_at, 'YYYY-MM-DD HH:mm:ss')
                 : '-'}
             </Descriptions.Item>
             {currentBackup.error_message && (
@@ -493,10 +494,10 @@ const CardView: React.FC = () => {
               </Descriptions.Item>
             )}
             <Descriptions.Item label={t('pages.system.dataBackups.columnCreatedAt')}>
-              {dayjs(currentBackup.created_at).format('YYYY-MM-DD HH:mm:ss')}
+              {formatDateTime(currentBackup.created_at, 'YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.dataBackups.columnUpdatedAt')}>
-              {dayjs(currentBackup.updated_at).format('YYYY-MM-DD HH:mm:ss')}
+              {formatDateTime(currentBackup.updated_at, 'YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
           </Descriptions>
         )}

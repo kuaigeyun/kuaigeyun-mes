@@ -12,6 +12,7 @@ from datetime import datetime
 from fastapi import HTTPException, status
 from loguru import logger
 from tortoise.exceptions import DoesNotExist, IntegrityError
+from core.utils.timezone_utils import to_api_isoformat
 
 from infra.models.industry_template import IndustryTemplate
 from infra.models.tenant import Tenant
@@ -358,7 +359,7 @@ class IndustryTemplateService:
                 tenant_settings = tenant.settings or {}
                 tenant_settings["applied_template_id"] = template_id
                 tenant_settings["applied_template_code"] = template.code
-                tenant_settings["applied_template_at"] = datetime.utcnow().isoformat()
+                tenant_settings["applied_template_at"] = to_api_isoformat(datetime.utcnow())
                 await Tenant.filter(id=tenant_id).update(settings=tenant_settings)
                 
                 logger.info(f"行业模板 {template.code} 应用成功到组织 {tenant_id}，应用项: {applied_items}")

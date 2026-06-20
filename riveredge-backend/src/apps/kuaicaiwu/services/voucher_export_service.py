@@ -10,6 +10,7 @@ from typing import List, Optional
 
 from apps.kuaicaiwu.models.voucher import Voucher
 from apps.kuaicaiwu.models.voucher_line import VoucherLine
+from core.utils.timezone_utils import to_api_isoformat
 
 
 class VoucherExportService:
@@ -48,7 +49,7 @@ class VoucherExportService:
             for line in lines:
                 writer.writerow([
                     voucher.voucher_code,
-                    voucher.voucher_date.isoformat(),
+                    to_api_isoformat(voucher.voucher_date),
                     voucher.status,
                     line.line_no,
                     line.account_code,

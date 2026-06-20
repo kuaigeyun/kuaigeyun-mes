@@ -24,6 +24,7 @@ import json
 from pathlib import Path
 from core.api.deps.deps import get_current_tenant
 from core.api.deps.access import AuthContext, get_auth_context
+from core.utils.timezone_utils import to_api_isoformat
 from core.services.application.application_dedicated_binding_service import ApplicationDedicatedBindingService
 from core.schemas.system_parameter import SystemParameterCreate, SystemParameterUpdate
 from core.services.system.system_parameter_service import SystemParameterService
@@ -685,7 +686,7 @@ async def activate_pro_application(
     apps_registry[app_code] = {
         "digest": _build_key_digest(tenant_id, app_code, key),
         "last4": key[-4:],
-        "activated_at": datetime.now(timezone.utc).isoformat(),
+        "activated_at": to_api_isoformat(datetime.now(timezone.utc)),
     }
     await _save_pro_activation_registry(tenant_id, registry)
 

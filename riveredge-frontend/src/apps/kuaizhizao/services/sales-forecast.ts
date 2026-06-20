@@ -171,6 +171,13 @@ export async function withdrawSalesForecastApproval(id: number): Promise<SalesFo
   });
 }
 
+/** 撤回提交（待审核 -> 草稿），走统一审核入口 */
+export async function withdrawSalesForecast(id: number): Promise<SalesForecast> {
+  return apiRequest<SalesForecast>(`/core/uni-audit/sales_forecast/${id}/withdraw`, {
+    method: 'POST',
+  });
+}
+
 /**
  * 获取销售预测明细
  */

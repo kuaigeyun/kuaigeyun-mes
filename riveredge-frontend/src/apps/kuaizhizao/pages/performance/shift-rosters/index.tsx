@@ -13,6 +13,7 @@ import { shiftApi, shiftRosterApi } from '../../../services/performance';
 import type { Shift, ShiftAssignment, ShiftRoster } from '../../../types/performance';
 import { factoryListItems, workGroupApi } from '../../../../master-data/services/factory';
 import type { WorkGroup } from '../../../../master-data/types/factory';
+import { formatDateTime } from '../../../../../utils/format';
 
 dayjs.extend(isoWeek);
 
@@ -221,7 +222,7 @@ const ShiftRostersPage: React.FC = () => {
       base.push({
         title: (
           <span>
-            {dayjs(d).format('MM-DD')}
+            {formatDateTime(d, 'MM-DD')}
             <br />
             <Typography.Text type="secondary" style={{ fontSize: 11 }}>
               {t(WEEKDAY_KEYS[dayjs(d).isoWeekday() - 1])}

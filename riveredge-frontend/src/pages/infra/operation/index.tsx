@@ -58,6 +58,7 @@ import {
   getUserStatistics,
 } from '../../../services/superadmin';
 import { getToken, getUserInfo, isInfraSuperAdminUser } from '../../../utils/auth';
+import { formatDateTime } from '../../../utils/format';
 
 dayjs.extend(relativeTime);
 dayjs.extend(localizedFormat);
@@ -253,7 +254,7 @@ export default function OperationsDashboard() {
     try {
       const rows: string[][] = [];
       rows.push([t('pages.infra.operation.exportStatsTitle'), '']);
-      rows.push([t('pages.infra.operation.exportTime'), dayjs().format('llll')]);
+      rows.push([t('pages.infra.operation.exportTime'), formatDateTime(new Date(), 'llll')]);
       rows.push([]);
 
       if (tenantStats) {
@@ -283,7 +284,7 @@ export default function OperationsDashboard() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${t('pages.infra.operation.exportStatsTitle')}_${dayjs().format('YYYYMMDD_HHmmss')}.csv`;
+      a.download = `${t('pages.infra.operation.exportStatsTitle')}_${formatDateTime(new Date(), 'YYYYMMDD_HHmmss')}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -341,7 +342,7 @@ export default function OperationsDashboard() {
               <Space>
                 <Text type="secondary" style={{ fontSize: 13 }}>
                   {t('pages.infra.operation.dataUpdatedAt')}：
-                  {dayjs(dataUpdatedAt).format('HH:mm:ss')}
+                  {formatDateTime(dataUpdatedAt, 'HH:mm:ss')}
                 </Text>
                 <Button 
                   icon={<ReloadOutlined spin={autoRefresh} />} 

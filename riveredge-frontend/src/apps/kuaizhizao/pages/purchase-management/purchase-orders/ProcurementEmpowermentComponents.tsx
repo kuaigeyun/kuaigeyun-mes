@@ -16,6 +16,7 @@ import {
 } from '../../../services/purchase';
 import { getPriceComparison } from '../../../services/purchase-requisition';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 
 const { Text, Title } = Typography;
 
@@ -53,7 +54,7 @@ export const MultiSupplierPriceComparison: React.FC<{ materialId: number; onSele
         dataIndex: 'last_order_date',
         key: 'date',
         width: 110,
-        render: (d: string) => (d ? dayjs(d).format('YYYY-MM-DD') : '-'),
+        render: (d: string) => (d ? formatDateTime(d, 'YYYY-MM-DD') : '-'),
       },
       {
         title: t('common.actions'),
@@ -195,7 +196,7 @@ export const FulfillmentTrackingTimeline: React.FC<{ orderId: number }> = ({ ord
               </Text>
               {node.time ? (
                 <Text type="secondary" style={{ fontSize: 11, flexShrink: 0 }}>
-                  {dayjs(node.time).format('MM-DD HH:mm')}
+                  {formatDateTime(node.time, 'MM-DD HH:mm')}
                 </Text>
               ) : null}
             </div>
@@ -313,7 +314,7 @@ export const PriceHistoryInsight: React.FC<{ materialId: number; currentPrice?: 
         title: t('app.kuaizhizao.purchaseOrder.empower.purchaseDate'),
         dataIndex: 'order_date',
         key: 'date',
-        render: (d: string) => dayjs(d).format('YYYY-MM-DD'),
+        render: (d: string) => formatDateTime(d, 'YYYY-MM-DD'),
       },
       { title: t('app.kuaizhizao.purchaseOrder.col.supplier'), dataIndex: 'supplier_name', key: 'supplier', ellipsis: true },
       {

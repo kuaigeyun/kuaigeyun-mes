@@ -25,7 +25,7 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
+import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -44,6 +44,7 @@ import {
   submitPurchaseInquiry,
   updatePurchaseInquiry,
   upsertSupplierQuote,
+  withdrawPurchaseInquirySubmit,
   withdrawPurchaseInquiryApproval,
   type ComparisonRow,
   type PurchaseInquiry,
@@ -63,6 +64,7 @@ import {
 } from '../../../utils/purchaseInquiryLifecycle';
 import { getPurchaseRequisition, listPurchaseRequisitions } from '../../../services/purchase-requisition';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
+import { formatDateTime } from '../../../../../utils/format';
 
 type PullPurchaseRequisitionLineCandidate = {
   key: string;
@@ -142,6 +144,7 @@ const PurchaseInquiriesPage: React.FC = () => {
   const purchaseInquiryAuditBatchHandlers = useMemo(
     () => ({
       submit: (id: number) => submitPurchaseInquiry(id),
+      withdraw: (id: number) => withdrawPurchaseInquirySubmit(id),
       approve: (id: number) => approvePurchaseInquiry(id, true),
       revoke: (id: number) => withdrawPurchaseInquiryApproval(id),
     }),
@@ -525,31 +528,46 @@ const PurchaseInquiriesPage: React.FC = () => {
       title: t('app.kuaizhizao.purchaseInquiry.colQuoteDeadline'),
       dataIndex: 'quote_deadline',
       width: 120,
-      render: (_, r) => (r.quote_deadline ? dayjs(r.quote_deadline).format('YYYY-MM-DD') : '-'),
+      render: (_, r) => (r.quote_deadline ? formatDateTime(r.quote_deadline, 'YYYY-MM-DD') : '-'),
     },
     {
       title: t('app.kuaizhizao.purchaseInquiry.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       valueType: 'select',
       valueEnum: purchaseInquiryLifecycleValueEnum,
-      render: (_, record) => {
-        const lc = getPurchaseInquiryLifecycle(record as Record<string, unknown>);
-        const tag = getDocumentLifecycleStageTagProps(lc.stageName ?? '-');
-        return <Tag color={tag.color}>{lc.stageName}</Tag>;
-      },
+      render: (_, record) => (
+        <ListUniLifecycleCell lifecycle={getPurchaseInquiryLifecycle(record as Record<string, unknown>)} />
+      ),
     },
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 160,
+      minWidth: 280,
       fixed: 'right',
-      render: (_, record) => [
-            <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record)}>{t('common.detail')}</Button>,
-            isInquiryDraft(record) ? (
-              <Button {...rowActionKind('update')} key="edit" onClick={() => openEdit(record)}>{t('common.edit')}</Button>
-            ) : null,
-            isInquiryDraft(record) ? (
-              <Button {...rowActionKind('delete')} key="del" onClick={() => {
+      render: (_, record) => {
+        const isDraft = isInquiryDraft(record);
+        const canUpdate = record.capabilities?.update?.allowed === true && purchaseInquiryPerms.canUpdate;
+        const canDelete = record.capabilities?.delete?.allowed === true && purchaseInquiryPerms.canDelete;
+        const canSubmit = record.capabilities?.submit?.allowed === true && purchaseInquiryPerms.canUpdate;
+        const parts: React.ReactNode[] = [
+          <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record)}>
+            {t('common.detail')}
+          </Button>,
+        ];
+
+        if (isDraft) {
+          parts.push(
+            <Button {...rowActionKind('update')} key="edit" disabled={!canUpdate} onClick={() => canUpdate && openEdit(record)}>
+              {t('common.edit')}
+            </Button>,
+          );
+          parts.push(
+            <Button
+              {...rowActionKind('delete')}
+              key="del"
+              disabled={!canDelete}
+              onClick={() => {
+                if (!canDelete) return;
                 modal.confirm({
                   title: t('app.kuaizhizao.purchaseInquiry.confirmDelete'),
                   onOk: async () => {
@@ -558,12 +576,110 @@ const PurchaseInquiriesPage: React.FC = () => {
                     actionRef.current?.reload();
                   },
                 });
-              }}>{t('common.delete')}</Button>
-            ) : null,
-          ],
+              }}
+            >
+              {t('common.delete')}
+            </Button>,
+          );
+          parts.push(
+            <Button
+              {...rowActionKind('submit')}
+              key="submit"
+              disabled={!canSubmit}
+              onClick={async () => {
+                if (!canSubmit) return;
+                await submitPurchaseInquiry(record.id!);
+                message.success(t('app.kuaizhizao.purchaseInquiry.submitSuccess'));
+                actionRef.current?.reload();
+              }}
+            >
+              {t('app.kuaizhizao.purchaseInquiry.submit')}
+            </Button>,
+          );
+          parts.push(
+            <Button
+              {...rowActionKind('release')}
+              key="publish"
+              disabled={!purchaseInquiryPerms.canUpdate}
+              onClick={async () => {
+                if (!purchaseInquiryPerms.canUpdate) return;
+                await publishPurchaseInquiry(record.id!);
+                message.success(t('app.kuaizhizao.purchaseInquiry.publishSuccess'));
+                actionRef.current?.reload();
+              }}
+            >
+              {t('app.kuaizhizao.purchaseInquiry.publishInquiry')}
+            </Button>,
+          );
+        }
+
+        if (isInquiryQuoting(record)) {
+          parts.push(
+            <Button
+              {...rowActionKind('update')}
+              key="close-quoting"
+              disabled={!purchaseInquiryPerms.canUpdate}
+              onClick={async () => {
+                if (!purchaseInquiryPerms.canUpdate) return;
+                await closeInquiryQuoting(record.id!);
+                message.success(t('app.kuaizhizao.purchaseInquiry.closeQuotingSuccess'));
+                actionRef.current?.reload();
+              }}
+            >
+              {t('app.kuaizhizao.purchaseInquiry.closeQuoting')}
+            </Button>,
+          );
+        }
+
+        if (isInquiryPendingCompare(record) || isInquiryQuoting(record)) {
+          parts.push(
+            <Button {...rowActionKind('read')} key="compare" onClick={() => void openCompare(record)}>
+              {t('app.kuaizhizao.purchaseInquiry.compareAward')}
+            </Button>,
+          );
+        }
+
+        if (isInquiryAwarded(record)) {
+          parts.push(
+            <Button
+              {...rowActionKind('release')}
+              key="convert-po"
+              disabled={!purchaseInquiryPerms.canUpdate}
+              onClick={() => {
+                if (!purchaseInquiryPerms.canUpdate) return;
+                void handleConvertPO(record);
+              }}
+            >
+              {pushToPurchaseOrderAction.label}
+            </Button>,
+          );
+        }
+
+        parts.push(
+          <UniWorkflowActions
+            {...rowActionKind('skip')}
+            key="workflow-actions"
+            record={record}
+            entityName={t('app.kuaizhizao.purchaseInquiry.entityName')}
+            statusField="status"
+            reviewStatusField="review_status"
+            draftStatuses={['DRAFT', '草稿']}
+            pendingStatuses={['PENDING', 'PENDING_REVIEW', '待审核']}
+            approvedStatuses={['APPROVED', '已通过', '审核通过']}
+            rejectedStatuses={['REJECTED', '已驳回']}
+            autoApproveWhenSubmit={!auditEnabled}
+            workflowAuditEnabled={auditEnabled}
+            onSuccess={() => {
+              actionRef.current?.reload();
+            }}
+          />,
+        );
+
+        return parts;
+      },
     },
   ],
-    [message, modal, purchaseInquiryLifecycleValueEnum, t],
+    [auditEnabled, message, modal, openCompare, purchaseInquiryLifecycleValueEnum, purchaseInquiryPerms.canDelete, purchaseInquiryPerms.canUpdate, pushToPurchaseOrderAction.label, t],
   );
 
   const request = useCallback(async (params: Record<string, unknown>) => {
@@ -781,7 +897,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       { title: t('app.kuaizhizao.purchaseInquiry.colMaterialName'), dataIndex: 'material_name' },
       { title: t('app.kuaizhizao.purchaseInquiry.quantity'), dataIndex: 'quantity', width: 90 },
       { title: t('app.kuaizhizao.purchaseInquiry.colUnit'), dataIndex: 'unit', width: 60 },
-      { title: t('app.kuaizhizao.purchaseInquiry.requiredDate'), dataIndex: 'required_date', width: 110, render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
+      { title: t('app.kuaizhizao.purchaseInquiry.requiredDate'), dataIndex: 'required_date', width: 110, render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-') },
     ],
     [t],
   );
@@ -881,7 +997,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       { title: t('app.kuaizhizao.purchaseInquiry.colSpec'), dataIndex: 'material_spec', width: 140, ellipsis: true, render: (v: string) => v || '-' },
       { title: t('app.kuaizhizao.purchaseInquiry.quantity'), dataIndex: 'quantity', width: 90, align: 'right' as const },
       { title: t('app.kuaizhizao.purchaseInquiry.colUnit'), dataIndex: 'unit', width: 70, render: (v: string) => v || '-' },
-      { title: t('app.kuaizhizao.purchaseInquiry.colRequiredDate'), dataIndex: 'required_date', width: 120, render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
+      { title: t('app.kuaizhizao.purchaseInquiry.colRequiredDate'), dataIndex: 'required_date', width: 120, render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-') },
       { title: t('app.kuaizhizao.purchaseInquiry.colApplicant'), dataIndex: 'applicant_name', width: 100, render: (v: string) => v || '-' },
       {
         title: t('common.status'),
@@ -1160,8 +1276,8 @@ const PurchaseInquiriesPage: React.FC = () => {
             <Descriptions column={2} size="small" style={{ marginTop: 16 }}>
               <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.source')}>{detail.source_code || '-'}</Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.colBuyer')}>{detail.buyer_name || '-'}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.inquiryDate')}>{detail.inquiry_date ? dayjs(detail.inquiry_date).format('YYYY-MM-DD') : '-'}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.colQuoteDeadline')}>{detail.quote_deadline ? dayjs(detail.quote_deadline).format('YYYY-MM-DD') : '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.inquiryDate')}>{detail.inquiry_date ? formatDateTime(detail.inquiry_date, 'YYYY-MM-DD') : '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.colQuoteDeadline')}>{detail.quote_deadline ? formatDateTime(detail.quote_deadline, 'YYYY-MM-DD') : '-'}</Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.notes')} span={2}>{detail.notes || '-'}</Descriptions.Item>
             </Descriptions>
             <div style={{ marginTop: 16 }}>

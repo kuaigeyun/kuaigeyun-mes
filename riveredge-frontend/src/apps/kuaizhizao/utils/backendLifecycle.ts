@@ -15,6 +15,8 @@ export interface BackendLifecycleStage {
 }
 
 export interface BackendLifecycle {
+  status_class?: string;
+  flow_class?: string;
   current_stage_key?: string;
   current_stage_name?: string;
   status?: 'success' | 'exception' | 'normal' | 'active';
@@ -79,5 +81,7 @@ export function parseBackendLifecycle(lifecycle: BackendLifecycle | null | undef
     mainStages: mainStages.length ? mainStages : undefined,
     subStages,
     nextStepSuggestions: lifecycle.next_step_suggestions,
+    statusClass: lifecycle.status_class,
+    flowClass: lifecycle.flow_class ?? lifecycle.current_stage_key,
   };
 }

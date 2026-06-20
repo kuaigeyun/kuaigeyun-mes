@@ -30,6 +30,7 @@ import { ListPageTemplate, DetailDrawerSection } from '../../../../../components
 import { Column } from '@ant-design/charts';
 import { apiRequest } from '../../../../../services/api';
 import dayjs, { Dayjs } from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface EfficiencyData {
   average_duration_hours?: number;
@@ -83,7 +84,7 @@ const DocumentEfficiencyPage: React.FC = () => {
         },
       });
       setEfficiencyData(result);
-      setLastLoadedAt(dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      setLastLoadedAt(formatDateTime(new Date(), 'YYYY-MM-DD HH:mm:ss'));
     } catch (error: any) {
       messageApi.error(error.message || '加载效率分析数据失败');
     } finally {

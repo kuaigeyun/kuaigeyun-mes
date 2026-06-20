@@ -10,6 +10,7 @@ Date: 2026-01-27
 from typing import Dict, Any, List
 from datetime import datetime
 from loguru import logger
+from core.utils.timezone_utils import to_api_isoformat
 
 from apps.kuaizhizao.services.launch_countdown_service import LaunchCountdownService
 from apps.kuaizhizao.models.launch_countdown import LaunchCountdown
@@ -240,7 +241,7 @@ class LaunchChecklistService:
         
         return {
             "check_status": "passed" if is_passed else "failed",
-            "check_time": datetime.now().isoformat(),
+            "check_time": to_api_isoformat(datetime.now()),
             "check_message": "检查通过" if is_passed else "检查未通过",
         }
     
@@ -271,7 +272,7 @@ class LaunchChecklistService:
         critical_failed = sum(1 for item in critical_items if item.get("check_status") == "failed")
         
         return {
-            "generated_at": datetime.now().isoformat(),
+            "generated_at": to_api_isoformat(datetime.now()),
             "summary": {
                 "total_items": total_items,
                 "passed_items": passed_items,

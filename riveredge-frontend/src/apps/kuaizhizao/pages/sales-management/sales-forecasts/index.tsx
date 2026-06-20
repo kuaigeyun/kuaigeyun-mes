@@ -1,4 +1,4 @@
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 /**
  * 销售预测页面
  *
@@ -43,7 +43,7 @@ import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut'
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts'
 import { UniTable } from '../../../../../components/uni-table'
-import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
   UniTableStackedPrimaryCell,
@@ -77,6 +77,7 @@ import {
   deleteSalesForecast,
   submitSalesForecast,
   approveSalesForecast,
+  withdrawSalesForecast,
   withdrawSalesForecastApproval,
   pushSalesForecastToComputation,
   importSalesForecasts,
@@ -104,6 +105,7 @@ import { downloadFile } from '../../../services/common'
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField'
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments'
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { formatDateTime } from '../../../../../utils/format';
 
 export default function SalesForecastsPage() {
   const { t } = useTranslation();
@@ -213,7 +215,7 @@ export default function SalesForecastsPage() {
   };
 
   const renderSalesForecastRowActions = (nodes: React.ReactNode[], keyPrefix: string): React.ReactNode => {
-    return nodes;
+    return renderRowActionsOverflow(nodes, keyPrefix);
   };
 
   useEffect(() => {
@@ -909,8 +911,8 @@ export default function SalesForecastsPage() {
       resizable: false,
       hideInSearch: true,
       ...orderLevelCellProps((_text, record) => {
-        const startDateText = record.start_date ? dayjs(record.start_date).format('YYYY-MM-DD') : '-';
-        const endDateText = record.end_date ? dayjs(record.end_date).format('YYYY-MM-DD') : '-';
+        const startDateText = record.start_date ? formatDateTime(record.start_date, 'YYYY-MM-DD') : '-';
+        const endDateText = record.end_date ? formatDateTime(record.end_date, 'YYYY-MM-DD') : '-';
         return (
           <UniTableStackedPrimaryCell
             primary={startDateText}
@@ -929,7 +931,7 @@ export default function SalesForecastsPage() {
       hideInSearch: true,
       hideInTable: true,
       ...orderLevelCellProps((_text, record) =>
-        record.end_date ? dayjs(record.end_date).format('YYYY-MM-DD') : '-',
+        record.end_date ? formatDateTime(record.end_date, 'YYYY-MM-DD') : '-',
       ),
     },
     {
@@ -1002,7 +1004,7 @@ export default function SalesForecastsPage() {
       hideInSearch: true,
       hideInTable: dataViewMode === 'order',
       render: (_, record) =>
-        record.item?.forecast_date ? dayjs(record.item.forecast_date).format('YYYY-MM-DD') : '-',
+        record.item?.forecast_date ? formatDateTime(record.item.forecast_date, 'YYYY-MM-DD') : '-',
     },
     {
       title: t('app.kuaizhizao.salesForecast.confidenceLevel'),
@@ -1065,9 +1067,8 @@ export default function SalesForecastsPage() {
         
         const canEdit = record.capabilities?.update?.allowed === true && forecastPerms.canUpdate
         const canDelete = record.capabilities?.delete?.allowed === true && forecastPerms.canDelete
-        const canPrintRow = record.capabilities?.print?.allowed === true && forecastPerms.canPrint
         const parts: React.ReactNode[] = [
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+          <Button {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
             {t('common.detail')}
           </Button>,
         ];
@@ -1113,21 +1114,8 @@ export default function SalesForecastsPage() {
             }}
           />
         );
-        if (record.id && canPrintRow) {
-          parts.push(
-            <Button
-              key="print"
-              type="link"
-              size="small"
-              icon={<PrinterOutlined />}
-              onClick={() => openPrint({ documentType: 'sales_forecast', documentId: record.id! })}
-            >
-              {t('components.uniAction.print')}
-            </Button>,
-          );
-        }
         parts.push(
-          <Tooltip {...rowActionKind('skip')}
+          <Tooltip {...rowActionKind('delete')}
             key="del-tip"
             title={!canDelete ? t('app.kuaizhizao.salesForecast.deleteDisabledTip') : undefined}
           >
@@ -1145,7 +1133,7 @@ export default function SalesForecastsPage() {
             </span>
           </Tooltip>,
         );
-        return parts;
+        return renderSalesForecastRowActions(parts, `sf-${record.id ?? record._rowKey ?? 'row'}`);
       },
       onCell: (record) => {
         if (dataViewMode === 'order') return {};
@@ -1715,8 +1703,8 @@ export default function SalesForecastsPage() {
               apiParams.status = sf.status as string;
             }
             if (sf.start_date)
-              apiParams.start_date = dayjs(sf.start_date).format('YYYY-MM-DD');
-            if (sf.end_date) apiParams.end_date = dayjs(sf.end_date).format('YYYY-MM-DD');
+              apiParams.start_date = formatDateTime(sf.start_date, 'YYYY-MM-DD');
+            if (sf.end_date) apiParams.end_date = formatDateTime(sf.end_date, 'YYYY-MM-DD');
 
             const paramsKey = JSON.stringify(apiParams);
 
@@ -1781,6 +1769,7 @@ export default function SalesForecastsPage() {
               permGates={forecastPerms}
               handlers={{
                 submit: submitSalesForecast,
+                withdraw: withdrawSalesForecast,
                 approve: approveSalesForecast,
                 revoke: withdrawSalesForecastApproval,
               }}
@@ -1795,6 +1784,31 @@ export default function SalesForecastsPage() {
                 actionRef.current?.reload();
               }}
               toolBarButtonSize="middle"
+            />,
+            <UniCapabilityBatchButton
+              key="sales-forecast-batch-print"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedForecastsForBatch}
+              capabilityKey="print"
+              permAllowed={forecastPerms.canPrint}
+              batchAllowed={(records, perm) =>
+                Boolean(perm) && records.some((record) => record.capabilities?.print?.allowed === true)
+              }
+              singleOnly
+              onRun={async (id) => {
+                openPrint({ documentType: 'sales_forecast', documentId: id });
+              }}
+              resolveId={(key) => {
+                const raw = rowKeyToOrderIdRef.current.get(String(key));
+                const id = raw ?? Number(key);
+                return Number.isFinite(id) && id > 0 ? id : null;
+              }}
+              labels={{
+                single: t('components.uniAction.print'),
+                batch: t('components.uniAction.print'),
+              }}
+              icon={<PrinterOutlined />}
+              size="middle"
             />,
           ]}
           showImportButton={true}

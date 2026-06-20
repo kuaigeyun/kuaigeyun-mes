@@ -1,7 +1,7 @@
 import type { DescriptionsProps } from 'antd';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
-import dayjs from 'dayjs';
 import type { ReactNode } from 'react';
+import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../../utils/format';
 
 /**
  * 主数据详情：将 ProDescriptions 列配置转为 Ant Design Descriptions items（与设备台账等页一致）
@@ -15,10 +15,10 @@ export function buildMasterDetailDescriptionItems<T extends Record<string, any>>
     const value = dataIndex != null ? dataSource[dataIndex] : undefined;
     let content: ReactNode = value as ReactNode;
     if (col.valueType === 'date' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD');
+      content = formatDateBySiteSetting(value as string);
     }
     if (col.valueType === 'dateTime' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+      content = formatDateTimeBySiteSetting(value as string);
     }
     if (col.render && dataSource != null) {
       content = (col.render as (dom: ReactNode, entity: T, i: number) => ReactNode)(content, dataSource, index);

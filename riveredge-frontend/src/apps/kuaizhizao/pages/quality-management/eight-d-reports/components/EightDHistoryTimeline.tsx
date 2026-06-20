@@ -1,10 +1,10 @@
 import React from 'react';
 import { Empty, Timeline, Typography } from 'antd';
-import dayjs from 'dayjs';
 import type { TFunction } from 'i18next';
 import type { Quality8DHistoryEntry } from '../../../../services/quality-improvement';
 import { useTranslation } from 'react-i18next';
 import { getEightDStatusText } from './eightDMeta';
+import { formatDateTime } from '../../../../../../utils/format';
 
 interface EightDHistoryTimelineProps {
   history: Quality8DHistoryEntry[];
@@ -34,7 +34,7 @@ export const EightDHistoryTimeline: React.FC<EightDHistoryTimelineProps> = ({ hi
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <Typography.Text strong>{renderActionText(t, entry)}</Typography.Text>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {entry.timestamp ? dayjs(entry.timestamp).format('YYYY-MM-DD HH:mm:ss') : '-'}
+              {entry.timestamp ? formatDateTime(entry.timestamp, 'YYYY-MM-DD HH:mm:ss') : '-'}
             </Typography.Text>
             {entry.verification_result ? (
               <Typography.Paragraph style={{ marginBottom: 0 }}>

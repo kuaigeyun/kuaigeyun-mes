@@ -22,6 +22,7 @@ import { normalizeDocumentAttachments } from '../../../utils/documentAttachments
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
+import { formatDateTime } from '../../../../../utils/format';
 
 const { Meta } = Card;
 const { Option } = Select;
@@ -517,7 +518,7 @@ const EquipmentStatusPage: React.FC = () => {
                     )}
                     {item.monitored_at && (
                       <div style={{ color: '#999', fontSize: 12 }}>
-                        {t(`${P}.updatedAt`, { time: dayjs(item.monitored_at).format('HH:mm:ss') })}
+                        {t(`${P}.updatedAt`, { time: formatDateTime(item.monitored_at, 'HH:mm:ss') })}
                       </div>
                     )}
                   </div>
@@ -592,13 +593,13 @@ const EquipmentStatusPage: React.FC = () => {
                     pressure: formatMetric(currentEquipment.pressure, 2),
                     vibration: formatMetric(currentEquipment.vibration, 2),
                     last_maintenance_date: currentEquipment.last_maintenance_date
-                      ? dayjs(currentEquipment.last_maintenance_date).format('YYYY-MM-DD')
+                      ? formatDateTime(currentEquipment.last_maintenance_date, 'YYYY-MM-DD')
                       : undefined,
                     next_maintenance_date: currentEquipment.next_maintenance_date
-                      ? dayjs(currentEquipment.next_maintenance_date).format('YYYY-MM-DD')
+                      ? formatDateTime(currentEquipment.next_maintenance_date, 'YYYY-MM-DD')
                       : undefined,
                     monitored_at: currentEquipment.monitored_at
-                      ? dayjs(currentEquipment.monitored_at).format('YYYY-MM-DD HH:mm:ss')
+                      ? formatDateTime(currentEquipment.monitored_at, 'YYYY-MM-DD HH:mm:ss')
                       : undefined,
                   }}
                   columns={drawerDescriptionColumns}
@@ -627,7 +628,7 @@ const EquipmentStatusPage: React.FC = () => {
                             )}
                           </div>
                           <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
-                            {dayjs(history.status_changed_at).format('YYYY-MM-DD HH:mm:ss')}
+                            {formatDateTime(history.status_changed_at, 'YYYY-MM-DD HH:mm:ss')}
                             {history.changed_by_name && ` · ${history.changed_by_name}`}
                           </div>
                           {history.reason && (

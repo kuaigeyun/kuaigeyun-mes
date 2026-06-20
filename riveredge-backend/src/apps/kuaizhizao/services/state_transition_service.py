@@ -11,6 +11,7 @@ Date: 2025-01-14
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from loguru import logger
+from core.utils.timezone_utils import to_api_isoformat
 
 from apps.kuaizhizao.models.state_transition import StateTransitionRule, StateTransitionLog
 from apps.kuaizhizao.constants import STATE_ALIASES, DocumentStatus
@@ -247,7 +248,7 @@ class StateTransitionService:
                 "transition_comment": log.transition_comment,
                 "operator_id": log.operator_id,
                 "operator_name": log.operator_name,
-                "transition_time": log.transition_time.isoformat() if log.transition_time else None,
+                "transition_time": to_api_isoformat(log.transition_time) if log.transition_time else None,
                 "related_entity_type": log.related_entity_type,
                 "related_entity_id": log.related_entity_id,
             })

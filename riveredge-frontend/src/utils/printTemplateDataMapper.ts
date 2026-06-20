@@ -5,9 +5,7 @@
  */
 
 import dayjs from 'dayjs';
-
-const DATE_FORMAT = 'YYYY-MM-DD';
-const DATETIME_FORMAT = 'YYYY-MM-DD HH:mm';
+import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from './format';
 
 /**
  * 从嵌套对象中按点号路径取值，如 "operations.0.operation_name"
@@ -35,10 +33,13 @@ function formatDateValue(val: unknown): string {
   if (val == null) return '';
   if (typeof val === 'string') {
     const d = dayjs(val);
-    return d.isValid() ? (val.length > 10 ? d.format(DATETIME_FORMAT) : d.format(DATE_FORMAT)) : String(val);
+    if (!d.isValid()) return String(val);
+    return val.length > 10
+      ? formatDateTimeBySiteSetting(val, '')
+      : formatDateBySiteSetting(val, '');
   }
   if (val instanceof Date) {
-    return dayjs(val).format(DATETIME_FORMAT);
+    return formatDateTimeBySiteSetting(val, '');
   }
   return String(val);
 }

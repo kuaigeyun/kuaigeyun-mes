@@ -89,6 +89,7 @@ import {
   getSourceTypeTag,
   getVarianceTypeTag,
 } from '../../../utils/costUiLabels';
+import { formatDateTime } from '../../../../../utils/format';
 
 type TopCat = 'ledger' | 'compare' | 'analyze' | 'optimization' | 'trial';
 
@@ -560,7 +561,7 @@ const CostCalculationPage: React.FC = () => {
         key: 'calculation_date',
         width: 120,
         search: false,
-        render: (_, r) => (r.calculation_date ? dayjs(r.calculation_date as string).format('YYYY-MM-DD') : '-'),
+        render: (_, r) => (r.calculation_date ? formatDateTime(r.calculation_date as string, 'YYYY-MM-DD') : '-'),
       },
       {
         title: t('app.kuaicaiwu.costCommon.col.updatedAt'),
@@ -568,7 +569,7 @@ const CostCalculationPage: React.FC = () => {
         key: 'updated_at',
         width: 180,
         search: false,
-        render: (_, r) => (r.updated_at ? dayjs(r.updated_at as string).format('YYYY-MM-DD HH:mm:ss') : '-'),
+        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at as string, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
         title: t('app.kuaicaiwu.costCommon.section.lifecycle'),
@@ -644,7 +645,7 @@ const CostCalculationPage: React.FC = () => {
         title: t('app.kuaicaiwu.costCommon.col.calculationDate'),
         dataIndex: 'calculation_date',
         render: (_, entity) =>
-          entity.calculation_date ? dayjs(entity.calculation_date as string).format('YYYY-MM-DD') : '-',
+          entity.calculation_date ? formatDateTime(entity.calculation_date as string, 'YYYY-MM-DD') : '-',
       },
       { title: t('app.kuaicaiwu.costCommon.remark'), dataIndex: 'remark' },
       { title: t('app.kuaicaiwu.costCommon.col.createdBy'), dataIndex: 'created_by_name' },
@@ -652,14 +653,14 @@ const CostCalculationPage: React.FC = () => {
         title: t('app.kuaicaiwu.costCommon.col.createdAt'),
         dataIndex: 'created_at',
         render: (_, entity) =>
-          entity.created_at ? dayjs(entity.created_at as string).format('YYYY-MM-DD HH:mm:ss') : '-',
+          entity.created_at ? formatDateTime(entity.created_at as string, 'YYYY-MM-DD HH:mm:ss') : '-',
       },
       { title: t('app.kuaicaiwu.costCommon.col.updatedBy'), dataIndex: 'updated_by_name' },
       {
         title: t('app.kuaicaiwu.costCommon.col.updatedAt'),
         dataIndex: 'updated_at',
         render: (_, entity) =>
-          entity.updated_at ? dayjs(entity.updated_at as string).format('YYYY-MM-DD HH:mm:ss') : '-',
+          entity.updated_at ? formatDateTime(entity.updated_at as string, 'YYYY-MM-DD HH:mm:ss') : '-',
       },
     ],
     [t],
@@ -856,7 +857,7 @@ const CostCalculationPage: React.FC = () => {
                         <>
                           {t('app.kuaicaiwu.costCommon.log.created')} ·{' '}
                           {costCalculationDetail.created_at
-                            ? dayjs(costCalculationDetail.created_at).format('YYYY-MM-DD HH:mm:ss')
+                            ? formatDateTime(costCalculationDetail.created_at, 'YYYY-MM-DD HH:mm:ss')
                             : '-'}
                           {costCalculationDetail.created_by_name ? ` · ${costCalculationDetail.created_by_name}` : ''}
                         </>
@@ -868,7 +869,7 @@ const CostCalculationPage: React.FC = () => {
                         <>
                           {t('app.kuaicaiwu.costCommon.log.updated')} ·{' '}
                           {costCalculationDetail.updated_at
-                            ? dayjs(costCalculationDetail.updated_at).format('YYYY-MM-DD HH:mm:ss')
+                            ? formatDateTime(costCalculationDetail.updated_at, 'YYYY-MM-DD HH:mm:ss')
                             : '-'}
                           {costCalculationDetail.updated_by_name ? ` · ${costCalculationDetail.updated_by_name}` : ''}
                         </>

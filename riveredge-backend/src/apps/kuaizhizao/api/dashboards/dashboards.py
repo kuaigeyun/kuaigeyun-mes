@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 
 from core.api.deps import get_current_user, get_current_tenant
 from core.utils.api_cache import cache_by_kwargs
+from core.utils.timezone_utils import to_api_isoformat
 from infra.models.user import User
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.exception_service import ExceptionService
@@ -1506,7 +1507,7 @@ async def get_production_broadcast(
                 product_name=work_order.product_name if work_order else "未知产品",
                 qualified_quantity=float(record.qualified_quantity or 0),
                 unqualified_quantity=float(record.unqualified_quantity or 0),
-                created_at=record.reported_at.isoformat() if record.reported_at else datetime.now().isoformat(),
+                created_at=to_api_isoformat(record.reported_at) if record.reported_at else to_api_isoformat(datetime.now()),
             ))
         
         return ProductionBroadcastResponse(items=items)

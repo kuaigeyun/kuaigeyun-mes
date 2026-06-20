@@ -74,6 +74,7 @@ import {
   formatNumericRangeLabel,
   isNumericMeasuredOutOfRange,
 } from '../../../../utils/inspectionNumericRange';
+import { formatDateTime } from '../../../../../../utils/format';
 
 function normalizeLine(ln: EquipmentSpotCheckLineRow): EquipmentSpotCheckLineRow {
   const ids = ln.attachment_file_ids;
@@ -351,7 +352,7 @@ const SpotCheckDocumentsPage: React.FC = () => {
         dataIndex: 'recorded_at',
         width: 168,
         hideInSearch: true,
-        render: (_, r) => (r.recorded_at ? dayjs(r.recorded_at).format('YYYY-MM-DD HH:mm') : '—'),
+        render: (_, r) => (r.recorded_at ? formatDateTime(r.recorded_at, 'YYYY-MM-DD HH:mm') : '—'),
       },
       {
         title: t('app.haoligo.equipment.documents.searchRecordedFrom'),

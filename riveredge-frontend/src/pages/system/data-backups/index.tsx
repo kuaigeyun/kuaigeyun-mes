@@ -42,6 +42,7 @@ import {
 } from '../../../services/dataBackup';
 import { useGlobalStore } from '../../../stores';
 import { getTenantId } from '../../../utils/auth';
+import { formatDateTime } from '../../../utils/format';
 
 function formatFileSize(bytes?: number): string {
   if (!bytes) return '-';
@@ -344,16 +345,16 @@ const DataBackupsPage: React.FC = () => {
       );
     };
 
-    const todayStr = dayjs().format('YYYY-MM-DD');
-    const yesterdayStr = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+    const todayStr = formatDateTime(new Date(), 'YYYY-MM-DD');
+    const yesterdayStr = formatDateTime(dayjs().subtract(1, 'day').toDate(), 'YYYY-MM-DD');
     let today_backups = 0;
     let yesterday_backups = 0;
     const trend_data = [] as Array<{ date: string; value: number }>;
 
     // 计算最近7天的备份数据趋势
     for (let i = 6; i >= 0; i--) {
-      const dateStr = dayjs().subtract(i, 'day').format('YYYY-MM-DD');
-      const count = allBackups.filter(b => dayjs(b.created_at).format('YYYY-MM-DD') === dateStr).length;
+      const dateStr = formatDateTime(dayjs().subtract(i, 'day').toDate(), 'YYYY-MM-DD');
+      const count = allBackups.filter((b) => formatDateTime(b.created_at, 'YYYY-MM-DD') === dateStr).length;
       trend_data.push({ date: dateStr, value: count });
       if (dateStr === todayStr) today_backups = count;
       if (dateStr === yesterdayStr) yesterday_backups = count;
@@ -483,7 +484,7 @@ const DataBackupsPage: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataBackups.labelStartedAt')}</Text>
                 <Text style={{ fontSize: 12 }}>
-                  {dayjs(backup.started_at).format('MM-DD HH:mm')}
+                  {formatDateTime(backup.started_at, 'MM-DD HH:mm')}
                 </Text>
               </div>
             )}
@@ -492,7 +493,7 @@ const DataBackupsPage: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataBackups.labelCompletedAt')}</Text>
                 <Text style={{ fontSize: 12 }}>
-                  {dayjs(backup.completed_at).format('MM-DD HH:mm')}
+                  {formatDateTime(backup.completed_at, 'MM-DD HH:mm')}
                 </Text>
               </div>
             )}
@@ -779,7 +780,7 @@ const DataBackupsPage: React.FC = () => {
                     <Text style={{ color: '#fff' }}>{t('pages.system.dataBackups.workerStatusPending')}: {workerHealth?.pending_total ?? '-'}</Text>
                     <Text style={{ color: '#fff' }}>{t('pages.system.dataBackups.workerStatusStalledPending')}: {workerHealth?.pending_stalled ?? '-'}</Text>
                     <Text style={{ color: '#fff' }}>{t('pages.system.dataBackups.workerStatusRunningCount')}: {workerHealth?.running_count ?? '-'}</Text>
-                    <Text style={{ color: '#fff' }}>{t('pages.system.dataBackups.workerStatusLastChecked')}: {workerHealth?.checked_at ? dayjs(workerHealth.checked_at).format('YYYY-MM-DD HH:mm:ss') : '-'}</Text>
+                    <Text style={{ color: '#fff' }}>{t('pages.system.dataBackups.workerStatusLastChecked')}: {workerHealth?.checked_at ? formatDateTime(workerHealth.checked_at, 'YYYY-MM-DD HH:mm:ss') : '-'}</Text>
                   </Space>
                 }
               >

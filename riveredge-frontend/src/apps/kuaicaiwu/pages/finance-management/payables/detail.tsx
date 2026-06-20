@@ -22,6 +22,7 @@ import {
 import { getPayableLifecycle } from '../../../utils/payableLifecycle';
 import { getPaymentMethodOptions } from '../../../utils/financeSharedOptions';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 
 const P = 'app.kuaicaiwu.payable';
 
@@ -78,7 +79,7 @@ const PayableDetail: React.FC = () => {
       await payableService.recordPayment(Number(id), {
         payable_id: Number(id),
         payment_amount: values.payment_amount,
-        payment_date: dayjs(values.payment_date).format('YYYY-MM-DD'),
+        payment_date: formatDateTime(values.payment_date, 'YYYY-MM-DD'),
         payment_method: values.payment_method || '银行转账',
         notes: values.notes,
       });

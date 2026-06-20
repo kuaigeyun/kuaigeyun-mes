@@ -45,6 +45,7 @@ import { canViewKuaizhizaoPricing } from '../../../../../utils/kuaizhizaoPricing
 import { useUserFieldMasks } from '../../../../../hooks/useUserFieldMasks';
 import { resolveAmountFieldVisibility } from '../../../../../utils/fieldMaskPermission';
 import { getStatusDisplay } from '../../../constants/documentStatus';
+import { formatDateTime } from '../../../../../utils/format';
 import {
   ModuleKpiRow,
   ModuleShortcutGrid,
@@ -222,7 +223,7 @@ const SalesDashboard: React.FC = () => {
             <span style={{ fontSize: 10, color: token.colorTextTertiary }}>
               {t('app.kuaizhizao.salesDashboard.deliveryDue', {
                 date: record.delivery_date
-                  ? dayjs(record.delivery_date).format('MM-DD')
+                  ? formatDateTime(record.delivery_date, 'MM-DD')
                   : t('app.kuaizhizao.salesDashboard.deliveryTbd'),
               })}
             </span>
@@ -569,7 +570,7 @@ const SalesDashboard: React.FC = () => {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
                         <Text type="secondary" style={{ fontSize: 10, lineHeight: 1.2 }}>
                           {t('app.kuaizhizao.salesDashboard.plannedFollowUp', {
-                            date: dayjs(item.next_follow_up_at).format('YYYY-MM-DD'),
+                            date: formatDateTime(item.next_follow_up_at, 'YYYY-MM-DD'),
                           })}
                         </Text>
                         <Button
@@ -668,7 +669,7 @@ const SalesDashboard: React.FC = () => {
                             {item.customer_name}
                           </Text>
                           <Text type="secondary" style={{ fontSize: 10, flexShrink: 0 }}>
-                            {dayjs(item.occurred_at || item.created_at).format('MM-DD HH:mm')}
+                            {formatDateTime(item.occurred_at || item.created_at, 'MM-DD HH:mm')}
                           </Text>
                         </div>
                         <Paragraph

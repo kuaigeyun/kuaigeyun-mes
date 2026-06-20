@@ -37,6 +37,7 @@ import {
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../master-data/utils/factoryImportTemplate';
 import type { CustomerCreate } from '../../../../master-data/types/supply-chain';
+import { formatDateTime } from '../../../../../utils/format';
 
 const CustomerPoolPage: React.FC = () => {
   const { t } = useTranslation();
@@ -345,14 +346,14 @@ const CustomerPoolPage: React.FC = () => {
         dataIndex: 'last_follow_up_at',
         width: 165,
         hideInSearch: true,
-        render: (_, row) => (row.last_follow_up_at ? dayjs(row.last_follow_up_at).format('YYYY-MM-DD HH:mm') : '—'),
+        render: (_, row) => (row.last_follow_up_at ? formatDateTime(row.last_follow_up_at, 'YYYY-MM-DD HH:mm') : '—'),
       },
       {
         title: t('field.customer.recycleAt'),
         dataIndex: 'recycle_at',
         width: 165,
         hideInSearch: true,
-        render: (_, row) => (row.recycle_at ? dayjs(row.recycle_at).format('YYYY-MM-DD HH:mm') : '—'),
+        render: (_, row) => (row.recycle_at ? formatDateTime(row.recycle_at, 'YYYY-MM-DD HH:mm') : '—'),
       },
       {
         title: t('common.actions'),
@@ -382,7 +383,7 @@ const CustomerPoolPage: React.FC = () => {
                   icon={<EditOutlined />}
                   onClick={() => openEditCustomer(row.uuid)}
                 >
-                  {t('field.customField.edit')}
+                  {t('common.edit')}
                 </Button>
               );
             }
@@ -610,13 +611,13 @@ const CustomerPoolPage: React.FC = () => {
         row.phone ?? '',
         row.salesman_name ?? '',
         status,
-        row.last_follow_up_at ? dayjs(row.last_follow_up_at).format('YYYY-MM-DD HH:mm:ss') : '',
-        row.recycle_at ? dayjs(row.recycle_at).format('YYYY-MM-DD HH:mm:ss') : '',
+        row.last_follow_up_at ? formatDateTime(row.last_follow_up_at, 'YYYY-MM-DD HH:mm:ss') : '',
+        row.recycle_at ? formatDateTime(row.recycle_at, 'YYYY-MM-DD HH:mm:ss') : '',
       ];
       csvRows.push(cells.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','));
     }
     const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    downloadFile(blob, t('app.kuaizhizao.customerPool.exportFileName', { date: dayjs().format('YYYY-MM-DD') }));
+    downloadFile(blob, t('app.kuaizhizao.customerPool.exportFileName', { date: formatDateTime(new Date(), 'YYYY-MM-DD') }));
     message.success(t('common.exportSuccess', { count: exportData.length }));
   }, [message, t]);
 

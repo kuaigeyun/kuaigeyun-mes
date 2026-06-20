@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
 import { Empty, Tag, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useThemeStore } from '../../../../stores/themeStore';
 import type { ModuleTodoItem } from './types';
 import { isModuleDashboardPlain } from './moduleDashboardTheme';
 import { localizeDashboardTodoItem } from '../../../../utils/dashboardTodoI18n';
+import { formatDateTime } from '../../../../utils/format';
 
 const { Text } = Typography;
 
@@ -68,7 +68,7 @@ export function ModuleTodoList({
               <div>
                 <Text type="secondary" style={{ fontSize: 11 }}>
                   {t('pages.dashboard.todo.dueDateShort', {
-                    date: dayjs(item.due_date).format('MM-DD'),
+                    date: formatDateTime(item.due_date, 'MM-DD'),
                   })}
                 </Text>
               </div>

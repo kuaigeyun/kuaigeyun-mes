@@ -8,6 +8,7 @@ import { App, Tag } from 'antd';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../../components/layout-templates';
+import { formatDateTime } from '../../../../../../utils/format';
 import { getMoldLedgerStatusTagColor } from '../../../../constants/moldStatus';
 import {
   type AlertLevel,
@@ -112,7 +113,7 @@ const MoldMaintenanceAlertReportPage: React.FC = () => {
       dataIndex: 'last_upkeep_at',
       width: 168,
       hideInSearch: true,
-      render: (_, r) => (r.last_upkeep_at ? dayjs(r.last_upkeep_at).format('YYYY-MM-DD HH:mm') : '—'),
+      render: (_, r) => (r.last_upkeep_at ? formatDateTime(r.last_upkeep_at, 'YYYY-MM-DD HH:mm') : '—'),
     },
     {
       title: '已用产量达成%',

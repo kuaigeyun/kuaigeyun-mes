@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from apps.kuaizhizao.models.demand_change_event import DemandChangeEvent
 from apps.kuaizhizao.models.demand_impact_record import DemandImpactRecord
 from apps.kuaizhizao.models.demand_replan_task import DemandReplanTask
+from core.utils.timezone_utils import to_api_isoformat
 from apps.kuaizhizao.services.demand_replan_impact_service import DemandReplanImpactService
 from apps.kuaizhizao.services.demand_replanning_orchestrator_service import (
     DemandReplanningOrchestratorService,
@@ -94,7 +95,7 @@ class DemandChangeEventService:
                 "source_id": r.source_id,
                 "source_code": r.source_code,
                 "event_status": r.event_status,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "created_at": to_api_isoformat(r.created_at) if r.created_at else None,
             }
             for r in rows
         ]
@@ -115,7 +116,7 @@ class DemandChangeEventService:
                 "source_code": event.source_code,
                 "event_status": event.event_status,
                 "trigger_reason": event.trigger_reason,
-                "created_at": event.created_at.isoformat() if event.created_at else None,
+                "created_at": to_api_isoformat(event.created_at) if event.created_at else None,
             },
             "impacts": [
                 {
@@ -168,7 +169,7 @@ class DemandChangeEventService:
                     "mode": t.mode,
                     "status": t.status,
                     "approval_status": t.approval_status,
-                    "created_at": t.created_at.isoformat() if t.created_at else None,
+                    "created_at": to_api_isoformat(t.created_at) if t.created_at else None,
                 }
                 for t in latest_tasks
             ],
@@ -187,9 +188,9 @@ class DemandChangeEventService:
                 "approval_status": r.approval_status,
                 "impact_metrics": r.impact_metrics,
                 "result_summary": r.result_summary,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-                "started_at": r.started_at.isoformat() if r.started_at else None,
-                "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+                "created_at": to_api_isoformat(r.created_at) if r.created_at else None,
+                "started_at": to_api_isoformat(r.started_at) if r.started_at else None,
+                "finished_at": to_api_isoformat(r.finished_at) if r.finished_at else None,
             }
             for r in rows
         ]

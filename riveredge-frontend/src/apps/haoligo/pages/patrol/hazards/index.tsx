@@ -23,6 +23,7 @@ import { formDateTimeToIso } from '../shared/datetimeHelpers';
 import { PatrolImagePreview } from '../shared/PatrolImagePreview';
 import { RemediationFormBody } from '../shared/RemediationFormBody';
 import { hazardIssueTypeCodes } from '../shared/patrolIssueHelpers';
+import { formatDateTime } from '../../../../../utils/format';
 
 const statusColors: Record<string, string> = {
   已登记: 'processing',
@@ -290,7 +291,7 @@ const PatrolHazardsPage: React.FC = () => {
             <Descriptions.Item label="车间">{contextRow.workshop_name ?? '—'}</Descriptions.Item>
             <Descriptions.Item label="巡查区域">{contextRow.workshop_area ?? '—'}</Descriptions.Item>
             <Descriptions.Item label="巡查时间">
-              {contextRow.reported_at ? dayjs(contextRow.reported_at).format('YYYY-MM-DD HH:mm') : '—'}
+              {contextRow.reported_at ? formatDateTime(contextRow.reported_at, 'YYYY-MM-DD HH:mm') : '—'}
             </Descriptions.Item>
             <Descriptions.Item label="问题类型">
               {hazardIssueTypeCodes(contextRow).join('、') || '—'}

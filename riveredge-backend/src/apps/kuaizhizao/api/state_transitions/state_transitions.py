@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Query, Path, HTTPException, status, Body
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.utils.timezone_utils import to_api_isoformat
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
@@ -86,7 +87,7 @@ async def transition_state(
             "transition_log_id": log.id,
             "from_state": from_state,
             "to_state": to_state,
-            "transition_time": log.transition_time.isoformat() if log.transition_time else None
+            "transition_time": to_api_isoformat(log.transition_time) if log.transition_time else None
         }
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

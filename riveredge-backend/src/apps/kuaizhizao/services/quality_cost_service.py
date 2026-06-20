@@ -21,6 +21,7 @@ from apps.kuaizhizao.models.process_inspection import ProcessInspection
 from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
 from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
 from apps.kuaicaiwu.models.cost_rule import CostRule
+from core.utils.timezone_utils import to_api_isoformat
 
 
 class QualityCostService:
@@ -321,7 +322,7 @@ class QualityCostService:
                 "inspection_quantity": float(inspection.inspection_quantity),
                 "unit_price": float(unit_price),
                 "cost": float(inspection_cost),
-                "inspection_time": inspection.inspection_time.isoformat() if inspection.inspection_time else None,
+                "inspection_time": to_api_isoformat(inspection.inspection_time) if inspection.inspection_time else None,
             })
         
         return total_cost, cost_breakdown
@@ -388,7 +389,7 @@ class QualityCostService:
                 "inspection_quantity": float(inspection.inspection_quantity),
                 "unit_price": float(unit_price),
                 "cost": float(inspection_cost),
-                "inspection_time": inspection.inspection_time.isoformat() if inspection.inspection_time else None,
+                "inspection_time": to_api_isoformat(inspection.inspection_time) if inspection.inspection_time else None,
             })
         
         return total_cost, cost_breakdown
@@ -455,7 +456,7 @@ class QualityCostService:
                 "inspection_quantity": float(inspection.inspection_quantity),
                 "unit_price": float(unit_price),
                 "cost": float(inspection_cost),
-                "inspection_time": inspection.inspection_time.isoformat() if inspection.inspection_time else None,
+                "inspection_time": to_api_isoformat(inspection.inspection_time) if inspection.inspection_time else None,
             })
         
         return total_cost, cost_breakdown
@@ -635,7 +636,7 @@ class QualityCostService:
                 "material_code": exception.material_code,
                 "material_name": exception.material_name,
                 "cost": float(exception_cost),
-                "created_at": exception.created_at.isoformat() if exception.created_at else None,
+                "created_at": to_api_isoformat(exception.created_at) if exception.created_at else None,
             })
         
         return total_cost, cost_breakdown

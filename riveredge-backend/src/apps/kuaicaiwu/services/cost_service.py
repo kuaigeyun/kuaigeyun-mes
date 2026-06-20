@@ -43,6 +43,7 @@ from apps.kuaizhizao.schemas.cost import (
     CostOptimizationResponse,
 )
 from loguru import logger
+from core.utils.timezone_utils import to_api_isoformat
 
 
 class CostRuleService(AppBaseService[CostRule]):
@@ -306,7 +307,7 @@ class CostCalculationService(AppBaseService[CostCalculation]):
             "refreshed_work_order_ids": refreshed_work_order_ids,
             "skipped_fresh_work_order_ids": skipped_fresh_work_order_ids,
             "failed_work_order_ids": failed_work_order_ids,
-            "generated_at": now.isoformat(),
+            "generated_at": to_api_isoformat(now),
             "sla_target": "T+0 明细（近实时增量刷新）",
         }
 
@@ -770,7 +771,7 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         ).order_by("-calculation_date").limit(6).all()
         for calc in reversed(calculations):
             cost_trend.append({
-                "date": calc.calculation_date.isoformat(),
+                "date": to_api_isoformat(calc.calculation_date),
                 "material_cost": float(calc.material_cost),
                 "labor_cost": float(calc.labor_cost),
                 "manufacturing_cost": float(calc.manufacturing_cost),

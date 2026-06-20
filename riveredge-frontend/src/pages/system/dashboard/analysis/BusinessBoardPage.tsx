@@ -44,6 +44,7 @@ import {
   type ProductionBroadcastItem,
   type ActiveWorkOrderItem,
 } from '../../../../services/dashboard';
+import { formatDateTime } from '../../../../utils/format';
 
 const { Title } = Typography;
 
@@ -737,7 +738,7 @@ const BroadcastFeed: React.FC<BroadcastFeedProps> = ({ items, emptyText }) => {
               : level === 'warn'
                 ? getBoardHud().amber
                 : getBoardHud().cyan;
-          const timeText = it.created_at ? dayjs(it.created_at).format('MM-DD HH:mm') : '';
+          const timeText = it.created_at ? formatDateTime(it.created_at, 'MM-DD HH:mm') : '';
           return (
             <div
               key={`${it.id}-${idx}`}
@@ -894,7 +895,7 @@ const BusinessBoardPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [currentTime, setCurrentTime] = useState(dayjs().format('YYYY-MM-DD HH:mm:ss'));
+  const [currentTime, setCurrentTime] = useState(formatDateTime(new Date(), 'YYYY-MM-DD HH:mm:ss'));
   const containerRef = useRef<HTMLDivElement>(null);
   const [customBoardTitle, setCustomBoardTitle] = useState('');
   /** 中间配图文件 UUID，null 表示使用系统默认图 */
@@ -1067,7 +1068,7 @@ const BusinessBoardPage: React.FC = () => {
   }, [defaultBoardTitle, customHeroImageUuid]);
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(dayjs().format('YYYY-MM-DD HH:mm:ss')), 1000);
+    const timer = setInterval(() => setCurrentTime(formatDateTime(new Date(), 'YYYY-MM-DD HH:mm:ss')), 1000);
     return () => clearInterval(timer);
   }, []);
 

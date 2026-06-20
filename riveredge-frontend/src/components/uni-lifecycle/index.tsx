@@ -42,8 +42,16 @@ function TooltipContent(props: {
   subLabel?: string;
   subPercent?: number;
   subStages?: SubStage[];
+  statusClass?: string;
+  flowClass?: string;
 }) {
-  const { stageName, subLabel, subPercent, subStages } = props;
+  const { stageName, subLabel, subPercent, subStages, statusClass, flowClass } = props;
+  const meta = (statusClass || flowClass) ? (
+    <div style={{ marginTop: 6, opacity: 0.85, fontSize: 12 }}>
+      <div>状态类: {statusClass || '-'}</div>
+      <div>流转类: {flowClass || '-'}</div>
+    </div>
+  ) : null;
   if (subStages && subStages.length > 0) {
     return (
       <div style={{ maxWidth: 260 }}>
@@ -56,17 +64,26 @@ function TooltipContent(props: {
             </div>
           ))}
         </div>
+        {meta}
       </div>
     );
   }
   if (subLabel != null && subPercent != null) {
     return (
-      <span>
-        {stageName} · {subLabel} {Math.round(subPercent)}%
-      </span>
+      <div>
+        <span>
+          {stageName} · {subLabel} {Math.round(subPercent)}%
+        </span>
+        {meta}
+      </div>
     );
   }
-  return <span>{stageName}</span>;
+  return (
+    <div>
+      <span>{stageName}</span>
+      {meta}
+    </div>
+  );
 }
 
 export const UniLifecycle: React.FC<UniLifecycleProps> = ({
@@ -76,6 +93,8 @@ export const UniLifecycle: React.FC<UniLifecycleProps> = ({
   subPercent,
   subLabel,
   subStages,
+  statusClass,
+  flowClass,
   showLabel = false,
   size = CIRCLE_SIZE,
   expandSubStages = false,
@@ -92,9 +111,11 @@ export const UniLifecycle: React.FC<UniLifecycleProps> = ({
         subPercent,
         subLabel,
         subStages,
+        statusClass,
+        flowClass,
         mainStages: undefined,
       }),
-    [t, i18n.language, percent, stageName, progressStatus, subPercent, subLabel, subStages],
+    [t, i18n.language, percent, stageName, progressStatus, subPercent, subLabel, subStages, statusClass, flowClass],
   );
   const displayStageName = translated.stageName;
   const displaySubLabel = translated.subLabel;
@@ -108,6 +129,8 @@ export const UniLifecycle: React.FC<UniLifecycleProps> = ({
       subLabel={displaySubLabel}
       subPercent={subPercent}
       subStages={displaySubStages}
+      statusClass={translated.statusClass}
+      flowClass={translated.flowClass}
     />
   );
 

@@ -27,6 +27,7 @@ import { getMaintenanceReminderLifecycle } from '../../../utils/equipmentLifecyc
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
+import { formatDateTime } from '../../../../../utils/format';
 
 const P = 'app.kuaizhizao.maintenanceReminder';
 
@@ -39,10 +40,10 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
     const value = dataIndex != null ? dataSource[dataIndex] : undefined;
     let content: React.ReactNode = value as React.ReactNode;
     if (col.valueType === 'date' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD');
+      content = formatDateTime(value as string, 'YYYY-MM-DD');
     }
     if (col.valueType === 'dateTime' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
     }
     if (col.render && dataSource != null) {
             content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
@@ -306,7 +307,7 @@ const MaintenanceRemindersPage: React.FC = () => {
           title: t(`${P}.col.plannedMaintenanceDate`),
           dataIndex: 'planned_maintenance_date',
           render: (_, r) =>
-            r.planned_maintenance_date ? dayjs(r.planned_maintenance_date).format('YYYY-MM-DD HH:mm') : '-',
+            r.planned_maintenance_date ? formatDateTime(r.planned_maintenance_date, 'YYYY-MM-DD HH:mm') : '-',
         },
         {
           title: t(`${P}.col.daysUntilDue`),
@@ -378,7 +379,7 @@ const MaintenanceRemindersPage: React.FC = () => {
           width: 150,
           render: (_, record) =>
             record.planned_maintenance_date
-              ? dayjs(record.planned_maintenance_date).format('YYYY-MM-DD HH:mm')
+              ? formatDateTime(record.planned_maintenance_date, 'YYYY-MM-DD HH:mm')
               : '-',
         },
         {
@@ -398,7 +399,7 @@ const MaintenanceRemindersPage: React.FC = () => {
           dataIndex: 'reminder_date',
           width: 150,
           render: (_, record) =>
-            record.reminder_date ? dayjs(record.reminder_date).format('YYYY-MM-DD HH:mm:ss') : '-',
+            record.reminder_date ? formatDateTime(record.reminder_date, 'YYYY-MM-DD HH:mm:ss') : '-',
         },
         {
           title: t(`${P}.col.lifecycle`),
@@ -573,11 +574,11 @@ const MaintenanceRemindersPage: React.FC = () => {
                     {t(`${P}.readHandleStatus`, {
                       read: currentReminder.is_read ? t(`${P}.yes`) : t(`${P}.no`),
                       readAt: currentReminder.read_at
-                        ? `（${dayjs(currentReminder.read_at).format('YYYY-MM-DD HH:mm:ss')}）`
+                        ? `（${formatDateTime(currentReminder.read_at, 'YYYY-MM-DD HH:mm:ss')}）`
                         : '',
                       handled: currentReminder.is_handled ? t(`${P}.yes`) : t(`${P}.no`),
                       handledAt: currentReminder.handled_at
-                        ? `（${dayjs(currentReminder.handled_at).format('YYYY-MM-DD HH:mm:ss')}，${currentReminder.handled_by_name || '-'}）`
+                        ? `（${formatDateTime(currentReminder.handled_at, 'YYYY-MM-DD HH:mm:ss')}，${currentReminder.handled_by_name || '-'}）`
                         : '',
                     })}
                   </Typography.Text>

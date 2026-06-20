@@ -16,6 +16,7 @@ import { StructuredCostDataView } from '../../../../../components/structured-cos
 import { productionCostApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface ProductionCostResult {
   material_id: number;
@@ -142,7 +143,7 @@ const ProductionCostPage: React.FC = () => {
               ),
               unit_cost: `¥${result.unit_cost?.toFixed(2)}`,
               calculation_type: result.calculation_type,
-              calculation_date: result.calculation_date ? dayjs(result.calculation_date).format('YYYY-MM-DD') : '-',
+              calculation_date: result.calculation_date ? formatDateTime(result.calculation_date, 'YYYY-MM-DD') : '-',
             }}
             columns={[
               { title: '物料编号', dataIndex: 'material_code' },

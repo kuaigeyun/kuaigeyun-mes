@@ -15,6 +15,7 @@ import asyncio
 from datetime import datetime
 
 from core.services.logging.online_user_service import OnlineUserService
+from core.utils.timezone_utils import to_api_isoformat
 
 
 class WebSocketManager:
@@ -334,7 +335,7 @@ class WebSocketService:
                         )
                         await websocket_manager.send_personal_message(connection_id, {
                             "type": "pong",
-                            "timestamp": datetime.now().isoformat(),
+                            "timestamp": to_api_isoformat(datetime.now()),
                         })
                     
                     else:
@@ -366,7 +367,7 @@ class WebSocketService:
             "type": "data",
             "channel": channel,
             "data": data,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": to_api_isoformat(datetime.now()),
         }
         await websocket_manager.broadcast_to_tenant(tenant_id, message)
     
@@ -384,7 +385,7 @@ class WebSocketService:
             "type": "data",
             "channel": channel,
             "data": data,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": to_api_isoformat(datetime.now()),
         }
         await websocket_manager.broadcast_to_user(user_id, message)
     
@@ -401,6 +402,6 @@ class WebSocketService:
             "type": "data",
             "channel": channel,
             "data": data,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": to_api_isoformat(datetime.now()),
         }
         await websocket_manager.broadcast_to_channel(channel, message)

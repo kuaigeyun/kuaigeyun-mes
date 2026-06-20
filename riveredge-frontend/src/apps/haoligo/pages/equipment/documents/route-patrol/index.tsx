@@ -38,6 +38,7 @@ import {
   type PatrolRouteRow,
   type WorkshopRow,
 } from '../../../../services/haoligo';
+import { formatDateTime } from '../../../../../../utils/format';
 import { uploadFile, type FileUploadResponse } from '../../../../../../services/file';
 import { MoldAttachmentImagePreview } from '../../../../components/MoldAttachmentImagePreview';
 import { SecurePictureCardUpload } from '../../../../components/SecurePictureCardUpload';
@@ -251,7 +252,7 @@ const RoutePatrolDocumentsPage: React.FC = () => {
         dataIndex: 'recorded_at',
         width: 168,
         hideInSearch: true,
-        render: (_, r) => (r.recorded_at ? dayjs(r.recorded_at).format('YYYY-MM-DD HH:mm') : '—'),
+        render: (_, r) => (r.recorded_at ? formatDateTime(r.recorded_at, 'YYYY-MM-DD HH:mm') : '—'),
       },
       {
         title: t('app.haoligo.equipment.documents.colPatrolRoute'),

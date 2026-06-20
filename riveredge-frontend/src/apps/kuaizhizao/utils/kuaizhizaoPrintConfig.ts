@@ -11,6 +11,9 @@ export type KuaizhizaoPrintDocumentType =
   | 'sales_contract'
   | 'sales_order'
   | 'sales_forecast'
+  | 'sales_order_change'
+  | 'shipment_notice'
+  | 'sales_return'
   | 'delivery_notice'
   | 'purchase_order'
   | 'purchase_receipt'
@@ -31,6 +34,9 @@ const PRINT_API_PATH_BUILDERS: Record<KuaizhizaoPrintDocumentType, (id: number) 
   sales_contract: (id) => `/apps/kuaizhizao/sales-contracts/${id}/print`,
   sales_order: (id) => `/apps/kuaizhizao/sales-orders/${id}/print`,
   sales_forecast: (id) => `/apps/kuaizhizao/sales-forecasts/${id}/print`,
+  sales_order_change: (id) => `/apps/kuaizhizao/sales-order-change-orders/${id}/print`,
+  shipment_notice: (id) => `/apps/kuaizhizao/shipment-notices/${id}/print`,
+  sales_return: (id) => `/apps/kuaizhizao/sales-returns/${id}/print`,
   delivery_notice: (id) => `/apps/kuaizhizao/delivery-notices/${id}/print`,
   purchase_order: (id) => `/apps/kuaizhizao/purchase-orders/${id}/print`,
   purchase_receipt: (id) => `/apps/kuaizhizao/purchase-receipts/${id}/print`,

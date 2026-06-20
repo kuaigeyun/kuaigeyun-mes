@@ -34,6 +34,7 @@ DEFAULT_PLATFORM_SETTINGS = PlatformSettingsResponse(
     login_content=None,
     icp_license=None,
     theme_color="#1890ff",
+    enable_register=True,
     created_at=now_utc(),
     updated_at=now_utc(),
 )
@@ -115,6 +116,9 @@ async def get_platform_settings_public(
                         "login_quick_enabled": site_settings.get("login_quick_enabled")
                         if site_settings.get("login_quick_enabled") is not None
                         else merged.get("login_quick_enabled"),
+                        "enable_register": site_settings.get("enable_register")
+                        if site_settings.get("enable_register") is not None
+                        else (merged.get("enable_register") if merged.get("enable_register") is not None else True),
                     }
                 )
                 return PlatformSettingsResponse(**merged)

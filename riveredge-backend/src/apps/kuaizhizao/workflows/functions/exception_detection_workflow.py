@@ -11,6 +11,7 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.services.exception_service import ExceptionService
 from core.tasks.dispatcher import TaskEvent, dispatch_event
 from core.tasks.event_compat import Event, TriggerEvent
+from core.utils.timezone_utils import to_api_isoformat
 from core.utils.workflow_tenant_isolation import with_tenant_isolation
 from core.workflows.client import workflow_client
 from infra.domain.tenant_context import get_current_tenant_id
@@ -19,9 +20,9 @@ from infra.domain.tenant_context import get_current_tenant_id
 async def run_exception_detection_scheduler() -> Dict[str, Any]:
     now = datetime.now()
     try:
-        await dispatch_event(TaskEvent(name="exception/detect-all", data={"timestamp": now.isoformat()}))
-        logger.info(f"已发送异常检测事件: {now.isoformat()}")
-        return {"success": True, "tenant_count": 1, "timestamp": now.isoformat()}
+        await dispatch_event(TaskEvent(name="exception/detect-all", data={"timestamp": to_api_isoformat(now)}))
+        logger.info(f"已发送异常检测事件: {to_api_isoformat(now)}")
+        return {"success": True, "tenant_count": 1, "timestamp": to_api_isoformat(now)}
     except Exception as e:
         logger.error(f"异常检测调度器执行失败: {e}")
         return {"success": False, "error": str(e)}
@@ -37,7 +38,7 @@ async def run_exception_detection_scheduler() -> Dict[str, Any]:
 async def exception_detection_worker_function(event: Event) -> Dict[str, Any]:
     tenant_id = get_current_tenant_id()
     data = event.data or {}
-    timestamp = data.get("timestamp", datetime.now().isoformat())
+    timestamp = data.get("timestamp", to_api_isoformat(datetime.now()))
     exception_service = ExceptionService()
     results = {
         "tenant_id": tenant_id,

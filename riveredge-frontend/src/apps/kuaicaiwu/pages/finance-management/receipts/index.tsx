@@ -33,6 +33,7 @@ import {
 } from '../../../utils/financeSharedOptions';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface ReceiptVoucher {
   id: number;
@@ -140,7 +141,7 @@ const ReceiptsPage: React.FC = () => {
       customer_id: values.customer_id,
       customer_name: customerOptions.find(o => o.value === values.customer_id)?.label || '',
       total_amount: values.total_amount,
-      receipt_date: values.receipt_date?.format ? values.receipt_date.format('YYYY-MM-DD') : values.receipt_date || dayjs().format('YYYY-MM-DD'),
+      receipt_date: formatDateTime(values.receipt_date || dayjs(), 'YYYY-MM-DD'),
       payment_method: values.payment_method,
       bank_account_id: values.bank_account_id,
       bank_account: bank?.account_number || values.bank_account,
@@ -213,7 +214,7 @@ const ReceiptsPage: React.FC = () => {
             customer_id: selected.customer_id,
             customer_name: selected.customer_name,
             total_amount: selected.remaining_amount,
-            receipt_date: dayjs().format('YYYY-MM-DD'),
+            receipt_date: formatDateTime(dayjs(), 'YYYY-MM-DD'),
             payment_method: '银行转账',
             notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
               source: pullFromReceivableAction.sourceLabel,
@@ -332,7 +333,7 @@ const ReceiptsPage: React.FC = () => {
       title: t('app.kuaicaiwu.common.dueDate'),
       dataIndex: 'due_date',
       width: 120,
-      render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+      render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
     },
     {
       title: t('app.kuaicaiwu.receivable.col.remainingAmount'),
@@ -438,7 +439,7 @@ const ReceiptsPage: React.FC = () => {
       dataIndex: 'created_at',
       width: 168,
       hideInSearch: true,
-      render: (_, r) => (r.created_at ? dayjs(r.created_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
       title: t('app.kuaicaiwu.common.lifecycle'),
@@ -658,7 +659,7 @@ const ReceiptsPage: React.FC = () => {
               <Descriptions.Item label={t(`${R}.detail.accountNote`)}>{detailRecord.bank_account || '—'}</Descriptions.Item>
               <Descriptions.Item label={t('app.kuaicaiwu.common.notes')}>{detailRecord.notes || '—'}</Descriptions.Item>
               <Descriptions.Item label={t('common.createdAt')}>
-                {detailRecord.created_at ? dayjs(detailRecord.created_at).format('YYYY-MM-DD HH:mm') : '—'}
+                {detailRecord.created_at ? formatDateTime(detailRecord.created_at, 'YYYY-MM-DD HH:mm') : '—'}
               </Descriptions.Item>
             </Descriptions>
           ) : null}

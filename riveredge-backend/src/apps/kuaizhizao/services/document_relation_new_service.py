@@ -23,6 +23,7 @@ from apps.kuaizhizao.schemas.document_relation import (
     DocumentTraceNode,
     DocumentTraceReportingEntry,
 )
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 
@@ -825,7 +826,7 @@ class DocumentRelationNewService:
             "id": demand.id,
             "code": getattr(demand, "demand_code", None),
             "name": getattr(demand, "demand_name", None),
-            "changed_at": demand.updated_at.isoformat() if demand.updated_at else None,
+            "changed_at": to_api_isoformat(demand.updated_at) if demand.updated_at else None,
         }
 
         trace = await self.trace_document_chain(
@@ -902,7 +903,7 @@ class DocumentRelationNewService:
             "id": order.id,
             "code": getattr(order, "order_code", None),
             "name": getattr(order, "order_name", None),
-            "changed_at": order.updated_at.isoformat() if order.updated_at else None,
+            "changed_at": to_api_isoformat(order.updated_at) if order.updated_at else None,
         }
 
         trace = await self.trace_document_chain(
@@ -967,7 +968,7 @@ class DocumentRelationNewService:
             "type": "purchase_order",
             "id": order.id,
             "code": getattr(order, "order_code", None),
-            "changed_at": order.updated_at.isoformat() if order.updated_at else None,
+            "changed_at": to_api_isoformat(order.updated_at) if order.updated_at else None,
         }
 
         trace = await self.trace_document_chain(

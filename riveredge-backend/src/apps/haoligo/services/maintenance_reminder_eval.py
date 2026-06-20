@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Literal
+from core.utils.timezone_utils import to_api_isoformat
 
 AlertLevel = Literal["critical", "warning", "ok"]
 EquipmentReminderKind = Literal[
@@ -149,7 +150,7 @@ def _iso_dt(dt: datetime | None) -> str | None:
         return None
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt.isoformat()
+    return to_api_isoformat(dt)
 
 
 def _days_since(last_upkeep: datetime) -> int:

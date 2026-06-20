@@ -33,6 +33,7 @@ from apps.kuaizhizao.services.inspection_policy_service import (
     resolve_inspection_policy,
     stage_plan_type,
 )
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from datetime import timedelta
 from decimal import Decimal
@@ -2487,7 +2488,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                     "unqualified_quantity": float(inspection.unqualified_quantity),
                     "quality_status": inspection.quality_status,
                     "nonconformance_reason": inspection.nonconformance_reason,
-                    "inspection_time": inspection.inspection_time.isoformat() if inspection.inspection_time else None
+                    "inspection_time": to_api_isoformat(inspection.inspection_time) if inspection.inspection_time else None
                 })
 
         # 查询过程检验异常
@@ -2522,7 +2523,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                     "unqualified_quantity": float(inspection.unqualified_quantity),
                     "quality_status": inspection.quality_status,
                     "nonconformance_reason": inspection.nonconformance_reason,
-                    "inspection_time": inspection.inspection_time.isoformat() if inspection.inspection_time else None
+                    "inspection_time": to_api_isoformat(inspection.inspection_time) if inspection.inspection_time else None
                 })
 
         # 查询成品检验异常
@@ -2555,7 +2556,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                     "unqualified_quantity": float(inspection.unqualified_quantity),
                     "quality_status": inspection.quality_status,
                     "nonconformance_reason": inspection.nonconformance_reason,
-                    "inspection_time": inspection.inspection_time.isoformat() if inspection.inspection_time else None
+                    "inspection_time": to_api_isoformat(inspection.inspection_time) if inspection.inspection_time else None
                 })
 
         # 按检验时间降序排序
@@ -2836,7 +2837,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         trend_results = await asyncio.gather(*trend_tasks)
         for d, (tq, qq) in zip(dates, trend_results):
             rate = float(qq / tq * 100) if tq > 0 else 0.0
-            daily_trend.append({"date": d.isoformat(), "rate": round(rate, 2)})
+            daily_trend.append({"date": to_api_isoformat(d), "rate": round(rate, 2)})
 
         sparkline_rates = [x["rate"] for x in daily_trend]
 

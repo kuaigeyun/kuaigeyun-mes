@@ -14,6 +14,7 @@ import { getDueReminderLifecycle } from '../../../utils/equipmentLifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { toolApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface ToolMaintenanceReminder {
   tool_uuid?: string;
@@ -58,7 +59,7 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
         title: t('app.kuaizhizao.toolMaintenanceReminder.colDueDate'),
         dataIndex: 'due_date',
         width: 120,
-        render: (_, r) => (r.due_date ? dayjs(r.due_date).format('YYYY-MM-DD') : '-'),
+        render: (_, r) => (r.due_date ? formatDateTime(r.due_date, 'YYYY-MM-DD') : '-'),
       },
       {
         title: t('app.kuaizhizao.toolMaintenanceReminder.colDaysUntilDue'),

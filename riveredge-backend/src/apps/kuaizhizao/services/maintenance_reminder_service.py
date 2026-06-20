@@ -16,6 +16,7 @@ from apps.kuaizhizao.models.maintenance_reminder import MaintenanceReminder
 from apps.kuaizhizao.models.equipment import Equipment
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.equipment_service import EquipmentService
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -127,7 +128,7 @@ class MaintenanceReminderService:
             "success": True,
             "checked_count": len(maintenance_plans),
             "reminder_count": reminder_count,
-            "timestamp": now.isoformat(),
+            "timestamp": to_api_isoformat(now),
         }
 
     def _generate_reminder_message(

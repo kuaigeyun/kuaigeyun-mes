@@ -25,6 +25,7 @@ import {
 import { useGlobalStore } from '../../../stores';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { formatDateTime } from '../../../utils/format';
 
 dayjs.extend(relativeTime);
 
@@ -85,7 +86,7 @@ const OnlineUsersPage: React.FC = () => {
     const minutesAgo = now.diff(lastActivity, 'minute');
     if (minutesAgo < 1) return t('pages.system.onlineUsers.justNow');
     if (minutesAgo < 60) return t('pages.system.onlineUsers.minutesAgo', { count: minutesAgo });
-    return lastActivity.format('YYYY-MM-DD HH:mm:ss');
+    return formatDateTime(user.last_activity_time, 'YYYY-MM-DD HH:mm:ss');
   };
 
   const getOnlineDuration = (user: OnlineUser): string => {
@@ -260,7 +261,7 @@ const OnlineUsersPage: React.FC = () => {
                   <ClockCircleOutlined /> {t('pages.system.onlineUsers.loginTime')}：
                 </Text>
                 <Text style={{ fontSize: 12 }}>
-                  {dayjs(user.login_time).format('MM-DD HH:mm')}
+                  {formatDateTime(user.login_time, 'MM-DD HH:mm')}
                 </Text>
               </div>
             )}
@@ -330,7 +331,7 @@ const OnlineUsersPage: React.FC = () => {
       sorter: true,
       search: false,
       render: (_: any, record: OnlineUser) =>
-        record.login_time ? dayjs(record.login_time).format('YYYY-MM-DD HH:mm:ss') : '-',
+        record.login_time ? formatDateTime(record.login_time, 'YYYY-MM-DD HH:mm:ss') : '-',
       width: 180,
     },
     {
@@ -341,7 +342,7 @@ const OnlineUsersPage: React.FC = () => {
       sorter: true,
       search: false,
       render: (_: any, record: OnlineUser) =>
-        record.last_activity_time ? dayjs(record.last_activity_time).format('YYYY-MM-DD HH:mm:ss') : '-',
+        record.last_activity_time ? formatDateTime(record.last_activity_time, 'YYYY-MM-DD HH:mm:ss') : '-',
       width: 180,
     },
   ];

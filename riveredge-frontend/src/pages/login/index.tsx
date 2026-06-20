@@ -252,6 +252,7 @@ export default function LoginPage() {
   const loginQuickEnabled = platformSettings?.login_quick_enabled !== false;
   const loginClientWinEnabled = platformSettings?.login_client_win_enabled !== false;
   const loginClientAndroidEnabled = platformSettings?.login_client_android_enabled !== false;
+  const registerEnabled = platformSettings?.enable_register !== false;
   const showClientDownloads = loginClientWinEnabled || loginClientAndroidEnabled;
 
   const { data: loginClientDownloads } = useQuery({
@@ -611,6 +612,12 @@ export default function LoginPage() {
   // 注册抽屉状态
   const [registerDrawerVisible, setRegisterDrawerVisible] = useState(false);
   const [registerType, setRegisterType] = useState<'personal' | 'organization'>('personal');
+
+  useEffect(() => {
+    if (!registerEnabled && registerDrawerVisible) {
+      setRegisterDrawerVisible(false);
+    }
+  }, [registerEnabled, registerDrawerVisible]);
 
   const showClientDownloadPlaceholder = useCallback(() => {
     message.info(t('pages.login.clientDownloadPlaceholder'));
@@ -2151,17 +2158,26 @@ export default function LoginPage() {
             </div>
             )}
 
-            <Text 
-              className="register-link"
-              style={{
-                color: themeColor,
-              }}
-            >
-              {t('pages.login.noAccount')}<Button type="link" style={{ padding: 0, color: themeColor, textDecoration: 'underline', textUnderlineOffset: '4px' }} onClick={() => {
-                setRegisterDrawerVisible(true);
-                setRegisterType('personal');
-              }}>{t('pages.login.registerNow')}</Button>
-            </Text>
+            {registerEnabled && (
+              <Text
+                className="register-link"
+                style={{
+                  color: themeColor,
+                }}
+              >
+                {t('pages.login.noAccount')}
+                <Button
+                  type="link"
+                  style={{ padding: 0, color: themeColor, textDecoration: 'underline', textUnderlineOffset: '4px' }}
+                  onClick={() => {
+                    setRegisterDrawerVisible(true);
+                    setRegisterType('personal');
+                  }}
+                >
+                  {t('pages.login.registerNow')}
+                </Button>
+              </Text>
+            )}
           </div>
 
           {showClientDownloads && (

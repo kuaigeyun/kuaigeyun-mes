@@ -15,6 +15,7 @@ from loguru import logger
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.master_data.models.supplier import Supplier
 from core.services.base import BaseService
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 
@@ -85,7 +86,7 @@ class SupplierCollaborationService(BaseService):
                 "purchase_order_code": purchase_order.order_code,
                 "supplier_id": supplier.id,
                 "supplier_name": supplier.name,
-                "sent_at": datetime.now().isoformat(),
+                "sent_at": to_api_isoformat(datetime.now()),
             }
     
     async def update_purchase_order_progress(
@@ -150,9 +151,9 @@ class SupplierCollaborationService(BaseService):
                 "success": True,
                 "purchase_order_id": purchase_order_id,
                 "progress_percentage": progress_percentage,
-                "estimated_delivery_date": estimated_delivery_date.isoformat() if estimated_delivery_date else None,
-                "delivery_date": purchase_order.delivery_date.isoformat() if purchase_order.delivery_date else None,
-                "updated_at": datetime.now().isoformat(),
+                "estimated_delivery_date": to_api_isoformat(estimated_delivery_date) if estimated_delivery_date else None,
+                "delivery_date": to_api_isoformat(purchase_order.delivery_date) if purchase_order.delivery_date else None,
+                "updated_at": to_api_isoformat(datetime.now()),
             }
     
     async def submit_delivery_notice(
@@ -225,9 +226,9 @@ class SupplierCollaborationService(BaseService):
                 "success": True,
                 "purchase_order_id": purchase_order_id,
                 "delivery_quantity": delivery_quantity,
-                "delivery_date": delivery_date.isoformat() if delivery_date else None,
+                "delivery_date": to_api_isoformat(delivery_date) if delivery_date else None,
                 "tracking_number": tracking_number,
-                "submitted_at": datetime.now().isoformat(),
+                "submitted_at": to_api_isoformat(datetime.now()),
             }
     
     async def get_supplier_purchase_orders(
@@ -264,10 +265,10 @@ class SupplierCollaborationService(BaseService):
             {
                 "id": order.id,
                 "code": order.order_code,
-                "order_date": order.order_date.isoformat() if order.order_date else None,
+                "order_date": to_api_isoformat(order.order_date) if order.order_date else None,
                 "total_amount": float(order.total_amount) if order.total_amount else 0.0,
                 "status": order.status,
-                "delivery_date": order.delivery_date.isoformat() if order.delivery_date else None,
+                "delivery_date": to_api_isoformat(order.delivery_date) if order.delivery_date else None,
             }
             for order in orders
         ]

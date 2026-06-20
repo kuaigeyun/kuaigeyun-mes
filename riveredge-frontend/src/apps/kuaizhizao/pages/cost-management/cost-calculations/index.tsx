@@ -18,6 +18,7 @@ import { ListPageTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } f
 import { costCalculationApi } from '../../../services/cost';
 import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface CostCalculation {
   id?: number;
@@ -301,7 +302,7 @@ const CostCalculationPage: React.FC = () => {
       dataIndex: 'calculation_date',
       key: 'calculation_date',
       width: 120,
-      render: (_, r) => (r.calculation_date ? dayjs(r.calculation_date as string).format('YYYY-MM-DD') : '-'),
+      render: (_, r) => (r.calculation_date ? formatDateTime(r.calculation_date as string, 'YYYY-MM-DD') : '-'),
     },
     {
       title: '操作',
@@ -397,7 +398,7 @@ const CostCalculationPage: React.FC = () => {
       title: '核算日期',
       dataIndex: 'calculation_date',
       render: (_, entity) =>
-        entity.calculation_date ? dayjs(entity.calculation_date as string).format('YYYY-MM-DD') : '-',
+        entity.calculation_date ? formatDateTime(entity.calculation_date as string, 'YYYY-MM-DD') : '-',
     },
     {
       title: '备注',
@@ -411,7 +412,7 @@ const CostCalculationPage: React.FC = () => {
       title: '创建时间',
       dataIndex: 'created_at',
       render: (_, entity) =>
-        entity.created_at ? dayjs(entity.created_at as string).format('YYYY-MM-DD HH:mm:ss') : '-',
+        entity.created_at ? formatDateTime(entity.created_at as string, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
   ];
 

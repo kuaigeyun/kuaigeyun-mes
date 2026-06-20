@@ -80,6 +80,7 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { reportingRecordBatchRevokeApprovalAllowed } from '../../../../../hooks/useDocumentCapabilities';
+import { formatDateTime } from '../../../../../utils/format';
 
 const REPORTING_RESOURCE = 'kuaizhizao:production-execution-reporting';
 
@@ -164,9 +165,9 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
     const value = dataIndex != null ? dataSource[dataIndex] : undefined;
     let content: React.ReactNode = value as React.ReactNode;
     if (col.valueType === 'dateTime' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
     } else if (col.valueType === 'date' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD');
+      content = formatDateTime(value as string, 'YYYY-MM-DD');
     }
     if (col.render && dataSource != null) {
             content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
@@ -1458,13 +1459,13 @@ const ReportingPage: React.FC = () => {
             title: t('app.kuaizhizao.workOrder.colPlannedStart'),
             dataIndex: 'planned_start_date',
             width: 180,
-            render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+            render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
           },
           {
             title: t('app.kuaizhizao.workOrder.colPlannedEnd'),
             dataIndex: 'planned_end_date',
             width: 180,
-            render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+            render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
           },
         ]}
         dataSource={pullFromWorkOrderQuery.dataSource}

@@ -37,4 +37,8 @@ export interface LifecycleResult {
   subStages?: SubStage[];
   /** 当前阶段的下一步操作建议，可选 */
   nextStepSuggestions?: string[];
+  /** 真实状态类（与单据 status 同源） */
+  statusClass?: string;
+  /** 流转类（生命周期当前阶段 key） */
+  flowClass?: string;
 }

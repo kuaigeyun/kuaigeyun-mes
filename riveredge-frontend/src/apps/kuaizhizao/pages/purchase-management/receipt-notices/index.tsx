@@ -80,6 +80,7 @@ import { inboundReceiptNoticeEntryPath } from '../../warehouse-management/inboun
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface ReceiptNoticeDetail extends ReceiptNotice {
   items?: { id?: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price?: number; total_amount?: number }[];
@@ -113,9 +114,9 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
     const value = dataIndex != null ? dataSource[dataIndex] : undefined;
     let content: React.ReactNode = value as React.ReactNode;
     if (col.valueType === 'dateTime' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
     } else if (col.valueType === 'date' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD');
+      content = formatDateTime(value as string, 'YYYY-MM-DD');
     }
     if (col.render && dataSource != null) {
             content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
@@ -591,8 +592,8 @@ const ReceiptNoticesPage: React.FC = () => {
       { title: t('app.kuaizhizao.receiptNotice.purchaseOrderCode'), dataIndex: 'order_code', width: 190, ellipsis: true },
       { title: t('app.kuaizhizao.receiptNotice.supplier'), dataIndex: 'supplier_name', width: 220, ellipsis: true },
       { title: t('app.kuaizhizao.shipmentNotice.orderStatus'), dataIndex: 'status', width: 120, align: 'center' as const },
-      { title: t('app.kuaizhizao.receiptNotice.orderDate'), dataIndex: 'order_date', width: 130, render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
-      { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-') },
+      { title: t('app.kuaizhizao.receiptNotice.orderDate'), dataIndex: 'order_date', width: 130, render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-') },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-') },
       {
         title: t('app.kuaizhizao.shipmentNotice.convertStatus'),
         key: 'convert_status',
@@ -914,7 +915,7 @@ const ReceiptNoticesPage: React.FC = () => {
         supplier_phone: values.supplier_phone,
         warehouse_id: values.warehouse_id,
         warehouse_name: values.warehouse_name,
-        planned_receipt_date: values.planned_receipt_date ? dayjs(values.planned_receipt_date).format('YYYY-MM-DD') : undefined,
+        planned_receipt_date: values.planned_receipt_date ? formatDateTime(values.planned_receipt_date, 'YYYY-MM-DD') : undefined,
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
         items: validItems.map((it: any) => ({
@@ -947,7 +948,7 @@ const ReceiptNoticesPage: React.FC = () => {
         supplier_phone: values.supplier_phone,
         warehouse_id: values.warehouse_id,
         warehouse_name: values.warehouse_name,
-        planned_receipt_date: values.planned_receipt_date ? dayjs(values.planned_receipt_date).format('YYYY-MM-DD') : undefined,
+        planned_receipt_date: values.planned_receipt_date ? formatDateTime(values.planned_receipt_date, 'YYYY-MM-DD') : undefined,
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
       });

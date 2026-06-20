@@ -5,6 +5,7 @@ from apps.common.base_service import AppBaseService
 from apps.kuaireport.models.report import Report
 from apps.kuaireport.schemas.report import ReportCreate, ReportUpdate
 from apps.kuaireport.constants import ReportCategory
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, AuthorizationError
 
 
@@ -268,7 +269,7 @@ class ReportService(AppBaseService[Report]):
         await report.save()
         return {
             "share_token": token,
-            "share_expires_at": expires_at.isoformat() if expires_at else None,
+            "share_expires_at": to_api_isoformat(expires_at) if expires_at else None,
             "is_shared": True,
         }
 

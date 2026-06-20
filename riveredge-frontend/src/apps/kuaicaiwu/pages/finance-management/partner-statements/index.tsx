@@ -34,6 +34,7 @@ import { buildPartnerStatementStatusEnum } from '../../../utils/financeSharedOpt
 import { apiRequest } from '../../../../../services/api';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
+import { formatDateTime } from '../../../../../utils/format';
 
 const money = (v: number | string | undefined) =>
   `¥${Number(v ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -261,7 +262,7 @@ const PartnerStatementsPage: React.FC = () => {
       dataIndex: 'created_at',
       width: 168,
       hideInSearch: true,
-      render: (_, r) => (r.created_at ? dayjs(r.created_at).format('YYYY-MM-DD HH:mm') : '—'),
+      render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm') : '—'),
     },
     {
       title: t('common.actions'),

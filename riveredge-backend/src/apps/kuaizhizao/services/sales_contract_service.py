@@ -46,6 +46,7 @@ from apps.kuaizhizao.services.document_action_policy.sales_contract import (
     assert_sales_contract_capability,
 )
 from apps.kuaizhizao.services.sales_contract_term_service import SalesContractTermService
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.services.business_config_service import BusinessConfigService
 
@@ -129,6 +130,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract: SalesContract,
         items: Optional[List[SalesContractItem]] = None,
         milestones: Optional[List[SalesContractMilestone]] = None,
+        capability_ctx: Optional[dict[str, Any]] = None,
     ) -> SalesContractResponse:
         rem_qty, rem_amt = self._remaining(contract)
         payload = {
@@ -228,7 +230,7 @@ class SalesContractService(AppBaseService[SalesContract]):
                 for m in milestones
             ]
         payload["lifecycle"] = get_sales_contract_lifecycle(contract)
-        ctx = self._contract_capability_context(contract, items)
+        ctx = capability_ctx or self._contract_capability_context(contract, items)
         return enrich_sales_contract_capabilities_on_response(
             contract,
             SalesContractResponse(**payload),
@@ -248,7 +250,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         return await CodeGenerationService().generate_code(
             tenant_id=tenant_id,
             rule_code=rule_code,
-            context={"date": contract_date.isoformat()},
+            context={"date": to_api_isoformat(contract_date)},
         )
 
     async def _generate_change_code(self, tenant_id: int) -> str:
@@ -261,7 +263,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         return await CodeGenerationService().generate_code(
             tenant_id=tenant_id,
             rule_code=rule_code,
-            context={"date": date.today().isoformat()},
+            context={"date": to_api_isoformat(date.today())},
         )
 
     @staticmethod
@@ -485,12 +487,47 @@ class SalesContractService(AppBaseService[SalesContract]):
             qs = qs.filter(Q(contract_code__icontains=keyword) | Q(customer_name__icontains=keyword))
         total = await qs.count()
         rows = await qs.order_by("-contract_date", "-id").offset(skip).limit(limit)
+        capability_ctx_by_contract_id: dict[int, dict[str, Any]] = {}
+        if rows:
+            contract_ids = [int(r.id) for r in rows if r.id is not None]
+            item_rows = await SalesContractItem.filter(
+                tenant_id=tenant_id,
+                contract_id__in=contract_ids,
+            ).values("contract_id", "contract_quantity", "released_quantity")
+            has_items_map: dict[int, bool] = {cid: False for cid in contract_ids}
+            has_releasable_map: dict[int, bool] = {cid: False for cid in contract_ids}
+            for it in item_rows:
+                contract_id = int(it.get("contract_id") or 0)
+                if contract_id <= 0:
+                    continue
+                has_items_map[contract_id] = True
+                contract_qty = Decimal(str(it.get("contract_quantity") or 0))
+                released_qty = Decimal(str(it.get("released_quantity") or 0))
+                if contract_qty - released_qty > Decimal("0"):
+                    has_releasable_map[contract_id] = True
+            for r in rows:
+                if r.id is None:
+                    continue
+                rem_qty, rem_amt = self._remaining(r)
+                contract_id = int(r.id)
+                capability_ctx_by_contract_id[contract_id] = {
+                    "has_items": has_items_map.get(contract_id, False),
+                    "has_releasable_items": has_releasable_map.get(contract_id, False),
+                    "remaining_amount": rem_amt,
+                    "remaining_quantity": rem_qty,
+                }
         from core.services.approval.audit_record_enricher import enrich_items
 
         items = await enrich_items(
             tenant_id,
             "sales_contract",
-            [self._contract_to_response(r) for r in rows],
+            [
+                self._contract_to_response(
+                    r,
+                    capability_ctx=capability_ctx_by_contract_id.get(int(r.id or 0)),
+                )
+                for r in rows
+            ],
         )
         return SalesContractListResponse(
             items=items,
@@ -816,7 +853,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             return
         rem_qty, rem_amt = self._remaining(contract)
         if rem_amt <= Decimal("0") and (contract.status or "") in ("已生效", "执行中"):
-            contract.status = "已关闭"
+            contract.status = "已完成"
             await contract.save(update_fields=["status", "updated_at"])
 
     async def _apply_release_to_contract(
@@ -878,7 +915,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract.released_amount = max(
             Decimal("0"), Decimal(str(contract.released_amount or 0)) - order_amt
         )
-        if (contract.status or "") == "已关闭":
+        if (contract.status or "") in ("已关闭", "已完成"):
             contract.status = "执行中"
         if operator_id:
             contract.updated_by = operator_id

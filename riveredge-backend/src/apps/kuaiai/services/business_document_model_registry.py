@@ -6,6 +6,7 @@ import importlib
 from typing import Any, Callable
 
 from tortoise.models import Model
+from core.utils.timezone_utils import to_api_isoformat
 
 DetailLoader = Callable[[Model], dict[str, Any]]
 
@@ -27,7 +28,7 @@ def _pick_fields(obj: Model, fields: tuple[str, ...]) -> dict[str, Any]:
         if hasattr(obj, name):
             val = getattr(obj, name)
             if hasattr(val, "isoformat"):
-                val = val.isoformat()
+                val = to_api_isoformat(val)
             out[name] = val
     return out
 

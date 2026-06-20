@@ -26,6 +26,7 @@ import {
   getSourceTypeTag,
   getVarianceTypeTag,
 } from '../../../utils/costUiLabels';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface CostComparisonResult {
   material_id: number;
@@ -166,7 +167,7 @@ const CostComparisonPage: React.FC = () => {
                 </Descriptions.Item>
                 <Descriptions.Item label={t('app.kuaicaiwu.costCommon.col.quantity')}>{result.quantity}</Descriptions.Item>
                 <Descriptions.Item label={t('app.kuaicaiwu.costCommon.col.calculationDate')}>
-                  {result.calculation_date ? dayjs(result.calculation_date).format('YYYY-MM-DD') : '-'}
+                  {result.calculation_date ? formatDateTime(result.calculation_date, 'YYYY-MM-DD') : '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label={t('app.kuaicaiwu.costComparison.col.varianceType')}>
                   {getVarianceTypeTag(result.cost_variance.variance_type, t)}
@@ -255,8 +256,8 @@ const CostComparisonPage: React.FC = () => {
                       <>
                         {t('app.kuaicaiwu.costComparison.compareCompleted')} ·{' '}
                         {result.calculation_date
-                          ? dayjs(result.calculation_date).format('YYYY-MM-DD')
-                          : dayjs().format('YYYY-MM-DD HH:mm:ss')}
+                          ? formatDateTime(result.calculation_date, 'YYYY-MM-DD')
+                          : formatDateTime(new Date(), 'YYYY-MM-DD HH:mm:ss')}
                       </>
                     ),
                   },

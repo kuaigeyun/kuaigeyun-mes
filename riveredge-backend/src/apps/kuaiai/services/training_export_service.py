@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from apps.kuaiai.models.knowledge import KuaiKnowledgeDocument, KuaiTrainingSample
+from core.utils.timezone_utils import to_api_isoformat
 
 
 class TrainingExportService:
@@ -29,7 +30,7 @@ class TrainingExportService:
                     "question": r.question,
                     "answer": r.answer,
                     "source": r.source,
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                    "created_at": to_api_isoformat(r.created_at) if r.created_at else None,
                 }
                 for r in rows
             ],

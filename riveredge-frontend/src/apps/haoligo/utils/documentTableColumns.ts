@@ -1,5 +1,5 @@
 import type { ProColumns } from '@ant-design/pro-components';
-import dayjs from 'dayjs';
+import { formatDateTimeBySiteSetting } from '../../../utils/format';
 
 type WithCreatedAt = { created_at?: string | null };
 
@@ -11,6 +11,6 @@ export function moldDocumentCreatedAtColumn<T extends WithCreatedAt>(): ProColum
     key: 'created_at',
     width: 168,
     hideInSearch: true,
-    render: (_, r) => (r.created_at ? dayjs(r.created_at).format('YYYY-MM-DD HH:mm:ss') : '—'),
+    render: (_, r) => (r.created_at ? formatDateTimeBySiteSetting(r.created_at, '—') : '—'),
   };
 }

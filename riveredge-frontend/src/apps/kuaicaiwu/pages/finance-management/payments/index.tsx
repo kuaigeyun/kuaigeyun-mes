@@ -34,6 +34,7 @@ import {
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface PaymentVoucher {
   id: number;
@@ -143,7 +144,7 @@ const PaymentsPage: React.FC = () => {
       supplier_id: values.supplier_id,
       supplier_name: supplierOptions.find(o => o.value === values.supplier_id)?.label || '',
       total_amount: values.total_amount,
-      payment_date: values.payment_date?.format ? values.payment_date.format('YYYY-MM-DD') : values.payment_date || dayjs().format('YYYY-MM-DD'),
+      payment_date: formatDateTime(values.payment_date || dayjs(), 'YYYY-MM-DD'),
       payment_method: values.payment_method,
       bank_account_id: values.bank_account_id,
       bank_account: bank?.account_number || values.bank_account,
@@ -234,9 +235,7 @@ const PaymentsPage: React.FC = () => {
           supplier_id: pullSelectedPayable.supplier_id,
           supplier_name: pullSelectedPayable.supplier_name,
           total_amount: totalAmount,
-          payment_date: values.payment_date?.format
-            ? values.payment_date.format('YYYY-MM-DD')
-            : (values.payment_date || dayjs().format('YYYY-MM-DD')),
+          payment_date: formatDateTime(values.payment_date || dayjs(), 'YYYY-MM-DD'),
           payment_method: values.payment_method || '银行转账',
           bank_account_id: values.bank_account_id,
           bank_account: bankAccountOptions.find((o) => o.value === values.bank_account_id)?.account_number || values.bank_account,
@@ -340,7 +339,7 @@ const PaymentsPage: React.FC = () => {
       title: t('app.kuaicaiwu.common.dueDate'),
       dataIndex: 'due_date',
       width: 120,
-      render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+      render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
     },
     {
       title: t('app.kuaicaiwu.payable.col.remainingAmount'),
@@ -446,7 +445,7 @@ const PaymentsPage: React.FC = () => {
       dataIndex: 'created_at',
       width: 168,
       hideInSearch: true,
-      render: (_, r) => (r.created_at ? dayjs(r.created_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
       title: t('app.kuaicaiwu.common.lifecycle'),
@@ -718,7 +717,7 @@ const PaymentsPage: React.FC = () => {
               <Descriptions.Item label={t('app.kuaicaiwu.receipt.detail.accountNote')}>{detailRecord.bank_account || '—'}</Descriptions.Item>
               <Descriptions.Item label={t('app.kuaicaiwu.common.notes')}>{detailRecord.notes || '—'}</Descriptions.Item>
               <Descriptions.Item label={t('common.createdAt')}>
-                {detailRecord.created_at ? dayjs(detailRecord.created_at).format('YYYY-MM-DD HH:mm') : '—'}
+                {detailRecord.created_at ? formatDateTime(detailRecord.created_at, 'YYYY-MM-DD HH:mm') : '—'}
               </Descriptions.Item>
             </Descriptions>
           ) : null}

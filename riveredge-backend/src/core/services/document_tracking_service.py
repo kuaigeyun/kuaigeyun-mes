@@ -10,6 +10,7 @@ Date: 2026-02-20
 
 from datetime import datetime
 from typing import Dict, Any, List, Optional
+from core.utils.timezone_utils import to_api_isoformat
 
 # document_type -> (model, code_field) 用于解析 document_code，延迟导入避免循环依赖
 def _get_model_registry() -> Dict[str, tuple]:
@@ -418,7 +419,7 @@ class DocumentTrackingService:
                 is_auto_approve = log.transition_reason == "自动审核"
                 timeline.append({
                     "type": "edit" if is_edit else "state_transition",
-                    "at": log.transition_time.isoformat() if log.transition_time else None,
+                    "at": to_api_isoformat(log.transition_time) if log.transition_time else None,
                     "by": log.operator_name or str(log.operator_id),
                     "by_id": log.operator_id,
                     "detail": detail,
@@ -450,7 +451,7 @@ class DocumentTrackingService:
                 for r in records:
                     timeline.append({
                         "type": "approve",
-                        "at": r.action_at.isoformat() if r.action_at else None,
+                        "at": to_api_isoformat(r.action_at) if r.action_at else None,
                         "by_id": r.action_by,
                         "detail": f"审核{r.action}",
                         "result": r.action,
@@ -470,7 +471,7 @@ class DocumentTrackingService:
                 ).order_by("reported_at").all()
 
                 for r in records:
-                    at_val = r.reported_at.isoformat() if r.reported_at else (r.created_at.isoformat() if r.created_at else None)
+                    at_val = to_api_isoformat(r.reported_at) if r.reported_at else (to_api_isoformat(r.created_at) if r.created_at else None)
                     detail_parts = [f"{r.operation_name or r.operation_code or '工序'}"]
                     if r.reported_quantity is not None:
                         detail_parts.append(f"报工 {r.reported_quantity}")
@@ -530,7 +531,7 @@ class DocumentTrackingService:
                 tgt_label = _doc_type_label_zh(rel.target_type or "")
                 timeline.append({
                     "type": "push",
-                    "at": rel.created_at.isoformat() if rel.created_at else None,
+                    "at": to_api_isoformat(rel.created_at) if rel.created_at else None,
                     "detail": f"下推了{tgt_label}（{tgt_code}）",
                     "is_auto_created": self._is_auto_relation(rel.relation_mode, rel.relation_desc),
                     "target_type": rel.target_type,
@@ -567,7 +568,7 @@ class DocumentTrackingService:
                 src_label = _doc_type_label_zh(rel.source_type or "")
                 timeline.append({
                     "type": "pull" if rel.relation_mode == "pull" else "from",
-                    "at": rel.created_at.isoformat() if rel.created_at else None,
+                    "at": to_api_isoformat(rel.created_at) if rel.created_at else None,
                     "detail": f"来自{src_label}（{src_code}）",
                     "source_type": rel.source_type,
                     "source_id": rel.source_id,
@@ -721,7 +722,7 @@ class DocumentTrackingService:
             meta = None
             if created_at is not None:
                 meta = {
-                    "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
+                    "created_at": to_api_isoformat(created_at) if hasattr(created_at, "isoformat") else str(created_at),
                     "created_by": created_by,
                 }
                 if created_by:

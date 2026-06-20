@@ -1,6 +1,5 @@
 /**
- * 生命周期解析器工厂：将重复的「后端优先 + 前端兜底」逻辑收敛到统一工厂。
- * 适用于阶段线性、status 直接映射的单据（入库、出库、调拨、盘点等）。
+ * 生命周期解析器工厂：以后端 lifecycle 为唯一真源。
  */
 
 import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
@@ -34,10 +33,6 @@ export interface LifecycleResolverConfig {
   getStatus?: (r: Record<string, unknown>) => string;
 }
 
-function norm(s: string | undefined): string {
-  return (s ?? '').trim();
-}
-
 function stageLabelKeysFromConfig(config: LifecycleResolverConfig): Record<string, string> {
   const map: Record<string, string> = {};
   for (const def of config.stageDefs) {
@@ -46,53 +41,8 @@ function stageLabelKeysFromConfig(config: LifecycleResolverConfig): Record<strin
   return map;
 }
 
-function buildFallbackFromConfig(
-  record: Record<string, unknown>,
-  config: LifecycleResolverConfig,
-): BackendLifecycle {
-  const getStatus = config.getStatus ?? ((r) => (r?.status as string) ?? '');
-  const status = norm(getStatus(record));
-  const key = config.statusToKey[status] ?? config.statusToKey[''] ?? config.stageDefs[0]?.key ?? 'draft';
-  const found = config.stageDefs.find((s) => s.key === key);
-  const stageName = found?.label ?? status ?? config.stageDefs[0]?.label ?? '-';
-
-  const exceptionKeys = new Set(config.exceptionKeys ?? []);
-  const successKeys = new Set(config.successKeys ?? []);
-  const isException = exceptionKeys.has(key);
-
-  const curIdx = config.stageDefs.findIndex((s) => s.key === key);
-  const resolvedCurIdx = curIdx >= 0 ? curIdx : 0;
-  const exceptionStageKey = config.exceptionStageKey ?? (exceptionKeys.has(key) ? key : undefined);
-
-  const mainStages = config.stageDefs.map((s, idx) => {
-    let st: 'done' | 'active' | 'pending' = 'pending';
-    if (isException && exceptionStageKey) {
-      st = s.key === exceptionStageKey ? 'active' : 'pending';
-    } else if (idx < resolvedCurIdx) {
-      st = 'done';
-    } else if (idx === resolvedCurIdx) {
-      st = 'active';
-    }
-    return { key: s.key, label: s.label, status: st };
-  });
-
-  const lifecycleStatus = isException
-    ? 'exception'
-    : successKeys.has(key)
-      ? 'success'
-      : 'normal';
-
-  return {
-    current_stage_key: key,
-    current_stage_name: stageName,
-    status: lifecycleStatus,
-    main_stages: mainStages,
-    next_step_suggestions: config.nextStepSuggestions[key] ?? [],
-  };
-}
-
 /**
- * 创建生命周期解析函数。优先使用后端下发的 lifecycle，无则按 config 前端兜底。
+ * 创建生命周期解析函数。仅使用后端下发的 lifecycle。
  */
 export function createLifecycleResolver(config: LifecycleResolverConfig) {
   const stageLabelKeys = stageLabelKeysFromConfig(config);
@@ -103,14 +53,11 @@ export function createLifecycleResolver(config: LifecycleResolverConfig) {
   ): LifecycleResult {
     if (!record) return { percent: 0, stageName: '-', mainStages: [] };
     const backend = (record as Record<string, unknown>).lifecycle as BackendLifecycle | undefined;
-    let result: LifecycleResult;
-    if (backend?.main_stages?.length) {
-      result = parseBackendLifecycle(backend);
-    } else {
-      result = parseBackendLifecycle(buildFallbackFromConfig(record as Record<string, unknown>, config));
-    }
+    const result: LifecycleResult = backend?.main_stages?.length
+      ? parseBackendLifecycle(backend)
+      : { percent: 0, stageName: '生命周期缺失', status: 'exception', mainStages: [] };
     if (t) {
-      result = applyLifecycleI18n(
+      return applyLifecycleI18n(
         result,
         t,
         { ...getGlobalLifecycleStageLabelKeys(), ...stageLabelKeys },

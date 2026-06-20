@@ -25,6 +25,7 @@ import { getPerformanceSummaryStatusValueEnum } from '../components/performanceM
 import { employeePerformanceApi } from '../../../services/performance';
 import type { PerformanceSummary, PerformanceDetail, PerformanceDetailItem } from '../../../types/performance';
 import { getPerformanceSummaryLifecycle } from '../../../utils/performanceLifecycle';
+import { formatDateTime } from '../../../../../utils/format';
 
 const SummariesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -33,7 +34,7 @@ const SummariesPage: React.FC = () => {
   const summaryDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const [period, setPeriod] = useState<string>(dayjs().format('YYYY-MM'));
+  const [period, setPeriod] = useState<string>(formatDateTime(dayjs(), 'YYYY-MM'));
   const [employeeId, setEmployeeId] = useState<number | undefined>();
   const [employees, setEmployees] = useState<{ id: number; full_name: string }[]>([]);
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -211,7 +212,7 @@ const SummariesPage: React.FC = () => {
         dataIndex: 'updated_at',
         width: 168,
         hideInSearch: true,
-        render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
         title: t('app.kuaizhizao.performance.common.columns.lifecycle'),

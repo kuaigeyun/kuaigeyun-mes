@@ -45,6 +45,7 @@ import { getToken } from '../../../../../utils/auth';
 import { getAvatarText } from '../../../../../utils/avatar';
 import { getCurrentUser, CurrentUser } from '../../../../../services/auth';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 
 const { Search } = Input;
 const { Text, Title } = Typography;
@@ -347,7 +348,7 @@ const WorkOrdersKioskPage: React.FC = () => {
     const PRIORITY_LABELS: Record<string, string> = {
         low: '低', normal: '普通', high: '高', urgent: '紧急',
     };
-    const formatDate = (d?: string) => d ? dayjs(d).format('MM-DD HH:mm') : '—';
+    const formatDate = (d?: string) => d ? formatDateTime(d, 'MM-DD HH:mm') : '—';
 
     const filteredWorkOrders = workOrders.filter(wo => {
         const matchSearch = !searchKeyword ||

@@ -35,6 +35,7 @@ import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '.
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface SalesInvoice {
   id: number;
@@ -131,7 +132,7 @@ const SalesInvoicesPage: React.FC = () => {
       customer_id: values.customer_id,
       customer_name: customerOptions.find(o => o.value === values.customer_id)?.label || '',
       invoice_number: String(values.invoice_number ?? '').trim(),
-      invoice_date: values.invoice_date?.format ? values.invoice_date.format('YYYY-MM-DD') : (values.invoice_date || dayjs().format('YYYY-MM-DD')),
+      invoice_date: formatDateTime(values.invoice_date || dayjs(), 'YYYY-MM-DD'),
       invoice_type: values.invoice_type || '增值税专用发票',
       tax_rate: taxRate,
       invoice_amount: invoiceAmount,
@@ -304,9 +305,7 @@ const SalesInvoicesPage: React.FC = () => {
           customer_name: pullSelectedSource.customer_name || '',
           sales_order_code: pullSelectedSource.source_code,
           invoice_number: String(values.invoice_number ?? '').trim(),
-          invoice_date: values.invoice_date?.format
-            ? values.invoice_date.format('YYYY-MM-DD')
-            : (values.invoice_date || dayjs().format('YYYY-MM-DD')),
+          invoice_date: formatDateTime(values.invoice_date || dayjs(), 'YYYY-MM-DD'),
           invoice_type: values.invoice_type || '增值税专用发票',
           tax_rate: taxRate,
           invoice_amount: invoiceAmount,
@@ -515,7 +514,7 @@ const SalesInvoicesPage: React.FC = () => {
         dataIndex: 'created_at',
         width: 168,
         hideInSearch: true,
-        render: (_, r) => (r.created_at ? dayjs(r.created_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+        render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
         title: t('app.kuaicaiwu.common.lifecycle'),
@@ -593,7 +592,7 @@ const SalesInvoicesPage: React.FC = () => {
         title: t('app.kuaicaiwu.common.businessDate'),
         dataIndex: 'source_date',
         width: 130,
-        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
       },
       {
         title: t('app.kuaicaiwu.invoice.col.totalAmount'),

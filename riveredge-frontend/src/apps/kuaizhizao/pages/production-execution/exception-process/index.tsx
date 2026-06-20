@@ -25,9 +25,9 @@ import { getExceptionProcessLifecycle } from '../../../utils/exceptionProcessLif
 import { apiRequest } from '../../../../../services/api';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { exceptionProcessBatchCancelAllowed } from '../../../../../hooks/useDocumentCapabilities';
+import { formatDateTime } from '../../../../../utils/format';
 
 const EXCEPTION_PROCESS_RESOURCE = 'kuaizhizao:production-execution-reporting';
-import dayjs from 'dayjs';
 
 const P = 'app.kuaizhizao.productionException';
 const PROC = `${P}.process`;
@@ -389,14 +389,14 @@ const ExceptionProcessPage: React.FC = () => {
       dataIndex: 'started_at',
       width: 180,
       render: (_, record) =>
-        record.started_at ? dayjs(record.started_at).format('YYYY-MM-DD HH:mm:ss') : '-',
+        record.started_at ? formatDateTime(record.started_at, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: t(`${P}.col.endTime`),
       dataIndex: 'completed_at',
       width: 180,
       render: (_, record) =>
-        record.completed_at ? dayjs(record.completed_at).format('YYYY-MM-DD HH:mm:ss') : '-',
+        record.completed_at ? formatDateTime(record.completed_at, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: t('common.actions'),
@@ -621,9 +621,9 @@ const ExceptionProcessPage: React.FC = () => {
                 process_status: getStatusTag(currentRecord.process_status),
                 current_step: getStepTag(currentRecord.current_step),
                 assigned_to_name: currentRecord.assigned_to_name || '-',
-                assigned_at: currentRecord.assigned_at ? dayjs(currentRecord.assigned_at).format('YYYY-MM-DD HH:mm:ss') : '-',
-                started_at: currentRecord.started_at ? dayjs(currentRecord.started_at).format('YYYY-MM-DD HH:mm:ss') : '-',
-                completed_at: currentRecord.completed_at ? dayjs(currentRecord.completed_at).format('YYYY-MM-DD HH:mm:ss') : '-',
+                assigned_at: currentRecord.assigned_at ? formatDateTime(currentRecord.assigned_at, 'YYYY-MM-DD HH:mm:ss') : '-',
+                started_at: currentRecord.started_at ? formatDateTime(currentRecord.started_at, 'YYYY-MM-DD HH:mm:ss') : '-',
+                completed_at: currentRecord.completed_at ? formatDateTime(currentRecord.completed_at, 'YYYY-MM-DD HH:mm:ss') : '-',
                 remarks: currentRecord.remarks || '-',
               }}
               columns={detailDescriptionColumns}
@@ -654,7 +654,7 @@ const ExceptionProcessPage: React.FC = () => {
                           )}
                         </div>
                         <div style={{ color: '#666', fontSize: '12px', marginTop: 4 }}>
-                          {dayjs(history.action_at).format('YYYY-MM-DD HH:mm:ss')}
+                          {formatDateTime(history.action_at, 'YYYY-MM-DD HH:mm:ss')}
                         </div>
                         {history.comment && <div style={{ marginTop: 8 }}>{history.comment}</div>}
                       </div>

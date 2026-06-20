@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 
 from loguru import logger
 
+from core.utils.timezone_utils import to_api_isoformat
 from infra.infrastructure.cache.cache import Cache, cache
 from infra.exceptions.exceptions import CacheError  # Fixed import path
 
@@ -363,8 +364,8 @@ class CacheManager:
                 name: {
                     "enabled": task["enabled"],
                     "interval": task["interval"],
-                    "last_run": task["last_run"].isoformat() if task["last_run"] else None,
-                    "next_run": task["next_run"].isoformat(),
+                    "last_run": to_api_isoformat(task["last_run"]),
+                    "next_run": to_api_isoformat(task["next_run"]),
                 }
                 for name, task in self._warmup_tasks.items()
             }

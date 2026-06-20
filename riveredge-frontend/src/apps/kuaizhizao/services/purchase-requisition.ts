@@ -17,6 +17,16 @@ export interface PurchaseRequisitionCapabilities {
   revoke_approval?: ActionCapability;
 }
 
+export interface PurchaseRequisitionLifecycle {
+  status_class?: string;
+  flow_class?: string;
+  current_stage_key?: string;
+  current_stage_name?: string;
+  status?: string;
+  main_stages?: Array<{ key?: string; label?: string; status?: string }>;
+  sub_stages?: Array<{ key?: string; label?: string; status?: string }>;
+}
+
 export interface PurchaseRequisitionItem {
   id?: number;
   material_id?: number;
@@ -54,6 +64,7 @@ export interface PurchaseRequisition {
   items?: PurchaseRequisitionItem[];
   created_at?: string;
   updated_at?: string;
+  lifecycle?: PurchaseRequisitionLifecycle;
   capabilities?: PurchaseRequisitionCapabilities;
 }
 
@@ -104,6 +115,13 @@ export async function approvePurchaseRequisition(
 
 export async function withdrawPurchaseRequisition(id: number): Promise<PurchaseRequisition> {
   return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${id}/withdraw-approval`, {
+    method: 'POST',
+  });
+}
+
+/** 撤回提交（待审核 -> 草稿），走统一审核入口 */
+export async function withdrawPurchaseRequisitionSubmit(id: number): Promise<PurchaseRequisition> {
+  return apiRequest(`/core/uni-audit/purchase_request/${id}/withdraw`, {
     method: 'POST',
   });
 }

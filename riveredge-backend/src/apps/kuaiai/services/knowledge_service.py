@@ -10,6 +10,7 @@ from apps.kuaiai.services.text_chunker import split_text_chunks
 from core.services.file.file_service import FileService
 from core.services.system.site_setting_service import SiteSettingService
 from core.utils.integration_settings import get_deepseek_integration, is_deepseek_api_key_configured
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -28,8 +29,8 @@ def _document_to_dict(doc: KuaiKnowledgeDocument) -> dict[str, Any]:
         "is_active": doc.is_active,
         "file_uuid": doc.file_uuid,
         "faq_question": doc.faq_question,
-        "created_at": doc.created_at.isoformat() if doc.created_at else None,
-        "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
+        "created_at": to_api_isoformat(doc.created_at) if doc.created_at else None,
+        "updated_at": to_api_isoformat(doc.updated_at) if doc.updated_at else None,
     }
 
 

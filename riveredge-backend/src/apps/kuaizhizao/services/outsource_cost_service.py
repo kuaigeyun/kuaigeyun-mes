@@ -21,6 +21,7 @@ from apps.kuaizhizao.models.outsource_work_order import (
     OutsourceMaterialIssue,
     OutsourceMaterialReceipt,
 )
+from core.utils.timezone_utils import to_api_isoformat
 
 
 class OutsourceCostService:
@@ -347,7 +348,7 @@ class OutsourceCostService:
                 "unit": issue.unit,
                 "unit_price": float(unit_price),
                 "cost": float(item_cost),
-                "issued_at": issue.issued_at.isoformat() if issue.issued_at else None,
+                "issued_at": to_api_isoformat(issue.issued_at) if issue.issued_at else None,
             })
         
         return total_cost, cost_breakdown

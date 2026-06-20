@@ -17,7 +17,7 @@ from apps.kuaizhizao.services.document_action_policy.types import (
 )
 
 _CONTRACT_EFFECTIVE_STATUSES = frozenset({"已生效", "执行中"})
-_CONTRACT_CLOSED_STATUSES = frozenset({"已关闭", "已到期"})
+_CONTRACT_CLOSED_STATUSES = frozenset({"已关闭", "已完成", "已到期"})
 
 
 def _cap(allowed: bool, reason: Optional[str] = None) -> ActionCapability:
@@ -143,7 +143,7 @@ def derive_sales_contract_capabilities(
                 push_reason = None
     push_cap = _cap(push_allowed, push_reason)
 
-    print_allowed = st in ("已生效", "执行中", "已关闭") and _is_approved(review_status)
+    print_allowed = st in ("已生效", "执行中", "已完成", "已关闭") and _is_approved(review_status)
     print_cap = _cap(
         print_allowed,
         "sales_contract.print.not_allowed" if not print_allowed else None,

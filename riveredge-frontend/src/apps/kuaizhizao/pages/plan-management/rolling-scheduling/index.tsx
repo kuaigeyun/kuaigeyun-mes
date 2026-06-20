@@ -36,6 +36,7 @@ import { useTranslation } from 'react-i18next';
 import dayjs, { Dayjs } from 'dayjs';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { formatDateTime } from '../../../../../utils/format';
 import {
   rollingSchedulingApi,
   type RollingScheduleLine,
@@ -51,7 +52,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 function formatDate(d: Dayjs | string | undefined | null): string {
   if (!d) return '';
-  return dayjs(d).format('YYYY-MM-DD');
+  return formatDateTime(d, 'YYYY-MM-DD');
 }
 
 const RollingSchedulingPage: React.FC = () => {

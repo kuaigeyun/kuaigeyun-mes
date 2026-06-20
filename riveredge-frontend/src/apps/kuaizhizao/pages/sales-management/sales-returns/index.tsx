@@ -9,7 +9,7 @@
 
 import React, { useRef, useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import type { TFunction } from 'i18next';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { useNavigate } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -19,8 +19,8 @@ import {
 } from '../../../../../hooks/useDocumentCapabilities';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Table, Row, Col, Form as AntForm, InputNumber, Input, Select, Dropdown, Tag, Card, Typography, Spin, Empty } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, CopyOutlined, EditOutlined } from '@ant-design/icons';
+import { App, Button, Space, Table, Row, Col, Form as AntForm, InputNumber, Input, Select, Dropdown, Tag, Card, Typography, Spin, Empty } from 'antd';
+import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, CopyOutlined, EditOutlined, PrinterOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -74,6 +74,8 @@ import {
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
+import { formatDateTime } from '../../../../../utils/format';
 
 const SALES_RETURN_RESOURCE = 'kuaizhizao:sales-return';
 const SALES_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_returns';
@@ -146,6 +148,7 @@ function getImportRowValue(row: Record<string, unknown>, keys: string[]) {
 
 const SalesReturnsPage: React.FC = () => {
   const { t } = useTranslation();
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_return.pull_from_sales_order');
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
@@ -292,8 +295,8 @@ const SalesReturnsPage: React.FC = () => {
     };
   }, [modalVisible, fallbackReturnReasonOptions, fallbackReturnTypeOptions, fallbackShippingMethodOptions]);
 
-  const renderSalesReturnRowActions = (actions: React.ReactNode[]) => {
-    return actions;
+  const renderSalesReturnRowActions = (actions: React.ReactNode[], keyPrefix: string) => {
+    return renderRowActionsOverflow(actions, keyPrefix);
   };
 
   const salesReturnCustomFieldColumns = generateSalesReturnCustomFieldColumns();
@@ -377,13 +380,7 @@ const SalesReturnsPage: React.FC = () => {
         record.capabilities?.update?.allowed && salesReturnPerms.canUpdate ? (
           <Button {...rowActionKind('update')} key="edit" onClick={() => void handleEdit(record)}>{t('common.edit')}</Button>
         ) : null,
-        record.capabilities?.confirm?.allowed && salesReturnPerms.canAction?.('submit') ? (
-          <Button {...rowActionKind('audit')} key="confirm" onClick={() => handleConfirm(record)}>{t('app.kuaizhizao.salesReturn.confirmReturn')}</Button>
-        ) : null,
-        record.capabilities?.withdraw?.allowed && salesReturnPerms.canAction?.('revoke') ? (
-          <Button {...rowActionKind('revoke')} key="withdraw" onClick={() => handleWithdraw(record)}>{t('app.kuaizhizao.salesReturn.withdrawConfirm')}</Button>
-        ) : null,
-      ].filter(Boolean)),
+      ].filter(Boolean), `sr-${record.id ?? 'row'}`),
     },
   ];
 
@@ -441,8 +438,8 @@ const SalesReturnsPage: React.FC = () => {
       { title: t('app.kuaizhizao.salesReturn.salesOrderNo'), dataIndex: 'order_code', width: 180, ellipsis: true },
       { title: t('app.kuaizhizao.salesReturn.customer'), dataIndex: 'customer_name', width: 220, ellipsis: true },
       { title: t('app.kuaizhizao.salesReturn.orderStatus'), dataIndex: 'status', width: 130, align: 'center' },
-      { title: t('app.kuaizhizao.salesReturn.deliveryDate'), dataIndex: 'delivery_date', width: 130, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
-      { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-') },
+      { title: t('app.kuaizhizao.salesReturn.deliveryDate'), dataIndex: 'delivery_date', width: 130, render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-') },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-') },
     ],
     [t],
   );
@@ -544,43 +541,6 @@ const SalesReturnsPage: React.FC = () => {
     } catch {
       messageApi.error(t('app.kuaizhizao.salesReturn.loadDetailFailed'));
     }
-  };
-
-  // 处理确认退货
-  const handleConfirm = async (record: SalesReturn) => {
-    Modal.confirm({
-      title: t('app.kuaizhizao.salesReturn.confirmTitle'),
-      content: t('app.kuaizhizao.salesReturn.confirmContent', { code: record.return_code }),
-      onOk: async () => {
-        try {
-          await warehouseApi.salesReturn.confirm(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.salesReturn.confirmSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.salesReturn.confirmFailed'));
-        }
-      },
-    });
-  };
-
-  const handleWithdraw = async (record: SalesReturn) => {
-    Modal.confirm({
-      title: t('app.kuaizhizao.salesReturn.withdrawTitle'),
-      content: t('app.kuaizhizao.salesReturn.withdrawContent', { code: record.return_code }),
-      onOk: async () => {
-        try {
-          await warehouseApi.salesReturn.withdraw(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.salesReturn.withdrawSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.salesReturn.withdrawFailed'));
-        }
-      },
-    });
   };
 
   // 处理批量删除
@@ -899,6 +859,26 @@ const SalesReturnsPage: React.FC = () => {
               size="middle"
               color="orange"
               variant="solid"
+            />,
+            <UniCapabilityBatchButton
+              key="sales-return-print"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedReturnsForBatch}
+              capabilityKey="print"
+              permAllowed={salesReturnPerms.canPrint}
+              batchAllowed={(records, perm) =>
+                Boolean(perm) && records.some((record) => record.capabilities?.print?.allowed === true)
+              }
+              singleOnly
+              onRun={async (id) => {
+                openPrint({ documentType: 'sales_return', documentId: id });
+              }}
+              labels={{
+                single: t('components.uniAction.print'),
+                batch: t('components.uniAction.print'),
+              }}
+              icon={<PrinterOutlined />}
+              size="middle"
             />,
           ]}
           scroll={{ x: 1200 }}
@@ -1223,6 +1203,22 @@ const SalesReturnsPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         dataSource={returnDetail || undefined}
+        extra={
+          returnDetail?.id != null &&
+          !(
+            returnDetail.capabilities?.print?.allowed === false ||
+            !salesReturnPerms.canPrint
+          ) ? (
+            <Space size="small">
+              <Button
+                icon={<PrinterOutlined />}
+                onClick={() => openPrint({ documentType: 'sales_return', documentId: returnDetail.id! })}
+              >
+                {t('components.uniAction.print')}
+              </Button>
+            </Space>
+          ) : null
+        }
         customContent={
           returnDetail ? (
             <div style={{ padding: '16px 0' }}>
@@ -1364,6 +1360,7 @@ const SalesReturnsPage: React.FC = () => {
           ) : null
         }
       />
+      {PrintModal}
     </>
   );
 };

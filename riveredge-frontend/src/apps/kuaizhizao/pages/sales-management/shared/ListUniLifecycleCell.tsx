@@ -32,6 +32,8 @@ export function ListUniLifecycleCell({
       percent={translated.percent}
       stageName={displayLabel}
       status={translated.status}
+      statusClass={translated.statusClass}
+      flowClass={translated.flowClass}
       subStages={withSubStages ? translated.subStages : undefined}
       subPercent={translated.subPercent}
       subLabel={translated.subLabel}

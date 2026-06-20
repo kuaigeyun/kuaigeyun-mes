@@ -63,6 +63,7 @@ import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/Wa
 import { getPackingBindingLifecycle } from '../../../utils/packingBindingLifecycle';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface PackingBinding {
   id?: number;
@@ -124,9 +125,9 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
     const value = dataIndex != null ? dataSource[dataIndex] : undefined;
     let content: React.ReactNode = value as React.ReactNode;
     if (col.valueType === 'dateTime' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
     } else if (col.valueType === 'date' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD');
+      content = formatDateTime(value as string, 'YYYY-MM-DD');
     }
     if (col.render && dataSource != null) {
             content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
@@ -676,7 +677,7 @@ const PackingBindingPage: React.FC = () => {
         defaultSortOrder: 'descend',
         render: (_, r) => {
           const d = r.updated_at;
-          return d ? dayjs(d).format('YYYY-MM-DD HH:mm:ss') : '-';
+          return d ? formatDateTime(d, 'YYYY-MM-DD HH:mm:ss') : '-';
         },
       },
       {
@@ -773,7 +774,7 @@ const PackingBindingPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.packingBinding.taskPoolColUpdatedAt'),
         dataIndex: 'updated_at',
-        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
     ],
     [t],
@@ -979,7 +980,7 @@ const PackingBindingPage: React.FC = () => {
                     {
                       key: 'opTime',
                       label: t('app.kuaizhizao.packingBinding.detailOpTime'),
-                      children: currentBinding.bound_at ? dayjs(currentBinding.bound_at).format('YYYY-MM-DD HH:mm:ss') : '-',
+                      children: currentBinding.bound_at ? formatDateTime(currentBinding.bound_at, 'YYYY-MM-DD HH:mm:ss') : '-',
                     },
                   ]}
                 />

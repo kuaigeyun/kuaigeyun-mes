@@ -9,6 +9,7 @@ Author: RiverEdge
 
 from typing import List, Dict, Any, Optional
 from loguru import logger
+from core.utils.timezone_utils import to_api_isoformat
 
 
 class TenantInitDataService:
@@ -413,7 +414,7 @@ class TenantInitDataService:
         tenant = await Tenant.get_or_none(id=tenant_id)
         settings = dict((tenant.settings or {}) if tenant else {})
         settings["bootstrap_completed"] = True
-        settings["bootstrap_completed_at"] = datetime.now().isoformat()
+        settings["bootstrap_completed_at"] = to_api_isoformat(datetime.now())
         await Tenant.filter(id=tenant_id).update(settings=settings)
         logger.info(f"组织 {tenant_id} 首次引导初始化完成")
 

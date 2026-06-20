@@ -46,7 +46,7 @@ from apps.kuaizhizao.utils.inventory_helper import (
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
-from core.utils.timezone_utils import make_aware, now_utc
+from core.utils.timezone_utils import make_aware, now_utc, to_api_isoformat
 
 
 def _to_utc_aware(dt: Optional[datetime]) -> Optional[datetime]:
@@ -80,7 +80,7 @@ def _preview_date_iso(d: Optional[Any]) -> Optional[str]:
     if isinstance(d, datetime):
         d = d.date()
     if hasattr(d, "isoformat"):
-        return d.isoformat()
+        return to_api_isoformat(d)
     return str(d)
 
 
@@ -1115,7 +1115,7 @@ class DemandComputationService:
         return [
             {
                 "id": r.id,
-                "recalc_at": r.recalc_at.isoformat() if r.recalc_at else None,
+                "recalc_at": to_api_isoformat(r.recalc_at) if r.recalc_at else None,
                 "trigger": r.trigger,
                 "operator_id": r.operator_id,
                 "result": r.result,
@@ -1174,7 +1174,7 @@ class DemandComputationService:
         return [
             {
                 "id": r.id,
-                "snapshot_at": r.snapshot_at.isoformat() if r.snapshot_at else None,
+                "snapshot_at": to_api_isoformat(r.snapshot_at) if r.snapshot_at else None,
                 "trigger": r.trigger,
                 "computation_summary_snapshot": r.computation_summary_snapshot,
                 "items_snapshot": r.items_snapshot,
@@ -1196,7 +1196,7 @@ class DemandComputationService:
             raise NotFoundError(f"快照不存在或不属于该计算: {snapshot_id}")
         return {
             "id": row.id,
-            "snapshot_at": row.snapshot_at.isoformat() if row.snapshot_at else None,
+            "snapshot_at": to_api_isoformat(row.snapshot_at) if row.snapshot_at else None,
             "trigger": row.trigger,
             "computation_summary_snapshot": row.computation_summary_snapshot,
             "items_snapshot": row.items_snapshot,
@@ -2492,7 +2492,7 @@ class DemandComputationService:
                 "target_code": rel.target_code,
                 "target_name": rel.target_name,
                 "relation_desc": rel.relation_desc,
-                "created_at": rel.created_at.isoformat() if rel.created_at else None,
+                "created_at": to_api_isoformat(rel.created_at) if rel.created_at else None,
                 "target_exists": target_exists,
             })
 

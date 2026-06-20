@@ -64,6 +64,7 @@ from apps.master_data.models.employee_performance import PerformanceSummary
 from apps.kuaizhizao.models.document_relation import DocumentRelation
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.timezone_utils import to_api_isoformat
 
 
 def _dedupe_relation_documents(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -176,7 +177,7 @@ class DocumentRelationService:
             "document_code": code,
             "document_name": op_name,
             "status": record.status if hasattr(record, "status") else None,
-            "created_at": record.created_at.isoformat() if record.created_at else None,
+            "created_at": to_api_isoformat(record.created_at) if record.created_at else None,
         }
 
     async def get_document_relations(
@@ -282,7 +283,7 @@ class DocumentRelationService:
                     "document_code": contract.contract_code,
                     "document_name": None,
                     "status": contract.status,
-                    "created_at": contract.created_at.isoformat() if contract.created_at else None,
+                    "created_at": to_api_isoformat(contract.created_at) if contract.created_at else None,
                 })
         return upstream
 
@@ -321,7 +322,7 @@ class DocumentRelationService:
                     "document_code": order.order_code,
                     "document_name": getattr(order, "order_name", None) or order.order_code,
                     "status": order.status,
-                    "created_at": order.created_at.isoformat() if order.created_at else None
+                    "created_at": to_api_isoformat(order.created_at) if order.created_at else None
                 })
                 return upstream
 
@@ -339,7 +340,7 @@ class DocumentRelationService:
                     "document_code": forecast.forecast_code,
                     "document_name": forecast.forecast_name,
                     "status": forecast.status,
-                    "created_at": forecast.created_at.isoformat() if forecast.created_at else None
+                    "created_at": to_api_isoformat(forecast.created_at) if forecast.created_at else None
                 })
             return upstream
 
@@ -349,7 +350,7 @@ class DocumentRelationService:
             "document_code": demand.demand_code,
             "document_name": getattr(demand, "demand_name", None) or demand.demand_code,
             "status": getattr(demand, "status", None),
-            "created_at": demand.created_at.isoformat() if demand.created_at else None
+            "created_at": to_api_isoformat(demand.created_at) if demand.created_at else None
         })
 
         return upstream
@@ -376,7 +377,7 @@ class DocumentRelationService:
                     "document_code": order.order_code,
                     "document_name": order.order_name,
                     "status": order.status,
-                    "created_at": order.created_at.isoformat() if order.created_at else None
+                    "created_at": to_api_isoformat(order.created_at) if order.created_at else None
                 })
                 # 通过 Demand 查找关联的需求计算
                 demand = await Demand.get_or_none(
@@ -394,7 +395,7 @@ class DocumentRelationService:
                             "document_code": comp.computation_code,
                             "document_name": f"需求计算-{comp.computation_code}",
                             "status": comp.computation_status,
-                            "created_at": comp.computation_start_time.isoformat() if comp.computation_start_time else None
+                            "created_at": to_api_isoformat(comp.computation_start_time) if comp.computation_start_time else None
                         })
 
         # MTS模式：通过 DocumentRelation 查找需求计算（工单作为 target 时）
@@ -414,7 +415,7 @@ class DocumentRelationService:
                     "document_code": comp.computation_code,
                     "document_name": f"需求计算-{comp.computation_code}",
                     "status": comp.computation_status,
-                    "created_at": comp.computation_start_time.isoformat() if comp.computation_start_time else None
+                    "created_at": to_api_isoformat(comp.computation_start_time) if comp.computation_start_time else None
                 })
                 demand = await Demand.get_or_none(tenant_id=tenant_id, id=comp.demand_id)
                 if demand and demand.source_type == "sales_forecast" and demand.source_id:
@@ -426,7 +427,7 @@ class DocumentRelationService:
                             "document_code": forecast.forecast_code,
                             "document_name": forecast.forecast_name,
                             "status": forecast.status,
-                            "created_at": forecast.created_at.isoformat() if forecast.created_at else None
+                            "created_at": to_api_isoformat(forecast.created_at) if forecast.created_at else None
                         })
 
         return upstream
@@ -451,7 +452,7 @@ class DocumentRelationService:
             "document_code": work_order.code,
             "document_name": work_order.name,
             "status": work_order.status,
-            "created_at": work_order.created_at.isoformat() if work_order.created_at else None
+            "created_at": to_api_isoformat(work_order.created_at) if work_order.created_at else None
         }]
 
     async def _get_production_return_upstream(
@@ -475,7 +476,7 @@ class DocumentRelationService:
                 "document_code": work_order.code,
                 "document_name": work_order.name,
                 "status": work_order.status,
-                "created_at": work_order.created_at.isoformat() if work_order.created_at else None
+                "created_at": to_api_isoformat(work_order.created_at) if work_order.created_at else None
             })
 
         # 领料单
@@ -488,7 +489,7 @@ class DocumentRelationService:
                     "document_code": picking.picking_code,
                     "document_name": None,
                     "status": picking.status,
-                    "created_at": picking.created_at.isoformat() if picking.created_at else None
+                    "created_at": to_api_isoformat(picking.created_at) if picking.created_at else None
                 })
 
         return upstream
@@ -514,7 +515,7 @@ class DocumentRelationService:
                 "document_code": work_order.code,
                 "document_name": work_order.name,
                 "status": work_order.status,
-                "created_at": work_order.created_at.isoformat() if work_order.created_at else None
+                "created_at": to_api_isoformat(work_order.created_at) if work_order.created_at else None
             })
 
         # 关联报工记录
@@ -547,7 +548,7 @@ class DocumentRelationService:
                     "document_code": work_order.code,
                     "document_name": work_order.name,
                     "status": work_order.status,
-                    "created_at": work_order.created_at.isoformat() if work_order.created_at else None,
+                    "created_at": to_api_isoformat(work_order.created_at) if work_order.created_at else None,
                 }
             )
         reporting_records = await ReportingRecord.filter(
@@ -581,7 +582,7 @@ class DocumentRelationService:
                     "document_code": computation.computation_code,
                     "document_name": f"需求计算-{computation.computation_code}",
                     "status": computation.computation_status,
-                    "created_at": computation.computation_start_time.isoformat() if computation.computation_start_time else None
+                    "created_at": to_api_isoformat(computation.computation_start_time) if computation.computation_start_time else None
                 })
                 demand = await Demand.get_or_none(tenant_id=tenant_id, id=computation.demand_id)
                 if demand:
@@ -594,7 +595,7 @@ class DocumentRelationService:
                                 "document_code": forecast.forecast_code,
                                 "document_name": forecast.forecast_name,
                                 "status": forecast.status,
-                                "created_at": forecast.created_at.isoformat() if forecast.created_at else None
+                                "created_at": to_api_isoformat(forecast.created_at) if forecast.created_at else None
                             })
                     elif demand.source_type == "sales_order" and demand.source_id:
                         sales_order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=demand.source_id)
@@ -605,7 +606,7 @@ class DocumentRelationService:
                                 "document_code": sales_order.order_code,
                                 "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
                                 "status": sales_order.status,
-                                "created_at": sales_order.created_at.isoformat() if sales_order.created_at else None
+                                "created_at": to_api_isoformat(sales_order.created_at) if sales_order.created_at else None
                             })
 
         return upstream
@@ -631,7 +632,7 @@ class DocumentRelationService:
                 "document_code": purchase_order.order_code,
                 "document_name": purchase_order.order_name if hasattr(purchase_order, 'order_name') else None,
                 "status": purchase_order.status,
-                "created_at": purchase_order.created_at.isoformat() if purchase_order.created_at else None
+                "created_at": to_api_isoformat(purchase_order.created_at) if purchase_order.created_at else None
             })
 
             # 如果采购单有来源，继续向上追溯（需求计算）
@@ -644,7 +645,7 @@ class DocumentRelationService:
                         "document_code": computation.computation_code,
                         "document_name": f"需求计算-{computation.computation_code}",
                         "status": computation.computation_status,
-                        "created_at": computation.computation_start_time.isoformat() if computation.computation_start_time else None
+                        "created_at": to_api_isoformat(computation.computation_start_time) if computation.computation_start_time else None
                     })
                     demand = await Demand.get_or_none(tenant_id=tenant_id, id=computation.demand_id)
                     if demand:
@@ -657,7 +658,7 @@ class DocumentRelationService:
                                     "document_code": forecast.forecast_code,
                                     "document_name": forecast.forecast_name,
                                     "status": forecast.status,
-                                    "created_at": forecast.created_at.isoformat() if forecast.created_at else None
+                                    "created_at": to_api_isoformat(forecast.created_at) if forecast.created_at else None
                                 })
                         elif demand.source_type == "sales_order" and demand.source_id:
                             sales_order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=demand.source_id)
@@ -668,7 +669,7 @@ class DocumentRelationService:
                                     "document_code": sales_order.order_code,
                                     "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
                                     "status": sales_order.status,
-                                    "created_at": sales_order.created_at.isoformat() if sales_order.created_at else None
+                                    "created_at": to_api_isoformat(sales_order.created_at) if sales_order.created_at else None
                                 })
 
         return upstream
@@ -698,7 +699,7 @@ class DocumentRelationService:
                     "document_code": receipt.receipt_code,
                     "document_name": None,
                     "status": receipt.status if hasattr(receipt, "status") else None,
-                    "created_at": receipt.created_at.isoformat() if receipt.created_at else None,
+                    "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None,
                 })
                 if receipt.purchase_order_id:
                     purchase_order = await PurchaseOrder.get_or_none(
@@ -713,7 +714,7 @@ class DocumentRelationService:
                             if hasattr(purchase_order, "order_name")
                             else None,
                             "status": purchase_order.status,
-                            "created_at": purchase_order.created_at.isoformat()
+                            "created_at": to_api_isoformat(purchase_order.created_at)
                             if purchase_order.created_at
                             else None,
                         })
@@ -730,7 +731,7 @@ class DocumentRelationService:
                     if hasattr(purchase_order, "order_name")
                     else None,
                     "status": purchase_order.status,
-                    "created_at": purchase_order.created_at.isoformat()
+                    "created_at": to_api_isoformat(purchase_order.created_at)
                     if purchase_order.created_at
                     else None,
                 })
@@ -757,7 +758,7 @@ class DocumentRelationService:
             "document_code": wo.code,
             "document_name": getattr(wo, "name", None),
             "status": wo.status if hasattr(wo, "status") else None,
-            "created_at": wo.created_at.isoformat() if wo.created_at else None,
+            "created_at": to_api_isoformat(wo.created_at) if wo.created_at else None,
         }]
 
     async def _get_outsource_order_upstream(
@@ -780,7 +781,7 @@ class DocumentRelationService:
             "document_code": wo.code,
             "document_name": getattr(wo, "name", None),
             "status": wo.status if hasattr(wo, "status") else None,
-            "created_at": wo.created_at.isoformat() if wo.created_at else None,
+            "created_at": to_api_isoformat(wo.created_at) if wo.created_at else None,
         }]
 
     async def _get_outsource_order_downstream(
@@ -805,7 +806,7 @@ class DocumentRelationService:
             "document_code": pr.receipt_code,
             "document_name": None,
             "status": pr.status if hasattr(pr, "status") else None,
-            "created_at": pr.created_at.isoformat() if pr.created_at else None,
+            "created_at": to_api_isoformat(pr.created_at) if pr.created_at else None,
         }]
 
     async def _get_packing_binding_upstream(
@@ -831,7 +832,7 @@ class DocumentRelationService:
                     "document_code": fr.receipt_code,
                     "document_name": None,
                     "status": fr.status if hasattr(fr, "status") else None,
-                    "created_at": fr.created_at.isoformat() if fr.created_at else None,
+                    "created_at": to_api_isoformat(fr.created_at) if fr.created_at else None,
                 })
         if pb.sales_delivery_id:
             sd = await SalesDelivery.get_or_none(
@@ -844,7 +845,7 @@ class DocumentRelationService:
                     "document_code": sd.delivery_code,
                     "document_name": None,
                     "status": sd.status if hasattr(sd, "status") else None,
-                    "created_at": sd.created_at.isoformat() if sd.created_at else None,
+                    "created_at": to_api_isoformat(sd.created_at) if sd.created_at else None,
                 })
         return upstream
 
@@ -868,7 +869,7 @@ class DocumentRelationService:
             "document_code": po.order_code,
             "document_name": getattr(po, "order_name", None),
             "status": po.status if hasattr(po, "status") else None,
-            "created_at": po.created_at.isoformat() if po.created_at else None,
+            "created_at": to_api_isoformat(po.created_at) if po.created_at else None,
         }]
 
     async def _get_receipt_notice_downstream(
@@ -891,7 +892,7 @@ class DocumentRelationService:
             "document_code": pr.receipt_code,
             "document_name": None,
             "status": pr.status if hasattr(pr, "status") else None,
-            "created_at": pr.created_at.isoformat() if pr.created_at else None,
+            "created_at": to_api_isoformat(pr.created_at) if pr.created_at else None,
         }]
 
     async def _get_sales_return_upstream(
@@ -915,7 +916,7 @@ class DocumentRelationService:
                     "document_code": sd.delivery_code,
                     "document_name": None,
                     "status": sd.status if hasattr(sd, "status") else None,
-                    "created_at": sd.created_at.isoformat() if sd.created_at else None,
+                    "created_at": to_api_isoformat(sd.created_at) if sd.created_at else None,
                 })
         if sr.sales_order_id:
             so = await SalesOrder.get_or_none(tenant_id=tenant_id, id=sr.sales_order_id)
@@ -926,7 +927,7 @@ class DocumentRelationService:
                     "document_code": so.order_code,
                     "document_name": getattr(so, "order_name", None),
                     "status": so.status if hasattr(so, "status") else None,
-                    "created_at": so.created_at.isoformat() if so.created_at else None,
+                    "created_at": to_api_isoformat(so.created_at) if so.created_at else None,
                 })
         return upstream
 
@@ -950,7 +951,7 @@ class DocumentRelationService:
             "document_code": so.order_code,
             "document_name": getattr(so, "order_name", None),
             "status": so.status if hasattr(so, "status") else None,
-            "created_at": so.created_at.isoformat() if so.created_at else None,
+            "created_at": to_api_isoformat(so.created_at) if so.created_at else None,
         }]
 
     async def _get_shipment_notice_downstream(
@@ -973,7 +974,7 @@ class DocumentRelationService:
             "document_code": sd.delivery_code,
             "document_name": None,
             "status": sd.status if hasattr(sd, "status") else None,
-            "created_at": sd.created_at.isoformat() if sd.created_at else None,
+            "created_at": to_api_isoformat(sd.created_at) if sd.created_at else None,
         }]
 
     async def _get_payable_upstream(
@@ -998,7 +999,7 @@ class DocumentRelationService:
                     "document_code": receipt.receipt_code,
                     "document_name": None,
                     "status": receipt.status,
-                    "created_at": receipt.created_at.isoformat() if receipt.created_at else None
+                    "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None
                 })
 
                 # 继续向上追溯采购单
@@ -1010,7 +1011,7 @@ class DocumentRelationService:
                         "document_code": purchase_order.order_code,
                         "document_name": purchase_order.order_name if hasattr(purchase_order, 'order_name') else None,
                         "status": purchase_order.status,
-                        "created_at": purchase_order.created_at.isoformat() if purchase_order.created_at else None
+                        "created_at": to_api_isoformat(purchase_order.created_at) if purchase_order.created_at else None
                     })
 
         elif payable.source_type == PAYABLE_SOURCE_PURCHASE_INVOICE and payable.source_id:
@@ -1022,7 +1023,7 @@ class DocumentRelationService:
                     "document_code": pinv.invoice_code,
                     "document_name": pinv.invoice_number,
                     "status": pinv.status,
-                    "created_at": pinv.created_at.isoformat() if pinv.created_at else None,
+                    "created_at": to_api_isoformat(pinv.created_at) if pinv.created_at else None,
                 })
                 po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=pinv.purchase_order_id)
                 if po:
@@ -1032,7 +1033,7 @@ class DocumentRelationService:
                         "document_code": po.order_code,
                         "document_name": po.order_name if hasattr(po, "order_name") else None,
                         "status": po.status,
-                        "created_at": po.created_at.isoformat() if po.created_at else None,
+                        "created_at": to_api_isoformat(po.created_at) if po.created_at else None,
                     })
                 receipts = await PurchaseReceipt.filter(
                     tenant_id=tenant_id,
@@ -1046,7 +1047,7 @@ class DocumentRelationService:
                         "document_code": pr.receipt_code,
                         "document_name": None,
                         "status": pr.status if hasattr(pr, "status") else None,
-                        "created_at": pr.created_at.isoformat() if pr.created_at else None,
+                        "created_at": to_api_isoformat(pr.created_at) if pr.created_at else None,
                     })
 
         return upstream
@@ -1075,7 +1076,7 @@ class DocumentRelationService:
                 "document_code": inv.invoice_code,
                 "document_name": inv.invoice_number,
                 "status": inv.status,
-                "created_at": inv.created_at.isoformat() if inv.created_at else None,
+                "created_at": to_api_isoformat(inv.created_at) if inv.created_at else None,
             })
 
         settlements = await SettlementRecord.filter(
@@ -1103,7 +1104,7 @@ class DocumentRelationService:
                 "document_code": pv.payment_code,
                 "document_name": pv.supplier_name,
                 "status": pv.status,
-                "created_at": pv.created_at.isoformat() if pv.created_at else None,
+                "created_at": to_api_isoformat(pv.created_at) if pv.created_at else None,
             })
         return _dedupe_relation_documents(downstream)
 
@@ -1129,7 +1130,7 @@ class DocumentRelationService:
                     "document_code": receipt.receipt_code,
                     "document_name": None,
                     "status": receipt.status,
-                    "created_at": receipt.created_at.isoformat() if receipt.created_at else None
+                    "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None
                 })
 
                 # 继续向上追溯采购单
@@ -1141,7 +1142,7 @@ class DocumentRelationService:
                         "document_code": purchase_order.order_code,
                         "document_name": purchase_order.order_name if hasattr(purchase_order, 'order_name') else None,
                         "status": purchase_order.status,
-                        "created_at": purchase_order.created_at.isoformat() if purchase_order.created_at else None
+                        "created_at": to_api_isoformat(purchase_order.created_at) if purchase_order.created_at else None
                     })
 
         return upstream
@@ -1169,7 +1170,7 @@ class DocumentRelationService:
                     "document_code": work_order.code,
                     "document_name": work_order.name,
                     "status": work_order.status,
-                    "created_at": work_order.created_at.isoformat() if work_order.created_at else None
+                    "created_at": to_api_isoformat(work_order.created_at) if work_order.created_at else None
                 })
 
         # 关联报工记录
@@ -1209,7 +1210,7 @@ class DocumentRelationService:
                     "document_code": work_order.code,
                     "document_name": work_order.name,
                     "status": work_order.status,
-                    "created_at": work_order.created_at.isoformat() if work_order.created_at else None
+                    "created_at": to_api_isoformat(work_order.created_at) if work_order.created_at else None
                 })
 
         # 关联成品入库单
@@ -1227,7 +1228,7 @@ class DocumentRelationService:
                     "document_code": receipt.receipt_code,
                     "document_name": None,
                     "status": receipt.status,
-                    "created_at": receipt.created_at.isoformat() if receipt.created_at else None
+                    "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None
                 })
 
         return upstream
@@ -1254,7 +1255,7 @@ class DocumentRelationService:
                     "document_code": order.order_code,
                     "document_name": order.order_name if hasattr(order, 'order_name') else None,
                     "status": order.status,
-                    "created_at": order.created_at.isoformat() if order.created_at else None
+                    "created_at": to_api_isoformat(order.created_at) if order.created_at else None
                 })
 
         # 关联工单（通过销售订单查找）
@@ -1270,7 +1271,7 @@ class DocumentRelationService:
                     "document_code": wo.code,
                     "document_name": wo.name,
                     "status": wo.status,
-                    "created_at": wo.created_at.isoformat() if wo.created_at else None
+                    "created_at": to_api_isoformat(wo.created_at) if wo.created_at else None
                 })
 
         # 关联成品入库单（通过工单查找）
@@ -1291,7 +1292,7 @@ class DocumentRelationService:
                         "document_code": receipt.receipt_code if hasattr(receipt, 'receipt_code') else None,
                         "document_name": None,
                         "status": receipt.status if hasattr(receipt, 'status') else None,
-                        "created_at": receipt.created_at.isoformat() if receipt.created_at else None
+                        "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None
                     })
 
         return upstream
@@ -1317,7 +1318,7 @@ class DocumentRelationService:
                 "document_code": notice.notice_code,
                 "document_name": None,
                 "status": notice.status,
-                "created_at": notice.created_at.isoformat() if notice.created_at else None,
+                "created_at": to_api_isoformat(notice.created_at) if notice.created_at else None,
             })
 
         # 通过source_type和source_id查找应收单
@@ -1333,7 +1334,7 @@ class DocumentRelationService:
                 "document_code": receivable.receivable_code if hasattr(receivable, 'receivable_code') else None,
                 "document_name": None,
                 "status": receivable.status if hasattr(receivable, 'status') else None,
-                "created_at": receivable.created_at.isoformat() if receivable.created_at else None
+                "created_at": to_api_isoformat(receivable.created_at) if receivable.created_at else None
             })
 
         # 销售退货单
@@ -1349,7 +1350,7 @@ class DocumentRelationService:
                 "document_code": sr.return_code,
                 "document_name": None,
                 "status": sr.status if hasattr(sr, 'status') else None,
-                "created_at": sr.created_at.isoformat() if sr.created_at else None
+                "created_at": to_api_isoformat(sr.created_at) if sr.created_at else None
             })
 
         return downstream
@@ -1376,7 +1377,7 @@ class DocumentRelationService:
                     "document_code": delivery.delivery_code if hasattr(delivery, 'delivery_code') else None,
                     "document_name": None,
                     "status": delivery.status if hasattr(delivery, 'status') else None,
-                    "created_at": delivery.created_at.isoformat() if delivery.created_at else None
+                    "created_at": to_api_isoformat(delivery.created_at) if delivery.created_at else None
                 })
 
                 # 继续向上追溯销售订单
@@ -1389,7 +1390,7 @@ class DocumentRelationService:
                             "document_code": sales_order.order_code,
                             "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
                             "status": sales_order.status,
-                            "created_at": sales_order.created_at.isoformat() if sales_order.created_at else None
+                            "created_at": to_api_isoformat(sales_order.created_at) if sales_order.created_at else None
                         })
 
         elif receivable.source_type == RECEIVABLE_SOURCE_SALES_INVOICE and receivable.source_id:
@@ -1403,7 +1404,7 @@ class DocumentRelationService:
                     "document_code": inv.invoice_code,
                     "document_name": inv.invoice_number,
                     "status": inv.status,
-                    "created_at": inv.created_at.isoformat() if inv.created_at else None,
+                    "created_at": to_api_isoformat(inv.created_at) if inv.created_at else None,
                 })
                 so_code = (inv.source_document_code or "").strip()
                 if so_code:
@@ -1417,7 +1418,7 @@ class DocumentRelationService:
                             "document_code": sales_order.order_code,
                             "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
                             "status": sales_order.status,
-                            "created_at": sales_order.created_at.isoformat() if sales_order.created_at else None,
+                            "created_at": to_api_isoformat(sales_order.created_at) if sales_order.created_at else None,
                         })
 
         return upstream
@@ -1446,7 +1447,7 @@ class DocumentRelationService:
                 "document_code": inv.invoice_code,
                 "document_name": inv.invoice_number,
                 "status": inv.status,
-                "created_at": inv.created_at.isoformat() if inv.created_at else None,
+                "created_at": to_api_isoformat(inv.created_at) if inv.created_at else None,
             })
 
         settlements = await SettlementRecord.filter(
@@ -1474,7 +1475,7 @@ class DocumentRelationService:
                 "document_code": rc.receipt_code,
                 "document_name": rc.customer_name,
                 "status": rc.status,
-                "created_at": rc.created_at.isoformat() if rc.created_at else None,
+                "created_at": to_api_isoformat(rc.created_at) if rc.created_at else None,
             })
 
         return _dedupe_relation_documents(downstream)
@@ -1504,7 +1505,7 @@ class DocumentRelationService:
                     "document_code": parent.invoice_code,
                     "document_name": parent.invoice_number,
                     "status": parent.status,
-                    "created_at": parent.created_at.isoformat() if parent.created_at else None,
+                    "created_at": to_api_isoformat(parent.created_at) if parent.created_at else None,
                 })
 
         rels = await DocumentRelation.filter(
@@ -1519,7 +1520,7 @@ class DocumentRelationService:
                 "document_code": rel.source_code,
                 "document_name": rel.source_name,
                 "status": None,
-                "created_at": rel.created_at.isoformat() if rel.created_at else None,
+                "created_at": to_api_isoformat(rel.created_at) if rel.created_at else None,
             })
 
         so_code = (inv.source_document_code or "").strip()
@@ -1534,7 +1535,7 @@ class DocumentRelationService:
                     "document_code": sales_order.order_code,
                     "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
                     "status": sales_order.status,
-                    "created_at": sales_order.created_at.isoformat() if sales_order.created_at else None,
+                    "created_at": to_api_isoformat(sales_order.created_at) if sales_order.created_at else None,
                 })
 
         return _dedupe_relation_documents(upstream)
@@ -1562,7 +1563,7 @@ class DocumentRelationService:
                     "document_code": ar.receivable_code,
                     "document_name": ar.customer_name,
                     "status": ar.status if hasattr(ar, "status") else None,
-                    "created_at": ar.created_at.isoformat() if ar.created_at else None,
+                    "created_at": to_api_isoformat(ar.created_at) if ar.created_at else None,
                 })
 
         red_children = await Invoice.filter(
@@ -1577,7 +1578,7 @@ class DocumentRelationService:
                 "document_code": child.invoice_code,
                 "document_name": child.invoice_number,
                 "status": child.status,
-                "created_at": child.created_at.isoformat() if child.created_at else None,
+                "created_at": to_api_isoformat(child.created_at) if child.created_at else None,
             })
 
         if inv.red_flush_invoice_id:
@@ -1591,7 +1592,7 @@ class DocumentRelationService:
                     "document_code": red.invoice_code,
                     "document_name": red.invoice_number,
                     "status": red.status,
-                    "created_at": red.created_at.isoformat() if red.created_at else None,
+                    "created_at": to_api_isoformat(red.created_at) if red.created_at else None,
                 })
 
         rels = await DocumentRelation.filter(
@@ -1606,7 +1607,7 @@ class DocumentRelationService:
                 "document_code": rel.target_code,
                 "document_name": rel.target_name,
                 "status": None,
-                "created_at": rel.created_at.isoformat() if rel.created_at else None,
+                "created_at": to_api_isoformat(rel.created_at) if rel.created_at else None,
             })
 
         return _dedupe_relation_documents(downstream)
@@ -1646,7 +1647,7 @@ class DocumentRelationService:
                         "document_code": ar.receivable_code,
                         "document_name": ar.customer_name,
                         "status": ar.status if hasattr(ar, "status") else None,
-                        "created_at": ar.created_at.isoformat() if ar.created_at else None,
+                        "created_at": to_api_isoformat(ar.created_at) if ar.created_at else None,
                     })
         return _dedupe_relation_documents(upstream)
 
@@ -1685,7 +1686,7 @@ class DocumentRelationService:
                         "document_code": py.payable_code,
                         "document_name": py.supplier_name if hasattr(py, "supplier_name") else None,
                         "status": py.status if hasattr(py, "status") else None,
-                        "created_at": py.created_at.isoformat() if py.created_at else None,
+                        "created_at": to_api_isoformat(py.created_at) if py.created_at else None,
                     })
         return _dedupe_relation_documents(upstream)
 
@@ -1715,7 +1716,7 @@ class DocumentRelationService:
                 "document_code": rel.source_code,
                 "document_name": rel.source_name,
                 "status": None,
-                "created_at": rel.created_at.isoformat() if rel.created_at else None,
+                "created_at": to_api_isoformat(rel.created_at) if rel.created_at else None,
             })
 
         if pinv.purchase_order_id:
@@ -1727,7 +1728,7 @@ class DocumentRelationService:
                     "document_code": po.order_code,
                     "document_name": po.order_name if hasattr(po, "order_name") else None,
                     "status": po.status if hasattr(po, "status") else None,
-                    "created_at": po.created_at.isoformat() if po.created_at else None,
+                    "created_at": to_api_isoformat(po.created_at) if po.created_at else None,
                 })
 
         return _dedupe_relation_documents(upstream)
@@ -1755,7 +1756,7 @@ class DocumentRelationService:
                     "document_code": py.payable_code,
                     "document_name": py.supplier_name if hasattr(py, "supplier_name") else None,
                     "status": py.status if hasattr(py, "status") else None,
-                    "created_at": py.created_at.isoformat() if py.created_at else None,
+                    "created_at": to_api_isoformat(py.created_at) if py.created_at else None,
                 })
 
         rels = await DocumentRelation.filter(
@@ -1770,7 +1771,7 @@ class DocumentRelationService:
                 "document_code": rel.target_code,
                 "document_name": rel.target_name,
                 "status": None,
-                "created_at": rel.created_at.isoformat() if rel.created_at else None,
+                "created_at": to_api_isoformat(rel.created_at) if rel.created_at else None,
             })
 
         return _dedupe_relation_documents(downstream)
@@ -1801,7 +1802,7 @@ class DocumentRelationService:
                     "document_code": comp.computation_code,
                     "document_name": f"需求计算-{comp.computation_code}",
                     "status": comp.computation_status,
-                    "created_at": comp.computation_start_time.isoformat() if comp.computation_start_time else None
+                    "created_at": to_api_isoformat(comp.computation_start_time) if comp.computation_start_time else None
                 })
                 # 通过需求计算查找采购单（source_type 为 MRP 或 demand_computation，source_id 为 computation_id）
                 purchase_orders = await PurchaseOrder.filter(
@@ -1815,7 +1816,7 @@ class DocumentRelationService:
                         "document_code": po.order_code,
                         "document_name": po.order_name if hasattr(po, 'order_name') else None,
                         "status": po.status,
-                        "created_at": po.created_at.isoformat() if po.created_at else None
+                        "created_at": to_api_isoformat(po.created_at) if po.created_at else None
                     })
 
         # 通过 DemandItem 查找工单（MTS 模式）
@@ -1832,7 +1833,7 @@ class DocumentRelationService:
                         "document_code": wo.code,
                         "document_name": wo.name,
                         "status": wo.status,
-                        "created_at": wo.created_at.isoformat() if wo.created_at else None
+                        "created_at": to_api_isoformat(wo.created_at) if wo.created_at else None
                     })
 
         return downstream
@@ -1858,7 +1859,7 @@ class DocumentRelationService:
                 "document_code": demand.computation_code,
                 "document_name": f"需求计算-{demand.computation_code}",
                 "status": "已下推",
-                "created_at": demand.updated_at.isoformat() if demand.updated_at else None
+                "created_at": to_api_isoformat(demand.updated_at) if demand.updated_at else None
             })
         
         # 根据需求类型查询下游单据
@@ -1886,7 +1887,7 @@ class DocumentRelationService:
                         "document_code": wo.code,
                         "document_name": wo.name,
                         "status": wo.status,
-                        "created_at": wo.created_at.isoformat() if wo.created_at else None
+                        "created_at": to_api_isoformat(wo.created_at) if wo.created_at else None
                     })
         
         elif demand.demand_type == "sales_order":
@@ -1913,7 +1914,7 @@ class DocumentRelationService:
                         "document_code": wo.code,
                         "document_name": wo.name,
                         "status": wo.status,
-                        "created_at": wo.created_at.isoformat() if wo.created_at else None
+                        "created_at": to_api_isoformat(wo.created_at) if wo.created_at else None
                     })
             
             # 销售出库单（通过销售订单ID关联）
@@ -1928,7 +1929,7 @@ class DocumentRelationService:
                     "document_code": delivery.delivery_code,
                     "document_name": None,
                     "status": delivery.status,
-                    "created_at": delivery.created_at.isoformat() if delivery.created_at else None
+                    "created_at": to_api_isoformat(delivery.created_at) if delivery.created_at else None
                 })
         
         return downstream
@@ -1957,7 +1958,7 @@ class DocumentRelationService:
                     "document_code": comp.computation_code,
                     "document_name": f"需求计算-{comp.computation_code}",
                     "status": comp.computation_status,
-                    "created_at": comp.computation_start_time.isoformat() if comp.computation_start_time else None
+                    "created_at": to_api_isoformat(comp.computation_start_time) if comp.computation_start_time else None
                 })
 
         # 工单（MTO模式）
@@ -1972,7 +1973,7 @@ class DocumentRelationService:
                 "document_code": wo.code,
                 "document_name": wo.name,
                 "status": wo.status,
-                "created_at": wo.created_at.isoformat() if wo.created_at else None
+                "created_at": to_api_isoformat(wo.created_at) if wo.created_at else None
             })
 
         # 销售出库单
@@ -1987,7 +1988,7 @@ class DocumentRelationService:
                 "document_code": delivery.delivery_code if hasattr(delivery, 'delivery_code') else None,
                 "document_name": None,
                 "status": delivery.status if hasattr(delivery, 'status') else None,
-                "created_at": delivery.created_at.isoformat() if delivery.created_at else None
+                "created_at": to_api_isoformat(delivery.created_at) if delivery.created_at else None
             })
 
         so = await SalesOrder.get_or_none(
@@ -2007,7 +2008,7 @@ class DocumentRelationService:
                     "document_code": inv.invoice_code,
                     "document_name": inv.invoice_number,
                     "status": inv.status,
-                    "created_at": inv.created_at.isoformat() if inv.created_at else None,
+                    "created_at": to_api_isoformat(inv.created_at) if inv.created_at else None,
                 })
 
         return _dedupe_relation_documents(downstream)
@@ -2033,7 +2034,7 @@ class DocumentRelationService:
             "id": order.id,
             "code": getattr(order, "order_code", None),
             "name": getattr(order, "order_name", None),
-            "changed_at": order.updated_at.isoformat() if order.updated_at else None,
+            "changed_at": to_api_isoformat(order.updated_at) if order.updated_at else None,
         }
 
         affected_demands = []
@@ -2151,7 +2152,7 @@ class DocumentRelationService:
             "id": demand.id,
             "code": getattr(demand, "demand_code", None),
             "name": getattr(demand, "demand_name", None),
-            "changed_at": demand.updated_at.isoformat() if demand.updated_at else None,
+            "changed_at": to_api_isoformat(demand.updated_at) if demand.updated_at else None,
         }
 
         affected_demands = [{
@@ -2327,7 +2328,7 @@ class DocumentRelationService:
                     "document_code": quotation.quotation_code,
                     "document_name": None,
                     "status": quotation.status,
-                    "created_at": quotation.created_at.isoformat() if quotation.created_at else None,
+                    "created_at": to_api_isoformat(quotation.created_at) if quotation.created_at else None,
                 })
         return upstream
 
@@ -2350,7 +2351,7 @@ class DocumentRelationService:
                 "document_code": order.order_code,
                 "document_name": order.order_name,
                 "status": order.status,
-                "created_at": order.created_at.isoformat() if order.created_at else None,
+                "created_at": to_api_isoformat(order.created_at) if order.created_at else None,
             })
         return downstream
 
@@ -2371,7 +2372,7 @@ class DocumentRelationService:
                 "document_code": r.return_code,
                 "document_name": None,
                 "status": r.status,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "created_at": to_api_isoformat(r.created_at) if r.created_at else None,
             })
         return downstream
 
@@ -2398,7 +2399,7 @@ class DocumentRelationService:
                     "document_code": delivery.delivery_code,
                     "document_name": None,
                     "status": delivery.status,
-                    "created_at": delivery.created_at.isoformat() if delivery.created_at else None,
+                    "created_at": to_api_isoformat(delivery.created_at) if delivery.created_at else None,
                 })
         if notice.sales_order_id:
             order = await SalesOrder.get_or_none(
@@ -2411,7 +2412,7 @@ class DocumentRelationService:
                     "document_code": order.order_code,
                     "document_name": order.order_name,
                     "status": order.status,
-                    "created_at": order.created_at.isoformat() if order.created_at else None,
+                    "created_at": to_api_isoformat(order.created_at) if order.created_at else None,
                 })
         return upstream
 
@@ -2436,7 +2437,7 @@ class DocumentRelationService:
                     "document_code": borrow.borrow_code,
                     "document_name": None,
                     "status": borrow.status,
-                    "created_at": borrow.created_at.isoformat() if borrow.created_at else None,
+                    "created_at": to_api_isoformat(borrow.created_at) if borrow.created_at else None,
                 })
         return upstream
 
@@ -2469,7 +2470,7 @@ class DocumentRelationService:
                     "document_code": wo.code,
                     "document_name": wo.name,
                     "status": wo.status,
-                    "created_at": wo.created_at.isoformat() if wo.created_at else None
+                    "created_at": to_api_isoformat(wo.created_at) if wo.created_at else None
                 })
 
         # 通过 source_id 查找采购单（PurchaseOrder.source_id 为 DemandComputation.id）
@@ -2484,7 +2485,7 @@ class DocumentRelationService:
                 "document_code": po.order_code,
                 "document_name": po.order_name if hasattr(po, 'order_name') else None,
                 "status": po.status,
-                "created_at": po.created_at.isoformat() if po.created_at else None
+                "created_at": to_api_isoformat(po.created_at) if po.created_at else None
             })
 
         return downstream
@@ -2509,7 +2510,7 @@ class DocumentRelationService:
                 "document_code": picking.picking_code,
                 "document_name": None,
                 "status": picking.status,
-                "created_at": picking.created_at.isoformat() if picking.created_at else None
+                "created_at": to_api_isoformat(picking.created_at) if picking.created_at else None
             })
 
         # 生产退料单
@@ -2524,7 +2525,7 @@ class DocumentRelationService:
                 "document_code": ret.return_code,
                 "document_name": None,
                 "status": ret.status,
-                "created_at": ret.created_at.isoformat() if ret.created_at else None
+                "created_at": to_api_isoformat(ret.created_at) if ret.created_at else None
             })
 
         # 报工记录
@@ -2548,7 +2549,7 @@ class DocumentRelationService:
                 "document_code": receipt.receipt_code,
                 "document_name": None,
                 "status": receipt.status,
-                "created_at": receipt.created_at.isoformat() if receipt.created_at else None
+                "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None
             })
 
         semi_receipts = await SemiFinishedGoodsReceipt.filter(
@@ -2563,7 +2564,7 @@ class DocumentRelationService:
                 "document_code": receipt.receipt_code,
                 "document_name": None,
                 "status": receipt.status,
-                "created_at": receipt.created_at.isoformat() if receipt.created_at else None
+                "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None
             })
 
         # 销售出库单（通过成品入库单关联）
@@ -2580,7 +2581,7 @@ class DocumentRelationService:
                         "document_code": delivery.delivery_code if hasattr(delivery, 'delivery_code') else None,
                         "document_name": None,
                         "status": delivery.status if hasattr(delivery, 'status') else None,
-                        "created_at": delivery.created_at.isoformat() if delivery.created_at else None
+                        "created_at": to_api_isoformat(delivery.created_at) if delivery.created_at else None
                     })
 
         # 返工单（工单作为原工单）
@@ -2596,7 +2597,7 @@ class DocumentRelationService:
                 "document_code": ro.code,
                 "document_name": ro.product_name,
                 "status": ro.status,
-                "created_at": ro.created_at.isoformat() if ro.created_at else None
+                "created_at": to_api_isoformat(ro.created_at) if ro.created_at else None
             })
 
         # 工序委外单
@@ -2612,7 +2613,7 @@ class DocumentRelationService:
                 "document_code": os_order.code,
                 "document_name": os_order.operation_name,
                 "status": os_order.status,
-                "created_at": os_order.created_at.isoformat() if os_order.created_at else None
+                "created_at": to_api_isoformat(os_order.created_at) if os_order.created_at else None
             })
 
         # 过程检验单
@@ -2627,7 +2628,7 @@ class DocumentRelationService:
                 "document_code": pi.inspection_code,
                 "document_name": None,
                 "status": pi.status,
-                "created_at": pi.created_at.isoformat() if pi.created_at else None
+                "created_at": to_api_isoformat(pi.created_at) if pi.created_at else None
             })
 
         # 成品检验单
@@ -2642,7 +2643,7 @@ class DocumentRelationService:
                 "document_code": fi.inspection_code,
                 "document_name": None,
                 "status": fi.status,
-                "created_at": fi.created_at.isoformat() if fi.created_at else None
+                "created_at": to_api_isoformat(fi.created_at) if fi.created_at else None
             })
 
         # 拆分工单（通过 DocumentRelation 追溯）
@@ -2665,7 +2666,7 @@ class DocumentRelationService:
                     "document_code": split_wo.code,
                     "document_name": split_wo.name,
                     "status": split_wo.status,
-                    "created_at": split_wo.created_at.isoformat() if split_wo.created_at else None
+                    "created_at": to_api_isoformat(split_wo.created_at) if split_wo.created_at else None
                 })
 
         return downstream
@@ -2694,7 +2695,7 @@ class DocumentRelationService:
                 "document_code": ret.return_code,
                 "document_name": None,
                 "status": ret.status,
-                "created_at": ret.created_at.isoformat() if ret.created_at else None
+                "created_at": to_api_isoformat(ret.created_at) if ret.created_at else None
             })
 
         # 报工记录
@@ -2733,7 +2734,7 @@ class DocumentRelationService:
                     "document_code": delivery.delivery_code if hasattr(delivery, 'delivery_code') else None,
                     "document_name": None,
                     "status": delivery.status if hasattr(delivery, 'status') else None,
-                    "created_at": delivery.created_at.isoformat() if delivery.created_at else None
+                    "created_at": to_api_isoformat(delivery.created_at) if delivery.created_at else None
                 })
 
         return downstream
@@ -2760,7 +2761,7 @@ class DocumentRelationService:
                     "document_code": delivery.delivery_code if hasattr(delivery, 'delivery_code') else None,
                     "document_name": None,
                     "status": delivery.status if hasattr(delivery, 'status') else None,
-                    "created_at": delivery.created_at.isoformat() if delivery.created_at else None
+                    "created_at": to_api_isoformat(delivery.created_at) if delivery.created_at else None
                 })
         return downstream
 
@@ -2784,7 +2785,7 @@ class DocumentRelationService:
                 "document_code": receipt.receipt_code if hasattr(receipt, 'receipt_code') else None,
                 "document_name": None,
                 "status": receipt.status if hasattr(receipt, 'status') else None,
-                "created_at": receipt.created_at.isoformat() if receipt.created_at else None
+                "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None
             })
 
         pinvs = await PurchaseInvoice.filter(
@@ -2799,7 +2800,7 @@ class DocumentRelationService:
                 "document_code": inv.invoice_code,
                 "document_name": inv.invoice_number,
                 "status": inv.status,
-                "created_at": inv.created_at.isoformat() if inv.created_at else None,
+                "created_at": to_api_isoformat(inv.created_at) if inv.created_at else None,
             })
 
         return _dedupe_relation_documents(downstream)
@@ -2825,7 +2826,7 @@ class DocumentRelationService:
                 "document_code": payable.payable_code,
                 "document_name": None,
                 "status": payable.status,
-                "created_at": payable.created_at.isoformat() if payable.created_at else None
+                "created_at": to_api_isoformat(payable.created_at) if payable.created_at else None
             })
 
         # 采购退货单
@@ -2841,7 +2842,7 @@ class DocumentRelationService:
                 "document_code": pr.return_code,
                 "document_name": None,
                 "status": pr.status if hasattr(pr, 'status') else None,
-                "created_at": pr.created_at.isoformat() if pr.created_at else None
+                "created_at": to_api_isoformat(pr.created_at) if pr.created_at else None
             })
 
         return downstream
@@ -2866,7 +2867,7 @@ class DocumentRelationService:
                 "document_code": f.fault_no,
                 "document_name": None,
                 "status": f.status,
-                "created_at": f.created_at.isoformat() if f.created_at else None,
+                "created_at": to_api_isoformat(f.created_at) if f.created_at else None,
             })
         plans = await MaintenancePlan.filter(
             tenant_id=tenant_id, equipment_id=equipment_id, deleted_at__isnull=True
@@ -2878,7 +2879,7 @@ class DocumentRelationService:
                 "document_code": p.plan_no,
                 "document_name": p.plan_name,
                 "status": p.status,
-                "created_at": p.created_at.isoformat() if p.created_at else None,
+                "created_at": to_api_isoformat(p.created_at) if p.created_at else None,
             })
         return downstream
 
@@ -2902,7 +2903,7 @@ class DocumentRelationService:
             "document_code": eq.code,
             "document_name": eq.name,
             "status": eq.status,
-            "created_at": eq.created_at.isoformat() if eq.created_at else None,
+            "created_at": to_api_isoformat(eq.created_at) if eq.created_at else None,
         }]
 
     async def _get_maintenance_plan_upstream(
@@ -2925,7 +2926,7 @@ class DocumentRelationService:
             "document_code": eq.code,
             "document_name": eq.name,
             "status": eq.status,
-            "created_at": eq.created_at.isoformat() if eq.created_at else None,
+            "created_at": to_api_isoformat(eq.created_at) if eq.created_at else None,
         }]
 
     async def _get_maintenance_reminder_upstream(
@@ -2946,7 +2947,7 @@ class DocumentRelationService:
                 "document_code": eq.code,
                 "document_name": eq.name,
                 "status": eq.status,
-                "created_at": eq.created_at.isoformat() if eq.created_at else None,
+                "created_at": to_api_isoformat(eq.created_at) if eq.created_at else None,
             })
         if reminder.maintenance_plan_id:
             plan = await MaintenancePlan.get_or_none(tenant_id=tenant_id, id=reminder.maintenance_plan_id)
@@ -2957,7 +2958,7 @@ class DocumentRelationService:
                     "document_code": plan.plan_no,
                     "document_name": plan.plan_name,
                     "status": plan.status,
-                    "created_at": plan.created_at.isoformat() if plan.created_at else None,
+                    "created_at": to_api_isoformat(plan.created_at) if plan.created_at else None,
                 })
         return upstream
 

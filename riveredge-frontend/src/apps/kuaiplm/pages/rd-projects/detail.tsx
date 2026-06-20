@@ -42,6 +42,7 @@ import {
 } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { buildFutureDateShortcutFieldProps } from '../../../../utils/futureDatePickerShortcuts';
+import { formatDateTime } from '../../../../utils/format';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, FormModalTemplate } from '../../../../components/layout-templates';
@@ -300,7 +301,7 @@ const RdProjectDetailPage: React.FC = () => {
         try {
           await updateRdProjectGate(id, gate.id!, {
             status: 'PASSED',
-            actual_date: dayjs().format('YYYY-MM-DD'),
+            actual_date: formatDateTime(dayjs(), 'YYYY-MM-DD'),
           });
           messageApi.success(t('app.kuaiplm.rdProjects.detail.gatePassSuccess'));
           load();
@@ -409,10 +410,10 @@ const RdProjectDetailPage: React.FC = () => {
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaiplm.rdProjects.detail.label.plannedDate')}>
-                {gate.planned_date ? dayjs(gate.planned_date).format('YYYY-MM-DD') : '—'}
+                {gate.planned_date ? formatDateTime(gate.planned_date, 'YYYY-MM-DD') : '—'}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaiplm.rdProjects.detail.label.actualDate')}>
-                {gate.actual_date ? dayjs(gate.actual_date).format('YYYY-MM-DD') : '—'}
+                {gate.actual_date ? formatDateTime(gate.actual_date, 'YYYY-MM-DD') : '—'}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaiplm.rdProjects.detail.label.reviewer')}>
                 {gate.reviewer_name || '—'}
@@ -476,7 +477,7 @@ const RdProjectDetailPage: React.FC = () => {
                   title: t('app.kuaiplm.common.columns.dueDate'),
                   dataIndex: 'due_date',
                   width: 108,
-                  render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '—'),
+                  render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '—'),
                 },
                 {
                   title: t('app.kuaiplm.common.columns.actions'),
@@ -707,7 +708,7 @@ const RdProjectDetailPage: React.FC = () => {
                   onOk: async () => {
                     await updateRdProject(id!, {
                       status: 'IN_PROGRESS',
-                      actual_start_date: dayjs().format('YYYY-MM-DD'),
+                      actual_start_date: formatDateTime(dayjs(), 'YYYY-MM-DD'),
                     });
                     messageApi.success(t('app.kuaiplm.rdProjects.detail.startSuccess'));
                     load();
@@ -759,11 +760,11 @@ const RdProjectDetailPage: React.FC = () => {
                 </Descriptions.Item>
                 <Descriptions.Item label={t('app.kuaiplm.rdProjects.detail.label.plannedPeriod')}>
                   {project.planned_start_date
-                    ? dayjs(project.planned_start_date).format('YYYY-MM-DD')
+                    ? formatDateTime(project.planned_start_date, 'YYYY-MM-DD')
                     : '—'}
                   {' ~ '}
                   {project.planned_end_date
-                    ? dayjs(project.planned_end_date).format('YYYY-MM-DD')
+                    ? formatDateTime(project.planned_end_date, 'YYYY-MM-DD')
                     : '—'}
                 </Descriptions.Item>
               </Descriptions>
@@ -940,7 +941,7 @@ const RdProjectDetailPage: React.FC = () => {
           const payload = {
             ...values,
             gate_id: values.gate_id ?? activeGate?.id,
-            due_date: values.due_date ? dayjs(values.due_date).format('YYYY-MM-DD') : undefined,
+            due_date: values.due_date ? formatDateTime(values.due_date, 'YYYY-MM-DD') : undefined,
             parent_task_id: values.parent_task_id ?? null,
           };
           if (!payload.gate_id) {
@@ -1071,10 +1072,10 @@ const RdProjectDetailPage: React.FC = () => {
           if (!editingGate?.id) return;
           await updateRdProjectGate(id!, editingGate.id, {
             planned_date: values.planned_date
-              ? dayjs(values.planned_date).format('YYYY-MM-DD')
+              ? formatDateTime(values.planned_date, 'YYYY-MM-DD')
               : undefined,
             actual_date: values.actual_date
-              ? dayjs(values.actual_date).format('YYYY-MM-DD')
+              ? formatDateTime(values.actual_date, 'YYYY-MM-DD')
               : undefined,
             reviewer_id: selectedReviewerRef.current?.id ?? null,
             reviewer_name: selectedReviewerRef.current?.name ?? undefined,

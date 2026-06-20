@@ -30,6 +30,7 @@ from apps.kuaizhizao.schemas.equipment_oee import (
 from apps.kuaizhizao.services.equipment_service import EquipmentService
 from apps.kuaizhizao.services.equipment_oee_service import EquipmentOEEService
 from core.api.deps.deps import get_current_tenant
+from core.utils.timezone_utils import to_api_isoformat
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -307,9 +308,9 @@ async def get_equipment_trace(
                     "plan_type": plan.plan_type,
                     "maintenance_type": plan.maintenance_type,
                     "status": plan.status,
-                    "planned_start_date": plan.planned_start_date.isoformat() if plan.planned_start_date else None,
-                    "planned_end_date": plan.planned_end_date.isoformat() if plan.planned_end_date else None,
-                    "created_at": plan.created_at.isoformat(),
+                    "planned_start_date": to_api_isoformat(plan.planned_start_date) if plan.planned_start_date else None,
+                    "planned_end_date": to_api_isoformat(plan.planned_end_date) if plan.planned_end_date else None,
+                    "created_at": to_api_isoformat(plan.created_at),
                 }
                 for plan in maintenance_plans
             ],
@@ -317,12 +318,12 @@ async def get_equipment_trace(
                 {
                     "uuid": exec.uuid,
                     "execution_no": exec.execution_no,
-                    "execution_date": exec.execution_date.isoformat(),
+                    "execution_date": to_api_isoformat(exec.execution_date),
                     "executor_name": exec.executor_name,
                     "execution_result": exec.execution_result,
                     "status": exec.status,
                     "maintenance_cost": float(exec.maintenance_cost) if exec.maintenance_cost else None,
-                    "created_at": exec.created_at.isoformat(),
+                    "created_at": to_api_isoformat(exec.created_at),
                 }
                 for exec in maintenance_executions
             ],
@@ -330,12 +331,12 @@ async def get_equipment_trace(
                 {
                     "uuid": fault.uuid,
                     "fault_no": fault.fault_no,
-                    "fault_date": fault.fault_date.isoformat(),
+                    "fault_date": to_api_isoformat(fault.fault_date),
                     "fault_type": fault.fault_type,
                     "fault_level": fault.fault_level,
                     "status": fault.status,
                     "repair_required": fault.repair_required,
-                    "created_at": fault.created_at.isoformat(),
+                    "created_at": to_api_isoformat(fault.created_at),
                 }
                 for fault in equipment_faults
             ],
@@ -343,26 +344,26 @@ async def get_equipment_trace(
                 {
                     "uuid": repair.uuid,
                     "repair_no": repair.repair_no,
-                    "repair_date": repair.repair_date.isoformat(),
+                    "repair_date": to_api_isoformat(repair.repair_date),
                     "repair_type": repair.repair_type,
                     "repairer_name": repair.repairer_name,
                     "repair_duration": float(repair.repair_duration) if repair.repair_duration else None,
                     "repair_cost": float(repair.repair_cost) if repair.repair_cost else None,
                     "status": repair.status,
                     "repair_result": repair.repair_result,
-                    "created_at": repair.created_at.isoformat(),
+                    "created_at": to_api_isoformat(repair.created_at),
                 }
                 for repair in equipment_repairs
             ],
             "equipment_calibrations": [
                 {
                     "uuid": calib.uuid,
-                    "calibration_date": calib.calibration_date.isoformat(),
+                    "calibration_date": to_api_isoformat(calib.calibration_date),
                     "result": calib.result,
                     "certificate_no": calib.certificate_no,
-                    "expiry_date": calib.expiry_date.isoformat() if calib.expiry_date else None,
+                    "expiry_date": to_api_isoformat(calib.expiry_date) if calib.expiry_date else None,
                     "remark": calib.remark,
-                    "created_at": calib.created_at.isoformat(),
+                    "created_at": to_api_isoformat(calib.created_at),
                 }
                 for calib in equipment_calibrations
             ],

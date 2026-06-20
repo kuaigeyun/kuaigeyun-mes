@@ -109,6 +109,7 @@ import {
   shouldAutoFillRatedUsableYield,
 } from '../../../utils/moldRatedYield';
 import { parseMoldLedgerListSearchFilters } from '../../../utils/moldLedgerListSearch';
+import { formatDateTime } from '../../../../../utils/format';
 
 const statusValueEnum = MOLD_LEDGER_STATUSES.reduce<Record<string, { text: string }>>((acc, s) => {
   acc[s] = { text: s };
@@ -1310,7 +1311,7 @@ const MoldLedgerPage: React.FC = () => {
                         <div style={{ paddingBottom: 4 }}>
                           <div style={{ marginBottom: 4 }}>
                             <Typography.Text type="secondary">
-                              {dayjs(e.occurred_at).format('YYYY-MM-DD HH:mm')}
+                              {formatDateTime(e.occurred_at, 'YYYY-MM-DD HH:mm')}
                             </Typography.Text>
                             <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
                               {e.sheet_no?.trim()

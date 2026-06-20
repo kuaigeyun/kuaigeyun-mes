@@ -32,6 +32,7 @@ from apps.kuaizhizao.schemas.demand import (
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, LEGACY_AUDITED_VALUES
 
 from apps.common.base_service import AppBaseService
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 
@@ -1622,8 +1623,8 @@ class DemandService(AppBaseService[Demand]):
             "demand_name": demand.demand_name,
             "total_quantity": str(demand.total_quantity),
             "total_amount": str(demand.total_amount),
-            "start_date": demand.start_date.isoformat() if demand.start_date else None,
-            "end_date": demand.end_date.isoformat() if demand.end_date else None,
+            "start_date": to_api_isoformat(demand.start_date) if demand.start_date else None,
+            "end_date": to_api_isoformat(demand.end_date) if demand.end_date else None,
             "source_type": demand.source_type,
             "source_id": demand.source_id,
         }
@@ -1634,7 +1635,7 @@ class DemandService(AppBaseService[Demand]):
             "material_code": item.material_code,
             "material_name": item.material_name,
             "required_quantity": str(item.required_quantity),
-            "delivery_date": item.delivery_date.isoformat() if getattr(item, "delivery_date", None) else None,
+            "delivery_date": to_api_isoformat(item.delivery_date) if getattr(item, "delivery_date", None) else None,
         }
 
     async def _notify_downstream_recalc(
@@ -1693,7 +1694,7 @@ class DemandService(AppBaseService[Demand]):
         return [
             {
                 "id": r.id,
-                "recalc_at": r.recalc_at.isoformat() if r.recalc_at else None,
+                "recalc_at": to_api_isoformat(r.recalc_at) if r.recalc_at else None,
                 "trigger_type": r.trigger_type,
                 "source_type": r.source_type,
                 "source_id": r.source_id,
@@ -1718,7 +1719,7 @@ class DemandService(AppBaseService[Demand]):
             {
                 "id": r.id,
                 "snapshot_type": r.snapshot_type,
-                "snapshot_at": r.snapshot_at.isoformat() if r.snapshot_at else None,
+                "snapshot_at": to_api_isoformat(r.snapshot_at) if r.snapshot_at else None,
                 "trigger_reason": r.trigger_reason,
                 "demand_snapshot": r.demand_snapshot,
                 "demand_items_snapshot": r.demand_items_snapshot,

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
+from infra.config.infra_config import infra_settings
 
 
 def now_utc() -> datetime:
@@ -58,6 +59,27 @@ def is_future_datetime(
     return aware.astimezone(timezone.utc) > limit
 
 
+def to_site_timezone(dt: datetime) -> datetime:
+    """将 ``datetime`` 统一转换到系统配置时区。naive 值按 UTC 解释。"""
+    aware = dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+    return aware.astimezone(ZoneInfo(infra_settings.TIMEZONE))
+
+
+def to_api_isoformat(value: datetime | date | None) -> str | None:
+    """
+    API 输出统一格式：
+
+    - datetime：转系统时区后输出 ``YYYY-MM-DD HH:MM:SS``
+    - date：输出 ``YYYY-MM-DD``
+    - None：返回 ``None``
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return to_site_timezone(value).strftime("%Y-%m-%d %H:%M:%S")
+    return value.isoformat()
+
+
 __all__ = [
     "now",
     "now_utc",
@@ -65,4 +87,6 @@ __all__ = [
     "make_aware",
     "to_naive_utc",
     "is_future_datetime",
+    "to_site_timezone",
+    "to_api_isoformat",
 ]

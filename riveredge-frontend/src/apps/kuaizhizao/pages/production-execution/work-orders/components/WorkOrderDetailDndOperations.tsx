@@ -5,7 +5,6 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { App, Button, Modal, Popconfirm, Space, Tag } from 'antd'
 import { HolderOutlined } from '@ant-design/icons'
-import dayjs from 'dayjs'
 import {
   DndContext,
   closestCenter,
@@ -24,6 +23,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { workOrderApi } from '../../../../services/production'
+import { formatDateTime } from '../../../../../../utils/format'
 
 export interface WorkOrderOperationsListProps {
   workOrderId?: number
@@ -112,7 +112,7 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
               {operation.planned_start_date && (
                 <span>
                   {t('app.kuaizhizao.workOrder.labelPlan')}:{' '}
-                  {dayjs(operation.planned_start_date).format('YYYY-MM-DD HH:mm')}
+                  {formatDateTime(operation.planned_start_date, 'YYYY-MM-DD HH:mm')}
                 </span>
               )}
             </Space>

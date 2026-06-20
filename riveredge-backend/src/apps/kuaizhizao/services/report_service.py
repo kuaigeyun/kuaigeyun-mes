@@ -14,6 +14,7 @@ from decimal import Decimal
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity, get_material_inventory_info
 from core.services.authorization.data_scope_service import DataScopeService
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
@@ -33,9 +34,9 @@ class ReportService:
         if isinstance(value, Decimal):
             return float(value)
         if isinstance(value, datetime):
-            return value.isoformat()
+            return to_api_isoformat(value)
         if isinstance(value, date):
-            return value.isoformat()
+            return to_api_isoformat(value)
         if isinstance(value, dict):
             return {k: ReportService._json_safe(v) for k, v in value.items()}
         if isinstance(value, (list, tuple)):
@@ -285,7 +286,7 @@ class ReportService:
         if not date_start: date_start = datetime.now() - timedelta(days=30)
         if not date_end: date_end = datetime.now()
         return {
-            "period": {"start": date_start.isoformat(), "end": date_end.isoformat()},
+            "period": {"start": to_api_isoformat(date_start), "end": to_api_isoformat(date_end)},
             "summary": {"avg_turnover_rate": 0.0, "avg_turnover_days": 0.0},
             "items": [],
         }
@@ -1178,7 +1179,7 @@ class ReportService:
                 "delivery_code": head.get("delivery_code"),
                 "customer_name": head.get("customer_name"),
                 "warehouse_name": head.get("warehouse_name"),
-                "delivery_date": delivery_time.date().isoformat() if delivery_time else None,
+                "delivery_date": to_api_isoformat(delivery_time.date()) if delivery_time else None,
                 "sales_order_code": head.get("sales_order_code"),
                 "quantity": float(r.get("delivery_quantity") or 0),
                 "unit_price": float(r.get("unit_price") or 0),
@@ -1269,7 +1270,7 @@ class ReportService:
                 "return_code": head.get("return_code"),
                 "customer_name": head.get("customer_name"),
                 "warehouse_name": head.get("warehouse_name"),
-                "return_date": return_time.date().isoformat() if return_time else None,
+                "return_date": to_api_isoformat(return_time.date()) if return_time else None,
                 "sales_delivery_code": head.get("sales_delivery_code"),
                 "return_reason": head.get("return_reason"),
                 "quantity": float(r.get("return_quantity") or 0),
@@ -1518,8 +1519,8 @@ class ReportService:
                     "contract_code": c.contract_code,
                     "contract_type": c.contract_type,
                     "customer_name": c.customer_name,
-                    "contract_date": c.contract_date.isoformat() if c.contract_date else None,
-                    "valid_to": c.valid_to.isoformat() if c.valid_to else None,
+                    "contract_date": to_api_isoformat(c.contract_date) if c.contract_date else None,
+                    "valid_to": to_api_isoformat(c.valid_to) if c.valid_to else None,
                     "status": c.status,
                     "total_amount": float(total_amt),
                     "released_amount": float(released_amt),
@@ -1625,7 +1626,7 @@ class ReportService:
                 )
                 if main_warehouse_filter_id is not None and resolved_wh_id != main_warehouse_filter_id:
                     continue
-                expiry_iso = b.expiry_date.isoformat() if b.expiry_date else None
+                expiry_iso = to_api_isoformat(b.expiry_date) if b.expiry_date else None
                 qty = float(b.quantity or 0)
                 status = "已过期" if b.expiry_date and b.expiry_date < date.today() else ("在库" if qty > 0 else "无库存")
                 rows.append({
@@ -1635,7 +1636,7 @@ class ReportService:
                     "material_name": b.material.name if b.material else "UNKNOWN",
                     "material_unit": getattr(b.material, "unit", None) if b.material else None,
                     "batch_no": b.batch_no,
-                    "production_date": b.production_date.isoformat() if b.production_date else None,
+                    "production_date": to_api_isoformat(b.production_date) if b.production_date else None,
                     "expiry_date": expiry_iso,
                     "supplier_batch_no": b.supplier_batch_no,
                     "quantity": qty,
@@ -1653,8 +1654,8 @@ class ReportService:
                 "material_name": l.material_name,
                 "material_unit": getattr(l, "material_unit", None),
                 "batch_no": l.batch_no,
-                "production_date": l.production_date.isoformat() if l.production_date else None,
-                "expiry_date": l.expiry_date.isoformat() if l.expiry_date else None,
+                "production_date": to_api_isoformat(l.production_date) if l.production_date else None,
+                "expiry_date": to_api_isoformat(l.expiry_date) if l.expiry_date else None,
                 "supplier_batch_no": None,
                 "quantity": qty,
                 "status": status,
@@ -1958,8 +1959,8 @@ class ReportService:
                 "material_code": b.material.main_code if b.material else (b.material.code if b.material else "UNKNOWN"), 
                 "material_name": b.material.name if b.material else "UNKNOWN", 
                 "batch_no": b.batch_no, 
-                "production_date": b.production_date.isoformat() if b.production_date else None,
-                "expiry_date": b.expiry_date.isoformat() if b.expiry_date else None,
+                "production_date": to_api_isoformat(b.production_date) if b.production_date else None,
+                "expiry_date": to_api_isoformat(b.expiry_date) if b.expiry_date else None,
                 "supplier_batch_no": b.supplier_batch_no,
                 "quantity": float(b.quantity or 0), 
                 "status": status, 
@@ -1974,8 +1975,8 @@ class ReportService:
                 "material_code": l.material_code, 
                 "material_name": l.material_name, 
                 "batch_no": l.batch_no, 
-                "production_date": l.production_date.isoformat() if l.production_date else None,
-                "expiry_date": l.expiry_date.isoformat() if l.expiry_date else None,
+                "production_date": to_api_isoformat(l.production_date) if l.production_date else None,
+                "expiry_date": to_api_isoformat(l.expiry_date) if l.expiry_date else None,
                 "supplier_batch_no": None,
                 "quantity": qty, 
                 "status": "在库" if qty > 0 else "无库存", 
@@ -2322,7 +2323,7 @@ class ReportService:
             from apps.kuaizhizao.services.report_enhancements import inspection_pass_rate_row
             enriched = []
             for it in items:
-                it["inspection_date"] = it["inspection_time"].date().isoformat() if it["inspection_time"] else None
+                it["inspection_date"] = to_api_isoformat(it["inspection_time"].date()) if it["inspection_time"] else None
                 it["batch_no"] = None
                 enriched.append(inspection_pass_rate_row(it))
             pass_rates = [r["pass_rate"] for r in enriched if r.get("pass_rate") is not None]
@@ -2343,7 +2344,7 @@ class ReportService:
             from apps.kuaizhizao.services.report_enhancements import inspection_pass_rate_row
             enriched = []
             for it in items:
-                it["inspection_date"] = it["inspection_time"].date().isoformat() if it["inspection_time"] else None
+                it["inspection_date"] = to_api_isoformat(it["inspection_time"].date()) if it["inspection_time"] else None
                 enriched.append(inspection_pass_rate_row(it))
             pass_rates = [r["pass_rate"] for r in enriched if r.get("pass_rate") is not None]
             avg_rate = round(sum(pass_rates) / len(pass_rates), 2) if pass_rates else 0.0
@@ -2363,7 +2364,7 @@ class ReportService:
             from apps.kuaizhizao.services.report_enhancements import inspection_pass_rate_row
             enriched = []
             for it in items:
-                it["inspection_date"] = it["inspection_time"].date().isoformat() if it["inspection_time"] else None
+                it["inspection_date"] = to_api_isoformat(it["inspection_time"].date()) if it["inspection_time"] else None
                 it["batch_no"] = it.pop("batch_number", None)
                 enriched.append(inspection_pass_rate_row(it))
             pass_rates = [r["pass_rate"] for r in enriched if r.get("pass_rate") is not None]
@@ -2388,7 +2389,7 @@ class ReportService:
             )
             for it in items:
                 it["exception_code"] = f"QE-{it['id']}"
-                it["discovery_date"] = it["created_at"].date().isoformat() if it["created_at"] else None
+                it["discovery_date"] = to_api_isoformat(it["created_at"].date()) if it["created_at"] else None
                 it["type"] = it["exception_type"]
                 it["reason"] = it["root_cause"] or it["problem_description"]
             return {"data": items, "success": True}
@@ -2408,7 +2409,7 @@ class ReportService:
                 it["material_name"] = it["product_name"]
                 it["unqualified_qty"] = float(it["defect_quantity"] or 0)
                 it["disposal_method"] = it["disposition"]
-                it["disposal_date"] = it["processed_at"].date().isoformat() if it["processed_at"] else None
+                it["disposal_date"] = to_api_isoformat(it["processed_at"].date()) if it["processed_at"] else None
             total_unqualified = sum(float(it["unqualified_qty"] or 0) for it in items)
             return {
                 "data": items,

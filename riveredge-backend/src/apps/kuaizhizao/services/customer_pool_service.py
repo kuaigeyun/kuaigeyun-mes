@@ -22,6 +22,7 @@ from apps.kuaizhizao.schemas.customer_pool import (
 )
 from apps.master_data.models.customer import Customer
 from core.services.authorization.data_scope_service import DataScopeService
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
@@ -456,5 +457,5 @@ class CustomerPoolService:
             "success": True,
             "scanned": scanned,
             "recycled": recycled,
-            "timestamp": now.isoformat(),
+            "timestamp": to_api_isoformat(now),
         }

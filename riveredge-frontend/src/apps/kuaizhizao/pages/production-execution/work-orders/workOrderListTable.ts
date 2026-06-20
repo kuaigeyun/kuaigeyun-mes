@@ -4,6 +4,7 @@
 import type { QueryClient } from '@tanstack/react-query'
 import type { ReactText } from 'react'
 import dayjs from 'dayjs'
+import { formatDateTime } from '../../../../../utils/format'
 import { stableJsonForQueryKey } from '../../../../../utils/tableQueryKey'
 import { resolveWorkOrderListStatusFilter } from '../../../utils/workOrderLifecycle'
 import { workOrderApi } from '../../../services/production'
@@ -411,13 +412,13 @@ function buildWorkOrderListApiParams(
   if (s.sales_order_code) apiParams.sales_order_code = s.sales_order_code
   if (s.planned_start_date && Array.isArray(s.planned_start_date) && s.planned_start_date.length === 2) {
     const [start, end] = s.planned_start_date
-    if (start) apiParams.planned_start_from = dayjs(start).format('YYYY-MM-DD')
-    if (end) apiParams.planned_start_to = dayjs(end).format('YYYY-MM-DD')
+    if (start) apiParams.planned_start_from = formatDateTime(start, 'YYYY-MM-DD')
+    if (end) apiParams.planned_start_to = formatDateTime(end, 'YYYY-MM-DD')
   }
   if (s.planned_end_date && Array.isArray(s.planned_end_date) && s.planned_end_date.length === 2) {
     const [start, end] = s.planned_end_date
-    if (start) apiParams.planned_end_from = dayjs(start).format('YYYY-MM-DD')
-    if (end) apiParams.planned_end_to = dayjs(end).format('YYYY-MM-DD')
+    if (start) apiParams.planned_end_from = formatDateTime(start, 'YYYY-MM-DD')
+    if (end) apiParams.planned_end_to = formatDateTime(end, 'YYYY-MM-DD')
   }
   if (sort && Object.keys(sort).length > 0) {
     const key = Object.keys(sort)[0]

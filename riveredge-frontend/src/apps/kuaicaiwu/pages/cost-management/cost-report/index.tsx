@@ -21,6 +21,7 @@ import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import { normalizeCostListRows } from '../costSelectData';
 import { getSourceTypeSelectOptions, getSourceTypeTag } from '../../../utils/costUiLabels';
+import { formatDateTime } from '../../../../../utils/format';
 
 type ReportSection = 'comprehensive' | 'trend' | 'structure';
 
@@ -260,10 +261,10 @@ const CostReportPage: React.FC = () => {
               {reportTypeLabel[result.report_type as ReportSection] ?? result.report_type}
             </Descriptions.Item>
             <Descriptions.Item label={t('app.kuaicaiwu.costReport.col.generatedAt')}>
-              {dayjs(result.generated_at).format('YYYY-MM-DD HH:mm:ss')}
+              {formatDateTime(result.generated_at, 'YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
-            <Descriptions.Item label={t('app.kuaicaiwu.costCommon.col.startDate')}>{dayjs(result.start_date).format('YYYY-MM-DD')}</Descriptions.Item>
-            <Descriptions.Item label={t('app.kuaicaiwu.costCommon.col.endDate')}>{dayjs(result.end_date).format('YYYY-MM-DD')}</Descriptions.Item>
+            <Descriptions.Item label={t('app.kuaicaiwu.costCommon.col.startDate')}>{formatDateTime(result.start_date, 'YYYY-MM-DD')}</Descriptions.Item>
+            <Descriptions.Item label={t('app.kuaicaiwu.costCommon.col.endDate')}>{formatDateTime(result.end_date, 'YYYY-MM-DD')}</Descriptions.Item>
           </Descriptions>
         </DetailDrawerSection>
 
@@ -288,7 +289,7 @@ const CostReportPage: React.FC = () => {
                 color: 'blue',
                 children: (
                   <>
-                    {t('app.kuaicaiwu.costReport.reportGenerated')} · {dayjs(result.generated_at).format('YYYY-MM-DD HH:mm:ss')}
+                    {t('app.kuaicaiwu.costReport.reportGenerated')} · {formatDateTime(result.generated_at, 'YYYY-MM-DD HH:mm:ss')}
                   </>
                 ),
               },

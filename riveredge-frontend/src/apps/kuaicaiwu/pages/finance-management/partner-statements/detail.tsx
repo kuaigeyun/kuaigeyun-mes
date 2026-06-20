@@ -22,6 +22,7 @@ import {
   formatSentChannel,
   getSentChannelOptions,
 } from '../../../utils/financeSharedOptions';
+import { formatDateTime } from '../../../../../utils/format';
 
 const PS = 'app.kuaicaiwu.partnerStatement';
 
@@ -258,7 +259,7 @@ const PartnerStatementDetailPage: React.FC = () => {
               <Typography.Text type="secondary">
                 {t(`${PS}.detail.sentAt`, {
                   channel: formatSentChannel(data.sent_channel, t),
-                  time: data.sent_at ? ` · ${dayjs(data.sent_at).format('YYYY-MM-DD HH:mm')}` : '',
+                  time: data.sent_at ? ` · ${formatDateTime(data.sent_at, 'YYYY-MM-DD HH:mm')}` : '',
                 })}
               </Typography.Text>
             ) : null}

@@ -82,9 +82,11 @@ import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { setFormPriceType } from '../../../../../utils/priceTypeSwitch';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 import {
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder,
   deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder,
+  withdrawPurchaseOrder,
   pushPurchaseOrderToReceipt, pushPurchaseOrderToReceiptPreview,
   pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToInvoice, pushPurchaseOrderToPurchaseReturn,
   pullPurchaseOrderFromInquiry, getPurchaseOrderStatistics, expeditePurchaseOrder,
@@ -206,9 +208,9 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
     const value = dataIndex != null ? dataSource[dataIndex] : undefined;
     let content: React.ReactNode = value as React.ReactNode;
     if (col.valueType === 'dateTime' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
     } else if (col.valueType === 'date' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD');
+      content = formatDateTime(value as string, 'YYYY-MM-DD');
     }
     if (col.render && dataSource != null) {
             content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
@@ -399,6 +401,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const purchaseOrderAuditBatchHandlers = useMemo(
     () => ({
       submit: (id: number) => submitPurchaseOrder(id),
+      withdraw: (id: number) => withdrawPurchaseOrder(id),
       approve: (id: number) => approvePurchaseOrder(id, { approved: true, review_remarks: '' }),
     }),
     [],
@@ -824,6 +827,7 @@ const PurchaseOrdersPage: React.FC = () => {
             approvedStatuses={PO_WORKFLOW_APPROVED_STATUSES}
             rejectedStatuses={PO_WORKFLOW_REJECTED_STATUSES}
             submitActionLabel={t('app.kuaizhizao.purchaseOrder.submitForReview')}
+            workflowAuditEnabled={purchaseOrderAuditEnabled}
             theme="link"
             size="small"
             onSuccess={() => {
@@ -2813,7 +2817,7 @@ const PurchaseOrdersPage: React.FC = () => {
               { title: t('app.kuaizhizao.purchaseOrder.col.spec'), dataIndex: 'material_spec', width: 140, ellipsis: true, render: (v: string) => v || '-' },
               { title: t('app.kuaizhizao.purchaseOrder.col.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
               { title: t('app.kuaizhizao.purchaseOrder.col.unit'), dataIndex: 'unit', width: 70, render: (v: string) => v || '-' },
-              { title: t('app.kuaizhizao.purchaseOrder.col.demandDate'), dataIndex: 'required_date', width: 120, render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
+              { title: t('app.kuaizhizao.purchaseOrder.col.demandDate'), dataIndex: 'required_date', width: 120, render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-') },
               { title: t('app.kuaizhizao.purchaseOrder.col.applicant'), dataIndex: 'applicant_name', width: 100, render: (v: string) => v || '-' },
               {
                 title: t('common.status'),
@@ -2890,7 +2894,7 @@ const PurchaseOrdersPage: React.FC = () => {
               { title: t('app.kuaizhizao.purchaseOrder.col.spec'), dataIndex: 'material_spec', width: 140, ellipsis: true, render: (v: string) => v || '-' },
               { title: t('app.kuaizhizao.purchaseOrder.col.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
               { title: t('app.kuaizhizao.purchaseOrder.col.unit'), dataIndex: 'unit', width: 70, render: (v: string) => v || '-' },
-              { title: t('app.kuaizhizao.purchaseOrder.col.demandDate'), dataIndex: 'required_date', width: 120, render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
+              { title: t('app.kuaizhizao.purchaseOrder.col.demandDate'), dataIndex: 'required_date', width: 120, render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-') },
               { title: t('app.kuaizhizao.purchaseOrder.col.applicant'), dataIndex: 'buyer_name', width: 100, render: (v: string) => v || '-' },
               {
                 title: t('common.status'),
@@ -3020,6 +3024,7 @@ const PurchaseOrdersPage: React.FC = () => {
                       approvedStatuses={PO_WORKFLOW_APPROVED_STATUSES}
                       rejectedStatuses={PO_WORKFLOW_REJECTED_STATUSES}
                       submitActionLabel={t('app.kuaizhizao.purchaseOrder.submitForReview')}
+                      workflowAuditEnabled={purchaseOrderAuditEnabled}
                       theme="link"
                       size="small"
                       onSuccess={() => {

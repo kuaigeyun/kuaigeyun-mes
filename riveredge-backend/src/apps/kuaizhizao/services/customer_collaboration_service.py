@@ -15,6 +15,7 @@ from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.master_data.models.customer import Customer
 from core.services.base import BaseService
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 
@@ -62,8 +63,8 @@ class CustomerCollaborationService(BaseService):
             {
                 "id": order.id,
                 "code": order.order_code,
-                "order_date": order.order_date.isoformat() if order.order_date else None,
-                "delivery_date": order.delivery_date.isoformat() if order.delivery_date else None,
+                "order_date": to_api_isoformat(order.order_date) if order.order_date else None,
+                "delivery_date": to_api_isoformat(order.delivery_date) if order.delivery_date else None,
                 "total_amount": float(order.total_amount) if order.total_amount else 0.0,
                 "status": order.status,
             }
@@ -122,10 +123,10 @@ class CustomerCollaborationService(BaseService):
                 "quantity": float(wo.quantity) if wo.quantity else 0.0,
                 "completed_quantity": float(wo.completed_quantity) if wo.completed_quantity else 0.0,
                 "status": wo.status,
-                "planned_start_date": wo.planned_start_date.isoformat() if wo.planned_start_date else None,
-                "planned_end_date": wo.planned_end_date.isoformat() if wo.planned_end_date else None,
-                "actual_start_date": wo.actual_start_date.isoformat() if wo.actual_start_date else None,
-                "actual_end_date": wo.actual_end_date.isoformat() if wo.actual_end_date else None,
+                "planned_start_date": to_api_isoformat(wo.planned_start_date) if wo.planned_start_date else None,
+                "planned_end_date": to_api_isoformat(wo.planned_end_date) if wo.planned_end_date else None,
+                "actual_start_date": to_api_isoformat(wo.actual_start_date) if wo.actual_start_date else None,
+                "actual_end_date": to_api_isoformat(wo.actual_end_date) if wo.actual_end_date else None,
             })
         
         return {
@@ -136,7 +137,7 @@ class CustomerCollaborationService(BaseService):
             "in_progress_work_orders": in_progress_work_orders,
             "progress_percentage": progress_percentage,
             "work_orders": work_order_details,
-            "updated_at": datetime.now().isoformat(),
+            "updated_at": to_api_isoformat(datetime.now()),
         }
     
     async def get_customer_order_summary(
@@ -187,5 +188,5 @@ class CustomerCollaborationService(BaseService):
             "in_progress_orders": in_progress_orders,
             "completed_orders": completed_orders,
             "total_amount": total_amount,
-            "updated_at": datetime.now().isoformat(),
+            "updated_at": to_api_isoformat(datetime.now()),
         }

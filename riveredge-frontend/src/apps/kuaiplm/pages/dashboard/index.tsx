@@ -62,6 +62,7 @@ import { getDashboardSummary, type MyTaskItem } from '../../services/dashboard';
 import { listUnifiedChanges } from '../../services/change-desk';
 
 import RdProjectGanttChart from '../../components/RdProjectGanttChart';
+import { formatDateTime } from '../../../../utils/format';
 import {
   getKuaiplmChangeCategoryText,
   getKuaiplmProjectStatusText,
@@ -531,7 +532,7 @@ const KuaiplmDashboard: React.FC = () => {
 
                   width: 96,
 
-                  render: (val) => (val ? dayjs(val).format('MM-DD') : '—'),
+                  render: (val) => (val ? formatDateTime(val, 'MM-DD') : '—'),
 
                 },
 
@@ -596,7 +597,7 @@ const KuaiplmDashboard: React.FC = () => {
                   title: t('app.kuaiplm.common.columns.dueDate'),
                   dataIndex: 'due_date',
                   width: 72,
-                  render: (val) => (val ? dayjs(val).format('MM-DD') : '—'),
+                  render: (val) => (val ? formatDateTime(val, 'MM-DD') : '—'),
                 },
               ]}
             />

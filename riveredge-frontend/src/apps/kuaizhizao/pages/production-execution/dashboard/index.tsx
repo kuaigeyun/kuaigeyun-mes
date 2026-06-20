@@ -15,6 +15,7 @@ import dayjs from 'dayjs';
 import { mesDashboardService } from '../../../services/dashboard';
 import { workOrderApi } from '../../../services/work-order';
 import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
+import { formatDateTime } from '../../../../../utils/format';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -252,7 +253,7 @@ const ManufacturingDashboard: React.FC = () => {
                     <Text style={{ fontSize: 12 }}>{item.content}</Text>
                     <div>
                       <Text type="secondary" style={{ fontSize: 11 }}>
-                        {item.created_at ? dayjs(item.created_at).format('MM-DD HH:mm') : ''}
+                        {item.created_at ? formatDateTime(item.created_at, 'MM-DD HH:mm') : ''}
                       </Text>
                     </div>
                   </>

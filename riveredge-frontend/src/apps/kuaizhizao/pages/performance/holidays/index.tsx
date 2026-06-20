@@ -28,6 +28,7 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { getPerformanceActiveValueEnum, renderActiveTag } from '../components/performanceMeta';
+import { formatDateTime } from '../../../../../utils/format';
 
 const HolidaysPage: React.FC = () => {
   const { t } = useTranslation();
@@ -176,7 +177,7 @@ const HolidaysPage: React.FC = () => {
       dataIndex: 'updatedAt',
       width: 168,
       hideInSearch: true,
-      render: (_, r) => (r.updatedAt ? dayjs(r.updatedAt).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (_, r) => (r.updatedAt ? formatDateTime(r.updatedAt, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
       title: t('app.kuaizhizao.performance.common.columns.lifecycle'),

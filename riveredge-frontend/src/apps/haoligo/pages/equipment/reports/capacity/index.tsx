@@ -9,6 +9,7 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../../components/layout-templates';
+import { formatDateTime } from '../../../../../../utils/format';
 import {
   getEquipmentCapacityReport,
   listEquipments,
@@ -94,7 +95,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
         dataIndex: 'recorded_at',
         width: 150,
         hideInSearch: true,
-        render: (_, r) => (r.recorded_at ? dayjs(r.recorded_at).format('YYYY-MM-DD HH:mm') : '—'),
+        render: (_, r) => (r.recorded_at ? formatDateTime(r.recorded_at, 'YYYY-MM-DD HH:mm') : '—'),
       },
       {
         title: t('app.haoligo.equipment.documents.colEquipment'),

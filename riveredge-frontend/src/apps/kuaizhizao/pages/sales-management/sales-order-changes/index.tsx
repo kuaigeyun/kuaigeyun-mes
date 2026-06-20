@@ -8,10 +8,10 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Descriptions, Form, Input, Space } from 'antd';
-import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, RollbackOutlined, SendOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, RollbackOutlined, SendOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import {
   UniTableStackedPrimaryCell,
@@ -53,9 +53,11 @@ import { isSourceOrderEligibleForChange } from '../../../utils/orderChangeSource
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import {
   resolveKuaizhizaoDocumentAction,
 } from '../../../constants/documentActionRegistry';
+import { formatDateTime } from '../../../../../utils/format';
 
 const SALES_ORDER_CHANGE_RESOURCE = 'kuaizhizao:sales-order-change';
 type PullSalesOrderCandidate = {
@@ -76,6 +78,7 @@ const isPullSalesOrderSelectable = (record: PullSalesOrderCandidate): boolean =>
 const SalesOrderChangesPage: React.FC = () => {
   const { t } = useTranslation();
   const { message, modal } = App.useApp();
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(
     t,
     'sales_order_change.pull_from_sales_order',
@@ -287,13 +290,13 @@ const SalesOrderChangesPage: React.FC = () => {
         title: t('app.kuaizhizao.salesOrder.orderDate'),
         dataIndex: 'order_date',
         width: 120,
-        render: (value: string) => (value ? dayjs(value).format('YYYY-MM-DD') : '-'),
+        render: (value: string) => (value ? formatDateTime(value, 'YYYY-MM-DD') : '-'),
       },
       {
         title: t('app.kuaizhizao.salesOrder.deliveryDate'),
         dataIndex: 'delivery_date',
         width: 120,
-        render: (value: string) => (value ? dayjs(value).format('YYYY-MM-DD') : '-'),
+        render: (value: string) => (value ? formatDateTime(value, 'YYYY-MM-DD') : '-'),
       },
       {
         title: t('app.kuaizhizao.orderChange.colAmount'),
@@ -371,6 +374,9 @@ const SalesOrderChangesPage: React.FC = () => {
       dataIndex: 'change_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
+      width: 220,
+      minWidth: 220,
+      uniTableKeepWidth: true,
       render: (_, record) => (
         <UniTableStackedPrimaryCell
           primary={String(record.customer_name ?? '')}
@@ -380,23 +386,42 @@ const SalesOrderChangesPage: React.FC = () => {
     },
     { title: t('app.kuaizhizao.salesOrderChange.colChangeCode'), dataIndex: 'change_code', hideInTable: true, copyable: true },
     { title: t('app.kuaizhizao.customerFollowUp.colCustomer'), dataIndex: 'customer_name', hideInTable: true, ellipsis: true },
-    { title: t('app.kuaizhizao.salesOrderChange.colSourceOrder'), dataIndex: 'source_order_code', width: 140 },
-    { title: t('app.kuaizhizao.salesOrderChange.colVersion'), dataIndex: 'change_version', width: 70 },
+    {
+      title: t('app.kuaizhizao.salesOrderChange.colSourceOrder'),
+      dataIndex: 'source_order_code',
+      width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+    },
+    {
+      title: t('app.kuaizhizao.salesOrderChange.colVersion'),
+      dataIndex: 'change_version',
+      width: 72,
+      minWidth: 72,
+      uniTableKeepWidth: true,
+    },
     {
       title: t('app.kuaizhizao.salesOrderChange.colCategory'),
       dataIndex: 'change_category',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
       render: (_, r) => formatOrderChangeCategory(r.change_category),
     },
     {
       title: t('app.kuaizhizao.salesOrderChange.colDeltaAmount'),
       dataIndex: 'delta_amount',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
       render: (_, r) => (r.delta_amount != null ? Number(r.delta_amount).toFixed(2) : '-'),
     },
     {
       title: t('app.kuaizhizao.salesOrderChange.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+      width: 170,
+      fixed: 'right',
+      uniTableKeepWidth: true,
       valueType: 'select',
       valueEnum: orderChangeLifecycleValueEnum,
       render: (_, record) => (
@@ -405,7 +430,14 @@ const SalesOrderChangesPage: React.FC = () => {
         />
       ),
     },
-    { title: t('app.kuaizhizao.salesOrderChange.colChangeReason'), dataIndex: 'change_reason', ellipsis: true, hideInSearch: true },
+    {
+      title: t('app.kuaizhizao.salesOrderChange.colChangeReason'),
+      dataIndex: 'change_reason',
+      minWidth: 180,
+      ellipsis: true,
+      hideInSearch: true,
+      uniTablePrimaryFlex: true,
+    },
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -530,6 +562,28 @@ const SalesOrderChangesPage: React.FC = () => {
             onSuccess={handleChangeAuditBatchSuccess}
           />,
         ]}
+        toolBarActionsAfterBatch={[
+          <UniCapabilityBatchButton
+            key="sales-order-change-print"
+            selectedRowKeys={selectedRowKeys}
+            selectedRecords={selectedChangesForBatch}
+            capabilityKey="print"
+            permAllowed={changePerms.canPrint}
+            batchAllowed={(records, perm) =>
+              Boolean(perm) && records.some((record) => record.capabilities?.print?.allowed === true)
+            }
+            singleOnly
+            onRun={async (id) => {
+              openPrint({ documentType: 'sales_order_change', documentId: id });
+            }}
+            labels={{
+              single: t('components.uniAction.print'),
+              batch: t('components.uniAction.print'),
+            }}
+            icon={<PrinterOutlined />}
+            size="middle"
+          />,
+        ]}
       />
 
       <UniPullQueryModal<PullSalesOrderCandidate>
@@ -645,6 +699,14 @@ const SalesOrderChangesPage: React.FC = () => {
                   if (detail.id) setDetail(await getSalesOrderChange(detail.id));
                 }}
               />
+              {!detailCapabilityGates.print.disabled && detail.id != null && (
+                <Button
+                  icon={<PrinterOutlined />}
+                  onClick={() => openPrint({ documentType: 'sales_order_change', documentId: detail.id! })}
+                >
+                  {t('components.uniAction.print')}
+                </Button>
+              )}
             </Space>
           ) : null
         }
@@ -675,7 +737,7 @@ const SalesOrderChangesPage: React.FC = () => {
               <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colBeforeAmount')}>{detail.before_total_amount}</Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colAfterAmount')}>{detail.after_total_amount}</Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colDeltaAmount')}>{detail.delta_amount}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colAppliedAt')}>{detail.applied_at ? dayjs(detail.applied_at).format('YYYY-MM-DD HH:mm') : '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colAppliedAt')}>{detail.applied_at ? formatDateTime(detail.applied_at, 'YYYY-MM-DD HH:mm') : '-'}</Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.salesOrderChange.colChangeReason')} span={2}>{detail.change_reason}</Descriptions.Item>
             </Descriptions>
             <div style={{ marginTop: 16 }}>
@@ -692,6 +754,7 @@ const SalesOrderChangesPage: React.FC = () => {
         onClose={() => { setImpactOpen(false); setPendingSubmitId(null); }}
         onConfirm={confirmSubmit}
       />
+      {PrintModal}
     </ListPageTemplate>
   );
 };

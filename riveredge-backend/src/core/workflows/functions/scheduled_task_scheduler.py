@@ -11,6 +11,7 @@ from loguru import logger
 
 from core.models.scheduled_task import ScheduledTask
 from core.tasks.dispatcher import TaskEvent, dispatch_event
+from core.utils.timezone_utils import to_api_isoformat
 
 
 async def run_scheduled_task_scheduler_tick() -> Dict[str, Any]:
@@ -51,7 +52,7 @@ async def run_scheduled_task_scheduler_tick() -> Dict[str, Any]:
             "success": True,
             "checked_count": len(active_tasks),
             "executed_count": executed_count,
-            "timestamp": now.isoformat(),
+            "timestamp": to_api_isoformat(now),
         }
     except Exception as e:
         logger.error(f"定时任务调度器执行失败: {e}")

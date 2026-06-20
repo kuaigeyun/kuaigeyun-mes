@@ -9,12 +9,12 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col, Typography, Dropdown, Spin, Empty, Descriptions } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, DownOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, DownOutlined, PrinterOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -48,7 +48,6 @@ import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleSt
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
-import { outboundShipmentNoticeEntryPath } from '../../warehouse-management/outbound/outboundPaths';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { listSalesOrders, getSalesOrder } from '../../../services/sales-order';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
@@ -59,6 +58,8 @@ import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDa
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
+import { formatDateTime } from '../../../../../utils/format';
 
 const SHIPMENT_NOTICE_RESOURCE = 'kuaizhizao:shipment-notice';
 
@@ -79,8 +80,8 @@ type PullSalesOrderCandidate = {
 
 const ShipmentNoticesPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'shipment_notice.pull_from_sales_order');
-  const pushToSalesDeliveryAction = resolveKuaizhizaoDocumentAction(t, 'sales_delivery.pull_from_shipment_notice');
 
   const noticeItemImportTemplate = useMemo(
     () =>
@@ -214,8 +215,8 @@ const ShipmentNoticesPage: React.FC = () => {
     <DocumentAmountSummaryWatch variant="basic" quantityField="notice_quantity" />
   );
 
-  const renderShipmentNoticeRowActions = (actions: React.ReactNode[]) => {
-    return actions;
+  const renderShipmentNoticeRowActions = (actions: React.ReactNode[], keyPrefix: string) => {
+    return renderRowActionsOverflow(actions, keyPrefix);
   };
 
   const columns: ProColumns<ShipmentNotice>[] = [
@@ -257,25 +258,13 @@ const ShipmentNoticesPage: React.FC = () => {
         record.capabilities?.update?.allowed && shipmentNoticePerms.canUpdate ? (
           <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>{t('common.edit')}</Button>
         ) : null,
-        record.capabilities?.notify?.allowed && shipmentNoticePerms.canAction?.('submit') ? (
-          <Button {...rowActionKind('dispatch')} key="notify" onClick={() => handleNotify(record as ShipmentNotice)}>{t('app.kuaizhizao.shipmentNotice.notifyWarehouse')}</Button>
-        ) : null,
         record.capabilities?.delete?.allowed && shipmentNoticePerms.canDelete ? (
           <Button {...rowActionKind('delete')} key="delete" onClick={() => handleDelete(record as ShipmentNotice)}>{t('common.delete')}</Button>
         ) : null,
         record.capabilities?.withdraw?.allowed && shipmentNoticePerms.canAction?.('revoke') ? (
           <Button {...rowActionKind('revoke')} key="withdraw" onClick={() => handleWithdraw(record as ShipmentNotice)}>{t('app.kuaizhizao.shipmentNotice.withdrawNotify')}</Button>
         ) : null,
-        record.status === '已通知' ? (
-          <Button
-            {...rowActionKind('audit')}
-            key="push-outbound"
-            onClick={() => handlePushToOutboundEntry(record as ShipmentNotice)}
-          >
-            {pushToSalesDeliveryAction.label}
-          </Button>
-        ) : null,
-      ].filter(Boolean)),
+      ].filter(Boolean), `sn-${record.id ?? 'row'}`),
     },
   ];
 
@@ -324,24 +313,6 @@ const ShipmentNoticesPage: React.FC = () => {
     }
   };
 
-  const handleNotify = (record: ShipmentNotice) => {
-    Modal.confirm({
-      title: t('app.kuaizhizao.shipmentNotice.notifyWarehouse'),
-      content: t('app.kuaizhizao.shipmentNotice.notifyConfirmContent', { code: record.notice_code }),
-      onOk: async () => {
-        try {
-          await shipmentNoticeApi.notify(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.shipmentNotice.notifySuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.shipmentNotice.notifyFailed'));
-        }
-      },
-    });
-  };
-
   const handleWithdraw = (record: ShipmentNotice) => {
     Modal.confirm({
       title: t('app.kuaizhizao.shipmentNotice.withdrawNotify'),
@@ -358,11 +329,6 @@ const ShipmentNoticesPage: React.FC = () => {
         }
       },
     });
-  };
-
-  const handlePushToOutboundEntry = (record: ShipmentNotice) => {
-    if (!record.id) return;
-    navigate(outboundShipmentNoticeEntryPath(record.id));
   };
 
   const handleDelete = (record: ShipmentNotice) => {
@@ -625,7 +591,7 @@ const ShipmentNoticesPage: React.FC = () => {
         customer_phone: values.customer_phone,
         warehouse_id: values.warehouse_id,
         warehouse_name: values.warehouse_name,
-        planned_ship_date: values.planned_ship_date ? dayjs(values.planned_ship_date).format('YYYY-MM-DD') : undefined,
+        planned_ship_date: values.planned_ship_date ? formatDateTime(values.planned_ship_date, 'YYYY-MM-DD') : undefined,
         shipping_address: values.shipping_address,
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
@@ -662,7 +628,7 @@ const ShipmentNoticesPage: React.FC = () => {
         customer_phone: values.customer_phone,
         warehouse_id: values.warehouse_id,
         warehouse_name: values.warehouse_name,
-        planned_ship_date: values.planned_ship_date ? dayjs(values.planned_ship_date).format('YYYY-MM-DD') : undefined,
+        planned_ship_date: values.planned_ship_date ? formatDateTime(values.planned_ship_date, 'YYYY-MM-DD') : undefined,
         shipping_address: values.shipping_address,
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
@@ -1105,6 +1071,26 @@ const ShipmentNoticesPage: React.FC = () => {
               color="orange"
               variant="solid"
             />,
+            <UniCapabilityBatchButton
+              key="shipment-notice-print"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedNoticesForBatch}
+              capabilityKey="print"
+              permAllowed={shipmentNoticePerms.canPrint}
+              batchAllowed={(records, perm) =>
+                Boolean(perm) && records.some((record) => record.capabilities?.print?.allowed === true)
+              }
+              singleOnly
+              onRun={async (id) => {
+                openPrint({ documentType: 'shipment_notice', documentId: id });
+              }}
+              labels={{
+                single: t('components.uniAction.print'),
+                batch: t('components.uniAction.print'),
+              }}
+              icon={<PrinterOutlined />}
+              size="middle"
+            />,
           ]}
           importHeaders={noticeItemImportTemplate.importHeaders}
           importExampleRow={noticeItemImportTemplate.importExampleRow}
@@ -1168,8 +1154,8 @@ const ShipmentNoticesPage: React.FC = () => {
           { title: t('app.kuaizhizao.shipmentNotice.salesOrderCode'), dataIndex: 'order_code', width: 190, ellipsis: true },
           { title: t('app.kuaizhizao.quotation.form.customer'), dataIndex: 'customer_name', width: 220, ellipsis: true },
           { title: t('app.kuaizhizao.shipmentNotice.orderStatus'), dataIndex: 'status', width: 130, align: 'center' },
-          { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 130, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
-          { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-') },
+          { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 130, render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-') },
+          { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-') },
           {
             title: t('app.kuaizhizao.shipmentNotice.convertStatus'),
             key: 'convert_status',
@@ -1211,6 +1197,22 @@ const ShipmentNoticesPage: React.FC = () => {
         columns={[]}
         column={3}
         dataSource={noticeDetail || undefined}
+        extra={
+          noticeDetail?.id != null &&
+          !(
+            noticeDetail.capabilities?.print?.allowed === false ||
+            !shipmentNoticePerms.canPrint
+          ) ? (
+            <Space size="small">
+              <Button
+                icon={<PrinterOutlined />}
+                onClick={() => openPrint({ documentType: 'shipment_notice', documentId: noticeDetail.id! })}
+              >
+                {t('components.uniAction.print')}
+              </Button>
+            </Space>
+          ) : null
+        }
         customContent={
           noticeDetail ? (
             <>
@@ -1224,9 +1226,9 @@ const ShipmentNoticesPage: React.FC = () => {
                       : undefined;
                     let content: React.ReactNode = value as React.ReactNode;
                     if (col.valueType === 'dateTime' && value) {
-                      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+                      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
                     } else if (col.valueType === 'date' && value) {
-                      content = dayjs(value as string).format('YYYY-MM-DD');
+                      content = formatDateTime(value as string, 'YYYY-MM-DD');
                     }
                     if (col.render && noticeDetail != null) {
                       content = col.render(content, noticeDetail, index, undefined as any, col as any) as React.ReactNode;
@@ -1389,6 +1391,7 @@ const ShipmentNoticesPage: React.FC = () => {
           exampleRow={noticeItemImportTemplate.importExampleRow}
         />
       </Suspense>
+      {PrintModal}
     </>
   );
 };

@@ -6,7 +6,9 @@
 
 from typing import Any, Optional, Dict, List
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from infra.responses import StandardResponse, PaginatedResponse
+from infra.config.infra_config import infra_settings
 
 
 def create_success_response(
@@ -28,7 +30,7 @@ def create_success_response(
     response = {
         "success": True,
         "data": data,
-        "timestamp": datetime.utcnow().isoformat() + "Z"
+        "timestamp": datetime.now(ZoneInfo(infra_settings.TIMEZONE)).strftime("%Y-%m-%d %H:%M:%S")
     }
     
     if message:
@@ -68,7 +70,7 @@ def create_paginated_response(
             "page": page,
             "page_size": page_size,
         },
-        "timestamp": datetime.utcnow().isoformat() + "Z"
+        "timestamp": datetime.now(ZoneInfo(infra_settings.TIMEZONE)).strftime("%Y-%m-%d %H:%M:%S")
     }
     
     if message:

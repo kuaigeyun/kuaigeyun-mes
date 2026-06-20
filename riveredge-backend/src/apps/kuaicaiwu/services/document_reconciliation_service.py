@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
+from core.utils.timezone_utils import to_api_isoformat
 
 
 class DocumentReconciliationService:
@@ -335,7 +336,7 @@ class DocumentReconciliationService:
         return {
             "partner_type": partner_type,
             "partner_id": partner_id,
-            "period": {"start": start_date.isoformat(), "end": end_date.isoformat()},
+            "period": {"start": to_api_isoformat(start_date), "end": to_api_isoformat(end_date)},
             "items": items,
             "open_balance_total": float(open_balance),
         }

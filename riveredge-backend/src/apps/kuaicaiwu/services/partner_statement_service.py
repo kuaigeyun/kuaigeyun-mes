@@ -23,6 +23,7 @@ from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaicaiwu.models.receipt import Receipt
 from apps.master_data.models.customer import Customer
 from apps.master_data.models.supplier import Supplier
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.tenant import Tenant
 
@@ -160,7 +161,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             ).order_by("receipt_date", "id").all()
             for r in receivables:
                 lines.append({
-                    "date": r.business_date.isoformat(),
+                    "date": to_api_isoformat(r.business_date),
                     "sort_date": r.business_date,
                     "doc_type": "应收单",
                     "doc_code": r.receivable_code,
@@ -171,7 +172,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                 })
             for r in receipts:
                 lines.append({
-                    "date": r.receipt_date.isoformat(),
+                    "date": to_api_isoformat(r.receipt_date),
                     "sort_date": r.receipt_date,
                     "doc_type": "收款单",
                     "doc_code": r.receipt_code,
@@ -198,7 +199,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             ).order_by("payment_date", "id").all()
             for p in payables:
                 lines.append({
-                    "date": p.business_date.isoformat(),
+                    "date": to_api_isoformat(p.business_date),
                     "sort_date": p.business_date,
                     "doc_type": "应付单",
                     "doc_code": p.payable_code,
@@ -209,7 +210,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                 })
             for p in payments:
                 lines.append({
-                    "date": p.payment_date.isoformat(),
+                    "date": to_api_isoformat(p.payment_date),
                     "sort_date": p.payment_date,
                     "doc_type": "付款单",
                     "doc_code": p.payment_code,
@@ -263,8 +264,8 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             "partner_id": partner_id,
             "partner_name": partner["name"],
             "partner_type": partner_type,
-            "start_date": start_date.isoformat(),
-            "end_date": end_date.isoformat(),
+            "start_date": to_api_isoformat(start_date),
+            "end_date": to_api_isoformat(end_date),
             "company_name": company_name,
             "balance_label": balance_label,
             "summary": {
@@ -294,7 +295,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         end_date: Optional[date] = None,
     ) -> PartnerStatement:
         if start_date and end_date:
-            period_label = f"{start_date.isoformat()}~{end_date.isoformat()}"
+            period_label = f"{to_api_isoformat(start_date)}~{to_api_isoformat(end_date)}"
             stmt_period = period or start_date.strftime("%Y-%m")
         else:
             start_date, end_date = period_to_date_range(period)
@@ -441,8 +442,8 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             "partner_name": obj.partner_name,
             "partner_type": obj.partner_type,
             "period": obj.statement_period,
-            "start_date": obj.start_date.isoformat(),
-            "end_date": obj.end_date.isoformat(),
+            "start_date": to_api_isoformat(obj.start_date),
+            "end_date": to_api_isoformat(obj.end_date),
             "status": obj.status,
             "balance_label": details.get("balance_label") or (
                 "应收余额" if obj.partner_type == "Customer" else "应付余额"

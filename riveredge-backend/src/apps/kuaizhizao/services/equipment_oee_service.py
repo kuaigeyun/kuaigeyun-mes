@@ -25,6 +25,7 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.equipment_service import EquipmentService
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -139,8 +140,8 @@ class EquipmentOEEService:
                 "name": equipment.name,
             },
             "period": {
-                "start": date_start.isoformat(),
-                "end": date_end.isoformat(),
+                "start": to_api_isoformat(date_start),
+                "end": to_api_isoformat(date_end),
             },
             "metrics": {
                 "planned_runtime": round(planned_runtime, 2),  # 计划运行时间（小时）
@@ -223,8 +224,8 @@ class EquipmentOEEService:
                         "name": equipment.name,
                     },
                     "period": {
-                        "start": date_start.isoformat(),
-                        "end": date_end.isoformat(),
+                        "start": to_api_isoformat(date_start),
+                        "end": to_api_isoformat(date_end),
                     },
                     "metrics": {
                         "planned_runtime": 0,
@@ -304,14 +305,14 @@ class EquipmentOEEService:
                     date_end=period_end,
                 )
                 trend_data.append({
-                    "period": current_date.isoformat(),
+                    "period": to_api_isoformat(current_date),
                     "oee": oee_data["oee"],
                     "metrics": oee_data["metrics"],
                 })
             except Exception as e:
                 logger.error(f"计算设备 {equipment_id} 在 {current_date} 的OEE失败: {e}")
                 trend_data.append({
-                    "period": current_date.isoformat(),
+                    "period": to_api_isoformat(current_date),
                     "oee": {
                         "availability_rate": 0,
                         "performance_rate": 0,

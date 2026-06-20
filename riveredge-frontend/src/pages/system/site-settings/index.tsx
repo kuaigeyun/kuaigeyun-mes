@@ -43,6 +43,7 @@ import {
   mapCurrencyDictionaryOptions,
   mapTimezoneDictionaryOptions,
 } from '../../../utils/systemDictionaryLabels';
+import { formatDateTimeBySiteSetting } from '../../../utils/format';
 import { TenantInitDataPanel } from '../config-center/TenantInitDataPanel';
 import {
   LoginLeftColumnPreview,
@@ -1972,7 +1973,7 @@ const SiteSettingsPage: React.FC = () => {
       title: t('pages.system.siteSettings.branchOrgColumnCreatedAt'),
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (value: string) => (value ? dayjs(value).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (value: string) => formatDateTimeBySiteSetting(value),
     },
     {
       title: t('common.actions'),

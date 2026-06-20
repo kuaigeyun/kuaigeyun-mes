@@ -41,7 +41,6 @@ export interface UniAuditActionsProps {
   theme?: 'default' | 'link';
   size?: 'small' | 'middle' | 'large';
   confirmMessages?: Partial<Record<UniAuditAction, string>>;
-  hideAuditActionsWhenDisabled?: boolean;
   resourcePrefix?: string;
   unifiedAudit?: boolean;
 }
@@ -165,7 +164,6 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   theme = 'link',
   size,
   confirmMessages = {},
-  hideAuditActionsWhenDisabled = true,
   resourcePrefix,
   unifiedAudit = false,
 }) => {
@@ -212,8 +210,10 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const isPending = matchesAnyStatus(status, pendingStatuses) || matchesAnyStatus(reviewStatus, pendingStatuses);
   const isApproved = matchesAnyStatus(status, approvedStatuses) || matchesAnyStatus(reviewStatus, approvedStatuses);
   const isRejected = matchesAnyStatus(status, rejectedStatuses) || matchesAnyStatus(reviewStatus, rejectedStatuses);
-  const canShowAuditSemanticActions =
-    effectiveAuditEnabled || isPending || !hideAuditActionsWhenDisabled;
+  const auditFeatureEnabled = auditAuthoritative
+    ? Boolean(auditState?.enabled)
+    : effectiveAuditEnabled;
+  const canShowAuditSemanticActions = auditFeatureEnabled;
 
   const unifiedOpts = {
     unifiedAudit,
@@ -230,18 +230,18 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const showSubmit = useAuthoritativeActions
     ? allowedActions.includes('submit')
     : isDraft || isRejected;
-  const showWithdraw = useAuthoritativeActions
+  const showWithdraw = canShowAuditSemanticActions && (useAuthoritativeActions
     ? allowedActions.includes('withdraw')
-    : isPending;
-  const showApprove = useAuthoritativeActions
+    : isPending);
+  const showApprove = canShowAuditSemanticActions && (useAuthoritativeActions
     ? allowedActions.includes('approve')
-    : canShowAuditSemanticActions && isPending;
-  const showReject = useAuthoritativeActions
+    : isPending);
+  const showReject = canShowAuditSemanticActions && (useAuthoritativeActions
     ? allowedActions.includes('reject')
-    : canShowAuditSemanticActions && isPending;
-  const showRevoke = useAuthoritativeActions
+    : isPending);
+  const showRevoke = canShowAuditSemanticActions && (useAuthoritativeActions
     ? allowedActions.includes('revoke')
-    : canShowAuditSemanticActions && isApproved;
+    : isApproved);
 
   const showAuditHub = showWithdraw || showApprove || showReject;
 
@@ -280,8 +280,8 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     revoke: canRevoke,
   };
 
-  const enabledForLabels = auditAuthoritative ? Boolean(auditState?.enabled) : effectiveAuditEnabled;
-  const approveLabel = enabledForLabels ? '审核通过' : '确认';
+  const enabledForLabels = auditFeatureEnabled;
+  const approveLabel = enabledForLabels ? '审核' : '确认';
   const revokeLabel = enabledForLabels ? '撤销审核' : '撤销';
   const effectiveSubmitLabel = !enabledForLabels && submitActionLabel.includes('审核')
     ? submitActionLabel.replace(/审核/g, '').trim() || '提交'
@@ -295,7 +295,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const hubActions = useMemo((): UniAuditHubAction[] => {
     const items: UniAuditHubAction[] = [];
     if (showWithdraw && channelByAction.withdraw) {
-      items.push({ action: 'withdraw', title: '撤回审核', canExecute: canExecuteByAction.withdraw });
+      items.push({ action: 'withdraw', title: '撤回提交', canExecute: canExecuteByAction.withdraw });
     }
     if (showApprove && channelByAction.approve) {
       items.push({
@@ -373,7 +373,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     if (action === 'add_sign') return '加签';
     if (action === 'delegate') return '委托';
     if (action === 'urge') return '催办';
-    if (action === 'withdraw') return '撤回审核';
+    if (action === 'withdraw') return '撤回提交';
     return '操作';
   };
 

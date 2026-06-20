@@ -14,7 +14,7 @@ from decimal import Decimal
 
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
-from core.utils.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc, to_api_isoformat
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
@@ -2459,8 +2459,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         "work_order_code": wo.code,
                         "work_order_name": wo.name,
                         "product_name": wo.product_name,
-                        "planned_end_date": wo.planned_end_date.isoformat() if wo.planned_end_date else None,
-                        "actual_end_date": wo.actual_end_date.isoformat() if wo.actual_end_date else None,
+                        "planned_end_date": to_api_isoformat(wo.planned_end_date) if wo.planned_end_date else None,
+                        "actual_end_date": to_api_isoformat(wo.actual_end_date) if wo.actual_end_date else None,
                         "delay_days": delay_days,
                         "status": wo.status,
                         "priority": wo.priority

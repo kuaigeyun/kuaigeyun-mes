@@ -36,6 +36,7 @@ import {
   type CustomerFollowUpPreset,
 } from '../../../components/CustomerFollowUpFormModal';
 import { getCustomerFollowUpLifecycle, isCustomerFollowUpRevisitOverdue } from '../../../utils/customerFollowUpLifecycle';
+import { formatDateTime } from '../../../../../utils/format';
 
 const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
 
@@ -96,19 +97,29 @@ const CustomerFollowUpsPage: React.FC = () => {
         title: t('app.kuaizhizao.customerFollowUp.colOccurredAt'),
         dataIndex: 'occurred_at',
         width: 162,
-        render: (_, r) => (r.occurred_at ? dayjs(r.occurred_at).format('YYYY-MM-DD HH:mm') : '—'),
+        render: (_, r) => (r.occurred_at ? formatDateTime(r.occurred_at, 'YYYY-MM-DD HH:mm') : '—'),
       },
       {
         title: t('app.kuaizhizao.customerFollowUp.colActivityType'),
         dataIndex: 'activity_type_code',
         width: 100,
         ellipsis: true,
-        render: (_, r) => activityLabelMap[r.activity_type_code] ?? '—',
+        render: (_, r) => (
+          <Typography.Text ellipsis={{ tooltip: activityLabelMap[r.activity_type_code] ?? '—' }}>
+            {activityLabelMap[r.activity_type_code] ?? '—'}
+          </Typography.Text>
+        ),
       },
       {
         title: t('app.kuaizhizao.customerFollowUp.colContent'),
         dataIndex: 'content',
+        width: 360,
         ellipsis: true,
+        render: (_, r) => (
+          <Typography.Text ellipsis={{ tooltip: r.content ?? '—' }}>
+            {r.content?.trim() ? r.content : '—'}
+          </Typography.Text>
+        ),
       },
     ],
     [t, activityLabelMap],
@@ -131,7 +142,7 @@ const CustomerFollowUpsPage: React.FC = () => {
         title: t('app.kuaizhizao.customerFollowUp.colNextFollowUp'),
         dataIndex: 'next_follow_up_at',
         render: (_, row) =>
-          row.next_follow_up_at ? dayjs(row.next_follow_up_at).format('YYYY-MM-DD HH:mm') : '—',
+          row.next_follow_up_at ? formatDateTime(row.next_follow_up_at, 'YYYY-MM-DD HH:mm') : '—',
       },
       {
         title: t('app.kuaizhizao.customerFollowUp.colQuotation'),
@@ -313,14 +324,45 @@ const CustomerFollowUpsPage: React.FC = () => {
       title: t('app.kuaizhizao.customerFollowUp.colActivityType'),
       dataIndex: 'activity_type_code',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      ellipsis: true,
       hideInSearch: true,
-      render: (_, row) => activityLabelMap[row.activity_type_code] ?? '—',
+      onCell: () => ({
+        style: {
+          maxWidth: 120,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        },
+      }),
+      render: (_, row) => (
+        <Typography.Text ellipsis={{ tooltip: activityLabelMap[row.activity_type_code] ?? '—' }} style={{ maxWidth: '100%' }}>
+          {activityLabelMap[row.activity_type_code] ?? '—'}
+        </Typography.Text>
+      ),
     },
     {
       title: t('app.kuaizhizao.customerFollowUp.colContent'),
       dataIndex: 'content',
+      width: 420,
+      minWidth: 420,
+      uniTableKeepWidth: true,
       ellipsis: true,
       hideInSearch: true,
+      onCell: () => ({
+        style: {
+          maxWidth: 420,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        },
+      }),
+      render: (_, row) => (
+        <Typography.Text ellipsis={{ tooltip: row.content ?? '—' }} style={{ maxWidth: '100%' }}>
+          {row.content?.trim() ? row.content : '—'}
+        </Typography.Text>
+      ),
     },
     {
       title: t('app.kuaizhizao.customerFollowUp.colOccurredAt'),
@@ -329,7 +371,7 @@ const CustomerFollowUpsPage: React.FC = () => {
       hideInSearch: true,
       defaultSortOrder: 'descend',
       render: (_, row) =>
-        row.occurred_at ? dayjs(row.occurred_at).format('YYYY-MM-DD HH:mm') : '',
+        row.occurred_at ? formatDateTime(row.occurred_at, 'YYYY-MM-DD HH:mm') : '',
     },
     {
       title: t('app.kuaizhizao.customerFollowUp.colNextFollowUp'),
@@ -337,7 +379,7 @@ const CustomerFollowUpsPage: React.FC = () => {
       width: 196,
       hideInSearch: true,
       render: (_, row) => {
-        const text = row.next_follow_up_at ? dayjs(row.next_follow_up_at).format('YYYY-MM-DD HH:mm') : '—';
+        const text = row.next_follow_up_at ? formatDateTime(row.next_follow_up_at, 'YYYY-MM-DD HH:mm') : '—';
         const overdue = isCustomerFollowUpRevisitOverdue(row);
         return (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>

@@ -174,7 +174,7 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 /** 用户列表：对接系统管理-用户管理-帐户管理（/core/users） */
 import { searchUserDisplay, type User } from '../../../../../services/user';
 import { useGlobalStore } from '../../../../../stores';
-import { displayItemsToUsers, formatUserDisplayLabel } from '../../../../../utils/userDisplay';
+import { displayItemsToUsers, normalizeUserDisplayName } from '../../../../../utils/userDisplay';
 import { useConfigStore } from '../../../../../stores/configStore';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
@@ -190,6 +190,7 @@ import { inboundSalesReturnEntryPath } from '../../warehouse-management/inbound/
 import { outboundSalesOrderEntryPath } from '../../warehouse-management/outbound/outboundPaths';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
+import { formatDateTime } from '../../../../../utils/format';
 
 /** API 异常 detail 可能是字符串或 { message, trace_id }，不能直接交给 message.error 渲染 */
 function salesOrderCatchMessage(error: unknown, fallback: string): string {
@@ -372,14 +373,15 @@ const SalesOrderSalesmanField: React.FC<{ userList: User[]; loading: boolean }> 
   const options = useMemo(() => {
     const base = userList.map((u) => ({
       value: Number(u.id),
-      label: formatUserDisplayLabel(u),
+      label: normalizeUserDisplayName(u.full_name || u.username),
     }));
     const sid =
       salesmanId != null && salesmanId !== '' && Number.isFinite(Number(salesmanId))
         ? Number(salesmanId)
         : NaN;
     if (Number.isFinite(sid) && !base.some((o) => o.value === sid)) {
-      const label = String(salesmanName || '').trim() || t('app.kuaizhizao.quotation.userFallback', { id: sid });
+      const label =
+        normalizeUserDisplayName(salesmanName) || t('app.kuaizhizao.quotation.userFallback', { id: sid });
       return [{ value: sid, label }, ...base];
     }
     return base;
@@ -740,14 +742,18 @@ const SalesOrdersPage: React.FC = () => {
         if (c) {
           const sId = (c as any).salesmanId ?? (c as any).salesman_id;
           const salesman = users.find((u) => u.id === sId);
-          const sName = (c as any).salesmanName ?? (c as any).salesman_name ?? (salesman ? (salesman.full_name || salesman.username) : '');
+          const sName = normalizeUserDisplayName(
+            (c as any).salesmanName ??
+            (c as any).salesman_name ??
+            (salesman ? (salesman.full_name || salesman.username) : ''),
+          );
           formRef.current?.setFieldsValue({
             customer_id: c.id,
             customer_name: c.name ?? (c as any).customer_name,
             customer_contact: (c as any).contactPerson ?? (c as any).contact_person ?? (c as any).contact,
             customer_phone: (c as any).phone ?? (c as any).customer_phone,
             salesman_id: sId,
-            salesman_name: sName,
+            salesman_name: normalizeUserDisplayName(sName),
             shipping_address: (c as any).address ?? (c as any).shipping_address,
           });
         }
@@ -1157,7 +1163,7 @@ const SalesOrdersPage: React.FC = () => {
           material_unit: (it as any).material_unit,
           conversion_factor: conversionFactor,
           required_quantity: q(it),
-          delivery_date: deliveryDateStr ?? mainDeliveryStr ?? dayjs().format('YYYY-MM-DD'),
+          delivery_date: deliveryDateStr ?? mainDeliveryStr ?? formatDateTime(dayjs(), 'YYYY-MM-DD'),
           unit_price: p(it),
           tax_rate: taxR(it),
           item_amount: line.incl,
@@ -1851,13 +1857,13 @@ const SalesOrdersPage: React.FC = () => {
         title: t('app.kuaizhizao.quotation.colQuotationDate'),
         dataIndex: 'quotation_date',
         width: 120,
-        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
       },
       {
         title: t('app.kuaizhizao.salesOrder.deliveryDate'),
         dataIndex: 'delivery_date',
         width: 120,
-        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
       },
       {
         title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
@@ -1896,7 +1902,7 @@ const SalesOrdersPage: React.FC = () => {
         dataIndex: 'salesman_name',
         width: 120,
         ellipsis: true,
-        render: (v: string) => v || '-',
+        render: (v: string) => normalizeUserDisplayName(v) || '-',
       },
       {
         title: t('app.kuaizhizao.salesOrder.duplicateGuardHint'),
@@ -1935,13 +1941,13 @@ const SalesOrdersPage: React.FC = () => {
         title: t('app.kuaizhizao.salesContract.contractDate'),
         dataIndex: 'contract_date',
         width: 120,
-        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
       },
       {
         title: t('app.kuaizhizao.salesContract.validUntil'),
         dataIndex: 'valid_to',
         width: 120,
-        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
       },
       {
         title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
@@ -1974,7 +1980,7 @@ const SalesOrdersPage: React.FC = () => {
         dataIndex: 'salesman_name',
         width: 120,
         ellipsis: true,
-        render: (v: string) => v || '-',
+        render: (v: string) => normalizeUserDisplayName(v) || '-',
       },
       {
         title: t('app.kuaizhizao.salesOrder.duplicateGuardHint'),
@@ -2628,8 +2634,8 @@ const SalesOrdersPage: React.FC = () => {
       sorter: true,
       hideInSearch: true,
       render: (_: unknown, record: SalesOrder) => {
-        const orderDateText = record.order_date ? dayjs(record.order_date).format('YYYY-MM-DD') : '-';
-        const deliveryDateText = record.delivery_date ? dayjs(record.delivery_date).format('YYYY-MM-DD') : '-';
+        const orderDateText = record.order_date ? formatDateTime(record.order_date, 'YYYY-MM-DD') : '-';
+        const deliveryDateText = record.delivery_date ? formatDateTime(record.delivery_date, 'YYYY-MM-DD') : '-';
         const overdue = isSalesOrderDeliveryOverdue(record, auditEnabled);
         return (
           <UniTableStackedPrimaryCell
@@ -2660,7 +2666,13 @@ const SalesOrdersPage: React.FC = () => {
         options: users.map(u => ({ label: u.full_name || u.username, value: u.id })),
       },
     },
-    { title: t('app.kuaizhizao.salesOrder.salesman'), dataIndex: 'salesman_name', width: 100, hideInSearch: true },
+    {
+      title: t('app.kuaizhizao.salesOrder.salesman'),
+      dataIndex: 'salesman_name',
+      width: 100,
+      hideInSearch: true,
+      render: (_: unknown, record: SalesOrder) => normalizeUserDisplayName(record.salesman_name) || '-',
+    },
     {
       title: t('app.kuaizhizao.salesOrder.deliveryDate'),
       dataIndex: 'delivery_date',
@@ -2669,7 +2681,7 @@ const SalesOrdersPage: React.FC = () => {
       sorter: true,
       render: (_: unknown, record: SalesOrder) => {
         const raw = record.delivery_date;
-        const text = raw ? dayjs(raw).format('YYYY-MM-DD') : '-';
+        const text = raw ? formatDateTime(raw, 'YYYY-MM-DD') : '-';
         const overdue = isSalesOrderDeliveryOverdue(record, auditEnabled);
         return (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
@@ -2733,7 +2745,6 @@ const SalesOrdersPage: React.FC = () => {
       render: (_: any, record: SalesOrder) => {
         const canEdit = record.capabilities?.update?.allowed === true && salesOrderPerms.canUpdate;
         const canDelete = record.capabilities?.delete?.allowed === true && salesOrderPerms.canDelete;
-        const canPrintRow = record.capabilities?.print?.allowed === true && salesOrderPerms.canPrint;
         const parts: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail([record.id!])} />,
         ];
@@ -2758,15 +2769,6 @@ const SalesOrdersPage: React.FC = () => {
             confirmMessages={{ submit: auditEnabled ? t('app.kuaizhizao.salesOrder.submitConfirmAudit') : t('app.kuaizhizao.salesOrder.submitConfirmAuto') }}
           />
         );
-        if (record.id && canPrintRow) {
-          parts.push(
-            <Button
-              {...rowActionKind('print')}
-              key="print"
-              onClick={() => openPrint({ documentType: 'sales_order', documentId: record.id! })}
-            />,
-          );
-        }
         parts.push(
           <Button {...rowActionAddFollowUpFromDocument()} key="follow-up" onClick={() => openFollowUpFromSalesOrder(record)} />,
         );
@@ -2856,7 +2858,7 @@ const SalesOrdersPage: React.FC = () => {
       width: 150,
       render: (_: unknown, row: SalesOrderItemRow) => {
         const raw = row.delivery_date;
-        const text = raw ? dayjs(raw).format('YYYY-MM-DD') : '-';
+        const text = raw ? formatDateTime(raw, 'YYYY-MM-DD') : '-';
         const overdue = isSalesOrderLineDeliveryOverdue(row, auditEnabled);
         return (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
@@ -3109,13 +3111,13 @@ const SalesOrdersPage: React.FC = () => {
                   const sName =
                     (c as any).salesmanName ??
                     (c as any).salesman_name ??
-                    (salesman ? formatUserDisplayLabel(salesman) : '');
+                    (salesman ? normalizeUserDisplayName(salesman.full_name || salesman.username) : '');
                   formRef.current?.setFieldsValue({
                     customer_name: c.name ?? (c as any).customer_name,
                     customer_contact: (c as any).contactPerson ?? (c as any).contact_person ?? (c as any).contact,
                     customer_phone: (c as any).phone ?? (c as any).customer_phone,
                     salesman_id: sId,
-                    salesman_name: sName,
+                    salesman_name: normalizeUserDisplayName(sName),
                     shipping_address:
                       (c as any).deliveryAddress ??
                       (c as any).delivery_address ??
@@ -3836,8 +3838,8 @@ const SalesOrdersPage: React.FC = () => {
             // 订单日期范围
             if (searchFormValues?.order_date && Array.isArray(searchFormValues.order_date) && searchFormValues.order_date.length === 2) {
               const [start, end] = searchFormValues.order_date;
-              if (start) apiParams.start_date = dayjs(start).format('YYYY-MM-DD');
-              if (end) apiParams.end_date = dayjs(end).format('YYYY-MM-DD');
+              if (start) apiParams.start_date = formatDateTime(start, 'YYYY-MM-DD');
+              if (end) apiParams.end_date = formatDateTime(end, 'YYYY-MM-DD');
             }
             // 排序
             if (sort && Object.keys(sort).length > 0) {
@@ -4017,6 +4019,27 @@ const SalesOrdersPage: React.FC = () => {
                 {t('app.kuaizhizao.salesOrder.highlightOverdue')}
               </span>
             </Space>,
+            <UniCapabilityBatchButton
+              key="sales-order-batch-print"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedOrdersForBatch}
+              capabilityKey="print"
+              permAllowed={salesOrderPerms.canPrint}
+              batchAllowed={(records, perm) =>
+                Boolean(perm) && records.some((record) => record.capabilities?.print?.allowed === true)
+              }
+              singleOnly
+              onRun={async (id) => {
+                openPrint({ documentType: 'sales_order', documentId: id });
+              }}
+              resolveId={(key, record) => resolveSalesOrderBatchId(key, record)}
+              labels={{
+                single: t('components.uniAction.print'),
+                batch: t('components.uniAction.print'),
+              }}
+              icon={<PrinterOutlined />}
+              size="middle"
+            />,
           ]}
           // 表头固定；scroll.y 由 UniTable 全局常量模板自动计算（统一行为）
           sticky
@@ -4184,14 +4207,6 @@ const SalesOrdersPage: React.FC = () => {
                     {pushToSalesOrderChangeAction.label}
                   </Button>
                 )}
-                {currentSalesOrder.id != null && !detailCapabilityGates.print.disabled && (
-                  <Button
-                    icon={<PrinterOutlined />}
-                    onClick={() => openPrint({ documentType: 'sales_order', documentId: currentSalesOrder.id! })}
-                  >
-                    {t('components.uniAction.print')}
-                  </Button>
-                )}
                 <UniWorkflowActions {...rowActionKind('skip')}
                   record={currentSalesOrder}
                   entityName={t('app.kuaizhizao.salesOrder.entityName')}
@@ -4215,6 +4230,14 @@ const SalesOrdersPage: React.FC = () => {
                   <Dropdown {...rowActionKind('skip')} menu={{ items: buildToolbarPushMenuItems(currentSalesOrder) }}>
                     <Button icon={<ArrowDownOutlined />}>{t('app.kuaizhizao.salesOrder.push')}</Button>
                   </Dropdown>
+                )}
+                {currentSalesOrder.id != null && !detailCapabilityGates.print.disabled && (
+                  <Button
+                    icon={<PrinterOutlined />}
+                    onClick={() => openPrint({ documentType: 'sales_order', documentId: currentSalesOrder.id! })}
+                  >
+                    {t('components.uniAction.print')}
+                  </Button>
                 )}
               </Space>
             }

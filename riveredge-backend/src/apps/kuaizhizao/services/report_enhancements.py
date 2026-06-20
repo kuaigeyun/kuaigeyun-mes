@@ -11,6 +11,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
+from core.utils.timezone_utils import to_api_isoformat
 
 
 async def customer_received_by_customer_id(
@@ -359,7 +360,7 @@ async def build_slow_moving_inventory(
             "material_code": material.main_code if material else "N/A",
             "material_name": material.name if material else "未知",
             "quantity": float(b.quantity or 0),
-            "last_move_date": ut.date().isoformat() if ut else None,
+            "last_move_date": to_api_isoformat(ut.date()) if ut else None,
             "age_days": age_days,
             "warehouse_name": "",
         })
@@ -493,7 +494,7 @@ async def build_production_delay_warning(
         items.append({
             "code": it.get("code"),
             "material_name": it.get("product_name"),
-            "planned_end_date": ped_d.isoformat() if isinstance(ped_d, date) else None,
+            "planned_end_date": to_api_isoformat(ped_d) if isinstance(ped_d, date) else None,
             "status": it.get("status"),
             "plan_qty": float(it.get("quantity") or 0),
             "completed_qty": float(it.get("completed_quantity") or 0),
@@ -527,7 +528,7 @@ async def build_outsource_work_order_query(
             "plan_qty": float(r.get("quantity") or 0),
             "amount": float(r.get("total_amount") or 0),
             "status": r.get("status"),
-            "planned_end_date": ped.date().isoformat() if ped and hasattr(ped, "date") else (ped.isoformat() if ped else None),
+            "planned_end_date": to_api_isoformat(ped.date()) if ped and hasattr(ped, "date") else (to_api_isoformat(ped) if ped else None),
         })
     return {"data": items, "total": total, "success": True}
 

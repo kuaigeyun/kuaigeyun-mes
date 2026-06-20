@@ -10,6 +10,7 @@ from loguru import logger
 from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
 from core.tasks.dispatcher import TaskEvent, dispatch_event
 from core.tasks.event_compat import Event, TriggerEvent
+from core.utils.timezone_utils import to_api_isoformat
 from core.utils.workflow_tenant_isolation import with_tenant_isolation
 from core.workflows.client import workflow_client
 from infra.domain.tenant_context import get_current_tenant_id
@@ -19,10 +20,10 @@ async def run_work_order_score_scheduler() -> Dict[str, Any]:
     now = datetime.now()
     try:
         await dispatch_event(
-            TaskEvent(name="work-order/score-recalc-all", data={"timestamp": now.isoformat()})
+            TaskEvent(name="work-order/score-recalc-all", data={"timestamp": to_api_isoformat(now)})
         )
-        logger.info(f"已发送工单打分重算事件: {now.isoformat()}")
-        return {"success": True, "timestamp": now.isoformat()}
+        logger.info(f"已发送工单打分重算事件: {to_api_isoformat(now)}")
+        return {"success": True, "timestamp": to_api_isoformat(now)}
     except Exception as e:
         logger.error(f"工单打分调度器执行失败: {e}")
         return {"success": False, "error": str(e)}

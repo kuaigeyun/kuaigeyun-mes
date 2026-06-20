@@ -14,6 +14,7 @@ from core.schemas.online_user import (
 )
 from core.services.logging.online_user_service import OnlineUserService
 from core.api.deps.deps import get_current_tenant
+from core.utils.timezone_utils import to_api_isoformat
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError
@@ -171,9 +172,9 @@ async def debug_test_write(
             "key": f"user_activity:{current_tenant_id}:{current_user.id}",
             "key_exists": activity is not None,
             "value": {
-                "last_activity_time": activity.last_activity_time.isoformat() if activity else None,
+                "last_activity_time": to_api_isoformat(activity.last_activity_time) if activity else None,
                 "login_ip": activity.login_ip if activity else None,
-                "login_time": activity.login_time.isoformat() if activity and activity.login_time else None,
+                "login_time": to_api_isoformat(activity.login_time) if activity and activity.login_time else None,
             } if activity else None,
         }
         
@@ -216,14 +217,14 @@ async def debug_activity_status(
         payload["key_exists"] = current is not None
         if current:
             payload["key_value"] = {
-                "last_activity_time": current.last_activity_time.isoformat(),
+                "last_activity_time": to_api_isoformat(current.last_activity_time),
                 "login_ip": current.login_ip,
-                "login_time": current.login_time.isoformat() if current.login_time else None,
+                "login_time": to_api_isoformat(current.login_time) if current.login_time else None,
             }
 
         rows = await UserActivity.all().order_by("-last_activity_time").limit(20)
         payload["all_activity_records"] = [
-            {"tenant_id": r.tenant_id, "user_id": r.user_id, "last_activity_time": r.last_activity_time.isoformat()}
+            {"tenant_id": r.tenant_id, "user_id": r.user_id, "last_activity_time": to_api_isoformat(r.last_activity_time)}
             for r in rows
         ]
         return payload

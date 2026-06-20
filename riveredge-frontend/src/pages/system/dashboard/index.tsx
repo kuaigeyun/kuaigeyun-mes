@@ -77,6 +77,7 @@ import {
 import { DashboardWelcomeBar } from './DashboardWelcomeBar';
 import { DashboardSectionCard } from './DashboardSectionCard';
 import { formatTimeInTimezone } from '../../../utils/formatTimeInTimezone';
+import { formatDateTime } from '../../../utils/format';
 import { getPlatformVersion } from '../../../services/platformSettings';
 import { useConfigStore } from '../../../stores/configStore';
 import DashboardKpiPanel, {
@@ -729,7 +730,7 @@ export default function DashboardPage() {
                         </p>
                       </div>
                       <span className="dashboard-feed-item__time">
-                        {item.created_at ? dayjs(item.created_at).format('MM-DD HH:mm') : item.date}
+                        {item.created_at ? formatDateTime(item.created_at, 'MM-DD HH:mm') : item.date}
                       </span>
                     </div>
                     <div className="dashboard-feed-item__row">
@@ -829,7 +830,7 @@ export default function DashboardPage() {
                               {item.due_date ? (
                                 <span className="dashboard-todo-item__desc">
                                   {t('pages.dashboard.dueDateShort', {
-                                    date: dayjs(item.due_date).format('YYYY-MM-DD'),
+                                    date: formatDateTime(item.due_date, 'YYYY-MM-DD'),
                                   })}
                                 </span>
                               ) : null}

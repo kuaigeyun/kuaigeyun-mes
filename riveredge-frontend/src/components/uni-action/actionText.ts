@@ -118,11 +118,14 @@ export function readExplicitActionKind(node: React.ReactNode): RowActionPermissi
 
   const props = node.props as Record<string, unknown>
   const onSelf = readPropsActionKind(props)
-  if (onSelf) return onSelf
+  // skip 仅表示“当前层不声明业务动作”，若子节点声明了真实动作，应以子节点为准。
+  if (onSelf && onSelf !== 'skip') return onSelf
 
   const t = node.type
   if (t === Popconfirm || t === Tooltip) {
-    return readExplicitActionKind(props.children as React.ReactNode)
+    const fromChild = readExplicitActionKind(props.children as React.ReactNode)
+    if (fromChild) return fromChild
+    return onSelf ?? null
   }
 
   const children = props.children
@@ -133,7 +136,7 @@ export function readExplicitActionKind(node: React.ReactNode): RowActionPermissi
     }
   }
 
-  return null
+  return onSelf ?? null
 }
 
 /** 显式 manifest action → 溢出排序语义 */

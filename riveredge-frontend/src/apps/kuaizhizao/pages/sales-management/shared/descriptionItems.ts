@@ -2,6 +2,7 @@ import type { DescriptionsProps } from 'antd';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import type React from 'react';
+import { formatDateTime } from '../../../../../utils/format';
 
 /**
  * 保证 Descriptions 每行 span 之和等于 column，避免 antd 告警。
@@ -59,9 +60,9 @@ export function buildDescriptionItemsFromColumns<T extends Record<string, unknow
     const value = dataIndex != null ? dataSource[dataIndex] : undefined;
     let content: React.ReactNode = value as React.ReactNode;
     if (col.valueType === 'dateTime' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
     } else if (col.valueType === 'date' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD');
+      content = formatDateTime(value as string, 'YYYY-MM-DD');
     }
     if (col.render && dataSource != null) {
       content = (

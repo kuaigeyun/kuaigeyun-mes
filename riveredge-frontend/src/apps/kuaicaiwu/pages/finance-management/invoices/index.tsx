@@ -28,6 +28,7 @@ import { ListPageTemplate, type StatCard } from '../../../../../components/layou
 import { getUnifiedInvoiceLifecycle } from '../../../utils/financeLifecycle';
 import { buildUnifiedInvoiceStatusEnum } from '../../../utils/financeSharedOptions';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 
 const P = 'app.kuaicaiwu.invoice';
 
@@ -161,7 +162,7 @@ const InvoiceList: React.FC = () => {
         dataIndex: 'updated_at',
         width: 168,
         hideInSearch: true,
-        render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
         title: t('app.kuaicaiwu.common.lifecycle'),

@@ -29,6 +29,7 @@ import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDet
 import { costRuleApi } from '../../../services/cost';
 import { getRuleTypeSelectOptions, getRuleTypeTag } from '../../../utils/costUiLabels';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface CostRule {
   id?: number;
@@ -276,7 +277,7 @@ const CostRulePage: React.FC = () => {
         key: 'created_at',
         width: 180,
         search: false,
-        render: (dom) => (dom ? dayjs(dom as string).format('YYYY-MM-DD HH:mm:ss') : '-'),
+        render: (dom) => (dom ? formatDateTime(dom as string, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
         title: t('app.kuaicaiwu.costCommon.col.updatedAt'),
@@ -284,7 +285,7 @@ const CostRulePage: React.FC = () => {
         key: 'updated_at',
         width: 180,
         search: false,
-        render: (dom) => (dom ? dayjs(dom as string).format('YYYY-MM-DD HH:mm:ss') : '-'),
+        render: (dom) => (dom ? formatDateTime(dom as string, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
         title: t('app.kuaicaiwu.costCommon.section.lifecycle'),
@@ -352,13 +353,13 @@ const CostRulePage: React.FC = () => {
       {
         title: t('app.kuaicaiwu.costCommon.col.createdAt'),
         dataIndex: 'created_at',
-        render: (text: string) => (text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-'),
+        render: (text: string) => (text ? formatDateTime(text, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       { title: t('app.kuaicaiwu.costCommon.col.updatedBy'), dataIndex: 'updated_by_name' },
       {
         title: t('app.kuaicaiwu.costCommon.col.updatedAt'),
         dataIndex: 'updated_at',
-        render: (text: string) => (text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-'),
+        render: (text: string) => (text ? formatDateTime(text, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
     ],
     [t],
@@ -617,7 +618,7 @@ const CostRulePage: React.FC = () => {
                       children: (
                         <>
                           {t('app.kuaicaiwu.costCommon.log.created')} ·{' '}
-                          {costRuleDetail.created_at ? dayjs(costRuleDetail.created_at).format('YYYY-MM-DD HH:mm:ss') : '-'}
+                          {costRuleDetail.created_at ? formatDateTime(costRuleDetail.created_at, 'YYYY-MM-DD HH:mm:ss') : '-'}
                           {costRuleDetail.created_by_name ? ` · ${costRuleDetail.created_by_name}` : ''}
                         </>
                       ),
@@ -627,7 +628,7 @@ const CostRulePage: React.FC = () => {
                       children: (
                         <>
                           {t('app.kuaicaiwu.costCommon.log.updated')} ·{' '}
-                          {costRuleDetail.updated_at ? dayjs(costRuleDetail.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'}
+                          {costRuleDetail.updated_at ? formatDateTime(costRuleDetail.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'}
                           {costRuleDetail.updated_by_name ? ` · ${costRuleDetail.updated_by_name}` : ''}
                         </>
                       ),

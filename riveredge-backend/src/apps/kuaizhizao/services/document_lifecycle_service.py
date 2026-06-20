@@ -6,10 +6,19 @@
 """
 
 from typing import Any, Dict, List, Optional
+from functools import wraps
 from decimal import Decimal
 from loguru import logger
+from core.utils.timezone_utils import to_api_isoformat
 
-from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, LEGACY_AUDITED_VALUES, LEGACY_PENDING_VALUES
+from apps.kuaizhizao.constants import (
+    DemandStatus,
+    ReviewStatus,
+    DocumentStatus,
+    LEGACY_AUDITED_VALUES,
+    LEGACY_PENDING_VALUES,
+    normalize_status,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1023,6 +1032,14 @@ PURCHASE_REQUISITION_MAIN_STAGES_NO_AUDIT = [
     {"key": "full", "label": "全部转单"},
 ]
 
+PURCHASE_REQUISITION_FLOW_LABELS = {
+    "draft": "草稿",
+    "pending_review": "待审核",
+    "approved": "已通过",
+    "partial": "部分转单",
+    "full": "全部转单",
+}
+
 
 def normalize_purchase_requisition_lifecycle_filter(stage: Optional[str]) -> str:
     """列表 lifecycle_stage 筛选值归一化（与 get_purchase_requisition_lifecycle 的 current_stage_name 一致）。"""
@@ -1036,37 +1053,65 @@ def get_purchase_requisition_lifecycle(
     audit_required: bool = True,
 ) -> Dict[str, Any]:
     """采购申请生命周期计算"""
-    status = _norm(getattr(requisition, "status", None))
+    status_raw = _norm(getattr(requisition, "status", None))
+    status_norm = normalize_status(status_raw)
     milestones = milestones or []
-    status_map = {
-        "草稿": "draft", "draft": "draft",
-        "待审核": "pending_review", "pending_review": "pending_review",
-        "已驳回": "pending_review", "rejected": "pending_review",
-        "已通过": "approved", "approved": "approved", "APPROVED": "approved",
-        "已确认": "approved", "confirmed": "approved", "CONFIRMED": "approved",
-        "部分转单": "partial", "partial": "partial",
-        "全部转单": "full", "full": "full",
-        "PARTIAL_CONVERTED": "partial", "FULL_CONVERTED": "full",
-    }
-    key = status_map.get(status, "draft")
-    if not audit_required and key == "pending_review":
-        key = "approved"
-    stage_name = {"draft": "草稿", "pending_review": "待审核", "approved": "已通过",
-                  "partial": "部分转单", "full": "全部转单"}.get(key, status or "草稿")
-    if status in ("已驳回", "rejected"):
-        stage_name = "已驳回"
-    if not audit_required and stage_name == "待审核":
-        stage_name = "已通过"
+    flow_class = {
+        DocumentStatus.DRAFT.value: "draft",
+        DocumentStatus.PENDING_REVIEW.value: "pending_review",
+        DocumentStatus.REJECTED.value: "pending_review",
+        DocumentStatus.AUDITED.value: "approved",
+        DocumentStatus.APPROVED.value: "approved",
+        DocumentStatus.CONFIRMED.value: "approved",
+        DocumentStatus.PARTIAL_CONVERTED.value: "partial",
+        DocumentStatus.FULL_CONVERTED.value: "full",
+    }.get(status_norm, "draft")
+    if not audit_required and flow_class == "pending_review":
+        flow_class = "approved"
+    stage_name = PURCHASE_REQUISITION_FLOW_LABELS.get(flow_class, "草稿")
     main_stages_def = PURCHASE_REQUISITION_MAIN_STAGES if audit_required else PURCHASE_REQUISITION_MAIN_STAGES_NO_AUDIT
+    is_rejected = status_norm == DocumentStatus.REJECTED.value
     return {
-        "current_stage_key": key,
+        "status_class": status_raw,
+        "flow_class": flow_class,
+        "current_stage_key": flow_class,
         "current_stage_name": stage_name,
-        "status": "exception" if stage_name == "已驳回" else "success" if key == "full" else "normal",
-        "main_stages": _build_main_stages(main_stages_def, key, is_exception=(stage_name == "已驳回")),
+        "status": "exception" if is_rejected else "success" if flow_class == "full" else "normal",
+        "main_stages": _build_main_stages(main_stages_def, flow_class, is_exception=is_rejected),
         "sub_stages": None,
-        "next_step_suggestions": ["下推采购订单"] if key in ("approved", "partial") else [],
+        "next_step_suggestions": ["下推采购订单"] if flow_class in ("approved", "partial") else [],
         "milestones": milestones,
     }
+
+
+def _extract_status_class_from_lifecycle_args(args: tuple, kwargs: Dict[str, Any]) -> str:
+    """统一提取真实状态类（单据 status 原值）。"""
+    status = kwargs.get("status")
+    if isinstance(status, str):
+        return status
+    if args:
+        first = args[0]
+        if isinstance(first, str):
+            return first
+        obj_status = getattr(first, "status", None)
+        if obj_status is not None:
+            return str(obj_status)
+    return ""
+
+
+def _lifecycle_contract_wrapper(fn):
+    """为 lifecycle 结果统一注入 status_class/flow_class，避免多源竞争。"""
+
+    @wraps(fn)
+    def _wrapped(*args, **kwargs):
+        payload = fn(*args, **kwargs)
+        if not isinstance(payload, dict):
+            return payload
+        payload.setdefault("status_class", _extract_status_class_from_lifecycle_args(args, kwargs))
+        payload.setdefault("flow_class", str(payload.get("current_stage_key") or "").strip())
+        return payload
+
+    return _wrapped
 
 
 # ---------------------------------------------------------------------------
@@ -1669,9 +1714,17 @@ def get_quotation_lifecycle(
 
 
 # ---------------------------------------------------------------------------
-# 销售合同生命周期（草稿→待审核→已生效→执行中→已关闭/已到期）
+# 销售合同生命周期（草稿→待审核→已生效→执行中→已完成/已关闭/已到期）
 # ---------------------------------------------------------------------------
-SALES_CONTRACT_MAIN_STAGES = [
+SALES_CONTRACT_MAIN_STAGES_FINISHED = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "pending_review", "label": "待审核"},
+    {"key": "effective", "label": "已生效"},
+    {"key": "executing", "label": "执行中"},
+    {"key": "finished", "label": "已完成"},
+]
+
+SALES_CONTRACT_MAIN_STAGES_CLOSED = [
     {"key": "draft", "label": "草稿"},
     {"key": "pending_review", "label": "待审核"},
     {"key": "effective", "label": "已生效"},
@@ -1695,12 +1748,14 @@ def get_sales_contract_lifecycle(
         st: str = "normal",
         suggestions: Optional[List[str]] = None,
         exc: bool = False,
+        stage_defs: Optional[List[Dict[str, str]]] = None,
     ) -> Dict[str, Any]:
+        defs = stage_defs or SALES_CONTRACT_MAIN_STAGES_FINISHED
         return {
             "current_stage_key": key,
             "current_stage_name": stage_name,
             "status": st,
-            "main_stages": _build_main_stages(SALES_CONTRACT_MAIN_STAGES, key, is_exception=exc),
+            "main_stages": _build_main_stages(defs, key, is_exception=exc),
             "sub_stages": None,
             "next_step_suggestions": suggestions or [],
             "milestones": milestones,
@@ -1724,11 +1779,27 @@ def get_sales_contract_lifecycle(
     if status in ("执行中", "executing"):
         return _ret("executing", "执行中", "success", ["下推释放订单", "发起合同变更"])
 
+    if status in ("已完成", "finished"):
+        return _ret("finished", "已完成", "success", [])
+
     if status in ("已关闭", "closed"):
-        return _ret("closed", "已关闭", "normal", [])
+        return _ret(
+            "closed",
+            "已关闭",
+            "normal",
+            [],
+            stage_defs=SALES_CONTRACT_MAIN_STAGES_CLOSED,
+        )
 
     if status in ("已到期", "expired"):
-        return _ret("closed", "已到期", "warning", ["续签或关闭合同"], exc=True)
+        return _ret(
+            "closed",
+            "已到期",
+            "warning",
+            ["续签或关闭合同"],
+            exc=True,
+            stage_defs=SALES_CONTRACT_MAIN_STAGES_CLOSED,
+        )
 
     return _ret("draft", status or "草稿", "normal", [])
 
@@ -2277,7 +2348,7 @@ async def get_document_milestones(
                 "action": "status_transition",
                 "label": f"状态变更为: {t.to_state}",
                 "operator": t.operator_name or str(t.operator_id or "系统"),
-                "occurred_at": t.transition_time.isoformat() if t.transition_time else None,
+                "occurred_at": to_api_isoformat(t.transition_time) if t.transition_time else None,
                 "status": "done"
             })
 
@@ -2306,7 +2377,7 @@ async def get_document_milestones(
                     "action": f"push_to_{node.document_type}",
                     "label": f"推送到{node.document_type}: {node.document_code or node.document_type}",
                     "operator": "系统",
-                    "occurred_at": rel_data.created_at.isoformat() if rel_data else None,
+                    "occurred_at": to_api_isoformat(rel_data.created_at) if rel_data else None,
                     "status": "done"
                 })
         
@@ -2320,3 +2391,8 @@ async def get_document_milestones(
     return milestones
 
 from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+# 统一生命周期契约：全局（非 haoligo）接入 status_class / flow_class。
+for _name, _fn in list(globals().items()):
+    if _name.startswith("get_") and _name.endswith("_lifecycle") and callable(_fn):
+        globals()[_name] = _lifecycle_contract_wrapper(_fn)

@@ -36,6 +36,7 @@ import { useTranslation } from 'react-i18next';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import { getDepartmentTree } from '../../../../../services/department';
 import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface MaterialBorrow {
   id?: number;
@@ -182,7 +183,7 @@ const MaterialBorrowsPage: React.FC = () => {
       width: 168,
       hideInSearch: true,
       defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
@@ -404,7 +405,7 @@ const MaterialBorrowsPage: React.FC = () => {
         borrower_id: values.borrower_id != null ? Number(values.borrower_id) : undefined,
         borrower_name: values.borrower_name,
         department: values.department,
-        expected_return_date: values.expected_return_date ? dayjs(values.expected_return_date).format('YYYY-MM-DD') : undefined,
+        expected_return_date: values.expected_return_date ? formatDateTime(values.expected_return_date, 'YYYY-MM-DD') : undefined,
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
         items: validItems.map((it: any) => ({

@@ -40,6 +40,7 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import { formatDateTime } from '../../../../../utils/format';
 
 const MOLD_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_molds';
 
@@ -672,7 +673,7 @@ const MoldsPage: React.FC = () => {
       width: 168,
       hideInSearch: true,
       defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     ...customFieldColumns,
     {
@@ -782,7 +783,7 @@ const MoldsPage: React.FC = () => {
         title: t('app.kuaizhizao.mold.colUsageDate'),
         dataIndex: 'usage_date',
         width: 110,
-        render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
+        render: (v: string) => v ? formatDateTime(v, 'YYYY-MM-DD') : '-',
       },
       { title: t('app.kuaizhizao.mold.colUsageCount'), dataIndex: 'usage_count', width: 80 },
       { title: t('app.kuaizhizao.mold.colOperator'), dataIndex: 'operator_name', width: 90 },
@@ -796,7 +797,7 @@ const MoldsPage: React.FC = () => {
         title: t('app.kuaizhizao.mold.colReturnDate'),
         dataIndex: 'return_date',
         width: 110,
-        render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
+        render: (v: string) => v ? formatDateTime(v, 'YYYY-MM-DD') : '-',
       },
     ],
     [t],
@@ -808,7 +809,7 @@ const MoldsPage: React.FC = () => {
         title: t('app.kuaizhizao.mold.colCalibrationDate'),
         dataIndex: 'calibration_date',
         width: 120,
-        render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
+        render: (v: string) => v ? formatDateTime(v, 'YYYY-MM-DD') : '-',
       },
       {
         title: t('app.kuaizhizao.mold.colResult'),
@@ -821,7 +822,7 @@ const MoldsPage: React.FC = () => {
         title: t('app.kuaizhizao.mold.colExpiryDate'),
         dataIndex: 'expiry_date',
         width: 120,
-        render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
+        render: (v: string) => v ? formatDateTime(v, 'YYYY-MM-DD') : '-',
       },
       { title: t('app.kuaizhizao.mold.colRemark'), dataIndex: 'remark', ellipsis: true },
     ],
@@ -1199,8 +1200,8 @@ const MoldsPage: React.FC = () => {
                         {detailColumns.map((col) => {
                           const val = (moldDetail as any)[col.dataIndex as string];
                           let content: React.ReactNode = val;
-                          if (col.valueType === 'dateTime' && val) content = dayjs(val).format('YYYY-MM-DD HH:mm:ss');
-                          else if (col.valueType === 'date' && val) content = dayjs(val).format('YYYY-MM-DD');
+                          if (col.valueType === 'dateTime' && val) content = formatDateTime(val, 'YYYY-MM-DD HH:mm:ss');
+                          else if (col.valueType === 'date' && val) content = formatDateTime(val, 'YYYY-MM-DD');
                           else if (col.render) {
                             content = (col.render as (dom: React.ReactNode, entity: Mold, i: number) => React.ReactNode)(
                               val,

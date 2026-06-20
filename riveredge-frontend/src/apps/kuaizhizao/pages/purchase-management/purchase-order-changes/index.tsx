@@ -52,6 +52,7 @@ import { isSourceOrderEligibleForChange } from '../../../utils/orderChangeSource
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { formatDateTime } from '../../../../../utils/format';
 
 const PURCHASE_ORDER_CHANGE_RESOURCE = 'kuaizhizao:purchase-order-change';
 
@@ -295,13 +296,13 @@ const PurchaseOrderChangesPage: React.FC = () => {
         title: t('app.kuaizhizao.purchaseOrder.col.orderDate'),
         dataIndex: 'order_date',
         width: 120,
-        render: (value: string) => (value ? dayjs(value).format('YYYY-MM-DD') : '-'),
+        render: (value: string) => (value ? formatDateTime(value, 'YYYY-MM-DD') : '-'),
       },
       {
         title: t('app.kuaizhizao.purchaseOrder.col.deliveryDate'),
         dataIndex: 'delivery_date',
         width: 120,
-        render: (value: string) => (value ? dayjs(value).format('YYYY-MM-DD') : '-'),
+        render: (value: string) => (value ? formatDateTime(value, 'YYYY-MM-DD') : '-'),
       },
       {
         title: t('app.kuaizhizao.orderChange.colAmount'),
@@ -668,7 +669,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
               <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colAfterAmount')}>{detail.after_total_amount}</Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colDeltaAmount')}>{detail.delta_amount}</Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colAppliedAt')}>
-                {detail.applied_at ? dayjs(detail.applied_at).format('YYYY-MM-DD HH:mm') : '-'}
+                {detail.applied_at ? formatDateTime(detail.applied_at, 'YYYY-MM-DD HH:mm') : '-'}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colChangeReason')} span={2}>
                 {detail.change_reason}

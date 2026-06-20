@@ -57,6 +57,7 @@ import {
   submitPurchaseRequisition,
   approvePurchaseRequisition,
   withdrawPurchaseRequisition,
+  withdrawPurchaseRequisitionSubmit,
   fixPurchaseRequisitionStatus,
   convertToPurchaseOrder,
   PurchaseRequisition,
@@ -90,6 +91,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { formatDateTime } from '../../../../../utils/format';
 
 /** 采购申请详情只读明细表最小横向宽度 */
 const PURCHASE_REQUISITION_DETAIL_ITEMS_MIN_WIDTH = 980;
@@ -127,19 +129,9 @@ function renderPurchaseRequisitionRowActions(nodes: React.ReactNode[], keyPrefix
 }
 
 function canPushPurchaseRequisition(record: PurchaseRequisition): boolean {
-  const s = (record.status ?? '').toString().trim();
-  return [
-    '已通过',
-    '已确认',
-    '部分转单',
-    'approved',
-    'confirmed',
-    'audited',
-    'APPROVED',
-    'CONFIRMED',
-    'AUDITED',
-    'PARTIAL_CONVERTED',
-  ].includes(s);
+  const lifecycle = (record as PurchaseRequisition & { lifecycle?: Record<string, unknown> }).lifecycle;
+  const flowClass = String(lifecycle?.flow_class ?? lifecycle?.current_stage_key ?? '').trim();
+  return flowClass === 'approved' || flowClass === 'partial';
 }
 
 const PURCHASE_REQUISITION_RESOURCE = 'kuaizhizao:purchase-requisition';
@@ -185,6 +177,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const purchaseRequisitionAuditBatchHandlers = useMemo(
     () => ({
       submit: (id: number) => submitPurchaseRequisition(id),
+      withdraw: (id: number) => withdrawPurchaseRequisitionSubmit(id),
       approve: (id: number) => approvePurchaseRequisition(id, { approved: true, review_remarks: '' }),
       revoke: (id: number) => withdrawPurchaseRequisition(id),
     }),
@@ -519,13 +512,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
         title: t('common.createdAt'),
         dataIndex: 'created_at',
         width: 180,
-        render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+        render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
         width: 180,
-        render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+        render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
         title: t('app.kuaizhizao.purchaseRequisition.pull.convertStatus'),
@@ -798,6 +791,29 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const canUseToolbarPush = selectedRequisitionForToolbar
     ? canPushPurchaseRequisition(selectedRequisitionForToolbar)
     : false;
+  const toolbarPushDisabledReason = useMemo(() => {
+    if (selectedRowKeys.length === 0) {
+      return t('app.kuaizhizao.purchaseRequisition.push.selectOne', { defaultValue: '请先选择一条采购申请' });
+    }
+    if (selectedRowKeys.length !== 1) {
+      return t('app.kuaizhizao.purchaseRequisition.push.singleOnly', {
+        count: selectedRowKeys.length,
+        defaultValue: '下推仅支持单条，请仅保留一条选中记录',
+      });
+    }
+    if (!selectedRequisitionForToolbar) {
+      return t('app.kuaizhizao.purchaseRequisition.push.rowUnavailable', { defaultValue: '当前选中记录不可用，请刷新后重试' });
+    }
+    if (!canUseToolbarPush) {
+      const lifecycle = (selectedRequisitionForToolbar as PurchaseRequisition & { lifecycle?: Record<string, unknown> }).lifecycle;
+      const flowClass = String(lifecycle?.flow_class ?? lifecycle?.current_stage_key ?? '-').trim() || '-';
+      return t('app.kuaizhizao.purchaseRequisition.push.flowBlocked', {
+        flowClass,
+        defaultValue: `当前流转类为 ${flowClass}，不可下推`,
+      });
+    }
+    return undefined;
+  }, [canUseToolbarPush, selectedRequisitionForToolbar, selectedRowKeys.length, t]);
 
   const handleBatchDelete = async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) return;
@@ -1066,8 +1082,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
           if (!value || !Array.isArray(value)) return {};
           const [a, b] = value;
           return {
-            required_date_from: a ? dayjs(a).format('YYYY-MM-DD') : undefined,
-            required_date_to: b ? dayjs(b).format('YYYY-MM-DD') : undefined,
+            required_date_from: a ? formatDateTime(a, 'YYYY-MM-DD') : undefined,
+            required_date_to: b ? formatDateTime(b, 'YYYY-MM-DD') : undefined,
           };
         },
       },
@@ -1078,7 +1094,16 @@ const PurchaseRequisitionsPage: React.FC = () => {
       dataIndex: 'requisition_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
+      width: 320,
+      minWidth: 320,
+      uniTableKeepWidth: true,
       hideInSearch: false,
+      onCell: () => ({
+        style: {
+          maxWidth: 320,
+          overflow: 'hidden',
+        },
+      }),
       render: (_, record) => (
         <UniTableStackedPrimaryCell
           primary={String(record.requisition_name ?? '')}
@@ -1156,11 +1181,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
         ];
         if (isDraft) {
           parts.push(
-            <Button {...rowActionKind('submit')} key="submit" onClick={() => handleSubmitRequisition(record)}>
-              {t('components.uniAction.submit')}
-            </Button>
-          );
-          parts.push(
             <Button {...rowActionKind('update')} key="e" onClick={() => handleEdit(record)}>
               {t('common.edit')}
             </Button>
@@ -1181,7 +1201,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
               size="small"
               confirmMessages={{ revoke: t('app.kuaizhizao.purchaseRequisition.workflowRevokeConfirm') }}
               workflowAuditEnabled={purchaseRequestAuditEnabled}
-              hideAuditActionsWhenDisabled={true}
               onSuccess={() => actionRef.current?.reload()}
             />
           </span>
@@ -1196,7 +1215,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         return parts;
       },
     },
-  ], [t, purchaseRequestAuditEnabled, lifecycleValueEnum, handleDetail, handleSubmitRequisition, handleEdit, handleDeleteOne]);
+  ], [t, purchaseRequestAuditEnabled, lifecycleValueEnum, handleDetail, handleEdit, handleDeleteOne]);
 
   const renderPurchaseRequisitionForm = () => (
     <>
@@ -1619,6 +1638,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
               key={`purchase-requisition-push-${selectedRequisitionForToolbar?.id ?? 'none'}`}
               menuItems={toolbarPushMenuItems}
               disabled={!selectedRequisitionForToolbar || !canUseToolbarPush}
+              disabledReason={toolbarPushDisabledReason}
             />,
           ]}
           enableRowSelection={true}
@@ -1750,7 +1770,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     size="small"
                     confirmMessages={{ revoke: t('app.kuaizhizao.purchaseRequisition.workflowRevokeConfirm') }}
                     workflowAuditEnabled={purchaseRequestAuditEnabled}
-                    hideAuditActionsWhenDisabled={true}
                     onSuccess={async () => {
                       invalidateMenuBadgeCounts();
 
@@ -1823,8 +1842,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   items={(() => {
                     const lc = getPurchaseRequisitionLifecycle(currentReq, purchaseRequestAuditEnabled);
                     const stageName = lc.stageName ?? currentReq.status ?? '草稿';
-                    const fmtDate = (v: string | undefined) => (v ? dayjs(v).format('YYYY-MM-DD') : '-');
-                    const fmtDt = (v: string | undefined) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-');
+                    const fmtDate = (v: string | undefined) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-');
+                    const fmtDt = (v: string | undefined) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-');
                     return [
                       {
                         key: 'code',
@@ -1964,7 +1983,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                           dataIndex: 'required_date',
                           width: 120,
                           ellipsis: true,
-                          render: (v: string | undefined) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+                          render: (v: string | undefined) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
                         },
                         {
                           title: t('app.kuaizhizao.purchaseRequisition.col.converted'),

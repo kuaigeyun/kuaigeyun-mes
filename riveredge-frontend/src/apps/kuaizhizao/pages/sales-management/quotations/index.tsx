@@ -91,6 +91,7 @@ import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -116,7 +117,7 @@ import {
 } from '../../../../../hooks/useDocumentCapabilities';
 import { hasModulePermission, hasReviewPermission } from '../../../../../utils/permissionContract';
 import { searchUserDisplay, type User } from '../../../../../services/user';
-import { displayItemsToUsers, formatUserDisplayLabel } from '../../../../../utils/userDisplay';
+import { displayItemsToUsers, normalizeUserDisplayName } from '../../../../../utils/userDisplay';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -366,14 +367,15 @@ const QuotationSalesmanField: React.FC<{ userList: User[]; loading: boolean }> =
   const options = useMemo(() => {
     const base = userList.map((u) => ({
       value: Number(u.id),
-      label: formatUserDisplayLabel(u),
+      label: normalizeUserDisplayName(u.full_name || u.username),
     }));
     const sid =
       salesmanId != null && salesmanId !== '' && Number.isFinite(Number(salesmanId))
         ? Number(salesmanId)
         : NaN;
     if (Number.isFinite(sid) && !base.some((o) => o.value === sid)) {
-      const label = String(salesmanName || '').trim() || t('app.kuaizhizao.quotation.userFallback', { id: sid });
+      const label =
+        normalizeUserDisplayName(salesmanName) || t('app.kuaizhizao.quotation.userFallback', { id: sid });
       return [{ value: sid, label }, ...base];
     }
     return base;
@@ -648,7 +650,7 @@ const QuotationsPage: React.FC = () => {
     detailDrawerVisible && quotationDetail ? 'quotation' : undefined,
     quotationDetail?.id
   );
-  /** 默认 false：配置未加载时不应误判为「已开审核」，否则会出现未开审核仍显示「撤回审核」等 */
+  /** 默认 false：配置未加载时不应误判为「已开审核」，否则会出现未开审核仍显示「撤回提交」等 */
   const quotationAuditRequired = useAuditRequired('quotation', false);
   const salesOrderAuditRequired = useAuditRequired('sales_order', false);
   const quotationLifecycleDetail = useMemo(
@@ -922,6 +924,7 @@ const QuotationsPage: React.FC = () => {
       width: 100,
       ellipsis: true,
       hideInSearch: true,
+      render: (_, r) => normalizeUserDisplayName(r.salesman_name) || '-',
     },
     {
       title: t('app.kuaizhizao.quotation.colVersion'),
@@ -1595,7 +1598,7 @@ const QuotationsPage: React.FC = () => {
     });
   };
 
-  // 统一审核动作由 UniWorkflowActions 接管（提交/撤回/通过/驳回/反审核）
+  // 统一审核动作由 UniWorkflowActions 接管（提交/撤回提交/审核/驳回/撤销审核）
 
   const handleConfirmCustomer = (record: Quotation) => {
     Modal.confirm({
@@ -1757,29 +1760,30 @@ const QuotationsPage: React.FC = () => {
     [handleRevision, messageApi]
   );
 
-  const selectedQuotationForToolbar = useMemo(() => {
+  const selectedQuotationIdForToolbar = useMemo(() => {
     if (selectedRowKeys.length !== 1) return null;
-    return resolveQuotationByRowKey(selectedRowKeys[0]);
-  }, [selectedRowKeys, resolveQuotationByRowKey]);
+    const id = Number(selectedRowKeys[0]);
+    return Number.isFinite(id) && id > 0 ? id : null;
+  }, [selectedRowKeys]);
+  const selectedQuotationForToolbar = useMemo(
+    () => (selectedQuotationIdForToolbar ? resolveQuotationByRowKey(selectedQuotationIdForToolbar) : null),
+    [selectedQuotationIdForToolbar, resolveQuotationByRowKey],
+  );
 
   /** 工具栏下推：优先用带 capabilities 的详情，避免列表未 enrich 时整组下推被禁用 */
   const [toolbarPushQuotation, setToolbarPushQuotation] = useState<Quotation | null>(null);
   useEffect(() => {
     let cancelled = false;
-    if (selectedRowKeys.length !== 1) {
+    if (!selectedQuotationIdForToolbar) {
       setToolbarPushQuotation(null);
       return;
     }
-    const cached = resolveQuotationByRowKey(selectedRowKeys[0]);
-    if (!cached?.id) {
-      setToolbarPushQuotation(null);
-      return;
-    }
-    if (cached.capabilities?.convert_to_order != null) {
+    const cached = resolveQuotationByRowKey(selectedQuotationIdForToolbar);
+    if (cached?.capabilities?.convert_to_order != null) {
       setToolbarPushQuotation(cached);
       return;
     }
-    void getQuotation(cached.id)
+    void getQuotation(selectedQuotationIdForToolbar)
       .then((full) => {
         if (!cancelled) setToolbarPushQuotation(full);
       })
@@ -1789,9 +1793,11 @@ const QuotationsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedRowKeys, resolveQuotationByRowKey, tableQuotationsFlat]);
+  }, [selectedQuotationIdForToolbar, resolveQuotationByRowKey, tableQuotationsFlat]);
 
   const quotationForToolbarPush = toolbarPushQuotation ?? selectedQuotationForToolbar;
+  /** 工具栏单选能力判定统一使用「详情能力」优先，避免列表能力字段缺失导致整组按钮误灰。 */
+  const toolbarSingleSelectionQuotation = quotationForToolbarPush;
 
   const quotationRowSelectionGetCheckboxProps = useCallback(
     (record: Quotation) => ({
@@ -1803,6 +1809,10 @@ const QuotationsPage: React.FC = () => {
   /** 工具栏「客户确认」：仅当选中项均可确认（已发送且审核通过/未开审核）时可点 */
   const canToolbarConfirmCustomer = useMemo(() => {
     if (selectedRowKeys.length === 0) return false;
+    if (selectedRowKeys.length === 1) {
+      const q = toolbarSingleSelectionQuotation;
+      return Boolean(q?.capabilities?.confirm_customer?.allowed) && quotationPerms.canAction?.('execute');
+    }
     const selected = selectedRowKeys
       .map((key) => resolveQuotationByRowKey(key))
       .filter((q): q is Quotation => q != null);
@@ -1810,10 +1820,14 @@ const QuotationsPage: React.FC = () => {
     return selected.every(
       (q) => q.capabilities?.confirm_customer?.allowed === true && quotationPerms.canAction?.('execute'),
     );
-  }, [selectedRowKeys, quotationPerms, resolveQuotationByRowKey]);
+  }, [selectedRowKeys, quotationPerms, resolveQuotationByRowKey, toolbarSingleSelectionQuotation]);
 
   const canToolbarCancelCustomerConfirm = useMemo(() => {
     if (selectedRowKeys.length === 0) return false;
+    if (selectedRowKeys.length === 1) {
+      const q = toolbarSingleSelectionQuotation;
+      return Boolean(q?.capabilities?.cancel_customer_confirm?.allowed) && quotationPerms.canAction?.('execute');
+    }
     const selected = selectedRowKeys
       .map((key) => resolveQuotationByRowKey(key))
       .filter((q): q is Quotation => q != null);
@@ -1823,7 +1837,7 @@ const QuotationsPage: React.FC = () => {
         q.capabilities?.cancel_customer_confirm?.allowed === true &&
         quotationPerms.canAction?.('execute'),
     );
-  }, [selectedRowKeys, quotationPerms, resolveQuotationByRowKey]);
+  }, [selectedRowKeys, quotationPerms, resolveQuotationByRowKey, toolbarSingleSelectionQuotation]);
 
   const selectedQuotationsForToolbar = useMemo(
     () =>
@@ -1839,16 +1853,16 @@ const QuotationsPage: React.FC = () => {
   );
 
   const canToolbarCreateRevision = useMemo(() => {
-    if (selectedQuotationsForToolbar.length !== 1) return false;
-    const q = selectedQuotationsForToolbar[0];
-    return q.capabilities?.create_revision?.allowed === true && quotationPerms.canCreate;
-  }, [selectedQuotationsForToolbar, quotationPerms.canCreate]);
+    if (selectedRowKeys.length !== 1) return false;
+    const q = toolbarSingleSelectionQuotation;
+    return q?.capabilities?.create_revision?.allowed === true && quotationPerms.canCreate;
+  }, [selectedRowKeys.length, toolbarSingleSelectionQuotation, quotationPerms.canCreate]);
 
   const canToolbarPrint = useMemo(() => {
-    if (selectedQuotationsForToolbar.length !== 1) return false;
-    const q = selectedQuotationsForToolbar[0];
-    return q.capabilities?.print_formal?.allowed === true && quotationPerms.canPrint;
-  }, [selectedQuotationsForToolbar, quotationPerms.canPrint]);
+    if (selectedRowKeys.length !== 1) return false;
+    const q = toolbarSingleSelectionQuotation;
+    return q?.capabilities?.print_formal?.allowed === true && quotationPerms.canPrint;
+  }, [selectedRowKeys.length, toolbarSingleSelectionQuotation, quotationPerms.canPrint]);
 
   const handleTableDataChange = useCallback((data: QuotationTableRow[]) => {
     const flat = flattenQuotationTableRows(data);
@@ -1861,7 +1875,8 @@ const QuotationsPage: React.FC = () => {
       const superseded = isQuotationSuperseded(record);
       const orderBizAllowed = quotationCapabilityAllowed(record, 'convert_to_order');
       const contractBizAllowed = quotationCapabilityAllowed(record, 'convert_to_contract');
-      const convertible = orderBizAllowed && quotationPerms.canUpdate;
+      const orderPushPermAllowed = quotationCanPushToSalesOrder(quotationPerms);
+      const convertible = orderBizAllowed && orderPushPermAllowed;
       const contractConvertible = contractBizAllowed;
       const hasContract =
         record.contract_id != null &&
@@ -1943,7 +1958,7 @@ const QuotationsPage: React.FC = () => {
       handleConvert,
       handleConvertToContract,
       messageApi,
-      quotationPerms.canUpdate,
+      quotationPerms,
       salesContractPerms.canCreate,
       permDeniedTitle,
       pushToSalesContractAction.label,
@@ -1956,6 +1971,23 @@ const QuotationsPage: React.FC = () => {
     () => (quotationForToolbarPush ? buildToolbarPushMenuItems(quotationForToolbarPush) : []),
     [buildToolbarPushMenuItems, quotationForToolbarPush],
   );
+  const quotationPushDisabledReason = useMemo(() => {
+    if (selectedRowKeys.length === 0) {
+      return t('app.kuaizhizao.quotation.push.selectOne', { defaultValue: '请先选择一条报价单' });
+    }
+    if (selectedRowKeys.length !== 1) {
+      return t('app.kuaizhizao.quotation.push.singleOnly', {
+        count: selectedRowKeys.length,
+        defaultValue: '下推仅支持单条，请仅保留一条选中记录',
+      });
+    }
+    if (!quotationForToolbarPush) {
+      return t('app.kuaizhizao.quotation.push.rowUnavailable', {
+        defaultValue: '当前选中记录暂不可用，请刷新后重试',
+      });
+    }
+    return undefined;
+  }, [quotationForToolbarPush, selectedRowKeys.length, t]);
 
   /**
    * 处理新建报价单
@@ -2143,7 +2175,7 @@ const QuotationsPage: React.FC = () => {
         customer_contact: values.customer_contact,
         customer_phone: values.customer_phone,
         salesman_id: values.salesman_id,
-        salesman_name: values.salesman_name,
+        salesman_name: normalizeUserDisplayName(values.salesman_name),
         shipping_address: values.shipping_address,
         shipping_method: values.shipping_method,
         payment_terms: values.payment_terms,
@@ -2230,7 +2262,7 @@ const QuotationsPage: React.FC = () => {
       customer_contact: values.customer_contact,
       customer_phone: values.customer_phone,
       salesman_id: values.salesman_id,
-      salesman_name: values.salesman_name,
+      salesman_name: normalizeUserDisplayName(values.salesman_name),
       shipping_address: values.shipping_address,
       shipping_method: values.shipping_method,
       payment_terms: values.payment_terms,
@@ -2323,7 +2355,11 @@ const QuotationsPage: React.FC = () => {
         return opt?.label ?? val ?? '-';
       },
     },
-    { title: salesCommonFormLabels.salesman, dataIndex: 'salesman_name' },
+    {
+      title: salesCommonFormLabels.salesman,
+      dataIndex: 'salesman_name',
+      render: (_: unknown, r: Quotation) => normalizeUserDisplayName(r.salesman_name) || '-',
+    },
     // —— 交货履约 ——
     { title: t('app.kuaizhizao.quotation.form.expectedDeliveryDate'), dataIndex: 'delivery_date', valueType: 'date' },
     {
@@ -3194,6 +3230,7 @@ const QuotationsPage: React.FC = () => {
               key={`quotation-push-${quotationForToolbarPush?.id ?? 'none'}`}
               menuItems={toolbarPushMenuItems}
               disabled={!quotationForToolbarPush}
+              disabledReason={quotationPushDisabledReason}
             />,
           ]}
           enableRowSelection
@@ -3331,8 +3368,8 @@ const QuotationsPage: React.FC = () => {
               let startDate: string | undefined;
               let endDate: string | undefined;
               if (dr && Array.isArray(dr) && dr[0]) {
-                startDate = dayjs(dr[0] as string | Date).format('YYYY-MM-DD');
-                endDate = dr[1] ? dayjs(dr[1] as string | Date).format('YYYY-MM-DD') : startDate;
+                startDate = formatDateTime(dr[0] as string | Date, 'YYYY-MM-DD');
+                endDate = dr[1] ? formatDateTime(dr[1] as string | Date, 'YYYY-MM-DD') : startDate;
               }
               const response = await listQuotations({
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),

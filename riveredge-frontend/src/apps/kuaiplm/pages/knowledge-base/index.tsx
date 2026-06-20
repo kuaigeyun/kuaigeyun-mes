@@ -27,6 +27,7 @@ import {
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 import { getKuaiplmKnowledgeStatusOptions, getKuaiplmKnowledgeStatusText } from '../../components/kuaiplmMeta';
+import { formatDateTime } from '../../../../utils/format';
 
 const KB_QUERY_LIMIT = 100;
 
@@ -542,7 +543,7 @@ const KnowledgeBasePage: React.FC = () => {
                           {item.title || unnamedDocument}
                         </Typography.Text>
                         <div style={{ fontSize: 11, color: 'var(--ant-color-text-secondary)', marginTop: 2 }}>
-                          {item.updated_at ? dayjs(item.updated_at).format('YYYY-MM-DD HH:mm') : '-'}
+                          {item.updated_at ? formatDateTime(item.updated_at, 'YYYY-MM-DD HH:mm') : '-'}
                         </div>
                       </div>
                     );
@@ -629,7 +630,7 @@ const KnowledgeBasePage: React.FC = () => {
                 <Tag>{activeArticle.author_name || t('app.kuaiplm.knowledgeBase.unknownAuthor')}</Tag>
                 <Typography.Text type="secondary">
                   {t('app.kuaiplm.common.columns.updatedAt')}{' '}
-                  {activeArticle.updated_at ? dayjs(activeArticle.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'}
+                  {activeArticle.updated_at ? formatDateTime(activeArticle.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'}
                 </Typography.Text>
               </Space>
               <Input.TextArea

@@ -10,6 +10,7 @@ Date: 2026-01-27
 from typing import Dict, Any, List
 from datetime import datetime, timedelta
 from loguru import logger
+from core.utils.timezone_utils import to_api_isoformat
 
 
 class UsageAnalysisService:
@@ -50,7 +51,7 @@ class UsageAnalysisService:
                 "usage_count": 150,
                 "user_count": 25,
                 "avg_duration": 120,  # 秒
-                "last_used": (end_date - timedelta(days=1)).isoformat(),
+                "last_used": to_api_isoformat(end_date - timedelta(days=1)),
             },
             {
                 "function_name": "工单管理",
@@ -58,7 +59,7 @@ class UsageAnalysisService:
                 "usage_count": 320,
                 "user_count": 45,
                 "avg_duration": 180,
-                "last_used": end_date.isoformat(),
+                "last_used": to_api_isoformat(end_date),
             },
             {
                 "function_name": "物料管理",
@@ -66,7 +67,7 @@ class UsageAnalysisService:
                 "usage_count": 280,
                 "user_count": 35,
                 "avg_duration": 150,
-                "last_used": (end_date - timedelta(hours=2)).isoformat(),
+                "last_used": to_api_isoformat(end_date - timedelta(hours=2)),
             },
         ]
         
@@ -88,8 +89,8 @@ class UsageAnalysisService:
         
         return {
             "period": {
-                "start_date": start_date.isoformat(),
-                "end_date": end_date.isoformat(),
+                "start_date": to_api_isoformat(start_date),
+                "end_date": to_api_isoformat(end_date),
             },
             "function_usage": function_usage,
             "unused_functions": unused_functions,
@@ -180,8 +181,8 @@ class UsageAnalysisService:
         # 这里返回模拟数据
         return {
             "period": {
-                "start_date": start_date.isoformat(),
-                "end_date": end_date.isoformat(),
+                "start_date": to_api_isoformat(start_date),
+                "end_date": to_api_isoformat(end_date),
             },
             "response_time": {
                 "avg": 120,  # 毫秒
@@ -192,7 +193,7 @@ class UsageAnalysisService:
             "concurrency": {
                 "avg": 50,
                 "max": 200,
-                "peak_time": (end_date - timedelta(hours=2)).isoformat(),
+                "peak_time": to_api_isoformat(end_date - timedelta(hours=2)),
             },
             "resource_usage": {
                 "cpu_usage": 65,  # 百分比
@@ -233,7 +234,7 @@ class UsageAnalysisService:
         performance = await self.analyze_performance(tenant_id)
         
         return {
-            "generated_at": datetime.now().isoformat(),
+            "generated_at": to_api_isoformat(datetime.now()),
             "function_usage": function_usage,
             "data_quality": data_quality,
             "performance": performance,

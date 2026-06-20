@@ -3637,6 +3637,41 @@ async def get_sales_return(
     )
 
 
+@router.get(
+    "/sales-returns/{return_id}/print",
+    summary="Print sales return",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-return:print"))],
+)
+async def print_sales_return(
+    return_id: int = Path(..., description="退货单ID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="sales_return",
+            document_id=return_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
 @router.put("/sales-returns/{return_id}", response_model=SalesReturnResponse, summary="Update sales return")
 async def update_sales_return(
     return_id: int,

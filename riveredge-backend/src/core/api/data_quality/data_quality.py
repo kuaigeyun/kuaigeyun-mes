@@ -18,6 +18,7 @@ from core.services.data_quality.data_quality_service import (
     DataQualityReport,
 )
 from core.api.deps.deps import get_current_tenant
+from core.utils.timezone_utils import to_api_isoformat
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from loguru import logger
@@ -198,7 +199,7 @@ async def generate_quality_report(
                     }
                     for suggestion in quality_report.suggestions
                 ],
-                "generated_at": quality_report.generated_at.isoformat(),
+                "generated_at": to_api_isoformat(quality_report.generated_at),
             },
         }
     except Exception as e:

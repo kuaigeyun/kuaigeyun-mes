@@ -10,6 +10,7 @@ Date: 2026-01-27
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from loguru import logger
+from core.utils.timezone_utils import to_api_isoformat
 
 from apps.kuaizhizao.services.launch_countdown_service import LaunchCountdownService
 from apps.kuaizhizao.models.launch_countdown import LaunchCountdown
@@ -68,8 +69,8 @@ class LaunchProgressService:
         return {
             "has_countdown": True,
             "countdown_uuid": countdown.uuid,
-            "launch_date": countdown.launch_date.isoformat() if countdown.launch_date else None,
-            "snapshot_time": countdown.snapshot_time.isoformat() if countdown.snapshot_time else None,
+            "launch_date": to_api_isoformat(countdown.launch_date) if countdown.launch_date else None,
+            "snapshot_time": to_api_isoformat(countdown.snapshot_time) if countdown.snapshot_time else None,
             "status": countdown.status,
             "days_remaining": days_remaining,
             "progress_percentage": progress_percentage,
@@ -175,7 +176,7 @@ class LaunchProgressService:
             })
         
         return {
-            "generated_at": datetime.now().isoformat(),
+            "generated_at": to_api_isoformat(datetime.now()),
             "summary": {
                 "total_tasks": total_tasks,
                 "completed_tasks": completed_tasks,

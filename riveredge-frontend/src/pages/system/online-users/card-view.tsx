@@ -22,6 +22,7 @@ import { useGlobalStore } from '../../../stores';
 import { handleError, handleSuccess } from '../../../utils/errorHandler';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { formatDateTime } from '../../../utils/format';
 
 dayjs.extend(relativeTime);
 
@@ -171,7 +172,7 @@ const CardView: React.FC = () => {
     const minutesAgo = now.diff(lastActivity, 'minute');
     if (minutesAgo < 1) return t('pages.system.onlineUsers.justNow');
     if (minutesAgo < 60) return t('pages.system.onlineUsers.minutesAgo', { count: minutesAgo });
-    return lastActivity.format('YYYY-MM-DD HH:mm:ss');
+    return formatDateTime(user.last_activity_time, 'YYYY-MM-DD HH:mm:ss');
   };
 
   return (
@@ -381,12 +382,12 @@ const CardView: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.onlineUsers.loginTime')}>
               {currentUserInfo.login_time
-                ? dayjs(currentUserInfo.login_time).format('YYYY-MM-DD HH:mm:ss')
+                ? formatDateTime(currentUserInfo.login_time, 'YYYY-MM-DD HH:mm:ss')
                 : '-'}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.onlineUsers.lastActivityTime')}>
               {currentUserInfo.last_activity_time
-                ? dayjs(currentUserInfo.last_activity_time).format('YYYY-MM-DD HH:mm:ss')
+                ? formatDateTime(currentUserInfo.last_activity_time, 'YYYY-MM-DD HH:mm:ss')
                 : '-'}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.onlineUsers.onlineDuration')}>

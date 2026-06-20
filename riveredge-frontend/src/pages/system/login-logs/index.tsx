@@ -27,6 +27,7 @@ import {
 } from '../../../services/loginLog';
 import { useGlobalStore } from '../../../stores';
 import dayjs from 'dayjs';
+import { formatDateTimeBySiteSetting } from '../../../utils/format';
 
 /**
  * 登录日志页面组件
@@ -146,7 +147,7 @@ const LoginLogsPage: React.FC = () => {
     {
       title: t('pages.system.loginLogs.loginTime'),
       dataIndex: 'created_at',
-      render: (_: unknown, record: LoginLog) => dayjs(record.created_at).format('YYYY-MM-DD HH:mm:ss'),
+      render: (_: unknown, record: LoginLog) => formatDateTimeBySiteSetting(record.created_at),
     },
   ];
 
@@ -259,7 +260,7 @@ const LoginLogsPage: React.FC = () => {
       key: 'created_at',
       valueType: 'dateTimeRange',
       sorter: true,
-      render: (_: any, record: LoginLog) => dayjs(record.created_at).format('YYYY-MM-DD HH:mm:ss'),
+      render: (_: any, record: LoginLog) => formatDateTimeBySiteSetting(record.created_at),
       width: 180,
     },
   ];

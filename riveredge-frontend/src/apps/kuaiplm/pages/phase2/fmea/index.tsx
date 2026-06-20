@@ -21,6 +21,7 @@ import {
 } from '../../../services/phase2';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
+import { formatDateTime } from '../../../../../utils/format';
 
 const RISK_COLOR: Record<string, string> = {
   高: 'red',
@@ -140,7 +141,7 @@ const FmeaPage: React.FC = () => {
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
-      render: (_, row) => (row.updated_at ? dayjs(row.updated_at).format('YYYY-MM-DD HH:mm') : '-'),
+      render: (_, row) => (row.updated_at ? formatDateTime(row.updated_at, 'YYYY-MM-DD HH:mm') : '-'),
     },
     {
       title: t('common.actions'),

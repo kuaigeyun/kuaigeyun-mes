@@ -23,6 +23,7 @@ from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
 from apps.master_data.models.material import Material
 from apps.master_data.models.material_batch import MaterialBatch
+from core.utils.timezone_utils import to_api_isoformat
 from tortoise.functions import Count, Sum
 
 
@@ -131,9 +132,7 @@ async def _total_inventory_value(tenant_id: int) -> float:
 def _iso(dt: Optional[datetime]) -> Optional[str]:
     if dt is None:
         return None
-    if dt.tzinfo is not None:
-        return dt.isoformat()
-    return dt.replace(microsecond=0).isoformat()
+    return to_api_isoformat(dt)
 
 
 async def _first_purchase_item_labels(

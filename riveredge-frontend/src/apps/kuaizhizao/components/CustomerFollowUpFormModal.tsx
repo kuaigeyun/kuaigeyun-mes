@@ -20,6 +20,7 @@ import { listSalesOrders, type SalesOrder } from '../services/sales-order';
 import { customerApi, getDictionaryOptions, getDictionaryOptionsSync } from '../../master-data/services/supply-chain';
 import { CustomerFormModal } from '../../master-data/components/CustomerFormModal';
 import type { Customer } from '../../master-data/types/supply-chain';
+import { formatDateTime } from '../../../utils/format';
 
 const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
 const STAGE_DICT_CODE = 'SALES_OPPORTUNITY_STAGE';
@@ -649,7 +650,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
                           <Space size={6} wrap>
                             <Tag color="blue">{activityText}</Tag>
                             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                              {dayjs(item.occurred_at).format('YYYY-MM-DD HH:mm')}
+                              {formatDateTime(item.occurred_at, 'YYYY-MM-DD HH:mm')}
                             </Typography.Text>
                           </Space>
                           <div style={{ marginTop: 6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>

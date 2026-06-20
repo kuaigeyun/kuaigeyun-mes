@@ -32,6 +32,7 @@ import OutsourceReceiptFormContent, {
   type OutsourceReceiptLine,
 } from '../../../components/OutsourceReceiptFormContent';
 import type { OutsourceMaterialTabKey } from './materialCenterTabs';
+import { formatDateTime } from '../../../../../utils/format';
 
 function unwrapList<T>(response: unknown): T[] {
   if (Array.isArray(response)) return response;
@@ -200,7 +201,7 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
       width: 160,
       render: (_, r) => {
         const createdAt = r.createdAt || r.created_at;
-        return createdAt ? dayjs(createdAt).format('YYYY-MM-DD HH:mm') : '-';
+        return createdAt ? formatDateTime(createdAt, 'YYYY-MM-DD HH:mm') : '-';
       },
     },
     {

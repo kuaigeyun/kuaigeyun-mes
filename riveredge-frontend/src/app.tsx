@@ -672,10 +672,11 @@ export default function App() {
     const plainSemanticTokens =
       resolved.themeStyle === 'plain'
         ? {
-            colorSuccess: resolved.isDark ? '#8c8c8c' : '#595959',
-            colorWarning: resolved.isDark ? '#8c8c8c' : '#595959',
-            colorError: resolved.isDark ? '#8c8c8c' : '#595959',
-            colorInfo: resolved.token.colorPrimary,
+            // 简约模式保留基础语义色，避免徽章/状态提示全部灰化后不可辨识
+            colorSuccess: '#52c41a',
+            colorWarning: '#faad14',
+            colorError: '#ff4d4f',
+            colorInfo: resolved.token.colorPrimary ?? '#1677ff',
           }
         : {};
     return {

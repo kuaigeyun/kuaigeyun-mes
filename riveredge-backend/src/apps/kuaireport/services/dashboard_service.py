@@ -4,6 +4,7 @@ from typing import Optional, List, Any, Dict
 from apps.common.base_service import AppBaseService
 from apps.kuaireport.models.dashboard import Dashboard
 from apps.kuaireport.schemas.dashboard import DashboardCreate, DashboardUpdate
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError
 
 class DashboardService(AppBaseService[Dashboard]):
@@ -50,7 +51,7 @@ class DashboardService(AppBaseService[Dashboard]):
         await dashboard.save()
         return {
             "share_token": token,
-            "share_expires_at": expires_at.isoformat() if expires_at else None,
+            "share_expires_at": to_api_isoformat(expires_at) if expires_at else None,
             "is_shared": True,
         }
 

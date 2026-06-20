@@ -4,7 +4,7 @@
  * 字段 key 与 API 返回的 snake_case 保持一致，确保数据绑定正确
  */
 
-import dayjs from 'dayjs';
+import { formatDateTime } from '../utils/format';
 
 export interface FieldSchema {
   key: string;
@@ -809,7 +809,7 @@ const getSampleValueByType = (type: string, key: string, label?: string): unknow
   if (type === 'image') return 'https://placehold.co/400x400/f0f2f5/a8b1bd?text=Image';
   if (type === 'signature') return 'https://placehold.co/200x100/f0f2f5/a8b1bd?text=Signature';
   if (l.includes('日期') || l.includes('时间') || k.includes('date') || k.includes('time')) {
-    return dayjs().format('YYYY-MM-DD HH:mm');
+    return formatDateTime(new Date(), 'YYYY-MM-DD HH:mm');
   }
   if (l.includes('数量') || l.includes('额') || k.includes('quantity') || k.includes('amount') || k.includes('price')) {
     return '1,280.00';
@@ -846,9 +846,9 @@ export const getSamplePreviewVariables = (type: string): Record<string, unknown>
   const schema = getSchemaByType(type);
   const result: Record<string, unknown> = {};
   result['print_user'] = '系统管理员';
-  result['print_time'] = dayjs().format('YYYY-MM-DD HH:mm:ss');
-  result['dateTime'] = dayjs().format('YYYY-MM-DD HH:mm:ss');
-  result['date'] = dayjs().format('YYYY-MM-DD');
+  result['print_time'] = formatDateTime(new Date(), 'YYYY-MM-DD HH:mm:ss');
+  result['dateTime'] = formatDateTime(new Date(), 'YYYY-MM-DD HH:mm:ss');
+  result['date'] = formatDateTime(new Date(), 'YYYY-MM-DD');
   result['company_name'] = 'RiverEdge 智能制造演示环境';
   result['document_type_label'] = type;
   if (!schema) return result;

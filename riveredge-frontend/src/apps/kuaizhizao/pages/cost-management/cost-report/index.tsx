@@ -23,6 +23,7 @@ import { MultiTabListPageTemplate } from '../../../../../components/layout-templ
 import { costReportApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
 
 type ReportSection = 'comprehensive' | 'trend' | 'structure';
 
@@ -160,9 +161,9 @@ const CostReportPage: React.FC = () => {
         style={{ marginBottom: 24 }}
         dataSource={{
           report_type: result.report_type,
-          generated_at: dayjs(result.generated_at).format('YYYY-MM-DD HH:mm:ss'),
-          start_date: dayjs(result.start_date).format('YYYY-MM-DD'),
-          end_date: dayjs(result.end_date).format('YYYY-MM-DD'),
+          generated_at: formatDateTime(result.generated_at, 'YYYY-MM-DD HH:mm:ss'),
+          start_date: formatDateTime(result.start_date, 'YYYY-MM-DD'),
+          end_date: formatDateTime(result.end_date, 'YYYY-MM-DD'),
         }}
         columns={[
           { title: '报表类型', dataIndex: 'report_type' },

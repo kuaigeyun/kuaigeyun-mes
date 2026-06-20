@@ -20,6 +20,7 @@ import {
   getKpiCalcTypeText,
   getPerformanceYesNoValueEnum,
 } from '../components/performanceMeta';
+import { formatDateTime } from '../../../../../utils/format';
 
 const KpiDefinitionsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -100,7 +101,7 @@ const KpiDefinitionsPage: React.FC = () => {
         dataIndex: 'updated_at',
         width: 168,
         hideInSearch: true,
-        render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
         title: t('app.kuaizhizao.performance.common.columns.lifecycle'),

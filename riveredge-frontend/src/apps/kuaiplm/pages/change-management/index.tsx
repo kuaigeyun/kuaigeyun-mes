@@ -30,6 +30,7 @@ import { buildBomChangeCreateUrl, buildRouteChangeCreateUrl } from '../../servic
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 import { getKuaiplmChangeCategoryText, getKuaiplmChangeStatusText, getKuaiplmChangeTypeText } from '../../components/kuaiplmMeta';
+import { formatDateTime } from '../../../../utils/format';
 
 type TabKey = 'all' | 'bom' | 'route';
 
@@ -195,7 +196,7 @@ const ChangeManagementPage: React.FC = () => {
         dataIndex: 'created_at',
         width: 168,
         hideInSearch: true,
-        render: (_, row) => (row.created_at ? dayjs(row.created_at).format('YYYY-MM-DD HH:mm') : '-'),
+        render: (_, row) => (row.created_at ? formatDateTime(row.created_at, 'YYYY-MM-DD HH:mm') : '-'),
       },
       {
         title: t('app.kuaiplm.common.columns.actions'),

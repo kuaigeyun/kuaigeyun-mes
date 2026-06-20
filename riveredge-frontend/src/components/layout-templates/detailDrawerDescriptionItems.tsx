@@ -5,7 +5,7 @@
 import type { Key, ReactNode } from 'react';
 import type { DescriptionsProps } from 'antd';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
-import dayjs from 'dayjs';
+import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../utils/format';
 
 export function detailDrawerDescriptionItems<T extends Record<string, any>>(
   columns: ProDescriptionsItemProps<T>[],
@@ -21,9 +21,9 @@ export function detailDrawerDescriptionItems<T extends Record<string, any>>(
     let content: ReactNode = value as ReactNode;
 
     if (col.valueType === 'dateTime' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+      content = formatDateTimeBySiteSetting(value as string);
     } else if (col.valueType === 'date' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD');
+      content = formatDateBySiteSetting(value as string);
     } else if (col.valueEnum && value != null && value !== '') {
       const vk = String(value);
       const rawEnum = col.valueEnum as Record<string, { text?: ReactNode } | undefined>;

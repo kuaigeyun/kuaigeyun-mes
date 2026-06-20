@@ -2,7 +2,7 @@
  * 客户选中后回填销售单据头字段（逻辑与销售订单 onCustomerPick 一致，供报价单等同等级页面复用）。
  */
 import type { ProFormInstance } from '@ant-design/pro-components';
-import { formatUserDisplayLabel } from '../../../../../utils/userDisplay';
+import { formatUserDisplayLabel, normalizeUserDisplayName } from '../../../../../utils/userDisplay';
 
 export type CustomerLike = Record<string, unknown>;
 
@@ -27,9 +27,11 @@ export function resolveCustomerFormFieldValues(
     sIdRaw != null && sIdRaw !== '' && Number.isFinite(Number(sIdRaw)) ? Number(sIdRaw) : undefined;
   const salesman = sId != null ? users.find((u) => Number(u.id) === sId) : undefined;
   const sName =
-    customer.salesmanName ??
-    customer.salesman_name ??
-    (salesman ? formatUserDisplayLabel(salesman) : '');
+    normalizeUserDisplayName(
+      customer.salesmanName ??
+      customer.salesman_name ??
+      (salesman ? formatUserDisplayLabel(salesman) : ''),
+    );
   return {
     customer_name: customer.name ?? customer.customer_name,
     customer_contact:

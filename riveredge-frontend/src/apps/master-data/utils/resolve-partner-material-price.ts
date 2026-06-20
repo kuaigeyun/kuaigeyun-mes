@@ -1,4 +1,5 @@
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../utils/format';
 import type { Material } from '../types/material';
 import { materialApi } from '../services/material';
 import { customerPriceBookApi, supplierPriceBookApi } from '../services/partner-price-book';
@@ -152,7 +153,7 @@ export function pickResolvedTaxRate(resolved?: PartnerPriceResolveResult | null)
 
 function formatAsOf(asOf?: string | dayjs.Dayjs): string | undefined {
   if (!asOf) return undefined;
-  return dayjs(asOf).format('YYYY-MM-DD');
+  return formatDateTime(asOf, 'YYYY-MM-DD');
 }
 
 export type ResolvePriceBatchLine = {

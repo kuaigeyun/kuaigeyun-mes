@@ -44,6 +44,7 @@ import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../..
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
+import { formatDateTime } from '../../../../../utils/format';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -54,10 +55,10 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
     const value = dataIndex != null ? dataSource[dataIndex] : undefined;
     let content: React.ReactNode = value as React.ReactNode;
     if (col.valueType === 'date' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD');
+      content = formatDateTime(value as string, 'YYYY-MM-DD');
     }
     if (col.valueType === 'dateTime' && value) {
-      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
     }
     if (col.render && dataSource != null) {
             content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
@@ -485,7 +486,7 @@ const ToolLedgerPage: React.FC = () => {
       width: 168,
       hideInSearch: true,
       defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
       title: t('app.kuaizhizao.toolLedger.colLifecycle'),
@@ -590,13 +591,13 @@ const ToolLedgerPage: React.FC = () => {
         title: t('app.kuaizhizao.toolLedger.colCheckoutDate'),
         dataIndex: 'checkout_date',
         width: 160,
-        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'),
+        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm') : '-'),
       },
       {
         title: t('app.kuaizhizao.toolLedger.colCheckinDate'),
         dataIndex: 'checkin_date',
         width: 160,
-        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'),
+        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm') : '-'),
       },
       {
         title: t('common.status'),
@@ -625,7 +626,7 @@ const ToolLedgerPage: React.FC = () => {
         title: t('app.kuaizhizao.toolLedger.colMaintenanceDate'),
         dataIndex: 'maintenance_date',
         width: 110,
-        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
       },
       { title: t('app.kuaizhizao.toolLedger.colExecutor'), dataIndex: 'executor', width: 90 },
       { title: t('app.kuaizhizao.toolLedger.colContent'), dataIndex: 'content', ellipsis: true },
@@ -640,7 +641,7 @@ const ToolLedgerPage: React.FC = () => {
         title: t('app.kuaizhizao.toolLedger.colCalibrationDate'),
         dataIndex: 'calibration_date',
         width: 110,
-        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
       },
       { title: t('app.kuaizhizao.toolLedger.colCalibrationOrg'), dataIndex: 'calibration_org', width: 120 },
       { title: t('app.kuaizhizao.toolLedger.colCertificateNo'), dataIndex: 'certificate_no', width: 120 },
@@ -649,7 +650,7 @@ const ToolLedgerPage: React.FC = () => {
         title: t('app.kuaizhizao.toolLedger.colExpiryDate'),
         dataIndex: 'expiry_date',
         width: 110,
-        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
       },
     ],
     [t],

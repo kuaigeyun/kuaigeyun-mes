@@ -1,5 +1,5 @@
 /**
- * 销售合同生命周期：草稿 → 待审核 → 已生效 → 执行中 → 已关闭 / 已到期
+ * 销售合同生命周期：草稿 → 待审核 → 已生效 → 执行中 → 已完成 / 已到期
  */
 
 import { createLifecycleResolver } from './createLifecycleResolver';
@@ -16,6 +16,7 @@ export const SALES_CONTRACT_LIFECYCLE_STAGE_LABELS = [
   '待审核',
   '已生效',
   '执行中',
+  '已完成',
   '已关闭',
   '已到期',
 ] as const;
@@ -25,6 +26,7 @@ const STAGE_I18N: Record<string, string> = {
   待审核: `${P}.statusPending`,
   已生效: `${P}.statusActive`,
   执行中: `${P}.statusExecuting`,
+  已完成: `${P}.statusCompleted`,
   已关闭: `${P}.statusClosed`,
   已到期: `${P}.statusExpired`,
 };
@@ -35,6 +37,7 @@ const baseResolver = createLifecycleResolver({
     { key: 'pending_review', label: '待审核', labelKey: `${P}.statusPending` },
     { key: 'effective', label: '已生效', labelKey: `${P}.statusActive` },
     { key: 'executing', label: '执行中', labelKey: `${P}.statusExecuting` },
+    { key: 'finished', label: '已完成', labelKey: `${P}.statusCompleted` },
     { key: 'closed', label: '已关闭', labelKey: `${P}.statusClosed` },
   ],
   statusToKey: {
@@ -44,17 +47,21 @@ const baseResolver = createLifecycleResolver({
     PENDING_REVIEW: 'pending_review',
     已生效: 'effective',
     执行中: 'executing',
+    已完成: 'finished',
+    FINISHED: 'finished',
     已关闭: 'closed',
     CLOSED: 'closed',
+    COMPLETED: 'finished',
     已到期: 'closed',
     EXPIRED: 'closed',
   },
-  successKeys: ['closed'],
+  successKeys: ['finished'],
   nextStepSuggestions: {
     draft: ['保存并提交审核'],
     pending_review: ['审核通过', '驳回'],
     effective: ['下推销售订单', '登记变更'],
     executing: ['查看回款', '关闭合同'],
+    finished: [],
     closed: [],
   },
   nextStepSuggestionKeys: {
@@ -62,6 +69,7 @@ const baseResolver = createLifecycleResolver({
     pending_review: [`${P}.lifecycleNextApprove`, `${P}.lifecycleNextReject`],
     effective: [`${P}.lifecycleNextReleaseOrder`, `${P}.lifecycleNextRegisterChange`],
     executing: [`${P}.lifecycleNextViewPayment`, `${P}.lifecycleNextCloseContract`],
+    finished: [],
     closed: [],
   },
 });
@@ -85,8 +93,9 @@ export function resolveSalesContractListLifecycleParams(
   params?: Record<string, unknown> | null,
 ): { status?: string } {
   const stage = resolveListLifecycleStageFromSearch(searchFormValues, params, {
-    allowedStages: [...SALES_CONTRACT_LIFECYCLE_STAGE_LABELS],
+    allowedStages: [...SALES_CONTRACT_LIFECYCLE_STAGE_LABELS, '已关闭'],
   });
-  const api = toListLifecycleStageApiParams(stage);
+  const stageToStatus: Record<string, string> = {};
+  const api = toListLifecycleStageApiParams(stage ? (stageToStatus[stage] ?? stage) : stage);
   return api.lifecycle_stage ? { status: api.lifecycle_stage } : {};
 }

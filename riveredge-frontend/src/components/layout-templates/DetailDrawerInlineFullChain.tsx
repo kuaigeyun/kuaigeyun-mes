@@ -69,10 +69,9 @@ export const DetailDrawerInlineFullChain: React.FC<DetailDrawerInlineFullChainPr
           height,
           display: 'flex',
           flexDirection: 'column',
-          border: '1px solid var(--ant-color-border-secondary)',
           borderRadius: token.borderRadiusLG,
           overflow: 'hidden',
-          background: 'var(--ant-color-fill-quaternary)',
+          background: 'transparent',
         }}
       >
         <DocumentTrackingRelationsTabsBody

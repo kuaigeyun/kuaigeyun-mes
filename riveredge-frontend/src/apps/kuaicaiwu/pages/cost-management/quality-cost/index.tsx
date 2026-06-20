@@ -14,6 +14,7 @@ import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import { loadWorkOrderSelectOptions, normalizeCostListRows, type CostSelectOption } from '../costSelectData';
 import { formatCalculationType } from '../../../utils/costUiLabels';
+import { formatDateTime } from '../../../../../utils/format';
 
 interface QualityCostResult {
   prevention_cost: number;
@@ -157,9 +158,9 @@ const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) =
                 </span>
               ),
               calculation_type: formatCalculationType(result.calculation_type, t),
-              start_date: result.start_date ? dayjs(result.start_date).format('YYYY-MM-DD') : undefined,
-              end_date: result.end_date ? dayjs(result.end_date).format('YYYY-MM-DD') : undefined,
-              calculation_date: result.calculation_date ? dayjs(result.calculation_date).format('YYYY-MM-DD') : '-',
+              start_date: result.start_date ? formatDateTime(result.start_date, 'YYYY-MM-DD') : undefined,
+              end_date: result.end_date ? formatDateTime(result.end_date, 'YYYY-MM-DD') : undefined,
+              calculation_date: result.calculation_date ? formatDateTime(result.calculation_date, 'YYYY-MM-DD') : '-',
             }}
             columns={resultColumns}
           />

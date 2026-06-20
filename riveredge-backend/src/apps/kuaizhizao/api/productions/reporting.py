@@ -16,6 +16,7 @@ from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
 from core.api.deps.access import AuthContext, ensure_permission_codes, get_auth_context
+from core.utils.timezone_utils import to_api_isoformat
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
 from infra.services.business_config_service import BusinessConfigService
@@ -132,7 +133,7 @@ async def _emit_overview_statistics_alert(tenant_id: int, trace_id: str, error_m
             "trace_id": trace_id,
             "route": "/reporting/overview-statistics",
             "error": error_message,
-            "occurred_at": datetime.now().isoformat(),
+            "occurred_at": to_api_isoformat(datetime.now()),
         }
         await get_http_client().post(str(webhook_url), json=payload, timeout=3.0)
     except Exception as notify_err:

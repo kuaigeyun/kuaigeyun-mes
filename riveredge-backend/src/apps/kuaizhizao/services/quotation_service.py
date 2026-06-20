@@ -38,6 +38,7 @@ from apps.kuaizhizao.services.document_action_policy import (
     enrich_quotation_list_capabilities,
 )
 from core.services.authorization.data_scope_service import DataScopeService
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
@@ -412,7 +413,7 @@ class QuotationService:
         context = {}
         if quotation_date:
             context["quotation_date"] = (
-                quotation_date.isoformat()
+                to_api_isoformat(quotation_date)
                 if hasattr(quotation_date, "isoformat")
                 else str(quotation_date)
             )

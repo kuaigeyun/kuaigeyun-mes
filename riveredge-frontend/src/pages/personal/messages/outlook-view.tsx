@@ -26,6 +26,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { ListPageTemplate } from '../../../components/layout-templates';
+import { formatDateTime } from '../../../utils/format';
 import {
   getUserMessages,
   getUserMessageStats,
@@ -599,12 +600,12 @@ const OutlookMessagesView: React.FC = () => {
                   {selectedMessage.sent_at && (
                     <Text type="secondary" style={{ fontSize: 12 }}>
                       {t('pages.personal.messages.sentAt')}：
-                      {dayjs(selectedMessage.sent_at).format('YYYY-MM-DD HH:mm:ss')}
+                      {formatDateTime(selectedMessage.sent_at, 'YYYY-MM-DD HH:mm:ss')}
                     </Text>
                   )}
                   <Text type="secondary" style={{ fontSize: 12 }}>
                     {t('pages.personal.messages.createdAt')}：
-                    {dayjs(selectedMessage.created_at).format('YYYY-MM-DD HH:mm:ss')}
+                    {formatDateTime(selectedMessage.created_at, 'YYYY-MM-DD HH:mm:ss')}
                   </Text>
                 </Space>
               </div>

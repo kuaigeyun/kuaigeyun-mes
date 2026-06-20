@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { UniMaterialSelect } from '../../../../components/uni-material-select';
 import type { Material } from '../../../master-data/types/material';
 import type { OrderChangeItem } from '../../services/sales-order-change';
+import { formatDateTime } from '../../../../utils/format';
 
 interface OrderChangeItemsTableProps {
   items: OrderChangeItem[];
@@ -86,7 +87,7 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
         after_quantity: 1,
         before_unit_price: 0,
         after_unit_price: 0,
-        after_delivery_date: dayjs().format('YYYY-MM-DD'),
+        after_delivery_date: formatDateTime(dayjs(), 'YYYY-MM-DD'),
         delta_amount: 0,
       },
     ]);

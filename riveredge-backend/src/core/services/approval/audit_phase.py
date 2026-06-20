@@ -27,6 +27,7 @@ _REJECTED_STATUS = {"rejected", "已驳回", "审核驳回"}
 _REVIEW_APPROVED = {"approved", "审核通过", "已通过", "通过", "已审核"}
 _REVIEW_REJECTED = {"rejected", "已驳回", "审核驳回"}
 _REVIEW_PENDING = {"待审核", "pending_review", "pending_approval", "已提交"}
+_DEMAND_REVOKABLE_CONFIRMED = {"confirmed", "已确认", "已生效"}
 
 # 提交后仍保持主状态为草稿、仅 review_status 进入待审的单据（如采购询价）
 _DRAFT_REVIEW_PENDING_ENTITY_TYPES = frozenset({"purchase_inquiry"})
@@ -82,9 +83,17 @@ def derive_audit_phase(
         phase = "none"
 
     allowed = list(_ALLOWED_ACTIONS_BY_PHASE[phase])
-    # 反审核仅在「严格已审核」阶段可用；已确认/已生效/执行中等下游阶段不再展示审核动作。
-    if phase == "approved" and not (s in _AUDITED_STRICT or (r in _REVIEW_APPROVED and s not in _APPROVED_ONGOING)):
-        allowed = []
+    # 反审核仅在「严格已审核」阶段可用；已确认/已生效/执行中等下游阶段默认不再展示审核动作。
+    # demand 特例：服务层允许 CONFIRMED -> PENDING_REVIEW（unapprove_demand），
+    # 审核相位必须与服务能力保持一致，避免出现“生命周期显示已审核但无撤销审核入口”的多源冲突。
+    if phase == "approved":
+        allow_revoke = bool(
+            s in _AUDITED_STRICT or (r in _REVIEW_APPROVED and s not in _APPROVED_ONGOING)
+        )
+        if entity_type == "demand" and s in _DEMAND_REVOKABLE_CONFIRMED:
+            allow_revoke = True
+        if not allow_revoke:
+            allowed = []
 
     return {
         "entity_type": entity_type,

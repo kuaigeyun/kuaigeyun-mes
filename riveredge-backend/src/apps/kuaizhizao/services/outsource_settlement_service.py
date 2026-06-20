@@ -16,6 +16,7 @@ from loguru import logger
 from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder, OutsourceMaterialReceipt
 from apps.master_data.models.supplier import Supplier
 from core.services.base import BaseService
+from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 
@@ -74,7 +75,7 @@ class OutsourceSettlementService(BaseService):
             "processing_cost": float(processing_cost),
             "material_cost": 0.0,  # TODO: 计算材料成本
             "total_cost": float(processing_cost),
-            "calculated_at": datetime.now().isoformat(),
+            "calculated_at": to_api_isoformat(datetime.now()),
         }
     
     async def create_settlement_statement(
@@ -170,12 +171,12 @@ class OutsourceSettlementService(BaseService):
                 "supplier_id": supplier_id,
                 "supplier_code": supplier.code,
                 "supplier_name": supplier.name,
-                "start_date": start_date.isoformat() if start_date else None,
-                "end_date": end_date.isoformat() if end_date else None,
+                "start_date": to_api_isoformat(start_date) if start_date else None,
+                "end_date": to_api_isoformat(end_date) if end_date else None,
                 "total_amount": float(total_amount),
                 "item_count": len(settlement_items),
                 "items": settlement_items,
-                "created_at": datetime.now().isoformat(),
+                "created_at": to_api_isoformat(datetime.now()),
             }
     
     async def reconcile_outsource_orders(
@@ -233,5 +234,5 @@ class OutsourceSettlementService(BaseService):
                 "calculated_amount": float(calculated_amount),
                 "confirmed_amount": float(confirmed_amount),
                 "amount_difference": float(amount_difference),
-                "reconciled_at": datetime.now().isoformat(),
+                "reconciled_at": to_api_isoformat(datetime.now()),
             }

@@ -28,6 +28,7 @@ import DocumentAttachmentsField from '../../../../kuaizhizao/components/Document
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
 import { buildReviewStatusEnum, getChineseInvoiceTypeOptions } from '../../../utils/financeSharedOptions';
+import { formatDateTime } from '../../../../../utils/format';
 
 const P = 'app.kuaicaiwu.purchaseInvoice';
 
@@ -98,7 +99,7 @@ const PurchaseInvoiceList: React.FC = () => {
                 supplier_id: values.supplier_id,
                 supplier_name: supplierOptions.find(o => o.value === values.supplier_id)?.label || '',
                 invoice_number: values.invoice_number,
-                invoice_date: values.invoice_date?.format ? values.invoice_date.format('YYYY-MM-DD') : (values.invoice_date || dayjs().format('YYYY-MM-DD')),
+                invoice_date: formatDateTime(values.invoice_date || dayjs(), 'YYYY-MM-DD'),
                 invoice_type: values.invoice_type || '增值税专用发票',
                 tax_rate: taxRate,
                 invoice_amount: invoiceAmount,
@@ -305,9 +306,7 @@ const PurchaseInvoiceList: React.FC = () => {
                 supplier_id: Number(pullSelectedSource.supplier_id || 0),
                 supplier_name: pullSelectedSource.supplier_name || '',
                 invoice_number: String(values.invoice_number ?? '').trim(),
-                invoice_date: values.invoice_date?.format
-                    ? values.invoice_date.format('YYYY-MM-DD')
-                    : (values.invoice_date || dayjs().format('YYYY-MM-DD')),
+                invoice_date: formatDateTime(values.invoice_date || dayjs(), 'YYYY-MM-DD'),
                 invoice_type: values.invoice_type || '增值税专用发票',
                 tax_rate: taxRate,
                 invoice_amount: invoiceAmount,
@@ -473,7 +472,7 @@ const PurchaseInvoiceList: React.FC = () => {
             title: t('app.kuaicaiwu.common.businessDate'),
             dataIndex: 'source_date',
             width: 130,
-            render: (v: unknown) => (v ? dayjs(String(v)).format('YYYY-MM-DD') : '-'),
+            render: (v: unknown) => (v ? formatDateTime(String(v), 'YYYY-MM-DD') : '-'),
         },
         {
             title: t(`${P}.col.amount`),
