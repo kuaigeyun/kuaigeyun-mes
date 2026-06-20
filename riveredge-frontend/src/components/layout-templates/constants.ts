@@ -186,7 +186,6 @@ export const DOCUMENT_FORM_PAGE_HEADER_STYLE: CSSProperties = {
   marginBottom: 0,
   paddingBottom: PAGE_SPACING.BLOCK_GAP,
   background: 'var(--ant-colorBgLayout)',
-  borderBottom: '1px solid var(--ant-colorBorderSecondary)',
 };
 
 /** 独立新建/编辑页可滚动内容区（顶栏下间距见 global.less .document-form-page-body） */

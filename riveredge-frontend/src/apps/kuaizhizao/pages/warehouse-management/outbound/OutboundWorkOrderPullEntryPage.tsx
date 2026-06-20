@@ -2,16 +2,18 @@
  * 从生产工单取单开生产领料 — 独立 Tab 页
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { App, Button, Card, Col, Form, Row, Select, Space, Spin, Typography } from 'antd';
+import { App, Button, Card, Col, Form, Row, Select, Space, Spin, Table, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import {
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   DocumentFormPageLayout,
   PAGE_SPACING,
+  WAREHOUSE_DETAIL_TABLE_STYLES,
 } from '../../../../../components/layout-templates';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { workOrderApi } from '../../../services/production';
 import { warehouseApi } from '../../../services/warehouse-execution';
@@ -30,6 +32,19 @@ import { OUTBOUND_LIST_PATH, outboundWorkOrderEntryPath } from './outboundPaths'
 import { draftOptionalNumber, usePullEntryFormDraft } from '../shared/pullEntryFormDraft';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
+type WorkOrderKittingLine = {
+  key: number;
+  material_code: string;
+  material_name: string;
+  material_unit?: string;
+  required_quantity: number;
+  picked_quantity: number;
+  shortage_quantity: number;
+  main_warehouse_available: number;
+  line_side_available: number;
+  status: string;
+};
+
 const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const { t } = useTranslation();
   const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'outbound.pull_from_work_order');
@@ -47,6 +62,9 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
   const [warehouseId, setWarehouseId] = useState<number | undefined>();
   const [notes, setNotes] = useState('');
+  const [kittingItems, setKittingItems] = useState<WorkOrderKittingLine[]>([]);
+  const [kittingRate, setKittingRate] = useState<number>(0);
+  const [kittingStatus, setKittingStatus] = useState<string>('');
   const { bindSnapshot, persistNow, clearDraft, applyDraftOnce } = usePullEntryFormDraft(
     'kuaizhizao:outbound-work-order-pull',
   );
@@ -56,6 +74,24 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const pageTitle = woCode
     ? `${pullFromWorkOrderAction.label} — ${woCode}`
     : pullFromWorkOrderAction.label;
+  const totalRequiredQty = useMemo(
+    () => kittingItems.reduce((sum, row) => sum + Number(row.required_quantity || 0), 0),
+    [kittingItems],
+  );
+  const kittingColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 140, ellipsis: true },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 180, ellipsis: true },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 70, align: 'center' as const },
+      { title: '需求数量', dataIndex: 'required_quantity', width: 110, align: 'right' as const },
+      { title: '已领数量', dataIndex: 'picked_quantity', width: 110, align: 'right' as const },
+      { title: '缺口数量', dataIndex: 'shortage_quantity', width: 110, align: 'right' as const },
+      { title: '主仓可用', dataIndex: 'main_warehouse_available', width: 130, align: 'right' as const },
+      { title: '线边可用', dataIndex: 'line_side_available', width: 120, align: 'right' as const },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.status'), dataIndex: 'status', width: 100, align: 'center' as const },
+    ],
+    [t],
+  );
 
   const leavePage = useCallback(() => {
     clearDraft();
@@ -110,6 +146,33 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         ]);
         setWorkOrder(woRaw as Record<string, unknown>);
         setWarehouseOptions(mapWarehouseSelectOptions(whRes));
+        try {
+          const kittingRaw = (await workOrderApi.getKittingAnalysis(String(woId))) as {
+            kitting_rate?: number | string;
+            status?: string;
+            items?: Array<Record<string, unknown>>;
+          };
+          const nextRows = (kittingRaw?.items || []).map((item, idx) => ({
+            key: Number(item.material_id ?? idx),
+            material_code: String(item.material_code ?? ''),
+            material_name: String(item.material_name ?? ''),
+            material_unit: item.material_unit ? String(item.material_unit) : '',
+            required_quantity: Number(item.required_quantity ?? 0),
+            picked_quantity: Number(item.picked_quantity ?? 0),
+            shortage_quantity: Number(item.shortage_quantity ?? 0),
+            main_warehouse_available: Number(item.main_warehouse_available ?? 0),
+            line_side_available: Number(item.line_side_available ?? 0),
+            status: String(item.status ?? ''),
+          }));
+          setKittingItems(nextRows);
+          setKittingRate(Number(kittingRaw?.kitting_rate ?? 0));
+          setKittingStatus(String(kittingRaw?.status ?? ''));
+        } catch {
+          // 齐套分析异常不阻断取单页，仅降级为无明细展示
+          setKittingItems([]);
+          setKittingRate(0);
+          setKittingStatus('');
+        }
         applyDraftOnce((draft) => {
           const whId = draftOptionalNumber(draft.warehouseId);
           if (whId != null) setWarehouseId(whId);
@@ -277,6 +340,32 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
               </Row>
             </Form>
           )}
+          <div className="uni-table-detail" style={{ marginTop: PAGE_SPACING.BLOCK_GAP }}>
+            <UniTableDetailHeader
+              title={t('app.kuaizhizao.warehouseOutbound.entry.issueDetails')}
+              extra={
+                <Typography.Text type="secondary">
+                  {`齐套率 ${Number.isFinite(kittingRate) ? kittingRate : 0}% / 总需求 ${totalRequiredQty}`}
+                  {kittingStatus ? ` / ${kittingStatus}` : ''}
+                </Typography.Text>
+              }
+            />
+            <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+            <div className="uni-table-detail-body">
+              <div className="uni-table-detail-scroll">
+                <Table
+                  className="uni-detail-table warehouse-detail-table"
+                  size="small"
+                  rowKey="key"
+                  pagination={false}
+                  scroll={{ x: 1200 }}
+                  dataSource={kittingItems}
+                  columns={kittingColumns}
+                  locale={{ emptyText: '暂无可领料明细' }}
+                />
+              </div>
+            </div>
+          </div>
         </Card>
       </Spin>
     </DocumentFormPageLayout>

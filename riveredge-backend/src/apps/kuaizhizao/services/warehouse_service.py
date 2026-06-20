@@ -5462,7 +5462,6 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             return_items = await SalesReturnItem.filter(
                 tenant_id=tenant_id,
                 return_id__in=list(return_ids),
-                deleted_at__isnull=True,
             ).all()
             for ri in return_items:
                 mid = int(ri.material_id)

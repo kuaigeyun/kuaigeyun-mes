@@ -119,6 +119,7 @@ import {
 } from '../../../../../components/layout-templates'
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull'
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query'
+import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push'
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel'
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter'
 import { useCustomFields } from '../../../../../hooks/useCustomFields'
@@ -239,7 +240,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate'
-import { formatDateTimeBySiteSetting } from '../../../../../utils/format'
+import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format'
 
 const toApiDateTimeString = (value: any): string | undefined => {
   if (!value) return undefined
@@ -3953,14 +3954,14 @@ const WorkOrdersPage: React.FC = () => {
       dataIndex: 'actual_start_date',
       render: (_, record) =>
         record.actual_start_date
-          ? dayjs(record.actual_start_date).format('YYYY-MM-DD HH:mm:ss')
+          ? formatDateTime(record.actual_start_date, 'YYYY-MM-DD HH:mm:ss')
           : '-',
     },
     {
       title: '实际结束时间',
       dataIndex: 'actual_end_date',
       render: (_, record) =>
-        record.actual_end_date ? dayjs(record.actual_end_date).format('YYYY-MM-DD HH:mm:ss') : '-',
+        record.actual_end_date ? formatDateTime(record.actual_end_date, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: t('app.kuaizhizao.workOrder.colCompletedQty'),
@@ -4424,6 +4425,68 @@ const WorkOrdersPage: React.FC = () => {
     if (!record.id) return
     navigate(outboundWorkOrderEntryPath(record.id))
   }
+
+  const selectedWorkOrderForToolbarPush = useMemo(() => {
+    if (selectedRowKeys.length !== 1) return null
+    const row = workOrderRowByKeyRef.current.get(String(selectedRowKeys[0]))
+    if (!row || (row.row_kind ?? 'work_order') !== 'work_order') return null
+    return row
+  }, [selectedRowKeys, workOrderListRowIndexVersion])
+
+  const toolbarPushMenuItems = useMemo(() => {
+    if (!selectedWorkOrderForToolbarPush?.id) return []
+    const rawStatus = String(selectedWorkOrderForToolbarPush.status ?? '').trim()
+    const canPushOutbound = ['released', '已下达', 'in_progress', '执行中'].includes(rawStatus)
+    const canPushInbound = ['completed', '已完成'].includes(rawStatus)
+    return buildUniPushMenuItems([
+      {
+        key: 'push-production-picking-outbound',
+        label: pushToOutboundAction.label,
+        disabled: !canPushOutbound,
+        title: canPushOutbound ? undefined : '仅“已下达 / 执行中”工单可下推领料出库',
+        onClick: () => handlePushToProductionPickingOutbound(selectedWorkOrderForToolbarPush),
+      },
+      {
+        key: 'push-finished-goods-inbound',
+        label: pushToInboundAction.label,
+        disabled: !canPushInbound,
+        title: canPushInbound ? undefined : '仅“已完成”工单可下推成品入库',
+        onClick: () => handlePushToFinishedGoodsInbound(selectedWorkOrderForToolbarPush),
+      },
+      {
+        key: 'push-production-return-inbound',
+        label: pushToProductionReturnInboundAction.label,
+        disabled: !canPushInbound,
+        title: canPushInbound ? undefined : '仅“已完成”工单可下推生产退料',
+        onClick: () => handlePushToProductionReturnInbound(selectedWorkOrderForToolbarPush),
+      },
+    ])
+  }, [
+    selectedWorkOrderForToolbarPush,
+    pushToOutboundAction.label,
+    pushToInboundAction.label,
+    pushToProductionReturnInboundAction.label,
+  ])
+
+  const canUseToolbarPush = useMemo(
+    () =>
+      toolbarPushMenuItems.some(
+        (item) =>
+          !!item &&
+          typeof item === 'object' &&
+          (item as { type?: string }).type !== 'divider' &&
+          (item as { disabled?: boolean }).disabled !== true,
+      ),
+    [toolbarPushMenuItems],
+  )
+
+  const toolbarPushDisabledReason = useMemo(() => {
+    if (selectedRowKeys.length === 0) return '请先选择一条工单'
+    if (selectedRowKeys.length !== 1) return '下推仅支持单条工单，请仅保留一条选中记录'
+    if (!selectedWorkOrderForToolbarPush) return '当前选中行不是可下推的工单记录'
+    if (!canUseToolbarPush) return '当前工单状态暂无可用下推操作'
+    return undefined
+  }, [canUseToolbarPush, selectedRowKeys.length, selectedWorkOrderForToolbarPush])
 
   /**
    * 处理提交工序委外表单
@@ -5243,14 +5306,14 @@ const WorkOrdersPage: React.FC = () => {
         dataIndex: 'planned_start_date',
         key: 'planned_start_date',
         width: 110,
-        render: (_: any, record: any) => (record.isParent ? null : (record.planned_start_date ? dayjs(record.planned_start_date).format('YYYY-MM-DD') : '-')),
+        render: (_: any, record: any) => (record.isParent ? null : (record.planned_start_date ? formatDateTime(record.planned_start_date, 'YYYY-MM-DD') : '-')),
       },
       {
         title: t('app.kuaizhizao.workOrder.colPlannedEndSearch'),
         dataIndex: 'planned_end_date',
         key: 'planned_end_date',
         width: 110,
-        render: (_: any, record: any) => (record.isParent ? null : (record.planned_end_date ? dayjs(record.planned_end_date).format('YYYY-MM-DD') : '-')),
+        render: (_: any, record: any) => (record.isParent ? null : (record.planned_end_date ? formatDateTime(record.planned_end_date, 'YYYY-MM-DD') : '-')),
       },
     ]
     if (treeData.length === 0) {
@@ -5366,14 +5429,14 @@ const WorkOrdersPage: React.FC = () => {
         dataIndex: 'planned_start_date',
         key: 'planned_start_date',
         width: 110,
-        render: (_: any, record: any) => (record.isParent ? null : (record.planned_start_date ? dayjs(record.planned_start_date).format('YYYY-MM-DD') : '-')),
+        render: (_: any, record: any) => (record.isParent ? null : (record.planned_start_date ? formatDateTime(record.planned_start_date, 'YYYY-MM-DD') : '-')),
       },
       {
         title: t('app.kuaizhizao.workOrder.colPlannedEndSearch'),
         dataIndex: 'planned_end_date',
         key: 'planned_end_date',
         width: 110,
-        render: (_: any, record: any) => (record.isParent ? null : (record.planned_end_date ? dayjs(record.planned_end_date).format('YYYY-MM-DD') : '-')),
+        render: (_: any, record: any) => (record.isParent ? null : (record.planned_end_date ? formatDateTime(record.planned_end_date, 'YYYY-MM-DD') : '-')),
       },
     ]
     if (treeData.length === 0) {
@@ -6325,6 +6388,12 @@ const WorkOrdersPage: React.FC = () => {
                 },
               ])}
             />,
+            <UniPushToolbarButton
+              key={`work-order-push-${selectedWorkOrderForToolbarPush?.id ?? 'none'}`}
+              menuItems={toolbarPushMenuItems}
+              disabled={!selectedWorkOrderForToolbarPush || !canUseToolbarPush}
+              disabledReason={toolbarPushDisabledReason}
+            />,
           ]}
           toolBarActionsAfterDelete={workOrderToolBarActionsAfterDelete}
           toolBarActionsAfterBatch={[
@@ -6366,13 +6435,13 @@ const WorkOrdersPage: React.FC = () => {
                 title: t('app.kuaizhizao.workOrder.colCreatedAt'),
                 dataIndex: 'created_at',
                 width: 180,
-                render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+                render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
               },
               {
                 title: '更新时间',
                 dataIndex: 'updated_at',
                 width: 180,
-                render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+                render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
               },
               {
                 title: t('app.kuaizhizao.workOrder.colConvertStatus'),
@@ -6432,7 +6501,7 @@ const WorkOrdersPage: React.FC = () => {
                 title: '更新时间',
                 dataIndex: 'updated_at',
                 width: 180,
-                render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+                render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
               },
               {
                 title: t('app.kuaizhizao.workOrder.colConvertStatus'),
@@ -6483,7 +6552,7 @@ const WorkOrdersPage: React.FC = () => {
             title: t('app.kuaizhizao.salesOrder.deliveryDate'),
             dataIndex: 'delivery_date',
             width: 130,
-            render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+            render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
           },
           {
             title: t('app.kuaizhizao.reports.remainingQuantity'),
@@ -6496,7 +6565,7 @@ const WorkOrdersPage: React.FC = () => {
             title: t('common.updatedAt'),
             dataIndex: 'updated_at',
             width: 180,
-            render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+            render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
           },
           {
             title: t('app.kuaizhizao.workOrder.colConvertStatus'),
