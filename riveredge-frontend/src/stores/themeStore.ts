@@ -23,6 +23,7 @@ const DEFAULT_CONFIG = {
   siderBgColor: '',
   headerBgColor: '',
   tabsBgColor: '',
+  themeStyle: 'vivid' as ThemeStyle,
 };
 
 export type ThemeMode = 'light' | 'dark' | 'auto';
@@ -110,12 +111,18 @@ export function resolveThemeFromCloud(
   const prefs = userPreferences && typeof userPreferences === 'object' ? userPreferences : {};
   const userTheme = (prefs.theme as ThemeMode) || 'light';
   const userConfig = (prefs.theme_config || {}) as Partial<ThemeConfig>;
-  if (hasCloudThemeConfig(userConfig)) {
-    return { theme: userTheme, config: mergeConfig({}, userConfig) };
-  }
-
   const site = siteSettings && typeof siteSettings === 'object' ? siteSettings : {};
   const siteConfig = buildSiteThemeConfig(site);
+
+  if (hasCloudThemeConfig(userConfig)) {
+    const config = mergeConfig({}, userConfig);
+    // 旧偏好无 themeStyle 时继承站点级简约/多彩，避免永选回 vivid
+    if (userConfig.themeStyle == null || userConfig.themeStyle === '') {
+      config.themeStyle = normalizeThemeStyle(siteConfig.themeStyle);
+    }
+    return { theme: userTheme, config };
+  }
+
   if (hasCloudThemeConfig(siteConfig)) {
     return { theme: userTheme, config: mergeConfig({}, siteConfig) };
   }
@@ -221,9 +228,16 @@ export const useThemeStore = create<ThemeState>((set, get) => {
 
   const syncFromPreferences = (preferences: Record<string, any>) => {
     if (!preferences || typeof preferences !== 'object') return;
-    const { siteThemeSettings } = get();
+    const { siteThemeSettings, config: liveConfig } = get();
     const { theme, config } = resolveThemeFromCloud(preferences, siteThemeSettings);
-    applyResolvedTheme(theme, config);
+    const userCfg = (preferences.theme_config || {}) as Partial<ThemeConfig>;
+    const mergedConfig =
+      (userCfg.themeStyle == null || userCfg.themeStyle === '') &&
+      liveConfig.themeStyle === 'plain' &&
+      config.themeStyle !== 'plain'
+        ? mergeConfig(config, { themeStyle: 'plain' })
+        : config;
+    applyResolvedTheme(theme, mergedConfig);
   };
 
   // 初始值：优先从 userPreferenceStore 缓存读取，否则用默认

@@ -542,7 +542,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       allValues,
       (allValues.colorMode as 'light' | 'dark' | 'auto') || colorMode,
     );
-    useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference, { persist: false });
+    useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference, {
+      persist: Boolean(changedValues.themeStyle && getToken()),
+    });
 
     applyPreviewTheme(allValues, themeMode);
   };
