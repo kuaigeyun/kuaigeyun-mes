@@ -1,5 +1,5 @@
 import React, { useMemo, Suspense, lazy } from 'react';
-import { App, Button, Space, Typography, Tag, Skeleton, Card, Descriptions } from 'antd';
+import { App, Button, Space, Typography, Tag, Skeleton } from 'antd';
 import {
   ThunderboltOutlined,
   CheckCircleOutlined,
@@ -111,22 +111,6 @@ const InspectionCenter: React.FC = () => {
     (summary?.pending_process || 0) +
     (summary?.pending_finished || 0) +
     (summary?.pending_oqc || 0);
-
-  const { data: stageToggles } = useDashboardRequest(
-    () => qualityApi.stageToggles.get(),
-    'kz:quality-dashboard:stage-toggles',
-    {
-      onError: (e: any) =>
-        message.error(
-          e?.message || t('app.kuaizhizao.quality.inspectionCenter.messages.loadStageTogglesFailed'),
-        ),
-    },
-  );
-
-  const stageOn = (enabled?: boolean) =>
-    enabled !== false
-      ? t('common.enabled', { defaultValue: '开启' })
-      : t('common.disabled', { defaultValue: '关闭' });
 
   const kpis: ModuleKpiDef[] = useMemo(
     () => [
@@ -354,27 +338,6 @@ const InspectionCenter: React.FC = () => {
       }
       chartRow={
         <ModuleChartRow>
-          <ModuleChartPanel title={t('app.kuaizhizao.quality.inspectionCenter.stageTogglesTitle')} lg={8}>
-            <Card size="small" variant="borderless">
-              <Descriptions column={1} size="small">
-                <Descriptions.Item label={t('app.kuaizhizao.quality.inspectionCenter.stageIqc')}>{stageOn(stageToggles?.iqc_enabled)}</Descriptions.Item>
-                <Descriptions.Item label={t('app.kuaizhizao.quality.inspectionCenter.stageIpqc')}>{stageOn(stageToggles?.ipqc_enabled)}</Descriptions.Item>
-                <Descriptions.Item label={t('app.kuaizhizao.quality.inspectionCenter.stageFqc')}>{stageOn(stageToggles?.fqc_enabled)}</Descriptions.Item>
-                <Descriptions.Item label={t('app.kuaizhizao.quality.inspectionCenter.stageOqc')}>{stageOn(stageToggles?.oqc_enabled)}</Descriptions.Item>
-              </Descriptions>
-              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
-                {t('app.kuaizhizao.quality.inspectionCenter.stageReadonlyHint')}
-              </Text>
-              <Button
-                type="link"
-                size="small"
-                style={{ paddingLeft: 0, marginTop: 4 }}
-                onClick={() => navigate('/system/config-center?tab=parameters&module=quality')}
-              >
-                {t('app.kuaizhizao.quality.inspectionCenter.gotoConfigCenter')}
-              </Button>
-            </Card>
-          </ModuleChartPanel>
           <ModuleChartPanel
             title={
               <Space>
@@ -382,7 +345,7 @@ const InspectionCenter: React.FC = () => {
                 <span>{t('app.kuaizhizao.quality.inspectionCenter.passRateTrend')}</span>
               </Space>
             }
-            lg={16}
+            lg={24}
           >
             <Suspense fallback={<Skeleton active />}>
               <PassRateLineChart {...trendConfig} height={300} />

@@ -2,6 +2,10 @@ import React from 'react';
 import { Col, theme } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
 import { AppstoreOutlined } from '@ant-design/icons';
+import {
+  MODULE_PANEL_TITLE_ICON_SIZE,
+  MODULE_PANEL_TITLE_STYLE,
+} from './constants';
 
 export interface ModuleActionPanelProps {
   title: string;
@@ -22,8 +26,8 @@ export function ModuleActionPanel({
 }: ModuleActionPanelProps) {
   const { token } = theme.useToken();
   const titleNode = (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-      <AppstoreOutlined />
+    <span style={{ ...MODULE_PANEL_TITLE_STYLE, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <AppstoreOutlined style={{ fontSize: MODULE_PANEL_TITLE_ICON_SIZE }} />
       <span>{title}</span>
     </span>
   );
@@ -35,7 +39,11 @@ export function ModuleActionPanel({
         headerBordered
         loading={loading}
         style={{ height: '100%', borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
-        styles={{ body: {padding: 8 } }}
+        styles={{
+          header: { minHeight: 48, paddingBlock: 12, paddingInline: 16 },
+          title: MODULE_PANEL_TITLE_STYLE,
+          body: { padding: 8 },
+        }}
         extra={extra}
       >
         {children}

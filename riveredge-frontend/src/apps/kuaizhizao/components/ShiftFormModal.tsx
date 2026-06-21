@@ -10,6 +10,11 @@ import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { shiftApi } from '../services/performance';
 import type { Shift, ShiftCreate, ShiftUpdate } from '../types/performance';
+import {
+  modalDateFieldProps,
+  modalFieldLayoutFromColSpan,
+  PERFORMANCE_FORM_MODAL_CLASS,
+} from '../utils/performanceFormLayout';
 
 export interface ShiftFormModalProps {
   open: boolean;
@@ -89,15 +94,18 @@ export const ShiftFormModal: React.FC<ShiftFormModalProps> = ({
       isEdit={isEdit}
       loading={loading}
       width={MODAL_CONFIG.STANDARD_WIDTH}
+      className={PERFORMANCE_FORM_MODAL_CLASS}
       formRef={formRef}
+      layout="vertical"
+      grid={false}
     >
-      <ProFormText name="code" label="班次编码" rules={[{ required: true }]} />
-      <ProFormText name="name" label="班次名称" rules={[{ required: true }]} />
-      <ProFormTimePicker name="startTime" label="开始时间" rules={[{ required: true }]} />
-      <ProFormTimePicker name="endTime" label="结束时间" rules={[{ required: true }]} />
-      <ProFormSwitch name="crossesMidnight" label="跨天" />
-      <ProFormDigit name="standardHours" label="标准工时(小时)" min={0} max={24} fieldProps={{ precision: 2 }} />
-      <ProFormSwitch name="isActive" label="启用" />
+      <ProFormText name="code" label="班次编码" rules={[{ required: true }]} formItemProps={modalFieldLayoutFromColSpan(12)} />
+      <ProFormText name="name" label="班次名称" rules={[{ required: true }]} formItemProps={modalFieldLayoutFromColSpan(12)} />
+      <ProFormTimePicker name="startTime" label="开始时间" rules={[{ required: true }]} {...modalDateFieldProps()} />
+      <ProFormTimePicker name="endTime" label="结束时间" rules={[{ required: true }]} {...modalDateFieldProps()} />
+      <ProFormDigit name="standardHours" label="标准工时(小时)" min={0} max={24} fieldProps={{ precision: 2 }} formItemProps={modalFieldLayoutFromColSpan(12)} />
+      <ProFormSwitch name="crossesMidnight" label="跨天" formItemProps={modalFieldLayoutFromColSpan(12)} />
+      <ProFormSwitch name="isActive" label="启用" formItemProps={modalFieldLayoutFromColSpan(12)} />
     </FormModalTemplate>
   );
 };

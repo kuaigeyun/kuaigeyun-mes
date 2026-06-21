@@ -42,6 +42,8 @@ import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocation
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { formatDateTime } from '../../../../../utils/format';
 
@@ -410,6 +412,11 @@ const OtherOutboundPage: React.FC = () => {
     setCreateModalVisible(true);
     // FormModalTemplate 设置了 destroyOnHidden，ProForm 每次打开都是全新挂载，无需 setTimeout + resetFields
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.otherOutbound.create')),
+    [t],
+  );
 
   const handleCreateSubmit = async (values: any) => {
     const needValidLinesMsg = t('app.kuaizhizao.otherOutbound.msg.needValidLines');
@@ -501,7 +508,7 @@ const OtherOutboundPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch
           showCreateButton
-          createButtonText={t('app.kuaizhizao.otherOutbound.create')}
+          createButtonText={createButtonLabel}
           onCreate={handleCreate}
           request={async (params) => {
             try {

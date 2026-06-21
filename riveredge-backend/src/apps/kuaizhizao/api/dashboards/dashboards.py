@@ -230,8 +230,13 @@ async def get_todos(
     async def _fetch_purchase_receipts() -> List[TodoItem]:
         try:
             from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+            from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
+                _INBOUND_PENDING_STATUSES,
+            )
             rows = await PurchaseReceipt.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True, status="待入库",
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                status__in=tuple(_INBOUND_PENDING_STATUSES),
             ).order_by("-created_at").limit(limit)
             return [TodoItem(
                 id=f"purchase_receipt_{pr.id}",
@@ -251,8 +256,13 @@ async def get_todos(
     async def _fetch_finished_goods_receipts() -> List[TodoItem]:
         try:
             from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+            from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
+                _INBOUND_PENDING_STATUSES,
+            )
             rows = await FinishedGoodsReceipt.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True, status="待入库",
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                status__in=tuple(_INBOUND_PENDING_STATUSES),
             ).order_by("-created_at").limit(limit)
             return [TodoItem(
                 id=f"finished_goods_receipt_{fg.id}",
@@ -293,8 +303,13 @@ async def get_todos(
     async def _fetch_other_inbounds() -> List[TodoItem]:
         try:
             from apps.kuaizhizao.models.other_inbound import OtherInbound
+            from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
+                _INBOUND_PENDING_STATUSES,
+            )
             rows = await OtherInbound.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True, status="待入库"
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                status__in=tuple(_INBOUND_PENDING_STATUSES),
             ).order_by("-created_at").limit(limit)
             return [TodoItem(
                 id=f"other_inbound_{row.id}",
@@ -1712,12 +1727,17 @@ async def get_menu_badge_counts(
     try:
         # 采购入库：待审核 / 待入库（已审）— 与销售订单侧栏徽标三态一致
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
+            _INBOUND_PENDING_STATUSES,
+        )
         _rv_pending = ["待审核", "PENDING", "PENDING_REVIEW"]
         _pr = PurchaseReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         pr_pending = await _pr.filter(review_status__in=_rv_pending).exclude(
             status__in=["已完成", "COMPLETED", "已取消", "CANCELLED", "关闭"]
         ).count()
-        pr_exec = await _pr.filter(status="待入库").exclude(review_status__in=_rv_pending).count()
+        pr_exec = await _pr.filter(status__in=tuple(_INBOUND_PENDING_STATUSES)).exclude(
+            review_status__in=_rv_pending
+        ).count()
         counts["inbound"] = {"overdue": 0, "pending": pr_pending, "in_progress": pr_exec}
     except Exception as e:
         logger.warning(f"menu-badge-counts inbound: {e}")
@@ -2869,7 +2889,7 @@ async def get_warehouse_summary(
     仓储四指标：
     - total_stock      总库存数量（MaterialBatch 在库 + LineSideInventory 可用）
     - in_stock_batches 在库批次数（MaterialBatch status="in_stock"）
-    - pending_inbound  待入库单数（PurchaseReceipt + FinishedGoodsReceipt + OtherInbound status="待入库"）
+    - pending_inbound  待入库单数（与入库 Hub 可确认态一致，含草稿下推单）
     - pending_outbound 待出库单数（SalesDelivery + OtherOutbound status="待出库"）
     """
     from apps.master_data.models.material_batch import MaterialBatch
@@ -2879,7 +2899,12 @@ async def get_warehouse_summary(
     from apps.kuaizhizao.models.other_inbound import OtherInbound
     from apps.kuaizhizao.models.sales_delivery import SalesDelivery
     from apps.kuaizhizao.models.other_outbound import OtherOutbound
+    from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
+        _INBOUND_PENDING_STATUSES,
+    )
     import asyncio
+
+    _pending_in = tuple(_INBOUND_PENDING_STATUSES)
 
     batch_qty_q = MaterialBatch.filter(
         tenant_id=tenant_id, status="in_stock"
@@ -2889,9 +2914,15 @@ async def get_warehouse_summary(
     ).values_list("quantity", flat=True)
     batch_count_q = MaterialBatch.filter(tenant_id=tenant_id, status="in_stock").count()
 
-    pr_q = PurchaseReceipt.filter(tenant_id=tenant_id, status="待入库", deleted_at__isnull=True).count()
-    fg_q = FinishedGoodsReceipt.filter(tenant_id=tenant_id, status="待入库", deleted_at__isnull=True).count()
-    oi_q = OtherInbound.filter(tenant_id=tenant_id, status="待入库", deleted_at__isnull=True).count()
+    pr_q = PurchaseReceipt.filter(
+        tenant_id=tenant_id, status__in=_pending_in, deleted_at__isnull=True
+    ).count()
+    fg_q = FinishedGoodsReceipt.filter(
+        tenant_id=tenant_id, status__in=_pending_in, deleted_at__isnull=True
+    ).count()
+    oi_q = OtherInbound.filter(
+        tenant_id=tenant_id, status__in=_pending_in, deleted_at__isnull=True
+    ).count()
 
     sd_q = SalesDelivery.filter(tenant_id=tenant_id, status="待出库", deleted_at__isnull=True).count()
     oo_q = OtherOutbound.filter(tenant_id=tenant_id, status="待出库", deleted_at__isnull=True).count()

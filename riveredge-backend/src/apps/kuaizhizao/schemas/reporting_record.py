@@ -5,7 +5,7 @@
 """
 
 from datetime import datetime
-from typing import Optional, Any
+from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
@@ -37,6 +37,8 @@ class ReportingRecordBase(BaseModel):
     remarks: Optional[str] = Field(None, description="备注")
     device_info: Optional[Any] = Field(None, description="设备信息")
     sop_parameters: Optional[Any] = Field(None, description="SOP参数数据（JSON格式，存储报工时收集的SOP参数）")
+    inbound_warehouse_id: Optional[int] = Field(None, description="末道工序入库仓库 ID")
+    inbound_warehouse_name: Optional[str] = Field(None, description="末道工序入库仓库名称")
 
 
 class ReportingRecordCreate(ReportingRecordBase):
@@ -86,6 +88,8 @@ class ReportingRecordResponse(ReportingRecordBase):
     approved_by: Optional[int] = Field(None, description="审核人ID")
     approved_by_name: Optional[str] = Field(None, description="审核人姓名")
     rejection_reason: Optional[str] = Field(None, description="驳回原因")
+    inbound_warehouse_id: Optional[int] = Field(None, description="末道工序入库仓库 ID")
+    inbound_warehouse_name: Optional[str] = Field(None, description="末道工序入库仓库名称")
     device_info: Optional[Any] = Field(None, description="设备信息")
     sop_parameters: Optional[Any] = Field(None, description="SOP参数数据（JSON格式）")
     created_at: datetime = Field(..., description="创建时间")
@@ -119,6 +123,10 @@ class ReportingRecordListResponse(BaseModel):
     created_at: datetime = Field(..., description="创建时间")
     capabilities: Optional[ReportingRecordCapabilities] = Field(
         None, description="业务态动作能力（document_action_policy）"
+    )
+    audit: Optional[Dict[str, Any]] = Field(
+        None,
+        description="审核相位（唯一来源：{entity_type, phase, enabled, allowed_actions}，供 uni-audit 渲染）",
     )
 
 

@@ -346,6 +346,11 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                     code = f"SN{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
 
             dump = notice_data.model_dump(exclude_unset=True, exclude={"items", "notice_code"})
+            audit_required = await self.business_config_service.check_audit_required(
+                tenant_id, "shipment_notice"
+            )
+            if audit_required:
+                dump["status"] = "待审核"
 
             notice = await ShipmentNotice.create(
                 tenant_id=tenant_id,
@@ -376,6 +381,23 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                 total_amount=total_amount
             )
             notice = await ShipmentNotice.get(tenant_id=tenant_id, id=notice.id)
+            if audit_required and (notice.status or "").strip() == "待审核":
+                from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+                instance = await ApprovalInstanceService.start_approval_for_node(
+                    tenant_id=tenant_id,
+                    user_id=created_by,
+                    node_key="shipment_notice",
+                    entity_type="shipment_notice",
+                    entity_id=notice.id,
+                    entity_uuid=str(notice.uuid),
+                    title=f"发货通知单审批: {notice.notice_code}",
+                    content=f"客户: {notice.customer_name}, 金额: {notice.total_amount}",
+                )
+                if not instance:
+                    raise BusinessLogicError(
+                        "发货通知单审核已开启但未找到可用的审批流程，请在配置中心检查 shipment_notice 审批流程是否已激活"
+                    )
             resp = ShipmentNoticeResponse.model_validate(notice)
             return await self._enrich_notice_response(tenant_id, notice, resp)
 
@@ -462,6 +484,151 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
 
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(deleted_at=datetime.now())
         return True
+
+    async def submit_shipment_notice(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        submitted_by: int,
+    ) -> ShipmentNoticeResponse:
+        notice = await ShipmentNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not notice:
+            raise NotFoundError(f"发货通知单不存在: {notice_id}")
+        status = str(notice.status or "").strip()
+        if status == "待审核":
+            return await self.get_shipment_notice_by_id(tenant_id, notice_id)
+
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "shipment_notice"
+        )
+        if not audit_required:
+            await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+                status="待发货",
+                updated_by=submitted_by,
+            )
+            return await self.get_shipment_notice_by_id(tenant_id, notice_id)
+
+        if status not in ("待发货",):
+            raise BusinessLogicError(f"当前状态不可提交审核: {status or '-'}")
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        instance = await ApprovalInstanceService.start_approval_for_node(
+            tenant_id=tenant_id,
+            user_id=submitted_by,
+            node_key="shipment_notice",
+            entity_type="shipment_notice",
+            entity_id=notice.id,
+            entity_uuid=str(notice.uuid),
+            title=f"发货通知单审批: {notice.notice_code}",
+            content=f"客户: {notice.customer_name}, 金额: {notice.total_amount}",
+        )
+        if not instance:
+            raise BusinessLogicError(
+                "发货通知单审核已开启但未找到可用的审批流程，请在配置中心检查 shipment_notice 审批流程是否已激活"
+            )
+        await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+            status="待审核",
+            updated_by=submitted_by,
+        )
+        return await self.get_shipment_notice_by_id(tenant_id, notice_id)
+
+    async def approve_shipment_notice(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        approver_id: int,
+    ) -> ShipmentNoticeResponse:
+        notice = await ShipmentNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not notice:
+            raise NotFoundError(f"发货通知单不存在: {notice_id}")
+        status = str(notice.status or "").strip()
+        if status != "待审核":
+            raise BusinessLogicError(f"只能审核待审核状态的发货通知单，当前: {status or '-'}")
+        await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+            status="待发货",
+            updated_by=approver_id,
+        )
+        return await self.get_shipment_notice_by_id(tenant_id, notice_id)
+
+    async def reject_shipment_notice(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        approver_id: int,
+        *,
+        rejection_reason: Optional[str] = None,
+    ) -> ShipmentNoticeResponse:
+        notice = await ShipmentNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not notice:
+            raise NotFoundError(f"发货通知单不存在: {notice_id}")
+        status = str(notice.status or "").strip()
+        if status != "待审核":
+            raise BusinessLogicError(f"只能驳回待审核状态的发货通知单，当前: {status or '-'}")
+        await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+            status="已驳回",
+            updated_by=approver_id,
+        )
+        return await self.get_shipment_notice_by_id(tenant_id, notice_id)
+
+    async def withdraw_shipment_notice_submit(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        operator_id: int,
+    ) -> ShipmentNoticeResponse:
+        notice = await ShipmentNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not notice:
+            raise NotFoundError(f"发货通知单不存在: {notice_id}")
+        status = str(notice.status or "").strip()
+        if status != "待审核":
+            raise BusinessLogicError(f"只能撤回待审核状态的发货通知单，当前: {status or '-'}")
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        await ApprovalInstanceService.cancel_approval(
+            tenant_id=tenant_id,
+            entity_type="shipment_notice",
+            entity_id=notice_id,
+            operator_id=operator_id,
+        )
+        await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+            status="待发货",
+            updated_by=operator_id,
+        )
+        return await self.get_shipment_notice_by_id(tenant_id, notice_id)
+
+    async def revoke_shipment_notice_approval(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        operator_id: int,
+    ) -> ShipmentNoticeResponse:
+        notice = await ShipmentNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not notice:
+            raise NotFoundError(f"发货通知单不存在: {notice_id}")
+        status = str(notice.status or "").strip()
+        if status != "待发货":
+            raise BusinessLogicError(f"当前状态不可撤销审核: {status or '-'}")
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "shipment_notice"
+        )
+        if not audit_required:
+            raise BusinessLogicError("发货通知单审核未开启，无法撤销审核")
+        await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+            status="待审核",
+            updated_by=operator_id,
+        )
+        return await self.get_shipment_notice_by_id(tenant_id, notice_id)
 
     async def notify_warehouse(
         self,

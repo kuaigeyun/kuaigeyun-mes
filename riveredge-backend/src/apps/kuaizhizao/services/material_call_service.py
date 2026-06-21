@@ -221,6 +221,8 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
         analysis = await WorkOrderService().get_work_order_kitting_analysis(tenant_id, work_order_id)
         lines: List[MaterialCallLineCreate] = []
         for item in analysis.items:
+            if not item.kitting_applicable:
+                continue
             shortage = item.shortage_quantity
             if shortage is None or shortage <= Decimal("0"):
                 continue

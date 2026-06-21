@@ -62,3 +62,29 @@ export function getOutsourceWorkOrderLifecycle(
   if (backend?.main_stages?.length) return parseBackendLifecycle(backend);
   return parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>));
 }
+
+const OUTSOURCE_STATUS_I18N_KEYS: Record<string, string> = {
+  draft: 'app.kuaizhizao.outsourceWorkOrder.statusDraft',
+  released: 'app.kuaizhizao.outsourceWorkOrder.statusReleased',
+  in_progress: 'app.kuaizhizao.outsourceWorkOrder.statusInProgress',
+  completed: 'app.kuaizhizao.outsourceWorkOrder.statusCompleted',
+  cancelled: 'app.kuaizhizao.outsourceWorkOrder.statusCancelled',
+};
+
+export function translateOutsourceWorkOrderLifecycleStatus(
+  t: (key: string) => string,
+  status?: string | null,
+): string {
+  if (!status) return '-';
+  const normStatus = status.trim();
+  const key = OUTSOURCE_STATUS_I18N_KEYS[normStatus];
+  if (key) return t(key);
+  const stageLabel = STATUS_TO_STAGE[normStatus];
+  if (stageLabel) {
+    const stageKey = OUTSOURCE_STATUS_I18N_KEYS[
+      Object.entries(STATUS_TO_STAGE).find(([, v]) => v === stageLabel)?.[0] ?? ''
+    ];
+    if (stageKey) return t(stageKey);
+  }
+  return normStatus;
+}

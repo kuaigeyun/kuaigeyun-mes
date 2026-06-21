@@ -873,30 +873,35 @@ async def list_shift_rosters(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     work_group_id: Optional[int] = Query(None, alias="workGroupId"),
+    employee_id: Optional[int] = Query(None, alias="employeeId"),
     period_start: Optional[date] = Query(None, alias="periodStart"),
     status: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
 ):
     return await ShiftSchedulingService.list_rosters(
-        tenant_id, work_group_id, period_start, status, skip, limit
+        tenant_id, work_group_id, employee_id, period_start, status, skip, limit
     )
 
 
 @router.get(
     "/shift-rosters/by-week",
     response_model=ShiftRosterResponse,
-    summary="Get or create shift roster for work group week",
+    summary="Get or create shift roster for work group or employee week",
 )
 async def get_or_create_shift_roster_week(
-    work_group_id: int = Query(..., alias="workGroupId"),
     period_start: date = Query(..., alias="periodStart"),
+    work_group_id: Optional[int] = Query(None, alias="workGroupId"),
+    employee_id: Optional[int] = Query(None, alias="employeeId"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
         return await ShiftSchedulingService.get_or_create_roster_for_week(
-            tenant_id, work_group_id, period_start
+            tenant_id,
+            period_start,
+            work_group_id=work_group_id,
+            employee_id=employee_id,
         )
     except (NotFoundError, ValidationError) as e:
         code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_400_BAD_REQUEST

@@ -9,7 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
@@ -74,6 +74,7 @@ import { listPurchaseOrders, getPurchaseOrder } from '../../../services/purchase
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useTranslation } from 'react-i18next';
 import { ROUTES } from '../../../constants/routes';
 import { inboundReceiptNoticeEntryPath } from '../../warehouse-management/inbound/inboundPaths';
@@ -81,6 +82,7 @@ import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } f
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { formatDateTime } from '../../../../../utils/format';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 interface ReceiptNoticeDetail extends ReceiptNotice {
   items?: { id?: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price?: number; total_amount?: number }[];
@@ -135,7 +137,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderReceiptNoticeRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return nodes;
+  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 const RECEIPT_NOTICE_RESOURCE = 'kuaizhizao:receipt-notice';
@@ -580,7 +582,7 @@ const ReceiptNoticesPage: React.FC = () => {
               </Button>
             );
           }
-          return parts;
+          return renderReceiptNoticeRowActions(parts, `receipt-notice-actions-${record.id ?? 'row'}`);
         },
       },
     ],
@@ -878,6 +880,11 @@ const ReceiptNoticesPage: React.FC = () => {
       createFormRef.current?.setFieldsValue({ items });
     }
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.receiptNotice.create')),
+    [t],
+  );
 
   const handleCreateSubmit = async (values: any) => {
     const validItems = (values.items ?? []).filter((it: any) => it.material_id && (Number(it.notice_quantity) || 0) > 0);
@@ -1203,13 +1210,13 @@ const ReceiptNoticesPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch={true}
           showCreateButton={false}
-          createButtonText={t('app.kuaizhizao.receiptNotice.create')}
+          createButtonText={createButtonLabel}
           onCreate={handleCreate}
           toolBarRender={() => [
             <UniPullCreateToolbar
               compactKey="create-receipt-notice-with-pull"
               createIcon={<PlusOutlined />}
-              createLabel={t('app.kuaizhizao.receiptNotice.create')}
+              createLabel={createButtonLabel}
               onCreate={handleCreate}
               menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
                 {
@@ -1360,9 +1367,8 @@ const ReceiptNoticesPage: React.FC = () => {
                   visible: noticeDetail.status === '待收货',
                   render: () => (
                     <Button
-                      type="link"
+                      {...rowActionKind('update')}
                       size="small"
-                      icon={<EditOutlined />}
                       onClick={() => {
                         setDetailDrawerVisible(false);
                         handleEdit(noticeDetail);
@@ -1377,10 +1383,8 @@ const ReceiptNoticesPage: React.FC = () => {
                   visible: noticeDetail.status === '待收货',
                   render: () => (
                     <Button
-                      type="link"
+                      {...rowActionKind('submit')}
                       size="small"
-                      icon={<SendOutlined />}
-                      style={{ color: '#1890ff' }}
                       onClick={() => handleNotify(noticeDetail)}
                     >
                       {t('app.kuaizhizao.shipmentNotice.notifyWarehouse')}
@@ -1391,7 +1395,7 @@ const ReceiptNoticesPage: React.FC = () => {
                   key: 'withdraw',
                   visible: noticeDetail.status === '已通知',
                   render: () => (
-                    <Button type="link" size="small" onClick={() => handleWithdraw(noticeDetail)}>
+                    <Button {...rowActionKind('revoke')} size="small" onClick={() => handleWithdraw(noticeDetail)}>
                       {t('app.kuaizhizao.shipmentNotice.withdrawNotify')}
                     </Button>
                   ),
@@ -1400,7 +1404,7 @@ const ReceiptNoticesPage: React.FC = () => {
                   key: 'delete',
                   visible: noticeDetail.status === '待收货',
                   render: () => (
-                    <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(noticeDetail)}>
+                    <Button {...rowActionKind('delete')} size="small" onClick={() => handleDelete(noticeDetail)}>
                       {t('common.delete')}
                     </Button>
                   ),

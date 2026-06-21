@@ -1,4 +1,4 @@
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 /**
  * 设备故障维修管理页面
  *
@@ -42,6 +42,8 @@ import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { formatDateTime } from '../../../../../utils/format';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const P = 'app.kuaizhizao.equipmentFault';
 
@@ -96,7 +98,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderFaultRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return nodes;
+  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 interface EquipmentFault {
@@ -159,6 +161,11 @@ const EquipmentFaultsPage: React.FC = () => {
     setModalVisible(true);
     formRef.current?.resetFields();
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t(`${P}.create`)),
+    [t],
+  );
 
   /**
    * 处理编辑故障记录
@@ -590,7 +597,7 @@ const EquipmentFaultsPage: React.FC = () => {
           showDeleteButton={true}
           onDelete={handleDelete}
           showCreateButton={true}
-          createButtonText={t(`${P}.create`)}
+          createButtonText={createButtonLabel}
           onCreate={handleCreate}
           scroll={{ x: 1900 }}
         />

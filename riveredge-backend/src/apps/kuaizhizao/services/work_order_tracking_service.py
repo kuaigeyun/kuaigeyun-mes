@@ -460,6 +460,60 @@ class WorkOrderTrackingService:
             await work_order.save(update_fields=list(updates.keys()) + ["updated_at"])
         return work_order
 
+    async def apply_manual_tracking_update(
+        self,
+        tenant_id: int,
+        work_order: WorkOrder,
+        material: Material,
+        patch: Dict[str, Any],
+    ) -> None:
+        """编辑工单时手工维护计划/确认批号与序列号。"""
+        mode = getattr(work_order, "tracking_mode", None) or self.resolve_tracking_mode(material)
+        if mode == TRACKING_NONE:
+            if any((str(v).strip() if v is not None else "") for v in patch.values()):
+                raise ValidationError("该物料未启用批号/序列号管理，不能填写追踪信息")
+            return
+
+        if work_order.status in ("cancelled", "split"):
+            raise ValidationError("已取消或已拆分的工单不能修改批号/序列号")
+
+        batch_fields = ("planned_batch_no", "confirmed_batch_no")
+        serial_fields = ("planned_serial_no", "confirmed_serial_no")
+        serial_touched = False
+        updates: Dict[str, Optional[str]] = {}
+
+        for field, raw in patch.items():
+            if field not in batch_fields + serial_fields:
+                continue
+            normalized = (str(raw).strip() if raw is not None else "") or None
+            current = getattr(work_order, field, None)
+            current_norm = (str(current).strip() if current is not None else "") or None
+            if normalized == current_norm:
+                continue
+            if field in batch_fields:
+                if mode not in (TRACKING_BATCH, TRACKING_BOTH):
+                    raise ValidationError("该物料未启用批号管理")
+                updates[field] = normalized
+            else:
+                if mode not in (TRACKING_SERIAL, TRACKING_BOTH):
+                    raise ValidationError("该物料未启用序列号管理")
+                serial_touched = True
+                if normalized:
+                    await self.validate_serial_no_available(
+                        tenant_id, normalized, exclude_work_order_id=work_order.id
+                    )
+                updates[field] = normalized
+
+        if serial_touched:
+            await self.check_serial_modification_allowed(tenant_id, work_order.id)
+
+        if not updates:
+            return
+
+        for key, val in updates.items():
+            setattr(work_order, key, val)
+        await work_order.save(update_fields=list(updates.keys()) + ["updated_at"])
+
     async def check_serial_modification_allowed(
         self,
         tenant_id: int,

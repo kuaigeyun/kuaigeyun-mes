@@ -9,7 +9,7 @@ Date: 2025-01-01
 """
 
 from datetime import date
-from typing import Optional, Dict, Any, List, Iterable
+from typing import Optional, Dict, Any, List, Iterable, Tuple
 from decimal import Decimal
 from tortoise.functions import Sum
 from tortoise.expressions import Q
@@ -26,22 +26,27 @@ def _decimal_or_zero(v: Any) -> Decimal:
         return Decimal("0")
 
 
-async def batch_sum_open_supply_quantities(
+async def batch_sum_open_supply_quantities_with_breakdown(
     tenant_id: int,
     material_ids: Iterable[int],
-) -> Dict[int, Decimal]:
+) -> Dict[int, Dict[str, float]]:
     """
-    按物料汇总「采购在途 + 生产/委外在制」数量，供 MRP include_in_transit 使用。
-
-    - 采购：已审核通过订单、状态非取消/驳回/完结，明细 outstanding_quantity>0
-    - 工单：released / in_progress，计划数量减 completed_quantity
-    - 委外工单：released / in_progress，计划数量减 received_quantity
+    按物料汇总在途/在制数量明细：
+    - purchase_quantity: 采购在途（已审核采购订单未入库量）
+    - work_order_quantity: 工单在制
+    - outsource_work_order_quantity: 委外工单在制
     """
     mids = [int(m) for m in material_ids if m is not None]
+    empty_row = {
+        "purchase_quantity": 0.0,
+        "work_order_quantity": 0.0,
+        "outsource_work_order_quantity": 0.0,
+        "total": 0.0,
+    }
     if not mids:
         return {}
 
-    result: Dict[int, Decimal] = {mid: Decimal("0") for mid in mids}
+    result: Dict[int, Dict[str, float]] = {mid: dict(empty_row) for mid in mids}
     mid_set = set(mids)
 
     from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, REVIEW_STATUS_ALIASES, normalize_status
@@ -61,7 +66,6 @@ async def batch_sum_open_supply_quantities(
         if ns in blocked or st in ("已完成", "已取消", "completed", "cancelled", "CLOSED"):
             return False
         return True
-
 
     try:
         from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
@@ -86,7 +90,7 @@ async def batch_sum_open_supply_quantities(
             if out > 0:
                 mid = int(line.material_id)
                 if mid in mid_set:
-                    result[mid] += out
+                    result[mid]["purchase_quantity"] += float(out)
     except Exception as e:
         logger.warning(f"采购在途汇总失败: {e}")
 
@@ -107,7 +111,7 @@ async def batch_sum_open_supply_quantities(
             done = _decimal_or_zero(wo.completed_quantity)
             wip = max(Decimal("0"), plan - done)
             if wip > 0:
-                result[pid] += wip
+                result[pid]["work_order_quantity"] += float(wip)
     except Exception as e:
         logger.warning(f"工单在制汇总失败: {e}")
 
@@ -128,11 +132,28 @@ async def batch_sum_open_supply_quantities(
             rec = _decimal_or_zero(owo.received_quantity)
             wip = max(Decimal("0"), plan - rec)
             if wip > 0:
-                result[pid] += wip
+                result[pid]["outsource_work_order_quantity"] += float(wip)
     except Exception as e:
         logger.warning(f"委外工单在制汇总失败: {e}")
 
+    for row in result.values():
+        row["total"] = (
+            row["purchase_quantity"]
+            + row["work_order_quantity"]
+            + row["outsource_work_order_quantity"]
+        )
     return result
+
+
+async def batch_sum_open_supply_quantities(
+    tenant_id: int,
+    material_ids: Iterable[int],
+) -> Dict[int, Decimal]:
+    """
+    按物料汇总「采购在途 + 生产/委外在制」数量，供 MRP include_in_transit 使用。
+    """
+    breakdown = await batch_sum_open_supply_quantities_with_breakdown(tenant_id, material_ids)
+    return {mid: Decimal(str(row.get("total") or 0)) for mid, row in breakdown.items()}
 
 
 async def get_material_available_quantity(
@@ -333,78 +354,208 @@ async def get_material_inventory_info(
     return result
 
 
+def _normalize_warehouse_display_name(warehouse_name: Optional[str]) -> str:
+    name = str(warehouse_name or "").strip()
+    return name or "未配置仓库"
+
+
+async def _list_material_default_warehouses(
+    tenant_id: int,
+    material: Any,
+) -> List[Tuple[int, str]]:
+    """物料 defaults.defaultWarehouses 中全部启用仓库，按 priority 升序。"""
+    from apps.master_data.models.warehouse import Warehouse
+    from apps.master_data.services.material_service import _material_defaults_as_dict
+
+    defaults = _material_defaults_as_dict(getattr(material, "defaults", None))
+    if not defaults:
+        return []
+    raw_list = defaults.get("defaultWarehouses") or defaults.get("default_warehouses")
+    if not isinstance(raw_list, list) or not raw_list:
+        return []
+
+    def _priority(entry: dict) -> int:
+        try:
+            return int(entry.get("priority") or 999)
+        except (TypeError, ValueError):
+            return 999
+
+    sorted_entries = sorted(
+        [e for e in raw_list if isinstance(e, dict)],
+        key=_priority,
+    )
+    seen: set[int] = set()
+    out: List[Tuple[int, str]] = []
+    for entry in sorted_entries:
+        wh_id = entry.get("warehouseId") or entry.get("warehouse_id")
+        if wh_id is None:
+            continue
+        try:
+            wh_id_int = int(wh_id)
+        except (TypeError, ValueError):
+            continue
+        if wh_id_int in seen:
+            continue
+        wh = await Warehouse.get_or_none(
+            id=wh_id_int,
+            tenant_id=tenant_id,
+            is_active=True,
+            deleted_at__isnull=True,
+        )
+        if wh:
+            seen.add(wh_id_int)
+            out.append((wh.id, wh.name))
+    return out
+
+
 async def get_material_detailed_locations(
     tenant_id: int,
     material_id: int
 ) -> list[Dict[str, Any]]:
     """
-    获取物料的详细库位分布
+    获取物料的详细库位分布（按具体仓库聚合，不再使用「主仓/线边仓」笼统标签）。
 
     Returns:
-        List[Dict], 包含库位、仓库、批次及可用数量
+        List[Dict]: warehouse_id, warehouse_name, warehouse_type, quantity
     """
-    locations = []
-    
-    # 1. 主仓 MaterialBatch
-    try:
-        from apps.master_data.models.material_batch import MaterialBatch
-        from apps.master_data.models.warehouse import Warehouse
+    from apps.master_data.models.material import Material
+    from apps.master_data.models.material_batch import MaterialBatch
+    from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
+    from apps.master_data.models.warehouse import Warehouse
+    from apps.master_data.services.material_service import (
+        resolve_primary_default_warehouse_from_material,
+    )
 
+    material = await Material.get_or_none(
+        tenant_id=tenant_id,
+        id=material_id,
+        deleted_at__isnull=True,
+    )
+
+    by_wh: Dict[int, Dict[str, Any]] = {}
+
+    def _ensure_wh(
+        wh_id: int,
+        wh_name: str,
+        *,
+        warehouse_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if wh_id not in by_wh:
+            by_wh[wh_id] = {
+                "warehouse_id": wh_id,
+                "warehouse_name": _normalize_warehouse_display_name(wh_name),
+                "warehouse_type": warehouse_type or "normal",
+                "quantity": Decimal("0"),
+                "batch_no": None,
+                "storage_location_code": None,
+            }
+        return by_wh[wh_id]
+
+    today = date.today()
+    batch_filter = (
+        Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
+    )
+
+    primary_wh = (
+        await resolve_primary_default_warehouse_from_material(
+            tenant_id=tenant_id,
+            material=material,
+        )
+        if material
+        else None
+    )
+    batch_wh_id, batch_wh_name = primary_wh if primary_wh else (0, "未配置仓库")
+    if primary_wh:
+        wh_row = await Warehouse.get_or_none(
+            tenant_id=tenant_id,
+            id=primary_wh[0],
+            deleted_at__isnull=True,
+        )
+        batch_wh_type = wh_row.warehouse_type if wh_row else "normal"
+    else:
+        batch_wh_type = "normal"
+
+    try:
         batches = await MaterialBatch.filter(
             tenant_id=tenant_id,
             material_id=material_id,
             deleted_at__isnull=True,
             quantity__gt=0,
-        ).filter(~Q(status__in=["out_stock", "scrapped", "expired"])).all()
-        
-        # 暂时没有在 MaterialBatch 里直接存 warehouse_id，
-        # 如果有仓库字段则关联；如果没有则标记为“默认主仓”
-        # 补充：通常在业务实务中，MaterialBatch 会归属于某个 Warehouse
+        ).filter(~Q(status__in=["out_stock", "scrapped", "expired"])).filter(batch_filter).all()
+
         for b in batches:
-            wh_name = "主仓"
-            wh_id = 0
-            # 尝试通过仓库字段获取（取决于具体模型定义，此处兼容性处理）
-            if hasattr(b, "warehouse_id") and b.warehouse_id:
-                wh = await Warehouse.get_or_none(id=b.warehouse_id)
-                if wh:
-                    wh_name = wh.name
-                    wh_id = wh.id
-            
-            locations.append({
-                "warehouse_id": wh_id,
-                "warehouse_name": wh_name,
-                "batch_no": b.batch_no,
-                "quantity": b.quantity,
-                "storage_location_code": getattr(b, "storage_location_code", None)
-            })
+            row = _ensure_wh(batch_wh_id, batch_wh_name, warehouse_type=batch_wh_type)
+            row["quantity"] += _decimal_or_zero(b.quantity)
     except Exception as e:
         logger.warning(f"获取主仓明细失败: {e}")
 
-    # 2. 线边仓 LineSideInventory
     try:
-        from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
-        from apps.master_data.models.warehouse import Warehouse
-
         line_items = await LineSideInventory.filter(
             tenant_id=tenant_id,
             material_id=material_id,
             deleted_at__isnull=True,
             status="available",
-            quantity__gt=0
-        ).all()
-        
+            quantity__gt=0,
+        ).filter(batch_filter).all()
+
+        wh_ids = {int(item.warehouse_id) for item in line_items if item.warehouse_id}
+        wh_map: Dict[int, Warehouse] = {}
+        if wh_ids:
+            wh_rows = await Warehouse.filter(
+                tenant_id=tenant_id,
+                id__in=list(wh_ids),
+                deleted_at__isnull=True,
+            ).all()
+            wh_map = {w.id: w for w in wh_rows}
+
         for item in line_items:
-            wh = await Warehouse.get_or_none(id=item.warehouse_id)
-            locations.append({
-                "warehouse_id": item.warehouse_id,
-                "warehouse_name": wh.name if wh else f"线边仓({item.warehouse_id})",
-                "batch_no": item.batch_no,
-                "quantity": (item.quantity or Decimal("0")) - (item.reserved_quantity or Decimal("0")),
-                "storage_location_code": "线边位"
-            })
+            wh_id = int(item.warehouse_id)
+            wh = wh_map.get(wh_id)
+            wh_name = (
+                (item.warehouse_name or "").strip()
+                or (wh.name if wh else "")
+                or f"仓库({wh_id})"
+            )
+            wh_type = wh.warehouse_type if wh else "line_side"
+            avail = _decimal_or_zero(item.quantity) - _decimal_or_zero(item.reserved_quantity)
+            if avail <= 0:
+                continue
+            row = _ensure_wh(wh_id, wh_name, warehouse_type=wh_type)
+            row["quantity"] += avail
     except Exception as e:
         logger.warning(f"获取线边仓明细失败: {e}")
 
+    if material and not by_wh:
+        for wh_id, wh_name in await _list_material_default_warehouses(tenant_id, material):
+            wh = await Warehouse.get_or_none(
+                tenant_id=tenant_id,
+                id=wh_id,
+                deleted_at__isnull=True,
+            )
+            _ensure_wh(
+                wh_id,
+                wh_name,
+                warehouse_type=wh.warehouse_type if wh else "normal",
+            )
+
+    locations: list[Dict[str, Any]] = []
+    for row in by_wh.values():
+        locations.append(
+            {
+                "warehouse_id": row["warehouse_id"],
+                "warehouse_name": row["warehouse_name"],
+                "warehouse_type": row["warehouse_type"],
+                "batch_no": row["batch_no"],
+                "quantity": row["quantity"],
+                "storage_location_code": row["storage_location_code"],
+            }
+        )
+    locations.sort(
+        key=lambda x: (
+            0 if (x.get("warehouse_type") or "") != "line_side" else 1,
+            str(x.get("warehouse_name") or ""),
+        )
+    )
     return locations
 
 

@@ -34,6 +34,12 @@ from apps.kuaizhizao.schemas.purchase import (
     PriceComparisonResponse, MaterialPriceComparison, PriceComparisonItem,
     PurchaseReceiptPullCandidate,
 )
+
+
+def _is_purchase_requisition_source_type(source_type: Optional[str]) -> bool:
+    """兼容 PurchaseRequisition / purchase_requisition 等写法。"""
+    key = (source_type or "").strip().lower().replace("_", "")
+    return key in {"purchaserequest", "purchaserequisition"}
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, LEGACY_AUDITED_VALUES, is_draft_status, is_pending_review_status
 from infra.services.business_config_service import BusinessConfigService
 from apps.kuaizhizao.services.document_action_policy.enricher import (
@@ -166,14 +172,15 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 .get("require_purchase_requisition", False)
             )
             if require_purchase_requisition:
-                source_type = (order_data.source_type or "").strip().lower()
+                source_type = (order_data.source_type or "").strip()
                 source_id = order_data.source_id
-                if source_type in {"purchase_request", "purchase_requisition"} and source_id:
+                if _is_purchase_requisition_source_type(source_type) and source_id:
                     pass
                 else:
                     # 兼容按明细挂接采购申请的场景
                     all_items_have_source = all(
-                        bool(item.source_id) and (item.source_type or "").strip().lower() in {"purchase_request", "purchase_requisition"}
+                        bool(item.source_id)
+                        and _is_purchase_requisition_source_type(item.source_type)
                         for item in order_data.items
                     )
                     if not all_items_have_source:
@@ -777,7 +784,6 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             PurchaseOrderResponse: 审核后的订单信息
         """
         from core.services.approval.approval_instance_service import ApprovalInstanceService
-        from infra.models.user import User
 
         order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
         if not order:
@@ -785,8 +791,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         assert_purchase_order_capability(order, "approve")
 
-        approver = await User.get_or_none(id=approved_by)
-        approver_name = approver.name if approver else f"用户{approved_by}"
+        approver_name = await self.get_user_name(approved_by)
 
         approval_status = await ApprovalInstanceService.get_approval_status(
             tenant_id=tenant_id,
@@ -806,6 +811,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             if result.get("flow_rejected"):
                 update_dict = {
                     'reviewer_id': approved_by,
+                    'reviewer_name': approver_name,
                     'review_time': datetime.now(),
                     'review_status': ReviewStatus.REJECTED.value,
                     'review_remarks': approve_data.review_remarks,
@@ -815,6 +821,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             elif result.get("flow_completed"):
                 update_dict = {
                     'reviewer_id': approved_by,
+                    'reviewer_name': approver_name,
                     'review_time': datetime.now(),
                     'review_status': ReviewStatus.APPROVED.value,
                     'review_remarks': approve_data.review_remarks,
@@ -824,6 +831,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             else:
                 update_dict = {
                     'reviewer_id': approved_by,
+                    'reviewer_name': approver_name,
                     'review_time': datetime.now(),
                     'review_status': "审核中" if approve_data.approved else ReviewStatus.REJECTED.value,
                     'review_remarks': approve_data.review_remarks,
@@ -840,6 +848,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
             update_dict = {
                 'reviewer_id': approved_by,
+                'reviewer_name': approver_name,
                 'review_time': datetime.now(),
                 'review_status': ReviewStatus.APPROVED.value if approve_data.approved else ReviewStatus.REJECTED.value,
                 'review_remarks': approve_data.review_remarks,
@@ -852,6 +861,47 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         await order.update_from_dict(update_dict).save()
 
         return await self.get_purchase_order_by_id(tenant_id, order_id)
+
+    async def revoke_purchase_order_approval(
+        self,
+        tenant_id: int,
+        order_id: int,
+        operator_id: int,
+    ) -> PurchaseOrderResponse:
+        """撤销审核：已确认/已驳回 → 待审核"""
+        from apps.kuaizhizao.services.document_action_policy.enricher import purchase_order_has_downstream
+        from core.services.approval.uni_audit_service import UniAuditService
+
+        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        if not order:
+            raise NotFoundError(f"采购订单不存在: {order_id}")
+
+        has_downstream = await purchase_order_has_downstream(tenant_id, order_id)
+        assert_purchase_order_capability(
+            order,
+            "revoke_approval",
+            has_downstream=has_downstream,
+        )
+
+        async def _do_revoke() -> PurchaseOrderResponse:
+            await order.update_from_dict({
+                "status": DocumentStatus.PENDING_REVIEW.value,
+                "review_status": ReviewStatus.PENDING.value,
+                "reviewer_id": None,
+                "reviewer_name": None,
+                "review_time": None,
+                "review_remarks": None,
+                "updated_by": operator_id,
+            }).save()
+            return await self.get_purchase_order_by_id(tenant_id, order_id)
+
+        return await UniAuditService.revoke_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="purchase_order",
+            entity_id=order_id,
+            operator_id=operator_id,
+            flow_revoke=_do_revoke,
+        )
 
     async def confirm_purchase_order(
         self,
@@ -1135,7 +1185,11 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         order_id: int,
         created_by: int,
         receipt_quantities: Optional[Dict[int, float]] = None,
-        batch_numbers: Optional[Dict[int, str]] = None
+        batch_numbers: Optional[Dict[int, str]] = None,
+        warehouse_id: Optional[int] = None,
+        line_warehouses: Optional[Dict[int, int]] = None,
+        line_location_ids: Optional[Dict[int, int]] = None,
+        line_location_codes: Optional[Dict[int, str]] = None,
     ) -> Dict[str, Any]:
         """
         下推到采购入库
@@ -1148,6 +1202,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             created_by: 创建人ID
             receipt_quantities: 入库数量字典 {item_id: quantity}，如果不提供则使用订单数量
             batch_numbers: 预生成批号字典 {item_id: batch_number}（可选，来自预览时使用以避免重复生成）
+            warehouse_id: 入库单表头仓库 ID（可选；未传则取行级或第一个可用仓库）
+            line_warehouses: 行级仓库 {purchase_order_item_id: warehouse_id}
+            line_location_ids: 行级库位 {purchase_order_item_id: location_id}
+            line_location_codes: 行级库位编码 {purchase_order_item_id: location_code}
             
         Returns:
             Dict: 包含创建的采购入库单信息
@@ -1159,6 +1217,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         from apps.kuaizhizao.services.warehouse_service import (
             PurchaseReceiptService,
             sync_purchase_order_receipt_quantities,
+            _resolve_warehouse_name_by_id,
         )
         from apps.kuaizhizao.schemas.warehouse import PurchaseReceiptCreate, PurchaseReceiptItemCreate
         from decimal import Decimal
@@ -1207,6 +1266,25 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             batch_number = batch_numbers.get(item.id) if batch_numbers else None
             snapshot = await self._resolve_po_item_receipt_snapshot(tenant_id, item)
 
+            line_wh: Optional[int] = None
+            if line_warehouses and item.id in line_warehouses:
+                line_wh = int(line_warehouses[item.id])
+            elif warehouse_id is not None:
+                line_wh = int(warehouse_id)
+
+            line_loc_id: Optional[int] = None
+            line_loc_code: Optional[str] = None
+            if line_location_ids and item.id in line_location_ids:
+                line_loc_id = int(line_location_ids[item.id])
+            if line_location_codes and item.id in line_location_codes:
+                raw_code = line_location_codes[item.id]
+                if raw_code and str(raw_code).strip():
+                    line_loc_code = str(raw_code).strip()
+
+            line_wh_name: Optional[str] = None
+            if line_wh is not None:
+                line_wh_name = await _resolve_warehouse_name_by_id(tenant_id, line_wh)
+
             receipt_items.append(PurchaseReceiptItemCreate(
                 purchase_order_item_id=item.id,
                 material_id=item.material_id,
@@ -1219,6 +1297,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 qualified_quantity=receipt_quantity,  # 默认全部合格，后续可通过检验调整
                 unqualified_quantity=Decimal('0'),  # 默认无不合格数量
                 batch_number=batch_number,
+                warehouse_id=line_wh,
+                warehouse_name=line_wh_name,
+                location_id=line_loc_id,
+                location_code=line_loc_code,
             ))
         
         if not receipt_items:
@@ -1226,9 +1308,22 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         from apps.master_data.models.warehouse import Warehouse
 
-        wh = await Warehouse.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True).order_by("id").first()
-        if not wh:
-            raise BusinessLogicError("未配置可用仓库，无法生成采购入库单。请先在主数据维护仓库。")
+        header_wh_id = warehouse_id
+        if header_wh_id is None and line_warehouses:
+            for ri in receipt_items:
+                if getattr(ri, "warehouse_id", None):
+                    header_wh_id = int(ri.warehouse_id)
+                    break
+
+        wh_query = Warehouse.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True)
+        if header_wh_id is not None:
+            wh = await wh_query.filter(id=int(header_wh_id)).first()
+            if not wh:
+                raise BusinessLogicError(f"仓库不存在或已停用: {header_wh_id}")
+        else:
+            wh = await wh_query.order_by("id").first()
+            if not wh:
+                raise BusinessLogicError("未配置可用仓库，无法生成采购入库单。请先在主数据维护仓库。")
         wh_name = str(getattr(wh, "name", None) or getattr(wh, "code", None) or "").strip()
         if not wh_name:
             raise BusinessLogicError(f"仓库名称未配置: {wh.id}")

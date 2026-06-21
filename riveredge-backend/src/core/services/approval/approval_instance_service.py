@@ -1977,7 +1977,11 @@ class ApprovalInstanceService:
                 if not demand:
                     return
                 approver = await User.get_or_none(id=approver_id)
-                approver_name = approver.name if approver else f"用户{approver_id}"
+                approver_name = (
+                    (approver.full_name or approver.username or f"用户{approver_id}").strip()
+                    if approver
+                    else f"用户{approver_id}"
+                )
                 remark = "审批通过" if approval_instance.status == "approved" else "审批驳回"
                 await Demand.filter(tenant_id=tenant_id, id=entity_id).update(
                     reviewer_id=approver_id,
@@ -1997,7 +2001,11 @@ class ApprovalInstanceService:
                 if not order:
                     return
                 approver = await User.get_or_none(id=approver_id)
-                approver_name = approver.name if approver else f"用户{approver_id}"
+                approver_name = (
+                    (approver.full_name or approver.username or f"用户{approver_id}").strip()
+                    if approver
+                    else f"用户{approver_id}"
+                )
                 remark = "审批通过" if approval_instance.status == "approved" else "审批驳回"
                 await PurchaseOrder.filter(tenant_id=tenant_id, id=entity_id).update(
                     reviewer_id=approver_id,

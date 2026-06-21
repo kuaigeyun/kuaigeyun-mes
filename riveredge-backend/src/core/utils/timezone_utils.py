@@ -60,9 +60,32 @@ def is_future_datetime(
 
 
 def to_site_timezone(dt: datetime) -> datetime:
-    """将 ``datetime`` 统一转换到系统配置时区。naive 值按 UTC 解释。"""
-    aware = dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
-    return aware.astimezone(ZoneInfo(infra_settings.TIMEZONE))
+    """将 ``datetime`` 统一转换到系统配置时区。naive 值按站点墙钟解释（与 Tortoise 业务时间一致）。"""
+    tz_name = infra_settings.TIMEZONE or "Asia/Shanghai"
+    if dt.tzinfo is None:
+        return make_aware(dt, tz_name)
+    return dt.astimezone(ZoneInfo(tz_name))
+
+
+def to_site_date(dt: datetime) -> date:
+    """业务日历日：在站点时区下取 date（入库确认、生产日期等）。"""
+    return to_site_timezone(dt).date()
+
+
+def resolve_business_datetime(value: datetime | None = None) -> datetime:
+    """
+    业务入库/出库时刻，供 QuerySet.update 等绕过 ORM 的路径写入 DB。
+
+    - 默认：站点当前时刻（Tortoise tz_now）
+    - naive：按站点墙钟解释后转 UTC
+    - aware：统一转 UTC
+    """
+    from tortoise.timezone import now as tz_now
+
+    dt = value if value is not None else tz_now()
+    if dt.tzinfo is None:
+        dt = make_aware(dt, infra_settings.TIMEZONE or "Asia/Shanghai")
+    return dt.astimezone(timezone.utc)
 
 
 def to_api_isoformat(value: datetime | date | None) -> str | None:
@@ -88,5 +111,7 @@ __all__ = [
     "to_naive_utc",
     "is_future_datetime",
     "to_site_timezone",
+    "to_site_date",
+    "resolve_business_datetime",
     "to_api_isoformat",
 ]

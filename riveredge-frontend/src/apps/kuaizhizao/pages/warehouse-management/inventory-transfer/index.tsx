@@ -29,6 +29,8 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { formatDateTime } from '../../../../../utils/format';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 interface InventoryTransfer {
   id?: number;
@@ -230,6 +232,11 @@ const InventoryTransferPage: React.FC = () => {
       });
     }, 0);
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.inventoryTransfer.createButton')),
+    [t],
+  );
 
   /**
    * 处理提交创建调拨单
@@ -555,7 +562,7 @@ const InventoryTransferPage: React.FC = () => {
         columns={columns}
         showAdvancedSearch={true}
         showCreateButton={true}
-        createButtonText={t('app.kuaizhizao.inventoryTransfer.createButton')}
+        createButtonText={createButtonLabel}
         onCreate={handleCreate}
         request={async (params, _sort, _filter, searchFormValues) => {
           try {

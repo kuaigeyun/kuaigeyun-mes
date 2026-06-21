@@ -21,6 +21,8 @@ import { materialApi } from '../../../../master-data/services/material';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 /**
  * 条码映射规则接口定义
@@ -71,6 +73,11 @@ const BarcodeMappingRulesPage: React.FC = () => {
     setPendingFormValues(null);
     setModalVisible(true);
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.barcodeMapping.createButton')),
+    [t],
+  );
 
   /**
    * 处理编辑
@@ -275,7 +282,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.barcode-mapping-rules"
         showCreateButton={true}
-        createButtonText={t('app.kuaizhizao.barcodeMapping.createButton')}
+        createButtonText={createButtonLabel}
         onCreate={handleCreate}
         enableRowSelection={true}
         showDeleteButton={true}

@@ -1,4 +1,4 @@
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 /**
  * 统一需求计算页面
  *
@@ -49,9 +49,7 @@ import {
 } from 'antd'
 import {
   PlayCircleOutlined,
-  EyeOutlined,
   ReloadOutlined,
-  DeleteOutlined,
   WarningOutlined,
   CopyOutlined,
 } from '@ant-design/icons'
@@ -132,6 +130,8 @@ import {
   salesForecastCapabilityReasonMessage,
   salesOrderCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities'
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut'
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut'
 
 const DEMAND_COMPUTATION_RESOURCE = 'plan-management-demand-computation'
 
@@ -196,7 +196,7 @@ type PullSalesForecastCandidate = {
 const DEMAND_COMPUTATION_DETAIL_ITEMS_MIN_WIDTH = 1920
 
 function renderDemandComputationRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return nodes;
+  return renderRowActionsOverflow(nodes, keyPrefix)
 }
 
 function normalizeComputationSourceNote(computation: DemandComputation | undefined, t: TFunction): string {
@@ -977,6 +977,14 @@ const DemandComputationPage: React.FC = () => {
       messageApi.error(t('app.kuaizhizao.demandComputation.loadDemandListFailed'))
     }
   }
+  const handleCreateByShortcut = useCallback(() => {
+    void handleCreate()
+  }, [handleCreate])
+  useNewShortcut(handleCreateByShortcut)
+  const createComputationButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.demandComputation.create')),
+    [t],
+  )
 
   const pullFromDemandQuery = useUniPullQuery<PullDemandCandidate>({
     rowKey: 'id',
@@ -1677,35 +1685,39 @@ const DemandComputationPage: React.FC = () => {
       render: (_, record) => {
         const canExecute = canExecuteComputation(record.computation_status)
         const canRecompute = isComputationCompleted(record.computation_status) || isComputationFailed(record.computation_status)
+        const canExecuteByCapability = record.capabilities?.execute?.allowed !== false
+        const canRecomputeByCapability = record.capabilities?.recompute?.allowed !== false
         const parts: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail([record.id!])}>
             {t('app.kuaizhizao.demandComputation.actionDetail')}
           </Button>,
         ]
-        if (canExecute) {
+        if (canExecute && canExecuteByCapability && (computationPerms.canAction?.('submit') ?? false)) {
           parts.push(
             <Button {...rowActionKind('execute')} key="ex" onClick={() => handleExecute(record)}>
               {t('app.kuaizhizao.demandComputation.actionExecute')}
             </Button>
           )
         }
-        if (canRecompute) {
+        if (canRecompute && canRecomputeByCapability && computationPerms.canUpdate) {
           parts.push(
             <Button {...rowActionKind('recycle')} key="rc" onClick={() => handleRecompute(record)}>
               {t('app.kuaizhizao.demandComputation.actionRecompute')}
             </Button>
           )
         }
-        parts.push(
-          <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)}>
-            {t('app.kuaizhizao.demandComputation.actionDelete')}
-          </Button>
-        )
+        if (computationPerms.canDelete) {
+          parts.push(
+            <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)}>
+              {t('app.kuaizhizao.demandComputation.actionDelete')}
+            </Button>
+          )
+        }
         return renderDemandComputationRowActions(parts, `dc-${record.id ?? 'row'}`)
       },
     },
   ],
-    [handleDelete, handleDetail, handleExecute, handleRecompute, messageApi, t],
+    [computationPerms.canAction, computationPerms.canDelete, computationPerms.canUpdate, handleDelete, handleDetail, handleExecute, handleRecompute, messageApi, t],
   )
 
   const selectedComputationForToolbar = useMemo(() => {
@@ -1834,7 +1846,7 @@ const DemandComputationPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         enableRowSelection={true}
-        showDeleteButton={true}
+        showDeleteButton={computationPerms.canDelete}
         onDelete={async (keys) => {
           try {
             for (const id of keys) {
@@ -1867,7 +1879,7 @@ const DemandComputationPage: React.FC = () => {
             <UniPullCreateToolbar
               compactKey="create-demand-computation-with-pull"
               createIcon={<PlayCircleOutlined />}
-              createLabel={t('app.kuaizhizao.demandComputation.create')}
+              createLabel={createComputationButtonLabel}
               onCreate={() => {
                 void handleCreate()
               }}
@@ -1915,7 +1927,7 @@ const DemandComputationPage: React.FC = () => {
             batchAllowed={(recs, perm) => demandComputationBatchExecuteAllowed(recs, perm)}
             onRun={(id) => executeDemandComputation(id)}
             labels={{
-              single: t('app.kuaizhizao.demandComputation.batchExecute'),
+              single: t('app.kuaizhizao.demandComputation.actionExecute'),
               batch: t('app.kuaizhizao.demandComputation.batchExecute'),
             }}
             icon={<PlayCircleOutlined />}
@@ -1931,7 +1943,7 @@ const DemandComputationPage: React.FC = () => {
             batchAllowed={(recs, perm) => demandComputationBatchRecomputeAllowed(recs, perm)}
             onRun={(id) => recomputeDemandComputation(id)}
             labels={{
-              single: t('app.kuaizhizao.demandComputation.batchRecompute'),
+              single: t('app.kuaizhizao.demandComputation.actionRecompute'),
               batch: t('app.kuaizhizao.demandComputation.batchRecompute'),
             }}
             icon={<ReloadOutlined />}

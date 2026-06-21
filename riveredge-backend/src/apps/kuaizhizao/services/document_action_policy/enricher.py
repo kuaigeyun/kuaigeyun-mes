@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, TypeVar
+from typing import Any, Dict, List, Optional, TypeVar
 
 from infra.services.business_config_service import BusinessConfigService
 
@@ -126,6 +126,47 @@ from apps.kuaizhizao.services.document_action_policy.types import (
 )
 
 T = TypeVar("T")
+
+
+async def batch_document_item_counts(
+    tenant_id: int,
+    item_model: Any,
+    parent_field: str,
+    parent_ids: List[int],
+) -> Dict[int, int]:
+    """批量统计单据明细行数（入库/出库 Hub 列表 total_items）。"""
+    if not parent_ids:
+        return {}
+    from tortoise.functions import Count
+
+    rows = await (
+        item_model.filter(tenant_id=tenant_id, **{f"{parent_field}__in": parent_ids})
+        .group_by(parent_field)
+        .annotate(c=Count("id"))
+        .values(parent_field, "c")
+    )
+    return {int(row[parent_field]): int(row["c"] or 0) for row in rows}
+
+
+def enrich_inbound_hub_list_capabilities(
+    records: List[Any],
+    responses: List[T],
+    receipt_type: str,
+    *,
+    item_counts: Optional[Dict[int, int]] = None,
+) -> List[T]:
+    out: List[T] = []
+    for record, resp in zip(records, responses):
+        caps = derive_inbound_hub_capabilities(record, receipt_type=receipt_type)
+        update: Dict[str, Any] = {"capabilities": caps}
+        if item_counts is not None:
+            rid = int(getattr(record, "id", 0) or 0)
+            update["total_items"] = item_counts.get(rid, 0)
+        if hasattr(resp, "model_copy"):
+            out.append(resp.model_copy(update=update))
+        else:
+            out.append(resp)
+    return out
 
 
 async def _quotation_audit_required(tenant_id: int) -> bool:
@@ -454,14 +495,18 @@ def enrich_sales_return_list_capabilities(
     responses: List[T],
     *,
     has_items_by_id: Optional[dict[int, bool]] = None,
+    item_counts_by_id: Optional[dict[int, int]] = None,
 ) -> List[T]:
     items_map = has_items_by_id or {}
     out: List[T] = []
     for doc, resp in zip(return_docs, responses):
         rid = int(getattr(doc, "id", 0) or 0)
         caps = derive_sales_return_capabilities(doc, has_items=items_map.get(rid, True))
+        update: Dict[str, Any] = {"capabilities": caps}
+        if item_counts_by_id is not None:
+            update["total_items"] = item_counts_by_id.get(rid, 0)
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(resp.model_copy(update=update))
         else:
             out.append(resp)
     return out
@@ -672,17 +717,78 @@ async def _purchase_order_outstanding_by_ids(tenant_id: int, order_ids: List[int
     return result
 
 
+async def _purchase_order_downstream_by_ids(tenant_id: int, order_ids: List[int]) -> dict[int, bool]:
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+    from apps.kuaizhizao.models.purchase_order_change_order import PurchaseOrderChangeOrder
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+    from apps.kuaizhizao.models.purchase_return import PurchaseReturn
+    from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
+
+    if not order_ids:
+        return {}
+    result: dict[int, bool] = {oid: False for oid in order_ids}
+
+    def _mark(order_id: int) -> None:
+        result[int(order_id)] = True
+
+    items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id__in=order_ids).all()
+    for item in items:
+        if float(item.received_quantity or 0) > 0:
+            _mark(int(item.order_id))
+
+    notice_ids = await ReceiptNotice.filter(
+        tenant_id=tenant_id,
+        purchase_order_id__in=order_ids,
+        deleted_at__isnull=True,
+    ).values_list("purchase_order_id", flat=True)
+    for oid in notice_ids:
+        _mark(int(oid))
+
+    receipt_ids = await PurchaseReceipt.filter(
+        tenant_id=tenant_id,
+        purchase_order_id__in=order_ids,
+        deleted_at__isnull=True,
+    ).values_list("purchase_order_id", flat=True)
+    for oid in receipt_ids:
+        _mark(int(oid))
+
+    return_ids = await PurchaseReturn.filter(
+        tenant_id=tenant_id,
+        purchase_order_id__in=order_ids,
+        deleted_at__isnull=True,
+    ).values_list("purchase_order_id", flat=True)
+    for oid in return_ids:
+        _mark(int(oid))
+
+    change_ids = await PurchaseOrderChangeOrder.filter(
+        tenant_id=tenant_id,
+        source_order_id__in=order_ids,
+        deleted_at__isnull=True,
+    ).values_list("source_order_id", flat=True)
+    for oid in change_ids:
+        _mark(int(oid))
+
+    return result
+
+
+async def purchase_order_has_downstream(tenant_id: int, order_id: int) -> bool:
+    downstream_map = await _purchase_order_downstream_by_ids(tenant_id, [order_id])
+    return downstream_map.get(order_id, False)
+
+
 def enrich_purchase_order_capabilities_on_response(
     order: Any,
     response: T,
     *,
     has_items: bool = True,
     has_outstanding: bool = False,
+    has_downstream: bool = False,
 ) -> T:
     caps = derive_purchase_order_capabilities(
         order,
         has_items=has_items,
         has_outstanding=has_outstanding,
+        has_downstream=has_downstream,
     )
     if hasattr(response, "model_copy"):
         return response.model_copy(update={"capabilities": caps})
@@ -697,11 +803,13 @@ async def enrich_purchase_order_detail_capabilities(
     has_items: bool = True,
 ) -> T:
     has_outstanding = await _purchase_order_has_outstanding(tenant_id, int(order.id))
+    has_downstream = await purchase_order_has_downstream(tenant_id, int(order.id))
     return enrich_purchase_order_capabilities_on_response(
         order,
         response,
         has_items=has_items,
         has_outstanding=has_outstanding,
+        has_downstream=has_downstream,
     )
 
 
@@ -714,6 +822,7 @@ async def enrich_purchase_order_list_capabilities(
 ) -> List[T]:
     order_ids = [int(getattr(o, "id", 0) or 0) for o in orders]
     outstanding_map = await _purchase_order_outstanding_by_ids(tenant_id, order_ids)
+    downstream_map = await _purchase_order_downstream_by_ids(tenant_id, order_ids)
     items_map = has_items_by_id or {}
     out: List[T] = []
     for order_model, resp in zip(orders, responses):
@@ -722,6 +831,7 @@ async def enrich_purchase_order_list_capabilities(
             order_model,
             has_items=items_map.get(oid, True),
             has_outstanding=outstanding_map.get(oid, False),
+            has_downstream=downstream_map.get(oid, False),
         )
         if hasattr(resp, "model_copy"):
             out.append(resp.model_copy(update={"capabilities": caps}))
@@ -901,21 +1011,6 @@ def enrich_packing_binding_list_capabilities(
     out: List[T] = []
     for binding, resp in zip(bindings, responses):
         caps = derive_packing_binding_capabilities(binding)
-        if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
-        else:
-            out.append(resp)
-    return out
-
-
-def enrich_inbound_hub_list_capabilities(
-    records: List[Any],
-    responses: List[T],
-    receipt_type: str,
-) -> List[T]:
-    out: List[T] = []
-    for record, resp in zip(records, responses):
-        caps = derive_inbound_hub_capabilities(record, receipt_type=receipt_type)
         if hasattr(resp, "model_copy"):
             out.append(resp.model_copy(update={"capabilities": caps}))
         else:

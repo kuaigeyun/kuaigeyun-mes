@@ -34,6 +34,8 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawer
 import { getToolAssetLifecycle } from '../../../utils/equipmentLifecycle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { toolApi } from '../../../services/equipment';
 import { batchImport } from '../../../../../utils/batchOperations';
 import {
@@ -229,6 +231,11 @@ const ToolLedgerPage: React.FC = () => {
     setFormInitialValues(undefined);
     setModalVisible(true);
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.toolLedger.create')),
+    [t],
+  );
 
   const handleEdit = async (record: Tool) => {
     try {
@@ -715,7 +722,7 @@ const ToolLedgerPage: React.FC = () => {
             });
           }}
           showCreateButton
-          createButtonText={t('app.kuaizhizao.toolLedger.create')}
+          createButtonText={createButtonLabel}
           onCreate={handleCreate}
           showImportButton
           onImport={async (data) => {

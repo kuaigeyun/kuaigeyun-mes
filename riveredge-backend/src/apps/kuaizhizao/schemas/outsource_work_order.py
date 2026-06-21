@@ -283,6 +283,7 @@ class OutsourceMaterialReceiptResponse(OutsourceMaterialReceiptBase):
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="入库 Hub capabilities（document_action_policy）",
     )
+    total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
 
 
 # ==================== 委外协同 Schema ====================
@@ -415,6 +416,7 @@ class OutsourceMaterialReturnResponse(OutsourceMaterialReturnBase):
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="入库 Hub capabilities（document_action_policy）",
     )
+    total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
 
 
 class OutsourceMaterialReturnPreviewLine(BaseModel):
@@ -482,6 +484,7 @@ class OutsourceProductReturnResponse(OutsourceProductReturnBase):
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="入库 Hub capabilities（document_action_policy）",
     )
+    total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
 
 
 class OutsourceProductReturnPreviewLine(BaseModel):

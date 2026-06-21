@@ -906,6 +906,10 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
             for item in group_items:
                 unit_price = item.suggested_unit_price or Decimal(0)
+                if data.item_unit_prices:
+                    price_override = data.item_unit_prices.get(item.id) or data.item_unit_prices.get(str(item.id))
+                    if price_override is not None:
+                        unit_price = Decimal(str(price_override))
                 full_qty = item.quantity
                 qty = full_qty
                 if data.item_quantities:
@@ -947,7 +951,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                         received_quantity=Decimal(0),
                         outstanding_quantity=qty,
                         required_date=item.required_date or max_required,
-                        source_type="PurchaseRequisition",
+                        source_type="purchase_requisition",
                         source_id=item.id,
                         notes=item.notes,
                     )
@@ -963,7 +967,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 delivery_date=max_required,
                 order_type="标准采购",
                 status=DocumentStatus.DRAFT.value,
-                source_type="PurchaseRequisition",
+                source_type="purchase_requisition",
                 source_id=requisition_id,
                 notes=f"由采购申请{req.requisition_code}转单生成",
                 items=po_items,

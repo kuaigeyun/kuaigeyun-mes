@@ -108,13 +108,17 @@ export function outboundDocumentCode(record: OutboundHubOrder): string {
   );
 }
 
+function pushUniqueRef(parts: string[], value: unknown) {
+  const s = String(value ?? '').trim();
+  if (s && !parts.includes(s)) parts.push(s);
+}
+
 export function outboundSourceDocNo(record: OutboundHubOrder): string {
-  return (
-    record.work_order_code ||
-    record.sales_order_code ||
-    record.outsource_work_order_code ||
-    ''
-  );
+  const parts: string[] = [];
+  pushUniqueRef(parts, record.sales_order_code);
+  pushUniqueRef(parts, record.work_order_code);
+  pushUniqueRef(parts, record.outsource_work_order_code);
+  return parts.join(' / ');
 }
 
 export function mapOutsourceIssueToOutbound(item: Record<string, unknown>): OutboundHubOrder {

@@ -63,6 +63,7 @@ import {
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -77,6 +78,8 @@ import { formatDateTime as formatDateTimeValue } from '../../../../../utils/form
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const DEMAND_ORIGIN_SUB_KEYS = new Set(['from_forecast', 'from_order', 'manual_plan']);
 
@@ -125,7 +128,22 @@ function isDemandPendingReview(d: Demand): boolean {
 function isDemandAuditedAndApproved(d: Demand): boolean {
   const s = (d?.status ?? '').trim();
   const r = (d?.review_status ?? '').trim();
-  return (s === DemandStatus.AUDITED || s === '已审核') && (r === ReviewStatus.APPROVED || r === '审核通过' || r === '通过' || r === '已通过');
+  const auditedOrConfirmed =
+    s === DemandStatus.AUDITED ||
+    s === DemandStatus.CONFIRMED ||
+    s === '已审核' ||
+    s === '已确认' ||
+    s === '已生效';
+  const approvedReview =
+    r === '' ||
+    r === ReviewStatus.APPROVED ||
+    r === 'APPROVED' ||
+    r === 'approved' ||
+    r === '已审核' ||
+    r === '审核通过' ||
+    r === '通过' ||
+    r === '已通过';
+  return auditedOrConfirmed && approvedReview;
 }
 
 function isDemandRejected(d: Demand): boolean {
@@ -230,6 +248,7 @@ const DemandManagementPage: React.FC = () => {
   const demandType = 'demand_plan' as const;
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const computationPerms = useResourcePermissions('plan-management-demand-computation');
+  useNewShortcut(() => setCreatePlanModalVisible(true));
 
   const selectedDemandsForBatch = useMemo(
     () =>
@@ -238,6 +257,10 @@ const DemandManagementPage: React.FC = () => {
         .filter((row): row is Demand => row != null),
     [selectedRowKeys],
   );
+  const selectedDemandForPush = useMemo(() => {
+    if (selectedRowKeys.length !== 1) return null;
+    return selectedDemandsForBatch[0] ?? null;
+  }, [selectedDemandsForBatch, selectedRowKeys.length]);
 
   useEffect(() => {
     const loadDicts = async () => {
@@ -499,6 +522,49 @@ const DemandManagementPage: React.FC = () => {
     });
   };
 
+  const demandCanPushToComputation = useCallback((record: Demand) => {
+    return !record.pushed_to_computation && isDemandAuditedAndApproved(record);
+  }, []);
+
+  const demandCanWithdrawComputation = useCallback((record: Demand) => {
+    return record.pushed_to_computation === true;
+  }, []);
+  const demandToolbarPushMenuItems = useMemo(
+    () =>
+      buildUniPushMenuItems([
+        {
+          key: 'push-to-computation',
+          label: pushToComputationAction.label,
+          disabled: !selectedDemandForPush || !demandCanPushToComputation(selectedDemandForPush),
+          onClick: () => {
+            if (selectedDemandForPush?.id != null) {
+              void handlePushToComputation(selectedDemandForPush.id);
+            }
+          },
+        },
+      ]),
+    [
+      demandCanPushToComputation,
+      handlePushToComputation,
+      pushToComputationAction.label,
+      selectedDemandForPush,
+    ],
+  );
+  const demandToolbarPushDisabledReason = useMemo(() => {
+    if (selectedRowKeys.length === 0) return t('app.kuaizhizao.demandComputation.selectOneFirst');
+    if (selectedRowKeys.length > 1) return t('app.kuaizhizao.demandComputation.pushSingleOnly');
+    if (!selectedDemandForPush) return t('app.kuaizhizao.demandComputation.selectedNotInList');
+    return t('components.uniPush.disabled.unavailable', { defaultValue: '当前状态不可下推' });
+  }, [selectedDemandForPush, selectedRowKeys.length, t]);
+  const canUseDemandToolbarPush = Boolean(
+    selectedDemandForPush &&
+    demandCanPushToComputation(selectedDemandForPush),
+  );
+  const createPlanButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.demandManagement.createPlan')),
+    [t],
+  );
+
   const columns: ProColumns<Demand>[] = useMemo(
     () => [
     {
@@ -571,7 +637,7 @@ const DemandManagementPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      width: 300,
+      width: 240,
       fixed: 'right' as const,
       hideInSearch: true,
       render: (_, record) => {
@@ -617,32 +683,19 @@ const DemandManagementPage: React.FC = () => {
             </Button>
           );
         }
-        if (record.pushed_to_computation) {
+        if (demandCanWithdrawComputation(record)) {
           parts.push(
             <Button {...rowActionKind('revoke')}
-              key="withdraw"
+              key="withdraw-push"
               type="link"
               size="small"
               icon={<RollbackOutlined />}
-              onClick={() => handleWithdrawFromComputation(record.id!)}
+              onClick={() => void handleWithdrawFromComputation(record.id!)}
             >
               {t('app.kuaizhizao.demandManagement.withdrawPush')}
             </Button>
           );
-        } else if (isDemandAuditedAndApproved(record)) {
-          parts.push(
-            <Button {...rowActionKind('submit')}
-              key="push"
-              type="link"
-              size="small"
-              icon={<ArrowDownOutlined />}
-              onClick={() => handlePushToComputation(record.id!)}
-            >
-              {pushToComputationAction.label}
-            </Button>
-          );
         }
-
         parts.push(
           <UniWorkflowActions {...rowActionKind('skip')}
             key="workflow-actions"
@@ -668,7 +721,7 @@ const DemandManagementPage: React.FC = () => {
       },
     },
   ],
-    [t, formatDemandTypeLabel, handleDelete, handleDetail, handleEdit, handlePushToComputation, handleWithdrawFromComputation, pushToComputationAction.label]
+    [t, formatDemandTypeLabel, handleDelete, handleDetail, handleEdit, demandCanWithdrawComputation, handleWithdrawFromComputation]
   );
 
   const statCards: StatCard[] = useMemo(
@@ -977,9 +1030,23 @@ const DemandManagementPage: React.FC = () => {
           rowKey="id"
           showAdvancedSearch={true}
           selectedRowKeys={selectedRowKeys}
-          showCreateButton
-          createButtonText={t('app.kuaizhizao.demandManagement.createPlan')}
-          onCreate={() => setCreatePlanModalVisible(true)}
+          showCreateButton={false}
+          toolBarRender={() => [
+            <Button
+              key="create-demand-plan"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setCreatePlanModalVisible(true)}
+            >
+              {createPlanButtonLabel}
+            </Button>,
+            <UniPushToolbarButton
+              key={`demand-toolbar-push-${selectedDemandForPush?.id ?? 'none'}`}
+              menuItems={demandToolbarPushMenuItems}
+              disabled={selectedRowKeys.length !== 1 || !canUseDemandToolbarPush}
+              disabledReason={demandToolbarPushDisabledReason}
+            />,
+          ]}
           showEditButton={false}
           showDeleteButton={true}
           onDelete={handleDelete}
@@ -1025,7 +1092,7 @@ const DemandManagementPage: React.FC = () => {
               labels={{
                 single: t('app.kuaizhizao.demandManagement.mergeComputation'),
                 batch: t('app.kuaizhizao.demandManagement.mergeComputation'),
-                batchConfirmTitle: (count) => t('app.kuaizhizao.demandManagement.mergeTitle'),
+                batchConfirmTitle: () => t('app.kuaizhizao.demandManagement.mergeTitle'),
                 batchConfirmDescription: (count) => t('app.kuaizhizao.demandManagement.mergeConfirm', { count }),
               }}
               icon={<MergeCellsOutlined />}

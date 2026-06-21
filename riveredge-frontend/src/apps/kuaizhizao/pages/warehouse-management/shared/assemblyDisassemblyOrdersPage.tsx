@@ -31,6 +31,8 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '../../../../../utils/format';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 type OrderLike = {
   id?: number;
@@ -201,6 +203,11 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       }
     }, 0);
   };
+  useNewShortcut(openCreateModal);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(config.createButtonText),
+    [config.createButtonText],
+  );
 
   const openEditOrderModal = (order: OrderLike) => {
     setEditingOrder(order);
@@ -560,7 +567,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         columns={columns}
         showAdvancedSearch
         showCreateButton
-        createButtonText={config.createButtonText}
+        createButtonText={createButtonLabel}
         onCreate={openCreateModal}
         enableRowSelection
         showDeleteButton

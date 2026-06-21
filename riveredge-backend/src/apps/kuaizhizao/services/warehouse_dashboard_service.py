@@ -11,10 +11,13 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
+from tortoise.functions import Count, Sum
 
 from apps.kuaizhizao.models.inventory_alert import InventoryAlert
 from apps.kuaizhizao.models.other_inbound import OtherInbound
 from apps.kuaizhizao.models.other_inbound_item import OtherInboundItem
+from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+from apps.kuaizhizao.models.production_return import ProductionReturn
 from apps.kuaizhizao.models.other_outbound import OtherOutbound
 from apps.kuaizhizao.models.other_outbound_item import OtherOutboundItem
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
@@ -24,7 +27,12 @@ from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
 from apps.master_data.models.material import Material
 from apps.master_data.models.material_batch import MaterialBatch
 from core.utils.timezone_utils import to_api_isoformat
-from tortoise.functions import Count, Sum
+from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
+    _INBOUND_PENDING_STATUSES,
+)
+
+_INBOUND_DOC_PENDING_STATUSES = tuple(_INBOUND_PENDING_STATUSES)
+_PRODUCTION_RETURN_PENDING_STATUSES = ("待退料",)
 
 
 def _unit_price_from_defaults(defaults: Any) -> Decimal:
@@ -204,6 +212,7 @@ class WarehouseDashboardService:
             "pending_inbound": 0,
             "overdue_inbound": 0,
             "pending_outbound": 0,
+            "pending_inbounds": [],
             "recent_inbounds": [],
             "recent_outbounds": [],
         }
@@ -211,16 +220,44 @@ class WarehouseDashboardService:
         import asyncio
 
         # 1. 定义并行动作：库存核心统计、总价值、待办数
+        async def _count_pending_inbounds() -> int:
+            pr, fg, oi, pret = await asyncio.gather(
+                PurchaseReceipt.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    status__in=_INBOUND_DOC_PENDING_STATUSES,
+                ).count(),
+                FinishedGoodsReceipt.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    status__in=_INBOUND_DOC_PENDING_STATUSES,
+                ).count(),
+                OtherInbound.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    status__in=_INBOUND_DOC_PENDING_STATUSES,
+                ).count(),
+                ProductionReturn.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    status__in=_PRODUCTION_RETURN_PENDING_STATUSES,
+                ).count(),
+            )
+            return int(pr or 0) + int(fg or 0) + int(oi or 0) + int(pret or 0)
+
+        async def _count_overdue_purchase_receipts() -> int:
+            return await PurchaseReceipt.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                status__in=_INBOUND_DOC_PENDING_STATUSES,
+                created_at__lt=datetime.now() - timedelta(days=3),
+            ).count()
+
         tasks = [
             _inventory_statistics_core(tenant_id),
             _total_inventory_value(tenant_id),
-            PurchaseReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待入库").count(),
-            PurchaseReceipt.filter(
-                tenant_id=tenant_id, 
-                deleted_at__isnull=True, 
-                status="待入库", 
-                created_at__lt=datetime.now() - timedelta(days=3)
-            ).count(),
+            _count_pending_inbounds(),
+            _count_overdue_purchase_receipts(),
             SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待出库").count(),
             OtherOutbound.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待出库").count()
         ]
@@ -340,9 +377,103 @@ class WarehouseDashboardService:
                     })
             return ro
 
-        # 3. 并行获取最近流水
-        recent_inbounds, recent_outbounds = await asyncio.gather(
-            fetch_recent_in(recent_limit),
+        async def fetch_pending_in(limit):
+            """待入库队列：与入库 Hub 可确认态一致（含草稿下推单）。"""
+            fetch_n = max(limit * 4, 32)
+            pr_list, fg_list, oi_list, pr_ret_list = await asyncio.gather(
+                PurchaseReceipt.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    status__in=_INBOUND_DOC_PENDING_STATUSES,
+                ).order_by("-created_at").limit(fetch_n).all(),
+                FinishedGoodsReceipt.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    status__in=_INBOUND_DOC_PENDING_STATUSES,
+                ).order_by("-created_at").limit(fetch_n).all(),
+                OtherInbound.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    status__in=_INBOUND_DOC_PENDING_STATUSES,
+                ).order_by("-created_at").limit(fetch_n).all(),
+                ProductionReturn.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    status__in=_PRODUCTION_RETURN_PENDING_STATUSES,
+                ).order_by("-created_at").limit(fetch_n).all(),
+            )
+
+            merged = []
+            for r in pr_list:
+                merged.append((r.created_at or datetime.min, "purchase", {
+                    "receipt_id": r.id,
+                    "receipt_code": r.receipt_code,
+                    "total_quantity": float(r.total_quantity or 0),
+                }))
+            for r in fg_list:
+                merged.append((r.created_at or datetime.min, "finished_goods", {
+                    "receipt_code": r.receipt_code,
+                    "total_quantity": float(r.total_quantity or 0),
+                }))
+            for r in oi_list:
+                merged.append((r.created_at or datetime.min, "other", {
+                    "inbound_code": r.inbound_code,
+                    "total_quantity": float(r.total_quantity or 0),
+                }))
+            for r in pr_ret_list:
+                merged.append((r.created_at or datetime.min, "production_return", {
+                    "return_code": r.return_code,
+                    "total_quantity": float(r.total_quantity or 0),
+                }))
+
+            merged.sort(key=lambda x: x[0], reverse=True)
+            merged = merged[:limit]
+
+            pr_ids = [m[2]["receipt_id"] for m in merged if m[1] == "purchase"]
+            labels = await _first_purchase_item_labels(tenant_id, pr_ids)
+
+            pending = []
+            for ts, kind, payload in merged:
+                if kind == "purchase":
+                    rid = payload["receipt_id"]
+                    name, nlines = labels.get(rid, ("", 0))
+                    mat_label = f"{name} 等{nlines}项" if nlines > 1 and name else (f"共{nlines}项" if nlines > 1 else name)
+                    pending.append({
+                        "doc_code": payload["receipt_code"],
+                        "material_name": mat_label,
+                        "quantity": payload["total_quantity"],
+                        "time": _iso(ts if ts != datetime.min else None),
+                        "doc_type": "purchase_receipt",
+                    })
+                elif kind == "finished_goods":
+                    pending.append({
+                        "doc_code": payload["receipt_code"],
+                        "material_name": "成品入库",
+                        "quantity": payload["total_quantity"],
+                        "time": _iso(ts if ts != datetime.min else None),
+                        "doc_type": "finished_goods_receipt",
+                    })
+                elif kind == "production_return":
+                    pending.append({
+                        "doc_code": payload["return_code"],
+                        "material_name": "生产退料",
+                        "quantity": payload["total_quantity"],
+                        "time": _iso(ts if ts != datetime.min else None),
+                        "doc_type": "production_return",
+                    })
+                else:
+                    pending.append({
+                        "doc_code": payload["inbound_code"],
+                        "material_name": "其他入库",
+                        "quantity": payload["total_quantity"],
+                        "time": _iso(ts if ts != datetime.min else None),
+                        "doc_type": "other_inbound",
+                    })
+            return pending
+
+        # 3. 并行获取待入库队列与最近出库流水
+        pending_inbounds, recent_outbounds = await asyncio.gather(
+            fetch_pending_in(recent_limit),
             fetch_recent_out(recent_limit)
         )
 
@@ -357,6 +488,7 @@ class WarehouseDashboardService:
             "pending_inbound": pending_inbound,
             "overdue_inbound": overdue_inbound,
             "pending_outbound": pending_outbound,
-            "recent_inbounds": recent_inbounds,
+            "pending_inbounds": pending_inbounds,
+            "recent_inbounds": [],
             "recent_outbounds": recent_outbounds,
         }

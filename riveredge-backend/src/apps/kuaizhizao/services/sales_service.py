@@ -1481,7 +1481,9 @@ class SalesOrderService(AppBaseService[SalesOrder]):
         delivery = await delivery_service.create_sales_delivery(
             tenant_id=tenant_id,
             delivery_data=delivery_data,
-            created_by=created_by
+            created_by=created_by,
+            # 下推仅生成待出库单，批号/序列号在仓库确认出库时录入（与发货通知下推一致）
+            require_batch_serial_on_create=False,
         )
         
         return {

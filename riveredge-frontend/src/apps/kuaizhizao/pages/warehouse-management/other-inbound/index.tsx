@@ -45,6 +45,8 @@ import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocation
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { formatDateTime } from '../../../../../utils/format';
 
@@ -452,6 +454,11 @@ const OtherInboundPage: React.FC = () => {
       formRef.current?.setFieldsValue({ items: [defaultInboundItem] });
     }, 0);
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.warehouseOtherInbound.create')),
+    [t],
+  );
 
   const handleCreateSubmit = async (values: any) => {
     try {
@@ -656,7 +663,7 @@ const OtherInboundPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch
           showCreateButton
-          createButtonText={t('app.kuaizhizao.warehouseOtherInbound.create')}
+          createButtonText={createButtonLabel}
           onCreate={handleCreate}
           request={async (params) => {
             try {

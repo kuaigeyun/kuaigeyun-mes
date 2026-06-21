@@ -53,8 +53,11 @@ from apps.kuaizhizao.schemas.work_order import (
     DefaultOperatorSnapshot,
     WorkOrderKittingAnalysisResponse,
     MaterialKittingItem,
+    KittingRelatedWorkOrderSummary,
+    KittingRelatedOutsourceWorkOrderSummary,
     MaterialLocationInfo,
 )
+from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.kuaizhizao.services.work_order_tracking_service import (
     WorkOrderTrackingService,
@@ -1645,12 +1648,40 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             ValidationError: 数据验证失败
         """
         score_recalc_fields = ("priority", "planned_start_date", "planned_end_date")
+        tracking_update_fields = (
+            "planned_batch_no",
+            "confirmed_batch_no",
+            "planned_serial_no",
+            "confirmed_serial_no",
+        )
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
             update_data = work_order_data.model_dump(exclude_unset=True)
             if update_data.get("status") == "cancelled":
                 assert_work_order_capability(work_order, "cancel")
             old_score_values = {f: getattr(work_order, f, None) for f in score_recalc_fields}
+
+            tracking_patch = {
+                field: update_data.pop(field)
+                for field in tracking_update_fields
+                if field in update_data
+            }
+            if tracking_patch:
+                material = await Material.get_or_none(
+                    id=work_order.product_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                )
+                if material:
+                    await WorkOrderTrackingService().apply_manual_tracking_update(
+                        tenant_id,
+                        work_order,
+                        material,
+                        tracking_patch,
+                    )
+                    work_order = await self.get_by_id(
+                        tenant_id, work_order_id, raise_if_not_found=True
+                    )
 
             if "process_route_id" in update_data:
                 new_pr_id = update_data.pop("process_route_id")
@@ -1712,6 +1743,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             )
 
             response = WorkOrderResponse.model_validate(work_order)
+            response = response.model_copy(
+                update=WorkOrderTrackingService.tracking_fields_for_response(work_order)
+            )
 
         needs_score_recalc = any(
             f in update_data and update_data.get(f) != old_score_values.get(f)
@@ -3023,6 +3057,22 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             deleted_at__isnull=True
         ).order_by('sequence').all()
 
+        from apps.kuaizhizao.services.reporting_service import _maybe_mark_operation_completed
+
+        op_status_changed = False
+        for op in operations:
+            if _maybe_mark_operation_completed(work_order, op):
+                await op.save()
+                op_status_changed = True
+        if op_status_changed:
+            all_done = operations and all(o.status == "completed" for o in operations)
+            if all_done and work_order.status != "completed":
+                from datetime import datetime
+
+                work_order.status = "completed"
+                work_order.actual_end_date = work_order.actual_end_date or datetime.now()
+                await work_order.save()
+
         if not operations and work_order.parent_work_order_id is not None:
             await self.backfill_split_child_operations(tenant_id, work_order)
             operations = await WorkOrderOperation.filter(
@@ -3773,6 +3823,45 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             return updated_work_orders
 
+    @staticmethod
+    def _work_order_progress_percent(wo: WorkOrder) -> float:
+        qty = float(wo.quantity or 0)
+        if qty <= 0:
+            return 0.0
+        return round(float(wo.completed_quantity or 0) / qty * 100, 2)
+
+    @staticmethod
+    def _build_kitting_related_work_order_summary(wo: WorkOrder) -> KittingRelatedWorkOrderSummary:
+        return KittingRelatedWorkOrderSummary(
+            work_order_id=int(wo.id),
+            work_order_code=wo.code or str(wo.id),
+            status=str(wo.status or ""),
+            quantity=Decimal(str(wo.quantity or 0)),
+            completed_quantity=Decimal(str(wo.completed_quantity or 0)),
+            progress_percent=WorkOrderService._work_order_progress_percent(wo),
+        )
+
+    @staticmethod
+    def _outsource_work_order_progress_percent(owo: OutsourceWorkOrder) -> float:
+        qty = float(owo.quantity or 0)
+        if qty <= 0:
+            return 0.0
+        return round(float(owo.received_quantity or 0) / qty * 100, 2)
+
+    @staticmethod
+    def _build_kitting_related_outsource_work_order_summary(
+        owo: OutsourceWorkOrder,
+    ) -> KittingRelatedOutsourceWorkOrderSummary:
+        return KittingRelatedOutsourceWorkOrderSummary(
+            outsource_work_order_id=int(owo.id),
+            outsource_work_order_code=owo.code or str(owo.id),
+            status=str(owo.status or ""),
+            quantity=Decimal(str(owo.quantity or 0)),
+            received_quantity=Decimal(str(owo.received_quantity or 0)),
+            progress_percent=WorkOrderService._outsource_work_order_progress_percent(owo),
+            supplier_name=owo.supplier_name,
+        )
+
     async def get_work_order_kitting_analysis(
         self,
         tenant_id: int,
@@ -3820,8 +3909,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         # 3. 聚合分析
         analysis_items = []
-        total_items = len(requirements)
+        applicable_count = 0
         fully_kitted_count = 0
+
+        from apps.kuaizhizao.utils.issue_method_resolver import is_kitting_inventory_material
 
         # 领料单明细未声明 ForeignKey，不能使用 picking__work_order_id；明细表亦无 deleted_at
         picking_ids = await ProductionPicking.filter(
@@ -3831,7 +3922,60 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         ).values_list("id", flat=True)
         picking_id_list = list(picking_ids) if picking_ids else []
 
+        component_wos: Dict[int, WorkOrder] = {}
+        component_owos: Dict[int, OutsourceWorkOrder] = {}
+        if wo.work_order_group_id:
+            child_rows = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                work_order_group_id=wo.work_order_group_id,
+                bom_parent_work_order_id=wo.id,
+                deleted_at__isnull=True,
+            ).all()
+            component_wos = {int(r.product_id): r for r in child_rows if r.product_id}
+            outsource_rows = await OutsourceWorkOrder.filter(
+                tenant_id=tenant_id,
+                work_order_group_id=wo.work_order_group_id,
+                bom_parent_work_order_id=wo.id,
+                deleted_at__isnull=True,
+            ).all()
+            component_owos = {int(r.product_id): r for r in outsource_rows if r.product_id}
+
         for req in requirements:
+            source_type = getattr(req, "component_type", None)
+            kitting_applicable = is_kitting_inventory_material(
+                getattr(req, "issue_method", None),
+                source_type,
+            )
+            required_qty = Decimal(str(req.gross_requirement))
+
+            if not kitting_applicable:
+                related_outsource: Optional[KittingRelatedOutsourceWorkOrderSummary] = None
+                if source_type == SOURCE_TYPE_OUTSOURCE:
+                    child_owo = component_owos.get(int(req.component_id))
+                    if child_owo:
+                        related_outsource = self._build_kitting_related_outsource_work_order_summary(
+                            child_owo
+                        )
+                analysis_items.append(MaterialKittingItem(
+                    material_id=req.component_id,
+                    material_code=req.component_code,
+                    material_name=req.component_name,
+                    material_unit=req.unit,
+                    source_type=source_type,
+                    kitting_applicable=False,
+                    required_quantity=required_qty,
+                    picked_quantity=Decimal("0"),
+                    shortage_quantity=Decimal("0"),
+                    main_warehouse_available=Decimal("0"),
+                    line_side_available=Decimal("0"),
+                    status="not_applicable",
+                    locations=[],
+                    related_outsource_work_order=related_outsource,
+                ))
+                continue
+
+            applicable_count += 1
+
             # 3.1 获取已领料数量 (从 ProductionPickingItem 汇总)
             # 状态为“已领料”或“已确认”的视为已下线到车间/线边
             if not picking_id_list:
@@ -3865,18 +4009,16 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 except Exception as exc:
                     logger.warning(f"齐套分析库位行解析跳过: {loc} err={exc}")
 
-            # 3.3 计算按仓库类型的汇总库存
+            # 3.3 计算按仓库类型的汇总库存（按 warehouse_type，不再用「线边位」标签推断）
             main_warehouse_qty = Decimal("0")
             line_side_qty = Decimal("0")
-            
-            # 这里简单通过名称或 warehouse_id 判断（生产实务中通常 warehouse_id 段位不同或有辅助字段）
-            # 我们在 inventory_helper 里标记了 wh_id=0 为主仓，>0 且匹配类型为线边仓
             for loc in locations_data:
                 try:
                     q = Decimal(str(loc.get("quantity") or 0))
                 except Exception:
                     q = Decimal("0")
-                if loc.get("storage_location_code") == "线边位":
+                wh_type = str(loc.get("warehouse_type") or "normal")
+                if wh_type == "line_side":
                     line_side_qty += q
                 else:
                     main_warehouse_qty += q
@@ -3886,9 +4028,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if shortage_qty < 0:
                 shortage_qty = Decimal("0")
 
-            # 3.4 判定状态
-            # 可用总量 = 已领 + 线边 + 主仓
-            total_available = picked_qty + line_side_qty + main_warehouse_qty
+            related_summary: Optional[KittingRelatedWorkOrderSummary] = None
+            wo_supply = Decimal("0")
+            if source_type in (SOURCE_TYPE_MAKE, SOURCE_TYPE_CONFIGURE):
+                child_wo = component_wos.get(int(req.component_id))
+                if child_wo:
+                    related_summary = self._build_kitting_related_work_order_summary(child_wo)
+                    wo_supply = Decimal(str(child_wo.completed_quantity or 0))
+
+            # 3.4 判定状态：库存 + 已领 + 关联半成品工单完工量
+            total_available = picked_qty + line_side_qty + main_warehouse_qty + wo_supply
+            shortage_qty = required_qty - total_available
+            if shortage_qty < 0:
+                shortage_qty = Decimal("0")
             
             if total_available >= required_qty:
                 item_status = "fully_kitted"
@@ -3903,29 +4055,45 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 material_code=req.component_code,
                 material_name=req.component_name,
                 material_unit=req.unit,
+                source_type=source_type,
+                kitting_applicable=True,
                 required_quantity=required_qty,
                 picked_quantity=picked_qty,
                 shortage_quantity=shortage_qty,
                 main_warehouse_available=main_warehouse_qty,
                 line_side_available=line_side_qty,
                 status=item_status,
-                locations=locations
+                locations=locations,
+                related_work_order=related_summary,
+                work_order_supply_quantity=wo_supply,
             ))
 
-        # 4. 汇总
-        kitting_rate = Decimal(str(round(fully_kitted_count / total_items * 100, 2))) if total_items > 0 else Decimal("100")
-        
-        overall_status = "fully_kitted"
-        if kitting_rate < 100:
-            overall_status = "partial" if kitting_rate > 0 else "shortage"
+        # 4. 汇总（仅统计需库存齐套的物料）
+        if applicable_count <= 0:
+            kitting_rate = Decimal("100")
+            overall_status = "fully_kitted"
+        else:
+            kitting_rate = Decimal(str(round(fully_kitted_count / applicable_count * 100, 2)))
+            overall_status = "fully_kitted"
+            if kitting_rate < 100:
+                overall_status = "partial" if kitting_rate > 0 else "shortage"
 
-        return WorkOrderKittingAnalysisResponse(
+        response = WorkOrderKittingAnalysisResponse(
             work_order_id=work_order_id,
             work_order_code=wo.code,
             kitting_rate=kitting_rate,
             status=overall_status,
             items=analysis_items
         )
+        try:
+            from apps.kuaizhizao.services.work_order_readiness_service import (
+                persist_kitting_analysis_result,
+            )
+
+            await persist_kitting_analysis_result(tenant_id, work_order_id, response)
+        except Exception as exc:
+            logger.warning(f"齐套分析结果持久化失败 wo={work_order_id}: {exc}")
+        return response
 
     async def merge_work_orders(
         self,

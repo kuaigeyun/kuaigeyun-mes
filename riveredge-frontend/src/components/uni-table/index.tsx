@@ -2580,11 +2580,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       return {
         ...base,
         onClick: (e: React.MouseEvent<HTMLElement>) => {
-          ;(base as { onClick?: (ev: React.MouseEvent<HTMLElement>) => void }).onClick?.(e)
-          if (e.defaultPrevented) return
           const el = e.target
           if (!(el instanceof Element)) return
           if (shouldIgnoreRowClickForSelection(el)) return
+
+          ;(base as { onClick?: (ev: React.MouseEvent<HTMLElement>) => void }).onClick?.(e)
+          if (e.defaultPrevented) return
 
           const recordKey =
             typeof rowKey === 'function'

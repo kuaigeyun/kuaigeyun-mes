@@ -98,6 +98,8 @@ class ReportingRecord(BaseModel):
     rejection_reason = fields.TextField(null=True, description="驳回原因")
 
     # 备注和设备信息
+    inbound_warehouse_id = fields.IntField(null=True, description="末道工序入库仓库 ID")
+    inbound_warehouse_name = fields.CharField(max_length=200, null=True, description="末道工序入库仓库名称")
     remarks = fields.TextField(null=True, description="备注")
     device_info = fields.JSONField(null=True, description="设备信息（JSON格式）")
     

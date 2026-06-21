@@ -21,7 +21,6 @@ from apps.master_data.schemas.material_schemas import (
     MaterialBatchListResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
-from loguru import logger
 
 
 class MaterialBatchService:
@@ -30,6 +29,32 @@ class MaterialBatchService:
     
     提供物料批号的 CRUD 操作和批号生成、追溯功能。
     """
+
+    @staticmethod
+    def _to_response(batch: MaterialBatch) -> MaterialBatchResponse:
+        material = batch.material
+        if not material:
+            raise ValueError(f"物料批号 {batch.id} 关联物料不存在")
+        return MaterialBatchResponse(
+            id=batch.id,
+            uuid=batch.uuid,
+            tenant_id=batch.tenant_id,
+            material_id=batch.material_id,
+            material_uuid=material.uuid,
+            material_name=material.name,
+            material_code=material.main_code,
+            material_model=material.model,
+            batch_no=batch.batch_no,
+            production_date=batch.production_date,
+            expiry_date=batch.expiry_date,
+            supplier_batch_no=batch.supplier_batch_no,
+            quantity=batch.quantity or Decimal(0),
+            status=batch.status,
+            remark=batch.remark,
+            created_at=batch.created_at,
+            updated_at=batch.updated_at,
+            deleted_at=batch.deleted_at,
+        )
     
     @staticmethod
     async def create_batch(
@@ -71,12 +96,13 @@ class MaterialBatchService:
         if existing:
             raise ValidationError(f"物料 {material.name} 的批号 {data.batch_no} 已存在")
         
+        production_date = data.production_date
         # 创建批号
         batch = await MaterialBatch.create(
             tenant_id=tenant_id,
             material_id=material.id,
             batch_no=data.batch_no,
-            production_date=data.production_date,
+            production_date=production_date,
             expiry_date=data.expiry_date,
             supplier_batch_no=data.supplier_batch_no,
             quantity=data.quantity,
@@ -87,9 +113,7 @@ class MaterialBatchService:
         # 加载关联数据
         await batch.fetch_related("material")
         
-        response = MaterialBatchResponse.model_validate(batch)
-        response.material_name = material.name
-        return response
+        return MaterialBatchService._to_response(batch)
     
     @staticmethod
     async def get_batch_by_uuid(
@@ -118,10 +142,7 @@ class MaterialBatchService:
         if not batch:
             raise NotFoundError("物料批号", batch_uuid)
         
-        response = MaterialBatchResponse.model_validate(batch)
-        if batch.material:
-            response.material_name = batch.material.name
-        return response
+        return MaterialBatchService._to_response(batch)
     
     @staticmethod
     async def list_batches(
@@ -151,7 +172,8 @@ class MaterialBatchService:
         """
         query = MaterialBatch.filter(
             tenant_id=tenant_id,
-            deleted_at__isnull=True
+            deleted_at__isnull=True,
+            material__deleted_at__isnull=True,
         )
         
         # 物料筛选
@@ -168,13 +190,15 @@ class MaterialBatchService:
         if batch_no:
             query = query.filter(batch_no__icontains=batch_no)
 
-        # 综合关键词（批号、供应商批号、物料名称）
+        # 综合关键词（批号、供应商批号、物料名称/编码/型号）
         if keyword and keyword.strip():
             kw = keyword.strip()
             query = query.filter(
                 Q(batch_no__icontains=kw)
                 | Q(supplier_batch_no__icontains=kw)
                 | Q(material__name__icontains=kw)
+                | Q(material__main_code__icontains=kw)
+                | Q(material__model__icontains=kw)
             )
         
         # 状态筛选
@@ -192,6 +216,8 @@ class MaterialBatchService:
             "expiry_date": "expiry_date",
             "created_at": "created_at",
             "material_name": "material__name",
+            "material_code": "material__main_code",
+            "material_model": "material__model",
         }
         db_sort = sort_field_map.get(sort_by or "", "created_at")
         desc = (sort_order or "desc").lower() == "desc"
@@ -202,20 +228,7 @@ class MaterialBatchService:
             (page - 1) * page_size
         ).limit(page_size).order_by(order_expr).all()
         
-        items = []
-        for batch in batches:
-            try:
-                # 检查关联的物料是否存在，如果不存在则跳过该批号（处理孤立数据）
-                if not batch.material:
-                    logger.warning(f"跳过孤立的物料批号: id={batch.id}, material_id={batch.material_id} (物料不存在)")
-                    continue
-                
-                response = MaterialBatchResponse.model_validate(batch)
-                response.material_name = batch.material.name
-                items.append(response)
-            except Exception as e:
-                logger.error(f"序列化物料批号 {batch.id} 失败: {str(e)}")
-                continue
+        items = [MaterialBatchService._to_response(batch) for batch in batches]
         
         return MaterialBatchListResponse(items=items, total=total)
     
@@ -254,11 +267,9 @@ class MaterialBatchService:
             setattr(batch, key, value)
         
         await batch.save()
+        await batch.fetch_related("material")
         
-        response = MaterialBatchResponse.model_validate(batch)
-        if batch.material:
-            response.material_name = batch.material.name
-        return response
+        return MaterialBatchService._to_response(batch)
     
     @staticmethod
     async def delete_batch(
@@ -383,28 +394,45 @@ class MaterialBatchService:
         Raises:
             NotFoundError: 当批号不存在时抛出
         """
+        from apps.kuaizhizao.services.traceability import TraceabilityService
+
+        profile = await TraceabilityService().build_profile_by_batch_uuid(tenant_id, batch_uuid, "both")
         batch = await MaterialBatch.filter(
             tenant_id=tenant_id,
             uuid=batch_uuid,
-            deleted_at__isnull=True
+            deleted_at__isnull=True,
         ).prefetch_related("material").first()
-        
         if not batch:
             raise NotFoundError("物料批号", batch_uuid)
-        
-        # TODO: 后续实现完整的追溯逻辑
-        # 需要查询：
-        # 1. 入库记录（库存入库单）
-        # 2. 出库记录（库存出库单）
-        # 3. 生产记录（工单、生产入库单）
-        # 4. 销售记录（销售订单、销售出库单）
-        
-        trace_info = {
-            "batch": MaterialBatchResponse.model_validate(batch).dict(),
-            "inbound_records": [],  # 入库记录
-            "outbound_records": [],  # 出库记录
-            "production_records": [],  # 生产记录
-            "sales_records": [],  # 销售记录
+
+        return {
+            "batch": MaterialBatchService._to_response(batch).model_dump(by_alias=True),
+            "profile": profile.model_dump(by_alias=True),
+            "inbound_records": [
+                e.model_dump(by_alias=True)
+                for e in profile.events
+                if e.document_type
+                in (
+                    "purchase_receipt",
+                    "customer_material_registration",
+                    "finished_goods_receipt",
+                    "semi_finished_goods_receipt",
+                    "sales_return",
+                )
+            ],
+            "outbound_records": [
+                e.model_dump(by_alias=True)
+                for e in profile.events
+                if e.document_type == "sales_delivery"
+            ],
+            "production_records": [
+                e.model_dump(by_alias=True)
+                for e in profile.events
+                if e.document_type in ("work_order", "reporting_record", "material_binding")
+            ],
+            "sales_records": [
+                e.model_dump(by_alias=True)
+                for e in profile.events
+                if e.document_type in ("sales_delivery", "sales_return")
+            ],
         }
-        
-        return trace_info

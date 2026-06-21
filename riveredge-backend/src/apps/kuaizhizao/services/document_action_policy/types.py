@@ -150,7 +150,9 @@ class PurchaseOrderCapabilities(BaseModel):
     submit: ActionCapability
     withdraw_submit: ActionCapability
     approve: ActionCapability
+    revoke_approval: ActionCapability
     push_receipt_notice: ActionCapability
+    print: ActionCapability
 
 
 class PurchaseOrderChangeCapabilities(BaseModel):
@@ -195,6 +197,7 @@ class WorkOrderCapabilities(BaseModel):
 class ReportingRecordCapabilities(BaseModel):
     update: ActionCapability
     delete: ActionCapability
+    approve: ActionCapability
     revoke_approval: ActionCapability
     print: ActionCapability
 
@@ -419,6 +422,8 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "purchase_order.submit.not_draft": "只能提交草稿状态的订单",
     "purchase_order.withdraw_submit.not_pending": "只有待审核状态的采购订单可撤回提交",
     "purchase_order.approve.not_pending": "只有待审核状态的采购订单可审核",
+    "purchase_order.revoke_approval.not_allowed": "只能撤销审核已确认或已驳回的采购订单",
+    "purchase_order.revoke_approval.has_downstream": "该采购订单已有下游单据或收货记录，不能撤销审核",
     "purchase_order.push_receipt.not_audited": "只有已审核或已确认的采购单才能下推到收货通知",
     "purchase_order.push_receipt.no_items": "采购单没有明细，无法生成收货通知单",
     "purchase_order.push_receipt.no_outstanding": "采购单已全部入库，无法生成收货通知单",
@@ -458,6 +463,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "work_order.set_priority.not_allowed": "当前状态不可调整优先级",
     "reporting_record.update.not_pending": "仅待审核报工记录可编辑",
     "reporting_record.delete.not_pending": "仅待审核报工记录可删除",
+    "reporting_record.approve.not_pending": "只有待审核状态的报工记录才可以审核",
     "reporting_record.revoke_approval.not_approved": "只有已审核通过的报工记录才可以撤回审核",
     "exception_process.cancel.already_finished": "该异常处理流程已结束，无法取消",
     "packing_binding.deleted": "装箱绑定记录已删除",

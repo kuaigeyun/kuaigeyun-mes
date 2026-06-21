@@ -55,15 +55,18 @@ export const shiftRosterApi = {
     api.post(`${PERF_BASE}/shift-rosters`, data),
   list: async (params?: {
     work_group_id?: number;
+    employee_id?: number;
     period_start?: string;
     status?: string;
     skip?: number;
     limit?: number;
   }): Promise<ShiftRoster[]> => api.get(`${PERF_BASE}/shift-rosters`, { params }),
-  getByWeek: async (workGroupId: number, periodStart: string): Promise<ShiftRoster> =>
-    api.get(`${PERF_BASE}/shift-rosters/by-week`, {
-      params: { workGroupId, periodStart },
-    }),
+  getByWeek: async (params: {
+    workGroupId?: number;
+    employeeId?: number;
+    periodStart: string;
+  }): Promise<ShiftRoster> =>
+    api.get(`${PERF_BASE}/shift-rosters/by-week`, { params }),
   get: async (uuid: string): Promise<ShiftRoster> => api.get(`${PERF_BASE}/shift-rosters/${uuid}`),
   saveAssignments: async (
     uuid: string,

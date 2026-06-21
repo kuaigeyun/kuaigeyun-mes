@@ -750,6 +750,7 @@ export const WORK_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
 export const REPORTING_RECORD_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'reporting_record.update.not_pending': '仅待审核报工记录可编辑',
   'reporting_record.delete.not_pending': '仅待审核报工记录可删除',
+  'reporting_record.approve.not_pending': '只有待审核状态的报工记录才可以审核',
   'reporting_record.revoke_approval.not_approved': '只有已审核通过的报工记录才可以撤回审核',
 };
 
@@ -797,6 +798,13 @@ export function reportingRecordBatchRevokeApprovalAllowed(
   canRevoke: boolean,
 ): boolean {
   return batchSomeCapabilityAllowed(records, canRevoke, (r) => r.capabilities?.revoke_approval);
+}
+
+export function reportingRecordBatchApproveAllowed(
+  records: { capabilities?: { approve?: ActionCapability } }[],
+  canAudit: boolean,
+): boolean {
+  return batchSomeCapabilityAllowed(records, canAudit, (r) => r.capabilities?.approve);
 }
 
 export function exceptionProcessBatchCancelAllowed(
@@ -949,6 +957,22 @@ export function qualityInspectionRowGates(
     createDefect: qualityCapView(
       caps?.create_defect,
       ncPerms.canCreate,
+      permDeniedTitle,
+      t,
+      QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES,
+      'app.kuaizhizao.quality.capability',
+    ),
+    approve: qualityCapView(
+      caps?.approve,
+      inspectionPerms.canAction?.('audit') ?? false,
+      permDeniedTitle,
+      t,
+      QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES,
+      'app.kuaizhizao.quality.capability',
+    ),
+    reject: qualityCapView(
+      caps?.reject,
+      inspectionPerms.canAction?.('audit') ?? false,
       permDeniedTitle,
       t,
       QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES,

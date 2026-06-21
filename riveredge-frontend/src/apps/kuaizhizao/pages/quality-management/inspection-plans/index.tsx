@@ -27,6 +27,7 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { App, Button, Tag, Space, Table, Modal, Row, Col, Descriptions, Typography, Empty } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { stackedPrimarySecondaryColumn } from '../components/qualityTableColumns';
 import {
   ListPageTemplate,
@@ -46,6 +47,7 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { getQualityPlanTypeFallback, getQualityTypeText } from '../components/qualityMeta';
 import { formatDateTime } from '../../../../../utils/format';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -160,6 +162,13 @@ const InspectionPlansPage: React.FC = () => {
       }
     }, 0);
   };
+  useNewShortcut(() => {
+    void handleCreate();
+  });
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.quality.plans.createButton')),
+    [t],
+  );
 
   const handleEdit = async (record: InspectionPlan) => {
     try {
@@ -420,7 +429,7 @@ const InspectionPlansPage: React.FC = () => {
           }
         }}
         showCreateButton
-        createButtonText={t('app.kuaizhizao.quality.plans.createButton')}
+        createButtonText={createButtonLabel}
         onCreate={handleCreate}
         enableRowSelection={true}
         onRowSelectionChange={setSelectedRowKeys}

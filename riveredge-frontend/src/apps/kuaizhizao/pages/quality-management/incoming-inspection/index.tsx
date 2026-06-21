@@ -8,7 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -77,7 +77,9 @@ import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { qualityInspectionRowGates } from '../../../../../hooks/useDocumentCapabilities';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
@@ -92,7 +94,9 @@ import {
   renderQualityDocStatusTag,
   renderQualityQualityStatusTag,
   getQualityDefectTypeOptions,
+  qualityInspectionUniAuditProps,
 } from '../components/qualityMeta';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const INCOMING_RESOURCE = 'kuaizhizao:quality-management-incoming-inspection';
 const INCOMING_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_incoming_inspections';
@@ -126,7 +130,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderIncomingRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return nodes;
+  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 // 来料检验接口定义
@@ -214,9 +218,14 @@ const IncomingInspectionPage: React.FC = () => {
   const incomingInspectionDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(pullFromPurchaseReceiptAction.label),
+    [pullFromPurchaseReceiptAction.label],
+  );
 
   const invalidateStats = () => queryClient.invalidateQueries({ queryKey: ['incoming-inspection-statistics'] });
   const incomingPerms = useResourcePermissions(INCOMING_RESOURCE);
+  const incomingAuditEnabled = useAuditRequired('incoming_inspection');
   const ncPerms = useResourcePermissions(NC_RESOURCE);
   const { canRead: canReadNcLedger } = useResourcePermissions(NC_RESOURCE);
   const disposalFallback = useMemo(() => getQualityIncomingDisposalFallback(t), [t]);
@@ -507,6 +516,7 @@ const IncomingInspectionPage: React.FC = () => {
       }
     },
   });
+  useNewShortcut(pullFromPurchaseReceiptQuery.openModal);
 
   // 处理创建不合格品记录
   const handleCreateDefect = (record: IncomingInspection) => {
@@ -681,35 +691,38 @@ const IncomingInspectionPage: React.FC = () => {
       >
         {t('app.kuaizhizao.quality.common.actions.detail')}
       </Button>,
-      <UniWorkflowActions {...rowActionKind('skip')}
-        key="wf"
-        record={record}
-        entityName={t('app.kuaizhizao.quality.common.entity.incomingInspection')}
-        statusField="status"
-        reviewStatusField="review_status"
-        draftStatuses={[]}
-        pendingStatuses={['待审核', '已检验']}
-        approvedStatuses={['已审核']}
-        rejectedStatuses={['已驳回']}
-        theme="link"
-        size="small"
-        onSuccess={() => {
-          actionRef.current?.reload();
-          if (inspectionDetail?.id === record.id) {
-            qualityApi.incomingInspection
-              .get(record.id!.toString())
-              .then(async (d) => {
-                setInspectionDetail(d);
-                setIiTrackingRefreshKey((k) => k + 1);
-                if (record.id != null) {
-                  await loadInspectionFieldValuesForDetail(record.id);
-                }
-              })
-              .catch(() => {});
-          }
-        }}
-      />,
     ];
+    if (gates.approve.allowed) {
+      nodes.push(
+        <UniWorkflowActions
+          {...rowActionKind('skip')}
+          key="wf"
+          record={record}
+          {...qualityInspectionUniAuditProps({
+            entityType: 'incoming_inspection',
+            resourcePrefix: INCOMING_RESOURCE,
+            entityName: t('app.kuaizhizao.quality.common.entity.incomingInspection'),
+            workflowAuditEnabled: incomingAuditEnabled,
+            onSuccess: () => {
+              actionRef.current?.reload();
+              invalidateStats();
+              if (inspectionDetail?.id === record.id) {
+                qualityApi.incomingInspection
+                  .get(record.id!.toString())
+                  .then(async (d) => {
+                    setInspectionDetail(d);
+                    setIiTrackingRefreshKey((k) => k + 1);
+                    if (record.id != null) {
+                      await loadInspectionFieldValuesForDetail(record.id);
+                    }
+                  })
+                  .catch(() => {});
+              }
+            },
+          })}
+        />,
+      );
+    }
     if (gates.createDefect.allowed) {
       nodes.push(
         <Button {...rowActionKind('create')}
@@ -944,7 +957,7 @@ const IncomingInspectionPage: React.FC = () => {
           }
         }}
         showCreateButton={true}
-        createButtonText={pullFromPurchaseReceiptAction.label}
+        createButtonText={createButtonLabel}
         onCreate={pullFromPurchaseReceiptQuery.openModal}
         toolBarRender={() => [
           <Button key="from-cm" onClick={pullFromCustomerMaterialQuery.openModal}>
@@ -1025,6 +1038,7 @@ const IncomingInspectionPage: React.FC = () => {
         <InspectionTemplateConductFields
           inspection={currentInspection as Record<string, unknown>}
           photoCategory="incoming_inspection_attachments"
+          stepPhotoRequired={false}
         />
         <ProFormDigit
           name="qualified_quantity"
@@ -1103,33 +1117,33 @@ const IncomingInspectionPage: React.FC = () => {
         columns={[]}
         column={3}
         extra={
-          inspectionDetail && (
-            <UniWorkflowActions {...rowActionKind('skip')}
+          inspectionDetail && qualityInspectionRowGates(inspectionDetail, incomingPerms, ncPerms, t).approve.allowed ? (
+            <UniWorkflowActions
+              {...rowActionKind('skip')}
               record={inspectionDetail}
-              entityName={t('app.kuaizhizao.quality.common.entity.incomingInspection')}
-              statusField="status"
-              reviewStatusField="review_status"
-              draftStatuses={[]}
-              pendingStatuses={['待审核', '已检验']}
-              approvedStatuses={['已审核']}
-              rejectedStatuses={['已驳回']}
-              theme="default"
-              size="small"
-              onSuccess={() => {
-                actionRef.current?.reload();
-                if (inspectionDetail?.id) {
-                  qualityApi.incomingInspection
-                    .get(inspectionDetail.id.toString())
-                    .then(async (d) => {
-                      setInspectionDetail(d);
-                      setIiTrackingRefreshKey((k) => k + 1);
-                      await loadInspectionFieldValuesForDetail(inspectionDetail.id!);
-                    })
-                    .catch(() => {});
-                }
-              }}
+              {...qualityInspectionUniAuditProps({
+                entityType: 'incoming_inspection',
+                resourcePrefix: INCOMING_RESOURCE,
+                entityName: t('app.kuaizhizao.quality.common.entity.incomingInspection'),
+                workflowAuditEnabled: incomingAuditEnabled,
+                theme: 'default',
+                onSuccess: () => {
+                  actionRef.current?.reload();
+                  invalidateStats();
+                  if (inspectionDetail?.id) {
+                    qualityApi.incomingInspection
+                      .get(inspectionDetail.id.toString())
+                      .then(async (d) => {
+                        setInspectionDetail(d);
+                        setIiTrackingRefreshKey((k) => k + 1);
+                        await loadInspectionFieldValuesForDetail(inspectionDetail.id!);
+                      })
+                      .catch(() => {});
+                  }
+                },
+              })}
             />
-          )
+          ) : null
         }
         customContent={
           inspectionDetail ? (

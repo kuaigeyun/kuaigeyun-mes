@@ -6,10 +6,12 @@ import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Space } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { ProFormText, ProFormSelect, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formatBusinessDateOnly } from '../../../../../utils/format';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { materialBatchApi, materialApi } from '../../../services/material';
@@ -59,11 +61,11 @@ const BatchesPage: React.FC = () => {
     try {
       const detail = await materialBatchApi.get(record.uuid);
       formRef.current?.setFieldsValue({
-        materialUuid: detail.materialUuid ?? (detail as any).material_uuid,
-        batchNo: detail.batchNo ?? (detail as any).batch_no,
-        productionDate: detail.productionDate ?? (detail as any).production_date,
-        expiryDate: detail.expiryDate ?? (detail as any).expiry_date,
-        supplierBatchNo: detail.supplierBatchNo ?? (detail as any).supplier_batch_no,
+        materialUuid: detail.materialUuid,
+        batchNo: detail.batchNo,
+        productionDate: detail.productionDate,
+        expiryDate: detail.expiryDate,
+        supplierBatchNo: detail.supplierBatchNo,
         quantity: detail.quantity,
         status: detail.status,
         remark: detail.remark,
@@ -85,17 +87,18 @@ const BatchesPage: React.FC = () => {
   const handleSubmit = async (values: Record<string, unknown>) => {
     try {
       if (isEdit && currentUuid) {
-        await materialBatchApi.update(currentUuid, {
+        const upd: MaterialBatchUpdate = {
           productionDate: formatDate(values.productionDate),
           expiryDate: formatDate(values.expiryDate),
           supplierBatchNo: values.supplierBatchNo as string | undefined,
           quantity: values.quantity as number | undefined,
           status: values.status as string | undefined,
           remark: values.remark as string | undefined,
-        });
+        };
+        await materialBatchApi.update(currentUuid, upd);
         messageApi.success(t('common.updateSuccess'));
       } else {
-        await materialBatchApi.create({
+        const crt: MaterialBatchCreate = {
           materialUuid: values.materialUuid as string,
           batchNo: values.batchNo as string,
           productionDate: formatDate(values.productionDate),
@@ -104,7 +107,8 @@ const BatchesPage: React.FC = () => {
           quantity: (values.quantity as number) ?? 0,
           status: (values.status as string) ?? 'in_stock',
           remark: values.remark as string | undefined,
-        });
+        };
+        await materialBatchApi.create(crt);
         messageApi.success(t('common.createSuccess'));
       }
       setModalVisible(false);
@@ -134,9 +138,16 @@ const BatchesPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
+  const formatBatchDateCell = (value: unknown) => {
+    if (value == null || value === '') return '-';
+    return formatBusinessDateOnly(String(value));
+  };
+
   const batchSortFieldMap: Record<string, string> = {
-    batch_no: 'batch_no',
-    material_name: 'material_name',
+    batchNo: 'batch_no',
+    materialCode: 'material_code',
+    materialName: 'material_name',
+    materialModel: 'material_model',
     quantity: 'quantity',
     status: 'status',
     productionDate: 'production_date',
@@ -145,63 +156,82 @@ const BatchesPage: React.FC = () => {
 
   const columns: ProColumns<MaterialBatch>[] = [
     {
-      title: t('app.master-data.batches.batchNo') || '批号',
-      dataIndex: 'batch_no',
-      width: 140,
+      title: t('app.master-data.batches.batchNo'),
+      dataIndex: 'batchNo',
+      width: 180,
       ellipsis: true,
       sorter: true,
-      render: (_, r) => r.batchNo ?? (r as any).batch_no,
+      copyable: true,
     },
     {
-      title: t('app.master-data.batches.materialName') || '物料名称',
-      dataIndex: 'material_name',
-      width: 200,
+      title: t('app.master-data.batches.materialCode'),
+      dataIndex: 'materialCode',
+      width: 120,
       ellipsis: true,
       hideInSearch: true,
       sorter: true,
-      render: (_, r) => r.materialName ?? (r as any).material_name ?? '-',
+      copyable: true,
     },
     {
-      title: t('app.master-data.batches.quantity') || '数量',
+      title: t('app.master-data.batches.materialName'),
+      dataIndex: 'materialName',
+      width: 180,
+      ellipsis: true,
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: t('app.master-data.batches.materialModel'),
+      dataIndex: 'materialModel',
+      width: 120,
+      ellipsis: true,
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: t('app.master-data.batches.quantity'),
       dataIndex: 'quantity',
       width: 100,
       valueType: 'digit',
       sorter: true,
-      render: (_, r) => r.quantity ?? (r as any).quantity ?? 0,
+      hideInSearch: true,
     },
     {
-      title: t('app.master-data.batches.status') || '状态',
+      title: t('app.master-data.batches.status'),
       dataIndex: 'status',
       width: 100,
       valueType: 'select',
       sorter: true,
       valueEnum: batchStatusValueEnum,
-      render: (_, r) => r.status ?? (r as any).status ?? '-',
     },
     {
-      title: t('app.master-data.batches.productionDate') || '生产日期',
+      title: t('app.master-data.batches.productionDate'),
       dataIndex: 'productionDate',
       width: 120,
       valueType: 'date',
       sorter: true,
-      render: (_, r) => r.productionDate ?? (r as any).production_date ?? '-',
+      hideInSearch: true,
+      render: (_, r) => formatBatchDateCell(r.productionDate),
     },
     {
-      title: t('app.master-data.batches.expiryDate') || '有效期',
+      title: t('app.master-data.batches.expiryDate'),
       dataIndex: 'expiryDate',
       width: 120,
       valueType: 'date',
       sorter: true,
-      render: (_, r) => r.expiryDate ?? (r as any).expiry_date ?? '-',
+      hideInSearch: true,
+      render: (_, r) => formatBatchDateCell(r.expiryDate),
     },
     {
       title: t('common.actions'),
+      valueType: 'option',
       width: 150,
       fixed: 'right',
       render: (_, record) => (
         <Space>
           <Button
-            type="link"
+            key="edit"
+            {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -209,6 +239,8 @@ const BatchesPage: React.FC = () => {
             {t('field.customField.edit')}
           </Button>
           <Popconfirm
+            key="delete"
+            {...rowActionKind('delete')}
             title={t('common.confirmDelete')}
             onConfirm={() => handleDelete(record)}
           >
@@ -230,13 +262,12 @@ const BatchesPage: React.FC = () => {
         rowKey="uuid"
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
-          const { current = 1, pageSize = 20, material_uuid, batch_no, status } = params || {};
+          const { current = 1, pageSize = 20, batchNo, status } = params || {};
           const { sortBy: raw, sortOrder } = extractProTableSort(sort);
           const sortBy = raw ? batchSortFieldMap[raw] : undefined;
           const res = await materialBatchApi.list({
-            materialUuid: material_uuid,
-            batchNo: batch_no,
-            status,
+            batchNo: batchNo as string | undefined,
+            status: status as string | undefined,
             page: current,
             pageSize,
             keyword: searchFormValues?.keyword?.trim() || undefined,
@@ -271,14 +302,14 @@ const BatchesPage: React.FC = () => {
       >
         <ProFormSelect
           name="materialUuid"
-          label={t('app.master-data.batches.material') || '物料'}
+          label={t('app.master-data.batches.material')}
           rules={[{ required: !isEdit, message: t('app.master-data.batches.selectMaterial') }]}
           disabled={isEdit}
           request={async () => {
             const res = await materialApi.list({ limit: 500, isActive: true });
             const items = Array.isArray(res) ? res : (res as any)?.items ?? [];
             return items.map((m: any) => ({
-              label: `${m.mainCode ?? m.main_code ?? m.code ?? ''} - ${m.name ?? ''}`.trim() || m.uuid,
+              label: `${m.mainCode ?? ''} - ${m.name ?? ''}`.trim() || m.uuid,
               value: m.uuid,
             }));
           }}
@@ -286,19 +317,19 @@ const BatchesPage: React.FC = () => {
         />
         <ProFormText
           name="batchNo"
-          label={t('app.master-data.batches.batchNo') || '批号'}
+          label={t('app.master-data.batches.batchNo')}
           rules={[{ required: true, message: t('app.master-data.batches.enterBatchNo') }]}
           disabled={isEdit}
           colProps={{ span: 12 }}
         />
         <ProFormDatePicker
           name="productionDate"
-          label={t('app.master-data.batches.productionDate') || '生产日期'}
+          label={t('app.master-data.batches.productionDate')}
           colProps={{ span: 12 }}
         />
         <ProFormDatePicker
           name="expiryDate"
-          label={t('app.master-data.batches.expiryDate') || '有效期'}
+          label={t('app.master-data.batches.expiryDate')}
           colProps={{ span: 12 }}
           fieldProps={buildFutureDateShortcutFieldProps({
             getForm: () => formRef.current,
@@ -309,19 +340,19 @@ const BatchesPage: React.FC = () => {
         />
         <ProFormText
           name="supplierBatchNo"
-          label={t('app.master-data.batches.supplierBatchNo') || '供应商批号'}
+          label={t('app.master-data.batches.supplierBatchNo')}
           colProps={{ span: 12 }}
         />
         <ProFormDigit
           name="quantity"
-          label={t('app.master-data.batches.quantity') || '数量'}
+          label={t('app.master-data.batches.quantity')}
           initialValue={0}
           min={0}
           colProps={{ span: 12 }}
         />
         <ProFormSelect
           name="status"
-          label={t('app.master-data.batches.status') || '状态'}
+          label={t('app.master-data.batches.status')}
           options={batchStatusOptions}
           initialValue="in_stock"
           colProps={{ span: 12 }}

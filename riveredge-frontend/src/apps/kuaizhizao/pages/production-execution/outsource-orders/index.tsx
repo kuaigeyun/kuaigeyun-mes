@@ -10,7 +10,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
@@ -64,6 +64,7 @@ import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDa
 import { useTranslation } from 'react-i18next';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   CustomFieldsFormSection,
   CustomFieldsDetailSection,
@@ -72,6 +73,7 @@ import {
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { formatDateTime } from '../../../../../utils/format';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_orders';
 
@@ -145,7 +147,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderOoRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return nodes;
+  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 const OO_STAT_SPARK_1 = [2, 3, 4, 3, 5, 4, 6];
@@ -452,6 +454,11 @@ export const OutsourceOrdersTable: React.FC = () => {
       },
     });
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.outsourceOrder.createButton')),
+    [t],
+  );
 
   /**
    * 处理提交表单（创建/更新）
@@ -740,7 +747,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         showCreateButton={true}
-        createButtonText={t('app.kuaizhizao.outsourceOrder.createButton')}
+        createButtonText={createButtonLabel}
         onCreate={handleCreate}
         showDeleteButton={true}
         onDelete={handleDelete}

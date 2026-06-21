@@ -30,6 +30,8 @@ const { Text } = Typography;
 interface InspectionTemplateConductFieldsProps {
   inspection: Record<string, unknown> | null | undefined;
   photoCategory?: string;
+  /** 为 false 时仍展示照片上传，但不强制校验（如来料检验） */
+  stepPhotoRequired?: boolean;
 }
 
 function JudgmentTag({ judgment }: { judgment?: string | null }) {
@@ -146,7 +148,8 @@ const TypedStepFields: React.FC<{
   label: string;
   hint?: string;
   photoCategory?: string;
-}> = ({ step, stepKey, label, hint, photoCategory }) => {
+  stepPhotoRequired?: boolean;
+}> = ({ step, stepKey, label, hint, photoCategory, stepPhotoRequired = true }) => {
   const { t } = useTranslation();
   const vt = normalizeValueType(step.value_type);
   const spec = { ...defaultValueSpec(vt, t), ...(step.value_spec || {}) };
@@ -156,7 +159,8 @@ const TypedStepFields: React.FC<{
   const allowsNa = stepSpecAllowsNa(spec);
   const isCritical = stepSpecIsCritical(spec);
   const isDerived = vt === 'numeric' && stepSpecIsDerived(spec);
-  const needsPhoto = stepSpecRequiresPhoto(spec);
+  const templateWantsPhoto = stepSpecRequiresPhoto(spec);
+  const enforcePhoto = templateWantsPhoto && stepPhotoRequired;
 
   const basePath = ['conduct_step_results', stepKey];
   const judgment = Form.useWatch([...basePath, 'judgment']);
@@ -177,7 +181,7 @@ const TypedStepFields: React.FC<{
 
   const photoRule = () => ({
     validator(_: unknown, value: unknown) {
-      if (!needsPhoto || isNa) return Promise.resolve();
+      if (!enforcePhoto || isNa) return Promise.resolve();
       if (!Array.isArray(value) || value.length === 0) {
         return Promise.reject(new Error(t('app.kuaizhizao.quality.template.stepPhotoRequired', { label })));
       }
@@ -324,13 +328,17 @@ const TypedStepFields: React.FC<{
         </>
       )}
 
-      {needsPhoto && photoCategory && !isNa && (
+      {templateWantsPhoto && photoCategory && !isNa && (
         <ProFormItem
           name={[...basePath, 'photos']}
           label={t('app.kuaizhizao.quality.template.stepPhoto')}
-          rules={[photoRule()]}
+          rules={enforcePhoto ? [photoRule()] : undefined}
         >
-          <InspectionStepConductPhotoField category={photoCategory} required />
+          <InspectionStepConductPhotoField
+            category={photoCategory}
+            required={enforcePhoto}
+            label={label}
+          />
         </ProFormItem>
       )}
     </div>
@@ -340,6 +348,7 @@ const TypedStepFields: React.FC<{
 const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsProps> = ({
   inspection,
   photoCategory,
+  stepPhotoRequired = true,
 }) => {
   const { t } = useTranslation();
   const template = getInspectionTemplateSource(inspection);
@@ -386,6 +395,7 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
               label={label}
               hint={hint || undefined}
               photoCategory={photoCategory}
+              stepPhotoRequired={stepPhotoRequired}
             />
           );
         })}

@@ -162,6 +162,11 @@ export const workOrderApi = {
       `/apps/kuaizhizao/work-orders/${workOrderId}/picking-confirmation-status`,
       { method: 'GET' }
     ),
+  getDefaultInboundWarehouse: async (workOrderId: string) =>
+    apiRequest<{ warehouse_id: number | null; warehouse_name: string | null }>(
+      `/apps/kuaizhizao/work-orders/${workOrderId}/default-inbound-warehouse`,
+      { method: 'GET' }
+    ),
   checkShortage: async (workOrderId: string, warehouseId?: number) => {
     const res = await apiRequest<{
       has_shortage: boolean;

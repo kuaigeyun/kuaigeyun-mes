@@ -155,6 +155,84 @@ async def _dispatch_quotation(
     _unsupported("quotation", action)
 
 
+async def _dispatch_shipment_notice(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.shipment_notice_service import ShipmentNoticeService
+
+    svc = ShipmentNoticeService()
+    if action == "submit":
+        return await svc.submit_shipment_notice(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_shipment_notice(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_shipment_notice(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_shipment_notice_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_shipment_notice_approval(tenant_id, entity_id, user_id)
+    _unsupported("shipment_notice", action)
+
+
+async def _dispatch_sales_delivery(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.warehouse_service import SalesDeliveryService
+
+    svc = SalesDeliveryService()
+    if action == "submit":
+        return await svc.submit_sales_delivery(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_sales_delivery(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_sales_delivery(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_sales_delivery_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_sales_delivery_approval(tenant_id, entity_id, user_id)
+    _unsupported("sales_delivery", action)
+
+
+async def _dispatch_sales_contract_change(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.sales_contract_service import SalesContractService
+
+    svc = SalesContractService()
+    if action == "submit":
+        return await svc.submit_contract_change(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_contract_change(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_contract_change(
+            tenant_id, entity_id, user_id, review_remarks=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        _unsupported("sales_contract_change", action)
+    if action == "revoke":
+        _unsupported("sales_contract_change", action)
+    _unsupported("sales_contract_change", action)
+
+
 async def _dispatch_demand(
     action: str,
     *,
@@ -254,7 +332,7 @@ async def _dispatch_purchase_order(
     if action == "withdraw":
         return await svc.withdraw_purchase_order(tenant_id, entity_id, user_id)
     if action == "revoke":
-        _unsupported("purchase_order", action)
+        return await svc.revoke_purchase_order_approval(tenant_id, entity_id, user_id)
     _unsupported("purchase_order", action)
 
 
@@ -586,6 +664,9 @@ HANDLERS: Dict[str, DispatchFn] = {
     "sales_forecast": _dispatch_sales_forecast,
     "sales_contract": _dispatch_sales_contract,
     "quotation": _dispatch_quotation,
+    "shipment_notice": _dispatch_shipment_notice,
+    "sales_delivery": _dispatch_sales_delivery,
+    "sales_contract_change": _dispatch_sales_contract_change,
     "demand": _dispatch_demand,
     "production_plan": _dispatch_production_plan,
     "purchase_order": _dispatch_purchase_order,

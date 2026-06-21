@@ -56,6 +56,87 @@ export interface QualityInspectionStageToggles {
   oqc_enabled: boolean;
 }
 
+/** 采购入库确认前 IQC ensure 结果 */
+export interface EnsureIqcForPurchaseReceiptLineSummary {
+  receipt_item_id: number;
+  material_id: number;
+  material_code: string;
+  material_name: string;
+  receipt_quantity: number;
+  iqc_required: boolean;
+  iqc_mode?: string | null;
+  plan_label?: string | null;
+  inspection_id?: number | null;
+  inspection_code?: string | null;
+  inspection_status?: string | null;
+  quality_status?: string | null;
+  review_status?: string | null;
+  passed: boolean;
+  can_inbound: boolean;
+}
+
+export interface EnsureIqcForPurchaseReceiptResult {
+  can_confirm_inbound: boolean;
+  requires_iqc: boolean;
+  gate_enabled: boolean;
+  iqc_stage_enabled: boolean;
+  iqc_module_enabled: boolean;
+  created_count: number;
+  created_inspections: unknown[];
+  pending_inspections: unknown[];
+  line_summaries: EnsureIqcForPurchaseReceiptLineSummary[];
+  message?: string | null;
+}
+
+/** 代工来料确认前 IQC ensure 结果 */
+export interface EnsureIqcForCustomerMaterialRegistrationResult {
+  can_confirm_inbound: boolean;
+  requires_iqc: boolean;
+  gate_enabled: boolean;
+  iqc_stage_enabled: boolean;
+  iqc_module_enabled: boolean;
+  registration_code?: string | null;
+  created_count: number;
+  created_inspections: unknown[];
+  pending_inspections: unknown[];
+  line_summaries: EnsureIqcForPurchaseReceiptLineSummary[];
+  message?: string | null;
+}
+
+/** 成品入库确认前 FQC ensure 结果 */
+export interface EnsureFqcForFinishedGoodsReceiptLineSummary {
+  receipt_item_id: number;
+  material_id: number;
+  material_code: string;
+  material_name: string;
+  receipt_quantity: number;
+  fqc_required: boolean;
+  fqc_mode?: string | null;
+  plan_label?: string | null;
+  inspection_id?: number | null;
+  inspection_code?: string | null;
+  inspection_status?: string | null;
+  quality_status?: string | null;
+  review_status?: string | null;
+  passed: boolean;
+  can_inbound: boolean;
+}
+
+export interface EnsureFqcForFinishedGoodsReceiptResult {
+  can_confirm_inbound: boolean;
+  requires_fqc: boolean;
+  gate_enabled: boolean;
+  fqc_stage_enabled: boolean;
+  fqc_module_enabled: boolean;
+  work_order_id?: number | null;
+  work_order_code?: string | null;
+  created_count: number;
+  created_inspections: unknown[];
+  pending_inspections: unknown[];
+  line_summaries: EnsureFqcForFinishedGoodsReceiptLineSummary[];
+  message?: string | null;
+}
+
 export const qualityApi = {
   incomingInspection: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/incoming-inspections', { method: 'GET', params }),
@@ -73,6 +154,16 @@ export const qualityApi = {
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/push-to-purchase-return`, { method: 'POST' }),
     createFromPurchaseReceipt: async (purchaseReceiptId: string) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/from-purchase-receipt/${purchaseReceiptId}`, { method: 'POST' }),
+    ensureForPurchaseReceipt: async (purchaseReceiptId: string) =>
+      apiRequest<EnsureIqcForPurchaseReceiptResult>(
+        `/apps/kuaizhizao/incoming-inspections/ensure-for-purchase-receipt/${purchaseReceiptId}`,
+        { method: 'POST' },
+      ),
+    ensureForCustomerMaterialRegistration: async (registrationId: string) =>
+      apiRequest<EnsureIqcForCustomerMaterialRegistrationResult>(
+        `/apps/kuaizhizao/incoming-inspections/ensure-for-customer-material-registration/${registrationId}`,
+        { method: 'POST' },
+      ),
     createFromCustomerMaterial: async (registrationId: string) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/from-customer-material/${registrationId}`, { method: 'POST' }),
     createDefect: async (inspectionId: string, data: any) =>
@@ -127,6 +218,16 @@ export const qualityApi = {
       apiRequest(
         `/apps/kuaizhizao/finished-goods-inspections/from-work-order?work_order_id=${workOrderId}`,
         { method: 'POST' }
+      ),
+    ensureForFinishedGoodsReceipt: async (finishedGoodsReceiptId: string) =>
+      apiRequest<EnsureFqcForFinishedGoodsReceiptResult>(
+        `/apps/kuaizhizao/finished-goods-inspections/ensure-for-finished-goods-receipt/${finishedGoodsReceiptId}`,
+        { method: 'POST' },
+      ),
+    ensureForSemiFinishedGoodsReceipt: async (semiFinishedGoodsReceiptId: string) =>
+      apiRequest<EnsureFqcForFinishedGoodsReceiptResult>(
+        `/apps/kuaizhizao/finished-goods-inspections/ensure-for-semi-finished-goods-receipt/${semiFinishedGoodsReceiptId}`,
+        { method: 'POST' },
       ),
     createDefect: async (inspectionId: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${inspectionId}/create-defect`, { method: 'POST', data }),

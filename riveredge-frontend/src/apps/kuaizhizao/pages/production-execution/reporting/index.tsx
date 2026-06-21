@@ -1,4 +1,4 @@
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 /**
  * 报工管理页面
  *
@@ -33,6 +33,7 @@ import {
   Typography,
   Empty,
   Table,
+  Alert,
   theme as AntdTheme,
 } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -42,11 +43,10 @@ import {
   CheckCircleOutlined,
   DeleteOutlined,
   WarningOutlined,
-  RollbackOutlined,
   EyeOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import {
   UniTableStackedPrimaryCell,
@@ -64,7 +64,7 @@ import {
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { reportingApi, workOrderApi, materialBindingApi, getReportingStatistics } from '../../../services/production';
-import { getReportingLifecycle } from '../../../utils/reportingLifecycle';
+import { getReportingLifecycle, reportingRecordUniAuditProps } from '../../../utils/reportingLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
@@ -75,12 +75,20 @@ import { UniUserSelect } from '../../../../../components/uni-user-select';
 import type { User } from '../../../../../services/user';
 import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting';
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload';
+import ReportingInboundWarehouseField from '../../../components/ReportingInboundWarehouseField';
+import {
+  isInboundWarehouseRequiredForLastOperation,
+  resolveIsLastOperation,
+  resolveLastInboundHint,
+} from '../../../utils/reportingLastOperation';
 import { countWithPagedRequests } from '../../../../../utils/pagedCount';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { reportingRecordBatchRevokeApprovalAllowed } from '../../../../../hooks/useDocumentCapabilities';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { formatDateTime } from '../../../../../utils/format';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const REPORTING_RESOURCE = 'kuaizhizao:production-execution-reporting';
 
@@ -102,8 +110,15 @@ interface ReportingRecord {
   remarks?: string;
   sop_parameters?: Record<string, any>;
   capabilities?: {
+    approve?: { allowed: boolean; reason?: string | null };
     revoke_approval?: { allowed: boolean; reason?: string | null };
     print?: { allowed: boolean; reason?: string | null };
+  };
+  audit?: {
+    entity_type?: string;
+    phase?: string;
+    enabled?: boolean;
+    allowed_actions?: string[];
   };
   [key: string]: any; // 支持索引访问
 }
@@ -186,7 +201,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderReportingRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return nodes;
+  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 /** 获取报工员工信息：优先使用工序派工的 assigned_worker，否则使用当前登录用户 */
@@ -232,6 +247,26 @@ const ReportingPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<ReportingRecord[]>([]);
   const reportingPerms = useResourcePermissions(REPORTING_RESOURCE);
+  const reportingAuditEnabled = useAuditRequired('reporting_record', false);
+
+  const reportingAuditBatchHandlers = useMemo(
+    () => ({
+      approve: (id: number) => reportingApi.approve(String(id)),
+      revoke: (id: number) => reportingApi.revoke(String(id)),
+    }),
+    [],
+  );
+
+  const reportingAuditBatchBulkHandlers = useMemo(
+    () => ({
+      revoke: (ids: number[]) =>
+        reportingApi.batchRevoke(ids.map(String)).then((res) => ({
+          success_count: res.success,
+          failed_count: res.failed,
+        })),
+    }),
+    [],
+  );
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -307,6 +342,24 @@ const ReportingPage: React.FC = () => {
     actionRef.current?.reload();
     invalidateStatistics();
   }, [invalidateMenuBadgeCounts, invalidateStatistics]);
+
+  const handleReportingWorkflowSuccess = useCallback(
+    (record?: ReportingRecord) => {
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      invalidateStatistics();
+      if (record?.id != null && reportingDetail?.id === record.id) {
+        reportingApi
+          .get(record.id.toString())
+          .then((d) => {
+            setReportingDetail(d as ReportingRecord);
+            setRpTrackingRefreshKey((k) => k + 1);
+          })
+          .catch(() => {});
+      }
+    },
+    [invalidateMenuBadgeCounts, invalidateStatistics, reportingDetail?.id],
+  );
 
   // 报工Modal状态
   const [reportingModalVisible, setReportingModalVisible] = useState(false);
@@ -481,12 +534,64 @@ const ReportingPage: React.FC = () => {
     formRef.current?.setFieldsValue({ proxy_worker_uuid: undefined });
   }, [reportingModalVisible, canProxyReporting, reportOperationId, reportOperations]);
 
+  const reportSelectedOperation = useMemo(
+    () =>
+      (Array.isArray(reportOperations) ? reportOperations : []).find(
+        (op: any) => op.operation_id === reportOperationId,
+      ),
+    [reportOperations, reportOperationId],
+  );
+
+  const reportIsLastOperation = useMemo(
+    () => resolveIsLastOperation(reportSelectedOperation, reportOperations),
+    [reportSelectedOperation, reportOperations],
+  );
+
+  const reportWarehouseRequired = useMemo(
+    () =>
+      isInboundWarehouseRequiredForLastOperation(
+        reportIsLastOperation,
+        executionConfig?.last_operation_auto_inbound_mode,
+      ),
+    [reportIsLastOperation, executionConfig?.last_operation_auto_inbound_mode],
+  );
+
+  const reportLastInboundHint = useMemo(() => {
+    if (!reportIsLastOperation) return '';
+    return resolveLastInboundHint(t, executionConfig?.last_operation_auto_inbound_mode);
+  }, [reportIsLastOperation, executionConfig?.last_operation_auto_inbound_mode, t]);
+
+  useEffect(() => {
+    if (!reportingModalVisible || !reportIsLastOperation || !reportWorkOrderId) return;
+    let cancelled = false;
+    workOrderApi
+      .getDefaultInboundWarehouse(String(reportWorkOrderId))
+      .then((res) => {
+        if (cancelled || !res?.warehouse_id) return;
+        formRef.current?.setFieldsValue({
+          inbound_warehouse_id: res.warehouse_id,
+          inbound_warehouse_name: res.warehouse_name ?? undefined,
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [reportingModalVisible, reportIsLastOperation, reportWorkOrderId]);
+
   /**
    * 处理新建报工（打开弹窗并加载工单列表）
    */
   const handleNewReporting = async () => {
     pullFromWorkOrderQuery.openModal();
   };
+  useNewShortcut(() => {
+    void handleNewReporting();
+  });
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.workReporting.createButton')),
+    [t],
+  );
 
   /**
    * 新建报工：工单变更时加载工序
@@ -611,6 +716,18 @@ const ReportingPage: React.FC = () => {
         reportingData.reported_quantity = rq;
         reportingData.qualified_quantity = values.qualified_quantity ?? rq ?? 0;
         reportingData.unqualified_quantity = rq - (values.qualified_quantity ?? rq ?? 0);
+      }
+      if (reportIsLastOperation) {
+        if (reportWarehouseRequired && !values.inbound_warehouse_id) {
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.workOrder.selectWarehouse'));
+          return;
+        }
+        if (values.inbound_warehouse_id) {
+          reportingData.inbound_warehouse_id = Number(values.inbound_warehouse_id);
+          reportingData.inbound_warehouse_name = values.inbound_warehouse_name
+            ? String(values.inbound_warehouse_name)
+            : undefined;
+        }
       }
       await reportingApi.create(coerceReportingCreateStrings(reportingData, workOrder));
       messageApi.success(t('app.kuaizhizao.workReporting.createSuccess'));
@@ -826,37 +943,21 @@ const ReportingPage: React.FC = () => {
         {t('common.detail')}
       </Button>
     );
+    nodes.push(
+      <span {...rowActionKind('skip')} key="wf" onClick={(e) => e.stopPropagation()}>
+        <UniWorkflowActions
+          {...rowActionKind('skip')}
+          record={record}
+          {...reportingRecordUniAuditProps({
+            resourcePrefix: REPORTING_RESOURCE,
+            entityName: t('app.kuaizhizao.workReporting.entityName'),
+            workflowAuditEnabled: reportingAuditEnabled,
+            onSuccess: () => handleReportingWorkflowSuccess(record),
+          })}
+        />
+      </span>
+    );
     if (isPending) {
-      nodes.push(
-        <span {...rowActionKind('skip')} key="wf" onClick={(e) => e.stopPropagation()}>
-          <UniWorkflowActions {...rowActionKind('skip')}
-            record={record}
-            entityName={t('app.kuaizhizao.workReporting.entityName')}
-            statusField="status"
-            draftStatuses={[]}
-            pendingStatuses={REPORTING_PENDING_STATUSES}
-            approvedStatuses={REPORTING_APPROVED_STATUSES}
-            rejectedStatuses={REPORTING_REJECTED_STATUSES}
-            onSuccess={() => {
-              invalidateMenuBadgeCounts();
-
-              actionRef.current?.reload();
-              invalidateStatistics();
-              if (reportingDetail?.id === record.id) {
-                reportingApi
-                  .get(record.id.toString())
-                  .then((d) => {
-                    setReportingDetail(d as ReportingRecord);
-                    setRpTrackingRefreshKey((k) => k + 1);
-                  })
-                  .catch(() => {});
-              }
-            }}
-            theme="link"
-            size="small"
-          />
-        </span>
-      );
       nodes.push(
         <Button {...rowActionKind('update')}
           key="corr"
@@ -905,44 +1006,6 @@ const ReportingPage: React.FC = () => {
       );
     }
     if (isApproved) {
-      nodes.push(
-        <Button {...rowActionKind('revoke')}
-          key="revoke"
-          type="link"
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            Modal.confirm({
-              title: t('app.kuaizhizao.workReporting.confirmRevokeTitle'),
-              content:
-                t('app.kuaizhizao.workReporting.confirmRevokeContent'),
-              onOk: async () => {
-                try {
-                  await reportingApi.revoke(record.id.toString());
-                  messageApi.success(t('app.kuaizhizao.workReporting.revokeSuccess'));
-                  if (reportingDetail?.id === record.id) {
-                    reportingApi
-                      .get(record.id.toString())
-                      .then((d) => {
-                        setReportingDetail(d as ReportingRecord);
-                        setRpTrackingRefreshKey((k) => k + 1);
-                      })
-                      .catch(() => {});
-                  }
-                  invalidateMenuBadgeCounts();
-
-                  actionRef.current?.reload();
-                  invalidateStatistics();
-                } catch (error: any) {
-                  messageApi.error(error.message || t('app.kuaizhizao.workReporting.revokeFailed'));
-                }
-              },
-            });
-          }}
-        >
-          {t('app.kuaizhizao.workReporting.revokeReview')}
-        </Button>
-      );
       if ((record.unqualified_quantity || 0) > 0) {
         nodes.push(
           <Button {...rowActionKind('create')}
@@ -1248,7 +1311,7 @@ const ReportingPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         showCreateButton={true}
-        createButtonText={t('app.kuaizhizao.workReporting.createButton')}
+        createButtonText={createButtonLabel}
         onCreate={handleNewReporting}
         showDeleteButton={true}
         onDelete={async (keys) => {
@@ -1276,33 +1339,16 @@ const ReportingPage: React.FC = () => {
           style: { cursor: 'pointer' },
         })}
         toolBarActionsAfterDelete={[
-          <UniCapabilityBatchButton
-            key="reporting-batch-revoke"
+          <UniAuditBatchMenuButton
+            key="reporting-batch-audit-menu"
             selectedRowKeys={selectedRowKeys}
             selectedRecords={selectedRecordsForBatch}
-            capabilityKey="revoke_approval"
-            permAllowed={reportingPerms.canAction?.('revoke') ?? false}
-            batchAllowed={(records, perm) =>
-              reportingRecordBatchRevokeApprovalAllowed(records, perm)
-            }
-            onRunBulk={async (ids) => {
-              const res = await reportingApi.batchRevoke(ids.map(String));
-              return {
-                success_count: res.success,
-                failed_count: res.failed,
-              };
-            }}
-            labels={{
-              single: t('app.kuaizhizao.workReporting.batchRevoke'),
-              batch: t('app.kuaizhizao.workReporting.batchRevoke'),
-              batchConfirmTitle: t('app.kuaizhizao.workReporting.confirmBatchRevokeTitle'),
-              batchConfirmDescription: (count) =>
-                t('app.kuaizhizao.workReporting.confirmBatchRevokeContent', { count }),
-            }}
-            icon={<RollbackOutlined />}
-            size="middle"
-            requireConfirm
+            auditEnabled={reportingAuditEnabled}
+            permGates={reportingPerms}
+            handlers={reportingAuditBatchHandlers}
+            bulkHandlers={reportingAuditBatchBulkHandlers}
             onSuccess={handleReportingBatchSuccess}
+            toolBarButtonSize="middle"
           />,
         ]}
       />
@@ -1322,6 +1368,11 @@ const ReportingPage: React.FC = () => {
         formRef={formRef}
         grid={true}
       >
+        {!!reportLastInboundHint && (
+          <Col span={24} style={{ marginBottom: 12 }}>
+            <Alert type="info" showIcon message={reportLastInboundHint} />
+          </Col>
+        )}
         <Col span={12}>
           <ProFormItem
             name="work_order_id"
@@ -1428,6 +1479,10 @@ const ReportingPage: React.FC = () => {
           min={0}
           fieldProps={{ step: 0.1 }}
           colProps={{ span: 8 }}
+        />
+        <ReportingInboundWarehouseField
+          isLastOperation={reportIsLastOperation}
+          warehouseRequired={reportWarehouseRequired}
         />
         <ProFormTextArea
           name="remarks"
@@ -1746,6 +1801,21 @@ const ReportingPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         column={3}
+        extra={
+          reportingDetail ? (
+            <UniWorkflowActions
+              {...rowActionKind('skip')}
+              record={reportingDetail}
+              {...reportingRecordUniAuditProps({
+                resourcePrefix: REPORTING_RESOURCE,
+                entityName: t('app.kuaizhizao.workReporting.entityName'),
+                workflowAuditEnabled: reportingAuditEnabled,
+                theme: 'default',
+                onSuccess: () => handleReportingWorkflowSuccess(reportingDetail),
+              })}
+            />
+          ) : null
+        }
         dataSource={reportingDetail || undefined}
         customContent={
           reportingDetail && (

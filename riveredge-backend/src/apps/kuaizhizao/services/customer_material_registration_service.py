@@ -6,12 +6,15 @@ import uuid
 import re
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, date
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
+from tortoise.timezone import now as tz_now
+
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 
 from apps.kuaizhizao.models.customer_material_registration import (
     BarcodeMappingRule,
@@ -458,6 +461,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
         registration: CustomerMaterialRegistration,
         items: List[CustomerMaterialRegistrationItem],
         operator_id: int,
+        ledger_production_date: date,
     ) -> None:
         from apps.kuaizhizao.services.inventory_service import InventoryService
         from apps.master_data.models.material import Material
@@ -513,6 +517,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 ownership_type="customer_provided",
                 customer_id=registration.customer_id,
                 customer_name=registration.customer_name,
+                ledger_production_date=ledger_production_date,
             )
 
     async def process_registration(
@@ -546,10 +551,12 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 tenant_id, registration_id, items
             )
 
-            await self._post_inventory_for_registration(registration, items, processed_by)
+            now = tz_now()
+            await self._post_inventory_for_registration(
+                registration, items, processed_by, ledger_production_date=to_site_date(now)
+            )
 
             user_info = await self.get_user_name(processed_by)
-            now = datetime.now()
             registration.status = "processed"
             registration.processed_at = now
             registration.processed_by = processed_by

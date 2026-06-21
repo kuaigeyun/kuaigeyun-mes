@@ -567,7 +567,12 @@ def resolve_step_judgment(
     return judge_step_value(vt, spec, entry.get("value"))
 
 
-def validate_inspection_template_conduct(template_json: Any, conduct_data: Dict[str, Any]) -> None:
+def validate_inspection_template_conduct(
+    template_json: Any,
+    conduct_data: Dict[str, Any],
+    *,
+    require_step_photo: bool = True,
+) -> None:
     """校验方案检验项 conduct（支持 conduct_step_results 与 legacy item_results）。"""
     if not template_json or not isinstance(template_json, dict):
         return
@@ -614,7 +619,7 @@ def validate_inspection_template_conduct(template_json: Any, conduct_data: Dict[
                 if spec.get("required", True):
                     missing.append(str(name))
                 continue
-            if spec.get("require_photo") and entry.get("judgment") != "na":
+            if require_step_photo and spec.get("require_photo") and entry.get("judgment") != "na":
                 if not _normalize_step_photos(entry.get("photos")):
                     missing.append(f"{name}（照片）")
             if filled:

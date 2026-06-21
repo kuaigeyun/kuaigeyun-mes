@@ -13,6 +13,7 @@ type Props = {
   onChange?: (files: PhotoFile[]) => void;
   category: string;
   required?: boolean;
+  label?: string;
 };
 
 export const InspectionStepConductPhotoField: React.FC<Props> = ({
@@ -20,6 +21,7 @@ export const InspectionStepConductPhotoField: React.FC<Props> = ({
   onChange,
   category,
   required,
+  label,
 }) => {
   const { t } = useTranslation();
   const fileList = (value ?? []).map((f, idx) => ({
@@ -61,7 +63,9 @@ export const InspectionStepConductPhotoField: React.FC<Props> = ({
           <PlusOutlined />
           <div style={{ marginTop: 8 }}>
             {required
-              ? t('app.kuaizhizao.quality.template.stepPhotoRequired')
+              ? t('app.kuaizhizao.quality.template.stepPhotoRequired', {
+                  label: label || t('app.kuaizhizao.quality.template.stepPhoto'),
+                })
               : t('app.kuaizhizao.quality.template.stepPhoto')}
           </div>
         </div>

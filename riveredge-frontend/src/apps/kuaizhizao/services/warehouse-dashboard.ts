@@ -23,6 +23,7 @@ export type WarehouseDashboardSummary = {
   pending_inbound: number;
   overdue_inbound: number;
   pending_outbound: number;
+  pending_inbounds: WarehouseDashboardRecentRow[];
   recent_inbounds: WarehouseDashboardRecentRow[];
   recent_outbounds: WarehouseDashboardRecentRow[];
 };

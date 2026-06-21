@@ -139,6 +139,7 @@ export async function convertToPurchaseOrder(
     supplier_id?: number;
     supplier_name?: string;
     item_quantities?: Record<number, number>;
+    item_unit_prices?: Record<number, number>;
     /** 申请行 id -> 供应商 id，优先于行上 supplier_id */
     item_suppliers?: Record<number, number>;
     /** 转单成功后写回采购件物料默认供应商 */

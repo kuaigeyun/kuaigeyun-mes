@@ -56,7 +56,9 @@ export function WorkOrderOperationStepsStrip({
 
 
 
-  const nodeSize = compact ? 22 : 26;
+  const nodeSize = compact ? 28 : 32;
+
+  const progressFontSize = compact ? 10 : 11;
 
   const labelFontSize = compact ? 11 : 12;
 
@@ -138,7 +140,7 @@ export function WorkOrderOperationStepsStrip({
 
         {placeholder ? null : isDone ? (
 
-          <CheckOutlined style={{ color: '#fff', fontSize: compact ? 11 : 13 }} />
+          <CheckOutlined style={{ color: '#fff', fontSize: compact ? 12 : 14 }} />
 
         ) : isActive ? (
 
@@ -148,11 +150,13 @@ export function WorkOrderOperationStepsStrip({
 
               color: activeColor,
 
-              fontSize: compact ? 9 : 10,
+              fontSize: progressFontSize,
 
               fontWeight: 700,
 
               lineHeight: 1,
+
+              whiteSpace: 'nowrap',
 
             }}
 

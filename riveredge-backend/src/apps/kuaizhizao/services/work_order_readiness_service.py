@@ -1,23 +1,21 @@
 """
 工单齐套率持久化服务
 
-- 计算口径与 list_work_orders(include_readiness=True) 一致：BOM 展开 + 批量库存，按物料种类齐套比例
+- 计算口径与 get_work_order_kitting_analysis / 库位与叫料弹窗一致
 - 结果写入 work_orders.readiness_rate，并缓存 readiness_component_ids 供库存变动定向刷新
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 from collections import defaultdict
-from datetime import datetime
 from decimal import Decimal
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Iterable, List, Optional, Sequence
 
 from loguru import logger
 
 from apps.kuaizhizao.models.work_order import WorkOrder
-from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
+from apps.kuaizhizao.schemas.work_order import WorkOrderKittingAnalysisResponse
 from core.utils.timezone_utils import now_utc
 
 READINESS_ACTIVE_STATUSES = ("draft", "released", "in_progress", "草稿", "已下达", "执行中")
@@ -26,49 +24,6 @@ _DEBOUNCE_SECONDS = 2.0
 _pending_materials: dict[int, set[int]] = defaultdict(set)
 _pending_tasks: dict[int, asyncio.Task] = {}
 _pending_lock = asyncio.Lock()
-
-
-def _normalize_configurable_selections(raw) -> Optional[dict]:
-    if not raw or not isinstance(raw, dict):
-        return None
-    try:
-        return {str(k): int(v) for k, v in raw.items() if v is not None}
-    except (TypeError, ValueError):
-        return None
-
-
-def bom_cache_key_for_work_order(wo: WorkOrder) -> str:
-    cfg = _normalize_configurable_selections(getattr(wo, "configurable_selections", None))
-    return json.dumps(
-        {
-            "product_id": wo.product_id,
-            "quantity": float(wo.quantity or 0),
-            "variant_attributes": getattr(wo, "variant_attributes", None),
-            "configurable_selections": cfg,
-        },
-        sort_keys=True,
-        default=str,
-    )
-
-
-def _rate_from_requirements(
-    requirements: Sequence,
-    inventory_map: Dict[int, Decimal],
-) -> Tuple[Optional[float], List[int]]:
-    if not requirements:
-        return 100.0, []
-    component_ids: List[int] = []
-    shortage_vars = 0
-    for req in requirements:
-        cid = int(req.component_id)
-        component_ids.append(cid)
-        available = inventory_map.get(cid, Decimal("0"))
-        if available < Decimal(str(req.gross_requirement)):
-            shortage_vars += 1
-    total_vars = len(requirements)
-    ready_vars = total_vars - shortage_vars
-    rate = round((ready_vars / total_vars * 100), 2) if total_vars > 0 else 100.0
-    return rate, sorted(set(component_ids))
 
 
 def _fixed_rate_for_status(status: str) -> Optional[float]:
@@ -85,32 +40,24 @@ def _needs_bom_readiness(status: str) -> bool:
     return status in READINESS_ACTIVE_STATUSES
 
 
-async def _expand_bom_requirements_batch(
+async def persist_kitting_analysis_result(
     tenant_id: int,
-    work_orders: Sequence[WorkOrder],
-) -> dict[int, list]:
-    bom_cache: dict[str, list] = {}
-    wo_requirements_map: dict[int, list] = {}
-    for wo in work_orders:
-        if not _needs_bom_readiness(wo.status or ""):
-            continue
-        try:
-            cache_key = bom_cache_key_for_work_order(wo)
-            if cache_key not in bom_cache:
-                cfg = _normalize_configurable_selections(getattr(wo, "configurable_selections", None))
-                bom_cache[cache_key] = await calculate_material_requirements_from_bom(
-                    tenant_id=tenant_id,
-                    material_id=wo.product_id,
-                    required_quantity=float(wo.quantity),
-                    only_approved=True,
-                    variant_attributes=getattr(wo, "variant_attributes", None),
-                    configurable_selections=cfg,
-                    for_kitting_analysis=True,
-                )
-            wo_requirements_map[wo.id] = bom_cache[cache_key]
-        except Exception as exc:
-            logger.warning(f"工单 {wo.id} BOM 展开失败（齐套率）: {exc}")
-    return wo_requirements_map
+    work_order_id: int,
+    analysis: WorkOrderKittingAnalysisResponse,
+) -> None:
+    """将齐套分析结果写入工单持久化字段（与列表齐套率、弹窗同一口径）。"""
+    component_ids = sorted(
+        {int(item.material_id) for item in analysis.items if item.kitting_applicable}
+    )
+    await WorkOrder.filter(
+        tenant_id=tenant_id,
+        id=work_order_id,
+        deleted_at__isnull=True,
+    ).update(
+        readiness_rate=analysis.kitting_rate,
+        readiness_component_ids=component_ids,
+        readiness_rate_updated_at=now_utc(),
+    )
 
 
 class WorkOrderReadinessService:
@@ -120,84 +67,59 @@ class WorkOrderReadinessService:
         self,
         tenant_id: int,
         work_orders: Sequence[WorkOrder],
-        inventory_map: Optional[Dict[int, Decimal]] = None,
-        wo_requirements_map: Optional[dict[int, list]] = None,
+        inventory_map=None,
+        wo_requirements_map=None,
     ) -> None:
         if not work_orders:
             return
 
-        if wo_requirements_map is None:
-            wo_requirements_map = await _expand_bom_requirements_batch(tenant_id, work_orders)
+        from apps.kuaizhizao.services.work_order_service import WorkOrderService
 
-        if inventory_map is None:
-            all_comp_ids: set[int] = set()
-            for reqs in wo_requirements_map.values():
-                for r in reqs:
-                    all_comp_ids.add(int(r.component_id))
-            from apps.kuaizhizao.utils.inventory_helper import batch_get_material_inventory
-
-            inventory_map = (
-                await batch_get_material_inventory(tenant_id, list(all_comp_ids))
-                if all_comp_ids
-                else {}
-            )
-
+        wo_svc = WorkOrderService()
         now = now_utc()
+
         for wo in work_orders:
             fixed = _fixed_rate_for_status(wo.status or "")
             if fixed is not None:
                 wo.readiness_rate = Decimal(str(fixed))
                 wo.readiness_component_ids = []
                 wo.readiness_rate_updated_at = now
-                await wo.save(update_fields=["readiness_rate", "readiness_component_ids", "readiness_rate_updated_at"])
+                await wo.save(
+                    update_fields=[
+                        "readiness_rate",
+                        "readiness_component_ids",
+                        "readiness_rate_updated_at",
+                    ]
+                )
                 continue
 
             if not _needs_bom_readiness(wo.status or ""):
                 wo.readiness_rate = None
                 wo.readiness_component_ids = []
                 wo.readiness_rate_updated_at = now
-                await wo.save(update_fields=["readiness_rate", "readiness_component_ids", "readiness_rate_updated_at"])
+                await wo.save(
+                    update_fields=[
+                        "readiness_rate",
+                        "readiness_component_ids",
+                        "readiness_rate_updated_at",
+                    ]
+                )
                 continue
 
-            requirements = wo_requirements_map.get(wo.id)
-            if requirements is None:
+            try:
+                await wo_svc.get_work_order_kitting_analysis(tenant_id, wo.id)
+            except Exception as exc:
+                logger.warning(f"工单 {wo.id} 齐套率计算失败: {exc}")
                 wo.readiness_rate = None
                 wo.readiness_component_ids = []
                 wo.readiness_rate_updated_at = now
-                await wo.save(update_fields=["readiness_rate", "readiness_component_ids", "readiness_rate_updated_at"])
-                continue
-
-            wo_inventory = inventory_map
-            if wo.sales_order_id:
-                from apps.kuaizhizao.models.sales_order import SalesOrder
-                from apps.kuaizhizao.utils.inventory_helper import batch_get_material_inventory
-
-                so = await SalesOrder.get_or_none(
-                    tenant_id=tenant_id, id=wo.sales_order_id, deleted_at__isnull=True
+                await wo.save(
+                    update_fields=[
+                        "readiness_rate",
+                        "readiness_component_ids",
+                        "readiness_rate_updated_at",
+                    ]
                 )
-                if so:
-                    comp_ids = [int(r.component_id) for r in requirements]
-                    company_inv = await batch_get_material_inventory(
-                        tenant_id, comp_ids, ownership_type="company_owned"
-                    )
-                    customer_inv = await batch_get_material_inventory(
-                        tenant_id,
-                        comp_ids,
-                        ownership_type="customer_provided",
-                        customer_id=so.customer_id,
-                    )
-                    wo_inventory = {
-                        mid: (company_inv.get(mid, Decimal("0")) + customer_inv.get(mid, Decimal("0")))
-                        for mid in comp_ids
-                    }
-
-            rate, component_ids = _rate_from_requirements(requirements, wo_inventory)
-            wo.readiness_rate = Decimal(str(rate)) if rate is not None else None
-            wo.readiness_component_ids = component_ids
-            wo.readiness_rate_updated_at = now
-            await wo.save(
-                update_fields=["readiness_rate", "readiness_component_ids", "readiness_rate_updated_at"]
-            )
 
     async def refresh_work_orders(
         self,

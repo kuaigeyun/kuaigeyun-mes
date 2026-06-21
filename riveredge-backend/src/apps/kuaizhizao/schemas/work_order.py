@@ -206,6 +206,10 @@ class WorkOrderUpdate(BaseModel):
     over_report_value: Optional[Decimal] = Field(None, alias="overReportValue", description="超报值")
     allow_operation_jump: Optional[bool] = Field(None, description="是否允许跳转工序")
     process_route_id: Optional[int] = Field(None, alias="processRouteId", description="来源工艺路线ID")
+    planned_batch_no: Optional[str] = Field(None, description="计划批号")
+    confirmed_batch_no: Optional[str] = Field(None, description="确认批号")
+    planned_serial_no: Optional[str] = Field(None, description="计划序列号")
+    confirmed_serial_no: Optional[str] = Field(None, description="确认序列号")
 
 
 class WorkOrderResponse(WorkOrderBase):
@@ -373,12 +377,35 @@ class MaterialLocationInfo(BaseModel):
     storage_location_code: Optional[str] = None
 
 
+class KittingRelatedWorkOrderSummary(BaseModel):
+    """齐套分析：BOM 自制/可配置子件对应的组内生产工单"""
+    work_order_id: int = Field(..., description="关联工单 ID")
+    work_order_code: str = Field(..., description="关联工单编号")
+    status: str = Field(..., description="工单状态")
+    quantity: Decimal = Field(..., description="计划数量")
+    completed_quantity: Decimal = Field(default=Decimal("0"), description="完工数量")
+    progress_percent: float = Field(default=0.0, description="进度百分比 0-100")
+
+
+class KittingRelatedOutsourceWorkOrderSummary(BaseModel):
+    """齐套分析：BOM 委外子件对应的组内委外工单"""
+    outsource_work_order_id: int = Field(..., description="关联委外工单 ID")
+    outsource_work_order_code: str = Field(..., description="关联委外工单编号")
+    status: str = Field(..., description="委外工单状态")
+    quantity: Decimal = Field(..., description="计划委外数量")
+    received_quantity: Decimal = Field(default=Decimal("0"), description="已收货数量")
+    progress_percent: float = Field(default=0.0, description="委外完成进度 0-100")
+    supplier_name: Optional[str] = Field(None, description="委外供应商名称")
+
+
 class MaterialKittingItem(BaseModel):
     """齐套性分析明细项"""
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., description="物料编码")
     material_name: str = Field(..., description="物料名称")
     material_unit: Optional[str] = Field(None, description="单位")
+    source_type: Optional[str] = Field(None, description="物料来源类型")
+    kitting_applicable: bool = Field(True, description="是否计入齐套率（服务/委外等为 false）")
     required_quantity: Decimal = Field(..., description="总需求数量")
     picked_quantity: Decimal = Field(..., description="已领料数量")
     shortage_quantity: Decimal = Field(..., description="缺料数量（相对于总需求）")
@@ -387,11 +414,23 @@ class MaterialKittingItem(BaseModel):
     main_warehouse_available: Decimal = Field(..., description="主仓可用库存")
     line_side_available: Decimal = Field(..., description="线边仓可用库存")
     
-    # 状态：fully_kitted(全齐), partial(部分满足), shortage(短缺)
+    # 状态：fully_kitted / partial / shortage / not_applicable（不计入齐套）
     status: str = Field(..., description="齐套状态")
     
     # 具体库位分布
     locations: List[MaterialLocationInfo] = Field(default_factory=list, description="库存位置分布详情")
+
+    # 半成品/可配置件：组内 BOM 子工单
+    related_work_order: Optional[KittingRelatedWorkOrderSummary] = Field(
+        None, description="关联生产工单（自制/可配置子件）"
+    )
+    work_order_supply_quantity: Decimal = Field(
+        default=Decimal("0"),
+        description="关联工单完工量计入齐套可用量",
+    )
+    related_outsource_work_order: Optional[KittingRelatedOutsourceWorkOrderSummary] = Field(
+        None, description="关联委外工单（委外子件）"
+    )
 
 
 class WorkOrderKittingAnalysisResponse(BaseModel):

@@ -111,6 +111,15 @@ class ShiftSchedulingService:
         return wg
 
     @staticmethod
+    async def _get_employee(tenant_id: int, employee_id: int):
+        from infra.models.user import User
+
+        user = await User.filter(id=employee_id, tenant_id=tenant_id, deleted_at__isnull=True).first()
+        if not user:
+            raise NotFoundError(f"员工 {employee_id} 不存在")
+        return user
+
+    @staticmethod
     async def _member_employee_ids(tenant_id: int, work_group_id: int) -> Set[int]:
         rows = await WorkGroupMember.filter(
             tenant_id=tenant_id,
@@ -118,6 +127,36 @@ class ShiftSchedulingService:
             deleted_at__isnull=True,
         ).all()
         return {r.employee_id for r in rows}
+
+    @staticmethod
+    async def _allowed_employee_ids(tenant_id: int, roster: ShiftRoster) -> Set[int]:
+        if roster.scope_type == "employee":
+            if not roster.employee_id:
+                raise ValidationError("员工排班表缺少 employee_id")
+            return {roster.employee_id}
+        if not roster.work_group_id:
+            raise ValidationError("工作小组排班表缺少 work_group_id")
+        return await ShiftSchedulingService._member_employee_ids(tenant_id, roster.work_group_id)
+
+    @staticmethod
+    async def _roster_lookup_filter(
+        tenant_id: int,
+        *,
+        scope_type: str,
+        period_start: date,
+        work_group_id: Optional[int] = None,
+        employee_id: Optional[int] = None,
+    ):
+        ps, _ = week_bounds(period_start)
+        q = ShiftRoster.filter(
+            tenant_id=tenant_id,
+            scope_type=scope_type,
+            period_start=ps,
+            deleted_at__isnull=True,
+        )
+        if scope_type == "work_group":
+            return q.filter(work_group_id=work_group_id)
+        return q.filter(employee_id=employee_id)
 
     @staticmethod
     async def _roster_to_response(
@@ -150,9 +189,12 @@ class ShiftSchedulingService:
             id=roster.id,
             uuid=roster.uuid,
             tenant_id=roster.tenant_id,
+            scope_type=roster.scope_type or "work_group",
             work_group_id=roster.work_group_id,
             work_group_code=roster.work_group_code,
             work_group_name=roster.work_group_name,
+            employee_id=roster.employee_id,
+            employee_name=roster.employee_name,
             period_start=roster.period_start,
             period_end=roster.period_end,
             status=roster.status,
@@ -165,34 +207,57 @@ class ShiftSchedulingService:
 
     @staticmethod
     async def create_roster(tenant_id: int, data: ShiftRosterCreate) -> ShiftRosterResponse:
-        wg = await ShiftSchedulingService._get_work_group(tenant_id, data.work_group_id)
         period_start, period_end = week_bounds(data.period_start)
-        existing = await ShiftRoster.filter(
-            tenant_id=tenant_id,
+        existing_q = await ShiftSchedulingService._roster_lookup_filter(
+            tenant_id,
+            scope_type=data.scope_type,
+            period_start=period_start,
             work_group_id=data.work_group_id,
-            period_start=period_start,
-            deleted_at__isnull=True,
-        ).first()
-        if existing:
-            raise ValidationError(
-                f"工作小组 {wg.name} 在 {period_start} 周已有排班表，请直接编辑"
-            )
-        roster = await ShiftRoster.create(
-            tenant_id=tenant_id,
-            work_group_id=wg.id,
-            work_group_code=wg.code,
-            work_group_name=wg.name,
-            period_start=period_start,
-            period_end=period_end,
-            status="draft",
-            remarks=data.remarks,
+            employee_id=data.employee_id,
         )
+        existing = await existing_q.first()
+        if existing:
+            if data.scope_type == "employee":
+                raise ValidationError(
+                    f"员工 {data.employee_id} 在 {period_start} 周已有排班表，请直接编辑"
+                )
+            raise ValidationError(
+                f"工作小组在 {period_start} 周已有排班表，请直接编辑"
+            )
+
+        roster_kwargs = {
+            "tenant_id": tenant_id,
+            "scope_type": data.scope_type,
+            "period_start": period_start,
+            "period_end": period_end,
+            "status": "draft",
+            "remarks": data.remarks,
+        }
+        if data.scope_type == "work_group":
+            wg = await ShiftSchedulingService._get_work_group(tenant_id, data.work_group_id)
+            roster_kwargs.update(
+                {
+                    "work_group_id": wg.id,
+                    "work_group_code": wg.code,
+                    "work_group_name": wg.name,
+                }
+            )
+        else:
+            user = await ShiftSchedulingService._get_employee(tenant_id, data.employee_id)
+            roster_kwargs.update(
+                {
+                    "employee_id": user.id,
+                    "employee_name": user.full_name or user.username,
+                }
+            )
+        roster = await ShiftRoster.create(**roster_kwargs)
         return await ShiftSchedulingService._roster_to_response(roster, include_assignments=True)
 
     @staticmethod
     async def list_rosters(
         tenant_id: int,
         work_group_id: Optional[int] = None,
+        employee_id: Optional[int] = None,
         period_start: Optional[date] = None,
         status: Optional[str] = None,
         skip: int = 0,
@@ -200,7 +265,9 @@ class ShiftSchedulingService:
     ) -> List[ShiftRosterResponse]:
         q = ShiftRoster.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if work_group_id is not None:
-            q = q.filter(work_group_id=work_group_id)
+            q = q.filter(scope_type="work_group", work_group_id=work_group_id)
+        if employee_id is not None:
+            q = q.filter(scope_type="employee", employee_id=employee_id)
         if period_start is not None:
             ps, _ = week_bounds(period_start)
             q = q.filter(period_start=ps)
@@ -224,14 +291,23 @@ class ShiftSchedulingService:
 
     @staticmethod
     async def get_or_create_roster_for_week(
-        tenant_id: int, work_group_id: int, period_start: date
+        tenant_id: int,
+        period_start: date,
+        *,
+        work_group_id: Optional[int] = None,
+        employee_id: Optional[int] = None,
     ) -> ShiftRosterResponse:
+        if bool(work_group_id) == bool(employee_id):
+            raise ValidationError("须且仅能指定 workGroupId 或 employeeId 之一")
+
+        scope_type = "employee" if employee_id else "work_group"
         ps, _ = week_bounds(period_start)
-        roster = await ShiftRoster.filter(
-            tenant_id=tenant_id,
-            work_group_id=work_group_id,
+        roster = await ShiftSchedulingService._roster_lookup_filter(
+            tenant_id,
+            scope_type=scope_type,
             period_start=ps,
-            deleted_at__isnull=True,
+            work_group_id=work_group_id,
+            employee_id=employee_id,
         ).first()
         if roster:
             return await ShiftSchedulingService._roster_to_response(
@@ -239,7 +315,12 @@ class ShiftSchedulingService:
             )
         return await ShiftSchedulingService.create_roster(
             tenant_id,
-            ShiftRosterCreate(work_group_id=work_group_id, period_start=ps),
+            ShiftRosterCreate(
+                scope_type=scope_type,
+                work_group_id=work_group_id,
+                employee_id=employee_id,
+                period_start=ps,
+            ),
         )
 
     @staticmethod
@@ -254,9 +335,7 @@ class ShiftSchedulingService:
         if roster.status != "draft":
             raise ValidationError("仅草稿状态可修改排班明细")
 
-        allowed = await ShiftSchedulingService._member_employee_ids(
-            tenant_id, roster.work_group_id
-        )
+        allowed = await ShiftSchedulingService._allowed_employee_ids(tenant_id, roster)
         shift_ids_valid: Set[int] = set()
         if data.assignments:
             sids = {a.shift_id for a in data.assignments if a.shift_id}
@@ -274,6 +353,8 @@ class ShiftSchedulingService:
             await ShiftAssignment.filter(roster_id=roster.id).update(deleted_at=datetime.now())
             for item in data.assignments:
                 if item.employee_id not in allowed:
+                    if roster.scope_type == "employee":
+                        raise ValidationError(f"员工 {item.employee_id} 与当前排班表不匹配")
                     raise ValidationError(f"员工 {item.employee_id} 不属于该工作小组")
                 if item.work_date < roster.period_start or item.work_date > roster.period_end:
                     raise ValidationError(f"日期 {item.work_date} 不在排班周期内")
@@ -352,12 +433,17 @@ class ShiftSchedulingService:
             raise ValidationError("仅草稿状态可复制排班")
 
         prev_start = roster.period_start - timedelta(days=7)
-        prev = await ShiftRoster.filter(
+        prev_q = ShiftRoster.filter(
             tenant_id=tenant_id,
-            work_group_id=roster.work_group_id,
+            scope_type=roster.scope_type,
             period_start=prev_start,
             deleted_at__isnull=True,
-        ).first()
+        )
+        if roster.scope_type == "employee":
+            prev_q = prev_q.filter(employee_id=roster.employee_id)
+        else:
+            prev_q = prev_q.filter(work_group_id=roster.work_group_id)
+        prev = await prev_q.first()
         if not prev:
             raise NotFoundError("上一周无排班表可复制")
 

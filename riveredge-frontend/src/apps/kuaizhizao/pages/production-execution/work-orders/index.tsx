@@ -105,6 +105,11 @@ import {
   resolveWorkOrderIdsFromListRowKeys,
   WORK_ORDER_LIST_STALE_MS,
 } from './workOrderListTable'
+import {
+  collectDefaultExpandedWorkOrderTreeKeys,
+  isBomTreeWorkOrderGroup,
+  WORK_ORDER_GROUP_ROW_KIND,
+} from './workOrderListGroupTree'
 import { ThemedSegmented } from '../../../../../components/themed-segmented'
 const SyncFromDatasetModal = lazy(() => import('../../../../../components/sync-from-dataset-modal'))
 import {
@@ -205,6 +210,7 @@ const LazyWorkOrderOperationsList = lazy(() => import('./components/WorkOrderDet
 import { WorkOrderReadinessPopover } from './components/WorkOrderReadinessPopover'
 import { WorkOrderOperationStepsStrip } from './components/WorkOrderOperationStepsStrip'
 import WorkOrderTrackingFields from './components/WorkOrderTrackingFields'
+import WorkOrderTrackingEditFields from './components/WorkOrderTrackingEditFields'
 import WorkOrderCompleteTrackingModal, {
   type WorkOrderTrackingConfirmValues,
 } from './components/WorkOrderCompleteTrackingModal'
@@ -221,6 +227,12 @@ import { commitListPageSearchParams } from '../../../../../utils/listLifecycleSt
 import { UniLifecycle } from '../../../../../components/uni-lifecycle'
 import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting'
 import ReportableQuantityPanel from '../../../components/ReportableQuantityPanel'
+import ReportingInboundWarehouseField from '../../../components/ReportingInboundWarehouseField'
+import {
+  isInboundWarehouseRequiredForLastOperation,
+  resolveIsLastOperation,
+  resolveLastInboundHint,
+} from '../../../utils/reportingLastOperation'
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload'
 import { getUserInfo } from '../../../../../utils/auth'
 import type { CurrentUser } from '../../../../../types/api'
@@ -884,12 +896,12 @@ function summarizeWorkOrderTreeChildren(record: WorkOrder) {
   let rework = 0
   let outsource = 0
   for (const child of children) {
-    const kind = child.row_kind || 'split'
-    if (kind === 'rework') rework += 1
+    const kind = child.row_kind || 'work_order'
+    if (kind === 'split') split += 1
+    else if (kind === 'rework') rework += 1
     else if (kind === 'outsource') outsource += 1
-    else split += 1
   }
-  return { split, rework, outsource, total: children.length }
+  return { split, rework, outsource, total: split + rework + outsource }
 }
 
 function renderWorkOrderTreeChildTags(record: WorkOrder, tagStyle: React.CSSProperties) {
@@ -1317,15 +1329,29 @@ const WorkOrdersPage: React.FC = () => {
     indexWorkOrderListRows(rows, map)
     workOrderRowByKeyRef.current = map
     setWorkOrderListRowIndexVersion((v) => v + 1)
-    const groupRowKeys = rows
-      .filter((r) => r.row_kind === 'work_order_group')
-      .map((r) => getWorkOrderListRowKey(r))
-    if (groupRowKeys.length > 0) {
-      setWorkOrderTreeExpandedRowKeys((prev) => {
-        const merged = new Set([...prev, ...groupRowKeys])
-        return [...merged]
-      })
-    }
+
+    const defaults = collectDefaultExpandedWorkOrderTreeKeys(rows, getWorkOrderListRowKey)
+    const defaultKeySet = new Set(defaults.map(String))
+    setWorkOrderTreeExpandedRowKeys((prev) => {
+      const next = new Set<string>([...defaultKeySet])
+      for (const k of prev) {
+        const sk = String(k)
+        if (defaultKeySet.has(sk)) continue
+        const row = map.get(sk)
+        if (!row?.children?.length) continue
+        const kind = row.row_kind || 'work_order'
+        if (kind === WORK_ORDER_GROUP_ROW_KIND && !isBomTreeWorkOrderGroup(row)) continue
+        if (kind === 'work_order') {
+          const onlySplitReworkOutsource = row.children.every((c) => {
+            const ck = c.row_kind || 'work_order'
+            return ck === 'split' || ck === 'rework' || ck === 'outsource'
+          })
+          if (onlySplitReworkOutsource) continue
+        }
+        next.add(sk)
+      }
+      return [...next]
+    })
     return rows
   }, [])
 
@@ -1942,21 +1968,44 @@ const WorkOrdersPage: React.FC = () => {
     }
   }, [quickReportingModalVisible, quickReportingWorkOrder?.id, expandedOperationsMap])
 
-  const quickReportingIsLastOperation = useMemo(() => {
-    if (!quickReportingOperation || quickReportingRouteOperations.length === 0) return false
-    const seq = Number(quickReportingOperation.sequence)
-    const maxSeq = Math.max(...quickReportingRouteOperations.map((o: any) => Number(o.sequence) || 0))
-    if (!Number.isFinite(seq) || !Number.isFinite(maxSeq)) return false
-    return seq === maxSeq
-  }, [quickReportingOperation, quickReportingRouteOperations])
+  const quickReportingIsLastOperation = useMemo(
+    () => resolveIsLastOperation(quickReportingOperation, quickReportingRouteOperations),
+    [quickReportingOperation, quickReportingRouteOperations],
+  )
+
+  const quickReportingWarehouseRequired = useMemo(
+    () =>
+      isInboundWarehouseRequiredForLastOperation(
+        quickReportingIsLastOperation,
+        executionConfig?.last_operation_auto_inbound_mode,
+      ),
+    [quickReportingIsLastOperation, executionConfig?.last_operation_auto_inbound_mode],
+  )
 
   const quickReportingLastInboundHint = useMemo(() => {
     if (!quickReportingIsLastOperation) return ''
-    const mode = executionConfig?.last_operation_auto_inbound_mode ?? 'none'
-    if (mode === 'direct_inbound') return t('apps.kuaizhizao.workOrder.quickReport.lastOpDirectInbound')
-    if (mode === 'inbound_notice') return t('apps.kuaizhizao.workOrder.quickReport.lastOpInboundNotice')
-    return t('apps.kuaizhizao.workOrder.quickReport.lastOpNoAutoInbound')
+    return resolveLastInboundHint(t, executionConfig?.last_operation_auto_inbound_mode)
   }, [quickReportingIsLastOperation, executionConfig?.last_operation_auto_inbound_mode, t])
+
+  useEffect(() => {
+    if (!quickReportingModalVisible || !quickReportingIsLastOperation || !quickReportingWorkOrder?.id) {
+      return
+    }
+    let cancelled = false
+    workOrderApi
+      .getDefaultInboundWarehouse(String(quickReportingWorkOrder.id))
+      .then((res) => {
+        if (cancelled || !res?.warehouse_id) return
+        quickReportingFormRef.current?.setFieldsValue({
+          inbound_warehouse_id: res.warehouse_id,
+          inbound_warehouse_name: res.warehouse_name ?? undefined,
+        })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [quickReportingModalVisible, quickReportingIsLastOperation, quickReportingWorkOrder?.id])
 
   useEffect(() => {
     if (!quickReportingModalVisible || !canProxyReporting || !quickReportingOperation) {
@@ -2453,6 +2502,10 @@ const WorkOrdersPage: React.FC = () => {
           process_route_id: (detail as any).process_route_id ?? (detail as any).processRouteId,
           over_report_mode: (detail as any).over_report_mode ?? (detail as any).overReportMode ?? 'none',
           over_report_value: Number((detail as any).over_report_value ?? (detail as any).overReportValue ?? 0) || 0,
+          planned_batch_no: detail.planned_batch_no,
+          confirmed_batch_no: detail.confirmed_batch_no,
+          planned_serial_no: detail.planned_serial_no,
+          confirmed_serial_no: detail.confirmed_serial_no,
           remarks: detail.remarks,
           attachments: mapWorkOrderAttachmentsToUploadList((detail as any).attachments),
         })
@@ -2793,6 +2846,18 @@ const WorkOrdersPage: React.FC = () => {
         reportingData.qualified_quantity = qq
         reportingData.unqualified_quantity = uq
       }
+      if (quickReportingIsLastOperation) {
+        if (quickReportingWarehouseRequired && !values.inbound_warehouse_id) {
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.workOrder.selectWarehouse'))
+          return
+        }
+        if (values.inbound_warehouse_id) {
+          reportingData.inbound_warehouse_id = Number(values.inbound_warehouse_id)
+          reportingData.inbound_warehouse_name = values.inbound_warehouse_name
+            ? String(values.inbound_warehouse_name)
+            : undefined
+        }
+      }
       const wid = quickReportingWorkOrder.id
       const created = await reportingApi.create(
         coerceReportingCreateStrings(reportingData, quickReportingWorkOrder)
@@ -2907,6 +2972,14 @@ const WorkOrdersPage: React.FC = () => {
   ) => {
     const progress = calculateProgress(operation, workOrder)
     const qualifiedRate = calculateQualifiedRate(operation)
+    const plannedQty = Number(workOrder.quantity || 0)
+    const qualifiedQty = Number(operation.qualified_quantity || 0)
+    const completedQty = Number(operation.completed_quantity || 0)
+    const isEffectivelyCompleted =
+      operation.status === 'completed' ||
+      (plannedQty > 0 && (qualifiedQty >= plannedQty || completedQty >= plannedQty))
+    const isCompleted = isEffectivelyCompleted
+    const isInProgress = !isCompleted && operation.status === 'in_progress'
     const isOutsourced = Boolean(
       operation.is_outsourced ||
         operation.isOutsourced ||
@@ -2915,11 +2988,12 @@ const WorkOrdersPage: React.FC = () => {
     )
     const outsourceTheme = getOutsourceOperationCardTheme(token)
     const progressColor =
-      isOutsourced && operation.status !== 'completed'
+      isOutsourced && !isCompleted
         ? outsourceTheme.accent
-        : getProgressColor(operation, qualifiedRate)
-    const isCompleted = operation.status === 'completed'
-    const isInProgress = operation.status === 'in_progress'
+        : getProgressColor(
+            isCompleted ? { ...operation, status: 'completed' } : operation,
+            qualifiedRate,
+          )
     const themeAccent = isCompleted
       ? token.colorSuccess
       : isOutsourced
@@ -2951,7 +3025,7 @@ const WorkOrdersPage: React.FC = () => {
             width: 200,
             minHeight: 200,
             flexShrink: 0,
-            borderRadius: 8,
+            borderRadius: token.borderRadiusLG,
             overflow: 'hidden',
             border: isCompleted
               ? `2px solid ${token.colorSuccess}`
@@ -3654,10 +3728,6 @@ const WorkOrdersPage: React.FC = () => {
           ),
         })
         messageApi.success(`已创建平级组工单：${result.group_code}`)
-        setWorkOrderTreeExpandedRowKeys((prev) => [
-          ...prev,
-          `work_order_group-${result.work_order_group_id}`,
-        ])
         setModalVisible(false)
         setCreateWorkOrderMode('normal')
         invalidateStatistics()
@@ -3768,6 +3838,18 @@ const WorkOrdersPage: React.FC = () => {
       }
 
       if (isEdit && currentWorkOrder?.id) {
+        for (const key of [
+          'planned_batch_no',
+          'confirmed_batch_no',
+          'planned_serial_no',
+          'confirmed_serial_no',
+        ] as const) {
+          if (key in values) {
+            const trimmed = String(values[key] ?? '').trim()
+            if (trimmed) values[key] = trimmed
+            else delete values[key]
+          }
+        }
         await workOrderApi.update(currentWorkOrder.id.toString(), values)
         if (selectedOperations.length > 0) {
           const opsPayload = selectedOperations.map((op: any, i: number) => ({
@@ -4327,18 +4409,11 @@ const WorkOrdersPage: React.FC = () => {
       }
       await reworkOrderApi.createFromWorkOrder(currentWorkOrderForRework.id.toString(), submitData)
       messageApi.success('返工单创建成功')
-      const parentWorkOrder = currentWorkOrderForRework
       setReworkModalVisible(false)
       setCurrentWorkOrderForRework(null)
       setReworkModalOperations([])
       setReworkableQuantity(0)
       reworkFormRef.current?.resetFields()
-      if (parentWorkOrder) {
-        setWorkOrderTreeExpandedRowKeys((prev) => {
-          const parentKey = getWorkOrderListRowKey(parentWorkOrder)
-          return prev.includes(parentKey) ? prev : [...prev, parentKey]
-        })
-      }
       actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error.message || '创建返工单失败')
@@ -4523,16 +4598,9 @@ const WorkOrdersPage: React.FC = () => {
       )
       messageApi.success('工序委外创建成功')
       setOutsourceModalVisible(false)
-      const parentWorkOrder = currentWorkOrderForOutsource
       setCurrentWorkOrderForOutsource(null)
       setOutsourceOptionsByOpId({})
       outsourceFormRef.current?.resetFields()
-      if (parentWorkOrder) {
-        setWorkOrderTreeExpandedRowKeys((prev) => {
-          const parentKey = getWorkOrderListRowKey(parentWorkOrder)
-          return prev.includes(parentKey) ? prev : [...prev, parentKey]
-        })
-      }
       actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error.message || '创建工序委外失败')
@@ -4741,10 +4809,6 @@ const WorkOrdersPage: React.FC = () => {
         remarks: values.remarks,
       })
       messageApi.success(`已合并为组工单：${result.group_code}`)
-      setWorkOrderTreeExpandedRowKeys((prev) => [
-        ...prev,
-        `work_order_group-${result.work_order_group_id}`,
-      ])
       setMergeModalVisible(false)
       setMergeTargetWorkOrderIds([])
       mergeFormRef.current?.resetFields()
@@ -6692,6 +6756,10 @@ const WorkOrdersPage: React.FC = () => {
                 colProps={{ span: 24 }}
               />
             )}
+            <ReportingInboundWarehouseField
+              isLastOperation={quickReportingIsLastOperation}
+              warehouseRequired={quickReportingWarehouseRequired}
+            />
             <ProFormTextArea
               name="remarks"
               label="备注"
@@ -6843,6 +6911,10 @@ const WorkOrdersPage: React.FC = () => {
                 colProps={{ span: 24 }}
               />
             )}
+            <ReportingInboundWarehouseField
+              isLastOperation={quickReportingIsLastOperation}
+              warehouseRequired={quickReportingWarehouseRequired}
+            />
             <ProFormTextArea
               name="remarks"
               label="备注"
@@ -7387,6 +7459,17 @@ const WorkOrdersPage: React.FC = () => {
                 productId={product_id}
                 productList={productList}
                 disabled={isEdit}
+              />
+            )}
+          </ProFormDependency>
+        )}
+        {isEdit && createWorkOrderMode === 'normal' && (
+          <ProFormDependency name={['product_id']}>
+            {({ product_id }) => (
+              <WorkOrderTrackingEditFields
+                productId={product_id ?? currentWorkOrder?.product_id}
+                productList={productList}
+                workOrderStatus={currentWorkOrder?.status}
               />
             )}
           </ProFormDependency>

@@ -441,18 +441,110 @@ async def resolve_inspection_policy(
     return "none", None, "default_none"
 
 
+_IQC_CONDUCTED_DOC_STATUSES = frozenset({"已检验", "已审核", "已驳回"})
+
+
+def iqc_inspection_conducted(inspection: Any) -> bool:
+    """来料检验单是否已执行检验（含不合格/驳回）。"""
+    return str(getattr(inspection, "status", "") or "").strip() in _IQC_CONDUCTED_DOC_STATUSES
+
+
+async def resolve_iqc_plan_label_for_material(tenant_id: int, material_id: int) -> Optional[str]:
+    """解析物料来料检验方案展示名；无需检验时返回 None。"""
+    from apps.kuaizhizao.models.inspection_plan import InspectionPlan
+
+    mode, plan_id, _ = await resolve_inspection_policy(tenant_id, "iqc", material_id=material_id)
+    if mode == "none":
+        return None
+    if mode == "simple":
+        return "简易检验"
+    if plan_id:
+        plan = await InspectionPlan.filter(
+            tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True
+        ).first()
+        if plan:
+            return str(plan.plan_name or plan.plan_code or "检验方案").strip() or "检验方案"
+    plan = await InspectionPlan.filter(
+        tenant_id=tenant_id,
+        material_id=material_id,
+        plan_type="incoming",
+        deleted_at__isnull=True,
+        is_active=True,
+    ).order_by("-created_at").first()
+    if plan:
+        return str(plan.plan_name or plan.plan_code or "检验方案").strip() or "检验方案"
+    return str(plan.plan_name or plan.plan_code or "检验方案").strip() or "检验方案"
+
+
+async def resolve_fqc_plan_label_for_material(tenant_id: int, material_id: int) -> Optional[str]:
+    """解析物料成品检验方案展示名；无需检验时返回 None。"""
+    from apps.kuaizhizao.models.inspection_plan import InspectionPlan
+
+    mode, plan_id, _ = await resolve_inspection_policy(tenant_id, "fqc", material_id=material_id)
+    if mode == "none":
+        return None
+    if mode == "simple":
+        return "简易检验"
+    if plan_id:
+        plan = await InspectionPlan.filter(
+            tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True
+        ).first()
+        if plan:
+            return str(plan.plan_name or plan.plan_code or "检验方案").strip() or "检验方案"
+    plan = await InspectionPlan.filter(
+        tenant_id=tenant_id,
+        material_id=material_id,
+        plan_type="finished",
+        deleted_at__isnull=True,
+        is_active=True,
+    ).order_by("-created_at").first()
+    if plan:
+        return str(plan.plan_name or plan.plan_code or "检验方案").strip() or "检验方案"
+    return "检验方案"
+
+
+_IQC_PASSED_REVIEW_STATUSES = frozenset({"已审核", "通过", "APPROVED"})
+_IQC_CONDUCTED_STATUSES = frozenset({"已检验", "已审核"})
+
+
+async def iqc_inspection_passed_for_inbound(tenant_id: int, inspection: Any) -> bool:
+    """来料检验是否满足采购入库确认条件（合格 + 已检验；需审核时另须审核通过）。"""
+    if getattr(inspection, "quality_status", None) != "合格":
+        return False
+    from infra.services.business_config_service import BusinessConfigService
+
+    audit_required = await BusinessConfigService().check_audit_required(tenant_id, "incoming_inspection")
+    if not audit_required:
+        return str(getattr(inspection, "status", "") or "").strip() in _IQC_CONDUCTED_STATUSES
+    return getattr(inspection, "review_status", None) in _IQC_PASSED_REVIEW_STATUSES
+
+
+_FQC_CONDUCTED_STATUSES = frozenset({"已检验", "已审核"})
+
+
+async def fqc_inspection_passed_for_inbound(tenant_id: int, inspection: Any) -> bool:
+    """成品检验是否满足成品入库确认条件（合格 + 已检验；需审核时另须审核通过）。"""
+    if getattr(inspection, "quality_status", None) != "合格":
+        return False
+    from infra.services.business_config_service import BusinessConfigService
+
+    audit_required = await BusinessConfigService().check_audit_required(tenant_id, "finished_goods_inspection")
+    if not audit_required:
+        return str(getattr(inspection, "status", "") or "").strip() in _FQC_CONDUCTED_STATUSES
+    return getattr(inspection, "review_status", None) in _IQC_PASSED_REVIEW_STATUSES
+
+
 async def assert_iqc_for_purchase_receipt_lines(
     tenant_id: int,
     receipt_id: int,
     lines: List[Any],
 ) -> None:
-    """采购入库确认：门禁开启时，仅对 iqc≠none 的行要求合格 IQC。"""
+    """采购入库确认：对 iqc≠none 的行要求来料检验合格（需审核时须审核通过）。"""
     from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
     from infra.exceptions.exceptions import BusinessLogicError
 
     cfg = await get_quality_effective_config(tenant_id)
-    if not cfg["gate"]["require_iqc_before_receipt_confirm"]:
-        return
+    gate_enabled = bool(cfg["gate"]["require_iqc_before_receipt_confirm"])
 
     needs_qc_mids: List[int] = []
     for item in lines:
@@ -478,21 +570,26 @@ async def assert_iqc_for_purchase_receipt_lines(
         deleted_at__isnull=True,
     ).all()
     if not inspections:
-        raise BusinessLogicError(
+        msg = (
             "已启用「收货前必须来料检验」，请先创建并完成来料检验，检验合格后再确认入库"
+            if gate_enabled
+            else "请先创建并完成来料检验，检验合格后再确认入库"
         )
+        raise BusinessLogicError(msg)
 
     passed_by_material: Dict[int, bool] = {}
     for i in inspections:
-        if i.quality_status == "合格" and i.review_status in ("已审核", "通过", "APPROVED"):
-            if i.material_id:
-                passed_by_material[int(i.material_id)] = True
+        if i.material_id and await iqc_inspection_passed_for_inbound(tenant_id, i):
+            passed_by_material[int(i.material_id)] = True
 
     for mid in needs_qc_mids:
-        if not passed_by_material.get(mid):
+        if passed_by_material.get(mid):
+            continue
+        if gate_enabled:
             raise BusinessLogicError(
                 "已启用「收货前必须来料检验」，相关物料的来料检验须审核通过且质量状态为合格后才能确认入库"
             )
+        raise BusinessLogicError("相关物料须完成来料检验并合格后方可确认入库")
 
 
 async def assert_iqc_for_customer_material_registration_lines(

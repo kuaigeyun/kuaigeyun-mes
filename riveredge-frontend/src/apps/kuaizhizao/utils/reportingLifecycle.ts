@@ -56,3 +56,29 @@ export function getReportingLifecycle(
   if (backend?.main_stages?.length) return parseBackendLifecycle(backend);
   return parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>));
 }
+
+/** 报工记录 uni-audit 工作流 props（与 record.audit + capabilities 对齐） */
+export function reportingRecordUniAuditProps(opts: {
+  resourcePrefix: string;
+  entityName: string;
+  workflowAuditEnabled: boolean;
+  onSuccess: () => void;
+  theme?: 'default' | 'link';
+  size?: 'small' | 'middle' | 'large';
+}) {
+  return {
+    entityType: 'reporting_record' as const,
+    unifiedAudit: true as const,
+    resourcePrefix: opts.resourcePrefix,
+    workflowAuditEnabled: opts.workflowAuditEnabled,
+    entityName: opts.entityName,
+    statusField: 'status',
+    draftStatuses: [] as string[],
+    pendingStatuses: ['pending', 'pending_approval', 'pending_review', '待审核'],
+    approvedStatuses: ['approved', 'audited', 'confirmed', '已审核', '审核通过'],
+    rejectedStatuses: ['rejected', '已驳回'],
+    theme: opts.theme ?? 'link',
+    size: opts.size ?? 'small',
+    onSuccess: opts.onSuccess,
+  };
+}

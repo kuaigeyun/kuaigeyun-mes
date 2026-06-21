@@ -1212,21 +1212,21 @@
             "sort_order": 4
           },
           {
-            "title": "app.kuaizhizao.menu.performance-management.employee-configs",
-            "path": "/apps/kuaizhizao/performance/employee-configs",
-            "permission": "kuaizhizao:performance-employee-configs:read",
-            "sort_order": 5
-          },
-          {
             "title": "app.kuaizhizao.menu.performance-management.hourly-rates",
             "path": "/apps/kuaizhizao/performance/hourly-rates",
             "permission": "kuaizhizao:performance-hourly-rates:read",
-            "sort_order": 6
+            "sort_order": 5
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.kpi-definitions",
             "path": "/apps/kuaizhizao/performance/kpi-definitions",
             "permission": "kuaizhizao:performance-kpi-definitions:read",
+            "sort_order": 6
+          },
+          {
+            "title": "app.kuaizhizao.menu.performance-management.employee-configs",
+            "path": "/apps/kuaizhizao/performance/employee-configs",
+            "permission": "kuaizhizao:performance-employee-configs:read",
             "sort_order": 7
           },
           {

@@ -320,7 +320,10 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
 
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
         responses = [OutsourceMaterialReceiptResponse.model_validate(receipt) for receipt in receipts]
-        return enrich_inbound_hub_list_capabilities(receipts, responses, "outsource_receipt")
+        item_counts = {int(r.id): 1 for r in receipts}
+        return enrich_inbound_hub_list_capabilities(
+            receipts, responses, "outsource_receipt", item_counts=item_counts
+        )
 
     async def get_material_receipt(
         self,

@@ -36,11 +36,13 @@ import { useTranslation } from 'react-i18next';
 import dayjs, { Dayjs } from 'dayjs';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { formatDateTime } from '../../../../../utils/format';
 import {
   rollingSchedulingApi,
   type RollingScheduleLine,
 } from '../../../services/rolling-scheduling';
+import { translateWorkOrderLifecycleStatus } from '../../../utils/workOrderLifecycle';
 
 const RESOURCE = 'kuaizhizao:plan-management-rolling-scheduling';
 
@@ -71,6 +73,24 @@ const RollingSchedulingPage: React.FC = () => {
       manual: t('app.kuaizhizao.rollingScheduling.source.manual'),
     }),
     [t]
+  );
+
+  const planStatusLabels = useMemo(
+    () => ({
+      draft: t('app.kuaizhizao.rollingScheduling.planStatus.draft'),
+      published: t('app.kuaizhizao.rollingScheduling.planStatus.published'),
+      closed: t('app.kuaizhizao.rollingScheduling.planStatus.closed'),
+    }),
+    [t]
+  );
+
+  const renderPlanStatusTag = useCallback(
+    (status: string) => (
+      <Tag color={STATUS_COLORS[status] || 'default'}>
+        {planStatusLabels[status as keyof typeof planStatusLabels] || status}
+      </Tag>
+    ),
+    [planStatusLabels],
   );
 
   const initialPlanDate = searchParams.get('plan_date');
@@ -287,6 +307,7 @@ const RollingSchedulingPage: React.FC = () => {
         title: t('app.kuaizhizao.rollingScheduling.col.status'),
         dataIndex: 'work_order_status',
         width: 80,
+        render: (v: string) => translateWorkOrderLifecycleStatus(t, v),
       },
       {
         title: t('app.kuaizhizao.rollingScheduling.col.actions'),
@@ -308,7 +329,7 @@ const RollingSchedulingPage: React.FC = () => {
                 disabled={index === lines.length - 1}
                 onClick={() => moveLine(index, 1)}
               />
-              <Button type="link" size="small" danger onClick={() => removeLine(row.work_order_id)}>
+              <Button {...rowActionKind('delete')} size="small" onClick={() => removeLine(row.work_order_id)}>
                 {t('app.kuaizhizao.rollingScheduling.remove')}
               </Button>
             </Space>
@@ -388,11 +409,7 @@ const RollingSchedulingPage: React.FC = () => {
             title={t('app.kuaizhizao.rollingScheduling.closeSummaryTitle', { date: formatDate(baseDate) })}
             loading={closeLoading}
             size="small"
-            extra={
-              closePlan ? (
-                <Tag color={STATUS_COLORS[closePlan.status] || 'default'}>{closePlan.status}</Tag>
-              ) : null
-            }
+            extra={closePlan ? renderPlanStatusTag(closePlan.status) : null}
           >
             {closeSummary ? (
               <Space direction="vertical" style={{ width: '100%' }} size="middle">
@@ -441,7 +458,7 @@ const RollingSchedulingPage: React.FC = () => {
               targetPlan ? (
                 <Space>
                   <Typography.Text type="secondary">{targetPlan.plan_code}</Typography.Text>
-                  <Tag color={STATUS_COLORS[targetPlan.status] || 'default'}>{targetPlan.status}</Tag>
+                  {renderPlanStatusTag(targetPlan.status)}
                 </Space>
               ) : null
             }

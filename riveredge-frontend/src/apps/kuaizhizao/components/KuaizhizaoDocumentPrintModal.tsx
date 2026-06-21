@@ -2,8 +2,8 @@
  * 快制造 — 业务单据打印预览（模板选择 + 浏览器打印）
  */
 
-import React, { useEffect, useRef, useState } from 'react';
-import { App, Button, Modal, Select, Space, Spin } from 'antd';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { App, Button, Modal, Select, Space, Spin, theme } from 'antd';
 import { FilePdfOutlined, PrinterOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../services/api';
 import { getPrintTemplateList, type PrintTemplate } from '../../../services/printTemplate';
@@ -43,6 +43,11 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
   onAfterPrint,
 }) => {
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
+  const previewScreenOptions = useMemo(
+    () => ({ borderRadius: token.borderRadiusLG }),
+    [token.borderRadiusLG],
+  );
   const [templates, setTemplates] = useState<PrintTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [printLoading, setPrintLoading] = useState(false);
@@ -219,6 +224,8 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
       open={open}
       onCancel={onClose}
       width={960}
+      centered
+      styles={{ body: { paddingTop: 12, paddingBottom: 16 } }}
       footer={
         <Space>
           <Button onClick={onClose}>关闭</Button>
@@ -246,26 +253,24 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
           <div
             style={{
               border: '1px solid #e2e8f0',
-              borderRadius: 8,
-              minHeight: 400,
-              maxHeight: '60vh',
+              borderRadius: token.borderRadiusLG,
+              minHeight: 560,
+              maxHeight: '78vh',
               overflow: 'auto',
-              background: '#f8fafc',
-              padding: 12,
+              background: '#e2e8f0',
             }}
           >
             {previewHtml ? (
               <iframe
                 ref={previewIframeRef}
                 title="print-preview"
-                srcDoc={withPrintPreviewScreenPadding(previewHtml)}
+                srcDoc={withPrintPreviewScreenPadding(previewHtml, previewScreenOptions)}
                 style={{
                   width: '100%',
-                  minHeight: 400,
+                  minHeight: 560,
                   border: 'none',
                   display: 'block',
-                  background: '#fff',
-                  borderRadius: 4,
+                  background: 'transparent',
                 }}
               />
             ) : (

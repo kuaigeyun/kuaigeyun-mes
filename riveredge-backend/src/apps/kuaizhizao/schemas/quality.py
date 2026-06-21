@@ -97,6 +97,66 @@ class IncomingInspectionListResponse(IncomingInspectionResponse):
     pass
 
 
+class EnsureIqcForPurchaseReceiptLineSummary(BaseSchema):
+    """采购入库确认前：明细行来料检验摘要"""
+    receipt_item_id: int = Field(..., description="入库明细 ID")
+    material_id: int = Field(..., description="物料 ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    receipt_quantity: float = Field(..., description="入库数量")
+    iqc_required: bool = Field(False, description="是否需要来料检验")
+    iqc_mode: Optional[str] = Field(None, description="检验策略：none/simple/plan")
+    plan_label: Optional[str] = Field(None, description="检验方案展示名")
+    inspection_id: Optional[int] = Field(None, description="关联来料检验单 ID")
+    inspection_code: Optional[str] = Field(None, description="来料检验单号")
+    inspection_status: Optional[str] = Field(None, description="检验单状态")
+    quality_status: Optional[str] = Field(None, description="质量状态")
+    review_status: Optional[str] = Field(None, description="审核状态")
+    passed: bool = Field(False, description="是否检验合格（含审核要求）")
+    can_inbound: bool = Field(True, description="是否允许确认入库")
+
+
+class EnsureIqcForPurchaseReceiptResponse(BaseSchema):
+    """采购入库确认前：补齐来料检验单并评估是否允许进入确认预览"""
+    can_confirm_inbound: bool = Field(..., description="是否允许打开确认入库预览")
+    requires_iqc: bool = Field(False, description="是否存在需要来料检验的明细物料")
+    gate_enabled: bool = Field(False, description="是否启用「收货前必须来料检验」门禁")
+    iqc_stage_enabled: bool = Field(True, description="组织是否开启来料检验环节")
+    iqc_module_enabled: bool = Field(True, description="组织是否开启来料检验模块")
+    created_count: int = Field(0, description="本次自动创建的来料检验单数量")
+    created_inspections: List[IncomingInspectionResponse] = Field(
+        default_factory=list, description="本次自动创建的来料检验单"
+    )
+    pending_inspections: List[IncomingInspectionResponse] = Field(
+        default_factory=list, description="尚未检验合格/审核通过的来料检验单"
+    )
+    line_summaries: List[EnsureIqcForPurchaseReceiptLineSummary] = Field(
+        default_factory=list, description="按入库明细行的来料检验摘要"
+    )
+    message: Optional[str] = Field(None, description="门禁拦截时的提示文案")
+
+
+class EnsureIqcForCustomerMaterialRegistrationResponse(BaseSchema):
+    """代工来料确认前：补齐来料检验单并评估是否允许确认入库"""
+    can_confirm_inbound: bool = Field(..., description="是否允许确认入库")
+    requires_iqc: bool = Field(False, description="是否存在需要来料检验的明细物料")
+    gate_enabled: bool = Field(False, description="是否启用「代工来料入库前必须来料检验」门禁")
+    iqc_stage_enabled: bool = Field(True, description="组织是否开启来料检验环节")
+    iqc_module_enabled: bool = Field(True, description="组织是否开启来料检验模块")
+    registration_code: Optional[str] = Field(None, description="代工来料单编码")
+    created_count: int = Field(0, description="本次自动创建的来料检验单数量")
+    created_inspections: List[IncomingInspectionResponse] = Field(
+        default_factory=list, description="本次自动创建的来料检验单"
+    )
+    pending_inspections: List[IncomingInspectionResponse] = Field(
+        default_factory=list, description="尚未检验合格/审核通过的来料检验单"
+    )
+    line_summaries: List[EnsureIqcForPurchaseReceiptLineSummary] = Field(
+        default_factory=list, description="按明细行的来料检验摘要"
+    )
+    message: Optional[str] = Field(None, description="门禁拦截时的提示文案")
+
+
 # === 过程检验单 ===
 
 class ProcessInspectionBase(BaseSchema):
@@ -256,6 +316,47 @@ class FinishedGoodsInspectionResponse(FinishedGoodsInspectionBase):
 class FinishedGoodsInspectionListResponse(FinishedGoodsInspectionResponse):
     """成品检验单列表响应schema（简化版）"""
     pass
+
+
+class EnsureFqcForFinishedGoodsReceiptLineSummary(BaseSchema):
+    """成品入库确认前：明细行成品检验摘要"""
+    receipt_item_id: int = Field(..., description="入库明细 ID")
+    material_id: int = Field(..., description="物料 ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    receipt_quantity: float = Field(..., description="入库数量")
+    fqc_required: bool = Field(False, description="是否需要成品检验")
+    fqc_mode: Optional[str] = Field(None, description="检验策略：none/simple/plan")
+    plan_label: Optional[str] = Field(None, description="检验方案展示名")
+    inspection_id: Optional[int] = Field(None, description="关联成品检验单 ID")
+    inspection_code: Optional[str] = Field(None, description="成品检验单号")
+    inspection_status: Optional[str] = Field(None, description="检验单状态")
+    quality_status: Optional[str] = Field(None, description="质量状态")
+    review_status: Optional[str] = Field(None, description="审核状态")
+    passed: bool = Field(False, description="是否检验合格（含审核要求）")
+    can_inbound: bool = Field(True, description="是否允许确认入库")
+
+
+class EnsureFqcForFinishedGoodsReceiptResponse(BaseSchema):
+    """成品入库确认前：补齐成品检验单并评估是否允许进入确认预览"""
+    can_confirm_inbound: bool = Field(..., description="是否允许打开确认入库预览")
+    requires_fqc: bool = Field(False, description="是否存在需要成品检验的明细物料")
+    gate_enabled: bool = Field(False, description="是否启用「成品检验合格才入库」门禁")
+    fqc_stage_enabled: bool = Field(True, description="组织是否开启成品检验环节")
+    fqc_module_enabled: bool = Field(True, description="组织是否开启成品检验模块")
+    work_order_id: Optional[int] = Field(None, description="关联工单 ID")
+    work_order_code: Optional[str] = Field(None, description="关联工单编码")
+    created_count: int = Field(0, description="本次自动创建的成品检验单数量")
+    created_inspections: List[FinishedGoodsInspectionResponse] = Field(
+        default_factory=list, description="本次自动创建的成品检验单"
+    )
+    pending_inspections: List[FinishedGoodsInspectionResponse] = Field(
+        default_factory=list, description="尚未检验合格/审核通过的成品检验单"
+    )
+    line_summaries: List[EnsureFqcForFinishedGoodsReceiptLineSummary] = Field(
+        default_factory=list, description="按入库明细行的成品检验摘要"
+    )
+    message: Optional[str] = Field(None, description="门禁拦截时的提示文案")
 
 
 # === 质检标准 ===

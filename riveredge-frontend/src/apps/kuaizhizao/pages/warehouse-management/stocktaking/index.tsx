@@ -15,6 +15,8 @@ import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, 
 import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, InputNumber } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined, CheckCircleOutlined, DatabaseOutlined, RollbackOutlined } from '@ant-design/icons';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
@@ -139,6 +141,11 @@ const StocktakingPage: React.FC = () => {
       });
     }, 0);
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.stocktaking.createButton')),
+    [t],
+  );
 
   /**
    * 处理提交创建盘点单
@@ -739,7 +746,7 @@ const StocktakingPage: React.FC = () => {
         columns={columns}
         showAdvancedSearch={true}
         showCreateButton={canCreate}
-        createButtonText={t('app.kuaizhizao.stocktaking.createButton')}
+        createButtonText={createButtonLabel}
         onCreate={canCreate ? handleCreate : undefined}
         request={async (params, _sort, _filter, searchFormValues) => {
           try {

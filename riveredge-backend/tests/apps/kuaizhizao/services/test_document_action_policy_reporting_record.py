@@ -15,12 +15,14 @@ def test_pending_update_delete():
     caps = derive_reporting_record_capabilities(SimpleNamespace(status="pending"))
     assert caps.update.allowed
     assert caps.delete.allowed
+    assert caps.approve.allowed
     assert not caps.revoke_approval.allowed
 
 
 def test_approved_revoke():
     caps = derive_reporting_record_capabilities(SimpleNamespace(status="approved"))
     assert caps.revoke_approval.allowed
+    assert not caps.approve.allowed
     assert not caps.update.allowed
 
 

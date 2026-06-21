@@ -92,6 +92,7 @@ import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActi
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { formatDateTime } from '../../../../../utils/format';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 
 /** 采购申请详情只读明细表最小横向宽度 */
 const PURCHASE_REQUISITION_DETAIL_ITEMS_MIN_WIDTH = 980;
@@ -770,6 +771,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     supplierId: number;
     supplierName: string;
     itemQuantities: Record<number, number>;
+    itemUnitPrices: Record<number, number>;
     itemSuppliers: Record<number, number>;
     persistDefaultSupplier: boolean;
   }>({
@@ -777,6 +779,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     supplierId: 0,
     supplierName: '',
     itemQuantities: {},
+    itemUnitPrices: {},
     itemSuppliers: {},
     persistDefaultSupplier: false,
   });
@@ -845,14 +848,19 @@ const PurchaseRequisitionsPage: React.FC = () => {
       }
       const defaultSupplierId = unconverted[0]?.supplier_id || suppliers[0]?.id;
       const quantities: Record<number, number> = {};
+      const unitPrices: Record<number, number> = {};
       unconverted.forEach((i) => {
-        if (i.id != null) quantities[i.id] = Number(i.quantity ?? 0);
+        if (i.id != null) {
+          quantities[i.id] = Number(i.quantity ?? 0);
+          unitPrices[i.id] = Number(i.suggested_unit_price ?? 0);
+        }
       });
       convertFormRef.current = {
         selectedIds: unconverted.map((i) => i.id!).filter(Boolean),
         supplierId: defaultSupplierId || 0,
         supplierName: suppliers.find((s) => s.id === defaultSupplierId)?.name || suppliers[0]?.name || '',
         itemQuantities: quantities,
+        itemUnitPrices: unitPrices,
         itemSuppliers: {},
         persistDefaultSupplier: false,
       };
@@ -875,6 +883,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             supplierId,
             supplierName,
             itemQuantities,
+            itemUnitPrices,
             itemSuppliers,
             persistDefaultSupplier,
           } = convertFormRef.current;
@@ -887,42 +896,41 @@ const PurchaseRequisitionsPage: React.FC = () => {
             messageApi.error(t('app.kuaizhizao.purchaseRequisition.selectLineSupplier'));
             return Promise.reject();
           }
+          const invalidPrice = selectedIds.some((id) => {
+            const price = itemUnitPrices[id];
+            return price == null || !Number.isFinite(price) || price < 0;
+          });
+          if (invalidPrice) {
+            messageApi.error(t('app.kuaizhizao.purchaseRequisition.convert.invalidUnitPrice'));
+            return Promise.reject();
+          }
           try {
             const res = await convertToPurchaseOrder(record.id!, {
               item_ids: selectedIds,
               supplier_id: supplierId || undefined,
               supplier_name: supplierName || undefined,
               item_quantities: itemQuantities,
+              item_unit_prices: Object.fromEntries(
+                selectedIds.map((id) => [id, itemUnitPrices[id] ?? 0]),
+              ),
               item_suppliers: Object.fromEntries(selectedIds.map((id) => [id, itemSuppliers[id]])),
               persist_default_supplier_to_material: persistDefaultSupplier,
             });
             const pos = res.purchase_orders?.length
               ? res.purchase_orders
               : [{ purchase_order_id: res.purchase_order_id, purchase_order_code: res.purchase_order_code, supplier_id: supplierId }];
-            messageApi.success({
-              content: (
-                <span>
-                  {res.message || t('app.kuaizhizao.purchaseRequisition.pushSuccess')}
-                  {pos.map((p) => (
-                    <Button
-                      key={p.purchase_order_id}
-                      type="link"
-                      size="small"
-                      style={{ paddingLeft: 8 }}
-                      onClick={() => navigate(ROUTES.PURCHASE_ORDERS)}
-                    >
-                      {t('app.kuaizhizao.purchaseRequisition.viewPurchaseOrder', { code: p.purchase_order_code })}
-                    </Button>
-                  ))}
-                </span>
-              ),
-              duration: 6,
-            });
+            const codes = pos.map((p) => p.purchase_order_code).filter(Boolean).join('、');
+            messageApi.success(
+              codes
+                ? `${res.message || t('app.kuaizhizao.purchaseRequisition.pushSuccess')}：${codes}`
+                : (res.message || t('app.kuaizhizao.purchaseRequisition.pushSuccess')),
+              6,
+            );
             invalidateMenuBadgeCounts();
 
             actionRef.current?.reload();
-          } catch (e: any) {
-            messageApi.error(e?.response?.data?.detail || t('app.kuaizhizao.purchaseRequisition.pushFailed'));
+          } catch (e: unknown) {
+            messageApi.error(getApiErrorMessage(e, t('app.kuaizhizao.purchaseRequisition.pushFailed')));
             return Promise.reject();
           }
         },
@@ -2036,6 +2044,7 @@ const ConvertForm: React.FC<{
     supplierId: number;
     supplierName: string;
     itemQuantities: Record<number, number>;
+    itemUnitPrices: Record<number, number>;
     itemSuppliers: Record<number, number>;
     persistDefaultSupplier: boolean;
   }>;
@@ -2062,8 +2071,21 @@ const ConvertForm: React.FC<{
     });
     return q;
   });
+  const [unitPrices, setUnitPrices] = useState<Record<number, number>>(() => {
+    const p: Record<number, number> = {};
+    items.filter((i) => !i.purchase_order_id).forEach((i) => {
+      if (i.id != null) p[i.id] = Number(i.suggested_unit_price ?? 0);
+    });
+    return p;
+  });
   const [persistDefault, setPersistDefault] = useState(false);
   const hasSuppliers = suppliers && suppliers.length > 0;
+
+  const formatLineAmount = (itemId: number) => {
+    const qty = quantities[itemId] ?? 0;
+    const price = unitPrices[itemId] ?? 0;
+    return (qty * price).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
 
   const applyBatchToSelected = () => {
     const selectedSet = new Set(selected);
@@ -2085,6 +2107,7 @@ const ConvertForm: React.FC<{
   useEffect(() => {
     formRef.current.selectedIds = selected;
     formRef.current.itemQuantities = quantities;
+    formRef.current.itemUnitPrices = unitPrices;
     formRef.current.itemSuppliers = rowSuppliers;
     formRef.current.persistDefaultSupplier = persistDefault;
     const firstSelectedId = selected[0];
@@ -2092,7 +2115,7 @@ const ConvertForm: React.FC<{
     const currentSupplierId = (head || batchSupplierId || 0) as number;
     formRef.current.supplierId = currentSupplierId;
     formRef.current.supplierName = suppliers.find((x) => x.id === currentSupplierId)?.name || '';
-  }, [selected, quantities, rowSuppliers, persistDefault, batchSupplierId, suppliers, formRef]);
+  }, [selected, quantities, unitPrices, rowSuppliers, persistDefault, batchSupplierId, suppliers, formRef]);
 
   const supplierOptions = suppliers.map((s) => ({
     label: `${s.code ? `${s.code} - ` : ''}${s.name}`.trim(),
@@ -2134,8 +2157,18 @@ const ConvertForm: React.FC<{
           }),
         }}
         columns={[
-          { title: t('app.kuaizhizao.purchaseRequisition.col.materialCode'), dataIndex: 'material_code', width: 110 },
-          { title: t('app.kuaizhizao.purchaseRequisition.col.materialName'), dataIndex: 'material_name', width: 160 },
+          {
+            title: t('app.kuaizhizao.purchaseRequisition.convert.col.material'),
+            key: 'material',
+            width: 200,
+            render: (_: unknown, record: PurchaseRequisitionItem) => (
+              <UniTableStackedPrimaryCell
+                primary={record.material_name || '-'}
+                secondary={record.material_code || '-'}
+                secondaryCopyable={Boolean(record.material_code)}
+              />
+            ),
+          },
           {
             title: t('app.kuaizhizao.purchaseRequisition.convert.col.supplier'),
             width: 380,
@@ -2197,11 +2230,39 @@ const ConvertForm: React.FC<{
                 '-'
               ) : null,
           },
+          {
+            title: t('app.kuaizhizao.purchaseRequisition.convert.col.unitPrice'),
+            width: 120,
+            align: 'right',
+            render: (_: unknown, record: PurchaseRequisitionItem) =>
+              record.id != null && !record.purchase_order_id ? (
+                <InputNumber
+                  min={0}
+                  precision={4}
+                  value={unitPrices[record.id] ?? Number(record.suggested_unit_price ?? 0)}
+                  onChange={(v) => setUnitPrices((prev) => ({ ...prev, [record.id!]: Number(v) || 0 }))}
+                  style={{ width: 100 }}
+                />
+              ) : record.purchase_order_id ? (
+                '-'
+              ) : null,
+          },
+          {
+            title: t('app.kuaizhizao.purchaseRequisition.convert.col.lineAmount'),
+            width: 110,
+            align: 'right',
+            render: (_: unknown, record: PurchaseRequisitionItem) =>
+              record.id != null && !record.purchase_order_id ? (
+                <Typography.Text>{formatLineAmount(record.id)}</Typography.Text>
+              ) : (
+                '-'
+              ),
+          },
         ]}
         dataSource={items}
         pagination={false}
         rowKey="id"
-        scroll={{ x: 1160 }}
+        scroll={{ x: 1280 }}
       />
     </div>
   );

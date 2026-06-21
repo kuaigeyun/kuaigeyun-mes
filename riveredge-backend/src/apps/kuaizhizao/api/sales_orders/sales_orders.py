@@ -1153,9 +1153,11 @@ async def push_sales_order_to_delivery(
         raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-delivery", tenant_id)
     except BusinessLogicError as e:
         raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-delivery", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-delivery", tenant_id)
     except Exception as e:
         logger.error(f"下推销售出库失败: {e}")
-        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "下推销售出库失败", "/sales-orders/{sales_order_id}/push-to-delivery", tenant_id)
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, f"下推销售出库失败：{e}", "/sales-orders/{sales_order_id}/push-to-delivery", tenant_id)
 
 
 @router.post("/{sales_order_id}/push-to-sales-return", response_model=Dict[str, Any], summary="Push to sales return")

@@ -13,6 +13,8 @@ from typing import List, Optional, Tuple
 from loguru import logger
 from tortoise.transactions import in_transaction
 
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date
+
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
 from apps.kuaizhizao.models.semi_finished_goods_receipt_item import SemiFinishedGoodsReceiptItem
@@ -203,9 +205,19 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
         if filters.get("work_order_id"):
             query = query.filter(work_order_id=filters["work_order_id"])
         receipts = await query.offset(skip).limit(limit).order_by("-created_at")
-        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_counts,
+            enrich_inbound_hub_list_capabilities,
+        )
+        from apps.kuaizhizao.models.semi_finished_goods_receipt_item import SemiFinishedGoodsReceiptItem
+
         responses = [SemiFinishedGoodsReceiptResponse.model_validate(r) for r in receipts]
-        return enrich_inbound_hub_list_capabilities(receipts, responses, "semi_finished_goods")
+        item_counts = await batch_document_item_counts(
+            tenant_id, SemiFinishedGoodsReceiptItem, "receipt_id", [r.id for r in receipts]
+        )
+        return enrich_inbound_hub_list_capabilities(
+            receipts, responses, "semi_finished_goods", item_counts=item_counts
+        )
 
     async def confirm_receipt(
         self,
@@ -285,12 +297,19 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                             setattr(item, "serial_numbers", json.dumps(serial_nos))
                             await item.save()
 
+            from apps.kuaizhizao.services.inspection_policy_service import assert_fqc_for_finished_goods_receipt
+
+            await assert_fqc_for_finished_goods_receipt(
+                tenant_id,
+                receipt_id,
+                receipt.work_order_id,
+                items,
+            )
+
             confirmer_name = await self.get_user_name(confirmed_by)
-            receipt_time = (
-                confirmation_data.receipt_time
-                if confirmation_data and confirmation_data.receipt_time
-                else None
-            ) or datetime.now()
+            receipt_time = resolve_business_datetime(
+                confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None
+            )
             await SemiFinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                 status="已入库",
                 receiver_id=confirmed_by,
@@ -322,6 +341,9 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                         source_type="semi_finished_goods_receipt",
                         source_doc_id=receipt_id,
                         source_doc_code=receipt.receipt_code,
+                        work_order_id=receipt.work_order_id,
+                        work_order_code=receipt.work_order_code,
+                        ledger_production_date=to_site_date(receipt_time),
                     )
             except Exception as inv_e:
                 logger.error("半成品入库确认-更新库存失败: %s", inv_e)

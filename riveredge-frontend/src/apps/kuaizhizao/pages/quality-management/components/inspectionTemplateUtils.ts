@@ -1,4 +1,5 @@
 import type { TFunction } from 'i18next';
+import { translateWorkOrderLifecycleStatus } from '../../../utils/workOrderLifecycle';
 import {
   normalizeValueType,
   type InspectionTemplateStepItem,
@@ -127,12 +128,34 @@ export type TraceabilityNodeLike = {
 const TRACEABILITY_NODE_TYPE_I18N: Record<string, string> = {
   work_order: 'app.kuaizhizao.quality.traceability.nodeType.workOrder',
   batch: 'app.kuaizhizao.quality.traceability.nodeType.batch',
+  serial: 'app.kuaizhizao.quality.traceability.nodeType.serial',
+  inbound: 'app.kuaizhizao.quality.traceability.nodeType.inbound',
+  outbound: 'app.kuaizhizao.quality.traceability.nodeType.outbound',
   process_inspection: 'app.kuaizhizao.quality.traceability.nodeType.processInspection',
   finished_goods_inspection: 'app.kuaizhizao.quality.traceability.nodeType.finishedGoodsInspection',
   defect_record: 'app.kuaizhizao.quality.traceability.nodeType.defectRecord',
   incoming_inspection: 'app.kuaizhizao.quality.traceability.nodeType.incomingInspection',
   oqc_inspection: 'app.kuaizhizao.quality.traceability.nodeType.oqcInspection',
+  reporting_record: 'app.kuaizhizao.quality.traceability.nodeType.reportingRecord',
+  finished_goods_receipt: 'app.kuaizhizao.quality.traceability.nodeType.finishedGoodsReceipt',
+  semi_finished_goods_receipt: 'app.kuaizhizao.quality.traceability.nodeType.semiFinishedGoodsReceipt',
+  purchase_receipt: 'app.kuaizhizao.quality.traceability.nodeType.purchaseReceipt',
+  customer_material_registration: 'app.kuaizhizao.quality.traceability.nodeType.customerMaterialRegistration',
+  sales_delivery: 'app.kuaizhizao.quality.traceability.nodeType.salesDelivery',
+  sales_return: 'app.kuaizhizao.quality.traceability.nodeType.salesReturn',
+  material_binding: 'app.kuaizhizao.quality.traceability.nodeType.materialBinding',
 };
+
+export function formatTraceEventRemark(remark: string | undefined | null, t: TFunction): string {
+  if (!remark?.trim()) return '-';
+  const trimmed = remark.trim();
+  const statusMatch = trimmed.match(/^(?:状态|status):\s*(.+)$/i);
+  if (statusMatch) {
+    const translated = translateWorkOrderLifecycleStatus(t, statusMatch[1].trim());
+    return t('app.kuaizhizao.quality.traceability.remarkStatus', { status: translated });
+  }
+  return trimmed;
+}
 
 export function getTraceabilityNodeTypeLabel(type: string | undefined, t: TFunction): string {
   if (!type) return t('app.kuaizhizao.quality.traceability.nodeType.default');
@@ -168,6 +191,24 @@ export function buildTraceabilityNodePath(node: TraceabilityNodeLike): string | 
     return `/apps/kuaizhizao/quality-management/nonconforming-ledger?defect_id=${data.defect_id}`;
   }
 
+  const docType = String(data.document_type || '');
+  const docId = data.document_id;
+  if (docType === 'finished_goods_receipt' && docId) {
+    return `/apps/kuaizhizao/warehouse-management/inbound?receipt_id=${docId}`;
+  }
+  if (docType === 'purchase_receipt' && docId) {
+    return `/apps/kuaizhizao/purchase-management/purchase-receipts?receipt_id=${docId}`;
+  }
+  if (docType === 'sales_delivery' && docId) {
+    return `/apps/kuaizhizao/sales-management/sales-deliveries?delivery_id=${docId}`;
+  }
+  if (docType === 'sales_return' && docId) {
+    return `/apps/kuaizhizao/sales-management/sales-returns?return_id=${docId}`;
+  }
+  if (docType === 'semi_finished_goods_receipt' && docId) {
+    return `/apps/kuaizhizao/warehouse-management/inbound?semi_receipt_id=${docId}`;
+  }
+
   return null;
 }
 
@@ -175,6 +216,14 @@ export function getTraceabilityNodeStyle(type?: string): { fill: string; stroke:
   switch (type) {
     case 'work_order':
       return { fill: '#E6F7FF', stroke: '#1890FF' };
+    case 'serial':
+      return { fill: '#F0F5FF', stroke: '#2F54EB' };
+    case 'batch':
+      return { fill: '#FCFFE6', stroke: '#A0D911' };
+    case 'inbound':
+      return { fill: '#E6FFFB', stroke: '#13C2C2' };
+    case 'outbound':
+      return { fill: '#FFF7E6', stroke: '#FA8C16' };
     case 'process_inspection':
       return { fill: '#F9F0FF', stroke: '#722ED1' };
     case 'finished_goods_inspection':

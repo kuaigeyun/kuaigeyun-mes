@@ -931,6 +931,8 @@ export interface MaterialBatch {
   materialId: number;
   materialUuid: string;
   materialName?: string;
+  materialCode?: string;
+  materialModel?: string;
   batchNo: string;
   productionDate?: string;
   expiryDate?: string;
@@ -990,6 +992,8 @@ export interface MaterialSerial {
   materialId: number;
   materialUuid: string;
   materialName?: string;
+  materialCode?: string;
+  materialModel?: string;
   serialNo: string;
   productionDate?: string;
   factoryDate?: string;

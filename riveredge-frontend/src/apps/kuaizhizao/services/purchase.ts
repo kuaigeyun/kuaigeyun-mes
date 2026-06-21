@@ -27,7 +27,9 @@ export interface PurchaseOrderCapabilities {
   submit?: ActionCapability;
   withdraw_submit?: ActionCapability;
   approve?: ActionCapability;
+  revoke_approval?: ActionCapability;
   push_receipt_notice?: ActionCapability;
+  print?: ActionCapability;
 }
 
 /**
@@ -70,6 +72,7 @@ export interface PurchaseOrder {
   change_reason?: string;
   fee_details?: any[];
   total_fee_amount?: number;
+  capabilities?: PurchaseOrderCapabilities;
 }
 
 export interface PurchaseOrderItem {
@@ -285,6 +288,13 @@ export async function withdrawPurchaseOrder(id: number): Promise<PurchaseOrder> 
   });
 }
 
+/** 撤销审核（已确认/已驳回 -> 待审核），走统一审核入口 */
+export async function revokePurchaseOrder(id: number): Promise<PurchaseOrder> {
+  return apiRequest<PurchaseOrder>(`/core/uni-audit/purchase_order/${id}/revoke`, {
+    method: 'POST',
+  });
+}
+
 /**
  * 下推采购入库预览（返回批号等，供弹窗展示）
  */
@@ -298,19 +308,39 @@ export async function pushPurchaseOrderToReceiptPreview(
   });
 }
 
+export type PushPurchaseOrderToReceiptOptions = {
+  warehouseId?: number;
+  lineWarehouses?: Record<number, number>;
+  lineLocationIds?: Record<number, number>;
+  lineLocationCodes?: Record<number, string>;
+};
+
 /**
  * 下推到采购入库
  */
 export async function pushPurchaseOrderToReceipt(
   id: number,
   receiptQuantities?: Record<number, number>,
-  batchNumbers?: Record<number, string>
+  batchNumbers?: Record<number, string>,
+  options?: number | PushPurchaseOrderToReceiptOptions,
 ): Promise<any> {
+  const opts: PushPurchaseOrderToReceiptOptions =
+    typeof options === 'number' ? { warehouseId: options } : (options ?? {});
   return apiRequest<any>(`/apps/kuaizhizao/purchase-orders/${id}/push-to-receipt`, {
     method: 'POST',
     data: {
       receipt_quantities: receiptQuantities || {},
       ...(batchNumbers && Object.keys(batchNumbers).length > 0 ? { batch_numbers: batchNumbers } : {}),
+      ...(opts.warehouseId != null && opts.warehouseId > 0 ? { warehouse_id: opts.warehouseId } : {}),
+      ...(opts.lineWarehouses && Object.keys(opts.lineWarehouses).length > 0
+        ? { line_warehouses: opts.lineWarehouses }
+        : {}),
+      ...(opts.lineLocationIds && Object.keys(opts.lineLocationIds).length > 0
+        ? { line_location_ids: opts.lineLocationIds }
+        : {}),
+      ...(opts.lineLocationCodes && Object.keys(opts.lineLocationCodes).length > 0
+        ? { line_location_codes: opts.lineLocationCodes }
+        : {}),
     },
   });
 }

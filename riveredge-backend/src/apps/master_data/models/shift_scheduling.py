@@ -37,7 +37,7 @@ class Shift(BaseModel):
 
 
 class ShiftRoster(BaseModel):
-    """排班周期（按工作小组 + 自然周）"""
+    """排班周期（按工作小组或单员工 + 自然周）"""
 
     class Meta:
         table = "apps_master_data_shift_rosters"
@@ -45,14 +45,21 @@ class ShiftRoster(BaseModel):
         indexes = [
             ("tenant_id",),
             ("work_group_id",),
+            ("employee_id",),
             ("period_start",),
             ("status",),
+            ("scope_type",),
         ]
 
     id = fields.IntField(pk=True, description="主键ID")
-    work_group_id = fields.IntField(description="工作小组ID")
+    scope_type = fields.CharField(
+        max_length=20, default="work_group", description="范围：work_group/employee"
+    )
+    work_group_id = fields.IntField(null=True, description="工作小组ID（小组排班）")
     work_group_code = fields.CharField(max_length=50, null=True, description="工作小组编码（冗余）")
     work_group_name = fields.CharField(max_length=200, null=True, description="工作小组名称（冗余）")
+    employee_id = fields.IntField(null=True, description="员工ID（单人排班）")
+    employee_name = fields.CharField(max_length=100, null=True, description="员工姓名（冗余）")
     period_start = fields.DateField(description="周期开始（周一）")
     period_end = fields.DateField(description="周期结束（周日）")
     status = fields.CharField(max_length=20, default="draft", description="状态：draft/published")

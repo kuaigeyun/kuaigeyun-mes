@@ -6,10 +6,12 @@ import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Space } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { ProFormText, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formatBusinessDateOnly } from '../../../../../utils/format';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { materialSerialApi, materialApi } from '../../../services/material';
 import type { MaterialSerial, MaterialSerialCreate, MaterialSerialUpdate } from '../../../types/material';
@@ -60,11 +62,11 @@ const SerialsPage: React.FC = () => {
     try {
       const detail = await materialSerialApi.get(record.uuid);
       formRef.current?.setFieldsValue({
-        materialUuid: detail.materialUuid ?? (detail as any).material_uuid,
-        serialNo: detail.serialNo ?? (detail as any).serial_no,
-        productionDate: detail.productionDate ?? (detail as any).production_date,
-        factoryDate: detail.factoryDate ?? (detail as any).factory_date,
-        supplierSerialNo: detail.supplierSerialNo ?? (detail as any).supplier_serial_no,
+        materialUuid: detail.materialUuid,
+        serialNo: detail.serialNo,
+        productionDate: detail.productionDate,
+        factoryDate: detail.factoryDate,
+        supplierSerialNo: detail.supplierSerialNo,
         status: detail.status,
         remark: detail.remark,
       });
@@ -134,9 +136,16 @@ const SerialsPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
+  const formatSerialDateCell = (value: unknown) => {
+    if (value == null || value === '') return '-';
+    return formatBusinessDateOnly(String(value));
+  };
+
   const serialSortFieldMap: Record<string, string> = {
-    serial_no: 'serial_no',
-    material_name: 'material_name',
+    serialNo: 'serial_no',
+    materialCode: 'material_code',
+    materialName: 'material_name',
+    materialModel: 'material_model',
     status: 'status',
     productionDate: 'production_date',
     factoryDate: 'factory_date',
@@ -145,20 +154,36 @@ const SerialsPage: React.FC = () => {
   const columns: ProColumns<MaterialSerial>[] = [
     {
       title: t('app.master-data.serials.serialNo'),
-      dataIndex: 'serial_no',
-      width: 160,
+      dataIndex: 'serialNo',
+      width: 220,
       ellipsis: true,
       sorter: true,
-      render: (_, r) => r.serialNo ?? (r as any).serial_no,
+      copyable: true,
     },
     {
-      title: t('app.master-data.serials.materialName'),
-      dataIndex: 'material_name',
-      width: 200,
+      title: t('app.master-data.serials.materialCode'),
+      dataIndex: 'materialCode',
+      width: 120,
       ellipsis: true,
       hideInSearch: true,
       sorter: true,
-      render: (_, r) => r.materialName ?? (r as any).material_name ?? '-',
+      copyable: true,
+    },
+    {
+      title: t('app.master-data.serials.materialName'),
+      dataIndex: 'materialName',
+      width: 180,
+      ellipsis: true,
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: t('app.master-data.serials.materialModel'),
+      dataIndex: 'materialModel',
+      width: 120,
+      ellipsis: true,
+      hideInSearch: true,
+      sorter: true,
     },
     {
       title: t('app.master-data.serials.status'),
@@ -167,7 +192,6 @@ const SerialsPage: React.FC = () => {
       valueType: 'select',
       sorter: true,
       valueEnum: serialStatusValueEnum,
-      render: (_, r) => r.status ?? (r as any).status ?? '-',
     },
     {
       title: t('app.master-data.serials.productionDate'),
@@ -175,7 +199,8 @@ const SerialsPage: React.FC = () => {
       width: 120,
       valueType: 'date',
       sorter: true,
-      render: (_, r) => r.productionDate ?? (r as any).production_date ?? '-',
+      hideInSearch: true,
+      render: (_, r) => formatSerialDateCell(r.productionDate),
     },
     {
       title: t('app.master-data.serials.factoryDate'),
@@ -183,18 +208,31 @@ const SerialsPage: React.FC = () => {
       width: 120,
       valueType: 'date',
       sorter: true,
-      render: (_, r) => r.factoryDate ?? (r as any).factory_date ?? '-',
+      hideInSearch: true,
+      render: (_, r) => formatSerialDateCell(r.factoryDate),
     },
     {
       title: t('common.actions'),
+      valueType: 'option',
       width: 150,
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button
+            key="edit"
+            {...rowActionKind('update')}
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
             {t('field.customField.edit')}
           </Button>
-          <Popconfirm title={t('common.confirmDelete')} onConfirm={() => handleDelete(record)}>
+          <Popconfirm
+            key="delete"
+            {...rowActionKind('delete')}
+            title={t('common.confirmDelete')}
+            onConfirm={() => handleDelete(record)}
+          >
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
               {t('field.customField.delete')}
             </Button>
@@ -213,11 +251,11 @@ const SerialsPage: React.FC = () => {
         rowKey="uuid"
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
-          const { current = 1, pageSize = 20, serial_no, status } = params || {};
+          const { current = 1, pageSize = 20, serialNo, status } = params || {};
           const { sortBy: raw, sortOrder } = extractProTableSort(sort);
           const sortBy = raw ? serialSortFieldMap[raw] : undefined;
           const res = await materialSerialApi.list({
-            serialNo: serial_no as string | undefined,
+            serialNo: serialNo as string | undefined,
             status: status as string | undefined,
             page: current,
             pageSize,
@@ -264,7 +302,7 @@ const SerialsPage: React.FC = () => {
             const res = await materialApi.list({ limit: 500, isActive: true });
             const items = Array.isArray(res) ? res : (res as any)?.items ?? [];
             return items.map((m: any) => ({
-              label: `${m.mainCode ?? m.main_code ?? m.code ?? ''} - ${m.name ?? ''}`.trim() || m.uuid,
+              label: `${m.mainCode ?? ''} - ${m.name ?? ''}`.trim() || m.uuid,
               value: m.uuid,
             }));
           }}

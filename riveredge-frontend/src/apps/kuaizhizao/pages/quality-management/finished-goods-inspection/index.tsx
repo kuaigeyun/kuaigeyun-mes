@@ -8,7 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -74,7 +74,9 @@ import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { qualityInspectionRowGates } from '../../../../../hooks/useDocumentCapabilities';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import KuaizhizaoDocumentPrintModal from '../../../components/KuaizhizaoDocumentPrintModal';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
@@ -90,7 +92,9 @@ import {
   renderQualityDocStatusTag,
   renderQualityQualityStatusTag,
   getQualityDefectTypeOptions,
+  qualityInspectionUniAuditProps,
 } from '../components/qualityMeta';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const FINISHED_RESOURCE = 'kuaizhizao:quality-management-finished-goods-inspection';
 const FINISHED_GOODS_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_finished_goods_inspections';
@@ -124,7 +128,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderFinishedRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return nodes;
+  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 // 成品检验接口定义
@@ -210,6 +214,10 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   const finishedGoodsInspectionDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(pullFromWorkOrderAction.label),
+    [pullFromWorkOrderAction.label],
+  );
 
   const invalidateStats = () => queryClient.invalidateQueries({ queryKey: ['finished-goods-inspection-statistics'] });
   const disposalFallback = useMemo(() => getQualityFinishedDisposalFallback(t), [t]);
@@ -241,6 +249,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     load();
   }, [disposalFallback]);
   const finishedPerms = useResourcePermissions(FINISHED_RESOURCE);
+  const finishedAuditEnabled = useAuditRequired('finished_goods_inspection');
   const ncPerms = useResourcePermissions(NC_RESOURCE);
   const { canPrint: canPrintCertificate } = useResourcePermissions(FINISHED_RESOURCE);
   const { canRead: canReadNcLedger } = useResourcePermissions(NC_RESOURCE);
@@ -459,6 +468,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       }
     },
   });
+  useNewShortcut(pullFromWorkOrderQuery.openModal);
 
   // 处理创建不合格品记录
   const handleCreateDefect = (record: FinishedGoodsInspection) => {
@@ -642,35 +652,37 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       >
         {t('app.kuaizhizao.quality.common.actions.detail')}
       </Button>,
-      <UniWorkflowActions {...rowActionKind('skip')}
-        key="wf"
-        record={record}
-        entityName={t('app.kuaizhizao.quality.common.entity.finishedInspection')}
-        statusField="status"
-        reviewStatusField="review_status"
-        draftStatuses={[]}
-        pendingStatuses={['待审核', '已检验']}
-        approvedStatuses={['已审核']}
-        rejectedStatuses={['已驳回']}
-        theme="link"
-        size="small"
-        onSuccess={() => {
-          actionRef.current?.reload();
-          if (inspectionDetail?.id === record.id) {
-            qualityApi.finishedGoodsInspection
-              .get(record.id!.toString())
-              .then(async (d) => {
-                setInspectionDetail(d);
-                setFgiTrackingRefreshKey((k) => k + 1);
-                if (record.id != null) {
-                  await loadInspectionFieldValuesForDetail(record.id);
-                }
-              })
-              .catch(() => {});
-          }
-        }}
-      />,
     ];
+    if (gates.approve.allowed) {
+      nodes.push(
+        <UniWorkflowActions
+          {...rowActionKind('skip')}
+          key="wf"
+          record={record}
+          {...qualityInspectionUniAuditProps({
+            entityType: 'finished_goods_inspection',
+            resourcePrefix: FINISHED_RESOURCE,
+            entityName: t('app.kuaizhizao.quality.common.entity.finishedInspection'),
+            workflowAuditEnabled: finishedAuditEnabled,
+            onSuccess: () => {
+              actionRef.current?.reload();
+              if (inspectionDetail?.id === record.id) {
+                qualityApi.finishedGoodsInspection
+                  .get(record.id!.toString())
+                  .then(async (d) => {
+                    setInspectionDetail(d);
+                    setFgiTrackingRefreshKey((k) => k + 1);
+                    if (record.id != null) {
+                      await loadInspectionFieldValuesForDetail(record.id);
+                    }
+                  })
+                  .catch(() => {});
+              }
+            },
+          })}
+        />,
+      );
+    }
     if (gates.createDefect.allowed) {
       nodes.push(
         <Button {...rowActionKind('create')}
@@ -907,7 +919,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           }
         }}
         showCreateButton={true}
-        createButtonText={pullFromWorkOrderAction.label}
+        createButtonText={createButtonLabel}
         onCreate={pullFromWorkOrderQuery.openModal}
         enableRowSelection={true}
         onRowSelectionChange={setSelectedRowKeys}
@@ -1104,31 +1116,32 @@ const FinishedGoodsInspectionPage: React.FC = () => {
                   {t('app.kuaizhizao.quality.finished.actions.printCertificate')}
                 </Button>
               ) : null}
-              <UniWorkflowActions {...rowActionKind('skip')}
-              record={inspectionDetail}
-              entityName={t('app.kuaizhizao.quality.common.entity.finishedInspection')}
-              statusField="status"
-              reviewStatusField="review_status"
-              draftStatuses={[]}
-              pendingStatuses={['待审核', '已检验']}
-              approvedStatuses={['已审核']}
-              rejectedStatuses={['已驳回']}
-              theme="default"
-              size="small"
-              onSuccess={() => {
-                actionRef.current?.reload();
-                if (inspectionDetail?.id) {
-                  qualityApi.finishedGoodsInspection
-                    .get(inspectionDetail.id.toString())
-                    .then(async (d) => {
-                      setInspectionDetail(d);
-                      setFgiTrackingRefreshKey((k) => k + 1);
-                      await loadInspectionFieldValuesForDetail(inspectionDetail.id!);
-                    })
-                    .catch(() => {});
-                }
-              }}
-            />
+              {qualityInspectionRowGates(inspectionDetail, finishedPerms, ncPerms, t).approve.allowed ? (
+                <UniWorkflowActions
+                  {...rowActionKind('skip')}
+                  record={inspectionDetail}
+                  {...qualityInspectionUniAuditProps({
+                    entityType: 'finished_goods_inspection',
+                    resourcePrefix: FINISHED_RESOURCE,
+                    entityName: t('app.kuaizhizao.quality.common.entity.finishedInspection'),
+                    workflowAuditEnabled: finishedAuditEnabled,
+                    theme: 'default',
+                    onSuccess: () => {
+                      actionRef.current?.reload();
+                      if (inspectionDetail?.id) {
+                        qualityApi.finishedGoodsInspection
+                          .get(inspectionDetail.id.toString())
+                          .then(async (d) => {
+                            setInspectionDetail(d);
+                            setFgiTrackingRefreshKey((k) => k + 1);
+                            await loadInspectionFieldValuesForDetail(inspectionDetail.id!);
+                          })
+                          .catch(() => {});
+                      }
+                    },
+                  })}
+                />
+              ) : null}
             </Space>
           )
         }

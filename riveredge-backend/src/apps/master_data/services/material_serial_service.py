@@ -20,7 +20,6 @@ from apps.master_data.schemas.material_schemas import (
     MaterialSerialListResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
-from loguru import logger
 
 
 class MaterialSerialService:
@@ -32,16 +31,18 @@ class MaterialSerialService:
     
     @staticmethod
     def _to_response(serial: MaterialSerial) -> MaterialSerialResponse:
-        material = getattr(serial, "material", None)
-        material_uuid = getattr(material, "uuid", "") if material else ""
-        material_name = getattr(material, "name", None) if material else None
+        material = serial.material
+        if not material:
+            raise ValueError(f"物料序列号 {serial.id} 关联物料不存在")
         return MaterialSerialResponse(
             id=serial.id,
             uuid=serial.uuid,
             tenant_id=serial.tenant_id,
             material_id=serial.material_id,
-            material_uuid=material_uuid,
-            material_name=material_name,
+            material_uuid=material.uuid,
+            material_name=material.name,
+            material_code=material.main_code,
+            material_model=material.model,
             serial_no=serial.serial_no,
             production_date=serial.production_date,
             factory_date=serial.factory_date,
@@ -166,7 +167,8 @@ class MaterialSerialService:
         """
         query = MaterialSerial.filter(
             tenant_id=tenant_id,
-            deleted_at__isnull=True
+            deleted_at__isnull=True,
+            material__deleted_at__isnull=True,
         )
         
         # 物料筛选
@@ -189,6 +191,8 @@ class MaterialSerialService:
                 Q(serial_no__icontains=kw)
                 | Q(supplier_serial_no__icontains=kw)
                 | Q(material__name__icontains=kw)
+                | Q(material__main_code__icontains=kw)
+                | Q(material__model__icontains=kw)
             )
         
         # 状态筛选
@@ -205,6 +209,8 @@ class MaterialSerialService:
             "factory_date": "factory_date",
             "created_at": "created_at",
             "material_name": "material__name",
+            "material_code": "material__main_code",
+            "material_model": "material__model",
         }
         db_sort = sort_field_map.get(sort_by or "", "created_at")
         desc = (sort_order or "desc").lower() == "desc"
@@ -215,17 +221,7 @@ class MaterialSerialService:
             (page - 1) * page_size
         ).limit(page_size).order_by(order_expr).all()
         
-        items = []
-        for serial in serials:
-            try:
-                # 处理历史孤立数据：若关联物料已不存在，跳过该序列号，避免整页报错
-                if not serial.material:
-                    logger.warning(f"跳过孤立的物料序列号: id={serial.id}, material_id={serial.material_id} (物料不存在)")
-                    continue
-                items.append(MaterialSerialService._to_response(serial))
-            except Exception as e:
-                logger.error(f"序列化物料序列号 {serial.id} 失败: {str(e)}")
-                continue
+        items = [MaterialSerialService._to_response(serial) for serial in serials]
         
         return MaterialSerialListResponse(items=items, total=total)
     
@@ -382,30 +378,50 @@ class MaterialSerialService:
         Raises:
             NotFoundError: 当序列号不存在时抛出
         """
+        from apps.kuaizhizao.services.traceability import TraceabilityService
+
+        profile = await TraceabilityService().build_profile_by_serial_uuid(tenant_id, serial_uuid, "both")
         serial = await MaterialSerial.filter(
             tenant_id=tenant_id,
             uuid=serial_uuid,
-            deleted_at__isnull=True
+            deleted_at__isnull=True,
         ).prefetch_related("material").first()
-        
         if not serial:
             raise NotFoundError("物料序列号", serial_uuid)
-        
-        # TODO: 后续实现完整的追溯逻辑
-        # 需要查询：
-        # 1. 生产记录（工单、生产入库单）
-        # 2. 入库记录（库存入库单）
-        # 3. 出库记录（库存出库单）
-        # 4. 销售记录（销售订单、销售出库单）
-        # 5. 售后记录（售后单、退货单）
-        
-        trace_info = {
-            "serial": MaterialSerialService._to_response(serial).dict(),
-            "production_records": [],  # 生产记录
-            "inbound_records": [],  # 入库记录
-            "outbound_records": [],  # 出库记录
-            "sales_records": [],  # 销售记录
-            "after_sales_records": [],  # 售后记录
+
+        return {
+            "serial": MaterialSerialService._to_response(serial).model_dump(by_alias=True),
+            "profile": profile.model_dump(by_alias=True),
+            "production_records": [
+                e.model_dump(by_alias=True)
+                for e in profile.events
+                if e.document_type in ("work_order", "reporting_record", "material_binding")
+            ],
+            "inbound_records": [
+                e.model_dump(by_alias=True)
+                for e in profile.events
+                if e.document_type
+                in (
+                    "purchase_receipt",
+                    "customer_material_registration",
+                    "finished_goods_receipt",
+                    "semi_finished_goods_receipt",
+                    "sales_return",
+                )
+            ],
+            "outbound_records": [
+                e.model_dump(by_alias=True)
+                for e in profile.events
+                if e.document_type == "sales_delivery"
+            ],
+            "sales_records": [
+                e.model_dump(by_alias=True)
+                for e in profile.events
+                if e.document_type in ("sales_delivery", "sales_return")
+            ],
+            "after_sales_records": [
+                e.model_dump(by_alias=True)
+                for e in profile.events
+                if e.document_type == "sales_return"
+            ],
         }
-        
-        return trace_info

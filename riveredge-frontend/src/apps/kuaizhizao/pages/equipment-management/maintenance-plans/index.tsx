@@ -1,4 +1,4 @@
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 /**
  * 维护保养计划管理页面
  *
@@ -44,6 +44,8 @@ import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { formatDateTime } from '../../../../../utils/format';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const P = 'app.kuaizhizao.maintenancePlan';
 
@@ -92,7 +94,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderPlanRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return nodes;
+  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 interface MaintenancePlan {
@@ -157,6 +159,11 @@ const MaintenancePlansPage: React.FC = () => {
     setModalVisible(true);
     formRef.current?.resetFields();
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t(`${P}.create`)),
+    [t],
+  );
 
   /**
    * 处理编辑维护计划
@@ -582,7 +589,7 @@ const MaintenancePlansPage: React.FC = () => {
           showDeleteButton={true}
           onDelete={handleDelete}
           showCreateButton={true}
-          createButtonText={t(`${P}.create`)}
+          createButtonText={createButtonLabel}
           onCreate={handleCreate}
           scroll={{ x: 1900 }}
         />

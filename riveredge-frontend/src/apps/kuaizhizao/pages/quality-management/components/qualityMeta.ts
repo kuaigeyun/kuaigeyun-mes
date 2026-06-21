@@ -302,3 +302,38 @@ export function buildQualityReportRateTrendColumns(t: TFunction): ProColumns[] {
     { title: t('app.kuaizhizao.quality.reports.columns.overallRate'), dataIndex: 'overall_rate', valueType: 'percent', width: 120, sorter: true },
   ];
 }
+
+/** 来料/过程/成品检验 uni-audit 工作流 props（与 record.audit + capabilities 对齐） */
+export const QUALITY_INSPECTION_AUDIT_PENDING_STATUSES = ['待审核', '已检验'] as const;
+
+export type QualityInspectionAuditEntityType =
+  | 'incoming_inspection'
+  | 'process_inspection'
+  | 'finished_goods_inspection';
+
+export function qualityInspectionUniAuditProps(opts: {
+  entityType: QualityInspectionAuditEntityType;
+  resourcePrefix: string;
+  entityName: string;
+  workflowAuditEnabled: boolean;
+  onSuccess: () => void;
+  theme?: 'default' | 'link';
+  size?: 'small' | 'middle' | 'large';
+}) {
+  return {
+    entityType: opts.entityType,
+    unifiedAudit: true as const,
+    resourcePrefix: opts.resourcePrefix,
+    workflowAuditEnabled: opts.workflowAuditEnabled,
+    entityName: opts.entityName,
+    statusField: 'status',
+    reviewStatusField: 'review_status',
+    draftStatuses: [] as string[],
+    pendingStatuses: [...QUALITY_INSPECTION_AUDIT_PENDING_STATUSES],
+    approvedStatuses: ['已审核'],
+    rejectedStatuses: ['已驳回'],
+    theme: opts.theme ?? 'link',
+    size: opts.size ?? 'small',
+    onSuccess: opts.onSuccess,
+  };
+}

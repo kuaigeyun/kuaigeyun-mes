@@ -1,6 +1,10 @@
 import React from 'react';
 import { Card, Col, Segmented, Spin, theme } from 'antd';
 import { BarChartOutlined } from '@ant-design/icons';
+import {
+  MODULE_PANEL_TITLE_ICON_SIZE,
+  MODULE_PANEL_TITLE_STYLE,
+} from './constants';
 
 export interface ModuleChartPanelProps {
   title: React.ReactNode;
@@ -28,8 +32,8 @@ export function ModuleChartPanel({
   const { token } = theme.useToken();
   const titleNode =
     typeof title === 'string' ? (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-        <BarChartOutlined />
+      <span style={{ ...MODULE_PANEL_TITLE_STYLE, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+        <BarChartOutlined style={{ fontSize: MODULE_PANEL_TITLE_ICON_SIZE }} />
         <span>{title}</span>
       </span>
     ) : (
@@ -54,6 +58,12 @@ export function ModuleChartPanel({
         }
         style={{ borderRadius: token.borderRadiusLG, width: '100%', height: '100%' }}
         styles={{
+          header: {
+            minHeight: 48,
+            padding: '12px 16px',
+            borderBottom: `1px solid ${token.colorSplit}`,
+          },
+          title: MODULE_PANEL_TITLE_STYLE,
           body: {
             padding: '12px 16px 8px',
             minHeight: height,

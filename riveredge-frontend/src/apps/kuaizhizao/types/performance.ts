@@ -327,9 +327,12 @@ export interface ShiftRoster {
   id: number;
   uuid: string;
   tenantId: number;
-  workGroupId: number;
+  scopeType: 'work_group' | 'employee';
+  workGroupId?: number | null;
   workGroupCode?: string;
   workGroupName?: string;
+  employeeId?: number | null;
+  employeeName?: string;
   periodStart: string;
   periodEnd: string;
   status: 'draft' | 'published';
@@ -341,7 +344,9 @@ export interface ShiftRoster {
 }
 
 export interface ShiftRosterCreate {
-  workGroupId: number;
+  scopeType?: 'work_group' | 'employee';
+  workGroupId?: number;
+  employeeId?: number;
   periodStart: string;
   remarks?: string;
 }

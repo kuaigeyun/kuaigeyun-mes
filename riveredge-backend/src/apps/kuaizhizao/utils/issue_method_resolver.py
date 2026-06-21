@@ -39,7 +39,23 @@ def is_backflush_material(bom_issue_method: Optional[str], source_type: Optional
     return resolve_issue_method(bom_issue_method, source_type) == ISSUE_METHOD_BACKFLUSH
 
 
+NON_INVENTORY_KITTING_SOURCE_TYPES = frozenset({"Service", "Outsource", "Phantom"})
+
+
+def is_kitting_inventory_material(
+    bom_issue_method: Optional[str],
+    source_type: Optional[str] = None,
+) -> bool:
+    """齐套率/库位分析：需校验实物库存的 BOM 行（排除服务、委外、虚拟件及发料 none）。"""
+    st = (source_type or "").strip()
+    if st in NON_INVENTORY_KITTING_SOURCE_TYPES:
+        return False
+    return resolve_issue_method(bom_issue_method, source_type) != ISSUE_METHOD_NONE
+
+
 def is_batching_material(bom_issue_method: Optional[str], source_type: Optional[str] = None) -> bool:
-    """需经配料中心从主仓拣选并送至线边仓的物料（pick + backflush，排除 none/虚拟件）。"""
+    """需经配料中心从主仓拣选并送至线边仓的物料（pick + backflush，排除无库存来源）。"""
+    if not is_kitting_inventory_material(bom_issue_method, source_type):
+        return False
     im = resolve_issue_method(bom_issue_method, source_type)
     return im in (ISSUE_METHOD_PICK, ISSUE_METHOD_BACKFLUSH)

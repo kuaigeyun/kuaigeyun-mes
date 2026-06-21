@@ -34,6 +34,9 @@ def build_work_order_operation_steps(
         if status == "active" and plan > 0:
             qty = float(op.get("qualified_quantity") or 0)
             progress = int(min(100, round(qty / plan * 100)))
+            if progress >= 100:
+                status = "done"
+                progress = 100
         steps.append(
             {
                 "name": op.get("operation_name") or "",

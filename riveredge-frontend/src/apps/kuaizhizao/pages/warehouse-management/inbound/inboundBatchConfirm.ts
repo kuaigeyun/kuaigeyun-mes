@@ -8,6 +8,12 @@ import {
 } from '../../../services/production';
 import type { InboundHubOrder } from './inboundHubTypes';
 import { isInboundConfirmable } from './inboundHubTypes';
+import { checkPurchaseReceiptIqcForConfirm } from './inboundPurchaseIqcGate';
+import { checkCustomerMaterialIqcForConfirm } from './inboundCustomerMaterialIqcGate';
+import {
+  checkFinishedGoodsReceiptFqcForConfirm,
+  checkSemiFinishedGoodsReceiptFqcForConfirm,
+} from './inboundFinishedGoodsFqcGate';
 
 export type BatchConfirmResult = {
   success: number;
@@ -49,6 +55,7 @@ async function fetchDetail(record: InboundHubOrder): Promise<Record<string, unkn
 async function confirmSingle(record: InboundHubOrder, t?: TFunction): Promise<void> {
   const id = String(record.id);
   if (record.receipt_type === 'customer_material') {
+    await checkCustomerMaterialIqcForConfirm(id, t);
     await customerMaterialRegistrationApi.process(id);
     return;
   }
@@ -64,6 +71,7 @@ async function confirmSingle(record: InboundHubOrder, t?: TFunction): Promise<vo
   const whName = String(detail.warehouse_name || record.warehouse_name || '');
 
   if (record.receipt_type === 'purchase') {
+    await checkPurchaseReceiptIqcForConfirm(id, t);
     const items = ((detail.items as Record<string, unknown>[]) || []).map((it) => ({
       item_id: Number(it.id),
       warehouse_id: whId,
@@ -81,6 +89,7 @@ async function confirmSingle(record: InboundHubOrder, t?: TFunction): Promise<vo
     return;
   }
   if (record.receipt_type === 'finished_goods') {
+    await checkFinishedGoodsReceiptFqcForConfirm(id, t);
     await warehouseApi.finishedGoodsReceipt.confirm(id, {
       warehouse_id: whId,
       warehouse_name: whName,
@@ -88,6 +97,7 @@ async function confirmSingle(record: InboundHubOrder, t?: TFunction): Promise<vo
     return;
   }
   if (record.receipt_type === 'semi_finished_goods') {
+    await checkSemiFinishedGoodsReceiptFqcForConfirm(id, t);
     await warehouseApi.semiFinishedGoodsReceipt.confirm(id, {
       warehouse_id: whId,
       warehouse_name: whName,

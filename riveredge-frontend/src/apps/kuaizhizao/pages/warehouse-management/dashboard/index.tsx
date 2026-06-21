@@ -225,18 +225,8 @@ const WarehouseDashboard: React.FC = () => {
       actionRow={
         <>
           <ModuleActionPanel
-            title={t('app.kuaizhizao.warehouseDashboard.todosTitle')}
-            lg={8}
-            loading={todosLoading}
-          >
-            <ModuleTodoList
-              items={todos}
-              emptyText={t('app.kuaizhizao.warehouseDashboard.noTodos')}
-            />
-          </ModuleActionPanel>
-          <ModuleActionPanel
             title={t('app.kuaizhizao.warehouseDashboard.pendingInboundTitle')}
-            lg={8}
+            lg={12}
             extra={
               <a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inbound')}>
                 {t('app.kuaizhizao.warehouseDashboard.more')}
@@ -245,7 +235,7 @@ const WarehouseDashboard: React.FC = () => {
           >
             <Table
               size="small"
-              dataSource={s?.recent_inbounds ?? []}
+              dataSource={s?.pending_inbounds ?? []}
               pagination={false}
               rowKey={(r) => `${r.doc_type}-${r.doc_code}`}
               columns={queueColumns}
@@ -253,7 +243,7 @@ const WarehouseDashboard: React.FC = () => {
           </ModuleActionPanel>
           <ModuleActionPanel
             title={t('app.kuaizhizao.warehouseDashboard.pendingOutboundTitle')}
-            lg={8}
+            lg={12}
             extra={
               <a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/outbound')}>
                 {t('app.kuaizhizao.warehouseDashboard.more')}
@@ -271,22 +261,37 @@ const WarehouseDashboard: React.FC = () => {
         </>
       }
       chartRow={
-        <ModuleChartPanel
-          title={t('app.kuaizhizao.warehouseDashboard.dailyTrendTitle')}
-          loading={trendLoading}
-          lg={24}
-        >
-          <Suspense fallback={null}>
-            <WarehouseTrendLine
-              data={trendChartData}
-              xField="date"
-              yField="value"
-              colorField="type"
-              height={260}
-              smooth
+        <ModuleChartRow>
+          <ModuleActionPanel
+            title={t('app.kuaizhizao.warehouseDashboard.todosTitle')}
+            lg={12}
+            loading={todosLoading}
+          >
+            <ModuleTodoList
+              items={todos}
+              emptyText={t('app.kuaizhizao.warehouseDashboard.noTodos')}
             />
-          </Suspense>
-        </ModuleChartPanel>
+          </ModuleActionPanel>
+          <ModuleChartPanel
+            title={t('app.kuaizhizao.warehouseDashboard.dailyTrendTitle')}
+            loading={trendLoading}
+            lg={12}
+            height={260}
+          >
+            <Suspense fallback={null}>
+              <WarehouseTrendLine
+                data={trendChartData}
+                xField="date"
+                yField="value"
+                colorField="type"
+                height={260}
+                smooth
+                axis={{ x: { title: false }, y: { title: false } }}
+                legend={{ color: { itemLabelFontSize: 13 } }}
+              />
+            </Suspense>
+          </ModuleChartPanel>
+        </ModuleChartRow>
       }
     />
   );

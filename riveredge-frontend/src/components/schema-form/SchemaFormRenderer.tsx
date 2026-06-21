@@ -27,6 +27,25 @@ import type { QuickCreateConfig, AdvancedSearchConfig } from '../uni-dropdown';
 import { ThemedSegmented } from '../themed-segmented';
 import type { FieldConfig } from './form-schemas';
 import { inferFormGridColumns } from '../custom-fields';
+import { FORM_LAYOUT } from '../layout-templates/constants';
+
+function resolveFieldLayout(
+  field: FieldConfig,
+  modalHalfWidthLayout?: boolean,
+): { colProps?: { span: number }; formItemProps?: { className?: string; style?: React.CSSProperties } } {
+  const colSpan = field.colSpan ?? 12;
+  if (!modalHalfWidthLayout) {
+    return { colProps: { span: colSpan } };
+  }
+  const isFull = colSpan >= FORM_LAYOUT.FULL_COL_SPAN;
+  const isDateLike = field.type === 'date' || field.type === 'datetime';
+  const useHalf = isDateLike ? !isFull : colSpan < FORM_LAYOUT.FULL_COL_SPAN;
+  return {
+    formItemProps: {
+      className: useHalf ? FORM_LAYOUT.MODAL_FIELD_HALF_CLASS : FORM_LAYOUT.MODAL_FIELD_FULL_CLASS,
+    },
+  };
+}
 
 export interface SchemaFormRendererProps {
   schema: FieldConfig[];
@@ -48,6 +67,8 @@ export interface SchemaFormRendererProps {
   allowEditCodeWhenEdit?: boolean;
   /** 按字段名禁用（如预设实体的名称不可直接改库内中文源） */
   disabledFields?: string[];
+  /** Modal 半宽 flex 布局（不依赖 ProForm grid / colProps） */
+  modalHalfWidthLayout?: boolean;
 }
 
 function buildRules(field: FieldConfig, t: (key: string) => string): any[] {
@@ -81,6 +102,7 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
   treeDataMap = {},
   allowEditCodeWhenEdit = false,
   disabledFields = [],
+  modalHalfWidthLayout = false,
 }) => {
   const { t } = useTranslation();
 
@@ -113,14 +135,22 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
               content = React.cloneElement(content, patch);
             }
           }
+            if (modalHalfWidthLayout) {
+              return (
+                <div key={field.name} className={FORM_LAYOUT.MODAL_FIELD_FULL_CLASS} style={{ width: '100%', flex: '0 0 100%' }}>
+                  {content}
+                </div>
+              );
+            }
             return <React.Fragment key={field.name}>{content}</React.Fragment>;
           }
           const colSpan = field.colSpan ?? 24;
+          const slotLayout = resolveFieldLayout(field, modalHalfWidthLayout);
           return (
             <ProFormField
               key={field.name}
-              colProps={{ span: colSpan }}
-              formItemProps={{ style: { marginBottom: 0 } }}
+              colProps={slotLayout.colProps}
+              formItemProps={{ style: { marginBottom: 0 }, ...slotLayout.formItemProps }}
               renderFormItem={() => (
                 <div style={{ width: '100%' }}>{slotContent}</div>
               )}
@@ -132,7 +162,11 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
         const placeholder = field.placeholderKey ? t(field.placeholderKey) : undefined;
         const extraContent = field.extraAsTooltip && field.extraKey ? undefined : (field.extraKey ? t(field.extraKey) : undefined);
         const rules = buildRules(field, t);
-        const colSpan = field.colSpan ?? 12;
+        const fieldLayout = resolveFieldLayout(field, modalHalfWidthLayout);
+        const dateFieldProps =
+          modalHalfWidthLayout && (field.type === 'date' || field.type === 'datetime')
+            ? { fieldProps: { style: { width: '100%' }, ...field.fieldProps } }
+            : { fieldProps: field.fieldProps };
         const isCodeField = codeField && field.name === codeField;
 
         if (field.type === 'treeSelect') {
@@ -143,7 +177,8 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
               name={field.name}
               label={label}
               placeholder={placeholder}
-              colProps={{ span: colSpan }}
+              colProps={fieldLayout.colProps}
+              formItemProps={fieldLayout.formItemProps}
               rules={rules}
               fieldProps={{
                 treeData,
@@ -169,7 +204,8 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
               key={field.name}
               name={field.name}
               label={label}
-              colProps={{ span: colSpan }}
+              colProps={fieldLayout.colProps}
+              formItemProps={fieldLayout.formItemProps}
               rules={rules}
               extra={extraContent}
               renderFormItem={(p: any) => (
@@ -198,7 +234,8 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
               key={field.name}
               name={field.name}
               label={label}
-              colProps={{ span: colSpan }}
+              colProps={fieldLayout.colProps}
+              formItemProps={fieldLayout.formItemProps}
               rules={rules}
               options={options}
               fieldProps={{
@@ -218,7 +255,8 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
               key={field.name}
               name={field.name}
               label={label}
-              colProps={{ span: colSpan }}
+              colProps={fieldLayout.colProps}
+              formItemProps={fieldLayout.formItemProps}
               rules={rules}
               extra={extraContent}
               renderFormItem={(_schema, { value, onChange }: any) => {
@@ -256,7 +294,8 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
               name={field.name}
               label={label}
               placeholder={placeholder}
-              colProps={{ span: colSpan }}
+              colProps={fieldLayout.colProps}
+              formItemProps={fieldLayout.formItemProps}
               rules={rules}
               fieldProps={textareaProps}
             />
@@ -269,7 +308,8 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
               key={field.name}
               name={field.name}
               label={label}
-              colProps={{ span: colSpan }}
+              colProps={fieldLayout.colProps}
+              formItemProps={fieldLayout.formItemProps}
               extra={extraContent}
               initialValue={field.initialValue !== undefined ? field.initialValue : true}
             />
@@ -283,7 +323,8 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
               name={field.name}
               label={label}
               placeholder={placeholder}
-              colProps={{ span: colSpan }}
+              colProps={fieldLayout.colProps}
+              formItemProps={fieldLayout.formItemProps}
               rules={rules}
               fieldProps={field.fieldProps}
             />
@@ -297,9 +338,10 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
               name={field.name}
               label={label}
               placeholder={placeholder}
-              colProps={{ span: colSpan }}
+              colProps={fieldLayout.colProps}
+              formItemProps={fieldLayout.formItemProps}
               rules={rules}
-              fieldProps={field.fieldProps}
+              {...dateFieldProps}
             />
           );
         }
@@ -311,9 +353,10 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
               name={field.name}
               label={label}
               placeholder={placeholder}
-              colProps={{ span: colSpan }}
+              colProps={fieldLayout.colProps}
+              formItemProps={fieldLayout.formItemProps}
               rules={rules}
-              fieldProps={field.fieldProps}
+              {...dateFieldProps}
               extra={extraContent}
             />
           );
@@ -333,7 +376,8 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
             name={field.name}
             label={label}
             placeholder={isCodeField && codeAutoGenerated ? t(codeAutoGeneratedKey, { label: labelText }) : placeholder}
-            colProps={{ span: colSpan }}
+            colProps={fieldLayout.colProps}
+            formItemProps={fieldLayout.formItemProps}
             rules={rules}
             fieldProps={textFieldProps}
             extra={undefined}

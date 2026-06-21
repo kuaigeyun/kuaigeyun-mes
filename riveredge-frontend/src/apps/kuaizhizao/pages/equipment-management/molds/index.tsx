@@ -35,12 +35,14 @@ import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../.
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   CustomFieldsFormSection,
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { formatDateTime } from '../../../../../utils/format';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const MOLD_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_molds';
 
@@ -195,6 +197,11 @@ const MoldsPage: React.FC = () => {
     resetMoldFormFieldValues();
     setModalVisible(true);
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.mold.create')),
+    [t],
+  );
 
   /**
    * 处理编辑模具
@@ -870,7 +877,7 @@ const MoldsPage: React.FC = () => {
           showDeleteButton={true}
           onDelete={handleDelete}
           showCreateButton={true}
-          createButtonText={t('app.kuaizhizao.mold.create')}
+          createButtonText={createButtonLabel}
           onCreate={handleCreate}
           showImportButton
           onImport={async (data) => {

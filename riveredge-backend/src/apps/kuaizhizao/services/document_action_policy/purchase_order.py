@@ -44,11 +44,18 @@ def _is_audited_status(status: Any) -> bool:
     return normalized in (DocumentStatus.AUDITED.value, DocumentStatus.CONFIRMED.value) or raw in LEGACY_AUDITED_VALUES
 
 
+def _is_rejected_status(status: Any) -> bool:
+    raw = _norm(status)
+    normalized = normalize_status(raw)
+    return normalized == DocumentStatus.REJECTED.value or raw in ("已驳回", "rejected", "REJECTED")
+
+
 def derive_purchase_order_capabilities(
     order: Any,
     *,
     has_items: bool = True,
     has_outstanding: bool = False,
+    has_downstream: bool = False,
 ) -> PurchaseOrderCapabilities:
     status = getattr(order, "status", None)
     review_status = getattr(order, "review_status", None)
@@ -101,13 +108,27 @@ def derive_purchase_order_capabilities(
             push_reason = None
     push_cap = _cap(push_allowed, push_reason)
 
+    revoke_allowed = False
+    revoke_reason = "purchase_order.revoke_approval.not_allowed"
+    if _is_audited_status(status) or _is_rejected_status(status):
+        if has_downstream:
+            revoke_reason = "purchase_order.revoke_approval.has_downstream"
+        else:
+            revoke_allowed = True
+            revoke_reason = None
+    revoke_cap = _cap(revoke_allowed, revoke_reason)
+
+    print_cap = _cap(True)
+
     return PurchaseOrderCapabilities(
         update=update_cap,
         delete=delete_cap,
         submit=submit_cap,
         withdraw_submit=withdraw_cap,
         approve=approve_cap,
+        revoke_approval=revoke_cap,
         push_receipt_notice=push_cap,
+        print=print_cap,
     )
 
 
@@ -117,11 +138,13 @@ def assert_purchase_order_capability(
     *,
     has_items: bool = True,
     has_outstanding: bool = False,
+    has_downstream: bool = False,
 ) -> None:
     caps = derive_purchase_order_capabilities(
         order,
         has_items=has_items,
         has_outstanding=has_outstanding,
+        has_downstream=has_downstream,
     )
     cap_map = {
         "update": caps.update,
@@ -129,6 +152,7 @@ def assert_purchase_order_capability(
         "submit": caps.submit,
         "withdraw_submit": caps.withdraw_submit,
         "approve": caps.approve,
+        "revoke_approval": caps.revoke_approval,
         "push_receipt_notice": caps.push_receipt_notice,
     }
     cap = cap_map.get(action)

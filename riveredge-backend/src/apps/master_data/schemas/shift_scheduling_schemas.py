@@ -2,9 +2,9 @@
 
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
 
 class ShiftBase(BaseModel):
@@ -54,11 +54,27 @@ class ShiftResponse(ShiftBase):
 
 
 class ShiftRosterCreate(BaseModel):
-    work_group_id: int = Field(..., alias="workGroupId")
+    scope_type: Literal["work_group", "employee"] = Field("work_group", alias="scopeType")
+    work_group_id: Optional[int] = Field(None, alias="workGroupId")
+    employee_id: Optional[int] = Field(None, alias="employeeId")
     period_start: date = Field(..., alias="periodStart")
     remarks: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def validate_scope(self) -> "ShiftRosterCreate":
+        if self.scope_type == "work_group":
+            if not self.work_group_id:
+                raise ValueError("工作小组排班须指定 workGroupId")
+            if self.employee_id:
+                raise ValueError("工作小组排班不可指定 employeeId")
+        elif self.scope_type == "employee":
+            if not self.employee_id:
+                raise ValueError("员工排班须指定 employeeId")
+            if self.work_group_id:
+                raise ValueError("员工排班不可指定 workGroupId")
+        return self
 
 
 class ShiftAssignmentItem(BaseModel):
@@ -89,9 +105,12 @@ class ShiftRosterResponse(BaseModel):
     id: int
     uuid: str
     tenant_id: int = Field(..., alias="tenantId")
-    work_group_id: int = Field(..., alias="workGroupId")
+    scope_type: str = Field("work_group", alias="scopeType")
+    work_group_id: Optional[int] = Field(None, alias="workGroupId")
     work_group_code: Optional[str] = Field(None, alias="workGroupCode")
     work_group_name: Optional[str] = Field(None, alias="workGroupName")
+    employee_id: Optional[int] = Field(None, alias="employeeId")
+    employee_name: Optional[str] = Field(None, alias="employeeName")
     period_start: date = Field(..., alias="periodStart")
     period_end: date = Field(..., alias="periodEnd")
     status: str

@@ -27,6 +27,8 @@ import { normalizeDocumentAttachments } from '../../../utils/documentAttachments
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { formatDateTime } from '../../../../../utils/format';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 interface MaterialReturn {
   id?: number;
@@ -211,6 +213,11 @@ const MaterialReturnsPage: React.FC = () => {
     setSelectedBorrowDetail(null);
     setReturnQuantities({});
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.warehouseMaterialReturn.create')),
+    [t],
+  );
 
   const handleCreateSubmit = async (values: any) => {
     if (!selectedBorrowDetail) {
@@ -443,7 +450,7 @@ const MaterialReturnsPage: React.FC = () => {
           columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-returns"
           showAdvancedSearch
           showCreateButton
-          createButtonText={t('app.kuaizhizao.warehouseMaterialReturn.create')}
+          createButtonText={createButtonLabel}
           onCreate={handleCreate}
           request={async (params) => {
             try {

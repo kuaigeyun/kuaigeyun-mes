@@ -1158,6 +1158,38 @@ code {
   font-weight: 600;
 }
 
+/* 绩效管理等业务 Modal：半宽字段用 flex 固定 50%，日期/时间控件不依赖 Ant Design Col grid */
+.form-modal-template.performance-form-modal .form-modal-content-inner {
+  .ant-form.ant-form-vertical {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 16px;
+    align-items: flex-start;
+  }
+
+  .form-modal-field-half-width.ant-form-item {
+    width: calc(50% - 8px);
+    flex: 0 0 calc(50% - 8px);
+    max-width: calc(50% - 8px);
+    box-sizing: border-box;
+  }
+
+  .form-modal-field-full-width.ant-form-item,
+  .form-modal-field-full-width {
+    width: 100%;
+    flex: 0 0 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .form-modal-field-half-width .ant-picker,
+  .form-modal-field-half-width .ant-input,
+  .form-modal-field-half-width .ant-input-number,
+  .form-modal-field-half-width .ant-select {
+    width: 100%;
+  }
+}
+
 /* 全局：输入类控件聚焦时去掉外圈光晕（保留边框/主题色描边，与 ConfigProvider controlOutlineWidth=0 配套） */
 .ant-input:focus,
 .ant-input-focused,

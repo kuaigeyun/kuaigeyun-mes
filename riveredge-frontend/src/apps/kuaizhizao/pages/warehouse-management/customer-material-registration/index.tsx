@@ -28,6 +28,8 @@ import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getCustomerMaterialRegistrationLifecycle } from '../../../utils/customerMaterialRegistrationLifecycle';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
@@ -423,6 +425,13 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       });
     }, 0);
   };
+  useNewShortcut(() => {
+    void handleCreate();
+  });
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.customerMaterialRegistration.createButton')),
+    [t],
+  );
 
   const handleScanBarcode = async (barcode: string) => {
     try {
@@ -918,7 +927,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.customer-material-registration"
         showAdvancedSearch
         showCreateButton
-        createButtonText={t('app.kuaizhizao.customerMaterialRegistration.createButton')}
+        createButtonText={createButtonLabel}
         onCreate={handleCreate}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}

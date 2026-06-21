@@ -1611,6 +1611,16 @@ class ReportService:
         batches = await batch_query.prefetch_related("material").all()
         lines = await line_query.all()
 
+        line_wh_map: Dict[int, Any] = {}
+        line_wh_ids = {int(l.warehouse_id) for l in lines if l.warehouse_id}
+        if line_wh_ids:
+            wh_rows = await Warehouse.filter(
+                tenant_id=tenant_id,
+                id__in=list(line_wh_ids),
+                deleted_at__isnull=True,
+            ).all()
+            line_wh_map = {w.id: w for w in wh_rows}
+
         rows: List[Dict[str, Any]] = []
         main_wh_cache: Dict[int, Optional[Tuple[int, str]]] = {}
         if include_main_batches:
@@ -1647,6 +1657,13 @@ class ReportService:
         for l in lines:
             qty = float((l.quantity or 0) - (l.reserved_quantity or 0))
             status = "已过期" if l.expiry_date and l.expiry_date < date.today() else ("在库" if qty > 0 else "无库存")
+            wh_id = int(l.warehouse_id) if l.warehouse_id else None
+            wh = line_wh_map.get(wh_id) if wh_id else None
+            wh_name = (
+                str(getattr(l, "warehouse_name", None) or "").strip()
+                or (wh.name if wh else "")
+                or (f"仓库({wh_id})" if wh_id else None)
+            )
             rows.append({
                 "id": 2000000 + l.id,
                 "material_id": l.material_id,
@@ -1659,9 +1676,148 @@ class ReportService:
                 "supplier_batch_no": None,
                 "quantity": qty,
                 "status": status,
-                "warehouse_name": self._normalize_warehouse_display_name(getattr(l, "warehouse_name", None)),
+                "warehouse_id": wh_id,
+                "warehouse_name": self._normalize_warehouse_display_name(wh_name),
             })
         return rows
+
+    async def _enrich_inventory_balance_material_fields(
+        self,
+        tenant_id: int,
+        balances: List[Dict[str, Any]],
+    ) -> None:
+        """为即时库存汇总行补齐主数据物料属性、在途/在制与库存预警展示字段。"""
+        from apps.kuaizhizao.models.inventory_alert import InventoryAlert
+        from apps.kuaizhizao.utils.inventory_helper import batch_sum_open_supply_quantities_with_breakdown
+        from apps.master_data.models.material import Material
+
+        material_ids = sorted({int(b["material_id"]) for b in balances if b.get("material_id")})
+        if not material_ids:
+            return
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            id__in=material_ids,
+            deleted_at__isnull=True,
+        ).all()
+        by_id = {m.id: m for m in materials}
+
+        in_transit_map = await batch_sum_open_supply_quantities_with_breakdown(tenant_id, material_ids)
+        pending_alerts = await InventoryAlert.filter(
+            tenant_id=tenant_id,
+            material_id__in=material_ids,
+            deleted_at__isnull=True,
+            status__in=["pending", "processing"],
+        ).all()
+        alerts_by_material: Dict[int, List[Any]] = {}
+        for alert in pending_alerts:
+            alerts_by_material.setdefault(int(alert.material_id), []).append(alert)
+
+        for balance in balances:
+            mid = balance.get("material_id")
+            if not mid:
+                continue
+            mid_int = int(mid)
+            material = by_id.get(mid_int)
+            if material:
+                balance["material_spec"] = getattr(material, "specification", None)
+                balance["brand"] = getattr(material, "brand", None)
+                balance["texture"] = getattr(material, "texture", None)
+                balance["model"] = getattr(material, "model", None)
+                balance["material_unit"] = balance.get("material_unit") or getattr(material, "base_unit", None)
+
+            transit = in_transit_map.get(mid_int) or {
+                "purchase_quantity": 0.0,
+                "work_order_quantity": 0.0,
+                "outsource_work_order_quantity": 0.0,
+                "total": 0.0,
+            }
+            balance["in_transit_quantity"] = float(transit.get("total") or 0)
+            balance["in_transit_breakdown"] = {
+                "purchase_quantity": float(transit.get("purchase_quantity") or 0),
+                "work_order_quantity": float(transit.get("work_order_quantity") or 0),
+                "outsource_work_order_quantity": float(transit.get("outsource_work_order_quantity") or 0),
+            }
+
+            alert_info = self._resolve_inventory_balance_alert(
+                float(balance.get("quantity") or 0),
+                material,
+                alerts_by_material.get(mid_int, []),
+            )
+            balance.update(alert_info)
+
+    @staticmethod
+    def _material_stock_thresholds(material: Any) -> tuple[Optional[float], Optional[float]]:
+        defaults = getattr(material, "defaults", None) if material else None
+        if not isinstance(defaults, dict):
+            return None, None
+        safety_raw = defaults.get("safetyStock")
+        max_raw = defaults.get("maxStock")
+        safety = None
+        max_stock = None
+        try:
+            if safety_raw is not None and str(safety_raw).strip() != "":
+                safety = float(safety_raw)
+        except (TypeError, ValueError):
+            safety = None
+        try:
+            if max_raw is not None and str(max_raw).strip() != "":
+                max_stock = float(max_raw)
+        except (TypeError, ValueError):
+            max_stock = None
+        return safety, max_stock
+
+    @classmethod
+    def _resolve_inventory_balance_alert(
+        cls,
+        quantity: float,
+        material: Any,
+        pending_alerts: List[Any],
+    ) -> Dict[str, Any]:
+        level_rank = {"critical": 3, "warning": 2, "info": 1}
+        type_labels = {
+            "low_stock": "低库存",
+            "high_stock": "高库存",
+            "expired": "过期",
+        }
+
+        if pending_alerts:
+            best = sorted(
+                pending_alerts,
+                key=lambda a: (
+                    level_rank.get(str(getattr(a, "alert_level", "") or ""), 0),
+                    str(getattr(a, "triggered_at", "") or ""),
+                ),
+                reverse=True,
+            )[0]
+            alert_type = str(getattr(best, "alert_type", "") or "")
+            return {
+                "alert_status": alert_type or "warning",
+                "alert_level": str(getattr(best, "alert_level", "") or "warning"),
+                "alert_label": type_labels.get(alert_type, "预警"),
+                "alert_message": getattr(best, "alert_message", None),
+            }
+
+        safety, max_stock = cls._material_stock_thresholds(material)
+        if safety is not None and quantity <= safety:
+            return {
+                "alert_status": "low_stock",
+                "alert_level": "critical" if quantity <= 0 else "warning",
+                "alert_label": "低库存",
+                "alert_message": f"当前 {quantity:g}，低于安全库存 {safety:g}",
+            }
+        if max_stock is not None and quantity > max_stock:
+            return {
+                "alert_status": "high_stock",
+                "alert_level": "warning",
+                "alert_label": "高库存",
+                "alert_message": f"当前 {quantity:g}，高于最高库存 {max_stock:g}",
+            }
+        return {
+            "alert_status": "normal",
+            "alert_level": None,
+            "alert_label": "正常",
+            "alert_message": None,
+        }
 
     @staticmethod
     def _apply_inventory_filters(
@@ -1708,6 +1864,10 @@ class ReportService:
                     r for r in out
                     if k in str(r.get("material_code") or "").lower()
                     or k in str(r.get("material_name") or "").lower()
+                    or k in str(r.get("material_spec") or "").lower()
+                    or k in str(r.get("brand") or "").lower()
+                    or k in str(r.get("texture") or "").lower()
+                    or k in str(r.get("model") or "").lower()
                     or k in str(r.get("batch_no") or "").lower()
                     or k in str(r.get("warehouse_name") or "").lower()
                 ]
@@ -1748,6 +1908,7 @@ class ReportService:
             batch_number=batch_number,
             include_expired=include_expired,
         )
+        await self._enrich_inventory_balance_material_fields(tenant_id, rows)
         rows = self._apply_inventory_filters(
             rows,
             include_zero_stock=include_zero_stock,
@@ -1778,6 +1939,7 @@ class ReportService:
             batch_number=batch_number,
             include_expired=include_expired,
         )
+        await self._enrich_inventory_balance_material_fields(tenant_id, rows)
         rows = self._apply_inventory_filters(
             rows,
             include_zero_stock=include_zero_stock,
@@ -1826,6 +1988,7 @@ class ReportService:
         balances = list(grouped.values())
         for b in balances:
             b["status"] = "在库" if float(b.get("quantity") or 0) > 0 else "无库存"
+        await self._enrich_inventory_balance_material_fields(tenant_id, balances)
         balances = self._apply_inventory_filters(
             balances,
             include_zero_stock=include_zero_stock,

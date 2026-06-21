@@ -19,6 +19,8 @@ from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
 from loguru import logger
 
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date
+
 
 def _agent_debug_ndjson(location: str, message: str, data: dict, hypothesis_id: str, run_id: str = "pre-fix") -> None:
     # #region agent log
@@ -367,7 +369,7 @@ def _coerce_sales_delivery_item_serials(serial_numbers: Any) -> Any:
 
 
 async def _get_warehouse_policy_flags(tenant_id: int) -> tuple[bool, bool]:
-    """读取仓储策略开关（库位管理、自动出库）。"""
+    """读取仓储策略开关（库位管理、自动出库）。库位管理不表示单据必填库位。"""
     cfg = await BusinessConfigService().get_business_config(tenant_id)
     wh = cfg.get("parameters", {}).get("warehouse", {})
     return bool(wh.get("location_management", False)), bool(wh.get("auto_outbound", False))
@@ -380,10 +382,8 @@ def _validate_location_if_required(
     scene: str,
     material_label: str,
 ) -> None:
-    if not location_required:
-        return
-    if location_id is None and not (location_code and str(location_code).strip()):
-        raise ValidationError(f"{scene}失败：物料 {material_label} 启用库位管理后必须提供库位")
+    """库位管理仅启用库位能力（主数据、UI、库存维度），不强制业务单据必须填写库位。"""
+    del location_required, location_id, location_code, scene, material_label
 
 
 async def _hydrate_item_material_snapshot(tenant_id: int, items: List[Any]) -> None:
@@ -928,11 +928,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                             ).update(**item_update)
 
             confirmer_name = await self.get_user_name(confirmed_by)
-            picking_time = (
-                confirmation_data.delivery_time
-                if confirmation_data and confirmation_data.delivery_time
-                else None
-            ) or datetime.now()
+            picking_time = resolve_business_datetime(
+                confirmation_data.delivery_time if confirmation_data and confirmation_data.delivery_time else None
+            )
 
             await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(
                 status='已领料',
@@ -1420,9 +1418,17 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
             query = query.filter(picking_id=filters["picking_id"])
 
         rets = await query.offset(skip).limit(limit).order_by("-created_at")
-        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_counts,
+            enrich_inbound_hub_list_capabilities,
+        )
         responses = [ProductionReturnListResponse.model_validate(r) for r in rets]
-        return enrich_inbound_hub_list_capabilities(rets, responses, "production_return")
+        item_counts = await batch_document_item_counts(
+            tenant_id, ProductionReturnItem, "return_id", [r.id for r in rets]
+        )
+        return enrich_inbound_hub_list_capabilities(
+            rets, responses, "production_return", item_counts=item_counts
+        )
 
     async def update_production_return(
         self,
@@ -1534,7 +1540,9 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                         await item.save()
 
             returner_name = await self.get_user_name(confirmed_by)
-            receipt_time = (confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None) or datetime.now()
+            receipt_time = resolve_business_datetime(
+                confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None
+            )
 
             await ProductionReturn.filter(tenant_id=tenant_id, id=return_id).update(
                 status="已退料",
@@ -1567,6 +1575,7 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                         source_type="production_return",
                         source_doc_id=return_id,
                         source_doc_code=ret.return_code,
+                        ledger_production_date=to_site_date(receipt_time),
                     )
             except Exception as inv_e:
                 logger.error("生产退料确认-更新库存失败: %s", inv_e)
@@ -1837,9 +1846,19 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             query = query.filter(work_order_id=filters['work_order_id'])
 
         receipts = await query.offset(skip).limit(limit).order_by('-created_at')
-        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_counts,
+            enrich_inbound_hub_list_capabilities,
+        )
+        from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
+
         responses = [FinishedGoodsReceiptResponse.model_validate(receipt) for receipt in receipts]
-        return enrich_inbound_hub_list_capabilities(receipts, responses, "finished_goods")
+        item_counts = await batch_document_item_counts(
+            tenant_id, FinishedGoodsReceiptItem, "receipt_id", [r.id for r in receipts]
+        )
+        return enrich_inbound_hub_list_capabilities(
+            receipts, responses, "finished_goods", item_counts=item_counts
+        )
 
     async def confirm_receipt(
         self,
@@ -1886,8 +1905,10 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                             item_update["batch_number"] = item_data.batch_number
                         if item_data.expiry_date:
                             item_update["expiry_date"] = item_data.expiry_date
-                        if item_data.serial_numbers and hasattr(FinishedGoodsReceiptItem, "serial_numbers"):
-                            item_update["serial_numbers"] = json.dumps(item_data.serial_numbers)
+                        if item_data.serial_numbers:
+                            parsed_serials = _parse_serial_numbers(item_data.serial_numbers)
+                            if parsed_serials:
+                                item_update["serial_numbers"] = parsed_serials
                         
                         if item_update:
                             await FinishedGoodsReceiptItem.filter(
@@ -1920,18 +1941,12 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 # 自动生成序列号
                 if material.serial_managed:
                     count = int(item.receipt_quantity or item.qualified_quantity or 0)
-                    existing_serials = []
-                    item_serials = getattr(item, "serial_numbers", None)
-                    if item_serials:
-                        try:
-                            existing_serials = json.loads(item_serials)
-                        except:
-                            pass
+                    existing_serials = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                     
                     if len(existing_serials) < count:
                         serial_nos = await ensure_serial_nos_for_item(tenant_id, material, item, count)
                         if serial_nos and hasattr(item, "serial_numbers"):
-                            setattr(item, "serial_numbers", json.dumps(serial_nos))
+                            setattr(item, "serial_numbers", serial_nos)
                             await item.save()
 
             from apps.kuaizhizao.services.inspection_policy_service import assert_fqc_for_finished_goods_receipt
@@ -1945,7 +1960,9 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
 
             # 3. 执行入库确认（更新状态和时间）
             confirmer_name = await self.get_user_name(confirmed_by)
-            receipt_time = (confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None) or datetime.now()
+            receipt_time = resolve_business_datetime(
+                confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None
+            )
 
             await FinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                 status='已入库',
@@ -1977,6 +1994,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                     
                     # 优先使用行仓库，若无则使用表头仓库
                     wh_id = item.warehouse_id if getattr(item, "warehouse_id", None) else receipt.warehouse_id
+                    serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                     
                     await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
@@ -1984,9 +2002,13 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         quantity=qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
+                        serial_nos=serial_nos or None,
                         source_type="finished_goods_receipt",
                         source_doc_id=receipt_id,
                         source_doc_code=receipt.receipt_code,
+                        work_order_id=receipt.work_order_id,
+                        work_order_code=receipt.work_order_code,
+                        ledger_production_date=to_site_date(receipt_time),
                     )
                 from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
                 await InventoryCostService().apply_finished_goods_receipt_cost(
@@ -2438,7 +2460,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             # 5. 创建成品入库单
             receipt = await FinishedGoodsReceipt.create(
                 tenant_id=tenant_id,
-                receipt_code=receipt_code,
+                receipt_code=code,
                 work_order_id=work_order_id,
                 work_order_code=work_order.code,
                 sales_order_id=work_order.sales_order_id,
@@ -2618,6 +2640,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             initial_status = delivery_data.status
             initial_review_status = delivery_data.review_status
             
+            if audit_required and initial_status in [None, "待审核", "草稿", "待出库"]:
+                initial_status = "待审核"
+                initial_review_status = "待审核"
             if not audit_required and initial_status in [None, "待审核", "草稿"]:
                 # 如果不需要审核，且未指定状态或指定为草稿/待审核，则直接设为待出库（即已通过审核，等待执行）
                 initial_status = "待出库"
@@ -2840,9 +2865,25 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     delivery_id=created_delivery_id,
                     confirmed_by=created_by,
                 )
-        return SalesDeliveryResponse.model_validate(
-            await SalesDelivery.get(tenant_id=tenant_id, id=created_delivery_id)
-        )
+        delivery_obj = await SalesDelivery.get(tenant_id=tenant_id, id=created_delivery_id)
+        if (delivery_obj.status or "").strip() == "待审核":
+            from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+            instance = await ApprovalInstanceService.start_approval_for_node(
+                tenant_id=tenant_id,
+                user_id=created_by,
+                node_key="sales_delivery",
+                entity_type="sales_delivery",
+                entity_id=delivery_obj.id,
+                entity_uuid=str(delivery_obj.uuid),
+                title=f"销售出库审批: {delivery_obj.delivery_code}",
+                content=f"客户: {delivery_obj.customer_name}, 金额: {delivery_obj.total_amount}",
+            )
+            if not instance:
+                raise BusinessLogicError(
+                    "销售出库审核已开启但未找到可用的审批流程，请在配置中心检查 sales_delivery 审批流程是否已激活"
+                )
+        return SalesDeliveryResponse.model_validate(delivery_obj)
 
     async def get_sales_delivery_by_id(self, tenant_id: int, delivery_id: int) -> SalesDeliveryWithItemsResponse:
         """根据ID获取销售出库单（含明细）"""
@@ -2931,6 +2972,174 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             raise BusinessLogicError("只有待出库或已取消状态的销售出库单才能删除")
         delivery.deleted_at = datetime.now()
         await delivery.save()
+
+    async def submit_sales_delivery(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+        submitted_by: int,
+    ) -> SalesDeliveryResponse:
+        delivery = await SalesDelivery.get_or_none(
+            id=delivery_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not delivery:
+            raise NotFoundError(f"销售出库单不存在: {delivery_id}")
+        status = str(delivery.status or "").strip()
+        if status == "待审核":
+            return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "sales_delivery"
+        )
+        if not audit_required:
+            submitter_name = await self.get_user_name(submitted_by)
+            await SalesDelivery.filter(tenant_id=tenant_id, id=delivery_id).update(
+                status="待出库",
+                review_status="已通过",
+                reviewer_id=submitted_by,
+                reviewer_name=submitter_name,
+                review_time=datetime.now(),
+                updated_by=submitted_by,
+            )
+            return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+
+        if status not in ("草稿", "待出库"):
+            raise BusinessLogicError(f"当前状态不可提交审核: {status or '-'}")
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        instance = await ApprovalInstanceService.start_approval_for_node(
+            tenant_id=tenant_id,
+            user_id=submitted_by,
+            node_key="sales_delivery",
+            entity_type="sales_delivery",
+            entity_id=delivery.id,
+            entity_uuid=str(delivery.uuid),
+            title=f"销售出库审批: {delivery.delivery_code}",
+            content=f"客户: {delivery.customer_name}, 金额: {delivery.total_amount}",
+        )
+        if not instance:
+            raise BusinessLogicError(
+                "销售出库审核已开启但未找到可用的审批流程，请在配置中心检查 sales_delivery 审批流程是否已激活"
+            )
+        await SalesDelivery.filter(tenant_id=tenant_id, id=delivery_id).update(
+            status="待审核",
+            review_status="待审核",
+            updated_by=submitted_by,
+        )
+        return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+
+    async def approve_sales_delivery(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+        approver_id: int,
+    ) -> SalesDeliveryResponse:
+        delivery = await SalesDelivery.get_or_none(
+            id=delivery_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not delivery:
+            raise NotFoundError(f"销售出库单不存在: {delivery_id}")
+        status = str(delivery.status or "").strip()
+        if status != "待审核":
+            raise BusinessLogicError(f"只能审核待审核状态的销售出库单，当前: {status or '-'}")
+        approver_name = await self.get_user_name(approver_id)
+        await SalesDelivery.filter(tenant_id=tenant_id, id=delivery_id).update(
+            status="待出库",
+            review_status="已通过",
+            reviewer_id=approver_id,
+            reviewer_name=approver_name,
+            review_time=datetime.now(),
+            updated_by=approver_id,
+        )
+        return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+
+    async def reject_sales_delivery(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+        approver_id: int,
+        *,
+        rejection_reason: Optional[str] = None,
+    ) -> SalesDeliveryResponse:
+        delivery = await SalesDelivery.get_or_none(
+            id=delivery_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not delivery:
+            raise NotFoundError(f"销售出库单不存在: {delivery_id}")
+        status = str(delivery.status or "").strip()
+        if status != "待审核":
+            raise BusinessLogicError(f"只能驳回待审核状态的销售出库单，当前: {status or '-'}")
+        await SalesDelivery.filter(tenant_id=tenant_id, id=delivery_id).update(
+            status="草稿",
+            review_status="已驳回",
+            review_remarks=rejection_reason,
+            updated_by=approver_id,
+        )
+        return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+
+    async def withdraw_sales_delivery_submit(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+        operator_id: int,
+    ) -> SalesDeliveryResponse:
+        delivery = await SalesDelivery.get_or_none(
+            id=delivery_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not delivery:
+            raise NotFoundError(f"销售出库单不存在: {delivery_id}")
+        status = str(delivery.status or "").strip()
+        if status != "待审核":
+            raise BusinessLogicError(f"只能撤回待审核状态的销售出库单，当前: {status or '-'}")
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        await ApprovalInstanceService.cancel_approval(
+            tenant_id=tenant_id,
+            entity_type="sales_delivery",
+            entity_id=delivery_id,
+            operator_id=operator_id,
+        )
+        await SalesDelivery.filter(tenant_id=tenant_id, id=delivery_id).update(
+            status="草稿",
+            review_status="待审核",
+            updated_by=operator_id,
+        )
+        return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+
+    async def revoke_sales_delivery_approval(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+        operator_id: int,
+    ) -> SalesDeliveryResponse:
+        delivery = await SalesDelivery.get_or_none(
+            id=delivery_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not delivery:
+            raise NotFoundError(f"销售出库单不存在: {delivery_id}")
+        status = str(delivery.status or "").strip()
+        if status != "待出库":
+            raise BusinessLogicError(f"当前状态不可撤销审核: {status or '-'}")
+        await SalesDelivery.filter(tenant_id=tenant_id, id=delivery_id).update(
+            status="待审核",
+            review_status="待审核",
+            reviewer_id=None,
+            reviewer_name=None,
+            review_time=None,
+            updated_by=operator_id,
+        )
+        return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
 
     async def withdraw_delivery_confirmation(
         self,
@@ -3176,15 +3385,16 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             items=delivery_items
         )
         
-        # 创建出库单
+        # 创建出库单（下推仅生成待出库单，批号/序列号在确认出库时录入）
         delivery = await self.create_sales_delivery(
             tenant_id=tenant_id,
             delivery_data=delivery_data,
-            created_by=created_by
+            created_by=created_by,
+            require_batch_serial_on_create=False,
         )
-        
+
         # 已交货/剩余数量在「确认出库」时按实发数量回写订单明细（见 confirm_delivery）
-        
+
         return delivery
 
     async def pull_from_sales_forecast(
@@ -3317,11 +3527,12 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             items=delivery_items
         )
         
-        # 创建出库单
+        # 创建出库单（下推仅生成待出库单，批号/序列号在确认出库时录入）
         delivery = await self.create_sales_delivery(
             tenant_id=tenant_id,
             delivery_data=delivery_data,
-            created_by=created_by
+            created_by=created_by,
+            require_batch_serial_on_create=False,
         )
         
         return delivery
@@ -3607,11 +3818,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         await it.save()
 
             confirmer_name = await self.get_user_name(confirmed_by)
-            confirm_time = (
-                confirm_request.delivery_time
-                if confirm_request and confirm_request.delivery_time
-                else None
-            ) or datetime.now()
+            confirm_time = resolve_business_datetime(
+                confirm_request.delivery_time if confirm_request and confirm_request.delivery_time else None
+            )
 
             # 使用 ORM save 更新表头，避免部分环境下 QuerySet.update 命中异常或与事务交互问题
             sd_row = await SalesDelivery.get_or_none(
@@ -3989,7 +4198,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     customer_name=sales_order.customer_name,
                     warehouse_id=delivery_wh_id,
                     warehouse_name=delivery_wh_name,
-                    delivery_time=delivery_data.get('delivery_time') or datetime.now(),
+                    delivery_time=resolve_business_datetime(delivery_data.get('delivery_time')),
                     items=delivery_items,
                     shipping_method=delivery_data.get('shipping_method'),
                     tracking_number=delivery_data.get('tracking_number'),
@@ -4468,8 +4677,14 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             # 列表与详情共用生命周期计算，避免前端仅按 status 兜底时与「已入库」不一致
             resp.lifecycle = get_purchase_receipt_lifecycle(receipt, milestones=[])
             out.append(resp)
-        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
-        return enrich_inbound_hub_list_capabilities(receipts, out, "purchase")
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_counts,
+            enrich_inbound_hub_list_capabilities,
+        )
+        item_counts = await batch_document_item_counts(
+            tenant_id, PurchaseReceiptItem, "receipt_id", [r.id for r in receipts]
+        )
+        return enrich_inbound_hub_list_capabilities(receipts, out, "purchase", item_counts=item_counts)
 
     async def confirm_receipt(
         self,
@@ -4632,6 +4847,11 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 )
 
             # 先过账库存，成功后再改单据状态，避免库存失败时单据已显示「已入库」
+            confirmer_name = await self.get_user_name(confirmed_by)
+            receipt_time = resolve_business_datetime(
+                confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None
+            )
+            ledger_production_date = to_site_date(receipt_time)
             try:
                 from apps.kuaizhizao.services.inventory_service import InventoryService
 
@@ -4676,10 +4896,11 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         quantity=qty,
                         warehouse_id=line_wh,
                         batch_no=item.batch_number or None,
-                        serial_nos=getattr(item, "serial_numbers", None),
+                        serial_nos=_parse_serial_numbers(getattr(item, "serial_numbers", None)) or None,
                         source_type="purchase_receipt",
                         source_doc_id=receipt_id,
                         source_doc_code=receipt.receipt_code,
+                        ledger_production_date=ledger_production_date,
                     )
                 from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
                 await InventoryCostService().on_purchase_receipt_confirmed(tenant_id, receipt_id)
@@ -4710,18 +4931,16 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     raise inv_e.__cause__ from inv_e
                 raise
 
-            confirmer_name = await self.get_user_name(confirmed_by)
-            now = (confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None) or datetime.now()
             _hdr_upd_rows = await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                 status='已入库',
                 receiver_id=confirmed_by,
                 receiver_name=confirmer_name,
-                receipt_time=now,
+                receipt_time=receipt_time,
                 updated_by=confirmed_by
             )
             _it_upd_rows = await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).update(
                 status='已入库',
-                receipt_time=now,
+                receipt_time=receipt_time,
             )
             # #region agent log
             _st_after = await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).values("status")
@@ -5134,7 +5353,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     supplier_name=purchase_order.supplier_name,
                     warehouse_id=receipt_wh_id,
                     warehouse_name=receipt_wh_name,
-                    receipt_time=receipt_data.get('receipt_time') or datetime.now(),
+                    receipt_time=resolve_business_datetime(receipt_data.get('receipt_time')),
                     items=receipt_items,
                     notes=receipt_data.get('notes')
                 )
@@ -5231,6 +5450,10 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         super().__init__(SalesReturn)
 
     async def _return_has_items_map(self, tenant_id: int, return_ids: List[int]) -> dict[int, bool]:
+        counts = await self._return_item_count_map(tenant_id, return_ids)
+        return {rid: count > 0 for rid, count in counts.items()}
+
+    async def _return_item_count_map(self, tenant_id: int, return_ids: List[int]) -> dict[int, int]:
         if not return_ids:
             return {}
         from tortoise.functions import Count
@@ -5239,7 +5462,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             tenant_id=tenant_id,
             return_id__in=return_ids,
         ).annotate(cnt=Count("id")).group_by("return_id").values("return_id", "cnt")
-        return {int(r["return_id"]): int(r["cnt"] or 0) > 0 for r in rows}
+        return {int(r["return_id"]): int(r["cnt"] or 0) for r in rows}
 
     async def _enrich_return_response(
         self,
@@ -5620,6 +5843,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         returns = await query.offset(skip).limit(limit).order_by('-created_at')
         return_ids = [int(r.id) for r in returns]
         has_items_by_id = await self._return_has_items_map(tenant_id, return_ids)
+        item_counts_by_id = await self._return_item_count_map(tenant_id, return_ids)
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_sales_return_list_capabilities
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_return_lifecycle
         list_responses: List[SalesReturnResponse] = []
@@ -5631,6 +5855,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             returns,
             list_responses,
             has_items_by_id=has_items_by_id,
+            item_counts_by_id=item_counts_by_id,
         )
 
     async def confirm_return(
@@ -5709,7 +5934,9 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         await item.save()
 
             returner_name = await self.get_user_name(confirmed_by)
-            receipt_time = (confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None) or datetime.now()
+            receipt_time = resolve_business_datetime(
+                confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None
+            )
 
             await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
                 status='已退货',
@@ -5742,6 +5969,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         source_type="sales_return",
                         source_doc_id=return_id,
                         source_doc_code=return_obj.return_code,
+                        ledger_production_date=to_site_date(receipt_time),
                     )
             except Exception as inv_e:
                 logger.error("销售退货确认-更新库存失败: %s", inv_e)
@@ -6331,7 +6559,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 status='已退货',
                 returner_id=confirmed_by,
                 returner_name=returner_name,
-                return_time=datetime.now(),
+                return_time=resolve_business_datetime(),
                 updated_by=confirmed_by
             )
 
@@ -6551,7 +6779,14 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             assert_purchase_return_capability(return_obj, "withdraw")
 
             from apps.kuaizhizao.services.inventory_service import InventoryService
+            from tortoise.timezone import now as tz_now
+
             items = await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
+            ledger_production_date = (
+                to_site_date(return_obj.return_time)
+                if return_obj.return_time
+                else to_site_date(tz_now())
+            )
             for item in items:
                 qty = item.return_quantity or Decimal(0)
                 if qty <= 0:
@@ -6565,6 +6800,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     source_type="purchase_return_withdraw",
                     source_doc_id=return_id,
                     source_doc_code=return_obj.return_code,
+                    ledger_production_date=ledger_production_date,
                 )
 
             await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
@@ -6714,9 +6950,17 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             query = query.filter(id__in=filters["scoped_ids"])
 
         inbounds = await query.offset(skip).limit(limit).order_by("-created_at")
-        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_counts,
+            enrich_inbound_hub_list_capabilities,
+        )
         responses = [OtherInboundListResponse.model_validate(r) for r in inbounds]
-        return enrich_inbound_hub_list_capabilities(inbounds, responses, "other_inbound")
+        item_counts = await batch_document_item_counts(
+            tenant_id, OtherInboundItem, "inbound_id", [r.id for r in inbounds]
+        )
+        return enrich_inbound_hub_list_capabilities(
+            inbounds, responses, "other_inbound", item_counts=item_counts
+        )
 
     async def update_other_inbound(
         self,
@@ -6904,7 +7148,9 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                         serial_nos_by_item_id[int(item.id)] = serial_nos
 
             receiver_name = await self.get_user_name(confirmed_by)
-            receipt_time = (confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None) or datetime.now()
+            receipt_time = resolve_business_datetime(
+                confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None
+            )
 
             await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(
                 status="已入库",
@@ -6938,6 +7184,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                         source_type="other_inbound",
                         source_doc_id=inbound_id,
                         source_doc_code=inbound.inbound_code,
+                        ledger_production_date=to_site_date(receipt_time),
                     )
             except Exception as inv_e:
                 logger.error("其他入库确认-更新库存失败: %s", inv_e)
@@ -7231,11 +7478,9 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                     outbound = await self.get_other_outbound_by_id(tenant_id, outbound_id)
 
             deliverer_name = await self.get_user_name(confirmed_by)
-            delivery_time = (
-                confirmation_data.delivery_time
-                if confirmation_data and confirmation_data.delivery_time
-                else None
-            ) or datetime.now()
+            delivery_time = resolve_business_datetime(
+                confirmation_data.delivery_time if confirmation_data and confirmation_data.delivery_time else None
+            )
             await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(
                 status="已出库",
                 deliverer_id=confirmed_by,
@@ -7542,11 +7787,9 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                     borrow = await self.get_material_borrow_by_id(tenant_id, borrow_id)
 
             borrower_name = await self.get_user_name(confirmed_by)
-            borrow_time = (
-                confirmation_data.delivery_time
-                if confirmation_data and confirmation_data.delivery_time
-                else None
-            ) or datetime.now()
+            borrow_time = resolve_business_datetime(
+                confirmation_data.delivery_time if confirmation_data and confirmation_data.delivery_time else None
+            )
             await MaterialBorrow.filter(tenant_id=tenant_id, id=borrow_id).update(
                 status="已借出",
                 borrower_id=confirmed_by,
@@ -7741,9 +7984,19 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
             query = query.filter(id__in=filters["scoped_ids"])
 
         returns = await query.offset(skip).limit(limit).order_by("-created_at")
-        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_counts,
+            enrich_inbound_hub_list_capabilities,
+        )
+        from apps.kuaizhizao.models.material_return_item import MaterialReturnItem
+
         responses = [MaterialReturnListResponse.model_validate(r) for r in returns]
-        return enrich_inbound_hub_list_capabilities(returns, responses, "material_return")
+        item_counts = await batch_document_item_counts(
+            tenant_id, MaterialReturnItem, "return_id", [r.id for r in returns]
+        )
+        return enrich_inbound_hub_list_capabilities(
+            returns, responses, "material_return", item_counts=item_counts
+        )
 
     async def update_material_return(
         self,
@@ -7791,18 +8044,19 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                 raise BusinessLogicError("只有待归还状态的还料单才能确认归还")
 
             returner_name = await self.get_user_name(confirmed_by)
+            return_time = resolve_business_datetime()
             await MaterialReturn.filter(tenant_id=tenant_id, id=return_id).update(
                 status="已归还",
                 returner_id=confirmed_by,
                 returner_name=returner_name,
-                return_time=datetime.now(),
+                return_time=return_time,
                 updated_by=confirmed_by
             )
             for item in return_obj.items:
                 await MaterialReturnItem.filter(
                     tenant_id=tenant_id,
                     id=item.id
-                ).update(status="已归还", return_time=datetime.now())
+                ).update(status="已归还", return_time=return_time)
 
             # 更新借料单明细的已归还数量
             for item in return_obj.items:
@@ -7836,6 +8090,7 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                         source_type="material_return",
                         source_doc_id=return_id,
                         source_doc_code=return_entity.return_code,
+                        ledger_production_date=to_site_date(return_time),
                     )
             except Exception as inv_e:
                 logger.error("还料确认-更新库存失败: %s", inv_e)

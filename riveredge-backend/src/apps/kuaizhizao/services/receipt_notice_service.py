@@ -338,10 +338,6 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             default_loc_id, default_loc_code = await _first_storage_location_for_warehouse(
                 tenant_id, int(wh_id)
             )
-            if not default_loc_id:
-                raise BusinessLogicError(
-                    "已启用库位管理，请先在目标仓库下维护至少一个可用库位，或关闭库位管理后再通知仓库"
-                )
 
         receipt_items: List[PurchaseReceiptItemCreate] = []
         for ni in notice_items:

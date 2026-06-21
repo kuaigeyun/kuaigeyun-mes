@@ -109,13 +109,18 @@ export function isInboundConfirmable(record: InboundHubOrder): boolean {
   return record.capabilities?.confirm?.allowed === true;
 }
 
+function pushUniqueRef(parts: string[], value: unknown) {
+  const s = String(value ?? '').trim();
+  if (s && !parts.includes(s)) parts.push(s);
+}
+
 export function inboundSourceDocNo(record: InboundHubOrder): string {
-  return (
-    record.purchase_order_code ||
-    record.work_order_code ||
-    record.sales_order_code ||
-    record.outsource_work_order_code ||
-    record.picking_code ||
-    ''
-  );
+  const parts: string[] = [];
+  pushUniqueRef(parts, record.purchase_order_code);
+  pushUniqueRef(parts, record.sales_order_code);
+  pushUniqueRef(parts, record.outsource_work_order_code);
+  pushUniqueRef(parts, record.work_order_code);
+  pushUniqueRef(parts, record.picking_code);
+  pushUniqueRef(parts, record.source_doc_no);
+  return parts.join(' / ');
 }

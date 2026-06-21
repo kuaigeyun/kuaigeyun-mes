@@ -1,27 +1,34 @@
 /**
- * 排班管理页面（按工作小组 + 周视图）
+ * 排班管理页面（按工作小组或工人人员 + 周视图）
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Button, Card, DatePicker, Select, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Card, DatePicker, Segmented, Select, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs, { Dayjs } from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
-import { shiftApi, shiftRosterApi } from '../../../services/performance';
-import type { Shift, ShiftAssignment, ShiftRoster } from '../../../types/performance';
+import { employeePerformanceApi, shiftApi, shiftRosterApi } from '../../../services/performance';
+import type { EmployeeOption, Shift, ShiftAssignment, ShiftRoster } from '../../../types/performance';
 import { factoryListItems, workGroupApi } from '../../../../master-data/services/factory';
 import type { WorkGroup } from '../../../../master-data/types/factory';
 import { formatDateTime } from '../../../../../utils/format';
 
 dayjs.extend(isoWeek);
 
+type RosterScopeType = 'work_group' | 'employee';
+
 type MatrixRow = {
   key: number;
   employeeId: number;
   employeeName: string;
   cells: Record<string, number | null | undefined>;
+};
+
+type RosterMember = {
+  employeeId: number;
+  employeeName: string;
 };
 
 const REST_VALUE = 0;
@@ -39,9 +46,12 @@ const WEEKDAY_KEYS = [
 const ShiftRostersPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const [scopeType, setScopeType] = useState<RosterScopeType>('work_group');
   const [workGroups, setWorkGroups] = useState<WorkGroup[]>([]);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [workGroupId, setWorkGroupId] = useState<number | undefined>();
+  const [employeeId, setEmployeeId] = useState<number | undefined>();
   const [weekAnchor, setWeekAnchor] = useState<Dayjs>(dayjs().startOf('isoWeek'));
   const [roster, setRoster] = useState<ShiftRoster | null>(null);
   const [matrix, setMatrix] = useState<MatrixRow[]>([]);
@@ -62,26 +72,29 @@ const ShiftRostersPage: React.FC = () => {
     [shifts, t],
   );
 
+  const scopeReady = scopeType === 'work_group' ? Boolean(workGroupId) : Boolean(employeeId);
+
   const loadBase = useCallback(async () => {
     try {
-      const [wgRes, shiftList] = await Promise.all([
+      const [wgRes, shiftList, employeeRes] = await Promise.all([
         workGroupApi.list({ limit: 500, is_active: true }),
         shiftApi.list({ limit: 200, is_active: true }),
+        employeePerformanceApi.listEmployees({ limit: 500 }),
       ]);
       const wgItems = factoryListItems(wgRes);
+      const employeeItems = employeeRes.items ?? [];
       setWorkGroups(wgItems);
+      setEmployees(employeeItems);
       setShifts(shiftList);
-      if (!workGroupId && wgItems.length > 0) {
-        setWorkGroupId(wgItems[0].id);
-      }
+      setWorkGroupId((prev) => prev ?? wgItems[0]?.id);
+      setEmployeeId((prev) => prev ?? employeeItems[0]?.id);
     } catch (e: any) {
       messageApi.error(e?.message || t('app.kuaizhizao.performance.rosters.messages.loadBaseFailed'));
     }
-  }, [messageApi, workGroupId, t]);
+  }, [messageApi, t]);
 
   const buildMatrix = useCallback(
-    (wg: WorkGroup, rosterData: ShiftRoster) => {
-      const members = wg.members ?? [];
+    (members: RosterMember[], rosterData: ShiftRoster) => {
       const assignmentMap = new Map<string, number | null>();
       (rosterData.assignments ?? []).forEach((a: ShiftAssignment) => {
         assignmentMap.set(`${a.employeeId}_${a.workDate}`, a.shiftId ?? null);
@@ -95,7 +108,8 @@ const ShiftRostersPage: React.FC = () => {
         return {
           key: m.employeeId,
           employeeId: m.employeeId,
-          employeeName: m.employeeName || t('app.kuaizhizao.performance.rosters.employeeFallback', { id: m.employeeId }),
+          employeeName:
+            m.employeeName || t('app.kuaizhizao.performance.rosters.employeeFallback', { id: m.employeeId }),
           cells,
         };
       });
@@ -105,18 +119,34 @@ const ShiftRostersPage: React.FC = () => {
   );
 
   const loadRoster = useCallback(async () => {
-    if (!workGroupId) return;
+    if (!scopeReady) return;
     setLoading(true);
     try {
-      const wgMeta = workGroups.find((w) => w.id === workGroupId);
-      if (!wgMeta?.uuid) {
-        messageApi.warning(t('app.kuaizhizao.performance.rosters.messages.selectWorkGroup'));
+      if (scopeType === 'work_group') {
+        const wgMeta = workGroups.find((w) => w.id === workGroupId);
+        if (!wgMeta?.uuid) {
+          messageApi.warning(t('app.kuaizhizao.performance.rosters.messages.selectWorkGroup'));
+          return;
+        }
+        const wg = await workGroupApi.get(wgMeta.uuid);
+        const rosterData = await shiftRosterApi.getByWeek({ workGroupId, periodStart });
+        setRoster(rosterData);
+        const members: RosterMember[] = (wg.members ?? []).map((m) => ({
+          employeeId: m.employeeId,
+          employeeName: m.employeeName,
+        }));
+        buildMatrix(members, rosterData);
         return;
       }
-      const wg = await workGroupApi.get(wgMeta.uuid);
-      const rosterData = await shiftRosterApi.getByWeek(workGroupId, periodStart);
+
+      const emp = employees.find((e) => e.id === employeeId);
+      if (!emp) {
+        messageApi.warning(t('app.kuaizhizao.performance.rosters.messages.selectEmployee'));
+        return;
+      }
+      const rosterData = await shiftRosterApi.getByWeek({ employeeId, periodStart });
       setRoster(rosterData);
-      buildMatrix(wg, rosterData);
+      buildMatrix([{ employeeId: emp.id, employeeName: emp.full_name }], rosterData);
     } catch (e: any) {
       messageApi.error(e?.message || t('app.kuaizhizao.performance.rosters.messages.loadRosterFailed'));
       setRoster(null);
@@ -124,22 +154,36 @@ const ShiftRostersPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [workGroupId, periodStart, workGroups, buildMatrix, messageApi, t]);
+  }, [
+    scopeReady,
+    scopeType,
+    workGroupId,
+    employeeId,
+    periodStart,
+    workGroups,
+    employees,
+    buildMatrix,
+    messageApi,
+    t,
+  ]);
 
   useEffect(() => {
     loadBase();
   }, [loadBase]);
 
   useEffect(() => {
-    if (workGroupId) {
+    if (scopeReady) {
       loadRoster();
+    } else {
+      setRoster(null);
+      setMatrix([]);
     }
-  }, [workGroupId, periodStart, loadRoster]);
+  }, [scopeType, workGroupId, employeeId, periodStart, scopeReady, loadRoster]);
 
-  const handleCellChange = (employeeId: number, workDate: string, value: number) => {
+  const handleCellChange = (targetEmployeeId: number, workDate: string, value: number) => {
     setMatrix((prev) =>
       prev.map((row) =>
-        row.employeeId === employeeId
+        row.employeeId === targetEmployeeId
           ? { ...row, cells: { ...row.cells, [workDate]: value === REST_VALUE ? null : value } }
           : row,
       ),
@@ -161,6 +205,29 @@ const ShiftRostersPage: React.FC = () => {
     });
     return list;
   };
+
+  const reloadMatrixFromRoster = useCallback(
+    async (rosterData: ShiftRoster) => {
+      if (scopeType === 'work_group' && workGroupId) {
+        const wgUuid = workGroups.find((w) => w.id === workGroupId)?.uuid;
+        if (wgUuid) {
+          const wg = await workGroupApi.get(wgUuid);
+          buildMatrix(
+            (wg.members ?? []).map((m) => ({ employeeId: m.employeeId, employeeName: m.employeeName })),
+            rosterData,
+          );
+        }
+        return;
+      }
+      if (scopeType === 'employee' && employeeId) {
+        const emp = employees.find((e) => e.id === employeeId);
+        if (emp) {
+          buildMatrix([{ employeeId: emp.id, employeeName: emp.full_name }], rosterData);
+        }
+      }
+    },
+    [scopeType, workGroupId, employeeId, workGroups, employees, buildMatrix],
+  );
 
   const handleSave = async () => {
     if (!roster?.uuid) return;
@@ -196,11 +263,7 @@ const ShiftRostersPage: React.FC = () => {
       setSaving(true);
       const updated = await shiftRosterApi.copyFromPreviousWeek(roster.uuid);
       setRoster(updated);
-      const wgUuid = workGroups.find((w) => w.id === workGroupId)?.uuid;
-      if (wgUuid) {
-        const wg = await workGroupApi.get(wgUuid);
-        buildMatrix(wg, updated);
-      }
+      await reloadMatrixFromRoster(updated);
       messageApi.success(t('app.kuaizhizao.performance.rosters.messages.copySuccess'));
     } catch (e: any) {
       messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.copyFailed'));
@@ -256,14 +319,39 @@ const ShiftRostersPage: React.FC = () => {
     <ListPageTemplate>
       <Card>
         <Space wrap style={{ marginBottom: 16 }}>
-          <span>{t('app.kuaizhizao.performance.rosters.label.workGroup')}</span>
-          <Select
-            style={{ minWidth: 200 }}
-            placeholder={t('app.kuaizhizao.performance.rosters.placeholder.workGroup')}
-            value={workGroupId}
-            options={workGroups.map((w) => ({ label: `${w.code} - ${w.name}`, value: w.id }))}
-            onChange={(v) => setWorkGroupId(v)}
+          <Segmented<RosterScopeType>
+            value={scopeType}
+            onChange={(v) => setScopeType(v)}
+            options={[
+              { label: t('app.kuaizhizao.performance.rosters.scope.workGroup'), value: 'work_group' },
+              { label: t('app.kuaizhizao.performance.rosters.scope.employee'), value: 'employee' },
+            ]}
           />
+          {scopeType === 'work_group' ? (
+            <>
+              <span>{t('app.kuaizhizao.performance.rosters.label.workGroup')}</span>
+              <Select
+                style={{ minWidth: 200 }}
+                placeholder={t('app.kuaizhizao.performance.rosters.placeholder.workGroup')}
+                value={workGroupId}
+                options={workGroups.map((w) => ({ label: `${w.code} - ${w.name}`, value: w.id }))}
+                onChange={(v) => setWorkGroupId(v)}
+              />
+            </>
+          ) : (
+            <>
+              <span>{t('app.kuaizhizao.performance.rosters.label.employee')}</span>
+              <Select
+                showSearch
+                optionFilterProp="label"
+                style={{ minWidth: 200 }}
+                placeholder={t('app.kuaizhizao.performance.rosters.placeholder.employee')}
+                value={employeeId}
+                options={employees.map((e) => ({ label: e.full_name, value: e.id }))}
+                onChange={(v) => setEmployeeId(v)}
+              />
+            </>
+          )}
           <span>{t('app.kuaizhizao.performance.rosters.label.rosterWeek')}</span>
           <DatePicker
             picker="week"
@@ -277,16 +365,18 @@ const ShiftRostersPage: React.FC = () => {
                 : t('app.kuaizhizao.performance.common.rosterStatus.draft')}
             </Tag>
           ) : null}
-          <Button type="primary" loading={saving} disabled={roster?.status === 'published'} onClick={handleSave}>
+          <Button type="primary" loading={saving} disabled={!scopeReady || roster?.status === 'published'} onClick={handleSave}>
             {t('app.kuaizhizao.performance.common.actions.saveDraft')}
           </Button>
-          <Button loading={saving} disabled={roster?.status === 'published'} onClick={handlePublish}>
+          <Button loading={saving} disabled={!scopeReady || roster?.status === 'published'} onClick={handlePublish}>
             {t('app.kuaizhizao.performance.common.actions.publish')}
           </Button>
-          <Button loading={saving} disabled={roster?.status === 'published'} onClick={handleCopyPrevious}>
+          <Button loading={saving} disabled={!scopeReady || roster?.status === 'published'} onClick={handleCopyPrevious}>
             {t('app.kuaizhizao.performance.common.actions.copyPreviousWeek')}
           </Button>
-          <Button onClick={loadRoster}>{t('app.kuaizhizao.performance.common.actions.refresh')}</Button>
+          <Button onClick={loadRoster} disabled={!scopeReady}>
+            {t('app.kuaizhizao.performance.common.actions.refresh')}
+          </Button>
         </Space>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
           {t('app.kuaizhizao.performance.rosters.hint.period', {

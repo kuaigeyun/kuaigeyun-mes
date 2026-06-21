@@ -1,4 +1,4 @@
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 /**
  * 设备管理页面
  *
@@ -57,6 +57,8 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import { getEquipmentAssetLifecycle } from '../../../utils/equipmentLifecycle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { equipmentApi } from '../../../services/equipment';
 import { workshopApi } from '../../../../master-data/services/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -110,7 +112,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderEquipmentRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return nodes;
+  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 interface Equipment {
@@ -237,6 +239,11 @@ const EquipmentPage: React.FC = () => {
     resetEquipmentFormFieldValues();
     setModalVisible(true);
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.equipment.create')),
+    [t],
+  );
 
   /**
    * 处理编辑设备
@@ -888,7 +895,7 @@ const EquipmentPage: React.FC = () => {
           showDeleteButton={true}
           onDelete={handleDelete}
           showCreateButton={true}
-          createButtonText={t('app.kuaizhizao.equipment.create')}
+          createButtonText={createButtonLabel}
           onCreate={handleCreate}
           showImportButton
           onImport={async (data) => {

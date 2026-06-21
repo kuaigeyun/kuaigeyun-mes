@@ -253,7 +253,10 @@ class OutsourceMaterialReturnService(AppBaseService[OutsourceMaterialReturn]):
         rows = await OutsourceMaterialReturn.filter(query).order_by("-created_at").offset(skip).limit(limit).all()
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
         responses = [OutsourceMaterialReturnResponse.model_validate(row) for row in rows]
-        return enrich_inbound_hub_list_capabilities(rows, responses, "outsource_material_return")
+        item_counts = {int(r.id): 1 for r in rows}
+        return enrich_inbound_hub_list_capabilities(
+            rows, responses, "outsource_material_return", item_counts=item_counts
+        )
 
     async def get_material_return(
         self,

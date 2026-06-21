@@ -86,6 +86,12 @@ export const FORM_LAYOUT = {
   FULL_COL_SPAN: 24,
   /** 表单项底部间距（与 Ant Design Form itemMarginBottom 一致） */
   ITEM_MARGIN_BOTTOM: 16,
+  /** Modal 半宽表单项 class（CSS flex 固定 50%，不依赖 Ant Design Col grid） */
+  MODAL_FIELD_HALF_CLASS: 'form-modal-field-half-width',
+  /** Modal 全宽表单项 class */
+  MODAL_FIELD_FULL_CLASS: 'form-modal-field-full-width',
+  /** 绩效管理等业务 Modal 容器 class（启用半宽 flex 布局） */
+  PERFORMANCE_FORM_MODAL_CLASS: 'performance-form-modal',
 } as const;
 
 /**
@@ -257,6 +263,13 @@ export const CANVAS_GRID_STYLE: CSSProperties = {
   boxSizing: 'border-box',
   overflow: 'hidden',
 };
+
+/** FlowGraph（G6 background 插件）点阵：与单据全链路追溯画板一致，较 CANVAS_GRID_STYLE 更密、圆点略细 */
+export const CANVAS_FLOW_GRAPH_GRID_STYLE = {
+  backgroundColor: CANVAS_VISUAL_BASE.BACKGROUND_COLOR,
+  backgroundImage: `radial-gradient(circle, ${CANVAS_VISUAL_BASE.DOT_COLOR} 0.75px, transparent 0.75px)`,
+  backgroundSize: '18px 18px',
+} as const;
 
 /**
  * ReactFlow Background 组件的等价参数（供 FlowEditor/FlowView 使用）

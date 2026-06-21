@@ -16,6 +16,7 @@ Date: 2026-02-28
 
 from decimal import Decimal
 from typing import Optional, Dict, Any
+from datetime import date
 from loguru import logger
 from tortoise.exceptions import IntegrityError
 from tortoise.transactions import atomic, in_transaction
@@ -61,6 +62,7 @@ class InventoryService:
         customer_name: Optional[str] = None,
         source_doc_id: Optional[int] = None,
         source_doc_code: Optional[str] = None,
+        ledger_production_date: Optional[date] = None,
     ) -> None:
         """
         主仓批次数量增加。包含软删行：若 (tenant, material, batch_no) 已存在但 deleted_at 有值，
@@ -87,6 +89,8 @@ class InventoryService:
                 batch.source_doc_id = source_doc_id
             if source_doc_code:
                 batch.source_doc_code = source_doc_code
+            if ledger_production_date is not None and batch.production_date is None:
+                batch.production_date = ledger_production_date
             await batch.save()
             return
         try:
@@ -97,6 +101,7 @@ class InventoryService:
                     batch_no=bn,
                     quantity=quantity,
                     status="in_stock",
+                    production_date=ledger_production_date,
                     ownership_type=own["ownership_type"],
                     customer_id=own["customer_id"],
                     customer_name=customer_name,
@@ -136,6 +141,8 @@ class InventoryService:
                 batch.deleted_at = None
             batch.quantity = (batch.quantity or Decimal(0)) + quantity
             batch.status = "in_stock"
+            if ledger_production_date is not None and batch.production_date is None:
+                batch.production_date = ledger_production_date
             await batch.save()
 
     @staticmethod
@@ -200,6 +207,7 @@ class InventoryService:
         ownership_type: Optional[str] = None,
         customer_id: Optional[int] = None,
         customer_name: Optional[str] = None,
+        ledger_production_date: Optional[date] = None,
     ) -> bool:
         """
         增加库存（不开启独立事务）。
@@ -207,6 +215,7 @@ class InventoryService:
         try:
             # 根据 warehouse_type 决定写入目标
             use_line_side = False
+            wh = None
             if warehouse_id is not None:
                 from apps.master_data.models.warehouse import Warehouse
                 wh = await Warehouse.get_or_none(id=warehouse_id, deleted_at__isnull=True)
@@ -239,6 +248,18 @@ class InventoryService:
                         if abs(float(quantity) - len(serial_nos)) > 0.001:
                             raise BusinessLogicError(f"入库数量（{quantity}）与序列号数量（{len(serial_nos)}）不一致")
 
+                if (
+                    material
+                    and getattr(material, "batch_managed", False)
+                    and batch_no
+                    and str(batch_no).strip()
+                    and str(batch_no).strip() != "DEFAULT"
+                    and ledger_production_date is None
+                ):
+                    raise BusinessLogicError("批号管理物料入库必须提供入库日期（来自入库单确认时间）")
+                if serial_nos and ledger_production_date is None:
+                    raise BusinessLogicError("序列号入库必须提供入库日期（来自入库单确认时间）")
+
                 logger.info(f"Adding stock for material_id={material_id}, batch_no={batch_no}, qty={quantity}")
                 await InventoryService._material_batch_increase_or_restore(
                     tenant_id=tenant_id,
@@ -250,27 +271,30 @@ class InventoryService:
                     customer_name=customer_name,
                     source_doc_id=source_doc_id,
                     source_doc_code=source_doc_code,
+                    ledger_production_date=ledger_production_date,
                 )
-                
+
                 # 记录序列号
                 if serial_nos:
                     from apps.master_data.models.material_serial import MaterialSerial
+
                     for s_no in serial_nos:
-                        # 检查序列号是否已在库或存在
                         existing = await MaterialSerial.filter(tenant_id=tenant_id, serial_no=s_no).first()
                         if existing:
                             if existing.status == "in_stock":
                                 raise BusinessLogicError(f"序列号 {s_no} 已在库，不可重复入库")
                             existing.status = "in_stock"
                             existing.material_id = material_id
-                            # 可补充来源信息
+                            if existing.production_date is None and ledger_production_date is not None:
+                                existing.production_date = ledger_production_date
                             await existing.save()
                         else:
                             await MaterialSerial.create(
                                 tenant_id=tenant_id,
                                 material_id=material_id,
                                 serial_no=s_no,
-                                status="in_stock"
+                                production_date=ledger_production_date,
+                                status="in_stock",
                             )
 
                 logger.info(
@@ -281,6 +305,7 @@ class InventoryService:
                 # 线边仓处理
                 from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
 
+                wh_name = str(wh.name if wh else "").strip()
                 inv_filter = dict(
                     tenant_id=tenant_id,
                     warehouse_id=warehouse_id,
@@ -296,12 +321,15 @@ class InventoryService:
                     if work_order_id and not inv.work_order_id:
                         inv.work_order_id = work_order_id
                         inv.work_order_code = work_order_code
+                    if wh_name and not str(inv.warehouse_name or "").strip():
+                        inv.warehouse_name = wh_name
                     await inv.save()
                 else:
                     mat = material or await Material.get_or_none(id=material_id)
                     await LineSideInventory.create(
                         tenant_id=tenant_id,
                         warehouse_id=warehouse_id,
+                        warehouse_name=wh_name or None,
                         material_id=material_id,
                         material_code=mat.code if mat else "",
                         material_name=mat.name if mat else "",
@@ -337,6 +365,10 @@ class InventoryService:
         source_doc_code: Optional[str] = None,
         work_order_id: Optional[int] = None,
         work_order_code: Optional[str] = None,
+        ownership_type: Optional[str] = None,
+        customer_id: Optional[int] = None,
+        customer_name: Optional[str] = None,
+        ledger_production_date: Optional[date] = None,
     ) -> bool:
         """
         增加库存（独立事务包装）。
@@ -353,6 +385,10 @@ class InventoryService:
             source_doc_code=source_doc_code,
             work_order_id=work_order_id,
             work_order_code=work_order_code,
+            ownership_type=ownership_type,
+            customer_id=customer_id,
+            customer_name=customer_name,
+            ledger_production_date=ledger_production_date,
         )
 
     @staticmethod

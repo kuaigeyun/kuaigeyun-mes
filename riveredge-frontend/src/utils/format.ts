@@ -55,6 +55,23 @@ function parseBySiteTimezone(
 }
 
 /**
+ * 纯业务日期（DateField / YYYY-MM-DD）：不做 UTC→本地二次偏移。
+ * 若误传带时刻的 ISO 字符串，仅取前 10 位日历日再格式化。
+ */
+export function formatBusinessDateOnly(
+  date: string | Date | number | Dayjs | null | undefined,
+  fallback: string = '-'
+): string {
+  if (date == null || date === '') return fallback;
+  const text = String(date).trim();
+  const datePart = text.length >= 10 ? text.slice(0, 10) : text;
+  if (DATE_ONLY_PATTERN.test(datePart)) {
+    return dayjs(datePart).format(getDateFormatFromSiteSetting());
+  }
+  return formatDateBySiteSetting(date, fallback);
+}
+
+/**
  * 格式化日期（使用站点设置中的日期格式和时区）
  * 用于单据、表格等业务展示场景
  *

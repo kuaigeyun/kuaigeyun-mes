@@ -3717,17 +3717,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           margin-top: auto !important;
           flex-shrink: 0 !important;
         }
-        ${!isDarkMode ? `
-        /* 浅色模式：激活菜单统一主题色背景（含浅色侧栏与深色侧栏） */
+        /* 嵌套菜单排版（明暗模式一致）：三级及以下保持原缩进，二级略向左 */
         .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-item,
         .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-submenu-title {
           margin-inline: 6px !important;
           width: calc(100% - 24px) !important;
           box-sizing: border-box !important;
           overflow: hidden !important;
-          /* 二级菜单文字与一级菜单文字起始线对齐 */
           padding-inline-start: 40px !important;
         }
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-sub > .ant-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-sub > .ant-menu-submenu > .ant-menu-submenu-title {
+          padding-inline-start: 32px !important;
+        }
+        ${!isDarkMode ? `
+        /* 浅色模式：激活菜单统一主题色背景（含浅色侧栏与深色侧栏） */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected {
           background-color: var(--riveredge-menu-primary-color) !important;
           border-right: none !important;
@@ -3748,15 +3752,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         ` : ''}
         ${isDarkMode ? `
-        /* 深色模式：二级菜单基础排版与明亮模式一致，避免切换主题时文本基线位移 */
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-item,
-        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-submenu-title {
-          margin-inline: 6px !important;
-          width: calc(100% - 24px) !important;
-          box-sizing: border-box !important;
-          overflow: hidden !important;
-          padding-inline-start: 40px !important;
-        }
         /* 深色模式：激活菜单项宽度与明亮模式保持一致（参考明亮模式右侧留白） */
         .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-item.ant-menu-item-selected,
         .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title,

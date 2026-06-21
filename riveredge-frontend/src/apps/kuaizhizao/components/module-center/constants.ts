@@ -17,3 +17,12 @@ export const MODULE_KPI_CARD_BODY_STYLE: React.CSSProperties = {
 };
 
 export const MODULE_CENTER_GUTTER = 16;
+
+/** 模块看板 action / chart 面板标题统一字号 */
+export const MODULE_PANEL_TITLE_FONT_SIZE = 16;
+export const MODULE_PANEL_TITLE_ICON_SIZE = 16;
+export const MODULE_PANEL_TITLE_STYLE: React.CSSProperties = {
+  fontSize: MODULE_PANEL_TITLE_FONT_SIZE,
+  fontWeight: 600,
+  lineHeight: '24px',
+};

@@ -9,7 +9,7 @@
 
 import React, { useRef, useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import type { TFunction } from 'i18next';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -90,6 +90,7 @@ import { qualityApi, warehouseApi } from '../../../services/production';
 import { listPurchaseOrders } from '../../../services/purchase';
 import type { PurchaseReturn, PurchaseReturnDetail, PurchaseReturnItem } from '../../../services/purchase-return';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   purchaseReturnBatchConfirmAllowed,
   purchaseReturnBatchWithdrawAllowed,
@@ -108,6 +109,7 @@ import {
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { formatDateTime } from '../../../../../utils/format';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const PURCHASE_RETURN_RESOURCE = 'kuaizhizao:purchase-return';
 
@@ -195,7 +197,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderPurchaseReturnRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return nodes;
+  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 type PullPurchaseOrderCandidate = {
@@ -454,6 +456,11 @@ const PurchaseReturnsPage: React.FC = () => {
     });
     setModalVisible(true);
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.purchaseReturn.create')),
+    [t],
+  );
 
   const pullFromPurchaseOrderQuery = useUniPullQuery<PullPurchaseOrderCandidate>({
     rowKey: 'id',
@@ -1139,7 +1146,7 @@ const PurchaseReturnsPage: React.FC = () => {
               </Button>
             );
           }
-          return parts;
+          return renderPurchaseReturnRowActions(parts, `purchase-return-actions-${record.id ?? 'row'}`);
         },
       },
     ],
@@ -1311,14 +1318,14 @@ const PurchaseReturnsPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch={true}
           showCreateButton={false}
-          createButtonText={t('app.kuaizhizao.purchaseReturn.create')}
+          createButtonText={createButtonLabel}
           onCreate={handleCreate}
           toolBarRender={() => [
             <UniPullCreateToolbar
               key="purchase-return-pull-create"
               compactKey="purchase-return-pull-create"
               createIcon={<PlusOutlined />}
-              createLabel={t('app.kuaizhizao.purchaseReturn.create')}
+              createLabel={createButtonLabel}
               onCreate={handleCreate}
               menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
                 {
@@ -1701,7 +1708,7 @@ const PurchaseReturnsPage: React.FC = () => {
                   key: 'edit',
                   visible: returnDetail.status === '待退货' || returnDetail.status === '草稿',
                   render: () => (
-                    <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(returnDetail)}>
+                    <Button {...rowActionKind('update')} size="small" onClick={() => void handleEdit(returnDetail)}>
                       {t('common.edit')}
                     </Button>
                   ),
@@ -1711,10 +1718,8 @@ const PurchaseReturnsPage: React.FC = () => {
                   visible: returnDetail.status === '待退货',
                   render: () => (
                     <Button
-                      type="link"
+                      {...rowActionKind('submit')}
                       size="small"
-                      icon={<CheckCircleOutlined />}
-                      style={{ color: '#52c41a' }}
                       onClick={() => handleConfirm(returnDetail)}
                     >
                       {t('app.kuaizhizao.purchaseReturn.confirmReturn')}
@@ -1725,7 +1730,7 @@ const PurchaseReturnsPage: React.FC = () => {
                   key: 'withdraw',
                   visible: returnDetail.status === '已退货',
                   render: () => (
-                    <Button type="link" size="small" onClick={() => void handleWithdraw(returnDetail)}>
+                    <Button {...rowActionKind('revoke')} size="small" onClick={() => void handleWithdraw(returnDetail)}>
                       {t('app.kuaizhizao.purchaseReturn.withdrawConfirm')}
                     </Button>
                   ),

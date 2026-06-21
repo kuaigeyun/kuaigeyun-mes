@@ -30,6 +30,9 @@ from apps.kuaizhizao.schemas.defect_record import (
 from apps.kuaizhizao.schemas.quality import (
     IncomingInspectionCreate,
     IncomingInspectionResponse,
+    EnsureIqcForPurchaseReceiptResponse,
+    EnsureIqcForCustomerMaterialRegistrationResponse,
+    EnsureFqcForFinishedGoodsReceiptResponse,
     ProcessInspectionCreate,
     ProcessInspectionResponse,
     ProcessInspectionListResponse,
@@ -93,24 +96,15 @@ async def _scoped_work_order_ids(*, tenant_id: int, current_user: User) -> List[
 
 
 async def _scoped_purchase_receipt_ids(*, tenant_id: int, current_user: User) -> List[int]:
-    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
     from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 
-    scoped_po_query = await DataScopeService.apply(
-        PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True),
+    scoped_receipt_query = await DataScopeService.apply(
+        PurchaseReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True),
         tenant_id=tenant_id,
         user=current_user,
-        resource="kuaizhizao:purchase-order",
+        resource="kuaizhizao:purchase-receipt",
     )
-    scoped_po_ids = [int(x) for x in await scoped_po_query.values_list("id", flat=True)]
-    if not scoped_po_ids:
-        return []
-
-    receipt_ids = await PurchaseReceipt.filter(
-        tenant_id=tenant_id,
-        deleted_at__isnull=True,
-        purchase_order_id__in=scoped_po_ids,
-    ).values_list("id", flat=True)
+    receipt_ids = await scoped_receipt_query.values_list("id", flat=True)
     return [int(x) for x in receipt_ids]
 
 
@@ -145,7 +139,6 @@ async def _assert_purchase_receipt_visible_by_id(
     current_user: User,
     purchase_receipt_id: Optional[int],
 ) -> None:
-    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
     from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 
     if not purchase_receipt_id:
@@ -157,21 +150,87 @@ async def _assert_purchase_receipt_visible_by_id(
     )
     if not receipt:
         return
-    purchase_order_id = getattr(receipt, "purchase_order_id", None)
-    if not purchase_order_id:
-        return
-    purchase_order = await PurchaseOrder.get_or_none(
-        tenant_id=tenant_id,
-        id=purchase_order_id,
-        deleted_at__isnull=True,
-    )
-    if not purchase_order:
-        return
+    # 引用单据（采购订单）仅用于追溯，不应阻塞采购入库单本身的查看/确认。
     await DataScopeService.assert_row_visible(
-        purchase_order,
+        receipt,
         tenant_id=tenant_id,
         user=current_user,
-        resource="kuaizhizao:purchase-order",
+        resource="kuaizhizao:purchase-receipt",
+    )
+
+
+async def _assert_finished_goods_receipt_visible_by_id(
+    *,
+    tenant_id: int,
+    current_user: User,
+    finished_goods_receipt_id: Optional[int],
+) -> None:
+    from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+
+    if not finished_goods_receipt_id:
+        return
+    receipt = await FinishedGoodsReceipt.get_or_none(
+        tenant_id=tenant_id,
+        id=finished_goods_receipt_id,
+        deleted_at__isnull=True,
+    )
+    if not receipt:
+        return
+    await DataScopeService.assert_row_visible(
+        receipt,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:inbound",
+    )
+
+
+async def _assert_semi_finished_goods_receipt_visible_by_id(
+    *,
+    tenant_id: int,
+    current_user: User,
+    semi_finished_goods_receipt_id: Optional[int],
+) -> None:
+    from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
+
+    if not semi_finished_goods_receipt_id:
+        return
+    receipt = await SemiFinishedGoodsReceipt.get_or_none(
+        tenant_id=tenant_id,
+        id=semi_finished_goods_receipt_id,
+        deleted_at__isnull=True,
+    )
+    if not receipt:
+        return
+    await DataScopeService.assert_row_visible(
+        receipt,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:inbound",
+    )
+
+
+async def _assert_customer_material_registration_visible_by_id(
+    *,
+    tenant_id: int,
+    current_user: User,
+    registration_id: Optional[int],
+) -> None:
+    from apps.kuaizhizao.models.customer_material_registration import CustomerMaterialRegistration
+
+    if not registration_id:
+        return
+    registration = await CustomerMaterialRegistration.get_or_none(
+        tenant_id=tenant_id,
+        id=registration_id,
+        deleted_at__isnull=True,
+    )
+    if not registration:
+        return
+    await DataScopeService.assert_row_visible(
+        registration,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:inbound",
     )
 
 
@@ -319,6 +378,7 @@ async def list_incoming_inspections(
     supplier_id: Optional[int] = Query(None, description="供应商ID"),
     material_id: Optional[int] = Query(None, description="物料ID"),
     purchase_receipt_id: Optional[int] = Query(None, description="采购入库单ID"),
+    customer_material_registration_id: Optional[int] = Query(None, description="代工来料单ID"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, Any]:
@@ -337,6 +397,7 @@ async def list_incoming_inspections(
         supplier_id=supplier_id,
         material_id=material_id,
         purchase_receipt_id=purchase_receipt_id,
+        customer_material_registration_id=customer_material_registration_id,
     )
 
 
@@ -462,6 +523,102 @@ async def create_inspection_from_purchase_receipt(
         tenant_id=tenant_id,
         purchase_receipt_id=purchase_receipt_id,
         created_by=current_user.id
+    )
+
+
+@router.post(
+    "/incoming-inspections/ensure-for-purchase-receipt/{purchase_receipt_id}",
+    response_model=EnsureIqcForPurchaseReceiptResponse,
+    summary="Ensure IQC before purchase receipt confirm",
+)
+async def ensure_iqc_for_purchase_receipt(
+    purchase_receipt_id: int = Path(..., description="采购入库单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> EnsureIqcForPurchaseReceiptResponse:
+    """
+    确认入库前：按物料 IQC 策略自动补齐缺失来料检验单，并返回是否允许进入确认预览。
+    """
+    await _assert_purchase_receipt_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        purchase_receipt_id=purchase_receipt_id,
+    )
+    return await IncomingInspectionService().ensure_iqc_for_purchase_receipt(
+        tenant_id=tenant_id,
+        purchase_receipt_id=purchase_receipt_id,
+        created_by=current_user.id,
+    )
+
+
+@router.post(
+    "/finished-goods-inspections/ensure-for-finished-goods-receipt/{finished_goods_receipt_id}",
+    response_model=EnsureFqcForFinishedGoodsReceiptResponse,
+    summary="Ensure FQC before finished goods receipt confirm",
+)
+async def ensure_fqc_for_finished_goods_receipt(
+    finished_goods_receipt_id: int = Path(..., description="成品入库单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> EnsureFqcForFinishedGoodsReceiptResponse:
+    """
+    确认入库前：按物料 FQC 策略自动补齐缺失成品检验单，并返回是否允许进入确认预览。
+    """
+    await _assert_finished_goods_receipt_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        finished_goods_receipt_id=finished_goods_receipt_id,
+    )
+    return await FinishedGoodsInspectionService().ensure_fqc_for_finished_goods_receipt(
+        tenant_id=tenant_id,
+        finished_goods_receipt_id=finished_goods_receipt_id,
+        created_by=current_user.id,
+    )
+
+
+@router.post(
+    "/finished-goods-inspections/ensure-for-semi-finished-goods-receipt/{semi_finished_goods_receipt_id}",
+    response_model=EnsureFqcForFinishedGoodsReceiptResponse,
+    summary="Ensure FQC before semi-finished goods receipt confirm",
+)
+async def ensure_fqc_for_semi_finished_goods_receipt(
+    semi_finished_goods_receipt_id: int = Path(..., description="半成品入库单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> EnsureFqcForFinishedGoodsReceiptResponse:
+    """确认半成品入库前：按物料 FQC 策略自动补齐缺失成品检验单，并返回是否允许进入确认预览。"""
+    await _assert_semi_finished_goods_receipt_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        semi_finished_goods_receipt_id=semi_finished_goods_receipt_id,
+    )
+    return await FinishedGoodsInspectionService().ensure_fqc_for_semi_finished_goods_receipt(
+        tenant_id=tenant_id,
+        semi_finished_goods_receipt_id=semi_finished_goods_receipt_id,
+        created_by=current_user.id,
+    )
+
+
+@router.post(
+    "/incoming-inspections/ensure-for-customer-material-registration/{registration_id}",
+    response_model=EnsureIqcForCustomerMaterialRegistrationResponse,
+    summary="Ensure IQC before customer material inbound confirm",
+)
+async def ensure_iqc_for_customer_material_registration(
+    registration_id: int = Path(..., description="代工来料单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> EnsureIqcForCustomerMaterialRegistrationResponse:
+    """确认代工来料入库前：按物料 IQC 策略自动补齐缺失来料检验单，并返回是否允许确认入库。"""
+    await _assert_customer_material_registration_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        registration_id=registration_id,
+    )
+    return await IncomingInspectionService().ensure_iqc_for_customer_material_registration(
+        tenant_id=tenant_id,
+        registration_id=registration_id,
+        created_by=current_user.id,
     )
 
 

@@ -11,7 +11,7 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Popconfirm, Badge, Card, Row, Col, Statistic, Typography } from 'antd';
+import { App, Button, Tag, Space, Modal, message, Popconfirm, Typography } from 'antd';
 import { EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, CloseCircleOutlined, WarningOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -26,13 +26,15 @@ import {
   inventoryAlertBatchIgnoreAllowed,
   inventoryAlertBatchResolveAllowed,
 } from '../../../../../hooks/useDocumentCapabilities';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, MultiTabListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { inventoryAlertApi } from '../../../services/inventory-alert';
 import { getInventoryAlertLifecycle } from '../../../utils/inventoryAlertLifecycle';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { formatDateTime } from '../../../../../utils/format';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 interface InventoryAlert {
   id?: number;
@@ -87,13 +89,15 @@ interface InventoryAlertRule {
 const InventoryAlertPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const actionRef = useRef<ActionType>(null);
+  const alertActionRef = useRef<ActionType>(null);
+  const ruleActionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [alertSelectedRowKeys, setAlertSelectedRowKeys] = useState<React.Key[]>([]);
+  const [ruleSelectedRowKeys, setRuleSelectedRowKeys] = useState<React.Key[]>([]);
   const tableRowsRef = useRef<InventoryAlert[]>([]);
   const [alertListVersion, setAlertListVersion] = useState(0);
   const alertPerms = useResourcePermissions('kuaizhizao:warehouse-management-inventory-alert');
-  const [activeTab, setActiveTab] = useState<'alerts' | 'rules'>('alerts');
+  const [activeTabKey, setActiveTabKey] = useState<'alerts' | 'rules'>('alerts');
 
   // Modal 相关状态
   const [ruleModalVisible, setRuleModalVisible] = useState(false);
@@ -113,10 +117,10 @@ const InventoryAlertPage: React.FC = () => {
 
   const selectedAlertsForBatch = useMemo(
     () =>
-      selectedRowKeys
+      alertSelectedRowKeys
         .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
         .filter((row): row is InventoryAlert => row != null),
-    [selectedRowKeys, alertListVersion],
+    [alertSelectedRowKeys, alertListVersion],
   );
 
   // 统计信息
@@ -135,10 +139,37 @@ const InventoryAlertPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (activeTab === 'alerts') {
+    if (activeTabKey === 'alerts') {
       loadStatistics();
     }
-  }, [activeTab]);
+  }, [activeTabKey]);
+
+  const alertStatCards = useMemo<StatCard[] | undefined>(() => {
+    if (activeTabKey !== 'alerts' || !statistics) return undefined;
+    return [
+      {
+        title: t('app.kuaizhizao.inventoryAlert.statPendingAlerts'),
+        value: statistics.pending_count || 0,
+        prefix: <WarningOutlined />,
+        valueStyle: { color: '#cf1322' },
+      },
+      {
+        title: t('app.kuaizhizao.inventoryAlert.statLowStock'),
+        value: statistics.by_type?.low_stock || 0,
+        valueStyle: { color: '#cf1322' },
+      },
+      {
+        title: t('app.kuaizhizao.inventoryAlert.statHighStock'),
+        value: statistics.by_type?.high_stock || 0,
+        valueStyle: { color: '#faad14' },
+      },
+      {
+        title: t('app.kuaizhizao.inventoryAlert.statCriticalLevel'),
+        value: statistics.by_level?.critical || 0,
+        valueStyle: { color: '#cf1322' },
+      },
+    ];
+  }, [activeTabKey, statistics, t]);
 
   /**
    * 处理新建预警规则
@@ -151,6 +182,11 @@ const InventoryAlertPage: React.FC = () => {
       threshold_type: 'quantity',
     });
   };
+  useNewShortcut(activeTabKey === 'rules' ? handleCreateRule : undefined);
+  const createRuleButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.inventoryAlert.createRuleButton')),
+    [t],
+  );
 
   /**
    * 处理编辑预警规则
@@ -223,7 +259,7 @@ const InventoryAlertPage: React.FC = () => {
       formRef.current?.resetFields();
       invalidateMenuBadgeCounts();
 
-      actionRef.current?.reload();
+      ruleActionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.warehouseCommon.operationFailed'));
       throw error;
@@ -239,7 +275,7 @@ const InventoryAlertPage: React.FC = () => {
       messageApi.success(t('app.kuaizhizao.inventoryAlert.msgRuleDeleteSuccess'));
       invalidateMenuBadgeCounts();
 
-      actionRef.current?.reload();
+      ruleActionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.inventoryAlert.msgDeleteRuleFailed'));
     }
@@ -290,7 +326,7 @@ const InventoryAlertPage: React.FC = () => {
       handleFormRef.current?.resetFields();
       invalidateMenuBadgeCounts();
 
-      actionRef.current?.reload();
+      alertActionRef.current?.reload();
       loadStatistics();
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.inventoryAlert.msgHandleFailed'));
@@ -299,12 +335,12 @@ const InventoryAlertPage: React.FC = () => {
   };
 
   const handleBatchHandleAlerts = async (status: 'resolved' | 'ignored') => {
-    if (!selectedRowKeys.length) {
+    if (!alertSelectedRowKeys.length) {
       messageApi.warning(t('app.kuaizhizao.warehouseCommon.selectAtLeastOne'));
       return;
     }
     let successCount = 0;
-    for (const key of selectedRowKeys) {
+    for (const key of alertSelectedRowKeys) {
       try {
         await inventoryAlertApi.handle(String(key), { status });
         successCount += 1;
@@ -314,9 +350,9 @@ const InventoryAlertPage: React.FC = () => {
     }
     if (successCount > 0) {
       messageApi.success(t('app.kuaizhizao.warehouseCommon.batchHandleSuccess', { count: successCount }));
-      setSelectedRowKeys([]);
+      setAlertSelectedRowKeys([]);
       invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
+      alertActionRef.current?.reload();
       loadStatistics();
       return;
     }
@@ -335,9 +371,9 @@ const InventoryAlertPage: React.FC = () => {
     }
     if (successCount > 0) {
       messageApi.success(t('app.kuaizhizao.warehouseCommon.batchDeleteSuccess', { count: successCount }));
-      setSelectedRowKeys([]);
+      setRuleSelectedRowKeys([]);
       invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
+      ruleActionRef.current?.reload();
       return;
     }
     messageApi.error(t('app.kuaizhizao.warehouseCommon.batchDeleteFailed'));
@@ -621,164 +657,137 @@ const InventoryAlertPage: React.FC = () => {
   ], [t, alertTypeEnum, alertLevelEnum, alertStatusEnum]);
 
   return (
-    <ListPageTemplate>
-      {/* 统计信息卡片 */}
-      {activeTab === 'alerts' && statistics && (
-        <Card style={{ marginBottom: 16 }}>
-          <Row gutter={16}>
-            <Col span={6}>
-              <Statistic
-                title={t('app.kuaizhizao.inventoryAlert.statPendingAlerts')}
-                value={statistics.pending_count || 0}
-                prefix={<WarningOutlined />}
-                styles={{ content: {color: '#cf1322' } }}
-              />
-            </Col>
-            <Col span={6}>
-              <Statistic
-                title={t('app.kuaizhizao.inventoryAlert.statLowStock')}
-                value={statistics.by_type?.low_stock || 0}
-                styles={{ content: {color: '#cf1322' } }}
-              />
-            </Col>
-            <Col span={6}>
-              <Statistic
-                title={t('app.kuaizhizao.inventoryAlert.statHighStock')}
-                value={statistics.by_type?.high_stock || 0}
-                styles={{ content: {color: '#faad14' } }}
-              />
-            </Col>
-            <Col span={6}>
-              <Statistic
-                title={t('app.kuaizhizao.inventoryAlert.statCriticalLevel')}
-                value={statistics.by_level?.critical || 0}
-                styles={{ content: {color: '#cf1322' } }}
-              />
-            </Col>
-          </Row>
-        </Card>
-      )}
-
-      <UniTable
-        headerTitle={activeTab === 'alerts' ? t('app.kuaizhizao.inventoryAlert.headerTitleAlerts') : t('app.kuaizhizao.inventoryAlert.headerTitleRules')}
-        actionRef={actionRef}
-        rowKey="id"
-        columns={activeTab === 'alerts' ? alertColumns : ruleColumns}
-        columnPersistenceId={
-          activeTab === 'alerts'
-            ? 'apps.kuaizhizao.pages.warehouse-management.inventory-alert'
-            : 'apps.kuaizhizao.pages.warehouse-management.inventory-alert:2'
-        }
-        showAdvancedSearch={true}
-        showCreateButton={activeTab === 'rules'}
-        createButtonText={t('app.kuaizhizao.inventoryAlert.createRuleButton')}
-        onCreate={activeTab === 'rules' ? handleCreateRule : undefined}
-        enableRowSelection
-        selectedRowKeys={selectedRowKeys}
-        onRowSelectionChange={setSelectedRowKeys}
-        showDeleteButton={activeTab === 'rules'}
-        onDelete={activeTab === 'rules' ? handleBatchDeleteRules : undefined}
-        deleteConfirmTitle={(count) =>
-          activeTab === 'rules'
-            ? t('app.kuaizhizao.inventoryAlert.deleteConfirmRules', { count })
-            : t('app.kuaizhizao.warehouseCommon.deleteConfirm', { count })
-        }
-        toolBarActionsAfterBatch={
-          activeTab === 'alerts'
-            ? [
-                <UniBatchButton
-                  key="batch-resolved"
-                  selectedRowKeys={selectedRowKeys}
-                  icon={<CheckCircleOutlined />}
-                  disabled={
-                    selectedAlertsForBatch.length > 0 &&
-                    !inventoryAlertBatchResolveAllowed(selectedAlertsForBatch, alertPerms.canUpdate)
-                  }
-                  onAction={() => void handleBatchHandleAlerts('resolved')}
-                >
-                  {t('app.kuaizhizao.warehouseCommon.batchMarkResolved')}
-                </UniBatchButton>,
-                <UniBatchButton
-                  key="batch-ignored"
-                  selectedRowKeys={selectedRowKeys}
-                  icon={<CloseCircleOutlined />}
-                  disabled={
-                    selectedAlertsForBatch.length > 0 &&
-                    !inventoryAlertBatchIgnoreAllowed(selectedAlertsForBatch, alertPerms.canUpdate)
-                  }
-                  onAction={() => void handleBatchHandleAlerts('ignored')}
-                >
-                  {t('app.kuaizhizao.warehouseCommon.batchMarkIgnored')}
-                </UniBatchButton>,
-              ]
-            : []
-        }
-        request={async (params) => {
-          try {
-            const pageSize = params.pageSize || 20;
-            const skip = (params.current! - 1) * pageSize;
-            const result = activeTab === 'alerts'
-              ? await inventoryAlertApi.list({
-                  skip,
-                  limit: pageSize,
-                  alert_type: params.alert_type,
-                  status: params.status,
-                  alert_level: params.alert_level,
-                  material_id: params.material_id,
-                  warehouse_id: params.warehouse_id,
-                })
-              : await inventoryAlertApi.listRules({
-                  skip,
-                  limit: pageSize,
-                  alert_type: params.alert_type,
-                  is_enabled: params.is_enabled,
-                });
-            const rows = Array.isArray(result) ? result : [];
-            if (activeTab === 'alerts') {
-              tableRowsRef.current = rows as InventoryAlert[];
-              setAlertListVersion((v) => v + 1);
-            }
-            const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
-            return {
-              data: rows,
-              success: true,
-              total,
-            };
-          } catch (error) {
-            return {
-              data: [],
-              success: false,
-              total: 0,
-            };
-          }
+    <>
+      <MultiTabListPageTemplate
+        statCards={alertStatCards}
+        activeTabKey={activeTabKey}
+        onTabChange={(key) => {
+          setActiveTabKey(key as 'alerts' | 'rules');
+          invalidateMenuBadgeCounts();
         }}
-        toolBarRender={() => [
-          <Button
-            key="alerts"
-            type={activeTab === 'alerts' ? 'primary' : 'default'}
-            onClick={() => {
-              setActiveTab('alerts');
-              setSelectedRowKeys([]);
-              invalidateMenuBadgeCounts();
-
-              actionRef.current?.reload();
-            }}
-          >
-            {t('app.kuaizhizao.inventoryAlert.tabAlerts')}
-          </Button>,
-          <Button
-            key="rules"
-            type={activeTab === 'rules' ? 'primary' : 'default'}
-            onClick={() => {
-              setActiveTab('rules');
-              setSelectedRowKeys([]);
-              invalidateMenuBadgeCounts();
-
-              actionRef.current?.reload();
-            }}
-          >
-            {t('app.kuaizhizao.inventoryAlert.tabRules')}
-          </Button>,
+        preserveMounted
+        tabs={[
+          {
+            key: 'alerts',
+            label: t('app.kuaizhizao.inventoryAlert.tabAlerts'),
+            children: (
+              <UniTable<InventoryAlert>
+                actionRef={alertActionRef}
+                rowKey="id"
+                columns={alertColumns}
+                columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-alert"
+                showAdvancedSearch
+                enableRowSelection
+                selectedRowKeys={alertSelectedRowKeys}
+                onRowSelectionChange={setAlertSelectedRowKeys}
+                toolBarActionsAfterBatch={[
+                  <UniBatchButton
+                    key="batch-resolved"
+                    selectedRowKeys={alertSelectedRowKeys}
+                    icon={<CheckCircleOutlined />}
+                    disabled={
+                      selectedAlertsForBatch.length > 0 &&
+                      !inventoryAlertBatchResolveAllowed(selectedAlertsForBatch, alertPerms.canUpdate)
+                    }
+                    onAction={() => void handleBatchHandleAlerts('resolved')}
+                  >
+                    {t('app.kuaizhizao.warehouseCommon.batchMarkResolved')}
+                  </UniBatchButton>,
+                  <UniBatchButton
+                    key="batch-ignored"
+                    selectedRowKeys={alertSelectedRowKeys}
+                    icon={<CloseCircleOutlined />}
+                    disabled={
+                      selectedAlertsForBatch.length > 0 &&
+                      !inventoryAlertBatchIgnoreAllowed(selectedAlertsForBatch, alertPerms.canUpdate)
+                    }
+                    onAction={() => void handleBatchHandleAlerts('ignored')}
+                  >
+                    {t('app.kuaizhizao.warehouseCommon.batchMarkIgnored')}
+                  </UniBatchButton>,
+                ]}
+                request={async (params) => {
+                  try {
+                    const pageSize = params.pageSize || 20;
+                    const skip = (params.current! - 1) * pageSize;
+                    const result = await inventoryAlertApi.list({
+                      skip,
+                      limit: pageSize,
+                      alert_type: params.alert_type,
+                      status: params.status,
+                      alert_level: params.alert_level,
+                      material_id: params.material_id,
+                      warehouse_id: params.warehouse_id,
+                    });
+                    const rows = Array.isArray(result) ? result : [];
+                    tableRowsRef.current = rows as InventoryAlert[];
+                    setAlertListVersion((v) => v + 1);
+                    const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
+                    return {
+                      data: rows,
+                      success: true,
+                      total,
+                    };
+                  } catch {
+                    return {
+                      data: [],
+                      success: false,
+                      total: 0,
+                    };
+                  }
+                }}
+              />
+            ),
+          },
+          {
+            key: 'rules',
+            label: t('app.kuaizhizao.inventoryAlert.tabRules'),
+            children: (
+              <UniTable<InventoryAlertRule>
+                actionRef={ruleActionRef}
+                rowKey="id"
+                columns={ruleColumns}
+                columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-alert:2"
+                showAdvancedSearch
+                showCreateButton
+                createButtonText={createRuleButtonLabel}
+                onCreate={handleCreateRule}
+                enableRowSelection
+                selectedRowKeys={ruleSelectedRowKeys}
+                onRowSelectionChange={setRuleSelectedRowKeys}
+                showDeleteButton
+                onDelete={handleBatchDeleteRules}
+                deleteConfirmTitle={(count) =>
+                  t('app.kuaizhizao.inventoryAlert.deleteConfirmRules', { count })
+                }
+                request={async (params) => {
+                  try {
+                    const pageSize = params.pageSize || 20;
+                    const skip = (params.current! - 1) * pageSize;
+                    const result = await inventoryAlertApi.listRules({
+                      skip,
+                      limit: pageSize,
+                      alert_type: params.alert_type,
+                      is_enabled: params.is_enabled,
+                    });
+                    const rows = Array.isArray(result) ? result : [];
+                    const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
+                    return {
+                      data: rows,
+                      success: true,
+                      total,
+                    };
+                  } catch {
+                    return {
+                      data: [],
+                      success: false,
+                      total: 0,
+                    };
+                  }
+                }}
+              />
+            ),
+          },
         ]}
       />
 
@@ -933,7 +942,7 @@ const InventoryAlertPage: React.FC = () => {
         dataSource={currentAlert || {}}
         columns={detailColumns}
       />
-    </ListPageTemplate>
+    </>
   );
 };
 

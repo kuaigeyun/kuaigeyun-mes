@@ -441,10 +441,20 @@ const InboundPoPullEntryPage: React.FC = () => {
       }
     }
     const batchPayload: Record<number, string> = {};
+    const lineWhPayload: Record<number, number> = {};
+    const lineLocIdPayload: Record<number, number> = {};
+    const lineLocCodePayload: Record<number, string> = {};
+    let headerWhId: number | undefined;
     outstandingItems.forEach((it) => {
-      if (it.id != null && (quantities[it.id] ?? 0) > 0 && batchNumbers[it.id]) {
-        batchPayload[it.id] = batchNumbers[it.id];
+      if (it.id == null || (quantities[it.id] ?? 0) <= 0) return;
+      const id = it.id;
+      if (lineWh[id] != null && lineWh[id] > 0) {
+        lineWhPayload[id] = lineWh[id];
+        if (headerWhId == null) headerWhId = lineWh[id];
       }
+      if (lineLoc[id] != null && lineLoc[id] > 0) lineLocIdPayload[id] = lineLoc[id];
+      if (lineLocCode[id]) lineLocCodePayload[id] = lineLocCode[id];
+      if (batchNumbers[id]) batchPayload[id] = batchNumbers[id];
     });
     setSubmitting(true);
     try {
@@ -452,6 +462,12 @@ const InboundPoPullEntryPage: React.FC = () => {
         order.id,
         quantities,
         Object.keys(batchPayload).length > 0 ? batchPayload : undefined,
+        {
+          warehouseId: headerWhId ?? defaultWarehouseId,
+          lineWarehouses: lineWhPayload,
+          lineLocationIds: lineLocIdPayload,
+          lineLocationCodes: lineLocCodePayload,
+        },
       )) as { id?: number; receipt_code?: string };
       if (created?.id == null) {
         messageApi.error(t('app.kuaizhizao.warehouseInbound.entry.purchase.noReceiptId'));

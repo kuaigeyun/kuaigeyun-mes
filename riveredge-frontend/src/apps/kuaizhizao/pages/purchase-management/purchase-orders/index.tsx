@@ -14,13 +14,13 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
-import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, List, Typography, theme, Dropdown, Descriptions, Spin, Card } from 'antd';
+import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, List, Typography, theme, Dropdown, Descriptions, Spin, Card, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined, AppstoreAddOutlined, ArrowLeftOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, DownOutlined, FileTextOutlined, InboxOutlined, RollbackOutlined, AppstoreAddOutlined, ArrowLeftOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../services/dataDictionary';
 import { mapSystemDictionaryItemOptions, resolveSystemDictionaryItemLabel } from '../../../../../utils/systemDictionaryI18n';
@@ -87,6 +87,7 @@ import {
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder,
   deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder,
   withdrawPurchaseOrder,
+  revokePurchaseOrder,
   pushPurchaseOrderToReceipt, pushPurchaseOrderToReceiptPreview,
   pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToInvoice, pushPurchaseOrderToPurchaseReturn,
   pullPurchaseOrderFromInquiry, getPurchaseOrderStatistics, expeditePurchaseOrder,
@@ -145,7 +146,8 @@ import { SupplierSelectDropdown } from '../../../../master-data/components/Suppl
 import { batchImport } from '../../../../../utils/batchOperations';
 import { ROUTES } from '../../../constants/routes';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import { inboundPoEntryPath } from '../../warehouse-management/inbound/inboundPaths';
+import { fetchStorageLocationsForWarehouse } from '../../warehouse-management/inbound/inboundPoReceiptEntryUtils';
+import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 
@@ -338,7 +340,6 @@ const PurchaseOrdersPage: React.FC = () => {
   const pushToReceiptAction = resolveKuaizhizaoDocumentAction(t, 'purchase_receipt.pull_from_purchase_order');
   const pushToInvoiceAction = resolveKuaizhizaoDocumentAction(t, 'purchase_invoice.pull_from_purchase_order');
   const pushToPurchaseReturnAction = resolveKuaizhizaoDocumentAction(t, 'purchase_return.pull_from_purchase_order');
-  const pushToInboundAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_purchase_order');
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<PurchaseOrder[]>([]);
@@ -403,6 +404,7 @@ const PurchaseOrdersPage: React.FC = () => {
       submit: (id: number) => submitPurchaseOrder(id),
       withdraw: (id: number) => withdrawPurchaseOrder(id),
       approve: (id: number) => approvePurchaseOrder(id, { approved: true, review_remarks: '' }),
+      revoke: (id: number) => revokePurchaseOrder(id),
     }),
     [],
   );
@@ -699,6 +701,16 @@ const PurchaseOrdersPage: React.FC = () => {
   const [pushToReceiptOrder, setPushToReceiptOrder] = useState<PurchaseOrderDetail | null>(null);
   const [pushToReceiptQuantities, setPushToReceiptQuantities] = useState<Record<number, number>>({});
   const [pushToReceiptBatchNumbers, setPushToReceiptBatchNumbers] = useState<Record<number, string>>({});
+  const [pushToReceiptWarehouseId, setPushToReceiptWarehouseId] = useState<number | undefined>();
+  const [pushToReceiptWarehouseOptions, setPushToReceiptWarehouseOptions] = useState<
+    { label: string; value: number }[]
+  >([]);
+  const [pushToReceiptLineWh, setPushToReceiptLineWh] = useState<Record<number, number>>({});
+  const [pushToReceiptLineLoc, setPushToReceiptLineLoc] = useState<Record<number, number | undefined>>({});
+  const [pushToReceiptLineLocCode, setPushToReceiptLineLocCode] = useState<Record<number, string>>({});
+  const [pushToReceiptLocOptionsByWh, setPushToReceiptLocOptionsByWh] = useState<
+    Record<number, { value: number; label: string; code: string }[]>
+  >({});
   const [pushToReceiptPreviewLoading, setPushToReceiptPreviewLoading] = useState(false);
   const [pushToReceiptLoading, setPushToReceiptLoading] = useState(false);
 
@@ -791,28 +803,29 @@ const PurchaseOrdersPage: React.FC = () => {
     ...purchaseOrderCustomFieldColumns,
     {
       title: t('common.actions'),
-      width: 120,
       fixed: 'right',
       hideInSearch: true,
+      valueType: 'option',
       render: (_: any, record: PurchaseOrder) => {
+        const canEdit = record.capabilities?.update?.allowed === true && purchaseOrderPerms.canUpdate;
+        const canDelete = record.capabilities?.delete?.allowed === true && purchaseOrderPerms.canDelete;
         const parts: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail(record)}>
             {t('common.detail')}
           </Button>,
-          <Button {...rowActionKind('update')} key="e" onClick={() => handleEdit(record)}>
-            {t('common.edit')}
-          </Button>,
         ];
-        if (isDraftStatus(record.status)) {
+        if (canEdit) {
           parts.push(
-            <Button {...rowActionKind('submit')} key="submit" onClick={() => handleSubmitOrder(record)}>
-              {t('components.uniAction.submit')}
-            </Button>
+            <Button {...rowActionKind('update')} key="e" onClick={() => handleEdit(record)}>
+              {t('common.edit')}
+            </Button>,
           );
+        }
+        if (canDelete) {
           parts.push(
             <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)}>
               {t('common.delete')}
-            </Button>
+            </Button>,
           );
         }
         parts.push(
@@ -820,6 +833,9 @@ const PurchaseOrdersPage: React.FC = () => {
             key="wf"
             record={record}
             entityName={t('app.kuaizhizao.purchaseOrder.entityName')}
+            entityType="purchase_order"
+            unifiedAudit
+            resourcePrefix="kuaizhizao:purchase-order"
             statusField="status"
             reviewStatusField="review_status"
             draftStatuses={PO_WORKFLOW_DRAFT_STATUSES}
@@ -838,19 +854,10 @@ const PurchaseOrdersPage: React.FC = () => {
             }}
           />
         );
-        if (record.id) {
-          parts.push(
-            <Button
-              {...rowActionKind('print')}
-              key="print"
-              onClick={() => openPrint({ documentType: 'purchase_order', documentId: record.id! })}
-            />,
-          );
-        }
         return parts;
       },
     },
-  ], [t, purchaseOrderAuditEnabled, lifecycleValueEnum, purchaseOrderCustomFieldColumns, openPrint]);
+  ], [t, purchaseOrderAuditEnabled, lifecycleValueEnum, purchaseOrderCustomFieldColumns, purchaseOrderPerms]);
 
   const [pushToNoticeLoading, setPushToNoticeLoading] = useState(false);
   const [pushToInvoiceLoading, setPushToInvoiceLoading] = useState(false);
@@ -891,12 +898,25 @@ const PurchaseOrdersPage: React.FC = () => {
   // 打开下推入库 Modal（加载订单明细，初始化可编辑数量，预拉批号）
   const handlePushToReceipt = async (record: PurchaseOrder) => {
     try {
-      const detail = await getPurchaseOrder(record.id!);
+      const [detail, whRes] = await Promise.all([
+        getPurchaseOrder(record.id!),
+        masterWarehouseApi.list({ is_active: true, limit: 500 }),
+      ]);
       const items = (detail.items || []).filter(
         (it: PurchaseOrderItem) => (it.outstanding_quantity ?? 0) > 0
       );
       if (items.length === 0) {
         messageApi.warning(t('app.kuaizhizao.purchaseOrder.allReceived'));
+        return;
+      }
+      const whList = Array.isArray(whRes) ? whRes : (whRes as { items?: unknown[] })?.items ?? [];
+      const warehouseOptions = (Array.isArray(whList) ? whList : []).map((w) => {
+        const row = w as { id: number; code?: string; name?: string };
+        const label = `${row.code || ''} ${row.name || ''}`.trim() || String(row.id);
+        return { label, value: row.id };
+      });
+      if (warehouseOptions.length === 0) {
+        messageApi.error(t('app.kuaizhizao.purchaseOrder.pushReceiptNoWarehouse'));
         return;
       }
       const quantities: Record<number, number> = {};
@@ -907,8 +927,25 @@ const PurchaseOrdersPage: React.FC = () => {
       });
       setPushToReceiptOrder(detail as PurchaseOrderDetail);
       setPushToReceiptQuantities(quantities);
-      setPushToReceiptVisible(true);
+      setPushToReceiptWarehouseOptions(warehouseOptions);
+      setPushToReceiptLineWh({});
+      setPushToReceiptLineLoc({});
+      setPushToReceiptLineLocCode({});
+      setPushToReceiptLocOptionsByWh({});
+      const defaultWhId = warehouseOptions.length === 1 ? warehouseOptions[0].value : undefined;
+      setPushToReceiptWarehouseId(defaultWhId);
+      if (defaultWhId != null) {
+        const lineWh: Record<number, number> = {};
+        items.forEach((it: PurchaseOrderItem) => {
+          if (it.id != null) lineWh[it.id] = defaultWhId;
+        });
+        setPushToReceiptLineWh(lineWh);
+        void fetchStorageLocationsForWarehouse(defaultWhId).then((opts) =>
+          setPushToReceiptLocOptionsByWh((prev) => ({ ...prev, [defaultWhId]: opts })),
+        );
+      }
       setPushToReceiptBatchNumbers({});
+      setPushToReceiptVisible(true);
       setPushToReceiptPreviewLoading(true);
       try {
         const preview = await pushPurchaseOrderToReceiptPreview(record.id!, quantities);
@@ -927,41 +964,85 @@ const PurchaseOrdersPage: React.FC = () => {
     }
   };
 
-  const handlePushToInboundEntry = (record: PurchaseOrder) => {
-    if (!record.id) return;
-    navigate(inboundPoEntryPath(record.id));
-  };
-
   // 确认下推入库
   const handlePushToReceiptConfirm = async () => {
     if (!pushToReceiptOrder?.id) return;
     const items = (pushToReceiptOrder.items || []).filter(
       (it: PurchaseOrderItem) => (it.outstanding_quantity ?? 0) > 0
     );
+    let hasPositiveQty = false;
     for (const it of items) {
       if (it.id == null) continue;
       const qty = pushToReceiptQuantities[it.id] ?? 0;
       const max = Number(it.outstanding_quantity ?? 0);
       if (qty <= 0) continue;
+      hasPositiveQty = true;
       if (qty > max) {
         messageApi.error(t('app.kuaizhizao.purchaseOrder.qtyExceedsUnreceived', { material: it.material_code || it.material_name, max }));
         return;
       }
+      const lineWh = pushToReceiptLineWh[it.id];
+      if (lineWh == null || !(lineWh > 0)) {
+        messageApi.error(t('app.kuaizhizao.purchaseOrder.pushReceiptSelectLineWarehouse', { material: it.material_code || it.material_name || '-' }));
+        return;
+      }
+    }
+    if (!hasPositiveQty) {
+      messageApi.warning(t('app.kuaizhizao.purchaseOrder.pushReceiptQtyRequired'));
+      return;
     }
     const batchNumbers: Record<number, string> = {};
+    const lineWhByPoItemId: Record<number, number> = {};
+    const lineLocByPoItemId: Record<number, number> = {};
+    const lineLocCodeByPoItemId: Record<number, string> = {};
+    let headerWarehouseId: number | undefined;
     items.forEach((it: PurchaseOrderItem) => {
-      if (it.id != null && (pushToReceiptQuantities[it.id] ?? 0) > 0 && pushToReceiptBatchNumbers[it.id]) {
+      if (it.id == null) return;
+      const qty = pushToReceiptQuantities[it.id] ?? 0;
+      if (qty <= 0) return;
+      const lineWh = pushToReceiptLineWh[it.id];
+      if (lineWh == null || !(lineWh > 0)) return;
+      lineWhByPoItemId[it.id] = lineWh;
+      if (headerWarehouseId == null) headerWarehouseId = lineWh;
+      const locId = pushToReceiptLineLoc[it.id];
+      if (locId != null && locId > 0) {
+        lineLocByPoItemId[it.id] = locId;
+        const locCode = pushToReceiptLineLocCode[it.id];
+        if (locCode) lineLocCodeByPoItemId[it.id] = locCode;
+      }
+      if (pushToReceiptBatchNumbers[it.id]) {
         batchNumbers[it.id] = pushToReceiptBatchNumbers[it.id];
       }
     });
     setPushToReceiptLoading(true);
     try {
-      const result = await pushPurchaseOrderToReceipt(pushToReceiptOrder.id, pushToReceiptQuantities, Object.keys(batchNumbers).length > 0 ? batchNumbers : undefined);
+      const result = await pushPurchaseOrderToReceipt(
+        pushToReceiptOrder.id,
+        pushToReceiptQuantities,
+        Object.keys(batchNumbers).length > 0 ? batchNumbers : undefined,
+        {
+          warehouseId: headerWarehouseId,
+          lineWarehouses: lineWhByPoItemId,
+          lineLocationIds: lineLocByPoItemId,
+          lineLocationCodes: lineLocCodeByPoItemId,
+        },
+      );
+      const receiptId = Number(result?.id);
+      if (!Number.isFinite(receiptId) || receiptId <= 0) {
+        messageApi.error(t('app.kuaizhizao.purchaseOrder.pushReceiptFailed'));
+        return;
+      }
       messageApi.success(t('app.kuaizhizao.purchaseOrder.pushReceiptSuccess', { code: result.receipt_code || t('app.kuaizhizao.purchaseOrder.createdFallback') }));
       setPushToReceiptVisible(false);
       setPushToReceiptOrder(null);
       setPushToReceiptQuantities({});
       setPushToReceiptBatchNumbers({});
+      setPushToReceiptWarehouseId(undefined);
+      setPushToReceiptWarehouseOptions([]);
+      setPushToReceiptLineWh({});
+      setPushToReceiptLineLoc({});
+      setPushToReceiptLineLocCode({});
+      setPushToReceiptLocOptionsByWh({});
       invalidateStatistics();
       invalidateMenuBadgeCounts();
 
@@ -1149,19 +1230,9 @@ const PurchaseOrdersPage: React.FC = () => {
           },
         },
         {
-          key: 'inbound-entry',
-          label: pushToInboundAction.label,
-          icon: <InboxOutlined />,
-          disabled: !pushEnabled,
-          onClick: () => {
-            if (!pushEnabled) return;
-            handlePushToInboundEntry(record);
-          },
-        },
-        {
           key: 'invoice',
           label: pushToInvoiceAction.label,
-          icon: <DollarOutlined />,
+          icon: <FileTextOutlined />,
           disabled: !pushEnabled,
           onClick: () => {
             if (!pushEnabled) return;
@@ -1181,12 +1252,10 @@ const PurchaseOrdersPage: React.FC = () => {
       ]);
     },
     [
-      handlePushToInboundEntry,
       handlePushToInvoice,
       handlePushToNotice,
       handlePushToReceipt,
       handlePushToReturn,
-      pushToInboundAction.label,
       pushToInvoiceAction.label,
       pushToPurchaseReturnAction.label,
       pushToReceiptAction.label,
@@ -1220,29 +1289,6 @@ const PurchaseOrdersPage: React.FC = () => {
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('app.kuaizhizao.purchaseOrder.deleteFailed'));
-        }
-      },
-    });
-  };
-
-  const handleSubmitOrder = (record: PurchaseOrder) => {
-    if (!record.id) return;
-    Modal.confirm({
-      title: t('app.kuaizhizao.purchaseOrder.submitTitle'),
-      content: t('app.kuaizhizao.purchaseOrder.submitContent'),
-      onOk: async () => {
-        try {
-          await submitPurchaseOrder(record.id!);
-          messageApi.success(t('app.kuaizhizao.salesOrder.submitted'));
-          invalidateStatistics();
-          invalidateMenuBadgeCounts();
-          actionRef.current?.reload();
-          if (detailDrawerVisible && orderDetail?.id === record.id) {
-            const refreshed = await getPurchaseOrder(record.id!);
-            setOrderDetail(refreshed);
-          }
-        } catch (error: any) {
-          messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.submitFailed'));
         }
       },
     });
@@ -2622,6 +2668,7 @@ const PurchaseOrdersPage: React.FC = () => {
               onPrimarySubmit={() => void triggerPurchaseOrderPrimarySubmit()}
               isCreatePage={isCreatePage}
               canSubmitAfterSave={canSubmitAfterSave}
+              showSaveDraft={canSubmitAfterSave}
             />
             </>
           }
@@ -2727,6 +2774,26 @@ const PurchaseOrdersPage: React.FC = () => {
                 batch: t('app.kuaizhizao.purchaseOrder.batchPushNotice'),
               }}
               icon={<FileTextOutlined />}
+              size="middle"
+            />,
+            <UniCapabilityBatchButton
+              key="purchase-order-print"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedOrdersForBatch}
+              capabilityKey="print"
+              permAllowed={purchaseOrderPerms.canPrint}
+              batchAllowed={(records, perm) =>
+                Boolean(perm) && records.some((record) => record.capabilities?.print?.allowed === true)
+              }
+              singleOnly
+              onRun={async (id) => {
+                openPrint({ documentType: 'purchase_order', documentId: id });
+              }}
+              labels={{
+                single: t('components.uniAction.print'),
+                batch: t('components.uniAction.print'),
+              }}
+              icon={<PrinterOutlined />}
               size="middle"
             />,
           ]}
@@ -2995,19 +3062,10 @@ const PurchaseOrdersPage: React.FC = () => {
               items={[
                 {
                   key: 'edit',
-                  visible: isDraftStatus(orderDetail.status),
+                  visible: orderDetail.capabilities?.update?.allowed === true && purchaseOrderPerms.canUpdate,
                   render: () => (
                     <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setDetailDrawerVisible(false); handleEdit(orderDetail); }}>
                       {t('common.edit')}
-                    </Button>
-                  ),
-                },
-                {
-                  key: 'submit',
-                  visible: isDraftStatus(orderDetail.status),
-                  render: () => (
-                    <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmitOrder(orderDetail)}>
-                      {t('components.uniAction.submit')}
                     </Button>
                   ),
                 },
@@ -3017,6 +3075,9 @@ const PurchaseOrdersPage: React.FC = () => {
                     <UniWorkflowActions {...rowActionKind('skip')}
                       record={orderDetail}
                       entityName={t('app.kuaizhizao.purchaseOrder.entityName')}
+                      entityType="purchase_order"
+                      unifiedAudit
+                      resourcePrefix="kuaizhizao:purchase-order"
                       statusField="status"
                       reviewStatusField="review_status"
                       draftStatuses={PO_WORKFLOW_DRAFT_STATUSES}
@@ -3038,19 +3099,6 @@ const PurchaseOrdersPage: React.FC = () => {
                   ),
                 },
                 {
-                  key: 'print',
-                  render: () => (
-                    <Button
-                      type="link"
-                      size="small"
-                      icon={<PrinterOutlined />}
-                      onClick={() => openPrint({ documentType: 'purchase_order', documentId: orderDetail.id! })}
-                    >
-                      {t('components.uniAction.print')}
-                    </Button>
-                  ),
-                },
-                {
                   key: 'push',
                   visible: isAuditedStatus(orderDetail.status),
                   render: () => (
@@ -3059,8 +3107,7 @@ const PurchaseOrdersPage: React.FC = () => {
                         items: [
                           { key: 'receipt-notice', label: pushToReceiptNoticeAction.label, icon: <FileTextOutlined />, onClick: () => handlePushToNotice(orderDetail) },
                           { key: 'receipt', label: pushToReceiptAction.label, icon: <InboxOutlined />, onClick: () => handlePushToReceipt(orderDetail) },
-                          { key: 'inbound-entry', label: pushToInboundAction.label, icon: <InboxOutlined />, onClick: () => handlePushToInboundEntry(orderDetail) },
-                          { key: 'invoice', label: pushToInvoiceAction.label, icon: <DollarOutlined />, onClick: () => handlePushToInvoice(orderDetail) },
+                          { key: 'invoice', label: pushToInvoiceAction.label, icon: <FileTextOutlined />, onClick: () => handlePushToInvoice(orderDetail) },
                           { key: 'purchase-return', label: pushToPurchaseReturnAction.label, icon: <RollbackOutlined />, onClick: () => handlePushToReturn(orderDetail) },
                         ],
                       }}
@@ -3113,10 +3160,24 @@ const PurchaseOrdersPage: React.FC = () => {
                 },
                 {
                   key: 'delete',
-                  visible: isDraftStatus(orderDetail.status),
+                  visible: orderDetail.capabilities?.delete?.allowed === true && purchaseOrderPerms.canDelete,
                   render: () => (
                     <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(orderDetail)}>
                       {t('common.delete')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'print',
+                  visible: orderDetail.id != null && purchaseOrderPerms.canPrint,
+                  render: () => (
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<PrinterOutlined />}
+                      onClick={() => openPrint({ documentType: 'purchase_order', documentId: orderDetail.id! })}
+                    >
+                      {t('components.uniAction.print')}
                     </Button>
                   ),
                 },
@@ -3486,11 +3547,17 @@ const PurchaseOrdersPage: React.FC = () => {
           setPushToReceiptOrder(null);
           setPushToReceiptQuantities({});
           setPushToReceiptBatchNumbers({});
+          setPushToReceiptWarehouseId(undefined);
+          setPushToReceiptWarehouseOptions([]);
+          setPushToReceiptLineWh({});
+          setPushToReceiptLineLoc({});
+          setPushToReceiptLineLocCode({});
+          setPushToReceiptLocOptionsByWh({});
         }}
         onOk={handlePushToReceiptConfirm}
         confirmLoading={pushToReceiptLoading}
         okText={t('app.kuaizhizao.purchaseOrder.confirmPush')}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         destroyOnHidden
       >
         {pushToReceiptOrder && (
@@ -3498,6 +3565,53 @@ const PurchaseOrdersPage: React.FC = () => {
             <p style={{ marginBottom: 16 }}>
               {t('app.kuaizhizao.purchaseOrder.pushReceiptIntro', { code: pushToReceiptOrder.order_code })}
             </p>
+            <Row gutter={16} style={{ marginBottom: 16 }}>
+              <Col span={12}>
+                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                  {t('app.kuaizhizao.purchaseOrder.pushReceiptDefaultWarehouse')}
+                </Typography.Text>
+                <Select
+                  style={{ width: '100%' }}
+                  placeholder={t('app.kuaizhizao.purchaseOrder.pushReceiptBatchWarehousePlaceholder')}
+                  showSearch
+                  allowClear
+                  optionFilterProp="label"
+                  value={pushToReceiptWarehouseId}
+                  options={pushToReceiptWarehouseOptions}
+                  onChange={(value) => {
+                    setPushToReceiptWarehouseId(value ?? undefined);
+                    if (value == null) return;
+                    const lineIds = (pushToReceiptOrder.items || [])
+                      .filter((it: PurchaseOrderItem) => (it.outstanding_quantity ?? 0) > 0 && it.id != null)
+                      .map((it) => it.id!);
+                    setPushToReceiptLineWh((prev) => {
+                      const next = { ...prev };
+                      lineIds.forEach((id) => {
+                        next[id] = value;
+                      });
+                      return next;
+                    });
+                    setPushToReceiptLineLoc((prev) => {
+                      const next = { ...prev };
+                      lineIds.forEach((id) => {
+                        delete next[id];
+                      });
+                      return next;
+                    });
+                    setPushToReceiptLineLocCode((prev) => {
+                      const next = { ...prev };
+                      lineIds.forEach((id) => {
+                        delete next[id];
+                      });
+                      return next;
+                    });
+                    void fetchStorageLocationsForWarehouse(value).then((opts) =>
+                      setPushToReceiptLocOptionsByWh((prev) => ({ ...prev, [value]: opts })),
+                    );
+                  }}
+                />
+              </Col>
+            </Row>
             <Table
               size="small"
               dataSource={(pushToReceiptOrder.items || []).filter(
@@ -3505,22 +3619,102 @@ const PurchaseOrdersPage: React.FC = () => {
               )}
               rowKey="id"
               pagination={false}
-              scroll={{ x: 700 }}
+              scroll={{ x: 1200 }}
               columns={[
-                { title: t('app.kuaizhizao.purchaseOrder.col.materialCode'), dataIndex: 'material_code', width: 120 },
-                { title: t('app.kuaizhizao.purchaseOrder.col.materialName'), dataIndex: 'material_name', width: 150 },
-                { title: t('app.kuaizhizao.purchaseOrder.col.orderedQty'), dataIndex: 'ordered_quantity', width: 100, align: 'right' },
-                { title: t('app.kuaizhizao.purchaseOrder.col.receivedQty'), dataIndex: 'received_quantity', width: 90, align: 'right' },
-                { title: t('app.kuaizhizao.purchaseOrder.col.outstandingQty'), dataIndex: 'outstanding_quantity', width: 90, align: 'right' },
+                { title: t('app.kuaizhizao.purchaseOrder.col.materialCode'), dataIndex: 'material_code', width: 110 },
+                { title: t('app.kuaizhizao.purchaseOrder.col.materialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
+                { title: t('app.kuaizhizao.purchaseOrder.col.orderedQty'), dataIndex: 'ordered_quantity', width: 90, align: 'right' },
+                { title: t('app.kuaizhizao.purchaseOrder.col.receivedQty'), dataIndex: 'received_quantity', width: 80, align: 'right' },
+                { title: t('app.kuaizhizao.purchaseOrder.col.outstandingQty'), dataIndex: 'outstanding_quantity', width: 80, align: 'right' },
+                {
+                  title: (
+                    <>
+                      {t('app.kuaizhizao.purchaseOrder.pushReceiptWarehouse')}
+                      <Typography.Text type="danger"> *</Typography.Text>
+                    </>
+                  ),
+                  width: 150,
+                  render: (_: unknown, record: PurchaseOrderItem) =>
+                    record.id != null ? (
+                      <Select
+                        style={{ width: '100%', minWidth: 130 }}
+                        placeholder={t('app.kuaizhizao.purchaseOrder.pushReceiptSelectWarehouse')}
+                        showSearch
+                        optionFilterProp="label"
+                        value={pushToReceiptLineWh[record.id]}
+                        options={pushToReceiptWarehouseOptions}
+                        onChange={(nv) => {
+                          const rid = record.id!;
+                          setPushToReceiptLineWh((prev) => ({ ...prev, [rid]: nv }));
+                          setPushToReceiptLineLoc((prev) => {
+                            const next = { ...prev };
+                            delete next[rid];
+                            return next;
+                          });
+                          setPushToReceiptLineLocCode((prev) => {
+                            const next = { ...prev };
+                            delete next[rid];
+                            return next;
+                          });
+                          void fetchStorageLocationsForWarehouse(nv).then((opts) =>
+                            setPushToReceiptLocOptionsByWh((prev) => ({ ...prev, [nv]: opts })),
+                          );
+                        }}
+                      />
+                    ) : null,
+                },
+                {
+                  title: t('app.kuaizhizao.purchaseOrder.pushReceiptLocation'),
+                  width: 150,
+                  render: (_: unknown, record: PurchaseOrderItem) => {
+                    if (record.id == null) return null;
+                    const rid = record.id;
+                    const wh = pushToReceiptLineWh[rid];
+                    const locOpts = wh != null ? pushToReceiptLocOptionsByWh[wh] ?? [] : [];
+                    return (
+                      <Select
+                        style={{ width: '100%', minWidth: 130 }}
+                        placeholder={
+                          wh != null
+                            ? t('app.kuaizhizao.purchaseOrder.pushReceiptSelectLocation')
+                            : t('app.kuaizhizao.purchaseOrder.pushReceiptSelectWarehouseFirst')
+                        }
+                        showSearch
+                        allowClear
+                        optionFilterProp="label"
+                        value={pushToReceiptLineLoc[rid]}
+                        options={locOpts}
+                        disabled={wh == null}
+                        onDropdownVisibleChange={(open) => {
+                          if (open && wh != null && !pushToReceiptLocOptionsByWh[wh]?.length) {
+                            void fetchStorageLocationsForWarehouse(wh).then((opts) =>
+                              setPushToReceiptLocOptionsByWh((prev) => ({ ...prev, [wh]: opts })),
+                            );
+                          }
+                        }}
+                        onChange={(v) => {
+                          setPushToReceiptLineLoc((prev) => ({ ...prev, [rid]: v ?? undefined }));
+                          const o = locOpts.find((x) => x.value === v);
+                          setPushToReceiptLineLocCode((prev) => {
+                            const next = { ...prev };
+                            if (v == null) delete next[rid];
+                            else next[rid] = o?.code ?? '';
+                            return next;
+                          });
+                        }}
+                      />
+                    );
+                  },
+                },
                 {
                   title: t('app.kuaizhizao.purchaseOrder.col.batchNo'),
-                  width: 140,
+                  width: 120,
                   render: (_: any, record: PurchaseOrderItem) =>
                     record.id != null ? (pushToReceiptBatchNumbers[record.id] ?? (pushToReceiptPreviewLoading ? t('app.kuaizhizao.purchaseOrder.loading') : '-')) : '-',
                 },
                 {
                   title: t('app.kuaizhizao.purchaseOrder.col.receiptQty'),
-                  width: 140,
+                  width: 110,
                   align: 'right',
                   render: (_: any, record: PurchaseOrderItem) => (record.id != null ? (
                     <InputNumber
@@ -3533,7 +3727,7 @@ const PurchaseOrdersPage: React.FC = () => {
                           [record.id!]: Number(v) || 0,
                         }))
                       }
-                      style={{ width: 100 }}
+                      style={{ width: 88 }}
                     />
                   ) : null),
                 },

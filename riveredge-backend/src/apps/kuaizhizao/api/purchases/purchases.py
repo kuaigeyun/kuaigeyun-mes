@@ -437,7 +437,7 @@ async def push_purchase_order_to_receipt_preview(
 @router.post("/purchase-orders/{order_id}/push-to-receipt", summary="Push to purchase receipt")
 async def push_purchase_order_to_receipt(
     order_id: int = Path(..., description="采购订单ID"),
-    body: Optional[dict] = Body(None, description="receipt_quantities 和可选的 batch_numbers"),
+    body: Optional[dict] = Body(None, description="receipt_quantities、可选 batch_numbers 与 warehouse_id"),
     current_user: CurrentUser = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -446,7 +446,7 @@ async def push_purchase_order_to_receipt(
     
     自动生成采购入库单，支持指定入库数量及预生成批号
     
-    body 格式：{ "receipt_quantities": {item_id: quantity}, "batch_numbers": {item_id: batch_number} }
+    body 格式：{ "receipt_quantities": {item_id: quantity}, "batch_numbers": {item_id: batch_number}, "warehouse_id": 1, "line_warehouses": {item_id: warehouse_id}, "line_location_ids": {item_id: location_id}, "line_location_codes": {item_id: code} }
     或直接传 receipt_quantities 字典（向后兼容）
     """
     from fastapi import status
@@ -456,9 +456,36 @@ async def push_purchase_order_to_receipt(
         body = {}
     # 兼容：body 直接为 receipt_quantities，或 body.receipt_quantities
     receipt_quantities = body.get("receipt_quantities")
-    if receipt_quantities is None and "receipt_quantities" not in body and "batch_numbers" not in body:
+    if receipt_quantities is None and "receipt_quantities" not in body and "batch_numbers" not in body and "warehouse_id" not in body and "line_warehouses" not in body and "line_location_ids" not in body:
         receipt_quantities = body  # 向后兼容：直接传 {item_id: quantity}
     batch_numbers = body.get("batch_numbers")
+    warehouse_id_raw = body.get("warehouse_id")
+    warehouse_id = None
+    if warehouse_id_raw is not None:
+        try:
+            warehouse_id = int(warehouse_id_raw)
+        except (ValueError, TypeError):
+            warehouse_id = None
+
+    def _normalize_int_int_map(raw: Any) -> Optional[dict]:
+        if not raw or not isinstance(raw, dict):
+            return None
+        try:
+            return {int(k): int(v) for k, v in raw.items()}
+        except (ValueError, TypeError):
+            return None
+
+    def _normalize_int_str_map(raw: Any) -> Optional[dict]:
+        if not raw or not isinstance(raw, dict):
+            return None
+        try:
+            return {int(k): str(v) for k, v in raw.items() if v is not None and str(v).strip()}
+        except (ValueError, TypeError):
+            return None
+
+    line_warehouses = _normalize_int_int_map(body.get("line_warehouses"))
+    line_location_ids = _normalize_int_int_map(body.get("line_location_ids"))
+    line_location_codes = _normalize_int_str_map(body.get("line_location_codes"))
 
     normalized = None
     if receipt_quantities:
@@ -480,7 +507,11 @@ async def push_purchase_order_to_receipt(
         order_id=order_id,
         created_by=current_user.id,
         receipt_quantities=normalized,
-        batch_numbers=batch_normalized
+        batch_numbers=batch_normalized,
+        warehouse_id=warehouse_id,
+        line_warehouses=line_warehouses,
+        line_location_ids=line_location_ids,
+        line_location_codes=line_location_codes,
     )
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 

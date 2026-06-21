@@ -21,17 +21,10 @@ import { useRequest } from 'ahooks';
 import { useTranslation } from 'react-i18next';
 import { FlowGraph } from '@ant-design/graphs';
 import { NodeEvent, type Graph, type NodeData } from '@antv/g6';
-import { CANVAS_GRID_STYLE } from '../layout-templates/constants';
+import { CANVAS_FLOW_GRAPH_GRID_STYLE } from '../layout-templates/constants';
 import { getDocumentRelationTrace } from '../../services/documentRelations';
 import type { TraceGraphNodeMeta } from './traceToGraph';
 import { traceDocumentNodeKey, traceResponseToFlowGraphData } from './traceToGraph';
-
-/** 全链路画板专用：比全局 CANVAS_GRID_STYLE 略小的点阵（更密、圆点略细） */
-const TRACE_FLOW_GRID_BACKGROUND = {
-  ...CANVAS_GRID_STYLE,
-  backgroundImage: 'radial-gradient(circle, #94a3b8 0.75px, transparent 0.75px)',
-  backgroundSize: '18px 18px',
-} as const;
 
 /** fitView 时画布内边距（左右留白），与视口选项 padding 一致 */
 const TRACE_FLOW_VIEWPORT_PADDING = { compact: 24, normal: 36 } as const;
@@ -517,9 +510,9 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
         {
           type: 'background',
           key: 'document-trace-flow-bg',
-          backgroundColor: TRACE_FLOW_GRID_BACKGROUND.backgroundColor,
-          backgroundImage: TRACE_FLOW_GRID_BACKGROUND.backgroundImage,
-          backgroundSize: TRACE_FLOW_GRID_BACKGROUND.backgroundSize,
+          backgroundColor: CANVAS_FLOW_GRAPH_GRID_STYLE.backgroundColor,
+          backgroundImage: CANVAS_FLOW_GRAPH_GRID_STYLE.backgroundImage,
+          backgroundSize: CANVAS_FLOW_GRAPH_GRID_STYLE.backgroundSize,
         },
       ],
       /** 使用 data.label，见 @ant-design/graphs formatLabel(data, labelField) */

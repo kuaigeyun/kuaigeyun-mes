@@ -19,7 +19,15 @@ from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspec
 
 from apps.kuaizhizao.schemas.quality import (
     # 来料检验单
-    IncomingInspectionCreate, IncomingInspectionUpdate, IncomingInspectionResponse, IncomingInspectionListResponse,
+    IncomingInspectionCreate,
+    IncomingInspectionUpdate,
+    IncomingInspectionResponse,
+    IncomingInspectionListResponse,
+    EnsureIqcForPurchaseReceiptResponse,
+    EnsureIqcForPurchaseReceiptLineSummary,
+    EnsureIqcForCustomerMaterialRegistrationResponse,
+    EnsureFqcForFinishedGoodsReceiptResponse,
+    EnsureFqcForFinishedGoodsReceiptLineSummary,
     # 过程检验单
     ProcessInspectionCreate, ProcessInspectionUpdate, ProcessInspectionResponse, ProcessInspectionListResponse,
     # 成品检验单
@@ -28,7 +36,12 @@ from apps.kuaizhizao.schemas.quality import (
 
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.services.inspection_policy_service import (
+    iqc_inspection_passed_for_inbound,
+    fqc_inspection_passed_for_inbound,
+    resolve_iqc_plan_label_for_material,
+    resolve_fqc_plan_label_for_material,
     InspectionStage,
+    get_quality_effective_config,
     get_quality_inspection_stage_toggles,
     resolve_inspection_policy,
     stage_plan_type,
@@ -72,6 +85,120 @@ async def _require_iqc_stage_enabled(tenant_id: int) -> None:
     t = await get_quality_inspection_stage_toggles(tenant_id)
     if not t.get("iqc_enabled", True):
         raise BusinessLogicError("当前组织已关闭来料检验（IQC）环节，禁止创建或下推来料检验单")
+
+
+_PURCHASE_RECEIPT_IQC_ELIGIBLE_STATUSES = frozenset({
+    "待入库", "已入库", "草稿", "draft", "DRAFT",
+})
+
+
+def _purchase_receipt_allows_iqc_creation(receipt: Any) -> bool:
+    return str(getattr(receipt, "status", "") or "").strip() in _PURCHASE_RECEIPT_IQC_ELIGIBLE_STATUSES
+
+
+_CUSTOMER_MATERIAL_IQC_ELIGIBLE_STATUSES = frozenset({"pending", "processed"})
+
+
+def _customer_material_allows_iqc_creation(registration: Any) -> bool:
+    return str(getattr(registration, "status", "") or "").strip() in _CUSTOMER_MATERIAL_IQC_ELIGIBLE_STATUSES
+
+
+_FINISHED_GOODS_RECEIPT_FQC_ELIGIBLE_STATUSES = frozenset({
+    "待入库", "已入库", "草稿", "draft", "DRAFT",
+})
+
+
+def _finished_goods_receipt_allows_fqc_creation(receipt: Any) -> bool:
+    return str(getattr(receipt, "status", "") or "").strip() in _FINISHED_GOODS_RECEIPT_FQC_ELIGIBLE_STATUSES
+
+
+def _semi_finished_goods_receipt_allows_fqc_creation(receipt: Any) -> bool:
+    return _finished_goods_receipt_allows_fqc_creation(receipt)
+
+
+async def _collect_fqc_required_material_ids(tenant_id: int, lines: List[Any]) -> List[int]:
+    """成品入库明细中 fqc 策略≠none 且数量>0 的物料 ID（去重保序）。"""
+    needs_qc_mids: List[int] = []
+    seen: set[int] = set()
+    for item in lines:
+        mid = getattr(item, "material_id", None)
+        if not mid:
+            continue
+        qty = getattr(item, "receipt_quantity", None) or getattr(item, "qualified_quantity", None) or 0
+        try:
+            if float(qty) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        mid_int = int(mid)
+        if mid_int in seen:
+            continue
+        eff, _, _ = await resolve_inspection_policy(tenant_id, "fqc", material_id=mid_int)
+        if eff == "none":
+            continue
+        seen.add(mid_int)
+        needs_qc_mids.append(mid_int)
+    return needs_qc_mids
+
+
+async def _ensure_fqc_for_work_order(
+    tenant_id: int,
+    work_order_id: int,
+    created_by: int,
+) -> Optional[FinishedGoodsInspectionResponse]:
+    """补齐工单成品检验单（已有则返回，缺失则创建）。"""
+    existing = await FinishedGoodsInspection.filter(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        deleted_at__isnull=True,
+    ).order_by("-id").first()
+    if existing:
+        return FinishedGoodsInspectionResponse.model_validate(existing)
+
+    svc = FinishedGoodsInspectionService()
+    try:
+        return await svc.create_inspection_from_work_order(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            created_by=created_by,
+        )
+    except BusinessLogicError as e:
+        msg = str(e)
+        if "已存在待检验" in msg:
+            pending = await FinishedGoodsInspection.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).order_by("-id").first()
+            if pending:
+                return FinishedGoodsInspectionResponse.model_validate(pending)
+        if "无质检" in msg or "无需下推" in msg:
+            return None
+        raise
+
+
+async def _collect_iqc_required_material_ids(tenant_id: int, lines: List[Any]) -> List[int]:
+    """采购入库明细中 iqc 策略≠none 且数量>0 的物料 ID（去重保序）。"""
+    needs_qc_mids: List[int] = []
+    seen: set[int] = set()
+    for item in lines:
+        mid = getattr(item, "material_id", None)
+        if not mid:
+            continue
+        qty = getattr(item, "receipt_quantity", None) or getattr(item, "quantity", None) or 0
+        try:
+            if float(qty) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        eff, _, _ = await resolve_inspection_policy(tenant_id, "iqc", material_id=int(mid))
+        if eff == "none":
+            continue
+        mid_int = int(mid)
+        if mid_int not in seen:
+            seen.add(mid_int)
+            needs_qc_mids.append(mid_int)
+    return needs_qc_mids
 
 
 async def _require_ipqc_stage_enabled(tenant_id: int) -> None:
@@ -229,16 +356,30 @@ async def _resolve_inspection_template_fields(
 def _validate_inspection_template_conduct(
     template_json: Any,
     conduct_data: Dict[str, Any],
+    *,
+    require_step_photo: bool = True,
 ) -> None:
     from apps.kuaizhizao.services.inspection_step_spec import validate_inspection_template_conduct
 
-    validate_inspection_template_conduct(template_json, conduct_data)
+    validate_inspection_template_conduct(
+        template_json, conduct_data, require_step_photo=require_step_photo
+    )
+
+
+_CONDUCT_PAYLOAD_SKIP_KEYS = frozenset({
+    "item_results",
+    "conduct_step_results",
+    "qualified_quantity",
+    "unqualified_quantity",
+})
 
 
 def _apply_template_conduct_to_payload(
     inspection: Any,
     template_attr: str,
     inspection_data: dict,
+    *,
+    require_step_photo: bool = True,
 ) -> dict:
     """校验方案项并返回可写入 ORM 的 conduct 附加字段。"""
     from apps.kuaizhizao.services.inspection_step_spec import (
@@ -249,11 +390,13 @@ def _apply_template_conduct_to_payload(
 
     template = getattr(inspection, template_attr, None)
     conduct_input = apply_derived_step_results(template, dict(inspection_data))
-    _validate_inspection_template_conduct(template, conduct_input)
+    _validate_inspection_template_conduct(
+        template, conduct_input, require_step_photo=require_step_photo
+    )
     payload = {
         k: v
         for k, v in conduct_input.items()
-        if k not in ("item_results", "conduct_step_results") and v is not None
+        if k not in _CONDUCT_PAYLOAD_SKIP_KEYS and v is not None
     }
     merged_measurement = build_measurement_data_from_conduct(template, conduct_input)
     if merged_measurement and hasattr(inspection, "measurement_data"):
@@ -437,6 +580,10 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             query = query.filter(material_id=filters['material_id'])
         if filters.get('purchase_receipt_id'):
             query = query.filter(purchase_receipt_id=filters['purchase_receipt_id'])
+        if filters.get('customer_material_registration_id'):
+            query = query.filter(
+                customer_material_registration_id=filters['customer_material_registration_id']
+            )
         if filters.get("scoped_purchase_receipt_ids") is not None:
             query = query.filter(purchase_receipt_id__in=filters["scoped_purchase_receipt_ids"])
 
@@ -504,21 +651,31 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             quality_status = "合格" if unqualified_quantity == 0 else "不合格"
 
             conduct_payload = _apply_template_conduct_to_payload(
-                inspection_model, "other_checks", inspection_data
+                inspection_model,
+                "other_checks",
+                inspection_data,
+                require_step_photo=False,
             )
 
-            await IncomingInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
-                qualified_quantity=qualified_quantity,
-                unqualified_quantity=unqualified_quantity,
-                inspection_result="已检验",
-                quality_status=quality_status,
-                inspector_id=inspected_by,
-                inspector_name=inspector_name,
-                inspection_time=datetime.now(),
-                status="已检验",
-                updated_by=inspected_by,
-                **conduct_payload
-            )
+            conduct_update: Dict[str, Any] = {
+                "qualified_quantity": qualified_quantity,
+                "unqualified_quantity": unqualified_quantity,
+                "inspection_result": "已检验",
+                "quality_status": quality_status,
+                "inspector_id": inspected_by,
+                "inspector_name": inspector_name,
+                "inspection_time": datetime.now(),
+                "status": "已检验",
+                "updated_by": inspected_by,
+                **conduct_payload,
+            }
+            audit_required = await _is_quality_audit_required(tenant_id, "incoming_inspection")
+            if not audit_required and quality_status == "合格":
+                from apps.kuaizhizao.constants import ReviewStatus
+
+                conduct_update["review_status"] = ReviewStatus.APPROVED
+                conduct_update["status"] = "已审核"
+            await IncomingInspection.filter(tenant_id=tenant_id, id=inspection_id).update(**conduct_update)
 
             updated_inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
             
@@ -666,6 +823,492 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             updated_inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
             return updated_inspection
 
+    async def _ensure_missing_incoming_inspections_for_purchase_receipt(
+        self,
+        tenant_id: int,
+        receipt: Any,
+        receipt_items: List[Any],
+        created_by: int,
+    ) -> List[IncomingInspectionResponse]:
+        """为采购入库单明细补齐缺失的来料检验单（已有则跳过，不拆单）。"""
+        purchase_receipt_id = int(receipt.id)
+        audit_required = await _is_quality_audit_required(tenant_id, "incoming_inspection")
+        inspections: List[IncomingInspectionResponse] = []
+        for item in receipt_items:
+            existing = await IncomingInspection.filter(
+                tenant_id=tenant_id,
+                purchase_receipt_id=purchase_receipt_id,
+                material_id=item.material_id,
+                deleted_at__isnull=True,
+            ).first()
+            if existing:
+                continue
+
+            eff, _, _ = await resolve_inspection_policy(
+                tenant_id,
+                "iqc",
+                material_id=item.material_id,
+            )
+            if eff == "none":
+                continue
+
+            template = await _resolve_inspection_template_fields(
+                tenant_id,
+                item.material_id,
+                "iqc",
+            )
+
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(tenant_id, "INCOMING_INSPECTION_CODE", prefix=f"IQ{today}")
+
+            create_kwargs: Dict[str, Any] = {
+                "tenant_id": tenant_id,
+                "inspection_code": code,
+                "purchase_receipt_id": purchase_receipt_id,
+                "purchase_receipt_code": receipt.receipt_code,
+                "supplier_id": receipt.supplier_id,
+                "supplier_name": receipt.supplier_name,
+                "material_id": item.material_id,
+                "material_code": item.material_code,
+                "material_name": item.material_name,
+                "material_spec": item.material_spec,
+                "material_unit": item.material_unit,
+                "inspection_quantity": item.receipt_quantity,
+                "qualified_quantity": 0,
+                "unqualified_quantity": 0,
+                "inspection_result": "待检验",
+                "quality_status": "待判定",
+                "status": "待检验",
+                "created_by": created_by,
+                **template,
+            }
+            if not audit_required:
+                from apps.kuaizhizao.constants import ReviewStatus
+
+                create_kwargs["review_status"] = ReviewStatus.APPROVED
+            inspection = await IncomingInspection.create(**create_kwargs)
+            inspections.append(IncomingInspectionResponse.model_validate(inspection))
+
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                rel_svc = DocumentRelationNewService()
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="purchase_receipt",
+                        source_id=purchase_receipt_id,
+                        source_code=receipt.receipt_code,
+                        source_name=None,
+                        target_type="incoming_inspection",
+                        target_id=inspection.id,
+                        target_code=inspection.inspection_code,
+                        target_name=None,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="从采购入库单创建来料检验单",
+                    ),
+                    created_by=created_by,
+                )
+            except Exception as rel_e:
+                logger.warning("创建采购入库→来料检验 单据关联失败: %s", rel_e)
+
+        return inspections
+
+    async def ensure_iqc_for_purchase_receipt(
+        self,
+        tenant_id: int,
+        purchase_receipt_id: int,
+        created_by: int,
+    ) -> EnsureIqcForPurchaseReceiptResponse:
+        """
+        确认入库前：按物料 IQC 策略自动补齐缺失检验单，并评估是否允许进入确认预览。
+        """
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+
+        cfg = await get_quality_effective_config(tenant_id)
+        gate_enabled = bool(cfg["gate"]["require_iqc_before_receipt_confirm"])
+        iqc_can_create = bool(cfg["stage_enabled"]["iqc"] and cfg["module_enabled"]["incoming"])
+
+        receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=purchase_receipt_id)
+        if not receipt:
+            raise NotFoundError(f"采购入库单不存在: {purchase_receipt_id}")
+
+        receipt_items = await PurchaseReceiptItem.filter(
+            tenant_id=tenant_id,
+            receipt_id=purchase_receipt_id,
+        ).all()
+        if not receipt_items:
+            raise BusinessLogicError("采购入库单没有明细项")
+
+        needs_qc_mids = await _collect_iqc_required_material_ids(tenant_id, receipt_items)
+        requires_iqc = bool(needs_qc_mids)
+
+        created: List[IncomingInspectionResponse] = []
+        if requires_iqc and iqc_can_create and _purchase_receipt_allows_iqc_creation(receipt):
+            async with in_transaction():
+                created = await self._ensure_missing_incoming_inspections_for_purchase_receipt(
+                    tenant_id=tenant_id,
+                    receipt=receipt,
+                    receipt_items=receipt_items,
+                    created_by=created_by,
+                )
+
+        inspections = await IncomingInspection.filter(
+            tenant_id=tenant_id,
+            purchase_receipt_id=purchase_receipt_id,
+            deleted_at__isnull=True,
+        ).all()
+        needs_qc_set = set(needs_qc_mids)
+        passed_by_material: Dict[int, bool] = {}
+        for inspection in inspections:
+            if inspection.material_id and await iqc_inspection_passed_for_inbound(tenant_id, inspection):
+                passed_by_material[int(inspection.material_id)] = True
+
+        pending_inspections: List[IncomingInspectionResponse] = []
+        for i in inspections:
+            if not i.material_id or int(i.material_id) not in needs_qc_set:
+                continue
+            if await iqc_inspection_passed_for_inbound(tenant_id, i):
+                continue
+            pending_inspections.append(IncomingInspectionResponse.model_validate(i))
+
+        all_iqc_passed = (not requires_iqc) or all(passed_by_material.get(mid) for mid in needs_qc_mids)
+        can_confirm_inbound = all_iqc_passed
+        message: Optional[str] = None
+        if requires_iqc and not all_iqc_passed:
+            if not inspections:
+                message = (
+                    "已启用「收货前必须来料检验」，请先创建并完成来料检验，检验合格后再确认入库"
+                    if gate_enabled
+                    else "请先创建并完成来料检验，检验合格后再确认入库"
+                )
+            elif gate_enabled:
+                message = (
+                    "已启用「收货前必须来料检验」，相关物料的来料检验须合格"
+                    "（需审核时须审核通过）后才能确认入库"
+                )
+            else:
+                message = "相关物料须完成来料检验并合格后方可确认入库"
+
+        inspection_by_material: Dict[int, IncomingInspection] = {}
+        for inspection in inspections:
+            mid = getattr(inspection, "material_id", None)
+            if mid and int(mid) not in inspection_by_material:
+                inspection_by_material[int(mid)] = inspection
+
+        plan_label_cache: Dict[int, Optional[str]] = {}
+        line_summaries: List[EnsureIqcForPurchaseReceiptLineSummary] = []
+        for item in receipt_items:
+            mid = getattr(item, "material_id", None)
+            if not mid:
+                continue
+            qty = getattr(item, "receipt_quantity", None) or getattr(item, "quantity", None) or 0
+            try:
+                qty_f = float(qty)
+            except (TypeError, ValueError):
+                qty_f = 0.0
+            if qty_f <= 0:
+                continue
+            mid_int = int(mid)
+            eff_mode, _, _ = await resolve_inspection_policy(tenant_id, "iqc", material_id=mid_int)
+            iqc_required = eff_mode != "none"
+            plan_label: Optional[str] = None
+            if iqc_required:
+                if mid_int not in plan_label_cache:
+                    plan_label_cache[mid_int] = await resolve_iqc_plan_label_for_material(tenant_id, mid_int)
+                plan_label = plan_label_cache[mid_int]
+
+            linked = inspection_by_material.get(mid_int)
+            passed = False
+            if not iqc_required:
+                passed = True
+            elif linked:
+                passed = await iqc_inspection_passed_for_inbound(tenant_id, linked)
+
+            line_summaries.append(
+                EnsureIqcForPurchaseReceiptLineSummary(
+                    receipt_item_id=int(item.id),
+                    material_id=mid_int,
+                    material_code=str(getattr(item, "material_code", "") or ""),
+                    material_name=str(getattr(item, "material_name", "") or ""),
+                    receipt_quantity=qty_f,
+                    iqc_required=iqc_required,
+                    iqc_mode=eff_mode if iqc_required else "none",
+                    plan_label=plan_label,
+                    inspection_id=int(linked.id) if linked else None,
+                    inspection_code=getattr(linked, "inspection_code", None) if linked else None,
+                    inspection_status=getattr(linked, "status", None) if linked else None,
+                    quality_status=getattr(linked, "quality_status", None) if linked else None,
+                    review_status=getattr(linked, "review_status", None) if linked else None,
+                    passed=passed,
+                    can_inbound=passed,
+                )
+            )
+
+        return EnsureIqcForPurchaseReceiptResponse(
+            can_confirm_inbound=can_confirm_inbound,
+            requires_iqc=requires_iqc,
+            gate_enabled=gate_enabled,
+            iqc_stage_enabled=bool(cfg["stage_enabled"]["iqc"]),
+            iqc_module_enabled=bool(cfg["module_enabled"]["incoming"]),
+            created_count=len(created),
+            created_inspections=created,
+            pending_inspections=pending_inspections,
+            line_summaries=line_summaries,
+            message=message,
+        )
+
+    async def _ensure_missing_incoming_inspections_for_customer_material(
+        self,
+        tenant_id: int,
+        registration: Any,
+        registration_items: List[Any],
+        created_by: int,
+    ) -> List[IncomingInspectionResponse]:
+        """为代工来料明细补齐缺失的来料检验单（已有则跳过）。"""
+        from apps.master_data.models.material import Material
+
+        registration_id = int(registration.id)
+        mat_rows = await Material.filter(
+            tenant_id=tenant_id,
+            id__in=[it.material_id for it in registration_items if it.material_id],
+            deleted_at__isnull=True,
+        ).all()
+        mat_by_id = {m.id: m for m in mat_rows}
+        audit_required = await _is_quality_audit_required(tenant_id, "incoming_inspection")
+        inspections: List[IncomingInspectionResponse] = []
+
+        for item in registration_items:
+            if not item.material_id:
+                continue
+            existing = await IncomingInspection.filter(
+                tenant_id=tenant_id,
+                customer_material_registration_id=registration_id,
+                material_id=item.material_id,
+                deleted_at__isnull=True,
+            ).first()
+            if existing:
+                continue
+
+            eff, _, _ = await resolve_inspection_policy(
+                tenant_id, "iqc", material_id=item.material_id
+            )
+            if eff == "none":
+                continue
+
+            mat = mat_by_id.get(item.material_id)
+            template = await _resolve_inspection_template_fields(
+                tenant_id, item.material_id, "iqc"
+            )
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(
+                tenant_id, "INCOMING_INSPECTION_CODE", prefix=f"IQ{today}"
+            )
+            create_kwargs: Dict[str, Any] = {
+                "tenant_id": tenant_id,
+                "inspection_code": code,
+                "source_type": "customer_material_inbound",
+                "customer_material_registration_id": registration_id,
+                "customer_material_registration_code": registration.registration_code,
+                "customer_id": registration.customer_id,
+                "customer_name": registration.customer_name,
+                "material_id": item.material_id,
+                "material_code": item.material_code,
+                "material_name": item.material_name,
+                "material_spec": getattr(mat, "specification", None) if mat else None,
+                "material_unit": getattr(mat, "base_unit", None) or "件" if mat else "件",
+                "inspection_quantity": item.quantity,
+                "qualified_quantity": 0,
+                "unqualified_quantity": 0,
+                "inspection_result": "待检验",
+                "quality_status": "待判定",
+                "status": "待检验",
+                "created_by": created_by,
+                **template,
+            }
+            if not audit_required:
+                from apps.kuaizhizao.constants import ReviewStatus
+
+                create_kwargs["review_status"] = ReviewStatus.APPROVED
+            inspection = await IncomingInspection.create(**create_kwargs)
+            inspections.append(IncomingInspectionResponse.model_validate(inspection))
+
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                rel_svc = DocumentRelationNewService()
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="customer_material_inbound",
+                        source_id=registration_id,
+                        source_code=registration.registration_code,
+                        source_name=None,
+                        target_type="incoming_inspection",
+                        target_id=inspection.id,
+                        target_code=inspection.inspection_code,
+                        target_name=None,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="从代工来料单创建来料检验单",
+                    ),
+                    created_by=created_by,
+                )
+            except Exception as rel_e:
+                logger.warning("创建代工来料→来料检验 单据关联失败: %s", rel_e)
+
+        return inspections
+
+    async def ensure_iqc_for_customer_material_registration(
+        self,
+        tenant_id: int,
+        registration_id: int,
+        created_by: int,
+    ) -> EnsureIqcForCustomerMaterialRegistrationResponse:
+        """确认代工来料入库前：按物料 IQC 策略自动补齐缺失检验单，并评估是否允许确认入库。"""
+        from apps.kuaizhizao.models.customer_material_registration import CustomerMaterialRegistration
+        from apps.kuaizhizao.services.customer_material_registration_service import (
+            CustomerMaterialRegistrationService,
+        )
+
+        cfg = await get_quality_effective_config(tenant_id)
+        gate_enabled = bool(cfg["gate"]["require_iqc_before_customer_material_confirm"])
+        iqc_can_create = bool(cfg["stage_enabled"]["iqc"] and cfg["module_enabled"]["incoming"])
+
+        registration = await CustomerMaterialRegistration.get_or_none(
+            tenant_id=tenant_id, id=registration_id, deleted_at__isnull=True
+        )
+        if not registration:
+            raise NotFoundError(f"代工来料单不存在: {registration_id}")
+
+        registration_items = await CustomerMaterialRegistrationService()._effective_items(registration)
+        if not registration_items:
+            raise BusinessLogicError("代工来料单没有明细项")
+
+        needs_qc_mids = await _collect_iqc_required_material_ids(tenant_id, registration_items)
+        requires_iqc = bool(needs_qc_mids)
+
+        created: List[IncomingInspectionResponse] = []
+        if requires_iqc and iqc_can_create and _customer_material_allows_iqc_creation(registration):
+            async with in_transaction():
+                created = await self._ensure_missing_incoming_inspections_for_customer_material(
+                    tenant_id=tenant_id,
+                    registration=registration,
+                    registration_items=registration_items,
+                    created_by=created_by,
+                )
+
+        inspections = await IncomingInspection.filter(
+            tenant_id=tenant_id,
+            customer_material_registration_id=registration_id,
+            deleted_at__isnull=True,
+        ).all()
+        needs_qc_set = set(needs_qc_mids)
+        passed_by_material: Dict[int, bool] = {}
+        for inspection in inspections:
+            if inspection.material_id and await iqc_inspection_passed_for_inbound(tenant_id, inspection):
+                passed_by_material[int(inspection.material_id)] = True
+
+        pending_inspections: List[IncomingInspectionResponse] = []
+        for i in inspections:
+            if not i.material_id or int(i.material_id) not in needs_qc_set:
+                continue
+            if await iqc_inspection_passed_for_inbound(tenant_id, i):
+                continue
+            pending_inspections.append(IncomingInspectionResponse.model_validate(i))
+
+        all_iqc_passed = (not requires_iqc) or all(passed_by_material.get(mid) for mid in needs_qc_mids)
+        can_confirm_inbound = all_iqc_passed
+        message: Optional[str] = None
+        if requires_iqc and not all_iqc_passed:
+            if not inspections:
+                message = (
+                    "已启用「代工来料入库前必须来料检验」，请先创建并完成来料检验，检验合格后再确认入库"
+                    if gate_enabled
+                    else "请先创建并完成来料检验，检验合格后再确认入库"
+                )
+            elif gate_enabled:
+                message = (
+                    "已启用「代工来料入库前必须来料检验」，相关物料的来料检验须合格"
+                    "（需审核时须审核通过）后才能确认入库"
+                )
+            else:
+                message = "相关物料须完成来料检验并合格后方可确认入库"
+
+        inspection_by_material: Dict[int, IncomingInspection] = {}
+        for inspection in inspections:
+            mid = getattr(inspection, "material_id", None)
+            if mid and int(mid) not in inspection_by_material:
+                inspection_by_material[int(mid)] = inspection
+
+        plan_label_cache: Dict[int, Optional[str]] = {}
+        line_summaries: List[EnsureIqcForPurchaseReceiptLineSummary] = []
+        for item in registration_items:
+            mid = getattr(item, "material_id", None)
+            if not mid:
+                continue
+            qty = getattr(item, "quantity", None) or getattr(item, "receipt_quantity", None) or 0
+            try:
+                qty_f = float(qty)
+            except (TypeError, ValueError):
+                qty_f = 0.0
+            if qty_f <= 0:
+                continue
+            mid_int = int(mid)
+            eff_mode, _, _ = await resolve_inspection_policy(tenant_id, "iqc", material_id=mid_int)
+            iqc_required = eff_mode != "none"
+            plan_label: Optional[str] = None
+            if iqc_required:
+                if mid_int not in plan_label_cache:
+                    plan_label_cache[mid_int] = await resolve_iqc_plan_label_for_material(tenant_id, mid_int)
+                plan_label = plan_label_cache[mid_int]
+
+            linked = inspection_by_material.get(mid_int)
+            passed = False
+            if not iqc_required:
+                passed = True
+            elif linked:
+                passed = await iqc_inspection_passed_for_inbound(tenant_id, linked)
+
+            item_id = getattr(item, "id", None) or mid_int
+            line_summaries.append(
+                EnsureIqcForPurchaseReceiptLineSummary(
+                    receipt_item_id=int(item_id),
+                    material_id=mid_int,
+                    material_code=str(getattr(item, "material_code", "") or ""),
+                    material_name=str(getattr(item, "material_name", "") or ""),
+                    receipt_quantity=qty_f,
+                    iqc_required=iqc_required,
+                    iqc_mode=eff_mode if iqc_required else "none",
+                    plan_label=plan_label,
+                    inspection_id=int(linked.id) if linked else None,
+                    inspection_code=getattr(linked, "inspection_code", None) if linked else None,
+                    inspection_status=getattr(linked, "status", None) if linked else None,
+                    quality_status=getattr(linked, "quality_status", None) if linked else None,
+                    review_status=getattr(linked, "review_status", None) if linked else None,
+                    passed=passed,
+                    can_inbound=passed,
+                )
+            )
+
+        return EnsureIqcForCustomerMaterialRegistrationResponse(
+            can_confirm_inbound=can_confirm_inbound,
+            requires_iqc=requires_iqc,
+            gate_enabled=gate_enabled,
+            iqc_stage_enabled=bool(cfg["stage_enabled"]["iqc"]),
+            iqc_module_enabled=bool(cfg["module_enabled"]["incoming"]),
+            registration_code=getattr(registration, "registration_code", None),
+            created_count=len(created),
+            created_inspections=created,
+            pending_inspections=pending_inspections,
+            line_summaries=line_summaries,
+            message=message,
+        )
+
     async def create_inspection_from_purchase_receipt(
         self,
         tenant_id: int,
@@ -683,114 +1326,29 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             raise BusinessLogicError("当前组织未开启来料检验，禁止从采购入库单下推来料检验")
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
         from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
-        from apps.master_data.models.material import Material
 
         async with in_transaction():
-            # 获取采购入库单
             receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=purchase_receipt_id)
             if not receipt:
                 raise NotFoundError(f"采购入库单不存在: {purchase_receipt_id}")
-            
-            # 允许「待入库」或「已入库」状态创建检验单，支持先检验后入库流程
-            if receipt.status not in ('待入库', '已入库'):
-                raise BusinessLogicError("只有待入库或已入库状态的采购入库单才能创建来料检验单")
-            
-            # 获取采购入库单明细
+
+            if not _purchase_receipt_allows_iqc_creation(receipt):
+                raise BusinessLogicError("只有待入库、已入库或草稿状态的采购入库单才能创建来料检验单")
+
             receipt_items = await PurchaseReceiptItem.filter(
                 tenant_id=tenant_id,
                 receipt_id=purchase_receipt_id
             ).all()
-            
+
             if not receipt_items:
                 raise BusinessLogicError("采购入库单没有明细项")
 
-            mids = [it.material_id for it in receipt_items if it.material_id]
-            mat_rows = await Material.filter(
-                tenant_id=tenant_id, id__in=mids, deleted_at__isnull=True
-            ).all()
-            mat_by_id = {m.id: m for m in mat_rows}
-
-            # 为每个明细项创建来料检验单
-            inspections = []
-            for item in receipt_items:
-                # 检查是否已存在检验单
-                existing = await IncomingInspection.filter(
-                    tenant_id=tenant_id,
-                    purchase_receipt_id=purchase_receipt_id,
-                    material_id=item.material_id
-                ).first()
-                
-                if existing:
-                    # 如果已存在，跳过
-                    continue
-
-                mat = mat_by_id.get(item.material_id)
-                eff, _, _reason = await resolve_inspection_policy(
-                    tenant_id,
-                    "iqc",
-                    material_id=item.material_id,
-                )
-                if eff == "none":
-                    continue
-
-                template = await _resolve_inspection_template_fields(
-                    tenant_id,
-                    item.material_id,
-                    "iqc",
-                )
-                
-                # 创建检验单
-                today = datetime.now().strftime("%Y%m%d")
-                code = await self.generate_code(tenant_id, "INCOMING_INSPECTION_CODE", prefix=f"IQ{today}")
-                
-                inspection = await IncomingInspection.create(
-                    tenant_id=tenant_id,
-                    inspection_code=code,
-                    purchase_receipt_id=purchase_receipt_id,
-                    purchase_receipt_code=receipt.receipt_code,
-                    supplier_id=receipt.supplier_id,
-                    supplier_name=receipt.supplier_name,
-                    material_id=item.material_id,
-                    material_code=item.material_code,
-                    material_name=item.material_name,
-                    material_spec=item.material_spec,
-                    material_unit=item.material_unit,
-                    inspection_quantity=item.receipt_quantity,
-                    qualified_quantity=0,
-                    unqualified_quantity=0,
-                    inspection_result="待检验",
-                    quality_status="待判定",
-                    status="待检验",
-                    created_by=created_by,
-                    **template,
-                )
-                inspections.append(IncomingInspectionResponse.model_validate(inspection))
-
-                # 建立采购入库→来料检验 的 DocumentRelation（支持单据追溯）
-                try:
-                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-
-                    rel_svc = DocumentRelationNewService()
-                    await rel_svc.create_relation(
-                        tenant_id=tenant_id,
-                        relation_data=DocumentRelationCreate(
-                            source_type="purchase_receipt",
-                            source_id=purchase_receipt_id,
-                            source_code=receipt.receipt_code,
-                            source_name=None,
-                            target_type="incoming_inspection",
-                            target_id=inspection.id,
-                            target_code=inspection.inspection_code,
-                            target_name=None,
-                            relation_type="source",
-                            relation_mode="push",
-                            relation_desc="从采购入库单创建来料检验单",
-                        ),
-                        created_by=created_by,
-                    )
-                except Exception as rel_e:
-                    logger.warning("创建采购入库→来料检验 单据关联失败: %s", rel_e)
+            inspections = await self._ensure_missing_incoming_inspections_for_purchase_receipt(
+                tenant_id=tenant_id,
+                receipt=receipt,
+                receipt_items=receipt_items,
+                created_by=created_by,
+            )
 
             if not inspections:
                 raise BusinessLogicError(
@@ -811,14 +1369,10 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         if not incoming_enabled:
             raise BusinessLogicError("当前组织未开启来料检验，禁止从代工来料单下推来料检验")
 
-        from apps.kuaizhizao.models.customer_material_registration import (
-            CustomerMaterialRegistration,
-            CustomerMaterialRegistrationItem,
-        )
+        from apps.kuaizhizao.models.customer_material_registration import CustomerMaterialRegistration
         from apps.kuaizhizao.services.customer_material_registration_service import (
             CustomerMaterialRegistrationService,
         )
-        from apps.master_data.models.material import Material
 
         async with in_transaction():
             registration = await CustomerMaterialRegistration.get_or_none(
@@ -829,91 +1383,16 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             if registration.status not in ("pending", "processed"):
                 raise BusinessLogicError("仅待入库或已入库状态的代工来料单可创建来料检验单")
 
-            svc = CustomerMaterialRegistrationService()
-            lines = await svc._effective_items(registration)
+            lines = await CustomerMaterialRegistrationService()._effective_items(registration)
             if not lines:
                 raise BusinessLogicError("代工来料单没有明细项")
 
-            mids = [it.material_id for it in lines if it.material_id]
-            mat_rows = await Material.filter(
-                tenant_id=tenant_id, id__in=mids, deleted_at__isnull=True
-            ).all()
-            mat_by_id = {m.id: m for m in mat_rows}
-
-            inspections = []
-            for item in lines:
-                existing = await IncomingInspection.filter(
-                    tenant_id=tenant_id,
-                    customer_material_registration_id=registration_id,
-                    material_id=item.material_id,
-                    deleted_at__isnull=True,
-                ).first()
-                if existing:
-                    continue
-
-                mat = mat_by_id.get(item.material_id)
-                eff, _, _ = await resolve_inspection_policy(
-                    tenant_id, "iqc", material_id=item.material_id
-                )
-                if eff == "none":
-                    continue
-
-                template = await _resolve_inspection_template_fields(
-                    tenant_id, item.material_id, "iqc"
-                )
-                today = datetime.now().strftime("%Y%m%d")
-                code = await self.generate_code(
-                    tenant_id, "INCOMING_INSPECTION_CODE", prefix=f"IQ{today}"
-                )
-                inspection = await IncomingInspection.create(
-                    tenant_id=tenant_id,
-                    inspection_code=code,
-                    source_type="customer_material_inbound",
-                    customer_material_registration_id=registration_id,
-                    customer_material_registration_code=registration.registration_code,
-                    customer_id=registration.customer_id,
-                    customer_name=registration.customer_name,
-                    material_id=item.material_id,
-                    material_code=item.material_code,
-                    material_name=item.material_name,
-                    material_spec=getattr(mat, "specification", None) if mat else None,
-                    material_unit=getattr(mat, "base_unit", None) or "件" if mat else "件",
-                    inspection_quantity=item.quantity,
-                    qualified_quantity=0,
-                    unqualified_quantity=0,
-                    inspection_result="待检验",
-                    quality_status="待判定",
-                    status="待检验",
-                    created_by=created_by,
-                    **template,
-                )
-                inspections.append(IncomingInspectionResponse.model_validate(inspection))
-
-                try:
-                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-
-                    rel_svc = DocumentRelationNewService()
-                    await rel_svc.create_relation(
-                        tenant_id=tenant_id,
-                        relation_data=DocumentRelationCreate(
-                            source_type="customer_material_inbound",
-                            source_id=registration_id,
-                            source_code=registration.registration_code,
-                            source_name=None,
-                            target_type="incoming_inspection",
-                            target_id=inspection.id,
-                            target_code=inspection.inspection_code,
-                            target_name=None,
-                            relation_type="source",
-                            relation_mode="push",
-                            relation_desc="从代工来料单创建来料检验单",
-                        ),
-                        created_by=created_by,
-                    )
-                except Exception as rel_e:
-                    logger.warning("创建代工来料→来料检验 单据关联失败: %s", rel_e)
-
+            inspections = await self._ensure_missing_incoming_inspections_for_customer_material(
+                tenant_id=tenant_id,
+                registration=registration,
+                registration_items=lines,
+                created_by=created_by,
+            )
             if not inspections:
                 raise BusinessLogicError(
                     "未生成任何来料检验单：各明细可能已有检验单，或物料质检模式为无质检"
@@ -2117,6 +2596,221 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 logger.warning(f"建立质检->返工单关联失败: {rel_e}")
 
             return {"rework_order_id": rework_order.id, "rework_order_code": rework_order.code}
+
+    async def _ensure_fqc_for_work_order_inbound_items(
+        self,
+        tenant_id: int,
+        created_by: int,
+        *,
+        receipt_items: List[Any],
+        work_order_id: Optional[int],
+        work_order_code: Optional[str],
+        allow_auto_create: bool,
+    ) -> EnsureFqcForFinishedGoodsReceiptResponse:
+        cfg = await get_quality_effective_config(tenant_id)
+        gate_enabled = bool(cfg["gate"]["require_fqc_before_finished_goods_receipt"])
+        fqc_can_create = bool(cfg["stage_enabled"]["fqc"] and cfg["module_enabled"]["finished"])
+
+        needs_qc_mids = await _collect_fqc_required_material_ids(tenant_id, receipt_items)
+        requires_fqc = bool(needs_qc_mids)
+
+        created: List[FinishedGoodsInspectionResponse] = []
+        if requires_fqc and fqc_can_create and allow_auto_create and work_order_id:
+            before_ids = {
+                i.id
+                for i in await FinishedGoodsInspection.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=int(work_order_id),
+                    deleted_at__isnull=True,
+                ).all()
+            }
+            insp = await _ensure_fqc_for_work_order(
+                tenant_id=tenant_id,
+                work_order_id=int(work_order_id),
+                created_by=created_by,
+            )
+            if insp and insp.id not in before_ids:
+                created.append(insp)
+
+        inspections: List[FinishedGoodsInspection] = []
+        if work_order_id:
+            inspections = await FinishedGoodsInspection.filter(
+                tenant_id=tenant_id,
+                work_order_id=int(work_order_id),
+                deleted_at__isnull=True,
+            ).all()
+
+        needs_qc_set = set(needs_qc_mids)
+        passed_by_material: Dict[int, bool] = {}
+        for inspection in inspections:
+            if inspection.material_id and await fqc_inspection_passed_for_inbound(tenant_id, inspection):
+                passed_by_material[int(inspection.material_id)] = True
+
+        pending_inspections: List[FinishedGoodsInspectionResponse] = []
+        for inspection in inspections:
+            if not inspection.material_id or int(inspection.material_id) not in needs_qc_set:
+                continue
+            if await fqc_inspection_passed_for_inbound(tenant_id, inspection):
+                continue
+            pending_inspections.append(FinishedGoodsInspectionResponse.model_validate(inspection))
+
+        all_fqc_passed = (not requires_fqc) or all(passed_by_material.get(mid) for mid in needs_qc_mids)
+        can_confirm_inbound = all_fqc_passed
+        message: Optional[str] = None
+        if requires_fqc and not all_fqc_passed:
+            if not inspections:
+                message = (
+                    "已启用「成品检验合格才入库」，请先创建并完成成品检验，检验合格后再确认入库"
+                    if gate_enabled
+                    else "请先创建并完成成品检验，检验合格后再确认入库"
+                )
+            elif gate_enabled:
+                message = (
+                    "已启用「成品检验合格才入库」，相关物料的成品检验须合格"
+                    "（需审核时须审核通过）后才能确认入库"
+                )
+            else:
+                message = "相关物料须完成成品检验并合格后方可确认入库"
+
+        inspection_by_material: Dict[int, FinishedGoodsInspection] = {}
+        for inspection in inspections:
+            mid = getattr(inspection, "material_id", None)
+            if mid and int(mid) not in inspection_by_material:
+                inspection_by_material[int(mid)] = inspection
+
+        plan_label_cache: Dict[int, Optional[str]] = {}
+        line_summaries: List[EnsureFqcForFinishedGoodsReceiptLineSummary] = []
+        for item in receipt_items:
+            mid = getattr(item, "material_id", None)
+            if not mid:
+                continue
+            qty = getattr(item, "receipt_quantity", None) or getattr(item, "qualified_quantity", None) or 0
+            try:
+                qty_f = float(qty)
+            except (TypeError, ValueError):
+                qty_f = 0.0
+            if qty_f <= 0:
+                continue
+            mid_int = int(mid)
+            eff_mode, _, _ = await resolve_inspection_policy(tenant_id, "fqc", material_id=mid_int)
+            fqc_required = eff_mode != "none"
+            plan_label: Optional[str] = None
+            if fqc_required:
+                if mid_int not in plan_label_cache:
+                    plan_label_cache[mid_int] = await resolve_fqc_plan_label_for_material(tenant_id, mid_int)
+                plan_label = plan_label_cache[mid_int]
+
+            linked = inspection_by_material.get(mid_int)
+            passed = False
+            if not fqc_required:
+                passed = True
+            elif linked:
+                passed = await fqc_inspection_passed_for_inbound(tenant_id, linked)
+
+            line_summaries.append(
+                EnsureFqcForFinishedGoodsReceiptLineSummary(
+                    receipt_item_id=int(item.id),
+                    material_id=mid_int,
+                    material_code=str(getattr(item, "material_code", "") or ""),
+                    material_name=str(getattr(item, "material_name", "") or ""),
+                    receipt_quantity=qty_f,
+                    fqc_required=fqc_required,
+                    fqc_mode=eff_mode if fqc_required else "none",
+                    plan_label=plan_label,
+                    inspection_id=int(linked.id) if linked else None,
+                    inspection_code=getattr(linked, "inspection_code", None) if linked else None,
+                    inspection_status=getattr(linked, "status", None) if linked else None,
+                    quality_status=getattr(linked, "quality_status", None) if linked else None,
+                    review_status=getattr(linked, "review_status", None) if linked else None,
+                    passed=passed,
+                    can_inbound=passed,
+                )
+            )
+
+        return EnsureFqcForFinishedGoodsReceiptResponse(
+            can_confirm_inbound=can_confirm_inbound,
+            requires_fqc=requires_fqc,
+            gate_enabled=gate_enabled,
+            fqc_stage_enabled=bool(cfg["stage_enabled"]["fqc"]),
+            fqc_module_enabled=bool(cfg["module_enabled"]["finished"]),
+            work_order_id=int(work_order_id) if work_order_id else None,
+            work_order_code=work_order_code,
+            created_count=len(created),
+            created_inspections=created,
+            pending_inspections=pending_inspections,
+            line_summaries=line_summaries,
+            message=message,
+        )
+
+    async def ensure_fqc_for_finished_goods_receipt(
+        self,
+        tenant_id: int,
+        finished_goods_receipt_id: int,
+        created_by: int,
+    ) -> EnsureFqcForFinishedGoodsReceiptResponse:
+        """
+        确认入库前：按物料 FQC 策略自动补齐缺失检验单，并评估是否允许进入确认预览。
+        """
+        from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+        from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
+
+        receipt = await FinishedGoodsReceipt.get_or_none(
+            tenant_id=tenant_id,
+            id=finished_goods_receipt_id,
+            deleted_at__isnull=True,
+        )
+        if not receipt:
+            raise NotFoundError(f"成品入库单不存在: {finished_goods_receipt_id}")
+
+        receipt_items = await FinishedGoodsReceiptItem.filter(
+            tenant_id=tenant_id,
+            receipt_id=finished_goods_receipt_id,
+        ).all()
+        if not receipt_items:
+            raise BusinessLogicError("成品入库单没有明细项")
+
+        return await self._ensure_fqc_for_work_order_inbound_items(
+            tenant_id=tenant_id,
+            created_by=created_by,
+            receipt_items=receipt_items,
+            work_order_id=getattr(receipt, "work_order_id", None),
+            work_order_code=getattr(receipt, "work_order_code", None),
+            allow_auto_create=_finished_goods_receipt_allows_fqc_creation(receipt),
+        )
+
+    async def ensure_fqc_for_semi_finished_goods_receipt(
+        self,
+        tenant_id: int,
+        semi_finished_goods_receipt_id: int,
+        created_by: int,
+    ) -> EnsureFqcForFinishedGoodsReceiptResponse:
+        """确认半成品入库前：同工单 FQC 策略评估与自动补齐检验单。"""
+        from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
+        from apps.kuaizhizao.models.semi_finished_goods_receipt_item import SemiFinishedGoodsReceiptItem
+
+        receipt = await SemiFinishedGoodsReceipt.get_or_none(
+            tenant_id=tenant_id,
+            id=semi_finished_goods_receipt_id,
+            deleted_at__isnull=True,
+        )
+        if not receipt:
+            raise NotFoundError(f"半成品入库单不存在: {semi_finished_goods_receipt_id}")
+
+        receipt_items = await SemiFinishedGoodsReceiptItem.filter(
+            tenant_id=tenant_id,
+            receipt_id=semi_finished_goods_receipt_id,
+        ).all()
+        if not receipt_items:
+            raise BusinessLogicError("半成品入库单没有明细项")
+
+        return await self._ensure_fqc_for_work_order_inbound_items(
+            tenant_id=tenant_id,
+            created_by=created_by,
+            receipt_items=receipt_items,
+            work_order_id=getattr(receipt, "work_order_id", None),
+            work_order_code=getattr(receipt, "work_order_code", None),
+            allow_auto_create=_semi_finished_goods_receipt_allows_fqc_creation(receipt),
+        )
 
     async def create_inspection_from_work_order(
         self,

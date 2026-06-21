@@ -14,6 +14,7 @@ import { SchemaFormRenderer } from '../../../components/schema-form';
 import { skillFormSchema } from '../schemas/skill';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
+import { PERFORMANCE_FORM_MODAL_CLASS } from '../utils/performanceFormLayout';
 
 const CUSTOM_FIELD_TABLE = 'master_data_skills';
 
@@ -114,15 +115,17 @@ export const SkillFormModal: React.FC<SkillFormModalProps> = ({
       isEdit={isEdit}
       loading={formLoading}
       width={MODAL_CONFIG.STANDARD_WIDTH}
+      className={PERFORMANCE_FORM_MODAL_CLASS}
       formRef={formRef as React.RefObject<ProFormInstance>}
       initialValues={{ isActive: true }}
       layout="vertical"
-      grid
+      grid={false}
     >
       <SchemaFormRenderer
         schema={skillFormSchema}
         codeField="code"
         isEdit={isEdit}
+        modalHalfWidthLayout
         slots={{
           customFields: (
             <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} gridColumns={2} />

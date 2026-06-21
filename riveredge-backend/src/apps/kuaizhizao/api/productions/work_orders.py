@@ -849,6 +849,34 @@ async def get_work_order_picking_confirmation_status(
     }
 
 
+@router.get(
+    "/work-orders/{work_order_id}/default-inbound-warehouse",
+    summary="Resolve default inbound warehouse for work order",
+)
+async def get_work_order_default_inbound_warehouse(
+    work_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.models.work_order import WorkOrder
+    from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+
+    wo = await WorkOrder.get_or_none(
+        tenant_id=tenant_id, id=work_order_id, deleted_at__isnull=True
+    )
+    if not wo:
+        raise HTTPException(status_code=404, detail=f"工单不存在: {work_order_id}")
+
+    resolved = await FinishedGoodsReceiptService().resolve_default_inbound_warehouse_for_work_order(
+        tenant_id=tenant_id,
+        work_order=wo,
+    )
+    if not resolved:
+        return {"warehouse_id": None, "warehouse_name": None}
+    wh_id, wh_name = resolved
+    return {"warehouse_id": wh_id, "warehouse_name": wh_name}
+
+
 @router.put("/work-orders/{work_order_id:int}", response_model=WorkOrderResponse, summary="Update work order")
 async def update_work_order(
     work_order_id: int,

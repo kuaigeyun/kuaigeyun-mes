@@ -15,6 +15,7 @@ import { SchemaFormRenderer } from '../../../components/schema-form';
 import { holidayFormSchema } from '../schemas/holiday';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
+import { PERFORMANCE_FORM_MODAL_CLASS } from '../utils/performanceFormLayout';
 
 const CUSTOM_FIELD_TABLE = 'master_data_holidays';
 
@@ -119,14 +120,16 @@ export const HolidayFormModal: React.FC<HolidayFormModalProps> = ({
       isEdit={isEdit}
       loading={formLoading}
       width={MODAL_CONFIG.STANDARD_WIDTH}
+      className={PERFORMANCE_FORM_MODAL_CLASS}
       formRef={formRef as React.RefObject<ProFormInstance>}
       initialValues={{ isActive: true }}
       layout="vertical"
-      grid
+      grid={false}
     >
       <SchemaFormRenderer
         schema={holidayFormSchema}
         isEdit={isEdit}
+        modalHalfWidthLayout
         slots={{
           customFields: (
             <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} gridColumns={2} />

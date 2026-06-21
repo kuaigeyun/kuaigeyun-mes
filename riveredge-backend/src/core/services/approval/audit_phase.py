@@ -28,9 +28,21 @@ _REVIEW_APPROVED = {"approved", "审核通过", "已通过", "通过", "已审�
 _REVIEW_REJECTED = {"rejected", "已驳回", "审核驳回"}
 _REVIEW_PENDING = {"待审核", "pending_review", "pending_approval", "已提交"}
 _DEMAND_REVOKABLE_CONFIRMED = {"confirmed", "已确认", "已生效"}
+_PURCHASE_ORDER_REVOKABLE_CONFIRMED = {"confirmed", "已确认"}
 
 # 提交后仍保持主状态为草稿、仅 review_status 进入待审的单据（如采购询价）
 _DRAFT_REVIEW_PENDING_ENTITY_TYPES = frozenset({"purchase_inquiry"})
+
+# 来料/过程/成品/出货检验：主状态「已检验」+ review 待审（与 quality_inspection_record capabilities 一致）
+_QUALITY_INSPECTION_ENTITY_TYPES = frozenset({
+    "incoming_inspection",
+    "process_inspection",
+    "finished_goods_inspection",
+    "oqc_inspection",
+})
+_QUALITY_INSPECTION_PENDING_MAIN_STATUSES = frozenset({
+    "已检验", "inspected", "待审核", "pending_review",
+})
 
 # phase -> 该相位下允许的审核动作（前端据此渲染按钮，无需任何本地状态数组）
 _ALLOWED_ACTIONS_BY_PHASE: Dict[str, List[str]] = {
@@ -66,6 +78,12 @@ def derive_audit_phase(
 
     if s in _REJECTED_STATUS or r in _REVIEW_REJECTED:
         phase = "rejected"
+    elif (
+        entity_type in _QUALITY_INSPECTION_ENTITY_TYPES
+        and r in _REVIEW_PENDING
+        and s in _QUALITY_INSPECTION_PENDING_MAIN_STATUSES
+    ):
+        phase = "pending"
     elif s in _DRAFT:
         # 主状态仍为草稿但已提交待审（如采购询价单 status=DRAFT + review_status=待审核）
         if (
@@ -92,7 +110,15 @@ def derive_audit_phase(
         )
         if entity_type == "demand" and s in _DEMAND_REVOKABLE_CONFIRMED:
             allow_revoke = True
+        if entity_type == "purchase_order" and s in _PURCHASE_ORDER_REVOKABLE_CONFIRMED:
+            allow_revoke = True
         if not allow_revoke:
+            allowed = []
+
+    if entity_type in _QUALITY_INSPECTION_ENTITY_TYPES:
+        if phase == "pending":
+            allowed = [a for a in allowed if a in ("approve", "reject")]
+        else:
             allowed = []
 
     return {

@@ -8,13 +8,19 @@ import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-compone
 import { App, Popconfirm, Button, Tag, Space, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { ProFormSelect, ProFormDigit, ProFormRadio, ProFormSwitch, ProFormDatePicker } from '@ant-design/pro-components';
+import { ProFormSelect, ProFormDigit, ProFormSwitch, ProFormDatePicker, ProFormField } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { employeePerformanceApi } from '../../../services/performance';
 import type { EmployeePerformanceConfig } from '../../../types/performance';
 import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
+import {
+  modalDateFieldProps,
+  modalFieldLayoutFromColSpan,
+  PERFORMANCE_FORM_MODAL_CLASS,
+} from '../../../utils/performanceFormLayout';
 import {
   getCalcModeOptions,
   getCalcModeText,
@@ -244,23 +250,39 @@ const EmployeeConfigsPage: React.FC = () => {
         }}
         isEdit={!!editId}
         width={MODAL_CONFIG.STANDARD_WIDTH}
+        className={PERFORMANCE_FORM_MODAL_CLASS}
+        layout="vertical"
+        grid={false}
       >
         <ProFormSelect
           name="employee_id"
           label={t('app.kuaizhizao.performance.common.columns.employee')}
           rules={[{ required: true }]}
           options={employees.map((e) => ({ label: e.full_name, value: e.id }))}
-          colProps={{ span: 12 }}
+          formItemProps={modalFieldLayoutFromColSpan(12)}
           disabled={!!editId}
         />
-        <ProFormRadio.Group name="calc_mode" label={t('app.kuaizhizao.performance.common.columns.calcMode')} options={calcModeOptions} colProps={{ span: 12 }} />
-        <ProFormSelect name="piece_rate_mode" label={t('app.kuaizhizao.performance.employeeConfigs.form.pieceRateMode')} options={pieceRateModeOptions} colProps={{ span: 12 }} />
-        <ProFormDigit name="hourly_rate" label={t('app.kuaizhizao.performance.employeeConfigs.form.hourlyRate')} min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
-        <ProFormDigit name="default_piece_rate" label={t('app.kuaizhizao.performance.employeeConfigs.form.defaultPieceRate')} min={0} fieldProps={{ precision: 4 }} colProps={{ span: 12 }} />
-        <ProFormDigit name="base_salary" label={t('app.kuaizhizao.performance.employeeConfigs.form.baseSalary')} min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
-        <ProFormDatePicker name="effective_from" label={t('app.kuaizhizao.performance.employeeConfigs.form.effectiveFrom')} colProps={{ span: 12 }} />
-        <ProFormDatePicker name="effective_to" label={t('app.kuaizhizao.performance.employeeConfigs.form.effectiveTo')} colProps={{ span: 12 }} />
-        <ProFormSwitch name="is_active" label={t('app.kuaizhizao.performance.common.form.active')} colProps={{ span: 12 }} />
+        <ProFormField
+          name="calc_mode"
+          label={t('app.kuaizhizao.performance.common.columns.calcMode')}
+          formItemProps={modalFieldLayoutFromColSpan(12)}
+          renderFormItem={(_, { value, onChange }) => (
+            <ThemedSegmented
+              block
+              className="form-field-segmented"
+              value={value ?? 'time'}
+              onChange={(v) => onChange?.(v)}
+              options={calcModeOptions}
+            />
+          )}
+        />
+        <ProFormSelect name="piece_rate_mode" label={t('app.kuaizhizao.performance.employeeConfigs.form.pieceRateMode')} options={pieceRateModeOptions} formItemProps={modalFieldLayoutFromColSpan(12)} />
+        <ProFormDigit name="hourly_rate" label={t('app.kuaizhizao.performance.employeeConfigs.form.hourlyRate')} min={0} fieldProps={{ precision: 2 }} formItemProps={modalFieldLayoutFromColSpan(12)} />
+        <ProFormDigit name="default_piece_rate" label={t('app.kuaizhizao.performance.employeeConfigs.form.defaultPieceRate')} min={0} fieldProps={{ precision: 4 }} formItemProps={modalFieldLayoutFromColSpan(12)} />
+        <ProFormDigit name="base_salary" label={t('app.kuaizhizao.performance.employeeConfigs.form.baseSalary')} min={0} fieldProps={{ precision: 2 }} formItemProps={modalFieldLayoutFromColSpan(12)} />
+        <ProFormDatePicker name="effective_from" label={t('app.kuaizhizao.performance.employeeConfigs.form.effectiveFrom')} {...modalDateFieldProps()} />
+        <ProFormDatePicker name="effective_to" label={t('app.kuaizhizao.performance.employeeConfigs.form.effectiveTo')} {...modalDateFieldProps()} />
+        <ProFormSwitch name="is_active" label={t('app.kuaizhizao.performance.common.form.active')} formItemProps={modalFieldLayoutFromColSpan(12)} />
       </FormModalTemplate>
     </>
   );

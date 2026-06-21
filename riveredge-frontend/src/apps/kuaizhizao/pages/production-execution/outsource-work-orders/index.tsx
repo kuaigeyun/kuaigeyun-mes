@@ -1,4 +1,4 @@
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 /**
  * 工单委外管理页面
  *
@@ -78,6 +78,7 @@ import { KUAIZHIZAO_OUTSOURCE_ORDER_FIELD_RESOURCE as OO } from '../../../consta
 import { useTranslation } from 'react-i18next';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   CustomFieldsFormSection,
   CustomFieldsDetailSection,
@@ -87,6 +88,7 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { formatDateTime } from '../../../../../utils/format';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const OUTSOURCE_WORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_work_orders';
 
@@ -186,7 +188,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderOwoRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return nodes;
+  return renderRowActionsOverflow(nodes, { keyPrefix });
 }
 
 const OWO_STAT_SPARK_1 = [2, 3, 4, 3, 5, 4, 6];
@@ -624,6 +626,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     setModalVisible(true);
     // FormModalTemplate 设置了 destroyOnHidden，ProForm 每次打开都是全新挂载，无需 setTimeout + resetFields
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.outsourceWorkOrder.createButton')),
+    [t],
+  );
 
   /**
    * 处理编辑工单委外
@@ -1358,7 +1365,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showCreateButton={true}
-          createButtonText={t('app.kuaizhizao.outsourceWorkOrder.createButton')}
+          createButtonText={createButtonLabel}
           onCreate={handleCreate}
           showDeleteButton={true}
           onDelete={handleDelete}

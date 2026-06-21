@@ -9,11 +9,11 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
-import { App, Button, Card, Col, Modal, Row, Space, Tag, message } from 'antd';
+import { App, Button, Card, Col, Modal, Row, Tag, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, FormOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -41,6 +41,8 @@ import {
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useTranslation } from 'react-i18next';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const REWORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_rework_orders';
 
@@ -392,31 +394,33 @@ const ReworkOrdersPage: React.FC = () => {
         const canDelete = lifecycle.stageName === '草稿';
         const canReport =
           lifecycle.stageName === '已下达' || lifecycle.stageName === '执行中';
-        return (
-          <Space>
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>{t('common.detail')}</Button>
-            {canReport ? (
-              <Button{...rowActionKind('delete')} key="delete"
-                type="link"
-                size="small"
+        return renderRowActionsOverflow(
+          [
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>{t('common.detail')}</Button>,
+            canReport ? (
+              <Button
+                {...rowActionKind('execute')}
+                key="report"
                 icon={<FormOutlined />}
                 onClick={() => void handleOpenReport(record)}
               >
                 {t('app.kuaizhizao.reworkOrder.report')}
               </Button>
-            ) : null}
-            <Button key="edit" {...rowActionKind('update')}
-              size="small"
+            ) : null,
+            <Button
+              key="edit"
+              {...rowActionKind('update')}
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
               disabled={!canEdit}
             >
               {t('common.edit')}
-            </Button>
-            {canDelete && (
+            </Button>,
+            canDelete ? (
               <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDelete(record)}>{t('common.delete')}</Button>
-            )}
-          </Space>
+            ) : null,
+          ],
+          { keyPrefix: `rework-order-actions-${record.id ?? 'row'}` },
         );
       },
     },
@@ -791,6 +795,11 @@ const ReworkOrdersPage: React.FC = () => {
       }
     },
   });
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.reworkOrder.createButton')),
+    [t],
+  );
 
   return (
     <ListPageTemplate>
@@ -805,7 +814,7 @@ const ReworkOrdersPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         showCreateButton={false}
-        createButtonText={t('app.kuaizhizao.reworkOrder.createButton')}
+        createButtonText={createButtonLabel}
         onCreate={handleCreate}
         showDeleteButton={true}
         onDelete={handleDeleteFromSelection}
@@ -816,7 +825,7 @@ const ReworkOrdersPage: React.FC = () => {
             key="rework-order-create-with-pull"
             compactKey="rework-order-create-with-pull"
             createIcon={<PlusOutlined />}
-            createLabel={t('app.kuaizhizao.reworkOrder.createButton')}
+            createLabel={createButtonLabel}
             onCreate={handleCreate}
             menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
               {

@@ -5,6 +5,56 @@ import type { WorkOrderListRow } from './workOrderListTreeTypes'
 
 export const WORK_ORDER_GROUP_ROW_KIND = 'work_order_group'
 
+export type WorkOrderGroupLayout = 'bom_tree' | 'peer'
+
+export function isBomTreeWorkOrderGroup(groupRow: WorkOrderListRow): boolean {
+  if ((groupRow.row_kind || '') !== WORK_ORDER_GROUP_ROW_KIND) return false
+  if (groupRow.group_layout === 'peer') return false
+  if (groupRow.group_layout === 'bom_tree') return true
+  const childRoots = groupRow.children ?? []
+  if (childRoots.some((c) => c.group_role === 'root')) return true
+  const workOrders = childRoots.filter((c) => (c.row_kind || 'work_order') === 'work_order')
+  if (workOrders.length > 1 && !workOrders.some((c) => c.group_role === 'root')) return false
+  return workOrders.some((wo) =>
+    (wo.children ?? []).some((c) => (c.row_kind || 'work_order') === 'work_order'),
+  )
+}
+
+/** 树形组默认展开：组节点 + 组内带 BOM 子工单的父行；平级组/拆/返/委外默认收起 */
+export function collectDefaultExpandedWorkOrderTreeKeys(
+  rows: WorkOrderListRow[],
+  getRowKey: (row: WorkOrderListRow) => string | number,
+): Array<string | number> {
+  const keys: Array<string | number> = []
+
+  const walk = (row: WorkOrderListRow, insideBomTreeGroup: boolean) => {
+    const kind = row.row_kind || 'work_order'
+    const children = row.children ?? []
+    const hasChildren = children.length > 0
+
+    if (kind === WORK_ORDER_GROUP_ROW_KIND) {
+      const expandGroup = isBomTreeWorkOrderGroup(row)
+      if (expandGroup) keys.push(getRowKey(row))
+      if (hasChildren) {
+        for (const child of children) walk(child, expandGroup)
+      }
+      return
+    }
+
+    if (insideBomTreeGroup && kind === 'work_order' && hasChildren) {
+      const hasBomChild = children.some((c) => (c.row_kind || 'work_order') === 'work_order')
+      if (hasBomChild) keys.push(getRowKey(row))
+    }
+
+    if (hasChildren) {
+      for (const child of children) walk(child, insideBomTreeGroup)
+    }
+  }
+
+  for (const row of rows) walk(row, false)
+  return keys
+}
+
 export function flattenWorkOrderListRows(rows: WorkOrderListRow[]): WorkOrderListRow[] {
   const out: WorkOrderListRow[] = []
   const walk = (row: WorkOrderListRow) => {
@@ -137,6 +187,8 @@ function createGroupParentNode(
     .find((name) => name.length > 0)
   const rootMember = members.find((m) => m.group_role === 'root')
   const hasDesignatedRoot = Boolean(rootMember)
+  const workOrderMembers = members.filter((m) => (m.row_kind || 'work_order') === 'work_order')
+  const isPeerGroup = !hasDesignatedRoot && workOrderMembers.length > 1
   const productLabel = groupName
     ? groupName
     : hasDesignatedRoot
@@ -157,6 +209,7 @@ function createGroupParentNode(
     product_name: displayName,
     name: displayName,
     member_count: members.filter((m) => (m.row_kind || 'work_order') === 'work_order').length,
+    group_layout: isPeerGroup ? 'peer' : 'bom_tree',
     list_tree_depth: 0,
     children: memberRoots,
   }

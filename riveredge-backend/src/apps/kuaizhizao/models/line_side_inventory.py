@@ -68,7 +68,7 @@ class LineSideInventory(BaseModel):
     work_order_code = fields.CharField(max_length=50, null=True, description="关联工单编码")
     
     # 来源信息
-    source_type = fields.CharField(max_length=20, null=True, description="来源类型（transfer=调拨, direct=直接入库）")
+    source_type = fields.CharField(max_length=50, null=True, description="来源类型（如 finished_goods_receipt、semi_finished_goods_receipt）")
     source_doc_id = fields.IntField(null=True, description="来源单据ID")
     source_doc_code = fields.CharField(max_length=50, null=True, description="来源单据编码")
     

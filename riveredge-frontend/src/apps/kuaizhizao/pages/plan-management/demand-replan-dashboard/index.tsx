@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { App, Button, Empty, Modal, Space, Spin, Table, Tag, Typography } from 'antd';
-import { EyeOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined } from '@ant-design/icons';
 import type { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, TwoColumnLayout, type StatCard, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
+import { rowActionKind } from '../../../../../components/uni-action';
 import {
   executeDemandReplanTask,
   getDemandChangeImpact,
@@ -205,9 +206,8 @@ const DemandReplanDashboardPage: React.FC = () => {
         width: 140,
         render: (_, row) => (
           <Button
-            icon={<PlayCircleOutlined />}
+            {...rowActionKind('execute')}
             size="small"
-            type="primary"
             loading={executingTaskId === row.id}
             disabled={!(row.status === 'pending' || row.status === 'failed')}
             onClick={() => executeTask(row)}
@@ -284,9 +284,8 @@ const DemandReplanDashboardPage: React.FC = () => {
                   {sourceTypeText[row.source_type as keyof typeof sourceTypeText] || row.source_type}
                 </Typography.Text>
                 <Button
+                  {...rowActionKind('read')}
                   size="small"
-                  type="link"
-                  icon={<EyeOutlined />}
                   onClick={(e) => {
                     e.stopPropagation();
                     void openImpact(row.id);

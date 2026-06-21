@@ -1,8 +1,9 @@
 import React, { useMemo, useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
-import { App, Card, Col, Row, Segmented, Select, Space, Statistic, Tag } from 'antd';
+import { App, Card, Col, Popover, Row, Select, Space, Statistic, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   MaterialStackedCell,
@@ -10,13 +11,29 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { apiRequest } from '../../../../../services/api';
 
+interface InTransitBreakdown {
+  purchase_quantity: number;
+  work_order_quantity: number;
+  outsource_work_order_quantity: number;
+}
+
 interface InventoryItem {
   id: number;
   material_id: number;
   material_code: string;
   material_name: string;
+  material_spec?: string | null;
+  brand?: string | null;
+  texture?: string | null;
+  model?: string | null;
   material_unit?: string | null;
   quantity: number;
+  in_transit_quantity?: number;
+  in_transit_breakdown?: InTransitBreakdown | null;
+  alert_status?: string | null;
+  alert_level?: string | null;
+  alert_label?: string | null;
+  alert_message?: string | null;
   status: string;
   warehouse_name: string | null;
 }
@@ -34,6 +51,89 @@ interface GroupItem {
   group_key: string;
   record_count: number;
   total_quantity: number;
+}
+
+function formatQty(val: unknown): string {
+  const n = Number(val ?? 0);
+  if (!Number.isFinite(n)) return '0';
+  return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+function InTransitPopoverContent({
+  breakdown,
+  t,
+}: {
+  breakdown?: InTransitBreakdown | null;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const rows = [
+    {
+      key: 'purchase',
+      label: t('app.kuaizhizao.warehouseInventory.inTransitPurchase'),
+      value: breakdown?.purchase_quantity ?? 0,
+    },
+    {
+      key: 'work_order',
+      label: t('app.kuaizhizao.warehouseInventory.inTransitWorkOrder'),
+      value: breakdown?.work_order_quantity ?? 0,
+    },
+    {
+      key: 'outsource',
+      label: t('app.kuaizhizao.warehouseInventory.inTransitOutsource'),
+      value: breakdown?.outsource_work_order_quantity ?? 0,
+    },
+  ];
+  return (
+    <div style={{ minWidth: 200, fontSize: 12 }}>
+      <Typography.Text strong>{t('app.kuaizhizao.warehouseInventory.inTransitDetailTitle')}</Typography.Text>
+      <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+        {rows.map((row) => (
+          <li key={row.key}>
+            {row.label}: <strong>{formatQty(row.value)}</strong>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function renderInTransitCell(record: InventoryItem, t: (key: string) => string) {
+  const total = Number(record.in_transit_quantity ?? 0);
+  if (!total) return '—';
+  const breakdown = record.in_transit_breakdown;
+  const hasDetail =
+    breakdown &&
+    (breakdown.purchase_quantity > 0 ||
+      breakdown.work_order_quantity > 0 ||
+      breakdown.outsource_work_order_quantity > 0);
+  if (!hasDetail) return formatQty(total);
+  return (
+    <Popover content={<InTransitPopoverContent breakdown={breakdown} t={t} />} trigger="hover">
+      <span style={{ cursor: 'help', borderBottom: '1px dashed var(--ant-color-text-secondary)' }}>
+        {formatQty(total)}
+      </span>
+    </Popover>
+  );
+}
+
+function renderAlertCell(record: InventoryItem, t: (key: string) => string) {
+  const status = record.alert_status || 'normal';
+  const label = record.alert_label || t('app.kuaizhizao.warehouseInventory.alertNormal');
+  let color: string | undefined;
+  if (status === 'low_stock') color = record.alert_level === 'critical' ? 'error' : 'warning';
+  else if (status === 'high_stock') color = 'orange';
+  else if (status === 'expired') color = 'error';
+  else if (status === 'normal') color = 'success';
+
+  const tag = <Tag color={color}>{label}</Tag>;
+  if (record.alert_message && status !== 'normal') {
+    return (
+      <Popover content={<Typography.Text style={{ fontSize: 12 }}>{record.alert_message}</Typography.Text>}>
+        <span style={{ cursor: 'help' }}>{tag}</span>
+      </Popover>
+    );
+  }
+  return tag;
 }
 
 const InventoryPage: React.FC = () => {
@@ -61,11 +161,23 @@ const InventoryPage: React.FC = () => {
     return s;
   };
 
+  const renderCell = (v: unknown) => {
+    const s = String(v ?? '').trim();
+    return s || '—';
+  };
+
   const exportRows = (rows: InventoryItem[]) => {
     const headers = [
       t('app.kuaizhizao.warehouseReports.colMaterialCode'),
       t('app.kuaizhizao.warehouseReports.colMaterialName'),
+      t('app.master-data.materials.specification'),
+      t('app.master-data.materials.model'),
+      t('app.kuaizhizao.warehouseInventory.colBrand'),
+      t('app.kuaizhizao.warehouseInventory.colTexture'),
+      t('app.kuaizhizao.warehouseCommon.colUnit'),
       t('app.kuaizhizao.warehouseReports.colStockQty'),
+      t('app.kuaizhizao.warehouseInventory.colInTransit'),
+      t('app.kuaizhizao.warehouseInventory.colAlert'),
       t('app.kuaizhizao.warehouseCommon.colStatus'),
       t('app.kuaizhizao.warehouseReports.colWarehouse'),
     ];
@@ -73,7 +185,14 @@ const InventoryPage: React.FC = () => {
       [
         r.material_code,
         r.material_name,
-        `${r.quantity}${r.material_unit ? ` ${r.material_unit}` : ''}`,
+        r.material_spec,
+        r.model,
+        r.brand,
+        r.texture,
+        r.material_unit,
+        r.quantity,
+        r.in_transit_quantity ?? 0,
+        r.alert_label,
         r.status,
         r.warehouse_name || '-',
       ]
@@ -92,6 +211,53 @@ const InventoryPage: React.FC = () => {
 
   const groupTags = useMemo(() => groups.slice(0, 8), [groups]);
 
+  const tableHeaderActions = useMemo(
+    () => (
+      <Space wrap>
+        <ThemedSegmented
+          surfaceBackground
+          value={includeZeroStock ? 'show' : 'hide'}
+          options={[
+            { label: t('app.kuaizhizao.warehouseCommon.showZeroStock'), value: 'show' },
+            { label: t('app.kuaizhizao.warehouseCommon.hideZeroStock'), value: 'hide' },
+          ]}
+          onChange={(v) => {
+            setIncludeZeroStock(v === 'show');
+            actionRef.current?.reload();
+          }}
+        />
+        <Select
+          value={statusFilter}
+          style={{ width: 140 }}
+          options={[
+            { label: t('app.kuaizhizao.warehouseCommon.allStatus'), value: 'all' },
+            { label: t('app.kuaizhizao.warehouseCommon.inStockOnly'), value: 'in_stock' },
+            { label: t('app.kuaizhizao.warehouseCommon.zeroStockOnly'), value: 'zero' },
+          ]}
+          onChange={(v) => {
+            setStatusFilter(v);
+            actionRef.current?.reload();
+          }}
+        />
+        <Select
+          value={groupBy}
+          style={{ width: 150 }}
+          options={[
+            { label: t('app.kuaizhizao.warehouseCommon.groupByWarehouse'), value: 'warehouse' },
+            { label: t('app.kuaizhizao.warehouseCommon.groupByMaterial'), value: 'material' },
+            { label: t('app.kuaizhizao.warehouseCommon.groupByStatus'), value: 'status' },
+            { label: t('app.kuaizhizao.warehouseCommon.groupByAging'), value: 'aging_bucket' },
+          ]}
+          onChange={(v) => {
+            setGroupBy(v);
+            actionRef.current?.reload();
+          }}
+        />
+      </Space>
+    ),
+    [t, includeZeroStock, statusFilter, groupBy]
+  );
+
   const columns: ProColumns<InventoryItem>[] = useMemo(
     () => [
       {
@@ -101,34 +267,83 @@ const InventoryPage: React.FC = () => {
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         fixed: 'left',
         render: (_, r) => (
-          <MaterialStackedCell
-            material_name={r.material_name}
-            material_code={r.material_code}
-          />
+          <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
         ),
       },
       { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', hideInTable: true },
       { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', hideInTable: true },
       {
+        title: t('app.master-data.materials.specification'),
+        dataIndex: 'material_spec',
+        width: 120,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => renderCell(r.material_spec),
+      },
+      {
+        title: t('app.master-data.materials.model'),
+        dataIndex: 'model',
+        width: 100,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => renderCell(r.model),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInventory.colBrand'),
+        dataIndex: 'brand',
+        width: 100,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => renderCell(r.brand),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInventory.colTexture'),
+        dataIndex: 'texture',
+        width: 100,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => renderCell(r.texture),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colUnit'),
+        dataIndex: 'material_unit',
+        width: 72,
+        hideInSearch: true,
+        render: (_, r) => renderCell(r.material_unit),
+      },
+      {
         title: t('app.kuaizhizao.warehouseReports.colStockQty'),
         dataIndex: 'quantity',
-        width: 120,
+        width: 100,
+        align: 'right',
         valueType: 'digit',
         render: (_, record) => {
           const qty = Number(record.quantity || 0);
-          const unit = String(record.material_unit || '').trim();
           return (
-            <span style={{ color: qty <= 0 ? '#ff4d4f' : undefined }}>
-              {qty}
-              {unit ? ` ${unit}` : ''}
-            </span>
+            <span style={{ color: qty <= 0 ? '#ff4d4f' : undefined }}>{formatQty(qty)}</span>
           );
         },
       },
       {
+        title: t('app.kuaizhizao.warehouseInventory.colInTransit'),
+        dataIndex: 'in_transit_quantity',
+        width: 100,
+        align: 'right',
+        hideInSearch: true,
+        render: (_, record) => renderInTransitCell(record, t),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInventory.colAlert'),
+        dataIndex: 'alert_label',
+        width: 96,
+        align: 'center',
+        hideInSearch: true,
+        render: (_, record) => renderAlertCell(record, t),
+      },
+      {
         title: t('app.kuaizhizao.warehouseCommon.colStatus'),
         dataIndex: 'status',
-        width: 120,
+        width: 100,
         render: (_, record) => {
           let color = 'default';
           if (record.status === '已过期') color = 'red';
@@ -140,7 +355,7 @@ const InventoryPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
         dataIndex: 'warehouse_name',
-        width: 140,
+        width: 120,
         render: (_, r) => r.warehouse_name || '-',
       },
     ],
@@ -220,7 +435,7 @@ const InventoryPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <Card size="small" style={{ marginBottom: 12 }} title={t('app.kuaizhizao.warehouseCommon.analysisSection')}>
+      <Card size="small" style={{ marginBottom: 12 }}>
         <Row gutter={12}>
           <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statRecords')} value={summary.total_records} /></Col>
           <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statTotalQty')} value={summary.total_quantity} precision={2} /></Col>
@@ -242,64 +457,19 @@ const InventoryPage: React.FC = () => {
         </Space>
       </Card>
 
-      <Card size="small" style={{ marginBottom: 12 }} title={t('app.kuaizhizao.warehouseCommon.filterSection')}>
-        <Space wrap>
-          <Segmented
-            value={includeZeroStock ? 'show' : 'hide'}
-            options={[
-              { label: t('app.kuaizhizao.warehouseCommon.showZeroStock'), value: 'show' },
-              { label: t('app.kuaizhizao.warehouseCommon.hideZeroStock'), value: 'hide' },
-            ]}
-            onChange={(v) => {
-              setIncludeZeroStock(v === 'show');
-              actionRef.current?.reload();
-            }}
-          />
-          <Select
-            value={statusFilter}
-            style={{ width: 140 }}
-            options={[
-              { label: t('app.kuaizhizao.warehouseCommon.allStatus'), value: 'all' },
-              { label: t('app.kuaizhizao.warehouseCommon.inStockOnly'), value: 'in_stock' },
-              { label: t('app.kuaizhizao.warehouseCommon.zeroStockOnly'), value: 'zero' },
-            ]}
-            onChange={(v) => {
-              setStatusFilter(v);
-              actionRef.current?.reload();
-            }}
-          />
-          <Select
-            value={groupBy}
-            style={{ width: 150 }}
-            options={[
-              { label: t('app.kuaizhizao.warehouseCommon.groupByWarehouse'), value: 'warehouse' },
-              { label: t('app.kuaizhizao.warehouseCommon.groupByMaterial'), value: 'material' },
-              { label: t('app.kuaizhizao.warehouseCommon.groupByStatus'), value: 'status' },
-              { label: t('app.kuaizhizao.warehouseCommon.groupByAging'), value: 'aging_bucket' },
-            ]}
-            onChange={(v) => {
-              setGroupBy(v);
-              actionRef.current?.reload();
-            }}
-          />
-        </Space>
-      </Card>
-
-      <Card size="small" title={t('app.kuaizhizao.warehouseCommon.resultSection')}>
-        <UniTable<InventoryItem>
-          headerTitle={t('app.kuaizhizao.warehouseInventory.headerTitle')}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory"
-          actionRef={actionRef}
-          columns={columns}
-          request={fetchInventory}
-          showExportButton
-          onExport={handleExport}
-          rowKey="id"
-          search={{ labelWidth: 'auto' }}
-          pagination={{ defaultPageSize: 20, showSizeChanger: true }}
-          scroll={{ x: 760 }}
-        />
-      </Card>
+      <UniTable<InventoryItem>
+        headerActions={tableHeaderActions}
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory"
+        actionRef={actionRef}
+        columns={columns}
+        request={fetchInventory}
+        showExportButton
+        onExport={handleExport}
+        rowKey="id"
+        search={{ labelWidth: 'auto' }}
+        pagination={{ defaultPageSize: 20, showSizeChanger: true }}
+        scroll={{ x: 1560 }}
+      />
     </ListPageTemplate>
   );
 };

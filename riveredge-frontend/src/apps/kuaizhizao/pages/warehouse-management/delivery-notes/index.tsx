@@ -53,6 +53,8 @@ import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
 import { resolveDeliveryNoticeQualityCertificates } from '../../../services/print';
 import { SafetyCertificateOutlined } from '@ant-design/icons';
 import { formatDateTime } from '../../../../../utils/format';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 interface DeliveryNotice {
   id?: number;
@@ -419,6 +421,11 @@ const DeliveryNotesPage: React.FC = () => {
       formRef.current?.setFieldsValue({ items: [defaultDeliveryItem] });
     }, 0);
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.deliveryNote.create')),
+    [t],
+  );
 
   const pullFromSalesDeliveryQuery = useUniPullQuery<PullSalesDeliveryCandidate>({
     rowKey: 'id',
@@ -979,13 +986,13 @@ const DeliveryNotesPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch={true}
           showCreateButton={false}
-          createButtonText={t('app.kuaizhizao.deliveryNote.create')}
+          createButtonText={createButtonLabel}
           onCreate={handleCreate}
           toolBarRender={() => [
             <UniPullCreateToolbar
               compactKey="create-delivery-note-with-pull"
               createIcon={<PlusOutlined />}
-              createLabel={t('app.kuaizhizao.deliveryNote.create')}
+              createLabel={createButtonLabel}
               onCreate={handleCreate}
               menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
                 {

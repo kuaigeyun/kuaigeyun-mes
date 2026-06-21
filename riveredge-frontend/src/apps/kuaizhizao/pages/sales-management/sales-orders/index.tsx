@@ -186,8 +186,6 @@ import { rowActionKind, rowActionAddFollowUpFromDocument } from '../../../../../
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import { inboundSalesReturnEntryPath } from '../../warehouse-management/inbound/inboundPaths';
-import { outboundSalesOrderEntryPath } from '../../warehouse-management/outbound/outboundPaths';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { formatDateTime } from '../../../../../utils/format';
@@ -430,8 +428,6 @@ const SalesOrdersPage: React.FC = () => {
   const pushToShipmentNoticeAction = resolveKuaizhizaoDocumentAction(t, 'shipment_notice.pull_from_sales_order');
   const pushToSalesDeliveryAction = resolveKuaizhizaoDocumentAction(t, 'sales_delivery.pull_from_sales_order');
   const pushToSalesReturnAction = resolveKuaizhizaoDocumentAction(t, 'sales_return.pull_from_sales_order');
-  const pushToOutboundEntryAction = resolveKuaizhizaoDocumentAction(t, 'outbound.pull_from_sales_order');
-  const pushToSalesReturnInboundEntryAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_sales_order');
   const pushToSalesOrderChangeAction = resolveKuaizhizaoDocumentAction(t, 'sales_order_change.pull_from_sales_order');
   const navigate = useNavigate();
   const location = useLocation();
@@ -1593,14 +1589,6 @@ const SalesOrdersPage: React.FC = () => {
     }
   };
 
-  const handlePushToOutboundEntry = (id: number) => {
-    navigate(outboundSalesOrderEntryPath(id));
-  };
-
-  const handlePushToSalesReturnInboundEntry = (id: number) => {
-    navigate(inboundSalesReturnEntryPath(id));
-  };
-
   const handlePushToSalesOrderChange = (id: number) => {
     navigate(`/apps/kuaizhizao/sales-management/sales-order-changes?source_order_id=${id}`);
   };
@@ -2510,25 +2498,10 @@ const SalesOrdersPage: React.FC = () => {
         onClick: () => canPushDelivery && handlePushToDelivery(record.id!),
       },
       {
-        key: 'delivery-entry',
-        label: renderPushItemLabelWithReason(
-          pushToOutboundEntryAction.label,
-          deliveryDisabledReason,
-        ),
-        className: getPushMenuItemClassName(deliveryDisabledReason),
-        onClick: () => canPushDelivery && handlePushToOutboundEntry(record.id!),
-      },
-      {
         key: 'sales-return',
         label: pushToSalesReturnAction.label,
         disabled: !canPushSalesReturn,
         onClick: () => canPushSalesReturn && handlePushToSalesReturn(record.id!),
-      },
-      {
-        key: 'sales-return-inbound-entry',
-        label: pushToSalesReturnInboundEntryAction.label,
-        disabled: !canPushSalesReturn,
-        onClick: () => canPushSalesReturn && handlePushToSalesReturnInboundEntry(record.id!),
       },
       {
         key: 'sales-order-change',
@@ -2548,7 +2521,7 @@ const SalesOrdersPage: React.FC = () => {
           ]
         : []),
     ]);
-  }, [getPushMenuItemClassName, handlePushToComputation, handlePushToDelivery, handlePushToInvoice, handlePushToOutboundEntry, handlePushToSalesOrderChange, handlePushToSalesReturn, handlePushToSalesReturnInboundEntry, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, permDeniedTitle, pushToDemandComputationAction.label, pushToOutboundEntryAction.label, pushToSalesDeliveryAction.label, pushToSalesInvoiceAction.label, pushToSalesOrderChangeAction.label, pushToSalesReturnAction.label, pushToSalesReturnInboundEntryAction.label, pushToShipmentNoticeAction.label, pushToWorkOrderAction.label, renderPushItemLabelWithReason, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, salesOrderPerms.canUpdate, t]);
+  }, [getPushMenuItemClassName, handlePushToComputation, handlePushToDelivery, handlePushToInvoice, handlePushToSalesOrderChange, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, permDeniedTitle, pushToDemandComputationAction.label, pushToSalesDeliveryAction.label, pushToSalesInvoiceAction.label, pushToSalesOrderChangeAction.label, pushToSalesReturnAction.label, pushToShipmentNoticeAction.label, pushToWorkOrderAction.label, renderPushItemLabelWithReason, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, salesOrderPerms.canUpdate, t]);
   const toolbarPushMenuItems = useMemo(
     () => (selectedOrderForToolbar ? buildToolbarPushMenuItems(selectedOrderForToolbar) : []),
     [buildToolbarPushMenuItems, selectedOrderForToolbar]

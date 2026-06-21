@@ -33,6 +33,11 @@ def derive_reporting_record_capabilities(record: Any) -> ReportingRecordCapabili
         "reporting_record.delete.not_pending" if status != "pending" else None,
     )
 
+    approve_cap = _cap(
+        status == "pending",
+        "reporting_record.approve.not_pending" if status != "pending" else None,
+    )
+
     revoke_cap = _cap(
         status == "approved",
         "reporting_record.revoke_approval.not_approved" if status != "approved" else None,
@@ -43,6 +48,7 @@ def derive_reporting_record_capabilities(record: Any) -> ReportingRecordCapabili
     return ReportingRecordCapabilities(
         update=update_cap,
         delete=delete_cap,
+        approve=approve_cap,
         revoke_approval=revoke_cap,
         print=print_cap,
     )
@@ -53,6 +59,7 @@ def assert_reporting_record_capability(record: Any, action: str) -> None:
     cap_map = {
         "update": caps.update,
         "delete": caps.delete,
+        "approve": caps.approve,
         "revoke_approval": caps.revoke_approval,
         "print": caps.print,
     }

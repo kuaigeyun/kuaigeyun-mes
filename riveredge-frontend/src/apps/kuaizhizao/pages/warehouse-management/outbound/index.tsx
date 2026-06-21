@@ -17,6 +17,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
@@ -62,6 +63,7 @@ import {
   isOutboundWithdrawable,
   mapOutsourceIssueToOutbound,
   outboundDocumentCode,
+  outboundSourceDocNo,
 } from './outboundHubTypes';
 import type { OutboundPullEntryNavigationState } from './outboundPullEntryTypes';
 
@@ -400,6 +402,10 @@ const OutboundPage: React.FC = () => {
   };
 
   useNewShortcut(handleCreate);
+  const pullLoadLabel = useMemo(
+    () => withSingleNewShortcutHint(t('components.uniPull.loadFromDocument')),
+    [t],
+  );
 
   /**
    * 处理查看详情
@@ -769,10 +775,12 @@ const OutboundPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: t('app.kuaizhizao.warehouseOutbound.col.workOrderCode'),
-      dataIndex: 'work_order_code',
-      width: 120,
+      title: t('app.kuaizhizao.warehouseOutbound.col.sourceDocNo'),
+      dataIndex: ['sales_order_code', 'work_order_code', 'outsource_work_order_code'],
+      width: 160,
       ellipsis: true,
+      hideInSearch: true,
+      render: (_, record) => outboundSourceDocNo(record) || '-',
     },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.totalQuantity'),
@@ -959,6 +967,7 @@ const OutboundPage: React.FC = () => {
           <UniPullLoadButton
             key="pull"
             compactKey="outbound-pull-load"
+            label={pullLoadLabel}
             type="primary"
             variant="solid"
             menuItems={buildKuaizhizaoPullCreateMenuItems(t, [

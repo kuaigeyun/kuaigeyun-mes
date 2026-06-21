@@ -1,4 +1,4 @@
-import { rowActionKind } from '../../../../../components/uni-action';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 /**
  * 异常处理流程管理页面
  *
@@ -26,6 +26,8 @@ import { apiRequest } from '../../../../../services/api';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { exceptionProcessBatchCancelAllowed } from '../../../../../hooks/useDocumentCapabilities';
 import { formatDateTime } from '../../../../../utils/format';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const EXCEPTION_PROCESS_RESOURCE = 'kuaizhizao:production-execution-reporting';
 
@@ -226,6 +228,11 @@ const ExceptionProcessPage: React.FC = () => {
     }
     setStartModalVisible(true);
   };
+  useNewShortcut(() => openStartModal());
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t(`${PROC}.createButton`)),
+    [t],
+  );
 
   const handleStart = async (values: any) => {
     try {
@@ -403,33 +410,35 @@ const ExceptionProcessPage: React.FC = () => {
       valueType: 'option',
       width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
-            {t('common.detail')}
-          </Button>
-          {record.process_status === 'pending' && (
-            <Button {...rowActionKind('audit')} key="approve" onClick={() => openAssignModal(record)}>
-              {t(`${P}.action.assign`)}
-            </Button>
-          )}
-          {record.process_status === 'processing' && (
-            <>
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+              {t('common.detail')}
+            </Button>,
+            record.process_status === 'pending' ? (
+              <Button {...rowActionKind('audit')} key="approve" onClick={() => openAssignModal(record)}>
+                {t(`${P}.action.assign`)}
+              </Button>
+            ) : null,
+            record.process_status === 'processing' ? (
               <Button {...rowActionKind('audit')} key="transition" onClick={() => openStepTransitionModal(record)}>
                 {t(`${P}.action.transition`)}
               </Button>
+            ) : null,
+            record.process_status === 'processing' ? (
               <Button key="resolve" {...rowActionKind('audit')} onClick={() => openResolveModal(record)}>
                 {t(`${P}.lifecycleNext.resolve`)}
               </Button>
-            </>
-          )}
-          {['pending', 'processing'].includes(record.process_status || '') && (
-            <Button key="reject" {...rowActionKind('reject')} onClick={() => handleCancel(record)}>
-              {t(`${P}.action.cancel`)}
-            </Button>
-          )}
-        </Space>
-      ),
+            ) : null,
+            ['pending', 'processing'].includes(record.process_status || '') ? (
+              <Button key="reject" {...rowActionKind('reject')} onClick={() => handleCancel(record)}>
+                {t(`${P}.action.cancel`)}
+              </Button>
+            ) : null,
+          ],
+          { keyPrefix: `exception-process-actions-${record.id ?? 'row'}` },
+        ),
     },
   ], [t, getExceptionTypeTag, getStepTag]);
 
@@ -514,7 +523,7 @@ const ExceptionProcessPage: React.FC = () => {
           rowKey="id"
           showAdvancedSearch={true}
           showCreateButton={true}
-          createButtonText={t(`${PROC}.createButton`)}
+          createButtonText={createButtonLabel}
           onCreate={() => openStartModal()}
           enableRowSelection={true}
           selectedRowKeys={selectedRowKeys}

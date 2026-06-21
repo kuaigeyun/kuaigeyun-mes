@@ -8,7 +8,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import type { SelectProps } from 'antd'
-import { Spin, Empty, Typography, Table, Space, Modal, Form, Button, InputNumber, Input, App, Select, Tabs } from 'antd'
+import { Spin, Empty, Typography, Table, Space, Modal, Form, Button, InputNumber, Input, App, Select, Tabs, Progress, Tag } from 'antd'
 import { PlusOutlined, MinusCircleOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { workOrderApi } from '../../../../services/production'
@@ -18,6 +18,9 @@ import { getMaterialCallLifecycle } from '../../../../utils/materialCallLifecycl
 import UniMaterialSelect from '../../../../../../components/uni-material-select'
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../../services/dataDictionary'
 import { useInvalidateMenuBadgeCounts } from '../../../../../../hooks/useInvalidateMenuBadgeCounts'
+import { translateWorkOrderLifecycleStatus } from '../../../../utils/workOrderLifecycle'
+import { translateOutsourceWorkOrderLifecycleStatus } from '../../../../utils/outsourceWorkOrderLifecycle'
+import { UniTableStackedPrimaryCell } from '../../../../../../components/uni-table/stackedPrimaryColumn'
 
 function useFallbackCallTypeOptions() {
   const { t } = useTranslation()
@@ -455,6 +458,12 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     staleTime: 0,
   })
 
+  useEffect(() => {
+    if (kittingData) {
+      void queryClient.invalidateQueries({ queryKey: ['kuaizhizao', 'work-orders', 'list'] })
+    }
+  }, [kittingData, queryClient])
+
   const { data: calls, isLoading: callsLoading } = useQuery({
     queryKey: ['materialCallsByWorkOrder', workOrderId],
     queryFn: () =>
@@ -478,15 +487,81 @@ const WorkOrderReadinessPopoverContent: React.FC<{
 
   const items = (kittingData as { items?: unknown[] } | undefined)?.items ?? []
 
+  type RelatedWorkOrderRow = {
+    id: number
+    code: string
+    status: string
+    quantity: number
+    completedQuantity: number
+    progressPercent: number
+  }
+
+  type RelatedOutsourceWorkOrderRow = {
+    id: number
+    code: string
+    status: string
+    quantity: number
+    receivedQuantity: number
+    progressPercent: number
+    supplierName?: string
+  }
+
   type WhRow = {
     key: string
-    material: string
+    materialCode: string
+    materialName: string
     requiredQty: string
-    warehouse: string
     qty: string
+    warehouseLocation: string
     /** 数量相对需求：够=绿，不够=红，无法比较=默认色 */
     qtyVsRequired: 'ok' | 'short' | 'neutral'
+    kittingApplicable: boolean
+    relatedWorkOrder?: RelatedWorkOrderRow
+    relatedOutsourceWorkOrder?: RelatedOutsourceWorkOrderRow
   }
+
+  function formatWarehouseLocation(loc: Record<string, unknown>): string {
+    const wh = String(loc.warehouse_name ?? loc.warehouseName ?? '').trim()
+    const locCode = String(loc.storage_location_code ?? loc.storageLocationCode ?? '').trim()
+    if (!wh && !locCode) return '—'
+    if (!locCode) return wh || '—'
+    if (!wh) return locCode
+    return `${wh} / ${locCode}`
+  }
+
+  function parseRelatedWorkOrder(raw: Record<string, unknown>): RelatedWorkOrderRow | undefined {
+    const nested = raw.related_work_order as Record<string, unknown> | undefined
+    if (!nested?.work_order_id) return undefined
+    return {
+      id: Number(nested.work_order_id),
+      code: String(nested.work_order_code ?? ''),
+      status: String(nested.status ?? ''),
+      quantity: Number(nested.quantity ?? 0),
+      completedQuantity: Number(nested.completed_quantity ?? 0),
+      progressPercent: Number(nested.progress_percent ?? 0),
+    }
+  }
+
+  function parseRelatedOutsourceWorkOrder(raw: Record<string, unknown>): RelatedOutsourceWorkOrderRow | undefined {
+    const nested = raw.related_outsource_work_order as Record<string, unknown> | undefined
+    if (!nested?.outsource_work_order_id) return undefined
+    return {
+      id: Number(nested.outsource_work_order_id),
+      code: String(nested.outsource_work_order_code ?? ''),
+      status: String(nested.status ?? ''),
+      quantity: Number(nested.quantity ?? 0),
+      receivedQuantity: Number(nested.received_quantity ?? 0),
+      progressPercent: Number(nested.progress_percent ?? 0),
+      supplierName: nested.supplier_name ? String(nested.supplier_name) : undefined,
+    }
+  }
+
+  function nonInventoryKittingHint(sourceType: unknown): string {
+    const st = String(sourceType ?? '').trim()
+    if (st === 'Service') return t('app.kuaizhizao.workOrder.readinessNonInventoryService')
+    return t('app.kuaizhizao.workOrder.readinessNonInventoryOther')
+  }
+
   const warehouseRows: WhRow[] = []
   if (!kittingError) {
     for (const raw of items) {
@@ -494,41 +569,83 @@ const WorkOrderReadinessPopoverContent: React.FC<{
       const materialId = it.material_id
       const code = String(it.material_code ?? '')
       const name = String(it.material_name ?? '')
-      const materialLabel = [code, name].filter(Boolean).join(' ')
-      const locs = (it.locations as Record<string, unknown>[] | undefined) ?? []
       const requiredQty = formatKittingRequiredQty(it.required_quantity ?? it.requiredQuantity)
       const requiredNum = parseRequiredNumber(it.required_quantity ?? it.requiredQuantity)
+      const kittingApplicable = it.kitting_applicable !== false
+      const sourceType = it.source_type ?? it.sourceType
+      const relatedWorkOrder = parseRelatedWorkOrder(it)
+      const relatedOutsourceWorkOrder = parseRelatedOutsourceWorkOrder(it)
+      const woSupply = Number(it.work_order_supply_quantity ?? 0)
+      const woSupplySafe = Number.isFinite(woSupply) ? woSupply : 0
+
+      if (!kittingApplicable) {
+        const st = String(sourceType ?? '').trim()
+        if (st === 'Outsource') {
+          const received = relatedOutsourceWorkOrder?.receivedQuantity ?? 0
+          const meets = isAvailableMeetsRequirement(received, requiredNum)
+          warehouseRows.push({
+            key: `${materialId}-outsource`,
+            materialCode: code,
+            materialName: name,
+            requiredQty,
+            qty: formatQtyAdaptive(received),
+            warehouseLocation: '—',
+            qtyVsRequired: meets === null ? 'neutral' : meets ? 'ok' : 'short',
+            kittingApplicable: false,
+            relatedOutsourceWorkOrder,
+          })
+        } else {
+          warehouseRows.push({
+            key: `${materialId}-non-inventory`,
+            materialCode: code,
+            materialName: name,
+            requiredQty,
+            qty: nonInventoryKittingHint(sourceType),
+            warehouseLocation: '—',
+            qtyVsRequired: 'neutral',
+            kittingApplicable: false,
+          })
+        }
+        continue
+      }
+
+      const locs = (it.locations as Record<string, unknown>[] | undefined) ?? []
+      const inventoryAvail = locs.reduce((sum, loc) => {
+        const qn = Number(loc.quantity ?? 0)
+        return sum + (Number.isFinite(qn) ? qn : 0)
+      }, 0)
+      const totalAvail = inventoryAvail + woSupplySafe
+      const materialCmp = isAvailableMeetsRequirement(totalAvail, requiredNum)
+
       if (locs.length === 0) {
-        const main = it.main_warehouse_available ?? it.mainWarehouseAvailable ?? 0
-        const line = it.line_side_available ?? it.lineSideAvailable ?? 0
-        const mainN = Number(main)
-        const lineN = Number(line)
-        const totalAvail =
-          (Number.isFinite(mainN) ? mainN : 0) + (Number.isFinite(lineN) ? lineN : 0)
-        const cmp = isAvailableMeetsRequirement(totalAvail, requiredNum)
         warehouseRows.push({
-          key: `${materialId}-summary`,
-          material: materialLabel || '—',
+          key: `${materialId}-empty`,
+          materialCode: code,
+          materialName: name,
           requiredQty,
-          warehouse: '主仓 / 线边',
-          qty: `主仓 ${main} / 线边 ${line}`,
-          qtyVsRequired: cmp === null ? 'neutral' : cmp ? 'ok' : 'short',
+          qty: formatQtyAdaptive(inventoryAvail),
+          warehouseLocation: t('app.kuaizhizao.workOrder.readinessNoWarehouseConfigured'),
+          qtyVsRequired:
+            materialCmp === null ? 'neutral' : materialCmp ? 'ok' : 'short',
+          kittingApplicable: true,
+          relatedWorkOrder,
         })
       } else {
         for (const loc of locs) {
-          const wh = String(loc.warehouse_name ?? loc.warehouseName ?? '—')
+          const whId = loc.warehouse_id ?? loc.warehouseId ?? '0'
+          const locCode = loc.storage_location_code ?? loc.storageLocationCode ?? ''
           const qty = loc.quantity ?? 0
-          const slot = loc.storage_location_code ?? loc.storageLocationCode
-          const qn = Number(qty)
-          const locAvail = Number.isFinite(qn) ? qn : 0
-          const cmp = isAvailableMeetsRequirement(locAvail, requiredNum)
           warehouseRows.push({
-            key: `${materialId}-${wh}-${String(slot ?? '')}`,
-            material: materialLabel || '—',
+            key: `${materialId}-${whId}-${locCode || 'default'}`,
+            materialCode: code,
+            materialName: name,
             requiredQty,
-            warehouse: wh,
-            qty: slot ? `${qty}（${slot}）` : String(qty),
-            qtyVsRequired: cmp === null ? 'neutral' : cmp ? 'ok' : 'short',
+            qty: formatQtyAdaptive(qty),
+            warehouseLocation: formatWarehouseLocation(loc),
+            qtyVsRequired:
+              materialCmp === null ? 'neutral' : materialCmp ? 'ok' : 'short',
+            kittingApplicable: true,
+            relatedWorkOrder,
           })
         }
       }
@@ -537,7 +654,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
 
   const callList = Array.isArray(calls) ? calls : []
 
-  const hasShortage = warehouseRows.some((r) => r.qtyVsRequired === 'short')
+  const hasShortage = warehouseRows.some((r) => r.kittingApplicable && r.qtyVsRequired === 'short')
 
   const handleGoBatching = async () => {
     setPullLoading(true)
@@ -598,15 +715,26 @@ const WorkOrderReadinessPopoverContent: React.FC<{
               rowKey="key"
               dataSource={warehouseRows}
               columns={[
-                { title: t('app.kuaizhizao.workOrder.colMaterial'), dataIndex: 'material', key: 'material', ellipsis: true, width: 220 },
-                { title: t('app.kuaizhizao.workOrder.colRequiredQty'), dataIndex: 'requiredQty', key: 'requiredQty', ellipsis: true, width: 112 },
-                { title: t('app.kuaizhizao.workOrder.colWarehouse'), dataIndex: 'warehouse', key: 'warehouse', ellipsis: true, width: 100 },
                 {
-                  title: t('app.kuaizhizao.workOrder.colQtyLocation'),
+                  title: t('app.kuaizhizao.workOrder.colMaterial'),
+                  key: 'material',
+                  ellipsis: false,
+                  width: 200,
+                  render: (_: unknown, row: WhRow) => (
+                    <UniTableStackedPrimaryCell
+                      primary={row.materialName || row.materialCode || '—'}
+                      secondary={row.materialCode}
+                      secondaryCopyable={Boolean(row.materialCode?.trim())}
+                    />
+                  ),
+                },
+                { title: t('app.kuaizhizao.workOrder.colRequiredQty'), dataIndex: 'requiredQty', key: 'requiredQty', ellipsis: true, width: 96 },
+                {
+                  title: t('app.kuaizhizao.workOrder.colInventoryQty'),
                   dataIndex: 'qty',
                   key: 'qty',
                   ellipsis: true,
-                  width: 108,
+                  width: 88,
                   render: (text: string, row: WhRow) =>
                     row.qtyVsRequired === 'neutral' ? (
                       text
@@ -615,6 +743,98 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                         {text}
                       </Typography.Text>
                     ),
+                },
+                {
+                  title: t('app.kuaizhizao.workOrder.colWarehouseLocation'),
+                  dataIndex: 'warehouseLocation',
+                  key: 'warehouseLocation',
+                  ellipsis: true,
+                  width: 140,
+                },
+                {
+                  title: t('app.kuaizhizao.workOrder.colRelatedWorkOrder'),
+                  key: 'relatedWorkOrder',
+                  width: 128,
+                  ellipsis: true,
+                  render: (_: unknown, row: WhRow) => {
+                    const owo = row.relatedOutsourceWorkOrder
+                    if (owo?.id) {
+                      return (
+                        <Button
+                          type="link"
+                          size="small"
+                          style={{ padding: 0, height: 'auto' }}
+                          onClick={(e) => {
+                            stopRowToggle(e)
+                            navigate(
+                              `/apps/kuaizhizao/production-execution/outsource-work-orders?highlight=${owo.id}`,
+                            )
+                          }}
+                        >
+                          {owo.code}
+                        </Button>
+                      )
+                    }
+                    const wo = row.relatedWorkOrder
+                    if (!wo?.code) return '—'
+                    return (
+                      <Button
+                        type="link"
+                        size="small"
+                        style={{ padding: 0, height: 'auto' }}
+                        onClick={(e) => {
+                          stopRowToggle(e)
+                          navigate(`/apps/kuaizhizao/production-execution/work-orders?highlight=${wo.id}`)
+                        }}
+                      >
+                        {wo.code}
+                      </Button>
+                    )
+                  },
+                },
+                {
+                  title: t('app.kuaizhizao.workOrder.colWorkOrderProgress'),
+                  key: 'workOrderProgress',
+                  width: 168,
+                  render: (_: unknown, row: WhRow) => {
+                    const owo = row.relatedOutsourceWorkOrder
+                    if (owo?.id) {
+                      const statusLabel = translateOutsourceWorkOrderLifecycleStatus(t, owo.status)
+                      return (
+                        <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                          <Space size={4} wrap>
+                            <Tag style={{ margin: 0 }}>{statusLabel}</Tag>
+                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                              {formatQtyAdaptive(owo.receivedQuantity)}/{formatQtyAdaptive(owo.quantity)}
+                            </Typography.Text>
+                          </Space>
+                          <Progress
+                            percent={Math.min(100, Math.max(0, owo.progressPercent))}
+                            size="small"
+                            showInfo
+                          />
+                        </Space>
+                      )
+                    }
+                    const wo = row.relatedWorkOrder
+                    if (!wo?.code) return '—'
+                    const statusLabel = translateWorkOrderLifecycleStatus(t, wo.status)
+                    return (
+                      <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                        <Space size={4} wrap>
+                          <Tag style={{ margin: 0 }}>{statusLabel}</Tag>
+                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                            {formatQtyAdaptive(wo.completedQuantity)}/{formatQtyAdaptive(wo.quantity)}
+                          </Typography.Text>
+                        </Space>
+                        <Progress
+                          percent={Math.min(100, Math.max(0, wo.progressPercent))}
+                          size="small"
+                          showInfo
+                        />
+                      </Space>
+                    )
+                  },
                 },
               ]}
             />
@@ -668,9 +888,14 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                         {
                           title: t('app.kuaizhizao.workOrder.colMaterial'),
                           key: 'mn',
-                          ellipsis: true,
-                          render: (_: unknown, it) =>
-                            `${String(it.material_code ?? '')} ${String(it.material_name ?? '')}`.trim() || '—',
+                          ellipsis: false,
+                          render: (_: unknown, it) => (
+                            <UniTableStackedPrimaryCell
+                              primary={String(it.material_name ?? '').trim() || String(it.material_code ?? '').trim() || '—'}
+                              secondary={String(it.material_code ?? '')}
+                              secondaryCopyable={Boolean(String(it.material_code ?? '').trim())}
+                            />
+                          ),
                         },
                         {
                           title: t('app.kuaizhizao.workOrder.colDeliveredRequested'),
@@ -706,8 +931,14 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                   title: t('app.kuaizhizao.workOrder.colMaterial'),
                   key: 'material',
                   width: '34%',
-                  ellipsis: true,
-                  render: (_: unknown, r: Record<string, unknown>) => String(r.material_name ?? ''),
+                  ellipsis: false,
+                  render: (_: unknown, r: Record<string, unknown>) => (
+                    <UniTableStackedPrimaryCell
+                      primary={String(r.material_name ?? '').trim() || String(r.material_code ?? '').trim() || '—'}
+                      secondary={String(r.material_code ?? '')}
+                      secondaryCopyable={Boolean(String(r.material_code ?? '').trim())}
+                    />
+                  ),
                 },
                 {
                   title: t('app.kuaizhizao.workOrder.colDeliveredRequested'),
@@ -835,7 +1066,7 @@ export const WorkOrderReadinessPopover: React.FC<WorkOrderReadinessPopoverProps>
           setCallModalOpen(false)
         }}
         footer={null}
-        width={760}
+        width={960}
         destroyOnHidden
         zIndex={1100}
         styles={{ body: { ...READINESS_MAIN_MODAL_BODY_STYLE } }}

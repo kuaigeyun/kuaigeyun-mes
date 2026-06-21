@@ -303,8 +303,8 @@ export function normalizeWorkOrderListTreeData(rows: WorkOrderListRow[]): WorkOr
 }
 
 function listSnapshotStorageKey(queryKey: readonly unknown[]): string {
-  /* v12：组内继承拆分子行/返工/委外 */
-  return `riveredge.woList.v12:${tenantIdForSnapshot()}:${stableJsonForQueryKey(queryKey)}`
+  /* v13：树形组默认展开，平级组/拆返委外默认收起 */
+  return `riveredge.woList.v13:${tenantIdForSnapshot()}:${stableJsonForQueryKey(queryKey)}`
 }
 
 /** 将上次成功的列表写入 sessionStorage，下次进页可瞬时 hydrate */
@@ -440,8 +440,8 @@ export async function fetchWorkOrderListForTable(
   searchFormValues: Record<string, any> | undefined
 ): Promise<WorkOrderListTableResult> {
   const apiParams = buildWorkOrderListApiParams(params, sort, searchFormValues, {
-    /** 列表读库表持久化字段；导出等场景可传 include_readiness=true 强制重算 */
-    include_readiness: false,
+    /** 与齐套分析 API 同口径重算当前页并写库，保证列表齐套率与库位弹窗一致 */
+    include_readiness: true,
     /** 列表首屏关闭；避免 batch_ensure_scores 触发大量快照计算 */
     include_scores: false,
     /** 工序列：与运营看板同口径的步骤摘要 */

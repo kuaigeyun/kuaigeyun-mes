@@ -71,6 +71,20 @@ import type {
 } from './inboundPullEntryTypes';
 import { fetchInboundHubList } from './inboundListAggregate';
 import { batchConfirmInboundDocuments } from './inboundBatchConfirm';
+import { fetchPurchaseReceiptIqcEnsure } from './inboundPurchaseIqcGate';
+import { PurchaseReceiptIqcReviewModal } from './PurchaseReceiptIqcReviewModal';
+import { fetchCustomerMaterialIqcEnsure } from './inboundCustomerMaterialIqcGate';
+import { CustomerMaterialIqcReviewModal } from './CustomerMaterialIqcReviewModal';
+import {
+  fetchFinishedGoodsReceiptFqcEnsure,
+  fetchSemiFinishedGoodsReceiptFqcEnsure,
+} from './inboundFinishedGoodsFqcGate';
+import { FinishedGoodsReceiptFqcReviewModal } from './FinishedGoodsReceiptFqcReviewModal';
+import type {
+  EnsureIqcForPurchaseReceiptResult,
+  EnsureIqcForCustomerMaterialRegistrationResult,
+  EnsureFqcForFinishedGoodsReceiptResult,
+} from '../../../services/quality-execution';
 import {
   type InboundHubOrder,
   type InboundReceiptType,
@@ -83,6 +97,8 @@ import { uploadMultipleFiles } from '../../../../../services/file';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { inboundReceiptTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintConfig';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 interface InboundOrder extends InboundHubOrder {
   workshop_name?: string;
@@ -386,6 +402,14 @@ const InboundPage: React.FC = () => {
   const inboundDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
   const quickPullRef = useRef<InboundQuickPullModalsRef>(null);
+  const handleCreate = useCallback(() => {
+    quickPullRef.current?.open('work_order');
+  }, []);
+  useNewShortcut(handleCreate);
+  const pullLoadLabel = useMemo(
+    () => withSingleNewShortcutHint(t('components.uniPull.loadFromDocument')),
+    [t],
+  );
   const listDataRef = useRef<InboundOrder[]>([]);
   const [inboundListVersion, setInboundListVersion] = useState(0);
   const inboundPerms = useResourcePermissions('kuaizhizao:inbound');
@@ -461,6 +485,21 @@ const InboundPage: React.FC = () => {
   const [purchaseConfirmMaterialMeta, setPurchaseConfirmMaterialMeta] = useState<Record<number, ConfirmPreviewMaterialMeta>>({});
   const [purchaseConfirmGeneratingSerialId, setPurchaseConfirmGeneratingSerialId] = useState<number | null>(null);
   const [purchaseConfirmWarehouseOptions, setPurchaseConfirmWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
+
+  const [iqcReviewOpen, setIqcReviewOpen] = useState(false);
+  const [iqcReviewLoading, setIqcReviewLoading] = useState(false);
+  const [iqcReviewEnsure, setIqcReviewEnsure] = useState<EnsureIqcForPurchaseReceiptResult | null>(null);
+  const [iqcReviewPurchaseReceiptId, setIqcReviewPurchaseReceiptId] = useState<number | string | undefined>();
+  const [cmIqcReviewOpen, setCmIqcReviewOpen] = useState(false);
+  const [cmIqcReviewLoading, setCmIqcReviewLoading] = useState(false);
+  const [cmIqcReviewEnsure, setCmIqcReviewEnsure] = useState<EnsureIqcForCustomerMaterialRegistrationResult | null>(null);
+  const [cmIqcReviewRegistrationId, setCmIqcReviewRegistrationId] = useState<number | string | undefined>();
+  const [fqcReviewOpen, setFqcReviewOpen] = useState(false);
+  const [fqcReviewLoading, setFqcReviewLoading] = useState(false);
+  const [fqcReviewEnsure, setFqcReviewEnsure] = useState<EnsureFqcForFinishedGoodsReceiptResult | null>(null);
+  const [fqcReviewFinishedGoodsReceiptId, setFqcReviewFinishedGoodsReceiptId] = useState<number | string | undefined>();
+  const pendingConfirmRecordRef = useRef<InboundOrder | null>(null);
+  const pendingConfirmHandoffRef = useRef<PurchaseReceiptEntryHandoff | undefined>(undefined);
 
   const productionReturnConfirmFormRef = useRef<ProFormInstance>();
   const {
@@ -694,11 +733,12 @@ const InboundPage: React.FC = () => {
     }
   };
 
-  const openConfirmPreview = async (
+  const proceedOpenConfirmPreview = async (
     record: InboundOrder,
     purchaseReceiptHandoff?: PurchaseReceiptEntryHandoff,
   ) => {
     if (!record.id) return;
+
     setPurchaseConfirmPreviewOpen(true);
     setPurchaseConfirmPreviewLoading(true);
     try {
@@ -828,6 +868,163 @@ const InboundPage: React.FC = () => {
     }
   };
 
+  const openConfirmPreview = async (
+    record: InboundOrder,
+    purchaseReceiptHandoff?: PurchaseReceiptEntryHandoff,
+  ) => {
+    if (!record.id) return;
+    if (record.receipt_type === 'purchase') {
+      pendingConfirmRecordRef.current = record;
+      pendingConfirmHandoffRef.current = purchaseReceiptHandoff;
+      setIqcReviewPurchaseReceiptId(record.id);
+      setIqcReviewEnsure(null);
+      setIqcReviewOpen(true);
+      setIqcReviewLoading(true);
+      try {
+        const ensure = await fetchPurchaseReceiptIqcEnsure(record.id);
+        setIqcReviewEnsure(ensure);
+      } catch (e: any) {
+        setIqcReviewOpen(false);
+        pendingConfirmRecordRef.current = null;
+        pendingConfirmHandoffRef.current = undefined;
+        messageApi.error(
+          e?.message || e?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.iqc.ensureFailed'),
+        );
+      } finally {
+        setIqcReviewLoading(false);
+      }
+      return;
+    }
+    if (record.receipt_type === 'finished_goods') {
+      pendingConfirmRecordRef.current = record;
+      pendingConfirmHandoffRef.current = purchaseReceiptHandoff;
+      setFqcReviewFinishedGoodsReceiptId(record.id);
+      setFqcReviewEnsure(null);
+      setFqcReviewOpen(true);
+      setFqcReviewLoading(true);
+      try {
+        const ensure = await fetchFinishedGoodsReceiptFqcEnsure(record.id);
+        setFqcReviewEnsure(ensure);
+      } catch (e: any) {
+        setFqcReviewOpen(false);
+        pendingConfirmRecordRef.current = null;
+        pendingConfirmHandoffRef.current = undefined;
+        messageApi.error(
+          e?.message || e?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.fqc.ensureFailed'),
+        );
+      } finally {
+        setFqcReviewLoading(false);
+      }
+      return;
+    }
+    if (record.receipt_type === 'semi_finished_goods') {
+      pendingConfirmRecordRef.current = record;
+      pendingConfirmHandoffRef.current = purchaseReceiptHandoff;
+      setFqcReviewFinishedGoodsReceiptId(record.id);
+      setFqcReviewEnsure(null);
+      setFqcReviewOpen(true);
+      setFqcReviewLoading(true);
+      try {
+        const ensure = await fetchSemiFinishedGoodsReceiptFqcEnsure(record.id);
+        setFqcReviewEnsure(ensure);
+      } catch (e: any) {
+        setFqcReviewOpen(false);
+        pendingConfirmRecordRef.current = null;
+        pendingConfirmHandoffRef.current = undefined;
+        messageApi.error(
+          e?.message || e?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.fqc.ensureFailed'),
+        );
+      } finally {
+        setFqcReviewLoading(false);
+      }
+      return;
+    }
+    await proceedOpenConfirmPreview(record, purchaseReceiptHandoff);
+  };
+
+  const openCustomerMaterialIqcReview = async (record: InboundOrder) => {
+    if (!record.id) return;
+    pendingConfirmRecordRef.current = record;
+    setCmIqcReviewRegistrationId(record.id);
+    setCmIqcReviewEnsure(null);
+    setCmIqcReviewOpen(true);
+    setCmIqcReviewLoading(true);
+    try {
+      const ensure = await fetchCustomerMaterialIqcEnsure(record.id);
+      setCmIqcReviewEnsure(ensure);
+    } catch (e: any) {
+      setCmIqcReviewOpen(false);
+      pendingConfirmRecordRef.current = null;
+      messageApi.error(
+        e?.message || e?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.cmIqc.ensureFailed'),
+      );
+    } finally {
+      setCmIqcReviewLoading(false);
+    }
+  };
+
+  const handleCmIqcReviewContinue = async () => {
+    const record = pendingConfirmRecordRef.current;
+    setCmIqcReviewOpen(false);
+    setCmIqcReviewEnsure(null);
+    setCmIqcReviewRegistrationId(undefined);
+    pendingConfirmRecordRef.current = null;
+    if (!record?.id) return;
+    try {
+      await customerMaterialRegistrationApi.process(String(record.id));
+      messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.customerMaterialConfirmed'));
+      invalidateMenuBadgeCounts();
+      await actionRef.current?.reload?.();
+    } catch (e: any) {
+      messageApi.error(
+        e?.message || e?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.msg.confirmFailed'),
+      );
+    }
+  };
+
+  const handleCmIqcReviewCancel = () => {
+    setCmIqcReviewOpen(false);
+    setCmIqcReviewEnsure(null);
+    setCmIqcReviewRegistrationId(undefined);
+    pendingConfirmRecordRef.current = null;
+  };
+
+  const handleFqcReviewContinue = async () => {
+    const record = pendingConfirmRecordRef.current;
+    const handoff = pendingConfirmHandoffRef.current;
+    setFqcReviewOpen(false);
+    setFqcReviewEnsure(null);
+    pendingConfirmRecordRef.current = null;
+    pendingConfirmHandoffRef.current = undefined;
+    if (!record) return;
+    await proceedOpenConfirmPreview(record, handoff);
+  };
+
+  const handleFqcReviewCancel = () => {
+    setFqcReviewOpen(false);
+    setFqcReviewEnsure(null);
+    pendingConfirmRecordRef.current = null;
+    pendingConfirmHandoffRef.current = undefined;
+  };
+
+  const handleIqcReviewContinue = async () => {
+    const record = pendingConfirmRecordRef.current;
+    const handoff = pendingConfirmHandoffRef.current;
+    setIqcReviewOpen(false);
+    setIqcReviewEnsure(null);
+    pendingConfirmRecordRef.current = null;
+    pendingConfirmHandoffRef.current = undefined;
+    if (!record) return;
+    await proceedOpenConfirmPreview(record, handoff);
+  };
+
+  const handleIqcReviewCancel = () => {
+    setIqcReviewOpen(false);
+    setIqcReviewEnsure(null);
+    pendingConfirmRecordRef.current = null;
+    pendingConfirmHandoffRef.current = undefined;
+  };
+
   useEffect(() => {
     const dc = (location.state as InboundPullEntryNavigationState | null)?.inboundDirectConfirm;
     if (!dc?.id) return;
@@ -948,40 +1145,10 @@ const InboundPage: React.FC = () => {
         const refItems = (refreshed as any)?.items || [];
         const orderedSource = items.filter((it) => it.material_id != null);
         if (refItems.length !== orderedSource.length) {
-          // #region agent log
-          globalThis.fetch('http://127.0.0.1:7807/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2f32a1' },
-            body: JSON.stringify({
-              sessionId: '2f32a1',
-              runId: 'pre-fix',
-              hypothesisId: 'H6',
-              location: 'inbound/index.tsx:submitConfirmPreview',
-              message: 'early_exit_row_count',
-              data: { receiptId: order.id, refLen: refItems.length, srcLen: orderedSource.length },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
           messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.lineCountMismatch'));
           return;
         }
         if (refItems.some((it: any) => it?.id == null || !(Number(it.id) > 0))) {
-          // #region agent log
-          globalThis.fetch('http://127.0.0.1:7807/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2f32a1' },
-            body: JSON.stringify({
-              sessionId: '2f32a1',
-              runId: 'pre-fix',
-              hypothesisId: 'H6',
-              location: 'inbound/index.tsx:submitConfirmPreview',
-              message: 'early_exit_bad_item_id',
-              data: { receiptId: order.id },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
           messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.lineIdAbnormal'));
           return;
         }
@@ -1004,26 +1171,6 @@ const InboundPage: React.FC = () => {
             serial_numbers: serialList?.length ? serialList : undefined,
           };
         });
-        // #region agent log
-        globalThis.fetch('http://127.0.0.1:7807/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2f32a1' },
-          body: JSON.stringify({
-            sessionId: '2f32a1',
-            runId: 'pre-fix',
-            hypothesisId: 'H1',
-            location: 'inbound/index.tsx:submitConfirmPreview',
-            message: 'before_confirm',
-            data: {
-              receiptId: order.id,
-              headerWh,
-              confirmItemIds: confirmItems.map((c: any) => c.item_id),
-              lineWhs: confirmItems.map((c: any) => c.warehouse_id),
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         await warehouseApi.purchaseReceipt.confirm(String(order.id), {
           warehouse_id: headerWh,
           warehouse_name: headerWhName,
@@ -1087,28 +1234,6 @@ const InboundPage: React.FC = () => {
       }
       setInboundTrackingRefreshKey((k) => k + 1);
     } catch (error: any) {
-      // #region agent log
-      const det = error?.response?.data?.detail;
-      const detailStr =
-        typeof det === 'string' ? det : Array.isArray(det) ? JSON.stringify(det).slice(0, 500) : det != null ? JSON.stringify(det).slice(0, 500) : '';
-      globalThis.fetch('http://127.0.0.1:7807/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2f32a1' },
-        body: JSON.stringify({
-          sessionId: '2f32a1',
-          runId: 'pre-fix',
-          hypothesisId: 'H6',
-          location: 'inbound/index.tsx:submitConfirmPreview',
-          message: 'confirm_catch',
-          data: {
-            errMsg: String(error?.message || '').slice(0, 400),
-            status: error?.response?.status,
-            detail: detailStr.slice(0, 500),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       messageApi.error(error?.message || error?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.msg.confirmFailed'));
       throw error;
     } finally {
@@ -1122,16 +1247,7 @@ const InboundPage: React.FC = () => {
   const handleConfirm = async (record: InboundOrder) => {
     const code = record.receipt_code || record.return_code || '';
     if (record.receipt_type === 'customer_material') {
-      Modal.confirm({
-        title: t('app.kuaizhizao.warehouseInbound.confirm.customerMaterial.title'),
-        content: t('app.kuaizhizao.warehouseInbound.confirm.customerMaterial.content', { code }),
-        onOk: async () => {
-          await customerMaterialRegistrationApi.process(String(record.id));
-          messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.customerMaterialConfirmed'));
-          invalidateMenuBadgeCounts();
-          await actionRef.current?.reload?.();
-        },
-      });
+      await openCustomerMaterialIqcReview(record);
       return;
     }
     if (record.receipt_type === 'sales_return') {
@@ -1365,8 +1481,8 @@ const InboundPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.sourceDocNo'),
-      dataIndex: 'source_doc_no',
-      width: 140,
+      dataIndex: ['purchase_order_code', 'sales_order_code', 'work_order_code', 'picking_code', 'source_doc_no'],
+      width: 160,
       ellipsis: true,
       hideInSearch: true,
       render: (_, record) => inboundSourceDocNo(record) || '-',
@@ -1376,13 +1492,6 @@ const InboundPage: React.FC = () => {
       dataIndex: 'supplier_name',
       hideInTable: true,
       ellipsis: true,
-    },
-    {
-      title: t('app.kuaizhizao.warehouseInbound.col.workOrderPicking'),
-      dataIndex: ['work_order_code', 'picking_code'],
-      width: 140,
-      ellipsis: true,
-      render: (_, record) => [record.work_order_code, record.picking_code].filter(Boolean).join(' / ') || '-',
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.totalQuantity'),
@@ -1395,6 +1504,7 @@ const InboundPage: React.FC = () => {
       dataIndex: 'total_items',
       width: 100,
       align: 'right',
+      render: (v: number | null | undefined) => (v != null ? v : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
@@ -1626,6 +1736,7 @@ const InboundPage: React.FC = () => {
             <UniPullLoadButton
               key="inbound-pull-load"
               compactKey="inbound-pull-load"
+              label={pullLoadLabel}
               menuItems={pullMenuItems}
               type="primary"
               variant="solid"
@@ -2278,6 +2389,36 @@ const InboundPage: React.FC = () => {
             </>
           ) : null
         }
+      />
+      <PurchaseReceiptIqcReviewModal
+        open={iqcReviewOpen}
+        loading={iqcReviewLoading}
+        purchaseReceiptId={iqcReviewPurchaseReceiptId}
+        ensure={iqcReviewEnsure}
+        t={t}
+        navigate={navigate}
+        onCancel={handleIqcReviewCancel}
+        onContinue={() => void handleIqcReviewContinue()}
+      />
+      <CustomerMaterialIqcReviewModal
+        open={cmIqcReviewOpen}
+        loading={cmIqcReviewLoading}
+        registrationId={cmIqcReviewRegistrationId}
+        ensure={cmIqcReviewEnsure}
+        t={t}
+        navigate={navigate}
+        onCancel={handleCmIqcReviewCancel}
+        onContinue={() => void handleCmIqcReviewContinue()}
+      />
+      <FinishedGoodsReceiptFqcReviewModal
+        open={fqcReviewOpen}
+        loading={fqcReviewLoading}
+        finishedGoodsReceiptId={fqcReviewFinishedGoodsReceiptId}
+        ensure={fqcReviewEnsure}
+        t={t}
+        navigate={navigate}
+        onCancel={handleFqcReviewCancel}
+        onContinue={() => void handleFqcReviewContinue()}
       />
       {PrintModal}
     </ListPageTemplate>

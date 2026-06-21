@@ -37,6 +37,8 @@ import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocation
 import { getDepartmentTree } from '../../../../../services/department';
 import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { formatDateTime } from '../../../../../utils/format';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 interface MaterialBorrow {
   id?: number;
@@ -388,6 +390,11 @@ const MaterialBorrowsPage: React.FC = () => {
     setCreateModalVisible(true);
     // FormModalTemplate 设置了 destroyOnHidden，ProForm 每次打开都是全新挂载，无需 setTimeout + resetFields
   };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.materialBorrow.create')),
+    [t],
+  );
 
   const handleCreateSubmit = async (values: any) => {
     try {
@@ -465,7 +472,7 @@ const MaterialBorrowsPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch={true}
           showCreateButton
-          createButtonText={t('app.kuaizhizao.materialBorrow.create')}
+          createButtonText={createButtonLabel}
           onCreate={handleCreate}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
