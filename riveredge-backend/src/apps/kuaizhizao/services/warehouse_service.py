@@ -2915,8 +2915,15 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
 
         deliveries = await query.offset(skip).limit(limit).order_by('-created_at')
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
-        responses = [SalesDeliveryResponse.model_validate(delivery) for delivery in deliveries]
-        return enrich_outbound_hub_list_capabilities(deliveries, responses, "sales_delivery")
+        from apps.kuaizhizao.services.document_lifecycle_service import get_sales_delivery_lifecycle
+
+        out: List[SalesDeliveryResponse] = []
+        for delivery in deliveries:
+            resp = SalesDeliveryResponse.model_validate(delivery)
+            # 列表与详情共用生命周期计算，避免出库 Hub 列表显示「生命周期缺失」
+            resp.lifecycle = get_sales_delivery_lifecycle(delivery, milestones=[])
+            out.append(resp)
+        return enrich_outbound_hub_list_capabilities(deliveries, out, "sales_delivery")
 
     async def update_sales_delivery(
         self,
@@ -7399,8 +7406,14 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
 
         outbounds = await query.offset(skip).limit(limit).order_by("-created_at")
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
-        responses = [OtherOutboundListResponse.model_validate(r) for r in outbounds]
-        return enrich_outbound_hub_list_capabilities(outbounds, responses, "other_outbound")
+        from apps.kuaizhizao.services.document_lifecycle_service import get_other_outbound_lifecycle
+
+        out: List[OtherOutboundListResponse] = []
+        for outbound in outbounds:
+            resp = OtherOutboundListResponse.model_validate(outbound)
+            resp.lifecycle = get_other_outbound_lifecycle(outbound, milestones=[])
+            out.append(resp)
+        return enrich_outbound_hub_list_capabilities(outbounds, out, "other_outbound")
 
     async def update_other_outbound(
         self,
@@ -7701,8 +7714,14 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
 
         borrows = await query.offset(skip).limit(limit).order_by("-created_at")
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
-        responses = [MaterialBorrowListResponse.model_validate(r) for r in borrows]
-        return enrich_outbound_hub_list_capabilities(borrows, responses, "material_borrow")
+        from apps.kuaizhizao.services.document_lifecycle_service import get_material_borrow_lifecycle
+
+        out: List[MaterialBorrowListResponse] = []
+        for borrow in borrows:
+            resp = MaterialBorrowListResponse.model_validate(borrow)
+            resp.lifecycle = get_material_borrow_lifecycle(borrow, milestones=[])
+            out.append(resp)
+        return enrich_outbound_hub_list_capabilities(borrows, out, "material_borrow")
 
     async def update_material_borrow(
         self,

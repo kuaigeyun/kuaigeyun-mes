@@ -52,6 +52,45 @@ class InventoryService:
         return {"ownership_type": ot, "customer_id": cid}
 
     @staticmethod
+    def _normalize_batch_no_for_ledger(batch_no: Optional[str]) -> str:
+        bn = str(batch_no or "").strip()
+        return bn if bn else "DEFAULT"
+
+    @staticmethod
+    def _material_batch_no_lookup_q(batch_no: Optional[str]):
+        from tortoise.expressions import Q
+
+        bn = InventoryService._normalize_batch_no_for_ledger(batch_no)
+        if bn == "DEFAULT":
+            return Q(batch_no="DEFAULT") | Q(batch_no="")
+        return Q(batch_no=bn)
+
+    @staticmethod
+    async def _find_in_stock_material_batch(
+        tenant_id: int,
+        material_id: int,
+        batch_no: Optional[str],
+        ownership_type: Optional[str] = None,
+        customer_id: Optional[int] = None,
+        *,
+        for_update: bool = False,
+    ):
+        from apps.master_data.models.material_batch import MaterialBatch
+
+        own = InventoryService._ownership_filter(ownership_type, customer_id)
+        q = InventoryService._material_batch_no_lookup_q(batch_no)
+        query = MaterialBatch.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            deleted_at__isnull=True,
+            status="in_stock",
+            **own,
+        ).filter(q)
+        if for_update:
+            query = query.select_for_update()
+        return await query.first()
+
+    @staticmethod
     async def _material_batch_increase_or_restore(
         tenant_id: int,
         material_id: int,
@@ -70,7 +109,7 @@ class InventoryService:
         """
         from apps.master_data.models.material_batch import MaterialBatch
 
-        bn = batch_no or "DEFAULT"
+        bn = InventoryService._normalize_batch_no_for_ledger(batch_no)
         own = InventoryService._ownership_filter(ownership_type, customer_id)
         batch = await MaterialBatch.filter(
             tenant_id=tenant_id,
@@ -155,7 +194,7 @@ class InventoryService:
         """盘点等场景直接设定批次数量；与 increase 相同需处理软删行与并发 insert。"""
         from apps.master_data.models.material_batch import MaterialBatch
 
-        bn = batch_no or "DEFAULT"
+        bn = InventoryService._normalize_batch_no_for_ledger(batch_no)
         batch = await MaterialBatch.filter(
             tenant_id=tenant_id,
             material_id=material_id,
@@ -444,18 +483,32 @@ class InventoryService:
 
                 own = InventoryService._ownership_filter(ownership_type, customer_id)
                 if batch_no:
-                    batch = await MaterialBatch.filter(
+                    ledger_bn = InventoryService._normalize_batch_no_for_ledger(batch_no)
+                    batch = await InventoryService._find_in_stock_material_batch(
                         tenant_id=tenant_id,
                         material_id=material_id,
                         batch_no=batch_no,
-                        deleted_at__isnull=True,
-                        status="in_stock",
-                        **own,
-                    ).select_for_update().first()
+                        ownership_type=ownership_type,
+                        customer_id=customer_id,
+                        for_update=True,
+                    )
                     if not batch or (batch.quantity or 0) < quantity:
+                        available_rows = await MaterialBatch.filter(
+                            tenant_id=tenant_id,
+                            material_id=material_id,
+                            deleted_at__isnull=True,
+                            status="in_stock",
+                            quantity__gt=0,
+                            **own,
+                        ).values_list("batch_no", "quantity")
+                        available_hint = "、".join(
+                            f"{InventoryService._normalize_batch_no_for_ledger(str(bn))}({qty})"
+                            for bn, qty in available_rows
+                        ) or "无"
                         raise ValueError(
-                            f"库存不足: material={material_id} batch={batch_no} "
-                            f"need={quantity} have={batch.quantity if batch else 0}"
+                            f"库存不足: material={material_id} batch={ledger_bn} "
+                            f"need={quantity} have={batch.quantity if batch else 0}；"
+                            f"可用批号: {available_hint}"
                         )
                         
                     # 阶段2：强制先进先出 (FIFO Strict Enforcement) 拦截网
@@ -495,7 +548,7 @@ class InventoryService:
                     next_qty = (batch.quantity or Decimal(0)) - quantity
                     if next_qty < 0:
                         raise ValueError(
-                            f"并发扣减导致库存不足: material={material_id} batch={batch_no} "
+                            f"并发扣减导致库存不足: material={material_id} batch={ledger_bn} "
                             f"need={quantity} have={batch.quantity or 0}"
                         )
                     batch.quantity = next_qty

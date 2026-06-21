@@ -534,6 +534,26 @@ async def fqc_inspection_passed_for_inbound(tenant_id: int, inspection: Any) -> 
     return getattr(inspection, "review_status", None) in _IQC_PASSED_REVIEW_STATUSES
 
 
+_OQC_CONDUCTED_STATUSES = frozenset({"已检验", "已审核"})
+
+
+async def oqc_inspection_passed_for_outbound(tenant_id: int, inspection: Any) -> bool:
+    """出货检验是否满足出库门禁（合格 + 已放行；需审核时另须审核通过）。"""
+    if getattr(inspection, "quality_status", None) != "合格":
+        return False
+    if getattr(inspection, "release_decision", None) != "released":
+        return False
+    from infra.services.business_config_service import BusinessConfigService
+
+    audit_required = await BusinessConfigService().check_audit_required(tenant_id, "oqc_inspection")
+    if not audit_required:
+        return str(getattr(inspection, "status", "") or "").strip() in _OQC_CONDUCTED_STATUSES
+    return (
+        str(getattr(inspection, "status", "") or "").strip() == "已审核"
+        and getattr(inspection, "review_status", None) in _IQC_PASSED_REVIEW_STATUSES
+    )
+
+
 async def assert_iqc_for_purchase_receipt_lines(
     tenant_id: int,
     receipt_id: int,
@@ -705,12 +725,20 @@ async def assert_oqc_for_outbound_lines(
 ) -> None:
     """
     出库相关动作前的出货检（OQC）校验。
-    当行物料 oqc 策略≠none 时，要求存在合格且放行的 OQC 检验单。
+    当行物料 oqc 策略≠none 时，要求存在合格且放行的 OQC 检验单；
+    是否必须「已审核」由业务配置中 oqc_inspection 审核开关决定（与 IQC/FQC 一致）。
     """
+    cfg = await get_quality_effective_config(tenant_id)
+    if not cfg["gate"]["require_oqc_before_outbound"]:
+        return
+
     from decimal import Decimal
 
     from apps.kuaizhizao.models.oqc_inspection import OQCInspection
     from infra.exceptions.exceptions import BusinessLogicError
+    from infra.services.business_config_service import BusinessConfigService
+
+    oqc_audit_required = await BusinessConfigService().check_audit_required(tenant_id, "oqc_inspection")
 
     for item in lines:
         qty_raw = getattr(item, quantity_attr, None)
@@ -733,8 +761,6 @@ async def assert_oqc_for_outbound_lines(
             material_id=int(mid),
             quality_status="合格",
             release_decision="released",
-            status="已审核",
-            review_status="已审核",
             deleted_at__isnull=True,
         )
         if shipment_notice_id:
@@ -745,17 +771,27 @@ async def assert_oqc_for_outbound_lines(
             q = q.filter(sales_order_id=int(sales_order_id))
         elif customer_id is not None:
             q = q.filter(customer_id=int(customer_id))
-        if not await q.exists():
-            hint = ""
-            if shipment_notice_id:
-                hint = "（需与本发货通知关联且已审核放行的 OQC 检验单一致）"
-            elif sales_order_id:
-                hint = "（需与销售订单关联的 OQC 检验单一致）"
-            elif customer_id is not None:
-                hint = "（需与客户关联的 OQC 检验单一致）"
-            raise BusinessLogicError(
-                f"出货检（OQC）未通过：物料 {mc} 需存在已审核、合格且放行的 OQC 检验单后方可继续{hint}"
-            )
+
+        inspections = await q.all()
+        passed = False
+        for inspection in inspections:
+            if await oqc_inspection_passed_for_outbound(tenant_id, inspection):
+                passed = True
+                break
+        if passed:
+            continue
+
+        hint = ""
+        if shipment_notice_id:
+            hint = "（需与本发货通知关联且已审核放行的 OQC 检验单一致）"
+        elif sales_order_id:
+            hint = "（需与销售订单关联的 OQC 检验单一致）"
+        elif customer_id is not None:
+            hint = "（需与客户关联的 OQC 检验单一致）"
+        audit_tip = "已审核、" if oqc_audit_required else "已检验、"
+        raise BusinessLogicError(
+            f"出货检（OQC）未通过：物料 {mc} 需存在{audit_tip}合格且放行的 OQC 检验单后方可继续{hint}"
+        )
 
 
 async def assert_oqc_before_sales_delivery_confirm(
@@ -767,6 +803,12 @@ async def assert_oqc_before_sales_delivery_confirm(
     sales_delivery_id: Optional[int] = None,
 ) -> None:
     """销售出库「确认出库」前的 OQC 校验。"""
+    from infra.services.business_config_service import BusinessConfigService
+
+    # 业务配置「销售出库审核」为总开关：未启用时不应再因 OQC 审核场景拦截确认出库
+    if not await BusinessConfigService().check_audit_required(tenant_id, "sales_delivery"):
+        return
+
     await assert_oqc_for_outbound_lines(
         tenant_id,
         sales_order_id=sales_order_id,

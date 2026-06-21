@@ -43,13 +43,12 @@ import dayjs from 'dayjs';
 import { listSalesOrders } from '../../../services/sales-order';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
 import { uploadMultipleFiles } from '../../../../../services/file';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { outboundTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintConfig';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
-import { deliveryNoticeApi } from '../../../services/delivery-notice';
 import OutboundQuickPullModals, { type OutboundQuickPullModalsRef } from './OutboundQuickPullModals';
 import OutboundConfirmPreviewModal from './OutboundConfirmPreviewModal';
 import { formatDateTime } from '../../../../../utils/format';
@@ -117,7 +116,6 @@ const PRODUCTION_PICKING_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_production_pickin
 const OutboundPage: React.FC = () => {
   const { t } = useTranslation();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
-  const pushToDeliveryNoteAction = resolveKuaizhizaoDocumentAction(t, 'delivery_note.pull_from_sales_delivery');
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = AntdTheme.useToken();
@@ -233,6 +231,11 @@ const OutboundPage: React.FC = () => {
   const openConfirmPreview = useCallback((record: OutboundOrder) => {
     setConfirmPreviewRecord(record);
     setConfirmPreviewOpen(true);
+  }, []);
+
+  const closeConfirmPreview = useCallback(() => {
+    setConfirmPreviewOpen(false);
+    setConfirmPreviewRecord(null);
   }, []);
 
   useEffect(() => {
@@ -574,72 +577,6 @@ const OutboundPage: React.FC = () => {
     openPrint({ documentType: docType, documentId: record.id });
   };
 
-  const handlePushToDeliveryNote = async (record: OutboundOrder) => {
-    if (record.outbound_type !== 'sales_delivery' || !record.id) return;
-    try {
-      const noticesRes = await deliveryNoticeApi.list({ skip: 0, limit: 50, sales_delivery_id: record.id });
-      const notices = Array.isArray(noticesRes) ? noticesRes : (noticesRes as any)?.items || (noticesRes as any)?.data || [];
-      const existing = notices.find((n: any) => Number(n?.sales_delivery_id) === Number(record.id));
-      if (existing) {
-        messageApi.warning(
-          t('app.kuaizhizao.deliveryNote.msg.alreadyCreated', {
-            source: pushToDeliveryNoteAction.sourceLabel,
-            target: pushToDeliveryNoteAction.targetLabel,
-          }),
-        );
-        return;
-      }
-
-      const detail: any = await warehouseApi.salesDelivery.get(String(record.id));
-      const itemRows = Array.isArray(detail?.items) ? detail.items : [];
-      const validItems = itemRows
-        .filter((it: any) => (Number(it.delivery_quantity ?? it.quantity ?? 0) || 0) > 0)
-        .map((it: any) => ({
-          material_id: it.material_id ?? it.materialId,
-          material_code: it.material_code ?? it.materialCode ?? '',
-          material_name: it.material_name ?? it.materialName ?? '',
-          material_unit: it.unit ?? it.material_unit ?? it.materialUnit ?? '',
-          notice_quantity: Number(it.delivery_quantity ?? it.quantity ?? 0) || 0,
-          unit_price: Number(it.unit_price ?? it.unitPrice ?? 0) || 0,
-        }));
-
-      if (!detail?.customer_id || validItems.length === 0) {
-        throw new Error(t('app.kuaizhizao.deliveryNote.msg.missingCustomerOrLines'));
-      }
-
-      await deliveryNoticeApi.create({
-        customer_id: detail.customer_id,
-        customer_name: detail.customer_name,
-        customer_contact: detail.customer_contact,
-        customer_phone: detail.customer_phone,
-        sales_delivery_id: detail.id ?? record.id,
-        sales_delivery_code: detail.delivery_code,
-        sales_order_id: detail.sales_order_id,
-        sales_order_code: detail.sales_order_code,
-        planned_delivery_date: detail.delivery_date,
-        shipping_address: detail.shipping_address,
-        items: validItems,
-      });
-
-      messageApi.success(
-        t('app.kuaizhizao.deliveryNote.msg.pullCreateSuccess', {
-          source: pushToDeliveryNoteAction.sourceLabel,
-          target: pushToDeliveryNoteAction.targetLabel,
-        }),
-      );
-      invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(
-        error?.message ||
-          t('app.kuaizhizao.deliveryNote.msg.pullCreateFailed', {
-            source: pushToDeliveryNoteAction.sourceLabel,
-            target: pushToDeliveryNoteAction.targetLabel,
-          }),
-      );
-    }
-  };
-
   const handleConfirm = async (record: OutboundOrder) => {
     if (record.outbound_type === 'outsource_issue') return;
     openConfirmPreview(record);
@@ -885,15 +822,6 @@ const OutboundPage: React.FC = () => {
               <Button {...rowActionKind('print')} onClick={() => handlePrint(record)} />
             ) : null;
           })()}
-          {record.outbound_type === 'sales_delivery' && record.id ? (
-            <Button
-              {...rowActionKind('audit')}
-              {...rowActionLabelKeep()}
-              onClick={() => void handlePushToDeliveryNote(record)}
-            >
-              {pushToDeliveryNoteAction.label}
-            </Button>
-          ) : null}
         </Space>
       ),
     },
@@ -905,8 +833,6 @@ const OutboundPage: React.FC = () => {
       handleConfirm,
       handleWithdraw,
       handlePrint,
-      handlePushToDeliveryNote,
-      pushToDeliveryNoteAction.label,
       salesDeliveryCustomFieldColumns,
       productionPickingCustomFieldColumns,
     ],
@@ -1133,10 +1059,7 @@ const OutboundPage: React.FC = () => {
         open={confirmPreviewOpen}
         record={confirmPreviewRecord}
         executionConfig={executionConfig}
-        onClose={() => {
-          setConfirmPreviewOpen(false);
-          setConfirmPreviewRecord(null);
-        }}
+        onClose={closeConfirmPreview}
         onSuccess={() => void handleConfirmPreviewSuccess()}
       />
 

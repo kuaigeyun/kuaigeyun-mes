@@ -76,6 +76,24 @@ class ReportService:
         name = str(warehouse_name or "").strip()
         return name or "未配置仓库"
 
+    @staticmethod
+    def _normalize_batch_no_for_report(batch_no: Optional[str]) -> str:
+        """空批号与库存过账口径一致，展示/拣选用 DEFAULT。"""
+        bn = str(batch_no or "").strip()
+        return bn if bn else "DEFAULT"
+
+    @staticmethod
+    def _material_batch_matches_warehouse_filter(
+        resolved_wh_id: Optional[int],
+        main_warehouse_filter_id: Optional[int],
+    ) -> bool:
+        """主仓批次未配置默认仓库时不应被出库仓库筛选误排除。"""
+        if main_warehouse_filter_id is None:
+            return True
+        if resolved_wh_id is None:
+            return True
+        return resolved_wh_id == main_warehouse_filter_id
+
     async def _scoped_sales_order_query(self, tenant_id: int, current_user: Optional[Any] = None):
         from apps.kuaizhizao.models.sales_order import SalesOrder
 
@@ -1634,7 +1652,7 @@ class ReportService:
                 resolved_wh_name = self._normalize_warehouse_display_name(
                     resolved_wh[1] if resolved_wh else None
                 )
-                if main_warehouse_filter_id is not None and resolved_wh_id != main_warehouse_filter_id:
+                if not self._material_batch_matches_warehouse_filter(resolved_wh_id, main_warehouse_filter_id):
                     continue
                 expiry_iso = to_api_isoformat(b.expiry_date) if b.expiry_date else None
                 qty = float(b.quantity or 0)
@@ -1645,7 +1663,7 @@ class ReportService:
                     "material_code": b.material.main_code if b.material else "UNKNOWN",
                     "material_name": b.material.name if b.material else "UNKNOWN",
                     "material_unit": getattr(b.material, "unit", None) if b.material else None,
-                    "batch_no": b.batch_no,
+                    "batch_no": self._normalize_batch_no_for_report(b.batch_no),
                     "production_date": to_api_isoformat(b.production_date) if b.production_date else None,
                     "expiry_date": expiry_iso,
                     "supplier_batch_no": b.supplier_batch_no,
@@ -1670,7 +1688,7 @@ class ReportService:
                 "material_code": l.material_code,
                 "material_name": l.material_name,
                 "material_unit": getattr(l, "material_unit", None),
-                "batch_no": l.batch_no,
+                "batch_no": self._normalize_batch_no_for_report(l.batch_no),
                 "production_date": to_api_isoformat(l.production_date) if l.production_date else None,
                 "expiry_date": to_api_isoformat(l.expiry_date) if l.expiry_date else None,
                 "supplier_batch_no": None,
@@ -2111,7 +2129,7 @@ class ReportService:
             resolved_wh_name = self._normalize_warehouse_display_name(
                 resolved_wh[1] if resolved_wh else None
             )
-            if main_warehouse_filter_id is not None and resolved_wh_id != main_warehouse_filter_id:
+            if not self._material_batch_matches_warehouse_filter(resolved_wh_id, main_warehouse_filter_id):
                 continue
             status = b.status
             if b.expiry_date and b.expiry_date < date.today(): status = "已过期"
@@ -2121,7 +2139,7 @@ class ReportService:
                 "material_id": b.material_id, 
                 "material_code": b.material.main_code if b.material else (b.material.code if b.material else "UNKNOWN"), 
                 "material_name": b.material.name if b.material else "UNKNOWN", 
-                "batch_no": b.batch_no, 
+                "batch_no": self._normalize_batch_no_for_report(b.batch_no), 
                 "production_date": to_api_isoformat(b.production_date) if b.production_date else None,
                 "expiry_date": to_api_isoformat(b.expiry_date) if b.expiry_date else None,
                 "supplier_batch_no": b.supplier_batch_no,
@@ -2137,7 +2155,7 @@ class ReportService:
                 "material_id": l.material_id, 
                 "material_code": l.material_code, 
                 "material_name": l.material_name, 
-                "batch_no": l.batch_no, 
+                "batch_no": self._normalize_batch_no_for_report(l.batch_no), 
                 "production_date": to_api_isoformat(l.production_date) if l.production_date else None,
                 "expiry_date": to_api_isoformat(l.expiry_date) if l.expiry_date else None,
                 "supplier_batch_no": None,

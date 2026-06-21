@@ -2,13 +2,11 @@
  * 出库 Hub — 统一确认预览 Modal（批号/库位/序列号）
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { App, AutoComplete, Form, Modal, Select, Table, Typography } from 'antd';
+import { App, Form, Modal, Select, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
-import { apiRequest } from '../../../../../services/api';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { outsourceMaterialIssueApi } from '../../../services/production';
 import { fetchStorageLocationsForWarehouse } from '../inbound/inboundPoReceiptEntryUtils';
@@ -19,19 +17,15 @@ import {
 } from './outboundItemTracking';
 import type { OutboundHubOrder, OutboundIssueType } from './outboundHubTypes';
 import { getOutboundIssueTypeLabel, outboundDocumentCode } from './outboundHubTypes';
-
-type SalesBatchPickOption = { value: string; label: string };
-
-function normalizeBatchFormValue(raw: unknown): string {
-  if (raw == null) return '';
-  if (typeof raw === 'string') return raw.trim();
-  if (typeof raw === 'number' || typeof raw === 'boolean') return String(raw).trim();
-  if (typeof raw === 'object' && raw !== null && 'value' in (raw as object)) {
-    const v = (raw as { value?: unknown }).value;
-    return v != null && v !== '' ? String(v).trim() : '';
-  }
-  return String(raw).trim();
-}
+import {
+  isValidOutboundBatchSelection,
+  loadBatchOptionsByMaterialId,
+  loadInStockSerialOptions,
+  normalizeOutboundBatchNo,
+  resolveOutboundConfirmBatchValue,
+  type InventoryPickOption,
+} from './outboundConfirmInventoryOptions';
+import OutboundSerialPickerField from './OutboundSerialPickerField';
 
 async function fetchOutboundDetail(record: OutboundHubOrder): Promise<Record<string, unknown> | null> {
   const id = String(record.id);
@@ -87,14 +81,21 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [materialMeta, setMaterialMeta] = useState<Record<number, ConfirmPreviewMaterialMeta>>({});
   const [batchOptionsByMaterialId, setBatchOptionsByMaterialId] = useState<
-    Record<number, SalesBatchPickOption[]>
+    Record<number, InventoryPickOption[]>
   >({});
   const [batchOptionsLoading, setBatchOptionsLoading] = useState(false);
+  const [serialOptionsByLineId, setSerialOptionsByLineId] = useState<
+    Record<number, InventoryPickOption[]>
+  >({});
+  const [serialOptionsLoading, setSerialOptionsLoading] = useState(false);
   const [locationOptionsByWh, setLocationOptionsByWh] = useState<
     Record<number, { value: number; label: string; code: string }[]>
   >({});
 
   const outboundType = record?.outbound_type;
+  const recordId = record?.id;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   const activeLines: Record<string, unknown>[] = useMemo(() => {
     const items = Array.isArray(detail?.items) ? detail!.items as Record<string, unknown>[] : [];
@@ -114,28 +115,34 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
   }, [detail, outboundType]);
 
   useEffect(() => {
-    if (!open || !record?.id || !record.outbound_type) {
+    if (
+      !open ||
+      outboundType !== 'production_picking' ||
+      !executionConfig ||
+      executionConfig.current_user_can_confirm_picking !== false
+    ) {
+      return;
+    }
+    messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.noConfirmPickingPermission'));
+    onCloseRef.current();
+  }, [open, outboundType, executionConfig, messageApi, t]);
+
+  useEffect(() => {
+    if (!open || recordId == null || !outboundType) {
       setDetail(null);
       form.resetFields();
       return;
     }
-    if (
-      record.outbound_type === 'production_picking' &&
-      executionConfig &&
-      executionConfig.current_user_can_confirm_picking === false
-    ) {
-      messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.noConfirmPickingPermission'));
-      onClose();
-      return;
-    }
+    const hubRecord = { id: recordId, outbound_type: outboundType, warehouse_id: record?.warehouse_id };
     let cancelled = false;
     void (async () => {
       setLoading(true);
       try {
-        const detailData = await fetchOutboundDetail(record);
-        if (cancelled || !detailData) {
+        const detailData = await fetchOutboundDetail(hubRecord);
+        if (cancelled) return;
+        if (!detailData) {
           messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.loadDetailFailed'));
-          onClose();
+          onCloseRef.current();
           return;
         }
         setDetail(detailData);
@@ -143,28 +150,32 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         const meta = await loadConfirmPreviewMaterialMeta(
           items.map((it) => ({
             id: Number(it.id),
+            material_id: it.material_id as number | undefined,
             material_code: String(it.material_code ?? ''),
             serial_numbers: it.serial_numbers as string[] | null | undefined,
           })),
         );
-        if (!cancelled) setMaterialMeta(meta);
+        if (cancelled) return;
+        setMaterialMeta(meta);
 
         const init: Record<string, unknown> = {};
         items.forEach((it) => {
           const lineId = Number(it.id);
           if (!Number.isFinite(lineId)) return;
-          init[`batch_${lineId}`] = it.batch_number ? String(it.batch_number) : '';
+          init[`batch_${lineId}`] = String(it.batch_number ?? '').trim() || undefined;
           init[`location_${lineId}`] = it.location_id ?? undefined;
           init[`location_code_${lineId}`] = it.location_code ?? '';
           init[`serial_${lineId}`] = Array.isArray(it.serial_numbers) ? it.serial_numbers : [];
         });
         form.setFieldsValue(init);
 
-        const whId = Number(detailData.warehouse_id ?? record.warehouse_id ?? 0);
+        const whId = Number(detailData.warehouse_id ?? record?.warehouse_id ?? 0);
         if (whId > 0) {
           try {
             const opts = await fetchStorageLocationsForWarehouse(whId);
-            setLocationOptionsByWh((prev) => ({ ...prev, [whId]: opts }));
+            if (!cancelled) {
+              setLocationOptionsByWh((prev) => ({ ...prev, [whId]: opts }));
+            }
           } catch {
             /* optional */
           }
@@ -172,7 +183,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       } catch {
         if (!cancelled) {
           messageApi.error(t('app.kuaizhizao.warehouseOutbound.confirm.loadPreviewFailed'));
-          onClose();
+          onCloseRef.current();
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -181,52 +192,43 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
     return () => {
       cancelled = true;
     };
-  }, [open, record, executionConfig, form, messageApi, onClose, t]);
+  }, [open, recordId, outboundType, record?.warehouse_id, form, messageApi, t]);
 
   useEffect(() => {
-    if (!open || outboundType !== 'sales_delivery' || !Array.isArray(detail?.items) || !detail.items.length) {
+    if (!open || !activeLines.length) {
       setBatchOptionsByMaterialId({});
       return;
     }
-    const active = (detail.items as Record<string, unknown>[]).filter(
-      (it) => Number(it.delivery_quantity ?? 0) > 0,
-    );
-    const mids = [...new Set(active.map((x) => x.material_id).filter(Boolean) as number[])];
-    if (!mids.length) return;
+    const mids = [
+      ...new Set(
+        activeLines
+          .filter((it) => materialMeta[Number(it.id)]?.batchManaged)
+          .map((x) => x.material_id)
+          .filter(Boolean) as number[],
+      ),
+    ];
+    if (!mids.length) {
+      setBatchOptionsByMaterialId({});
+      return;
+    }
 
     let cancelled = false;
     void (async () => {
       setBatchOptionsLoading(true);
       try {
-        const wid = detail.warehouse_id;
-        const res = await apiRequest<{ items?: Record<string, unknown>[] }>(
-          '/apps/kuaizhizao/reports/inventory/batch-query',
-          {
-            method: 'GET',
-            params: {
-              material_ids: mids,
-              include_expired: false,
-              ...(wid != null && wid !== '' ? { warehouse_id: wid } : {}),
-            },
-          },
+        const wid = Number(detail?.warehouse_id ?? record?.warehouse_id ?? 0);
+        const map = await loadBatchOptionsByMaterialId(
+          mids,
+          wid > 0 ? wid : undefined,
+          (batch, qty, warehouseName) =>
+            warehouseName
+              ? t('app.kuaizhizao.warehouseOutbound.confirm.batchAvailableWithWh', {
+                  batch,
+                  qty,
+                  warehouse: warehouseName,
+                })
+              : t('app.kuaizhizao.warehouseOutbound.confirm.batchAvailable', { batch, qty }),
         );
-        const rows = res.items ?? [];
-        const map: Record<number, SalesBatchPickOption[]> = {};
-        for (const row of rows) {
-          const mid = row.material_id as number;
-          if (!mid) continue;
-          const qty = Number(row.quantity ?? 0);
-          if (qty <= 0) continue;
-          if (row.status === '已过期' || row.status === '无库存') continue;
-          const bn = String(row.batch_no ?? '').trim();
-          if (!bn) continue;
-          if (!map[mid]) map[mid] = [];
-          if (map[mid].some((o) => o.value === bn)) continue;
-          map[mid].push({
-            value: bn,
-            label: t('app.kuaizhizao.warehouseOutbound.confirm.batchAvailable', { batch: bn, qty }),
-          });
-        }
         if (!cancelled) setBatchOptionsByMaterialId(map);
       } catch {
         if (!cancelled) setBatchOptionsByMaterialId({});
@@ -237,7 +239,67 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
     return () => {
       cancelled = true;
     };
-  }, [open, outboundType, detail?.id, detail?.warehouse_id, detail?.items, t]);
+  }, [open, activeLines, materialMeta, detail?.id, detail?.warehouse_id, record?.warehouse_id, t]);
+
+  useEffect(() => {
+    if (!open || batchOptionsLoading || !activeLines.length) return;
+    const patches: Record<string, unknown> = {};
+    for (const it of activeLines) {
+      const lineId = Number(it.id);
+      const mid = Number(it.material_id);
+      const meta = materialMeta[lineId];
+      if (!meta?.batchManaged) continue;
+      const opts = batchOptionsByMaterialId[mid] ?? [];
+      if (!opts.length) continue;
+      const current = form.getFieldValue(`batch_${lineId}`);
+      const resolved = resolveOutboundConfirmBatchValue(current ?? it.batch_number, opts);
+      if (resolved !== current) {
+        patches[`batch_${lineId}`] = resolved;
+      }
+    }
+    if (Object.keys(patches).length) {
+      form.setFieldsValue(patches);
+    }
+  }, [open, activeLines, materialMeta, batchOptionsByMaterialId, batchOptionsLoading, form]);
+
+  useEffect(() => {
+    if (!open || !activeLines.length) {
+      setSerialOptionsByLineId({});
+      return;
+    }
+    const serialLines = activeLines.filter((it) => {
+      const lineId = Number(it.id);
+      return materialMeta[lineId]?.serialManaged && materialMeta[lineId]?.materialUuid;
+    });
+    if (!serialLines.length) {
+      setSerialOptionsByLineId({});
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      setSerialOptionsLoading(true);
+      try {
+        const next: Record<number, InventoryPickOption[]> = {};
+        await Promise.all(
+          serialLines.map(async (it) => {
+            const lineId = Number(it.id);
+            const uuid = materialMeta[lineId]?.materialUuid;
+            if (!uuid) return;
+            next[lineId] = await loadInStockSerialOptions(uuid);
+          }),
+        );
+        if (!cancelled) setSerialOptionsByLineId(next);
+      } catch {
+        if (!cancelled) setSerialOptionsByLineId({});
+      } finally {
+        if (!cancelled) setSerialOptionsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, activeLines, materialMeta]);
 
   const qtyColumn = (it: Record<string, unknown>) => {
     if (outboundType === 'sales_delivery') {
@@ -256,6 +318,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
   };
 
   const whId = Number(detail?.warehouse_id ?? record?.warehouse_id ?? 0);
+  const whName = String(detail?.warehouse_name ?? record?.warehouse_name ?? '').trim();
   const locOptions = whId > 0 ? locationOptionsByWh[whId] ?? [] : [];
 
   const columns: ColumnsType<Record<string, unknown>> = useMemo(
@@ -267,19 +330,27 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         align: 'center',
         render: (_: unknown, __: unknown, index: number) => index + 1,
       },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 112, ellipsis: true },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', ellipsis: true },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
       {
         title: t('app.kuaizhizao.warehouseOutbound.col.deliveryQty'),
         key: 'qty',
-        width: 120,
+        width: 110,
         align: 'right',
         render: (_: unknown, it) => qtyColumn(it),
       },
       {
+        title: t('app.kuaizhizao.warehouseOutbound.col.warehouseName'),
+        key: 'warehouse',
+        width: 120,
+        ellipsis: true,
+        render: (_: unknown, it) =>
+          String(it.warehouse_name ?? (whName || '—')),
+      },
+      {
         title: t('app.kuaizhizao.warehouseOutbound.col.location'),
         key: 'location',
-        width: 160,
+        width: 180,
         render: (_: unknown, it) => {
           const lineId = Number(it.id);
           return (
@@ -304,22 +375,24 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         width: 220,
         render: (_: unknown, it) => {
           const lineId = Number(it.id);
+          const meta = materialMeta[lineId];
+          if (!meta?.batchManaged) return '—';
           const opts = batchOptionsByMaterialId[Number(it.material_id)] ?? [];
           return (
             <Form.Item name={`batch_${lineId}`} style={{ marginBottom: 0 }}>
-              <AutoComplete
+              <Select
                 size="small"
                 allowClear
+                showSearch
+                optionFilterProp="label"
                 options={opts}
-                placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectOrInputBatch')}
-                filterOption={(input, option) => {
-                  const q = (input || '').toLowerCase();
-                  return (
-                    String(option?.label ?? '').toLowerCase().includes(q) ||
-                    String(option?.value ?? '').toLowerCase().includes(q)
-                  );
-                }}
-                notFoundContent={batchOptionsLoading ? t('app.kuaizhizao.warehouseOutbound.confirm.loadingBatches') : undefined}
+                placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectBatch')}
+                loading={batchOptionsLoading}
+                notFoundContent={
+                  batchOptionsLoading
+                    ? t('app.kuaizhizao.warehouseOutbound.confirm.loadingBatches')
+                    : t('app.kuaizhizao.warehouseOutbound.confirm.noBatchAvailable')
+                }
               />
             </Form.Item>
           );
@@ -336,45 +409,99 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
           const qty = Number(
             it.delivery_quantity ?? it.picked_quantity ?? it.outbound_quantity ?? it.borrow_quantity ?? 0,
           );
+          const opts = serialOptionsByLineId[lineId] ?? [];
+          const materialLabel = [it.material_code, it.material_name].filter(Boolean).join(' · ');
           return (
-            <Form.Item noStyle shouldUpdate>
-              {() => {
-                const serials = (form.getFieldValue(`serial_${lineId}`) as string[] | undefined) ?? [];
-                return (
-                  <SerialNumbersImportTrigger
-                    serials={serials}
-                    expectedCount={qty > 0 ? qty : undefined}
-                    materialLabel={String(it.material_code ?? it.material_name ?? '')}
-                    onSerialsChange={(next) => form.setFieldValue(`serial_${lineId}`, next)}
-                  />
-                );
-              }}
+            <Form.Item name={`serial_${lineId}`} style={{ marginBottom: 0 }}>
+              <OutboundSerialPickerField
+                options={opts}
+                maxCount={qty > 0 ? qty : undefined}
+                loading={serialOptionsLoading}
+                materialLabel={materialLabel}
+              />
             </Form.Item>
           );
         },
       },
     ],
-    [batchOptionsByMaterialId, batchOptionsLoading, form, locOptions, materialMeta, outboundType, t],
+    [
+      batchOptionsByMaterialId,
+      batchOptionsLoading,
+      form,
+      locOptions,
+      materialMeta,
+      outboundType,
+      serialOptionsByLineId,
+      serialOptionsLoading,
+      t,
+      whName,
+    ],
   );
 
   const handleSubmit = async () => {
     if (!record?.id || !record.outbound_type || !detail) return;
     const vals = form.getFieldsValue(true);
-    const whName = String(detail.warehouse_name ?? record.warehouse_name ?? '');
+
+    for (const it of activeLines) {
+      const lineId = Number(it.id);
+      const mid = Number(it.material_id);
+      const meta = materialMeta[lineId];
+      if (!meta?.batchManaged) continue;
+      const opts = batchOptionsByMaterialId[mid] ?? [];
+      const batchRaw = vals[`batch_${lineId}`];
+      if (!isValidOutboundBatchSelection(batchRaw, opts)) {
+        const code = String(it.material_code ?? '');
+        if (!opts.length) {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseOutbound.confirm.batchNotInStock', {
+              material: code,
+              warehouse: whName || t('app.kuaizhizao.warehouseOutbound.field.selectWarehouse'),
+            }),
+          );
+        } else {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', {
+              material: code,
+              batches: opts.map((o) => o.value).join('、'),
+            }),
+          );
+        }
+        return;
+      }
+      const qty = Number(
+        it.delivery_quantity ?? it.picked_quantity ?? it.outbound_quantity ?? it.borrow_quantity ?? 0,
+      );
+      const picked = opts.find(
+        (o) => o.value === String(batchRaw ?? '').trim() || o.value === normalizeOutboundBatchNo(batchRaw),
+      );
+      if (picked?.quantity != null && qty > 0 && picked.quantity < qty) {
+        messageApi.error(
+          t('app.kuaizhizao.warehouseOutbound.confirm.batchQtyInsufficient', {
+            material: String(it.material_code ?? ''),
+            batch: picked.value,
+            available: picked.quantity,
+            required: qty,
+          }),
+        );
+        return;
+      }
+    }
+
+    const payloadWhName = String(detail.warehouse_name ?? record.warehouse_name ?? whName);
     const payload = buildOutboundConfirmPayloadFromForm(
       record.outbound_type,
       activeLines,
       vals,
       whId > 0 ? whId : undefined,
-      whName,
+      payloadWhName,
     );
 
     if (record.outbound_type === 'sales_delivery') {
       payload.item_batches = activeLines
         .map((it) => {
           const lineId = Number(it.id);
-          const batch = normalizeBatchFormValue(vals[`batch_${lineId}`] ?? it.batch_number);
-          return { item_id: lineId, batch_no: batch };
+          const batchRaw = String(vals[`batch_${lineId}`] ?? it.batch_number ?? '').trim();
+          return { item_id: lineId, batch_no: normalizeOutboundBatchNo(batchRaw) };
         })
         .filter((row) => Number.isFinite(row.item_id) && row.item_id > 0);
     }
@@ -430,8 +557,8 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       cancelText={t('app.kuaizhizao.warehouseOutbound.action.cancel')}
       confirmLoading={submitting}
       destroyOnHidden
-      width={960}
-      styles={{ body: { paddingTop: 12 } }}
+      width={1200}
+      styles={{ body: { paddingTop: 12, maxHeight: '78vh', overflowY: 'auto' } }}
       onCancel={onClose}
       onOk={() => void handleSubmit()}
     >
@@ -458,7 +585,10 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
           columns={columns}
           dataSource={activeLines}
           pagination={false}
-          scroll={{ x: 900, y: Math.min(activeLines.length * 52 + 40, 420) }}
+          scroll={{
+            x: 1180,
+            y: Math.min(Math.max(activeLines.length * 52 + 40, 360), 560),
+          }}
         />
       </Form>
     </Modal>
