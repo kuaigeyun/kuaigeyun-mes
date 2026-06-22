@@ -40,6 +40,11 @@ class HaoligoMoldOutsourceMaintenanceSheet(HaoligoTenantModel):
         default=list,
         description="提交待审消息抄送接收人用户 ID 列表",
     )
+    urgency_level = fields.CharField(
+        max_length=16,
+        default="一般",
+        description="紧急程度：一般/紧急",
+    )
     complete_notify_user_ids = fields.JSONField(
         default=list,
         description="审核通过后通知外协完修抄送用户 ID 列表",

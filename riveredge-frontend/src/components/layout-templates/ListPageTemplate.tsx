@@ -84,6 +84,11 @@ export interface ListPageTemplateProps {
   statCardsPreferenceKey?: string;
   /** 列表页表体 scroll.y 布局类型（MultiTab 模板传 multiTab） */
   tableScrollLayout?: ListPageTableScrollLayout;
+  /**
+   * 表格上方自定义区域（标题、指标卡等）额外占用的视口扣减（px）。
+   * 与 `tableScrollLayout` / `statCards` 的自动扣减叠加，用于报表页自绘指标区等场景。
+   */
+  tableScrollOffsetExtraPx?: number;
 }
 
 /**
@@ -117,6 +122,7 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
   fillMain = false,
   statCardsPreferenceKey,
   tableScrollLayout = 'list',
+  tableScrollOffsetExtraPx = 0,
 }) => {
   const { token } = AntdTheme.useToken();
   const themeStyle = useThemeStore((s) => s.resolved.themeStyle);
@@ -163,10 +169,11 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
   }, [preferences, statCardsPrefSegment, updatePreferences]);
 
   const showStatCardsRow = hasStatCardsRow && statCardsVisible;
-  const tableScrollOffsetPx = getListPageTableScrollOffsetPx({
-    layout: tableScrollLayout,
-    hasStatCardsRow: showStatCardsRow,
-  });
+  const tableScrollOffsetPx =
+    getListPageTableScrollOffsetPx({
+      layout: tableScrollLayout,
+      hasStatCardsRow: showStatCardsRow,
+    }) + tableScrollOffsetExtraPx;
 
   const statCardsContextValue = useMemo(
     () => ({

@@ -162,29 +162,46 @@ export const IssueRegisterFormBody: React.FC<IssueRegisterFormBodyProps> = ({
             rules={readOnly ? undefined : [{ required: true, message: '请选择车间' }]}
             placeholder="请选择"
             options={workshops.map((w) => ({ label: w.name, value: w.id }))}
-            fieldProps={{ showSearch: true, optionFilterProp: 'label', disabled: readOnly }}
+            fieldProps={{
+              showSearch: true,
+              optionFilterProp: 'label',
+              disabled: readOnly,
+              onChange: () => {
+                formRef.current?.setFieldsValue({ equipment_id: undefined });
+              },
+            }}
           />
         </Col>
         <Col xs={24} sm={12} style={{ display: 'flex', flexDirection: 'column' }}>
           <FieldLabel label="关联设备（可选）" />
-          <ProFormSelect
-            name="equipment_id"
-            formItemProps={inlineFormItemProps}
-            placeholder="请选择设备（可选）"
-            fieldProps={{
-              showSearch: true,
-              filterOption: false,
-              allowClear: true,
-              disabled: readOnly,
-            }}
-            request={async ({ keyWords }) => {
-              const res = await listEquipments({ keyword: keyWords || undefined, limit: 50 });
-              return (res.items || []).map((e) => ({
-                label: `${e.asset_code} ${e.name}`,
-                value: e.id,
-              }));
-            }}
-          />
+          <ProFormDependency name={['workshop_id']}>
+            {({ workshop_id: workshopId }) => (
+              <ProFormSelect
+                name="equipment_id"
+                formItemProps={inlineFormItemProps}
+                placeholder={workshopId ? '请选择设备（可选）' : '请先选择车间'}
+                params={{ workshopId }}
+                fieldProps={{
+                  showSearch: true,
+                  filterOption: false,
+                  allowClear: true,
+                  disabled: readOnly || !workshopId,
+                }}
+                request={async ({ keyWords }) => {
+                  if (!workshopId) return [];
+                  const res = await listEquipments({
+                    workshop_id: workshopId,
+                    keyword: keyWords || undefined,
+                    limit: 50,
+                  });
+                  return (res.items || []).map((e) => ({
+                    label: `${e.asset_code} ${e.name}`,
+                    value: e.id,
+                  }));
+                }}
+              />
+            )}
+          </ProFormDependency>
         </Col>
       </Row>
 

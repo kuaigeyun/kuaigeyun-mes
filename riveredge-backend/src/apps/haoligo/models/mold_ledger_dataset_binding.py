@@ -20,3 +20,6 @@ class HaoligoMoldLedgerDatasetBinding(HaoligoTenantModel):
     mold_capacity_column = fields.CharField(
         max_length=128, null=True, description="结果集中单模产能列名（可选；与 SQL 别名一致）"
     )
+    factory_entry_at_column = fields.CharField(
+        max_length=128, null=True, description="结果集中入厂时间列名（可选；与 SQL 别名一致）"
+    )

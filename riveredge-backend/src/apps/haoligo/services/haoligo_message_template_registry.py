@@ -14,6 +14,9 @@ from apps.haoligo.services.patrol_message_templates import HAOLIGO_PATROL_MESSAG
 from apps.haoligo.services.equipment_upkeep_message_templates import (
     HAOLIGO_EQUIPMENT_UPKEEP_MESSAGE_TEMPLATE_PRESETS,
 )
+from apps.haoligo.services.equipment_output_message_templates import (
+    HAOLIGO_EQUIPMENT_OUTPUT_MESSAGE_TEMPLATE_PRESETS,
+)
 from apps.haoligo.services.mold_maintenance_complete_message_templates import (
     HAOLIGO_MOLD_MAINTENANCE_COMPLETE_MESSAGE_TEMPLATE_PRESETS,
 )
@@ -37,6 +40,7 @@ HAOLIGO_MESSAGE_TEMPLATE_PRESETS: List[Dict[str, Any]] = [
     *HAOLIGO_MOLD_MAINTENANCE_COMPLETE_MESSAGE_TEMPLATE_PRESETS,
     *HAOLIGO_MOLD_OUTSOURCE_COMPLETE_MESSAGE_TEMPLATE_PRESETS,
     *HAOLIGO_EQUIPMENT_UPKEEP_MESSAGE_TEMPLATE_PRESETS,
+    *HAOLIGO_EQUIPMENT_OUTPUT_MESSAGE_TEMPLATE_PRESETS,
 ]
 
 

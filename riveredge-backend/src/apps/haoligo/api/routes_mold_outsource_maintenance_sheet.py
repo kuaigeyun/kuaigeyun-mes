@@ -38,6 +38,10 @@ from apps.haoligo.api.routes_mold_maintenance_sheet import (
     assert_maintenance_line_molds_are_standby,
 )
 from apps.haoligo.constants.mold_sheet_rule_codes import HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_SHEET_NO
+from apps.haoligo.constants.mold_repair_urgency import (
+    MOLD_REPAIR_URGENCY_DEFAULT,
+    normalize_mold_repair_urgency_level,
+)
 from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
     HaoligoMoldOutsourceMaintenanceCompleteSheet,
 )
@@ -77,6 +81,7 @@ router = APIRouter(
 )
 
 ServiceTypeLiteral = Literal["维修", "保养"]
+UrgencyLevelLiteral = Literal["一般", "紧急"]
 
 
 def _norm_uuid_list(v: Optional[List[str]]) -> List[str]:
@@ -192,6 +197,7 @@ class MoldOutsourceMaintenanceSheetOut(BaseModel):
     outsourced_unit_name: str
     service_type: str
     source_order_no: Optional[str] = None
+    urgency_level: str = Field(default=MOLD_REPAIR_URGENCY_DEFAULT, description="紧急程度：一般/紧急")
     header_attachment_file_uuids: List[str] = Field(default_factory=list)
     line_items: List[OutsourceMaintLineOut] = Field(default_factory=list)
     primary_mold_code: Optional[str] = Field(None, description="列表摘要：首行模具代号")
@@ -218,9 +224,15 @@ class MoldOutsourceMaintenanceSheetCreate(BaseModel):
     department_uuid: str = Field(max_length=36, description="申请部门 UUID（须为末级部门）")
     service_type: ServiceTypeLiteral
     source_order_no: Optional[str] = Field(None, max_length=128)
+    urgency_level: UrgencyLevelLiteral = MOLD_REPAIR_URGENCY_DEFAULT
     header_attachment_file_uuids: Optional[List[str]] = None
     submitted_notify_user_ids: Optional[List[int]] = None
     line_items: List[OutsourceMaintLineIn] = Field(min_length=1)
+
+    @field_validator("urgency_level", mode="before")
+    @classmethod
+    def validate_urgency_level(cls, v):
+        return normalize_mold_repair_urgency_level(v if v is not None else None)
 
     @field_validator("outsourced_unit_name", mode="before")
     @classmethod
@@ -251,6 +263,7 @@ class MoldOutsourceMaintenanceSheetUpdate(BaseModel):
     department_name: Optional[str] = Field(None, max_length=200)
     service_type: Optional[ServiceTypeLiteral] = None
     source_order_no: Optional[str] = Field(None, max_length=128)
+    urgency_level: Optional[UrgencyLevelLiteral] = None
     header_attachment_file_uuids: Optional[List[str]] = None
     submitted_notify_user_ids: Optional[List[int]] = None
     line_items: Optional[List[OutsourceMaintLineIn]] = None
@@ -346,6 +359,7 @@ async def _serialize(
         outsourced_unit_name=row.outsourced_unit_name,
         service_type=row.service_type,
         source_order_no=row.source_order_no,
+        urgency_level=normalize_mold_repair_urgency_level(getattr(row, "urgency_level", None)),
         header_attachment_file_uuids=list(row.header_attachment_file_uuids or []),
         line_items=lines,
         primary_mold_code=_primary_mold(lines),
@@ -488,6 +502,7 @@ async def create_outsource_maintenance_sheet(
             outsourced_unit_name=unit_name,
             service_type=body.service_type,
             source_order_no=_strip_opt(body.source_order_no),
+            urgency_level=body.urgency_level,
             header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
             submitted_notify_user_ids=normalize_report_user_ids(body.submitted_notify_user_ids),
             line_items=stored,
@@ -563,6 +578,8 @@ async def update_outsource_maintenance_sheet(
         data["header_attachment_file_uuids"] = _norm_uuid_list(data["header_attachment_file_uuids"])
     if "submitted_notify_user_ids" in data and data["submitted_notify_user_ids"] is not None:
         data["submitted_notify_user_ids"] = normalize_report_user_ids(data["submitted_notify_user_ids"])
+    if "urgency_level" in data and data["urgency_level"] is not None:
+        data["urgency_level"] = normalize_mold_repair_urgency_level(str(data["urgency_level"]))
     if "line_items" in data and data["line_items"] is not None:
         lines = [OutsourceMaintLineIn.model_validate(x) for x in data["line_items"]]
         if not lines:

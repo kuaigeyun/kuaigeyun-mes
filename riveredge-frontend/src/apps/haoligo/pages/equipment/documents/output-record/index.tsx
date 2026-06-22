@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { rowActionKind } from '../../../../../../components/uni-action';
 import {
   ActionType,
@@ -30,12 +31,23 @@ import {
   getEquipmentOutputRecord,
   listEquipmentOutputRecords,
   listEquipments,
+  listHaoligoNotifyUserOptions,
   previewEquipmentOutputByWorkOrder,
   putEquipmentOutputDatasetBinding,
   updateEquipmentOutputRecord,
   type EquipmentOutputDatasetBindingPayload,
   type EquipmentOutputRecordRow,
 } from '../../../../services/haoligo';
+import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
+import {
+  findEnabledBusinessNotificationRule,
+  getFormNotifyUserDefaultsFromRule,
+} from '../../../../../../components/business-notification-rules/notificationRuleFormUsers';
+import { getBusinessConfig } from '../../../../../../services/businessConfig';
+import {
+  formatEquipmentOutputQty,
+  roundEquipmentOutputQty,
+} from '../../../../utils/equipmentOutputQty';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { executeDatasetQuery, getDatasetByUuid, getDatasetList } from '../../../../../../services/dataset';
 import { extractSqlNamedParams } from '../../../../../../utils/extractSqlNamedParams';
@@ -57,11 +69,12 @@ function normalizeDatasetParameterMap(raw: Record<string, unknown>): Record<stri
   return out;
 }
 
-function roundToTwoDecimals(raw: unknown): number | undefined {
-  if (raw == null || raw === '') return undefined;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return undefined;
-  return Math.round(n * 100) / 100;
+const OUTPUT_RECORD_DOC_NOTIFICATION = 'haoligo_equipment_output_record';
+const OUTPUT_RECORD_ACTION_CREATED = 'created';
+
+function parseNotifyUserIds(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((v) => Number(v)).filter((id) => Number.isFinite(id) && id > 0);
 }
 
 const OutputRecordDocumentsPage: React.FC = () => {
@@ -87,6 +100,37 @@ const OutputRecordDocumentsPage: React.FC = () => {
   const [bindingModalBusy, setBindingModalBusy] = useState(false);
   const [datasetParamKeyOptions, setDatasetParamKeyOptions] = useState<{ value: string; label: string }[]>([]);
   const [datasetParamKeysLoading, setDatasetParamKeysLoading] = useState(false);
+
+  const { data: businessConfigRes } = useQuery({
+    queryKey: ['businessConfig'],
+    queryFn: getBusinessConfig,
+    staleTime: 0,
+  });
+  const outputNotifyRule = useMemo(
+    () =>
+      findEnabledBusinessNotificationRule(
+        businessConfigRes?.parameters?.notifications,
+        OUTPUT_RECORD_DOC_NOTIFICATION,
+        OUTPUT_RECORD_ACTION_CREATED,
+      ),
+    [businessConfigRes?.parameters?.notifications],
+  );
+  const outputNotifyDefaults = useMemo(
+    () => getFormNotifyUserDefaultsFromRule(outputNotifyRule),
+    [outputNotifyRule],
+  );
+
+  const searchOutputNotifyUsers = useCallback(
+    async (keyword?: string, selectedIds?: number[]) => {
+      const users = await listHaoligoNotifyUserOptions({
+        keyword: keyword?.trim() || undefined,
+        selected_user_ids: selectedIds?.length ? selectedIds : undefined,
+        limit: 50,
+      });
+      return users.map((u) => ({ label: u.label, value: u.id }));
+    },
+    [],
+  );
 
   const canPrefillFromDataset = useMemo(() => {
     const b = outputDatasetBinding;
@@ -313,8 +357,9 @@ const OutputRecordDocumentsPage: React.FC = () => {
     () => ({
       recorded_at: dayjs(),
       completed_qty: 0,
+      notify_user_ids: [...outputNotifyDefaults],
     }),
-    [],
+    [outputNotifyDefaults],
   );
 
   const openNew = () => {
@@ -339,13 +384,14 @@ const OutputRecordDocumentsPage: React.FC = () => {
           work_order_no: row.work_order_no,
           finished_product_code: row.finished_product_code ?? undefined,
           finished_product_name: row.finished_product_name ?? undefined,
-          planned_qty: roundToTwoDecimals(row.planned_qty),
-          completed_qty: Number(row.completed_qty ?? 0),
+          planned_qty: roundEquipmentOutputQty(row.planned_qty),
+          completed_qty: roundEquipmentOutputQty(row.completed_qty) ?? 0,
           startup_at: row.startup_at ? dayjs(row.startup_at) : undefined,
           completed_at: row.completed_at ? dayjs(row.completed_at) : undefined,
           operator_name: row.operator_name,
           team_leader_name: row.team_leader_name,
           remark: row.remark,
+          notify_user_ids: row.notify_user_ids?.length ? row.notify_user_ids : [...outputNotifyDefaults],
         });
       }, 0);
     } catch (e) {
@@ -371,7 +417,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
       formRef.current?.setFieldsValue({
         finished_product_code: res.finished_product_code ?? undefined,
         finished_product_name: res.finished_product_name ?? undefined,
-        planned_qty: roundToTwoDecimals(res.planned_qty),
+        planned_qty: roundEquipmentOutputQty(res.planned_qty),
       });
       setDatasetSnapshot(res.dataset_row || null);
       messageApi.success(t('app.haoligo.equipment.documents.outputPrefillOk'));
@@ -427,12 +473,44 @@ const OutputRecordDocumentsPage: React.FC = () => {
         dataIndex: 'planned_qty',
         width: 100,
         hideInSearch: true,
+        render: (_, r) => formatEquipmentOutputQty(r.planned_qty),
       },
       {
         title: t('app.haoligo.equipment.documents.colCompletedQty'),
         dataIndex: 'completed_qty',
         width: 100,
         hideInSearch: true,
+        render: (_, r) => formatEquipmentOutputQty(r.completed_qty),
+      },
+      {
+        title: t('app.haoligo.equipment.documents.formStartupAt'),
+        dataIndex: 'startup_at',
+        width: 150,
+        hideInSearch: true,
+        render: (_, r) => (r.startup_at ? formatDateTime(r.startup_at, 'YYYY-MM-DD HH:mm') : '—'),
+      },
+      {
+        title: t('app.haoligo.equipment.documents.formCompletedAt'),
+        dataIndex: 'completed_at',
+        width: 150,
+        hideInSearch: true,
+        render: (_, r) => (r.completed_at ? formatDateTime(r.completed_at, 'YYYY-MM-DD HH:mm') : '—'),
+      },
+      {
+        title: t('app.haoligo.equipment.documents.formOperator'),
+        dataIndex: 'operator_name',
+        width: 100,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.operator_name?.trim() ? r.operator_name : '—'),
+      },
+      {
+        title: t('app.haoligo.equipment.documents.formTeamLeader'),
+        dataIndex: 'team_leader_name',
+        width: 100,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.team_leader_name?.trim() ? r.team_leader_name : '—'),
       },
       {
         title: t('app.haoligo.equipment.documents.colRemark'),
@@ -492,13 +570,14 @@ const OutputRecordDocumentsPage: React.FC = () => {
           : dayjs().toISOString(),
         finished_product_code: String(v.finished_product_code ?? '').trim() || undefined,
         finished_product_name: String(v.finished_product_name ?? '').trim() || undefined,
-        planned_qty: roundToTwoDecimals(v.planned_qty),
-        completed_qty: v.completed_qty != null && v.completed_qty !== '' ? Number(v.completed_qty) : 0,
+        planned_qty: roundEquipmentOutputQty(v.planned_qty),
+        completed_qty: roundEquipmentOutputQty(v.completed_qty) ?? 0,
         startup_at: v.startup_at ? dayjs(v.startup_at as string).toISOString() : undefined,
         completed_at: v.completed_at ? dayjs(v.completed_at as string).toISOString() : undefined,
         operator_name: (v.operator_name as string) || undefined,
         team_leader_name: (v.team_leader_name as string) || undefined,
         remark: String(v.remark ?? '').trim() || undefined,
+        notify_user_ids: parseNotifyUserIds(v.notify_user_ids),
         dataset_snapshot: datasetSnapshot || undefined,
       };
       if (editId == null) {
@@ -781,7 +860,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
                 fieldProps={{
                   readOnly: true,
                   min: 0,
-                  precision: 2,
+                  precision: 0,
                   style: { width: '100%', backgroundColor: detailMode ? undefined : '#fafafa' },
                 }}
               />
@@ -791,7 +870,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
                 name="completed_qty"
                 label={t('app.haoligo.equipment.documents.colCompletedQty')}
                 rules={[{ required: true }]}
-                fieldProps={{ min: 0, precision: 4, style: { width: '100%' } }}
+                fieldProps={{ min: 0, precision: 0, style: { width: '100%' } }}
               />
             </Col>
           </Row>
@@ -848,6 +927,18 @@ const OutputRecordDocumentsPage: React.FC = () => {
             </Col>
           </Row>
           <Row gutter={16}>
+            <FormNotifyUsersSelect
+              inline
+              colSpan={24}
+              name="notify_user_ids"
+              label={t('app.haoligo.equipment.documents.formNotifyUsers')}
+              placeholder={t('app.haoligo.equipment.documents.formNotifyUsersPh')}
+              readonly={detailMode}
+              seedUserIds={outputNotifyDefaults}
+              searchUsers={searchOutputNotifyUsers}
+            />
+          </Row>
+          <Row gutter={16}>
             <Col span={24}>
               <ProFormTextArea
                 name="remark"
@@ -856,7 +947,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
               />
             </Col>
           </Row>
-        </ProForm>
+          </ProForm>
       </Modal>
     </ListPageTemplate>
   );

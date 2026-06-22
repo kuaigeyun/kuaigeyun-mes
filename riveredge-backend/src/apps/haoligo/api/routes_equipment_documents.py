@@ -38,6 +38,12 @@ from apps.haoligo.models.equipment_operations import (
     HaoligoEquipmentSpotCheck,
     HaoligoEquipmentSpotCheckLine,
 )
+from apps.haoligo.constants.route_patrol_line_status import (
+    ROUTE_PATROL_LINE_STATUS_ABNORMAL,
+    ROUTE_PATROL_LINE_STATUS_NORMAL,
+    is_route_patrol_line_abnormal,
+    normalize_route_patrol_line_status,
+)
 from apps.haoligo.services.route_patrol_side_effects import (
     _route_patrol_report_already_sent,
     apply_route_patrol_line_equipment_statuses,
@@ -53,6 +59,10 @@ from apps.haoligo.services.spot_check_side_effects import (
     send_spot_check_report_messages,
     validate_report_notify_users,
 )
+from apps.haoligo.services.equipment_output_side_effects import (
+    send_equipment_output_record_saved_messages,
+)
+from apps.haoligo.utils.equipment_output_qty import normalize_equipment_output_qty
 from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.schemas.dataset import ExecuteQueryRequest
@@ -119,12 +129,6 @@ def _cell_decimal(row: dict, key: Optional[str]) -> Optional[Decimal]:
         return Decimal(str(v).replace(",", "").strip())
     except (InvalidOperation, ValueError, TypeError):
         return None
-
-
-def _round_decimal_2(value: Optional[Decimal]) -> Optional[Decimal]:
-    if value is None:
-        return None
-    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 # --- output dataset binding ---
@@ -280,7 +284,7 @@ async def preview_equipment_output_by_work_order(
         work_order_no=body.work_order_no,
         finished_product_code=fcode[:128] if fcode else None,
         finished_product_name=fname[:200] if fname else None,
-        planned_qty=_round_decimal_2(pq),
+        planned_qty=normalize_equipment_output_qty(pq),
         dataset_row=raw,
     )
 
@@ -987,7 +991,7 @@ class RoutePatrolLineOut(BaseModel):
     asset_code: str
     equipment_name: str
     sequence: int
-    is_normal: bool
+    line_status: str = ROUTE_PATROL_LINE_STATUS_NORMAL
     abnormal_description: Optional[str] = None
     applied_operational_status: Optional[str] = None
     attachment_file_ids: Optional[list] = None
@@ -995,10 +999,15 @@ class RoutePatrolLineOut(BaseModel):
 
 class RoutePatrolLinePatchItem(BaseModel):
     id: int
-    is_normal: bool
+    line_status: str = ROUTE_PATROL_LINE_STATUS_NORMAL
     abnormal_description: Optional[str] = None
     applied_operational_status: Optional[str] = None
     attachment_file_ids: Optional[list] = None
+
+    @field_validator("line_status", mode="before")
+    @classmethod
+    def normalize_line_status(cls, v):
+        return normalize_route_patrol_line_status(v)
 
 
 class RoutePatrolPreviewLineOut(BaseModel):
@@ -1082,7 +1091,7 @@ async def _serialize_route_patrol(row: HaoligoEquipmentRoutePatrol, *, with_line
                 asset_code=ln.asset_code,
                 equipment_name=ln.equipment_name,
                 sequence=ln.sequence,
-                is_normal=ln.is_normal,
+                line_status=normalize_route_patrol_line_status(getattr(ln, "line_status", None)),
                 abnormal_description=ln.abnormal_description,
                 applied_operational_status=ln.applied_operational_status,
                 attachment_file_ids=ln.attachment_file_ids,
@@ -1217,7 +1226,7 @@ async def create_route_patrol(
                 asset_code=eq.asset_code if eq else "",
                 equipment_name=eq.name if eq else "",
                 sequence=st.sequence,
-                is_normal=True,
+                line_status=ROUTE_PATROL_LINE_STATUS_NORMAL,
                 abnormal_description=None,
             )
     await header.fetch_related("patrol_route")
@@ -1308,20 +1317,28 @@ async def update_route_patrol(
                     continue
                 patch = RoutePatrolLinePatchItem.model_validate(lu)
                 pd = patch.model_dump(exclude_unset=True)
-                ln.is_normal = patch.is_normal
+                ln.line_status = normalize_route_patrol_line_status(patch.line_status)
                 if "abnormal_description" in pd:
                     ad = patch.abnormal_description
                     ln.abnormal_description = (str(ad).strip() if ad is not None else None) or None
-                if not patch.is_normal and not (ln.abnormal_description or "").strip():
-                    raise HTTPException(
-                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                        detail=f"顺序 {ln.sequence} 设备异常时请填写异常说明",
-                    )
+                if is_route_patrol_line_abnormal(ln.line_status):
+                    if not (ln.abnormal_description or "").strip():
+                        raise HTTPException(
+                            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"顺序 {ln.sequence} 设备异常时请填写异常说明",
+                        )
+                else:
+                    ln.abnormal_description = None
+                    if "attachment_file_ids" not in pd:
+                        ln.attachment_file_ids = None
                 if "applied_operational_status" in pd:
                     raw_st = patch.applied_operational_status
                     line_status_by_id[ln.id] = (raw_st or "").strip() or None
                 if "attachment_file_ids" in pd:
-                    ln.attachment_file_ids = _norm_attachment_file_ids(patch.attachment_file_ids)
+                    if is_route_patrol_line_abnormal(ln.line_status):
+                        ln.attachment_file_ids = _norm_attachment_file_ids(patch.attachment_file_ids)
+                    else:
+                        ln.attachment_file_ids = None
                 await ln.save()
 
             status_changes = await apply_route_patrol_line_equipment_statuses(
@@ -1387,6 +1404,7 @@ class OutputRecordOut(BaseModel):
     operator_name: Optional[str] = None
     team_leader_name: Optional[str] = None
     remark: Optional[str] = None
+    notify_user_ids: List[int] = Field(default_factory=list)
     reporter_user_id: int
     dataset_snapshot: Optional[dict] = None
     created_at: datetime
@@ -1408,14 +1426,30 @@ class OutputRecordCreate(BaseModel):
     team_leader_name: Optional[str] = Field(None, max_length=100)
     remark: Optional[str] = None
     dataset_snapshot: Optional[dict] = None
+    notify_user_ids: List[int] = Field(default_factory=list)
 
-    @field_validator("work_order_no")
+    @field_validator("work_order_no", mode="before")
     @classmethod
-    def strip_wo(cls, v: Optional[str]) -> Optional[str]:
+    def normalize_work_order_no(cls, v):
         if v is None:
             return None
         s = v.strip()
         return s or None
+
+    @field_validator("notify_user_ids", mode="before")
+    @classmethod
+    def normalize_notify_user_ids_create(cls, v):
+        return normalize_report_user_ids(v)
+
+    @field_validator("planned_qty", mode="before")
+    @classmethod
+    def normalize_planned_qty(cls, v):
+        return normalize_equipment_output_qty(v)
+
+    @field_validator("completed_qty", mode="before")
+    @classmethod
+    def normalize_completed_qty(cls, v):
+        return normalize_equipment_output_qty(v, required=True)
 
 
 class OutputRecordUpdate(BaseModel):
@@ -1433,6 +1467,26 @@ class OutputRecordUpdate(BaseModel):
     team_leader_name: Optional[str] = Field(None, max_length=100)
     remark: Optional[str] = None
     dataset_snapshot: Optional[dict] = None
+    notify_user_ids: Optional[List[int]] = None
+
+    @field_validator("planned_qty", mode="before")
+    @classmethod
+    def normalize_planned_qty_upd(cls, v):
+        return normalize_equipment_output_qty(v)
+
+    @field_validator("completed_qty", mode="before")
+    @classmethod
+    def normalize_completed_qty_upd(cls, v):
+        if v is None:
+            return None
+        return normalize_equipment_output_qty(v, required=True)
+
+    @field_validator("notify_user_ids", mode="before")
+    @classmethod
+    def normalize_notify_user_ids_upd(cls, v):
+        if v is None:
+            return None
+        return normalize_report_user_ids(v)
 
 
 async def _serialize_output_record(row: HaoligoEquipmentOutputRecord) -> OutputRecordOut:
@@ -1451,13 +1505,14 @@ async def _serialize_output_record(row: HaoligoEquipmentOutputRecord) -> OutputR
         product_name=row.product_name,
         finished_product_code=row.finished_product_code or row.customer_name,
         finished_product_name=row.finished_product_name or row.product_name,
-        planned_qty=row.planned_qty,
-        completed_qty=row.completed_qty,
+        planned_qty=normalize_equipment_output_qty(row.planned_qty),
+        completed_qty=normalize_equipment_output_qty(row.completed_qty, required=True),
         startup_at=row.startup_at,
         completed_at=row.completed_at,
         operator_name=row.operator_name,
         team_leader_name=row.team_leader_name,
         remark=row.remark,
+        notify_user_ids=normalize_report_user_ids(getattr(row, "notify_user_ids", None)),
         reporter_user_id=row.reporter_user_id,
         dataset_snapshot=row.dataset_snapshot,
         created_at=row.created_at,
@@ -1522,6 +1577,7 @@ async def create_output_record(
     eq = await tenant_alive(HaoligoEquipment, tenant_id).filter(id=body.equipment_id).first()
     if not eq:
         await _not_found()
+    await validate_report_notify_users(tenant_id, body.notify_user_ids)
     rec_at = body.recorded_at or timezone.now()
     async with in_transaction():
         try:
@@ -1545,11 +1601,13 @@ async def create_output_record(
             operator_name=(body.operator_name or "").strip() or None,
             team_leader_name=(body.team_leader_name or "").strip() or None,
             remark=(body.remark or "").strip() or None,
+            notify_user_ids=body.notify_user_ids,
             reporter_user_id=user.id,
             dataset_snapshot=body.dataset_snapshot,
         )
         await adjust_equipment_used_yield(tenant_id, eq.id, Decimal(str(body.completed_qty or 0)))
     await row.fetch_related("equipment")
+    await send_equipment_output_record_saved_messages(tenant_id, row)
     return await _serialize_output_record(row)
 
 
@@ -1578,6 +1636,9 @@ async def update_output_record(
     prev_eq_id = row.equipment_id
     prev_qty = Decimal(str(row.completed_qty or 0))
     data = body.model_dump(exclude_unset=True)
+    if "notify_user_ids" in data:
+        data["notify_user_ids"] = normalize_report_user_ids(data.get("notify_user_ids"))
+        await validate_report_notify_users(tenant_id, data["notify_user_ids"])
     if "work_order_no" in data:
         raw = data["work_order_no"]
         if raw is None:
@@ -1612,6 +1673,7 @@ async def update_output_record(
         if new_eq_id:
             await adjust_equipment_used_yield(tenant_id, new_eq_id, new_qty)
     await row.fetch_related("equipment")
+    await send_equipment_output_record_saved_messages(tenant_id, row)
     return await _serialize_output_record(row)
 
 

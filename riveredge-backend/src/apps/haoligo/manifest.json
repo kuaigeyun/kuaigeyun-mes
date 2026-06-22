@@ -802,6 +802,7 @@
       "completed_at",
       "operator_name",
       "team_leader_name",
+      "notify_user_ids",
       "remark"
     ],
     "equipment.upkeep_complete.create": [

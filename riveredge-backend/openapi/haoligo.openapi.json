@@ -26305,6 +26305,14 @@
             ],
             "title": "Remark"
           },
+          "notify_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Notify User Ids",
+            "default": []
+          },
           "dataset_snapshot": {
             "anyOf": [
               {
@@ -26489,6 +26497,14 @@
               }
             ],
             "title": "Remark"
+          },
+          "notify_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Notify User Ids",
+            "default": []
           },
           "reporter_user_id": {
             "type": "integer",
@@ -26683,6 +26699,14 @@
               }
             ],
             "title": "Remark"
+          },
+          "notify_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Notify User Ids",
+            "default": []
           },
           "dataset_snapshot": {
             "anyOf": [
@@ -27466,9 +27490,15 @@
             "type": "integer",
             "title": "Sequence"
           },
-          "is_normal": {
-            "type": "boolean",
-            "title": "Is Normal"
+          "line_status": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "abnormal",
+              "not_producing"
+            ],
+            "title": "Line Status",
+            "default": "normal"
           },
           "abnormal_description": {
             "anyOf": [
@@ -27512,7 +27542,7 @@
           "asset_code",
           "equipment_name",
           "sequence",
-          "is_normal"
+          "line_status"
         ],
         "title": "RoutePatrolLineOut"
       },
@@ -27522,9 +27552,15 @@
             "type": "integer",
             "title": "Id"
           },
-          "is_normal": {
-            "type": "boolean",
-            "title": "Is Normal"
+          "line_status": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "abnormal",
+              "not_producing"
+            ],
+            "title": "Line Status",
+            "default": "normal"
           },
           "abnormal_description": {
             "anyOf": [
@@ -27564,7 +27600,7 @@
         "type": "object",
         "required": [
           "id",
-          "is_normal"
+          "line_status"
         ],
         "title": "RoutePatrolLinePatchItem"
       },

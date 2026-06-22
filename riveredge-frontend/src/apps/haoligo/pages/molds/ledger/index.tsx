@@ -12,6 +12,7 @@ import {
   ProColumns,
   ProDescriptionsItemProps,
   ProForm,
+  ProFormDatePicker,
   ProFormDigit,
   ProFormInstance,
   ProFormSelect,
@@ -153,6 +154,23 @@ function omitMoldLedgerKeys(obj: MoldCreatePayload): Record<string, unknown> {
   void _code;
   void _qty;
   return rest as Record<string, unknown>;
+}
+
+function toIsoDate(v: unknown): string | null | undefined {
+  if (v == null || v === '') return null;
+  if (dayjs.isDayjs(v)) return v.format('YYYY-MM-DD');
+  const s = String(v).trim();
+  return s ? s.slice(0, 10) : null;
+}
+
+function parseImportDateCell(v: unknown): string | null {
+  const iso = toIsoDate(v);
+  return iso ?? null;
+}
+
+function formatFactoryEntryAt(v: string | null | undefined): string {
+  if (!v) return '—';
+  return String(v).slice(0, 10);
 }
 
 function parseBoolCell(v: unknown): boolean | undefined {
@@ -521,6 +539,7 @@ const MoldLedgerPage: React.FC = () => {
       mold_name_column: d?.mold_name_column ?? undefined,
       unit_column: d?.unit_column ?? undefined,
       mold_capacity_column: d?.mold_capacity_column ?? undefined,
+      factory_entry_at_column: d?.factory_entry_at_column ?? undefined,
     });
     setBindingColumnOptions([]);
     return () => {
@@ -562,6 +581,7 @@ const MoldLedgerPage: React.FC = () => {
         mold_name_column: String(v.mold_name_column ?? '').trim(),
         unit_column: String(v.unit_column ?? '').trim(),
         mold_capacity_column: String(v.mold_capacity_column ?? '').trim() || undefined,
+        factory_entry_at_column: String(v.factory_entry_at_column ?? '').trim() || undefined,
       });
       setDatasetBinding(saved);
       messageApi.success('已保存');
@@ -793,6 +813,7 @@ const MoldLedgerPage: React.FC = () => {
         maintenance_cycle_by_yield: moldIntOrUndef(detail.maintenance_cycle_by_yield),
         allow_repeated_borrow: detail.allow_repeated_borrow ?? true,
         purchase_vendor_name: detail.purchase_vendor_name ?? undefined,
+        factory_entry_at: detail.factory_entry_at ? dayjs(detail.factory_entry_at) : undefined,
         mold_warehouse_id: detail.mold_warehouse_id ?? undefined,
         upkeep_param_set_id: detail.upkeep_param_set_id ?? undefined,
         status: detail.status,
@@ -895,6 +916,7 @@ const MoldLedgerPage: React.FC = () => {
       render: (_, r) => <Tag color={r.allow_repeated_borrow ? 'blue' : 'default'}>{r.allow_repeated_borrow ? '是' : '否'}</Tag>,
     },
     { title: '购买厂商', dataIndex: 'purchase_vendor_name', render: (_, r) => r.purchase_vendor_name || '—' },
+    { title: '入厂时间', dataIndex: 'factory_entry_at', render: (_, r) => formatFactoryEntryAt(r.factory_entry_at) },
     {
       title: '加工时间(分钟)',
       dataIndex: 'processing_time_min',
@@ -948,6 +970,7 @@ const MoldLedgerPage: React.FC = () => {
     maintenance_cycle_by_yield: moldIntStrOrUndef(values.maintenance_cycle_by_yield),
     allow_repeated_borrow: Boolean(values.allow_repeated_borrow),
     purchase_vendor_name: String(values.purchase_vendor_name ?? '').trim() || null,
+    factory_entry_at: toIsoDate(values.factory_entry_at) ?? null,
     mold_warehouse_id: parseMoldWarehouseIdForForm(values.mold_warehouse_id),
     upkeep_param_set_id: parseMoldWarehouseIdForForm(values.upkeep_param_set_id),
     status,
@@ -1094,6 +1117,13 @@ const MoldLedgerPage: React.FC = () => {
     },
     { title: '购买厂商', dataIndex: 'purchase_vendor_name', width: 120, ellipsis: true, hideInSearch: true },
     {
+      title: '入厂时间',
+      dataIndex: 'factory_entry_at',
+      width: 110,
+      hideInSearch: true,
+      render: (_, r) => formatFactoryEntryAt(r.factory_entry_at),
+    },
+    {
       title: '操作',
       valueType: 'option',
       fixed: 'right',
@@ -1145,6 +1175,7 @@ const MoldLedgerPage: React.FC = () => {
             '额定可用次数',
             '维修周期(依产量)',
             '购买厂商',
+            '入厂时间',
             '备注',
           ]}
           onImport={async (data) => {
@@ -1176,6 +1207,7 @@ const MoldLedgerPage: React.FC = () => {
             const timesIdx = getIdx('额定可用次数', '可用次数', '次数');
             const maintYIdx = getIdx('维修周期(依产量)', '依产量', 'maintenance_cycle_by_yield');
             const vendorIdx = getIdx('购买厂商', '厂商');
+            const entryIdx = getIdx('入厂时间', 'factory_entry_at');
             const remarkIdx = getIdx('备注', 'remark');
 
             const items: MoldCreatePayload[] = [];
@@ -1212,6 +1244,7 @@ const MoldLedgerPage: React.FC = () => {
                 allow_repeated_borrow: allowCell ?? true,
                 purchase_vendor_name:
                   vendorIdx >= 0 ? String(row[vendorIdx] ?? '').trim() || null : null,
+                factory_entry_at: entryIdx >= 0 ? parseImportDateCell(row[entryIdx]) : null,
                 status: rowStatus,
                 total_manufacture_qty: 0,
                 remark: remarkIdx >= 0 ? String(row[remarkIdx] ?? '').trim() || null : null,
@@ -1482,6 +1515,13 @@ const MoldLedgerPage: React.FC = () => {
               />
             </ProForm.Item>
           </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="factory_entry_at"
+              label="入厂时间"
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
           <Col span={24}>
             <ProFormTextArea name="remark" label="备注" placeholder="请输入备注" fieldProps={{ rows: 3 }} />
           </Col>
@@ -1601,7 +1641,7 @@ const MoldLedgerPage: React.FC = () => {
       >
         <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <div>
-            将按已保存的数据集执行无参查询，按模具代号匹配：已存在则更新名称、单位（若已配置「单模产能列」则同时更新单模产能）；不存在则新增（默认状态「待用」；未配置单模产能列时新增单模产能为 0）。
+            将按已保存的数据集执行无参查询，按模具代号匹配：已存在则更新名称、单位（若已配置「单模产能列」则同时更新单模产能；若已配置「入厂时间列」则同时更新入厂时间）；不存在则新增（默认状态「待用」；未配置单模产能列时新增单模产能为 0）。
           </div>
           <Alert
             type="warning"
@@ -1647,6 +1687,7 @@ const MoldLedgerPage: React.FC = () => {
                   mold_name_column: undefined,
                   unit_column: undefined,
                   mold_capacity_column: undefined,
+                  factory_entry_at_column: undefined,
                 });
                 setBindingColumnOptions([]);
               }}
@@ -1729,11 +1770,25 @@ const MoldLedgerPage: React.FC = () => {
                 />
               </Form.Item>
             </Col>
+            <Col span={12}>
+              <Form.Item name="factory_entry_at_column" label="入厂时间列">
+                <AutoComplete
+                  allowClear
+                  options={bindingColumnOptions}
+                  placeholder="下拉选择或输入（可选）"
+                  filterOption={(input, option) =>
+                    String(option?.value ?? '')
+                      .toLowerCase()
+                      .includes(String(input).trim().toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
           </Row>
           <Alert
             type="info"
             showIcon
-            message="同步时按「模具代号」匹配本系统台账：已存在则更新名称与单位；若配置了单模产能列则同时更新单模产能。不存在则新增（默认状态「待用」；未配置单模产能列时单模产能为 0）。请在数据集 SQL 中支持无参全量或分页拉取。"
+            message="同步时按「模具代号」匹配本系统台账：已存在则更新名称与单位；若配置了单模产能列则同时更新单模产能；若配置了入厂时间列则同时更新入厂时间。不存在则新增（默认状态「待用」；未配置单模产能列时单模产能为 0）。请在数据集 SQL 中支持无参全量或分页拉取。"
           />
         </Form>
       </Modal>

@@ -5,10 +5,9 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Card, Col, Flex, Row, Segmented, Statistic, Typography } from 'antd';
-import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../../components/uni-table';
-import { ListPageTemplate } from '../../../../../../components/layout-templates';
+import { ListPageTemplate, LIST_PAGE_TABLE_SCROLL } from '../../../../../../components/layout-templates';
 import { formatDateTime } from '../../../../../../utils/format';
 import {
   getEquipmentCapacityReport,
@@ -21,14 +20,9 @@ import {
   defaultEquipmentReportRecordedRange,
   parseEquipmentReportRecordedRange,
 } from '../../../../utils/equipmentReportDateRange';
+import { formatEquipmentOutputQty } from '../../../../utils/equipmentOutputQty';
 
 type ViewMode = 'detail' | 'equipment';
-
-function formatQty(v: string | number | null | undefined): string {
-  if (v == null || v === '') return '—';
-  const n = Number(v);
-  return Number.isFinite(n) ? String(n) : String(v);
-}
 
 function formatRate(v: number | null | undefined): string {
   if (v == null || Number.isNaN(v)) return '—';
@@ -133,14 +127,14 @@ const EquipmentCapacityReportPage: React.FC = () => {
         dataIndex: 'planned_qty',
         width: 100,
         hideInSearch: true,
-        render: (_, r) => formatQty(r.planned_qty),
+        render: (_, r) => formatEquipmentOutputQty(r.planned_qty),
       },
       {
         title: t('app.haoligo.equipment.documents.colCompletedQty'),
         dataIndex: 'completed_qty',
         width: 100,
         hideInSearch: true,
-        render: (_, r) => formatQty(r.completed_qty),
+        render: (_, r) => formatEquipmentOutputQty(r.completed_qty),
       },
       {
         title: t('app.haoligo.equipment.documents.formOperator'),
@@ -148,6 +142,29 @@ const EquipmentCapacityReportPage: React.FC = () => {
         width: 100,
         ellipsis: true,
         hideInSearch: true,
+        render: (_, r) => (r.operator_name?.trim() ? r.operator_name : '—'),
+      },
+      {
+        title: t('app.haoligo.equipment.documents.formStartupAt'),
+        dataIndex: 'startup_at',
+        width: 150,
+        hideInSearch: true,
+        render: (_, r) => (r.startup_at ? formatDateTime(r.startup_at, 'YYYY-MM-DD HH:mm') : '—'),
+      },
+      {
+        title: t('app.haoligo.equipment.documents.formCompletedAt'),
+        dataIndex: 'completed_at',
+        width: 150,
+        hideInSearch: true,
+        render: (_, r) => (r.completed_at ? formatDateTime(r.completed_at, 'YYYY-MM-DD HH:mm') : '—'),
+      },
+      {
+        title: t('app.haoligo.equipment.documents.formTeamLeader'),
+        dataIndex: 'team_leader_name',
+        width: 100,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.team_leader_name?.trim() ? r.team_leader_name : '—'),
       },
     ],
     [defaultRange, t],
@@ -207,14 +224,14 @@ const EquipmentCapacityReportPage: React.FC = () => {
         dataIndex: 'planned_qty_total',
         width: 110,
         hideInSearch: true,
-        render: (_, r) => formatQty(r.planned_qty_total),
+        render: (_, r) => formatEquipmentOutputQty(r.planned_qty_total),
       },
       {
         title: t('app.haoligo.equipment.reports.capacity.colCompletedTotal'),
         dataIndex: 'completed_qty_total',
         width: 110,
         hideInSearch: true,
-        render: (_, r) => formatQty(r.completed_qty_total),
+        render: (_, r) => formatEquipmentOutputQty(r.completed_qty_total),
       },
       {
         title: t('app.haoligo.equipment.reports.capacity.colAchievement'),
@@ -238,7 +255,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
         <Card size="small" bordered={false} style={{ background: '#fafafa' }}>
           <Statistic
             title={t('app.haoligo.equipment.reports.capacity.kpiPlanned')}
-            value={formatQty(summary?.planned_qty_total)}
+            value={formatEquipmentOutputQty(summary?.planned_qty_total)}
           />
         </Card>
       </Col>
@@ -246,7 +263,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
         <Card size="small" bordered={false} style={{ background: '#fafafa' }}>
           <Statistic
             title={t('app.haoligo.equipment.reports.capacity.kpiCompleted')}
-            value={formatQty(summary?.completed_qty_total)}
+            value={formatEquipmentOutputQty(summary?.completed_qty_total)}
           />
         </Card>
       </Col>
@@ -262,9 +279,20 @@ const EquipmentCapacityReportPage: React.FC = () => {
   );
 
   return (
-    <ListPageTemplate>
-      <Flex vertical gap={0} style={{ width: '100%' }}>
-        <Flex justify="space-between" align="center" wrap="wrap" gap={8} style={{ marginBottom: 8 }}>
+    <ListPageTemplate
+      fillMain
+      tableScrollLayout="report"
+      tableScrollOffsetExtraPx={LIST_PAGE_TABLE_SCROLL.STAT_CARDS_ROW_EXTRA_PX}
+    >
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        <Flex justify="space-between" align="center" wrap="wrap" gap={8} style={{ marginBottom: 8, flexShrink: 0 }}>
           <div>
             <Typography.Title level={4} style={{ margin: 0 }}>
               {title}
@@ -285,7 +313,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
             ]}
           />
         </Flex>
-        {summaryCards}
+        <div style={{ flexShrink: 0 }}>{summaryCards}</div>
         {viewMode === 'detail' ? (
           <UniTable<EquipmentOutputRecordRow>
             key="capacity-detail"
@@ -295,6 +323,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
             rowKey="id"
             columns={detailColumns}
             showAdvancedSearch
+            fillViewportBody
             form={{ initialValues: searchDefaults }}
             search={{ labelWidth: 'auto', defaultCollapsed: false }}
             request={async (params, _sort, _filter, searchFormValues) => {
@@ -337,6 +366,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
             rowKey="equipment_id"
             columns={equipmentColumns}
             showAdvancedSearch
+            fillViewportBody
             form={{ initialValues: searchDefaults }}
             search={{ labelWidth: 'auto', defaultCollapsed: false }}
             request={async (params, _sort, _filter, searchFormValues) => {
@@ -371,7 +401,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
             }}
           />
         )}
-      </Flex>
+      </div>
     </ListPageTemplate>
   );
 };

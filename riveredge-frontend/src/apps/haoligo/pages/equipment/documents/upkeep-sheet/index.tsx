@@ -602,9 +602,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
         <div className="form-modal-content-inner">
           {!formOptionsReady ? (
             <div style={{ display: 'flex', minHeight: 280, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-              <Spin tip="加载选项中…">
-                <div style={{ minHeight: 24 }} />
-              </Spin>
+              <Spin tip="加载选项中…" />
             </div>
           ) : (
             <ProForm

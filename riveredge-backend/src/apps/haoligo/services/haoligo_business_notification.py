@@ -20,6 +20,7 @@ DOC_MOLD_MAINTENANCE_COMPLETE = "haoligo_mold_maintenance_complete"
 DOC_MOLD_OUTSOURCE_MAINTENANCE_COMPLETE = "haoligo_mold_outsource_maintenance_complete"
 DOC_EQUIPMENT_UPKEEP_SHEET = "haoligo_equipment_upkeep_sheet"
 DOC_EQUIPMENT_UPKEEP_COMPLETE = "haoligo_equipment_upkeep_complete"
+DOC_EQUIPMENT_OUTPUT_RECORD = "haoligo_equipment_output_record"
 
 # ---------- 触发动作 ----------
 ACTION_SUBMITTED = "submitted"

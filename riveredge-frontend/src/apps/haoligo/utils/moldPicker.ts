@@ -26,3 +26,31 @@ export async function fetchMoldsForPicker(params: {
   }
   return out;
 }
+
+export type MoldPrimaryLineItem = {
+  mold_code?: string | null;
+  mold_name?: string | null;
+};
+
+export type MoldPrimaryDisplayRow = {
+  primary_mold_code?: string | null;
+  primary_mold_name?: string | null;
+  line_items?: MoldPrimaryLineItem[] | null;
+};
+
+/** 列表「首件模具」堆叠列：上行名称、下行编号 */
+export function resolvePrimaryMoldStacked(row: MoldPrimaryDisplayRow): { name: string; code: string } {
+  const lines = row.line_items || [];
+  const primary = (row.primary_mold_code && String(row.primary_mold_code).trim()) || '';
+  if (primary) {
+    const hit = lines.find((it) => String(it.mold_code ?? '').trim() === primary);
+    const fromHeader = (row.primary_mold_name || '').trim();
+    const nm = fromHeader || (hit?.mold_name != null ? String(hit.mold_name).trim() : '');
+    return { name: nm || '—', code: primary };
+  }
+  const first = lines.find((it) => String(it.mold_code ?? '').trim());
+  if (!first) return { name: '—', code: '—' };
+  const code = String(first.mold_code ?? '').trim();
+  const nm = first.mold_name != null ? String(first.mold_name).trim() : '';
+  return { name: nm || '—', code };
+}

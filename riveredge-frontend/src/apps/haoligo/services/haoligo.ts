@@ -688,7 +688,7 @@ export interface EquipmentRoutePatrolLineRow {
   asset_code: string;
   equipment_name: string;
   sequence: number;
-  is_normal: boolean;
+  line_status: string;
   abnormal_description?: string | null;
   applied_operational_status?: string | null;
   attachment_file_ids?: string[] | null;
@@ -727,7 +727,7 @@ export type EquipmentRoutePatrolCreatePayload = {
 
 export type EquipmentRoutePatrolLinePatch = {
   id: number;
-  is_normal: boolean;
+  line_status: string;
   abnormal_description?: string | null;
   applied_operational_status?: string | null;
   attachment_file_ids?: string[] | null;
@@ -1002,6 +1002,7 @@ export interface EquipmentOutputRecordRow {
   operator_name?: string | null;
   team_leader_name?: string | null;
   remark?: string | null;
+  notify_user_ids?: number[];
   reporter_user_id: number;
   dataset_snapshot?: Record<string, unknown> | null;
   created_at: string;
@@ -1022,6 +1023,7 @@ export type EquipmentOutputRecordCreatePayload = {
   operator_name?: string | null;
   team_leader_name?: string | null;
   remark?: string | null;
+  notify_user_ids?: number[];
   dataset_snapshot?: Record<string, unknown> | null;
 };
 
@@ -1212,6 +1214,7 @@ export interface MoldRow {
   maintenance_cycle_by_yield?: string | null;
   allow_repeated_borrow: boolean;
   purchase_vendor_name?: string | null;
+  factory_entry_at?: string | null;
   status: string;
   total_manufacture_qty: string;
   outsource_vendor_code?: string | null;
@@ -1243,6 +1246,7 @@ export type MoldCreatePayload = {
   maintenance_cycle_by_yield?: string | number | null;
   allow_repeated_borrow: boolean;
   purchase_vendor_name?: string | null;
+  factory_entry_at?: string | null;
   status: string;
   total_manufacture_qty?: string | number;
   outsource_vendor_code?: string | null;
@@ -1637,13 +1641,14 @@ export function deleteMold(rowId: number): Promise<void> {
   return apiRequest(`${PREFIX}/molds/${rowId}`, { method: 'DELETE' });
 }
 
-/** 模具台账 ↔ 数据集关联（同步代号/名称/单位；可选映射单模产能） */
+/** 模具台账 ↔ 数据集关联（同步代号/名称/单位；可选映射单模产能、入厂时间） */
 export interface MoldLedgerDatasetBindingPayload {
   dataset_uuid?: string | null;
   mold_code_column?: string | null;
   mold_name_column?: string | null;
   unit_column?: string | null;
   mold_capacity_column?: string | null;
+  factory_entry_at_column?: string | null;
 }
 
 export function getMoldLedgerDatasetBinding(): Promise<MoldLedgerDatasetBindingPayload> {
@@ -1895,6 +1900,7 @@ export interface MoldOutsourceMaintenanceSheetRow {
   outsourced_unit_name: string;
   service_type: string;
   source_order_no?: string | null;
+  urgency_level?: string;
   header_attachment_file_uuids: string[];
   submitted_notify_user_ids?: number[];
   line_items: OutsourceMaintLineRow[];
@@ -1924,6 +1930,7 @@ export type MoldOutsourceMaintenanceSheetCreatePayload = {
   department_uuid: string;
   service_type: '维修' | '保养';
   source_order_no?: string | null;
+  urgency_level?: '一般' | '紧急';
   header_attachment_file_uuids?: string[];
   submitted_notify_user_ids?: number[];
   line_items: OutsourceMaintLinePayload[];
@@ -2009,6 +2016,7 @@ export interface MoldMaintenanceSheetRow {
   department_name?: string | null;
   service_type: string;
   source_order_no?: string | null;
+  urgency_level?: string;
   header_attachment_file_uuids: string[];
   submitted_notify_user_ids?: number[];
   line_items: MoldMaintLineRow[];
@@ -2036,6 +2044,7 @@ export type MoldMaintenanceSheetCreatePayload = {
   department_uuid: string;
   service_type: '维修' | '保养';
   source_order_no?: string | null;
+  urgency_level?: '一般' | '紧急';
   header_attachment_file_uuids?: string[];
   submitted_notify_user_ids?: number[];
   line_items: MoldMaintLinePayload[];

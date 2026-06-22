@@ -139,7 +139,11 @@ class HaoligoEquipmentRoutePatrolLine(HaoligoTenantModel):
     asset_code = fields.CharField(max_length=64, description="设备代号快照")
     equipment_name = fields.CharField(max_length=200, description="设备名称快照")
     sequence = fields.IntField(default=0, description="顺序号")
-    is_normal = fields.BooleanField(default=True, description="是否正常")
+    line_status = fields.CharField(
+        max_length=32,
+        default="normal",
+        description="巡检结果：normal 正常 / abnormal 异常 / not_producing 未生产",
+    )
     abnormal_description = fields.TextField(null=True, description="异常描述")
     applied_operational_status = fields.CharField(
         max_length=32, null=True, description="本行调整后的设备运行状态（数据字典 value）"
@@ -196,6 +200,10 @@ class HaoligoEquipmentOutputRecord(HaoligoTenantModel):
     operator_name = fields.CharField(max_length=100, null=True, description="作业人员")
     team_leader_name = fields.CharField(max_length=100, null=True, description="组长")
     remark = fields.TextField(null=True, description="备注")
+    notify_user_ids = fields.JSONField(
+        default=list,
+        description="保存时站内信通知接收人用户 ID 列表",
+    )
     reporter_user_id = fields.IntField(description="填报人用户 ID")
     dataset_snapshot = fields.JSONField(null=True, description="数据集带出原始行快照")
 

@@ -7,6 +7,7 @@ from typing import List, Optional
 from loguru import logger
 
 from apps.haoligo.constants.message_template_codes import HAOLIGO_EQUIPMENT_ROUTE_PATROL_REPORT
+from apps.haoligo.constants.route_patrol_line_status import ROUTE_PATROL_LINE_STATUS_ABNORMAL
 from apps.haoligo.models.equipment import HaoligoEquipment
 from apps.haoligo.models.equipment_operations import (
     HaoligoEquipmentRoutePatrol,
@@ -31,7 +32,7 @@ async def _format_abnormal_patrol_lines_summary(
             tenant_id=tenant_id,
             header_id=header_id,
             deleted_at__isnull=True,
-            is_normal=False,
+            line_status=ROUTE_PATROL_LINE_STATUS_ABNORMAL,
         )
         .order_by("sequence", "id")
         .all()

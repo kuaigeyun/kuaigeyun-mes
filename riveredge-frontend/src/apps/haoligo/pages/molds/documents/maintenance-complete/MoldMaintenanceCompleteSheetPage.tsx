@@ -22,12 +22,13 @@ import {
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { UploadProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { App, Alert, Button, Col, Divider, Input, Modal, Row, Space, Spin, Table, Tooltip, Upload } from 'antd';
+import { App, Alert, Button, Col, Divider, Input, Modal, Row, Space, Spin, Table, Tooltip, Typography, Upload } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import HaoligoDocumentPrintModal from '../../../../components/HaoligoDocumentPrintModal';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
 import { UniTable } from '../../../../../../components/uni-table';
+import { UniTableStackedPrimaryCell } from '../../../../../../components/uni-table/stackedPrimaryColumn';
 import { useGlobalStore } from '../../../../../../stores/globalStore';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
@@ -70,6 +71,7 @@ import {
 } from '../../../../../../components/business-notification-rules/notificationRuleFormUsers';
 import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
 import { INHOUSE_COMPLETE_SOURCE_MAINTENANCE_PARAM } from '../../../../utils/inhouseCompleteNavigation';
+import { resolvePrimaryMoldStacked } from '../../../../utils/moldPicker';
 
 const MAINT_COMPLETE_DOC_NOTIFICATION = 'haoligo_mold_maintenance_complete';
 const MAINT_COMPLETE_ACTION_CREATED = 'created';
@@ -165,6 +167,25 @@ function SourceMaintSheetPickerTrigger({
         </Button>
       ) : null}
     </Space.Compact>
+  );
+}
+
+const COMPLETION_SUMMARY_COL_WIDTH = 120;
+
+function renderCompletionSummaryCell(text: string) {
+  if (!text || text === '—') return '—';
+  return (
+    <div
+      style={{
+        width: COMPLETION_SUMMARY_COL_WIDTH,
+        maxWidth: COMPLETION_SUMMARY_COL_WIDTH,
+        overflow: 'hidden',
+      }}
+    >
+      <Typography.Text ellipsis={{ tooltip: text }} style={{ width: '100%' }}>
+        {text}
+      </Typography.Text>
+    </div>
   );
 }
 
@@ -1019,16 +1040,24 @@ export function MoldMaintenanceCompleteSheetPage({
     {
       title: serviceType === '保养' ? '保养内容' : '维修摘要',
       key: 'completion_summary',
-      width: 200,
-      ellipsis: true,
+      width: COMPLETION_SUMMARY_COL_WIDTH,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: false,
       hideInSearch: true,
+      onCell: () => ({
+        style: {
+          maxWidth: COMPLETION_SUMMARY_COL_WIDTH,
+          overflow: 'hidden',
+        },
+      }),
       render: (_, r) => {
         const items = r.line_items || [];
         if (serviceType === '保养') {
           const parts = items
             .map((it) => (it.upkeep_content && String(it.upkeep_content).trim()) || '')
             .filter(Boolean);
-          return parts.length ? parts.join('；') : '—';
+          return renderCompletionSummaryCell(parts.length ? parts.join('；') : '—');
         }
         const parts: string[] = [];
         for (const it of items) {
@@ -1036,7 +1065,7 @@ export function MoldMaintenanceCompleteSheetPage({
           const rc = (it.repair_content && String(it.repair_content).trim()) || '';
           if (rr || rc) parts.push([rr, rc].filter(Boolean).join(' · '));
         }
-        return parts.length ? parts.join('；') : '—';
+        return renderCompletionSummaryCell(parts.length ? parts.join('；') : '—');
       },
     },
     {
@@ -1054,7 +1083,19 @@ export function MoldMaintenanceCompleteSheetPage({
         return '部分';
       },
     },
-    { title: '首件模具', dataIndex: 'primary_mold_code', width: 120, ellipsis: true, hideInSearch: true },
+    {
+      title: '首件模具',
+      dataIndex: 'primary_mold_code',
+      minWidth: 168,
+      width: 168,
+      resizable: false,
+      ellipsis: false,
+      hideInSearch: true,
+      render: (_, r) => {
+        const { name, code } = resolvePrimaryMoldStacked(r);
+        return <UniTableStackedPrimaryCell primary={name} secondary={code} />;
+      },
+    },
     {
       title: '模具条数',
       key: 'line_count',
@@ -1187,9 +1228,7 @@ export function MoldMaintenanceCompleteSheetPage({
                 padding: 24,
               }}
             >
-              <Spin tip="加载选项中…">
-                <div style={{ minHeight: 24 }} />
-              </Spin>
+              <Spin tip="加载选项中…" />
             </div>
           ) : (
             <ProForm

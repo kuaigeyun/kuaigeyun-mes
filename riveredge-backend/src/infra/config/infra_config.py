@@ -268,10 +268,22 @@ class InfraSettings(BaseSettings):
     # 基础URL配置：显式设置 BASE_URL 时使用该值；不设置则使用相对路径，便于局域网/反向代理部署
     base_url_override: str = Field(default="", alias="BASE_URL", description="文件/图片链接基础URL，不设置则使用相对路径")
 
-    # 极光推送（好力 GO 等移动端锁屏通知）
+    # 极光推送（好力 GO 等移动端锁屏通知；PUSH_PROVIDER=jpush 时使用）
     JPUSH_APP_KEY: str = Field(default="", description="极光 AppKey（客户端）")
     JPUSH_MASTER_SECRET: str = Field(default="", description="极光 Master Secret（仅服务端）")
-    PUSH_ENABLED: bool = Field(default=True, description="是否启用极光推送（需配置 AppKey 与 Master Secret）")
+    PUSH_ENABLED: bool = Field(default=True, description="是否启用移动端推送")
+    PUSH_PROVIDER: str = Field(
+        default="fcm",
+        description="推送通道：fcm（默认）| jpush",
+    )
+    FCM_PROJECT_ID: str = Field(
+        default="",
+        description="Firebase 项目 ID；留空则从 FCM_SERVICE_ACCOUNT_JSON 读取",
+    )
+    FCM_SERVICE_ACCOUNT_JSON: str = Field(
+        default="",
+        description="FCM 服务账号 JSON 文件路径或内联 JSON 字符串",
+    )
 
     @property
     def BASE_URL(self) -> str:

@@ -58,6 +58,7 @@ class HaoligoMold(HaoligoTenantModel):
     )
     allow_repeated_borrow = fields.BooleanField(default=True, description="允许重复领用")
     purchase_vendor_name = fields.CharField(max_length=200, null=True, description="购买厂商")
+    factory_entry_at = fields.DateField(null=True, description="入厂时间")
     status = fields.CharField(
         max_length=32,
         default="待用",

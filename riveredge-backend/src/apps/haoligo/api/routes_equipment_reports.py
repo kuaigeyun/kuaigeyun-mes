@@ -22,6 +22,7 @@ from apps.haoligo.api.routes_equipment_documents import (
     _parse_dt,
     _serialize_output_record,
 )
+from apps.haoligo.utils.equipment_output_qty import normalize_equipment_output_qty
 from apps.haoligo.models.equipment import HaoligoEquipment
 from apps.haoligo.models.equipment_operations import HaoligoEquipmentOutputRecord
 from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
@@ -243,8 +244,8 @@ async def _summary_for_qs(qs) -> "CapacitySummary":
         completed_total = Decimal("0")
     return CapacitySummary(
         record_count=record_count,
-        planned_qty_total=planned_total,
-        completed_qty_total=completed_total,
+        planned_qty_total=normalize_equipment_output_qty(planned_total),
+        completed_qty_total=normalize_equipment_output_qty(completed_total, required=True),
         achievement_rate_pct=_achievement_rate_pct(planned_total, completed_total),
     )
 
@@ -337,8 +338,8 @@ async def capacity_report(
                     equipment_asset_code=eq.asset_code if eq else "",
                     equipment_name=eq.name if eq else "",
                     record_count=int(r.get("record_count") or 0),
-                    planned_qty_total=planned,
-                    completed_qty_total=completed,
+                    planned_qty_total=normalize_equipment_output_qty(planned),
+                    completed_qty_total=normalize_equipment_output_qty(completed, required=True),
                     achievement_rate_pct=_achievement_rate_pct(planned, completed),
                 )
             )

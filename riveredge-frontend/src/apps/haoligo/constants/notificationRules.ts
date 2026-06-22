@@ -88,6 +88,16 @@ export const HAOLIGO_NOTIFICATION_DOCUMENT_OPTIONS = [
 
   {
 
+    value: 'haoligo_equipment_output_record',
+
+    labelKey: 'app.haoligo.settings.notifications.document.equipment_output_record',
+
+    fallback: '设备产出单',
+
+  },
+
+  {
+
     value: 'haoligo_patrol_issue_register',
 
     labelKey: 'app.haoligo.settings.notifications.document.patrol_issue_register',
@@ -407,6 +417,20 @@ export const HAOLIGO_NOTIFICATION_ACTION_OPTIONS: Record<
       labelKey: 'app.haoligo.settings.notifications.action.equipment_upkeep_complete.created',
 
       fallback: '创建',
+
+    },
+
+  ],
+
+  haoligo_equipment_output_record: [
+
+    {
+
+      value: 'created',
+
+      labelKey: 'app.haoligo.settings.notifications.action.equipment_output_record.created',
+
+      fallback: '保存',
 
     },
 

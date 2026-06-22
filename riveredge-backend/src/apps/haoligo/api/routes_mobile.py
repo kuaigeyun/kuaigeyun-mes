@@ -78,6 +78,59 @@ class MobileReleaseCheckOut(BaseModel):
     ota: MobileReleaseOtaOut | None = None
 
 
+class MobilePushDeviceRegisterIn(BaseModel):
+    token: str = Field(min_length=1, max_length=512, description="FCM 原生 token")
+    platform: str = Field(default="android", description="android | ios")
+    device_id: str | None = Field(default=None, max_length=128, description="客户端稳定设备标识")
+    provider: str = Field(default="fcm", description="推送通道，默认 fcm")
+
+
+class MobilePushDeviceRegisterOut(BaseModel):
+    registered: bool = True
+
+
+class MobilePushDeviceUnregisterIn(BaseModel):
+    token: str = Field(min_length=1, max_length=512, description="要注销的 FCM token")
+
+
+@router.post(
+    "/push-devices/register",
+    response_model=MobilePushDeviceRegisterOut,
+    summary="注册 FCM 推送 token",
+)
+async def register_mobile_push_device(
+    body: MobilePushDeviceRegisterIn,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> MobilePushDeviceRegisterOut:
+    from core.services.messaging.mobile_push_device_service import register_mobile_push_device as register_svc
+
+    await register_svc(
+        tenant_id=tenant_id,
+        user_id=user.id,
+        token=body.token,
+        platform=body.platform,
+        provider=body.provider,
+        device_id=body.device_id,
+    )
+    return MobilePushDeviceRegisterOut()
+
+
+@router.post(
+    "/push-devices/unregister",
+    summary="注销 FCM 推送 token",
+)
+async def unregister_mobile_push_device(
+    body: MobilePushDeviceUnregisterIn,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, bool]:
+    from core.services.messaging.mobile_push_device_service import unregister_mobile_push_device as unregister_svc
+
+    await unregister_svc(tenant_id=tenant_id, user_id=user.id, token=body.token)
+    return {"ok": True}
+
+
 @router.get("/release/check", response_model=MobileReleaseCheckOut, summary="移动端版本检查（公开）")
 async def check_mobile_release(
     request: Request,

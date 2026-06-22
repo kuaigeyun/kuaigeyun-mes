@@ -120,7 +120,7 @@ class ClientPushTestIn(BaseModel):
     user_id: int = Field(gt=0, description="用户 ID（与手机登录账号一致）")
     registration_id: str | None = Field(
         default=None,
-        description="可选：直接向 RegistrationID 推送，用于绕过 alias 排查 SDK 是否可达",
+        description="可选：极光 RegistrationID 或 FCM token，用于绕过 alias/用户 token 列表排查",
     )
 
 
@@ -245,21 +245,22 @@ async def list_push_test_users(
 @router.post(
     "/products/{client_key}/push-test",
     response_model=ClientPushTestOut,
-    summary="发送极光测试推送（超管）",
+    summary="发送推送测试（超管，按 PUSH_PROVIDER）",
 )
 async def send_client_push_test(
     client_key: str,
     body: ClientPushTestIn,
     _admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
 ) -> ClientPushTestOut:
-    from core.services.messaging.push_dispatch_service import send_jpush_test_notification
+    from core.services.messaging.push_dispatch_service import send_push_test_notification
 
     await _ensure_push_configurable_client(client_key)
-    result = await send_jpush_test_notification(
+    result = await send_push_test_notification(
         tenant_id=body.tenant_id,
         user_id=body.user_id,
         client_key=client_key,
         registration_id=body.registration_id,
+        fcm_token=body.registration_id,
     )
     return ClientPushTestOut.model_validate(result)
 

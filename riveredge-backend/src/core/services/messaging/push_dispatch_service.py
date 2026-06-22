@@ -4,28 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import re
 from typing import Any
 
 import httpx
 from loguru import logger
 
 from core.config.client_product_registry import CLIENT_KEY_HAOLIGO
+from core.services.messaging.push_payload import build_push_extras, plain_text
 from infra.config.infra_config import infra_settings
 
 _JPUSH_PUSH_URL = "https://api.jpush.cn/v3/push"
-_TAG_RE = re.compile(r"<[^>]+>")
 
 
 def build_jpush_alias(*, tenant_id: int, user_id: int) -> str:
     return f"{tenant_id}_{user_id}"
-
-
-def _plain_text(raw: str, *, limit: int = 120) -> str:
-    text = _TAG_RE.sub("", raw or "").replace("\n", " ").strip()
-    if len(text) <= limit:
-        return text
-    return f"{text[: limit - 1]}…"
 
 
 def _auth_header_from_credentials(app_key: str, master_secret: str) -> str:
@@ -47,58 +39,6 @@ async def push_enabled_for_client(client_key: str = CLIENT_KEY_HAOLIGO) -> bool:
     if not infra_settings.PUSH_ENABLED:
         return False
     return (await resolve_jpush_credentials(client_key)) is not None
-
-
-_PUSH_EXTRA_KEYS = (
-    "trigger_document",
-    "trigger_action",
-    "detail_path",
-    "sheet_no",
-    "trial_sheet_id",
-    "mold_maintenance_sheet_id",
-    "mold_maintenance_complete_sheet_id",
-    "outsource_maintenance_sheet_id",
-    "outsource_complete_sheet_id",
-    "equipment_upkeep_sheet_id",
-    "equipment_upkeep_complete_sheet_id",
-    "spot_check_id",
-    "route_patrol_id",
-    "hazard_id",
-    "service_type",
-)
-
-
-def _resolve_route_kind(*, subject: str, variables: dict[str, Any] | None) -> str:
-    action = str((variables or {}).get("trigger_action") or "").strip().lower()
-    if action in {"submitted"}:
-        return "approval"
-    subj = (subject or "").strip()
-    if "待审" in subj or "待审核" in subj:
-        return "approval"
-    return "message"
-
-
-def _build_push_extras(
-    *,
-    tenant_id: int,
-    message_log_uuid: str,
-    subject: str,
-    variables: dict[str, Any] | None,
-) -> dict[str, str]:
-    extras: dict[str, str] = {
-        "message_uuid": message_log_uuid,
-        "tenant_id": str(tenant_id),
-        "route_kind": _resolve_route_kind(subject=subject, variables=variables),
-    }
-    for key, value in (variables or {}).items():
-        if value is None:
-            continue
-        text = str(value).strip()
-        if not text:
-            continue
-        if key in _PUSH_EXTRA_KEYS or key.endswith("_id"):
-            extras[key] = text
-    return extras
 
 
 def _interpret_jpush_test_result(*, http_status: int, body: str, alias: str) -> str | None:
@@ -239,8 +179,8 @@ async def push_internal_message_to_user(
 
     alias = build_jpush_alias(tenant_id=tenant_id, user_id=user_id)
     title = (subject or "新消息").strip() or "新消息"
-    body = _plain_text(content) or title
-    extras = _build_push_extras(
+    body = plain_text(content) or title
+    extras = build_push_extras(
         tenant_id=tenant_id,
         message_log_uuid=message_log_uuid,
         subject=title,
@@ -286,6 +226,10 @@ async def push_internal_message_to_user(
         logger.warning("极光推送异常 alias={}: {}", alias, exc)
 
 
+def _active_push_provider() -> str:
+    return (infra_settings.PUSH_PROVIDER or "fcm").strip().lower()
+
+
 def schedule_internal_message_push(
     *,
     tenant_id: int,
@@ -300,6 +244,25 @@ def schedule_internal_message_push(
         return
 
     async def _run() -> None:
+        provider = _active_push_provider()
+        if provider == "fcm":
+            from core.services.messaging.fcm_dispatch_service import (
+                fcm_push_enabled,
+                push_internal_message_to_user_fcm,
+            )
+
+            if not fcm_push_enabled():
+                return
+            await push_internal_message_to_user_fcm(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                subject=subject,
+                content=content,
+                message_log_uuid=message_log_uuid,
+                variables=variables,
+            )
+            return
+
         from core.services.client_product_config_service import push_enabled_for_client
 
         if not await push_enabled_for_client(CLIENT_KEY_HAOLIGO):
@@ -318,3 +281,38 @@ def schedule_internal_message_push(
         loop.create_task(_run())
     except RuntimeError:
         asyncio.run(_run())
+
+
+async def send_push_test_notification(
+    *,
+    tenant_id: int,
+    user_id: int,
+    client_key: str = CLIENT_KEY_HAOLIGO,
+    registration_id: str | None = None,
+    fcm_token: str | None = None,
+) -> dict[str, Any]:
+    """按当前 PUSH_PROVIDER 发送测试推送（FCM 或极光）。"""
+    provider = _active_push_provider()
+    if provider == "fcm":
+        from core.services.messaging.fcm_dispatch_service import send_fcm_test_notification
+
+        result = await send_fcm_test_notification(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            fcm_token=fcm_token or registration_id,
+        )
+        return {
+            **result,
+            "jpush_message": result.get("provider_message", ""),
+        }
+
+    result = await send_jpush_test_notification(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        client_key=client_key,
+        registration_id=registration_id,
+    )
+    return {
+        **result,
+        "provider_message": result.get("jpush_message", ""),
+    }

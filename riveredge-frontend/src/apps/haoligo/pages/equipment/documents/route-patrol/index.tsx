@@ -15,7 +15,7 @@ import {
   ProFormSelect,
   ProFormSwitch,
 } from '@ant-design/pro-components';
-import { App, Button, Card, Col, Empty, Flex, Input, Modal, Row, Space, Spin, Switch, Tag, Typography } from 'antd';
+import { App, Button, Card, Col, Empty, Flex, Input, Modal, Row, Space, Spin, Tag, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -44,6 +44,15 @@ import { MoldAttachmentImagePreview } from '../../../../components/MoldAttachmen
 import { SecurePictureCardUpload } from '../../../../components/SecurePictureCardUpload';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { useEquipmentOperationalStatusLabels } from '../../../../utils/equipmentOperationalStatus';
+import { ThemedSegmented } from '../../../../../../components/themed-segmented';
+import {
+  isRoutePatrolLineAbnormal,
+  normalizeRoutePatrolLineStatus,
+  patchRoutePatrolLineStatus,
+  ROUTE_PATROL_LINE_STATUS_NORMAL,
+  ROUTE_PATROL_LINE_STATUS_OPTIONS,
+  type RoutePatrolLineStatus,
+} from '../../../../constants/routePatrolLineStatus';
 
 type DraftLine = EquipmentRoutePatrolLineRow & { _draftKey: string };
 
@@ -55,7 +64,7 @@ function previewToDraft(pl: EquipmentRoutePatrolPreviewLine): DraftLine {
     asset_code: pl.asset_code,
     equipment_name: pl.equipment_name,
     sequence: pl.sequence,
-    is_normal: true,
+    line_status: ROUTE_PATROL_LINE_STATUS_NORMAL,
     abnormal_description: null,
     applied_operational_status: null,
     attachment_file_ids: null,
@@ -66,6 +75,7 @@ function normalizeLine(ln: EquipmentRoutePatrolLineRow): DraftLine {
   const ids = ln.attachment_file_ids;
   return {
     ...ln,
+    line_status: normalizeRoutePatrolLineStatus(ln.line_status),
     _draftKey: `${ln.equipment_id}::${ln.sequence}`,
     attachment_file_ids: Array.isArray(ids) ? ids : ids == null ? null : [],
   };
@@ -314,7 +324,7 @@ const RoutePatrolDocumentsPage: React.FC = () => {
       return false;
     }
     for (const ln of lines) {
-      if (!ln.is_normal && !(ln.abnormal_description || '').trim()) {
+      if (isRoutePatrolLineAbnormal(ln.line_status) && !(ln.abnormal_description || '').trim()) {
         messageApi.warning(
           t('app.haoligo.equipment.documents.routePatrolAbnormalDescRequired', {
             name: `${ln.asset_code} ${ln.equipment_name}`.trim(),
@@ -331,7 +341,7 @@ const RoutePatrolDocumentsPage: React.FC = () => {
       const draft = lines.find((d) => d._draftKey === `${serverLn.equipment_id}::${serverLn.sequence}`);
       return {
         id: serverLn.id,
-        is_normal: draft?.is_normal ?? serverLn.is_normal,
+        line_status: draft?.line_status ?? normalizeRoutePatrolLineStatus(serverLn.line_status),
         abnormal_description: draft?.abnormal_description ?? null,
         applied_operational_status: draft?.applied_operational_status ?? null,
         attachment_file_ids: draft?.attachment_file_ids?.length ? draft.attachment_file_ids : null,
@@ -365,7 +375,7 @@ const RoutePatrolDocumentsPage: React.FC = () => {
           ...headerPayload,
           lines: lines.map((ln) => ({
             id: ln.id,
-            is_normal: ln.is_normal,
+            line_status: ln.line_status,
             abnormal_description: ln.abnormal_description ?? null,
             applied_operational_status: ln.applied_operational_status ?? null,
             attachment_file_ids: ln.attachment_file_ids?.length ? ln.attachment_file_ids : null,
@@ -388,6 +398,24 @@ const RoutePatrolDocumentsPage: React.FC = () => {
       setFormLoading(false);
     }
   };
+
+  const patrolStatusSegmentOptions = useMemo(
+    () =>
+      ROUTE_PATROL_LINE_STATUS_OPTIONS.map((opt) => ({
+        value: opt.value,
+        label: t(opt.labelKey, { defaultValue: opt.fallback }),
+      })),
+    [t],
+  );
+
+  const formatPatrolLineStatus = useCallback(
+    (status: unknown) => {
+      const normalized = normalizeRoutePatrolLineStatus(status);
+      const hit = ROUTE_PATROL_LINE_STATUS_OPTIONS.find((opt) => opt.value === normalized);
+      return hit ? t(hit.labelKey, { defaultValue: hit.fallback }) : '—';
+    },
+    [t],
+  );
 
   const routeSummaryText =
     routeHint && lines.length > 0
@@ -527,46 +555,33 @@ const RoutePatrolDocumentsPage: React.FC = () => {
                   <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                     {lines.map((row, idx) => (
                       <Card key={row._draftKey} size="small" type="inner">
-                        <Flex justify="space-between" align="flex-start" wrap="wrap" gap={8}>
-                          <div>
-                            <Typography.Text strong>
-                              {row.sequence}. {row.asset_code} {row.equipment_name}
+                        <Typography.Text strong>
+                          {row.sequence}. {row.asset_code} {row.equipment_name}
+                        </Typography.Text>
+                        <Row gutter={[16, 12]} style={{ marginTop: 8 }}>
+                          <Col xs={24} md={12}>
+                            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                              {t('app.haoligo.equipment.documents.colIsNormal')}
                             </Typography.Text>
-                            <div style={{ marginTop: 8 }}>
-                              <Space>
-                                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                                  {t('app.haoligo.equipment.documents.colIsNormal')}:
-                                </Typography.Text>
-                                {detailMode ? (
-                                  <Typography.Text>
-                                    {row.is_normal
-                                      ? t('app.haoligo.equipment.documents.resultNormal')
-                                      : t('app.haoligo.equipment.documents.resultAbnormal')}
-                                  </Typography.Text>
-                                ) : (
-                                  <Switch
-                                    checked={row.is_normal}
-                                    checkedChildren={t('app.haoligo.equipment.documents.resultNormal')}
-                                    unCheckedChildren={t('app.haoligo.equipment.documents.resultAbnormal')}
-                                    onChange={(checked) => {
-                                      setLines((prev) =>
-                                        prev.map((x, i) =>
-                                          i === idx
-                                            ? {
-                                                ...x,
-                                                is_normal: checked,
-                                                abnormal_description: checked ? null : x.abnormal_description,
-                                              }
-                                            : x,
-                                        ),
-                                      );
-                                    }}
-                                  />
-                                )}
-                              </Space>
-                            </div>
-                          </div>
-                          <div style={{ minWidth: 200, flex: 1, maxWidth: 280 }}>
+                            {detailMode ? (
+                              <Typography.Text>{formatPatrolLineStatus(row.line_status)}</Typography.Text>
+                            ) : (
+                              <ThemedSegmented<RoutePatrolLineStatus>
+                                block
+                                className="form-field-segmented haoligo-route-patrol-line-status-segmented"
+                                value={normalizeRoutePatrolLineStatus(row.line_status)}
+                                options={patrolStatusSegmentOptions}
+                                onChange={(next) => {
+                                  setLines((prev) =>
+                                    prev.map((x, i) =>
+                                      i === idx ? patchRoutePatrolLineStatus(x, next) : x,
+                                    ),
+                                  );
+                                }}
+                              />
+                            )}
+                          </Col>
+                          <Col xs={24} md={12}>
                             <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
                               {t('app.haoligo.equipment.documents.formAppliedOperationalStatus')}
                             </Typography.Text>
@@ -591,9 +606,9 @@ const RoutePatrolDocumentsPage: React.FC = () => {
                                 }}
                               />
                             )}
-                          </div>
-                        </Flex>
-                        {!row.is_normal ? (
+                          </Col>
+                        </Row>
+                        {isRoutePatrolLineAbnormal(row.line_status) ? (
                           <div style={{ marginTop: 8 }}>
                             <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
                               {t('app.haoligo.equipment.documents.colAbnormal')}
@@ -614,38 +629,40 @@ const RoutePatrolDocumentsPage: React.FC = () => {
                             )}
                           </div>
                         ) : null}
-                        <div style={{ marginTop: 8 }}>
-                          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                            {t('app.haoligo.equipment.documents.colLinePhotos')}
-                          </Typography.Text>
-                          {detailMode ? (
-                            <MoldAttachmentImagePreview uuids={row.attachment_file_ids ?? undefined} />
-                          ) : (
-                            <SecurePictureCardUpload
-                              className="haoligo-route-patrol-line-upload"
-                              uuids={row.attachment_file_ids ?? undefined}
-                              accept=".jpg,.jpeg,.png,.gif,.webp"
-                              onUuidsChange={(uuids) => {
-                                setLines((prev) =>
-                                  prev.map((x, i) =>
-                                    i === idx ? { ...x, attachment_file_ids: uuids.length ? uuids : null } : x,
-                                  ),
-                                );
-                              }}
-                              customRequest={async (options) => {
-                                try {
-                                  const file = options.file as File;
-                                  const res: FileUploadResponse = await uploadFile(file, {
-                                    category: 'haoligo_equipment_route_patrol',
-                                  });
-                                  options.onSuccess?.(res, options.file);
-                                } catch (e) {
-                                  options.onError?.(e instanceof Error ? e : new Error(String(e)));
-                                }
-                              }}
-                            />
-                          )}
-                        </div>
+                        {isRoutePatrolLineAbnormal(row.line_status) ? (
+                          <div style={{ marginTop: 8 }}>
+                            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                              {t('app.haoligo.equipment.documents.colLinePhotos')}
+                            </Typography.Text>
+                            {detailMode ? (
+                              <MoldAttachmentImagePreview uuids={row.attachment_file_ids ?? undefined} />
+                            ) : (
+                              <SecurePictureCardUpload
+                                className="haoligo-route-patrol-line-upload"
+                                uuids={row.attachment_file_ids ?? undefined}
+                                accept=".jpg,.jpeg,.png,.gif,.webp"
+                                onUuidsChange={(uuids) => {
+                                  setLines((prev) =>
+                                    prev.map((x, i) =>
+                                      i === idx ? { ...x, attachment_file_ids: uuids.length ? uuids : null } : x,
+                                    ),
+                                  );
+                                }}
+                                customRequest={async (options) => {
+                                  try {
+                                    const file = options.file as File;
+                                    const res: FileUploadResponse = await uploadFile(file, {
+                                      category: 'haoligo_equipment_route_patrol',
+                                    });
+                                    options.onSuccess?.(res, options.file);
+                                  } catch (e) {
+                                    options.onError?.(e instanceof Error ? e : new Error(String(e)));
+                                  }
+                                }}
+                              />
+                            )}
+                          </div>
+                        ) : null}
                       </Card>
                     ))}
                   </Space>

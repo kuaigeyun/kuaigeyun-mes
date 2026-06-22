@@ -207,6 +207,7 @@ TORTOISE_ORM = {
                 "core.models.message_config",
                 "core.models.message_template",
                 "core.models.message_log",
+                "core.models.mobile_push_device",
                 "core.models.scheduled_task",
                 "core.models.approval_process",
                 "core.models.audit_document_binding",

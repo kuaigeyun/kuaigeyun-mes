@@ -20,7 +20,7 @@ import {
 } from '@ant-design/pro-components';
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { UploadProps } from 'antd';
-import { App, Alert, Button, Col, Divider, Form, Input, Modal, Row, Space, Spin, Table, Tooltip, Typography, Upload, theme } from 'antd';
+import { App, Alert, Button, Col, Divider, Form, Input, Modal, Row, Space, Spin, Table, Tag, Tooltip, Typography, Upload, theme } from 'antd';
 import { CopyOutlined, DeleteOutlined, EditOutlined, EyeOutlined, ToolOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
 import {
@@ -49,6 +49,10 @@ import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortcut';
 import { uploadFile } from '../../../../../../services/file';
 import { MoldAttachmentImagePreview } from '../../../../components/MoldAttachmentImagePreview';
+import {
+  MOLD_REPAIR_URGENCY_DEFAULT,
+  moldRepairUrgencyOptions,
+} from '../../../../constants/moldRepairUrgency';
 import { uuidsToSecureUploadFileList } from '../../../../utils/secureUploadFileList';
 import { UniUserIdSelect, type UniUserIdSelectPreset } from '../../../../../../components/uni-user-id-select';
 import { useApplicantUserIdField } from '../../../../hooks/useApplicantUserIdField';
@@ -363,6 +367,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
           outsourced_unit_code: undefined,
           ...applicantDefaults,
           source_order_no: undefined,
+          urgency_level: MOLD_REPAIR_URGENCY_DEFAULT,
           submitted_notify_user_ids: [...outsSubmittedNotifyDefaults],
           line_items: [defaultLineItem()],
         });
@@ -401,10 +406,12 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
             : null,
         );
         const initDept = resolveInitDepartmentUuid(d.applicant_user_id, d.department_uuid);
-        const byIndex = (d.line_items || []).map((it) => [...(it.attachment_file_uuids || [])]);
+        const rawLineItems = d.line_items || [];
+        const formLineItems = detailOnly ? rawLineItems : rawLineItems.slice(0, 1);
+        const byIndex = formLineItems.map((it) => [...(it.attachment_file_uuids || [])]);
         setDetailAttachmentPreview(detailOnly ? { byIndex } : null);
         const line_items = detailOnly
-          ? (d.line_items || []).map((it) => ({
+          ? formLineItems.map((it) => ({
               mold_code: it.mold_code,
               mold_name: it.mold_name ?? '',
               mold_warehouse_name: formatMoldWarehouseLabel(it.mold_warehouse_name, it.mold_warehouse_code),
@@ -414,7 +421,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
               item_attachments: [] as UploadFile[],
             }))
           : await Promise.all(
-              (d.line_items || []).map(async (it) => ({
+              formLineItems.map(async (it) => ({
                 mold_code: it.mold_code,
                 mold_name: it.mold_name ?? '',
                 mold_warehouse_name: formatMoldWarehouseLabel(it.mold_warehouse_name, it.mold_warehouse_code),
@@ -430,6 +437,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
           applicant_user_id: d.applicant_user_id ?? undefined,
           department_uuid: initDept,
           source_order_no: d.source_order_no ?? undefined,
+          urgency_level: d.urgency_level ?? MOLD_REPAIR_URGENCY_DEFAULT,
           submitted_notify_user_ids:
             d.submitted_notify_user_ids?.length ? d.submitted_notify_user_ids : [...outsSubmittedNotifyDefaults],
           line_items,
@@ -515,7 +523,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
     applicantUserId: number,
   ): MoldOutsourceMaintenanceSheetCreatePayload => {
     const rawLines = values.line_items;
-    const lines = Array.isArray(rawLines) ? rawLines : [];
+    const lines = (Array.isArray(rawLines) ? rawLines : []).slice(0, 1);
     const line_items = lines.map((row) => {
       const r = row as Record<string, unknown>;
       const costRaw = r.repair_cost;
@@ -542,6 +550,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
       source_order_no: String(values.source_order_no ?? '').trim() || null,
       header_attachment_file_uuids: [],
       submitted_notify_user_ids: submittedNotifyIds,
+      urgency_level: String(values.urgency_level ?? MOLD_REPAIR_URGENCY_DEFAULT).trim() || MOLD_REPAIR_URGENCY_DEFAULT,
       line_items,
     };
   };
@@ -618,6 +627,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
       outsourced_unit_code: undefined,
       ...getCreateApplicantDefaults(),
       source_order_no: undefined,
+      urgency_level: MOLD_REPAIR_URGENCY_DEFAULT,
       submitted_notify_user_ids: [...outsSubmittedNotifyDefaults],
       line_items: [defaultLineItem()],
     });
@@ -664,6 +674,15 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
     { title: '申请部门', dataIndex: 'department_name', width: 160, ellipsis: true },
     { title: '申请人', dataIndex: 'applicant_name', width: 100, ellipsis: true, hideInSearch: true },
     { title: '来源单号', dataIndex: 'source_order_no', width: 140, ellipsis: true, copyable: true },
+    {
+      title: '紧急程度',
+      dataIndex: 'urgency_level',
+      width: 100,
+      hideInSearch: true,
+      render: (_: unknown, r: MoldOutsourceMaintenanceSheetRow) => (
+        <Tag color={r.urgency_level === '紧急' ? 'red' : 'default'}>{r.urgency_level ?? '一般'}</Tag>
+      ),
+    },
     {
       title: '首件模具',
       dataIndex: 'primary_mold_code',
@@ -910,9 +929,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
                 padding: 24,
               }}
             >
-              <Spin tip="加载选项中…">
-                <div style={{ minHeight: 24 }} />
-              </Spin>
+              <Spin tip="加载选项中…" />
             </div>
           ) : (
             <ProForm
@@ -982,6 +999,18 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
               <Col span={12}>
                 <ProFormText name="source_order_no" label="来源单号" placeholder="可手输来源单号" />
               </Col>
+              <Col span={12}>
+                <ProFormSelect
+                  name="urgency_level"
+                  label="紧急程度"
+                  initialValue={MOLD_REPAIR_URGENCY_DEFAULT}
+                  rules={[{ required: true, message: '请选择紧急程度' }]}
+                  options={moldRepairUrgencyOptions()}
+                  fieldProps={{ style: { width: '100%' } }}
+                />
+              </Col>
+            </Row>
+            <Row gutter={16}>
               <FormNotifyUsersSelect
                 inline
                 colSpan={12}
@@ -1000,48 +1029,18 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
             <ProFormList
               name="line_items"
               min={1}
+              max={1}
               copyIconProps={false}
-              creatorButtonProps={isDetailView ? false : { creatorButtonText: '添加模具' }}
-              itemRender={({ listDom, action }) => (
-                <div style={{ position: 'relative', marginBottom: 16 }}>
-                  {listDom}
-                  {action ? (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: 8,
-                        right: 8,
-                        zIndex: 2,
-                        lineHeight: 1,
-                      }}
-                    >
-                      {action}
-                    </div>
-                  ) : null}
-                </div>
-              )}
-              actionRender={(field, action, _defaultActionDom, count) => {
-                if (isDetailView || count <= 1) return [];
-                return [
-                  <Tooltip {...rowActionKind('delete')} key="remove" title="删除">
-                    <Button
-                      type="text"
-                      danger
-                      size="small"
-                      icon={<DeleteOutlined />}
-                      onClick={() => action.remove(field.name)}
-                    />
-                  </Tooltip>,
-                ];
-              }}
+              creatorButtonProps={false}
+              itemRender={({ listDom }) => <div style={{ marginBottom: 16 }}>{listDom}</div>}
+              actionRender={() => []}
             >
               {(meta, index) => (
                 <div
                   key={meta.key}
                   style={{
-                    position: 'relative',
                     marginBottom: 12,
-                    padding: '10px 40px 4px 12px',
+                    padding: '10px 12px 4px',
                     background: '#fafafa',
                     border: '1px solid #f0f0f0',
                     borderRadius: 6,

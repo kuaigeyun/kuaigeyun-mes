@@ -25,6 +25,7 @@ import { App, Button, Col, Divider, Input, Modal, Row, Space, Spin, Table, Toolt
 import { DeleteOutlined, EditOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons';
 import HaoligoDocumentPrintModal from '../../../../components/HaoligoDocumentPrintModal';
 import { UniTable } from '../../../../../../components/uni-table';
+import { UniTableStackedPrimaryCell } from '../../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
@@ -67,6 +68,7 @@ import {
 import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
 import { canPrintHaoligoDocument } from '../../../../utils/documentPrintPermission';
 import { invalidateHaoligoMoldLedgerTableCache } from '../../../../utils/moldLedgerTableCache';
+import { resolvePrimaryMoldStacked } from '../../../../utils/moldPicker';
 import {
   canAuditMoldSheet,
   isMoldSheetApproved,
@@ -906,7 +908,19 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
         return parts.length ? parts.join('；') : '—';
       },
     },
-    { title: '首件模具', dataIndex: 'primary_mold_code', width: 120, ellipsis: true, hideInSearch: true },
+    {
+      title: '首件模具',
+      dataIndex: 'primary_mold_code',
+      minWidth: 168,
+      width: 168,
+      resizable: false,
+      ellipsis: false,
+      hideInSearch: true,
+      render: (_, r) => {
+        const { name, code } = resolvePrimaryMoldStacked(r);
+        return <UniTableStackedPrimaryCell primary={name} secondary={code} />;
+      },
+    },
     {
       title: '所在仓库',
       dataIndex: 'primary_mold_warehouse_name',
@@ -1111,9 +1125,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
                 padding: 24,
               }}
             >
-              <Spin tip="加载选项中…">
-                <div style={{ minHeight: 24 }} />
-              </Spin>
+              <Spin tip="加载选项中…" />
             </div>
           ) : (
             <ProForm

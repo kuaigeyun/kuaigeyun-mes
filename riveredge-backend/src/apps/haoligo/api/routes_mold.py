@@ -1,7 +1,7 @@
 """好力 GO — 模具主数据 API。"""
 
 import asyncio
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Annotated, Any, List, Literal, Optional
 from uuid import UUID
@@ -128,6 +128,7 @@ class MoldOut(BaseModel):
     maintenance_cycle_by_yield: Optional[Decimal] = None
     allow_repeated_borrow: bool = True
     purchase_vendor_name: Optional[str] = None
+    factory_entry_at: Optional[date] = None
     status: str
     total_manufacture_qty: Decimal
     outsource_vendor_code: Optional[str] = None
@@ -155,6 +156,7 @@ class MoldCreate(BaseModel):
     maintenance_cycle_by_yield: Optional[Decimal] = None
     allow_repeated_borrow: bool = True
     purchase_vendor_name: Optional[str] = Field(None, max_length=200)
+    factory_entry_at: Optional[date] = None
     status: str = Field(default="待用", max_length=32)
     total_manufacture_qty: Decimal = Field(default=Decimal("0"))
     outsource_vendor_code: Optional[str] = Field(None, max_length=64)
@@ -193,6 +195,7 @@ class MoldUpdate(BaseModel):
     maintenance_cycle_by_yield: Optional[Decimal] = None
     allow_repeated_borrow: Optional[bool] = None
     purchase_vendor_name: Optional[str] = Field(None, max_length=200)
+    factory_entry_at: Optional[date] = None
     status: Optional[str] = Field(None, max_length=32)
     total_manufacture_qty: Optional[Decimal] = None
     outsource_vendor_code: Optional[str] = Field(None, max_length=64)
@@ -358,6 +361,7 @@ class MoldLedgerDatasetBindingOut(BaseModel):
     mold_name_column: Optional[str] = None
     unit_column: Optional[str] = None
     mold_capacity_column: Optional[str] = None
+    factory_entry_at_column: Optional[str] = None
 
 
 class MoldLedgerDatasetBindingUpsert(BaseModel):
@@ -366,6 +370,7 @@ class MoldLedgerDatasetBindingUpsert(BaseModel):
     mold_name_column: Optional[str] = None
     unit_column: Optional[str] = None
     mold_capacity_column: Optional[str] = None
+    factory_entry_at_column: Optional[str] = None
 
 
 class MoldLedgerSyncOut(BaseModel):
@@ -387,6 +392,7 @@ def _serialize_ledger_binding(row: Optional[HaoligoMoldLedgerDatasetBinding]) ->
         mold_name_column=row.mold_name_column,
         unit_column=row.unit_column,
         mold_capacity_column=row.mold_capacity_column,
+        factory_entry_at_column=row.factory_entry_at_column,
     )
 
 
@@ -405,6 +411,27 @@ def _decimal_from_dataset_cell(val) -> Decimal:
         return Decimal(s.replace(",", ""))
     except Exception:
         return Decimal("0")
+
+
+def _date_from_dataset_cell(val) -> Optional[date]:
+    """将数据集单元格解析为入厂日期（无法解析时返回 None）。"""
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val.date()
+    if isinstance(val, date):
+        return val
+    s = str(val).strip()
+    if not s:
+        return None
+    try:
+        if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+            return date.fromisoformat(s[:10])
+        if "T" in s or " " in s:
+            return datetime.fromisoformat(s.replace("Z", "+00:00")).date()
+        return date.fromisoformat(s[:10])
+    except (ValueError, TypeError):
+        return None
 
 
 @router.get("/ledger/dataset-binding", response_model=MoldLedgerDatasetBindingOut, summary="模具台账关联数据集配置")
@@ -433,6 +460,7 @@ async def put_mold_ledger_dataset_binding(
     mn = (body.mold_name_column or "").strip()
     uc = (body.unit_column or "").strip()
     cap_c = (body.mold_capacity_column or "").strip() or None
+    entry_c = (body.factory_entry_at_column or "").strip() or None
     if not all([mc, mn, uc]):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -447,11 +475,12 @@ async def put_mold_ledger_dataset_binding(
         mold_name_column=mn,
         unit_column=uc,
         mold_capacity_column=cap_c,
+        factory_entry_at_column=entry_c,
     )
     return _serialize_ledger_binding(row)
 
 
-@router.post("/ledger/sync-from-dataset", response_model=MoldLedgerSyncOut, summary="从绑定数据集同步模具代号/名称/单位/单模产能")
+@router.post("/ledger/sync-from-dataset", response_model=MoldLedgerSyncOut, summary="从绑定数据集同步模具代号/名称/单位/单模产能/入厂时间")
 async def sync_mold_ledger_from_dataset(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
@@ -467,6 +496,7 @@ async def sync_mold_ledger_from_dataset(
     mn = (binding.mold_name_column or "").strip()
     uc = (binding.unit_column or "").strip()
     cap_c = (binding.mold_capacity_column or "").strip()
+    entry_c = (binding.factory_entry_at_column or "").strip()
     if not all([mc, mn, uc]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -509,6 +539,7 @@ async def sync_mold_ledger_from_dataset(
         name = str(row.get(mn) or "").strip() or mold_code
         unit = str(row.get(uc) or "").strip()
         cap_for_row = _decimal_from_dataset_cell(row.get(cap_c)) if cap_c else Decimal("0")
+        entry_for_row = _date_from_dataset_cell(row.get(entry_c)) if entry_c else None
 
         existing = await tenant_alive(HaoligoMold, tenant_id).filter(mold_code=mold_code).first()
         if existing:
@@ -516,6 +547,8 @@ async def sync_mold_ledger_from_dataset(
             existing.unit = unit
             if cap_c:
                 existing.mold_capacity = cap_for_row
+            if entry_c:
+                existing.factory_entry_at = entry_for_row
             # 数据集同步：刷新业务字段；来源为「手工创建」的不改写（本系统新增）
             if existing.ledger_source != MOLD_LEDGER_SOURCE_MANUAL:
                 existing.ledger_source = MOLD_LEDGER_SOURCE_SYNC
@@ -535,6 +568,7 @@ async def sync_mold_ledger_from_dataset(
                 maintenance_cycle_by_yield=None,
                 allow_repeated_borrow=True,
                 purchase_vendor_name=None,
+                factory_entry_at=entry_for_row,
                 status="待用",
                 total_manufacture_qty=Decimal("0"),
                 outsource_vendor_code=None,
@@ -964,6 +998,7 @@ async def create_mold(
         maintenance_cycle_by_yield=body.maintenance_cycle_by_yield,
         allow_repeated_borrow=body.allow_repeated_borrow,
         purchase_vendor_name=((body.purchase_vendor_name or "").strip() or None),
+        factory_entry_at=body.factory_entry_at,
         status=body.status,
         total_manufacture_qty=body.total_manufacture_qty,
         outsource_vendor_code=body.outsource_vendor_code,
