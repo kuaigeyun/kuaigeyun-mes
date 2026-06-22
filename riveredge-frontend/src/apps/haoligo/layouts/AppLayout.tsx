@@ -8,7 +8,8 @@ const { Content } = Layout;
  * 好力 GO 内层布局：仅主内容区。
  * 模块切换走全局侧栏菜单（core 菜单），此处不再嵌套二级侧栏。
  * 外边距由 UniTabs 内容区统一提供（如左右 16px），此处不设 padding，避免双层留白。
- * 纵向滚动由 UniDashboard `.dashboard-main-scroll-col` 承担；须占满 RouteTransition 高度链。
+ * 工作台（UniDashboard）由 `.dashboard-main-scroll-col` 承担纵向滚动；
+ * 看板 / 报表等自然增高页面由下方 `haoligo-app-scroll` 承担，避免 Content overflow:hidden 裁切。
  */
 const HaoligoAppLayout: React.FC = () => {
   const { token } = theme.useToken();
@@ -34,7 +35,20 @@ const HaoligoAppLayout: React.FC = () => {
           overflow: 'hidden',
         }}
       >
-        <Outlet />
+        <div
+          className="haoligo-app-scroll"
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowX: 'hidden',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            width: '100%',
+          }}
+        >
+          <Outlet />
+        </div>
       </Content>
     </Layout>
   );

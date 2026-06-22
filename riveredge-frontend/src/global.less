@@ -2069,6 +2069,12 @@ code {
     max-height: none;
   }
 }
+/* 好力 GO：AppLayout 内滚动层；工作台 UniDashboard 仍限高，由 dashboard-main-scroll-col 滚动 */
+.haoligo-app-scroll > .uni-dashboard {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
 /* 勿对 min-height 使用 !important，否则会盖住 QuickEntryGrid 的 style.minHeight */
 .dashboard-bento-left-quick {
   display: flex;
