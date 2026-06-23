@@ -19,6 +19,8 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -458,6 +460,18 @@ const BOMPage: React.FC = () => {
   // 物料列表（用于下拉选择）
   const [materials, setMaterials] = useState<Material[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
+  const [mainMaterialScope, setMainMaterialScope] = useState<'make' | 'all'>('make');
+  const mainMaterialOptions = useMemo(
+    () =>
+      materials
+        .filter((m) => {
+          if (mainMaterialScope === 'all') return true;
+          const sourceType = String((m as any).sourceType ?? (m as any).source_type ?? '');
+          return sourceType === 'Make';
+        })
+        .map((m) => ({ label: formatMaterialLabel(m), value: m.id })),
+    [materials, mainMaterialScope],
+  );
   
   // 单位字典映射（value -> label）
   const [unitValueToLabel, setUnitValueToLabel] = useState<Record<string, string>>({});
@@ -507,6 +521,16 @@ const BOMPage: React.FC = () => {
     };
     loadMaterials();
   }, []);
+
+  useEffect(() => {
+    if (!(modalVisible && !isEdit)) return;
+    const currentId = Number(formRef.current?.getFieldValue('materialId'));
+    if (!currentId) return;
+    const existsInScope = mainMaterialOptions.some((opt) => Number(opt.value) === currentId);
+    if (!existsInScope) {
+      formRef.current?.setFieldValue('materialId', undefined);
+    }
+  }, [mainMaterialOptions, modalVisible, isEdit]);
 
   /**
    * 加载单位字典
@@ -1234,33 +1258,109 @@ const BOMPage: React.FC = () => {
   /**
    * 格式化物料显示文本（用于下拉选择器）
    */
-  const formatMaterialLabel = (material: Material): string => {
+  function formatMaterialLabel(material: Material): string {
     const code = material.code || material.mainCode || '';
     const spec = material.specification ? ` (${material.specification})` : '';
     return `${code} - ${material.name}${spec}`;
+  }
+
+  const getFormItems = (): Record<string, any>[] => {
+    const raw = formRef.current?.getFieldValue('items');
+    return Array.isArray(raw) ? raw : [];
+  };
+  const setItemField = (index: number, field: string, value: unknown) => {
+    formRef.current?.setFieldValue(['items', index, field], value);
   };
 
-  /**
-   * 子物料选择/更新时：根据物料 baseUnit 回填单位，表单存 value，表格展示用字典标签
-   * 使用回调的 componentId 更新，避免覆盖 Form 尚未写入的选项
-   */
-  const handleSubMaterialChange = (index: number, componentId: number | undefined) => {
-    const unit = componentId ? (materials.find(m => m.id === componentId)?.baseUnit ?? '') : '';
-    const items = formRef.current?.getFieldValue('items') ?? [];
-    const next = [...items];
-    if (next[index]) {
-      const patch: Record<string, unknown> = { unit };
-      if (componentId !== undefined) patch.componentId = componentId;
-      next[index] = { ...next[index], ...patch };
-      formRef.current?.setFieldsValue({ items: next });
+  const getAlternativeGroupOptions = (items: Record<string, any>[]) => {
+    const ids = Array.from(
+      new Set(
+        items
+          .map((item) => Number(item?.alternativeGroupId))
+          .filter((id) => Number.isFinite(id) && id > 0),
+      ),
+    ).sort((a, b) => a - b);
+    return ids.map((id) => ({
+      value: id,
+      label: `${t('app.master-data.bom.alternativeGroupLabelPrefix')} ${id}`,
+    }));
+  };
+
+  const getNextAlternativeGroupId = (items: Record<string, any>[]) => {
+    const used = new Set(
+      items
+        .map((item) => Number(item?.alternativeGroupId))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    );
+    let next = 1;
+    while (used.has(next)) next += 1;
+    return next;
+  };
+
+  const getNextPriorityInGroup = (
+    items: Record<string, any>[],
+    groupId: number,
+    excludeIndex?: number,
+  ) => {
+    const maxPriority = items.reduce((max, item, idx) => {
+      if (excludeIndex !== undefined && idx === excludeIndex) return max;
+      if (!item?.isAlternative || Number(item?.alternativeGroupId) !== groupId) return max;
+      const p = Number(item?.priority);
+      return Number.isFinite(p) ? Math.max(max, p) : max;
+    }, -1);
+    return maxPriority + 1;
+  };
+
+  const applyAlternativeGroupToRow = (
+    index: number,
+    groupId: number | undefined,
+    opts?: { keepPriority?: boolean },
+  ) => {
+    const items = getFormItems();
+    if (!items[index]) return;
+    const snapshot = [...items];
+    const previousPriority = Number(snapshot[index]?.priority);
+    const keepPriority =
+      !!opts?.keepPriority && Number.isFinite(previousPriority) && previousPriority >= 0;
+    const nextPriority = keepPriority
+      ? previousPriority
+      : (groupId ? getNextPriorityInGroup(snapshot, groupId, index) : 0);
+    setItemField(index, 'isAlternative', !!groupId);
+    setItemField(index, 'alternativeGroupId', groupId);
+    setItemField(index, 'priority', nextPriority);
+  };
+
+  const handleAlternativeToggle = (index: number, checked: boolean) => {
+    const items = getFormItems();
+    if (!items[index]) return;
+    if (!checked) {
+      setItemField(index, 'isAlternative', false);
+      setItemField(index, 'alternativeGroupId', undefined);
+      setItemField(index, 'priority', 0);
+      return;
     }
+    const currentGroupId = Number(items[index]?.alternativeGroupId);
+    if (Number.isFinite(currentGroupId) && currentGroupId > 0) {
+      applyAlternativeGroupToRow(index, currentGroupId, { keepPriority: true });
+      return;
+    }
+    const newGroupId = getNextAlternativeGroupId(items);
+    applyAlternativeGroupToRow(index, newGroupId);
+  };
+
+  const handleCreateAlternativeGroup = (index: number) => {
+    const items = getFormItems();
+    const newGroupId = getNextAlternativeGroupId(items);
+    applyAlternativeGroupToRow(index, newGroupId);
   };
 
   const appendBomItemsToForm = (incomingItems: Array<Record<string, unknown>>) => {
     if (!incomingItems.length) return;
     const existingItems = formRef.current?.getFieldValue('items');
     const normalizedExisting = Array.isArray(existingItems) ? existingItems : [];
-    formRef.current?.setFieldValue('items', [...normalizedExisting, ...incomingItems]);
+    formRef.current?.setFieldsValue({
+      items: [...normalizedExisting, ...incomingItems] as Record<string, any>[],
+    });
     void formRef.current?.validateFields(['items']).catch(() => undefined);
   };
 
@@ -3054,6 +3154,37 @@ const BOMPage: React.FC = () => {
           .bom-form-modal .bom-items-detail-table .ant-table-thead > tr > th .ant-table-column-title {
             white-space: nowrap !important;
           }
+          .bom-form-modal .bom-alternative-group-compact {
+            height: 24px !important;
+          }
+          .bom-form-modal .bom-alternative-group-compact .ant-space-compact-item {
+            height: 24px !important;
+            min-height: 24px !important;
+          }
+          .bom-form-modal .bom-alternative-group-compact .ant-select {
+            height: 24px !important;
+          }
+          .bom-form-modal .bom-alternative-group-compact .ant-select-single.ant-select-sm .ant-select-selector {
+            height: 24px !important;
+            min-height: 24px !important;
+            line-height: 22px !important;
+            display: flex;
+            align-items: center;
+          }
+          .bom-form-modal .bom-alternative-group-compact .ant-select-single.ant-select-sm .ant-select-selection-item,
+          .bom-form-modal .bom-alternative-group-compact .ant-select-single.ant-select-sm .ant-select-selection-placeholder {
+            line-height: 22px !important;
+          }
+          .bom-form-modal .bom-alternative-group-compact .bom-alternative-group-plus.ant-btn.ant-btn-sm {
+            height: 24px !important;
+            min-height: 24px !important;
+            line-height: 22px !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+          }
         `}</style>
         <ProForm.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.materialId !== currentValues.materialId || prevValues.version !== currentValues.version}>
           {({ getFieldValue }) => {
@@ -3083,10 +3214,24 @@ const BOMPage: React.FC = () => {
         </ProForm.Item>
         <SafeProFormSelect
           name="materialId"
-          label={t('app.master-data.bom.mainMaterialLabel')}
+          label={(
+            <Space size={10} align="center">
+              <span>{t('app.master-data.bom.mainMaterialLabel')}</span>
+              <ThemedSegmented
+                size="small"
+                value={mainMaterialScope}
+                onChange={(v) => setMainMaterialScope(v as 'make' | 'all')}
+                disabled={isEdit}
+                options={[
+                  { label: t('app.master-data.bom.mainMaterialScopeMake'), value: 'make' },
+                  { label: t('app.master-data.bom.mainMaterialScopeAll'), value: 'all' },
+                ]}
+              />
+            </Space>
+          )}
           placeholder={t('app.master-data.bom.mainMaterialPlaceholder')}
           colProps={{ span: 12 }}
-          options={materials.map(m => ({ label: formatMaterialLabel(m), value: m.id }))}
+          options={mainMaterialOptions}
           rules={[{ required: true, message: t('app.master-data.bom.mainMaterialRequired') }]}
           fieldProps={{
             disabled: isEdit,
@@ -3177,27 +3322,26 @@ const BOMPage: React.FC = () => {
                 dataIndex: 'componentId',
                 width: 210,
                 render: (_, __, index) => (
-                  <AntForm.Item
+                  <UniMaterialSelect
                     name={[index, 'componentId']}
-                    rules={[{ required: true, message: t('app.master-data.bom.childMaterialRequired') }]}
-                    style={{ margin: 0 }}
-                  >
-                    <Select
-                      placeholder={t('app.master-data.bom.childMaterialPlaceholder')}
-                      showSearch
-                      loading={materialsLoading}
-                      size="small"
-                      filterOption={(input, option) => {
-                        const label = (option?.label as string) || '';
-                        return label.toLowerCase().includes(input.toLowerCase());
-                      }}
-                      options={materials.map((m) => ({
-                        label: formatMaterialLabel(m),
-                        value: m.id,
-                      }))}
-                      onChange={(val) => handleSubMaterialChange(index, val)}
-                    />
-                  </AntForm.Item>
+                    label=""
+                    placeholder={t('app.master-data.bom.childMaterialPlaceholder')}
+                    required
+                    size="small"
+                    formItemProps={{ style: { margin: 0 } }}
+                    listFieldKey={index}
+                    listFieldName="items"
+                    showQuickCreate
+                    showAdvancedSearch
+                    fillMapping={{
+                      unit: 'baseUnit',
+                    }}
+                    onChange={(_val, material) => {
+                      const items = getFormItems();
+                      if (!items[index]) return;
+                      setItemField(index, 'unit', material?.baseUnit ?? '');
+                    }}
+                  />
                 ),
               },
               {
@@ -3298,37 +3442,68 @@ const BOMPage: React.FC = () => {
                     valuePropName="checked"
                     style={{ margin: 0 }}
                   >
-                    <Switch size="small" />
+                    <Switch
+                      size="small"
+                      onChange={(checked) => handleAlternativeToggle(index, checked)}
+                    />
                   </AntForm.Item>
                 ),
               },
               {
                 title: t('app.master-data.bom.alternativeGroupIdLabel'),
                 dataIndex: 'alternativeGroupId',
-                width: 118,
+                width: 170,
                 render: (_, __, index) => (
-                  <AntForm.Item
-                    name={[index, 'alternativeGroupId']}
-                    style={{ margin: 0 }}
-                    rules={[
-                      {
-                        validator: async (_, value) => {
-                          const items = formRef.current?.getFieldValue('items') || [];
-                          const item = items[index];
-                          if (item?.isAlternative && (value === undefined || value === null || value === '')) {
-                            throw new Error(t('app.master-data.bom.alternativeGroupIdRequired'));
-                          }
-                        },
-                      },
-                    ]}
-                  >
-                    <InputNumber
-                      placeholder={t('app.master-data.bom.alternativeGroupIdPlaceholder')}
-                      precision={0}
-                      size="small"
-                      style={{ width: '100%' }}
-                      min={0}
-                    />
+                  <AntForm.Item noStyle shouldUpdate>
+                    {() => {
+                      const items = getFormItems();
+                      const item = items[index] || {};
+                      const isAlternative = !!item?.isAlternative;
+                      const groupOptions = getAlternativeGroupOptions(items);
+                      return (
+                        <Space.Compact
+                          className="bom-alternative-group-compact"
+                          style={{ width: '100%', height: 24 }}
+                          block
+                        >
+                          <AntForm.Item
+                            noStyle
+                            name={[index, 'alternativeGroupId']}
+                            rules={[
+                              {
+                                validator: async (_, value) => {
+                                  const all = getFormItems();
+                                  const current = all[index];
+                                  if (
+                                    current?.isAlternative &&
+                                    (value === undefined || value === null || value === '')
+                                  ) {
+                                    throw new Error(t('app.master-data.bom.alternativeGroupIdRequired'));
+                                  }
+                                },
+                              },
+                            ]}
+                          >
+                            <Select
+                              size="small"
+                              style={{ width: '100%' }}
+                              disabled={!isAlternative}
+                              placeholder={t('app.master-data.bom.alternativeGroupIdPlaceholder')}
+                              options={groupOptions}
+                              onChange={(val) => applyAlternativeGroupToRow(index, Number(val))}
+                            />
+                          </AntForm.Item>
+                          <Button
+                            className="bom-alternative-group-plus"
+                            size="small"
+                            icon={<PlusOutlined />}
+                            title={t('app.master-data.bom.createAlternativeGroup')}
+                            disabled={!isAlternative}
+                            onClick={() => handleCreateAlternativeGroup(index)}
+                          />
+                        </Space.Compact>
+                      );
+                    }}
                   </AntForm.Item>
                 ),
               },

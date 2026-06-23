@@ -36,6 +36,18 @@ const LOCALE_BUNDLES: Record<string, Record<string, string>> = {
 };
 
 const FALLBACK_LANGUAGE: SupportedUiLanguage = UI_LANGUAGE_FALLBACK;
+const LANGUAGE_ALIASES: Record<string, SupportedUiLanguage> = {
+  zh: 'zh-CN',
+  'zh-cn': 'zh-CN',
+  en: 'en-US',
+  'en-us': 'en-US',
+  'zh-hant': 'zh-Hant',
+  'zh-tw': 'zh-Hant',
+  ja: 'ja-JP',
+  'ja-jp': 'ja-JP',
+  vi: 'vi-VN',
+  'vi-vn': 'vi-VN',
+};
 
 /** 最近一次云端租户默认语言（语言管理 is_default / 站点 default_language） */
 let tenantDefaultLanguage: SupportedUiLanguage | null = null;
@@ -126,6 +138,7 @@ export function resolveLanguageFromPreferences(
 
 let languageInitialized = false;
 let languageLoading = false;
+let latestLanguageApplyRequestId = 0;
 
 export function isLanguageInitialized(): boolean {
   return languageInitialized;
@@ -210,18 +223,27 @@ async function applyLanguage(
   languageCode: string,
   options?: { loadBackendTranslations?: boolean },
 ): Promise<void> {
-  await i18n.changeLanguage(languageCode);
+  const normalizedLanguage =
+    normalizeUiLanguage(languageCode) ??
+    LANGUAGE_ALIASES[languageCode.toLowerCase()] ??
+    languageCode;
+  const requestId = ++latestLanguageApplyRequestId;
+
+  await i18n.changeLanguage(normalizedLanguage);
 
   if (options?.loadBackendTranslations === false || !getToken()) return;
 
   try {
-    const response = await getTranslations(languageCode);
+    const response = await getTranslations(normalizedLanguage);
+    // 仅允许最后一次切换请求写入资源，避免异步回包覆盖最新语言状态
+    if (requestId !== latestLanguageApplyRequestId) return;
     if (response.translations) {
-      const merged = mergeTranslationsWithMenuPriority(response.translations, languageCode);
-      i18n.addResourceBundle(languageCode, 'translation', merged, true, true);
+      const merged = mergeTranslationsWithMenuPriority(response.translations, normalizedLanguage);
+      i18n.addResourceBundle(normalizedLanguage, 'translation', merged, true, true);
     }
   } catch (error) {
-    console.warn(`Failed to load translations from backend for ${languageCode}:`, error);
+    if (requestId !== latestLanguageApplyRequestId) return;
+    console.warn(`Failed to load translations from backend for ${normalizedLanguage}:`, error);
   }
 }
 
@@ -229,7 +251,11 @@ async function applyLanguage(
 export async function syncLanguageFromPreferences(
   preferences: Record<string, unknown> | null | undefined,
 ): Promise<void> {
-  const languageCode = resolveLanguageFromCloud(preferences, siteLanguageSettings, tenantDefaultLanguage);
+  const resolvedLanguage = resolveLanguageFromCloud(preferences, siteLanguageSettings, tenantDefaultLanguage);
+  const languageCode =
+    normalizeUiLanguage(resolvedLanguage) ??
+    LANGUAGE_ALIASES[resolvedLanguage.toLowerCase()] ??
+    resolvedLanguage;
   if (i18n.language === languageCode) {
     if (getToken() && !i18n.hasResourceBundle(languageCode, 'translation')) {
       await applyLanguage(languageCode);
@@ -311,9 +337,26 @@ export async function initLanguageFromApi(): Promise<void> {
 }
 
 export async function applyLanguageWithPersist(languageCode: string): Promise<void> {
-  await applyLanguage(languageCode);
+  const normalizedLanguage =
+    normalizeUiLanguage(languageCode) ??
+    LANGUAGE_ALIASES[languageCode.toLowerCase()] ??
+    languageCode;
+
+  // 先更新内存偏好，避免并发偏好写入时带回旧 language 造成“切换后又被切回”
+  const preferenceState = useUserPreferenceStore.getState();
+  const currentPrefs = preferenceState.preferences || {};
+  if (currentPrefs.language !== normalizedLanguage) {
+    useUserPreferenceStore.setState({
+      preferences: {
+        ...currentPrefs,
+        language: normalizedLanguage,
+      },
+    });
+  }
+
+  await applyLanguage(normalizedLanguage);
   if (!getToken()) return;
-  await useUserPreferenceStore.getState().updatePreferences({ language: languageCode });
+  await useUserPreferenceStore.getState().updatePreferences({ language: normalizedLanguage });
 }
 
 /** 登录或切换账户前调用，强制重新拉取租户/个人语言偏好 */

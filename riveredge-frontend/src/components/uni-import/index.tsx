@@ -242,22 +242,30 @@ export const UniImport: React.FC<UniImportProps> = ({
     () => (customImportFieldKeys && customImportFieldKeys.length > 0 ? customImportFieldKeys : allFieldKeys),
     [customImportFieldKeys, allFieldKeys],
   );
+  const fieldKeyToIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    (headers ?? []).forEach((header, idx) => {
+      map.set(resolveSystemFieldKey(header, importFieldMapRef.current), idx);
+    });
+    return map;
+  }, [headers]);
   const effectiveHeaders = useMemo(() => {
     if (!headers?.length) return headers;
-    const selectedSet = new Set(selectedImportFieldKeys);
-    return headers.filter((h) => selectedSet.has(resolveSystemFieldKey(h, importFieldMapRef.current)));
-  }, [headers, selectedImportFieldKeys]);
+    const orderedIndexes = selectedImportFieldKeys
+      .map((key) => fieldKeyToIndex.get(key))
+      .filter((idx): idx is number => idx !== undefined);
+    if (!orderedIndexes.length) return headers;
+    return orderedIndexes.map((idx) => headers[idx]);
+  }, [headers, selectedImportFieldKeys, fieldKeyToIndex]);
   const effectiveExampleRow = useMemo(() => {
     if (!effectiveHeaders?.length) return exampleRow;
     if (!headers?.length) return exampleRow;
-    const selectedSet = new Set(selectedImportFieldKeys);
-    const selectedIndexes = headers
-      .map((h, idx) => ({ idx, key: resolveSystemFieldKey(h, importFieldMapRef.current) }))
-      .filter((item) => selectedSet.has(item.key))
-      .map((item) => item.idx);
+    const selectedIndexes = selectedImportFieldKeys
+      .map((key) => fieldKeyToIndex.get(key))
+      .filter((idx): idx is number => idx !== undefined);
     if (!exampleRow?.length) return selectedIndexes.map(() => '');
     return selectedIndexes.map((idx) => String(exampleRow[idx] ?? ''));
-  }, [effectiveHeaders, headers, exampleRow, selectedImportFieldKeys]);
+  }, [effectiveHeaders, headers, exampleRow, selectedImportFieldKeys, fieldKeyToIndex]);
 
   headersRef.current = effectiveHeaders;
   exampleRowRef.current = effectiveExampleRow;
@@ -324,8 +332,10 @@ export const UniImport: React.FC<UniImportProps> = ({
       setCustomImportFieldKeys(allFieldKeys);
       return;
     }
-    const validSaved = allFieldKeys.filter((key) => saved.includes(key));
-    setCustomImportFieldKeys(validSaved.length ? validSaved : allFieldKeys);
+    const orderedSaved = saved.filter((key) => allFieldKeys.includes(key));
+    const missing = allFieldKeys.filter((key) => !orderedSaved.includes(key));
+    const merged = [...orderedSaved, ...missing];
+    setCustomImportFieldKeys(merged.length ? merged : allFieldKeys);
   }, [open, visible, allFieldKeys, getPreference, importPreferenceSegment]);
 
   // 弹窗打开时拦截 Ctrl/Cmd+D，避免触发浏览器收藏
@@ -427,11 +437,88 @@ export const UniImport: React.FC<UniImportProps> = ({
   };
 
   const shouldUseRelationImport = showRelationImport && customRelationEntities.length > 0 && !!onRelationImportSubmit;
+  const relationEntityRequiredFieldKeys = useMemo<Record<UniRelationImportEntity, string[]>>(
+    () => ({
+      material: ['parentCode', 'componentCode'],
+      processRoute: ['processRouteCode'],
+      operation: ['operationCode'],
+      performance: ['employeeId'],
+    }),
+    [],
+  );
+  const validateRelationPayload = useCallback(
+    (rows: string[][]): string[] => {
+      const errors: string[] = [];
+      const headerRow = rows[0] ?? [];
+      const headerFieldKeys = new Set(
+        headerRow.map((header) => resolveSystemFieldKey(String(header ?? ''), importFieldMapRef.current)),
+      );
+      const baseRequired = ['parentCode', 'componentCode', 'quantity'];
+      const missingBase = baseRequired.filter((key) => !headerFieldKeys.has(key));
+      if (missingBase.length) {
+        errors.push(
+          t('components.uniImport.relationMissingRequiredColumns', {
+            columns: missingBase.join(', '),
+          }),
+        );
+      }
+
+      customRelationEntities.forEach((entity) => {
+        const required = relationEntityRequiredFieldKeys[entity] ?? [];
+        const missing = required.filter((key) => !headerFieldKeys.has(key));
+        if (missing.length) {
+          errors.push(
+            t('components.uniImport.relationMissingEntityColumns', {
+              entity: t(`components.uniImport.relationEntity.${entity}`),
+              columns: missing.join(', '),
+            }),
+          );
+        }
+      });
+
+      const fieldIndexMap = Object.fromEntries(
+        headerRow.map((header, idx) => [
+          resolveSystemFieldKey(String(header ?? ''), importFieldMapRef.current),
+          idx,
+        ]),
+      ) as Record<string, number>;
+
+      for (let rowIdx = 2; rowIdx < rows.length; rowIdx += 1) {
+        const row = rows[rowIdx] ?? [];
+        if (!row.some((cell) => String(cell ?? '').trim() !== '')) continue;
+        customRelationEntities.forEach((entity) => {
+          (relationEntityRequiredFieldKeys[entity] ?? []).forEach((fieldKey) => {
+            const idx = fieldIndexMap[fieldKey];
+            const val = idx === undefined ? '' : String(row[idx] ?? '').trim();
+            if (!val) {
+              errors.push(
+                t('components.uniImport.relationMissingEntityValue', {
+                  row: rowIdx + 1,
+                  entity: t(`components.uniImport.relationEntity.${entity}`),
+                  field: fieldKey,
+                }),
+              );
+            }
+          });
+        });
+      }
+      return errors;
+    },
+    [customRelationEntities, relationEntityRequiredFieldKeys, t],
+  );
 
   const runImportPrecheck = useCallback(
     async (data: any[][]) => {
       const asStringRows = data.map((row) => row.map((cell) => String(cell ?? '')));
       if (showRelationImport && customRelationEntities.length > 0 && onRelationImportPrecheck) {
+        const localErrors = validateRelationPayload(asStringRows);
+        if (localErrors.length) {
+          setPrecheckResult({
+            canImport: false,
+            errors: localErrors,
+          });
+          return;
+        }
         setPrecheckLoading(true);
         setPrecheckResult(null);
         try {
@@ -482,6 +569,7 @@ export const UniImport: React.FC<UniImportProps> = ({
       customWriteStrategy,
       onRelationImportPrecheck,
       onImportPrecheck,
+      validateRelationPayload,
       t,
     ],
   );
@@ -500,15 +588,27 @@ export const UniImport: React.FC<UniImportProps> = ({
 
   const commitImport = async (data: any[][]) => {
     if (shouldUseRelationImport && onRelationImportSubmit) {
+      const relationRows = data.map((row) => row.map((cell) => String(cell ?? '')));
+      const localErrors = validateRelationPayload(relationRows);
+      if (localErrors.length) {
+        setPrecheckResult({
+          canImport: false,
+          errors: localErrors,
+        });
+        return;
+      }
       const relationResult = await onRelationImportSubmit({
-        rawRows: data.map((row) => row.map((cell) => String(cell ?? ''))),
+        rawRows: relationRows,
         entities: customRelationEntities,
         writeStrategy: customWriteStrategy,
       });
-      if (relationResult?.message) {
+      if (relationResult?.success !== false && !relationResult?.errors?.length && relationResult?.message) {
         messageApi.success(relationResult.message);
       }
       if (relationResult?.errors?.length) {
+        if (relationResult?.message) {
+          messageApi.error(relationResult.message);
+        }
         setPrecheckResult({
           canImport: false,
           errors: relationResult.errors,
@@ -903,22 +1003,35 @@ export const UniImport: React.FC<UniImportProps> = ({
         return;
       }
 
-      const selectedFieldSet = customImportFieldKeys ? new Set(customImportFieldKeys) : null;
       const projectedData =
-        selectedFieldSet && selectedFieldSet.size > 0 && headers?.length
+        selectedImportFieldKeys.length > 0 && headers?.length
           ? (() => {
-              const sourceHeaders = headers;
-              const selectedIndexes = sourceHeaders
-                .map((header, idx) => ({
-                  idx,
-                  key: resolveSystemFieldKey(header, importFieldMapRef.current),
-                }))
-                .filter((x) => selectedFieldSet.has(x.key))
-                .map((x) => x.idx);
+              const selectedIndexes = selectedImportFieldKeys
+                .map((key) => fieldKeyToIndex.get(key))
+                .filter((idx): idx is number => idx !== undefined);
               if (selectedIndexes.length === 0) return data;
               return data.map((row) => selectedIndexes.map((colIdx) => row?.[colIdx] ?? ''));
             })()
           : data;
+
+      if (shouldUseRelationImport) {
+        const localErrors = validateRelationPayload(
+          projectedData.map((row) => row.map((cell) => String(cell ?? ''))),
+        );
+        if (localErrors.length) {
+          setPrecheckResult({
+            canImport: false,
+            errors: localErrors,
+          });
+          if (enableImportPreview) {
+            setPreviewData(projectedData);
+            setPreviewModalOpen(true);
+          } else {
+            messageApi.error(localErrors[0]);
+          }
+          return;
+        }
+      }
 
       if (enableImportPreview) {
         openImportPreview(projectedData);

@@ -2933,6 +2933,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           font-size: var(--ant-fontSize) !important;
           font-weight: normal !important;
         }
+        /* 一级子菜单箭头位置微调：修复视觉偏左 */
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed)
+          > .ant-menu-submenu
+          > .ant-menu-submenu-title
+          .ant-menu-submenu-arrow {
+          inset-inline-end: 4px !important;
+        }
         
         /* 优化菜单标题内容：AntD 6.4 下避免 max-width 计算导致的右侧挤出 */
         .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content {

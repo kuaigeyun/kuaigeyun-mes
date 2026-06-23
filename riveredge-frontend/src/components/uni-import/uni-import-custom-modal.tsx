@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Table, Checkbox, Space, Typography, Button, Divider, Select } from 'antd';
+import { HolderOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { resolveSystemFieldKey } from './apply-import-mapping';
 import type {
@@ -29,6 +30,13 @@ export interface UniImportCustomModalProps {
   onApply: (result: UniImportCustomModalApplyResult) => void;
 }
 
+interface CustomImportRow {
+  key: string;
+  header: string;
+  fieldKey: string;
+  canSelect: boolean;
+}
+
 export const UniImportCustomModal: React.FC<UniImportCustomModalProps> = ({
   open,
   headers,
@@ -45,10 +53,22 @@ export const UniImportCustomModal: React.FC<UniImportCustomModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const allFieldKeys = useMemo(
     () => headers.map((h) => resolveSystemFieldKey(h, fieldMap)),
     [headers, fieldMap],
   );
+  const allRows = useMemo<CustomImportRow[]>(
+    () =>
+      headers.map((header, idx) => ({
+        key: `${idx}-${allFieldKeys[idx]}`,
+        header,
+        fieldKey: allFieldKeys[idx],
+        canSelect: Boolean(allFieldKeys[idx]),
+      })),
+    [headers, allFieldKeys],
+  );
+  const [orderedRows, setOrderedRows] = useState<CustomImportRow[]>(allRows);
   const [selectedFieldKeys, setSelectedFieldKeys] = useState<string[]>(allFieldKeys);
   const [relationEntities, setRelationEntities] = useState<UniRelationImportEntity[]>(
     initialRelationEntities?.length ? initialRelationEntities : defaultRelationEntities,
@@ -63,10 +83,20 @@ export const UniImportCustomModal: React.FC<UniImportCustomModalProps> = ({
       return;
     }
     if (hasInitialized) return;
-    const initial = initialSelectedFieldKeys?.length
-      ? allFieldKeys.filter((key) => initialSelectedFieldKeys.includes(key))
+    const initialSelection = initialSelectedFieldKeys?.length
+      ? initialSelectedFieldKeys.filter((key) => allFieldKeys.includes(key))
       : allFieldKeys;
-    setSelectedFieldKeys(initial.length ? initial : allFieldKeys);
+    const normalizedSelection = initialSelection.length ? initialSelection : allFieldKeys;
+    const selectedSet = new Set(normalizedSelection);
+    const selectedRows = allRows.filter((row) => selectedSet.has(row.fieldKey));
+    selectedRows.sort(
+      (a, b) =>
+        normalizedSelection.indexOf(a.fieldKey) - normalizedSelection.indexOf(b.fieldKey),
+    );
+    const unselectedRows = allRows.filter((row) => !selectedSet.has(row.fieldKey));
+
+    setOrderedRows([...selectedRows, ...unselectedRows]);
+    setSelectedFieldKeys(normalizedSelection);
     setRelationEntities(
       initialRelationEntities?.length ? initialRelationEntities : defaultRelationEntities,
     );
@@ -75,6 +105,7 @@ export const UniImportCustomModal: React.FC<UniImportCustomModalProps> = ({
   }, [
     open,
     hasInitialized,
+    allRows,
     allFieldKeys,
     initialSelectedFieldKeys,
     initialRelationEntities,
@@ -86,21 +117,14 @@ export const UniImportCustomModal: React.FC<UniImportCustomModalProps> = ({
   const selectedSet = useMemo(() => new Set(selectedFieldKeys), [selectedFieldKeys]);
   const allChecked = selectedFieldKeys.length > 0 && selectedFieldKeys.length === allFieldKeys.length;
   const indeterminate = selectedFieldKeys.length > 0 && selectedFieldKeys.length < allFieldKeys.length;
-
   const rows = useMemo(
     () =>
-      headers.map((header, idx) => {
-        const fieldKey = allFieldKeys[idx];
-        return {
-          key: `${idx}-${fieldKey}`,
-          index: idx + 1,
-          header,
-          fieldKey,
-          checked: selectedSet.has(fieldKey),
-          canSelect: Boolean(fieldKey),
-        };
-      }),
-    [headers, allFieldKeys, selectedSet],
+      orderedRows.map((row, idx) => ({
+        ...row,
+        index: idx + 1,
+        checked: selectedSet.has(row.fieldKey),
+      })),
+    [orderedRows, selectedSet],
   );
 
   const toggleField = (fieldKey: string, checked: boolean) => {
@@ -113,11 +137,24 @@ export const UniImportCustomModal: React.FC<UniImportCustomModalProps> = ({
     });
   };
 
+  const moveRow = (fromKey: string, toKey: string) => {
+    if (fromKey === toKey) return;
+    setOrderedRows((prev) => {
+      const from = prev.findIndex((row) => row.key === fromKey);
+      const to = prev.findIndex((row) => row.key === toKey);
+      if (from < 0 || to < 0) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  };
+
   const handleApply = () => {
-    const pickedHeaders = headers.filter((h, idx) => selectedSet.has(allFieldKeys[idx]));
+    const selectedRows = orderedRows.filter((row) => selectedSet.has(row.fieldKey));
     onApply({
-      selectedHeaders: pickedHeaders,
-      selectedFieldKeys,
+      selectedHeaders: selectedRows.map((row) => row.header),
+      selectedFieldKeys: selectedRows.map((row) => row.fieldKey),
       relationEntities,
       writeStrategy,
     });
@@ -154,7 +191,11 @@ export const UniImportCustomModal: React.FC<UniImportCustomModalProps> = ({
             <Checkbox
               checked={allChecked}
               indeterminate={indeterminate}
-              onChange={(e) => setSelectedFieldKeys(e.target.checked ? [...allFieldKeys] : [])}
+              onChange={(e) =>
+                setSelectedFieldKeys(
+                  e.target.checked ? orderedRows.map((row) => row.fieldKey) : [],
+                )
+              }
             >
               {t('components.uniImport.customImportSelectAll')}
             </Checkbox>
@@ -181,6 +222,25 @@ export const UniImportCustomModal: React.FC<UniImportCustomModalProps> = ({
         pagination={false}
         scroll={{ y: 360 }}
         columns={[
+          {
+            title: '',
+            width: 42,
+            dataIndex: 'drag',
+            render: (_, record: { key: string }) => (
+              <span
+                draggable
+                style={{ cursor: 'grab', color: '#999' }}
+                onClick={(e) => e.stopPropagation()}
+                onDragStart={(e) => {
+                  e.stopPropagation();
+                  setDraggingKey(record.key);
+                }}
+                onDragEnd={() => setDraggingKey(null)}
+              >
+                <HolderOutlined />
+              </span>
+            ),
+          },
           {
             title: '',
             width: 56,
@@ -211,7 +271,14 @@ export const UniImportCustomModal: React.FC<UniImportCustomModalProps> = ({
             ellipsis: true,
           },
         ]}
-        onRow={(record: { checked: boolean; fieldKey: string; canSelect: boolean }) => ({
+        onRow={(record: { checked: boolean; fieldKey: string; canSelect: boolean; key: string }) => ({
+          onDragOver: (e) => {
+            e.preventDefault();
+          },
+          onDrop: (e) => {
+            e.preventDefault();
+            if (draggingKey) moveRow(draggingKey, record.key);
+          },
           onClick: () => {
             if (!record.canSelect) return;
             toggleField(record.fieldKey, !record.checked);
