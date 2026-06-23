@@ -23,6 +23,7 @@ import {
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
@@ -606,8 +607,9 @@ const SalesOrdersPage: React.FC = () => {
   const [reminderSubmitting, setReminderSubmitting] = useState(false);
   const [reminderForm] = AntForm.useForm();
 
-  // 物料列表（用于物料选择器）
+  // 产品列表（用于产品选择器）
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [productScope, setProductScope] = useState<'make' | 'all'>('make');
   // 客户列表（对接技术数据管理-供应链-客户）
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
@@ -630,7 +632,7 @@ const SalesOrdersPage: React.FC = () => {
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
 
   /**
-   * 加载物料列表（无基础资料时使用空数组，不阻塞页面）
+   * 加载产品列表（无基础资料时使用空数组，不阻塞页面）
    */
   React.useEffect(() => {
     const loadMaterials = async () => {
@@ -2289,7 +2291,7 @@ const SalesOrdersPage: React.FC = () => {
     [materials],
   );
 
-  /** 从物料多选面板批量追加明细行（与「添加明细」默认字段一致，数量默认为 1） */
+  /** 从产品多选面板批量追加明细行（与「添加明细」默认字段一致，数量默认为 1） */
   const appendOrderItemsFromMaterials = React.useCallback(
     async (selected: Material[]) => {
       const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
@@ -3216,9 +3218,24 @@ const SalesOrdersPage: React.FC = () => {
             {({ getFieldValue: getFormValue }: any) => {
               const priceType = getFormValue('price_type') ?? 'tax_exclusive';
               const showTaxColumns = priceType === 'tax_inclusive';
+              const materialSourceType = productScope === 'make' ? 'Make' : undefined;
+              const productColumnTitle = (
+                <Space size={8} align="center">
+                  <span>{t('app.kuaizhizao.salesOrder.material')}</span>
+                  <ThemedSegmented
+                    size="small"
+                    value={productScope}
+                    options={[
+                      { label: t('app.kuaizhizao.sales.common.productScopeMake'), value: 'make' },
+                      { label: t('app.kuaizhizao.sales.common.productScopeAll'), value: 'all' },
+                    ]}
+                    onChange={(val) => setProductScope((val as 'make' | 'all') ?? 'make')}
+                  />
+                </Space>
+              );
               const orderDetailColumns = [
                     {
-                      title: t('app.kuaizhizao.salesOrder.material'),
+                      title: productColumnTitle,
                       dataIndex: 'material_id',
                       width: DOCUMENT_DETAIL_COL_WIDTH.material,
                       ...DOCUMENT_DETAIL_TEXT_COL,
@@ -3253,6 +3270,7 @@ const SalesOrdersPage: React.FC = () => {
                                     formItemProps={{ style: { margin: 0 } }}
                                     showQuickCreate
                                     showAdvancedSearch
+                                    sourceType={materialSourceType}
                                     onChange={(_val, material) => {
                                       if (!material) return;
                                       formRef.current?.setFieldValue(

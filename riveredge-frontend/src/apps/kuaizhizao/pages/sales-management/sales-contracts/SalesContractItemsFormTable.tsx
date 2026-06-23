@@ -1,5 +1,5 @@
 /**
- * 销售合同新建/编辑 — 合同明细表（与报价单物料明细表一致）
+ * 销售合同新建/编辑 — 合同明细表（与报价单产品明细表一致）
  */
 import React from 'react';
 import type { ProFormInstance } from '@ant-design/pro-components';
@@ -7,6 +7,7 @@ import { ProForm } from '@ant-design/pro-components';
 import { AppstoreAddOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, DatePicker, Form, Input, InputNumber, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import PriceTypeSwitch from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
@@ -62,6 +63,22 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
   editingInclValueRef,
 }) => {
   const { t } = useTranslation();
+  const [productScope, setProductScope] = React.useState<'make' | 'all'>('make');
+  const materialSourceType = productScope === 'make' ? 'Make' : undefined;
+  const productColumnTitle = (
+    <Space size={8} align="center">
+      <span>{t('app.kuaizhizao.salesOrder.material')}</span>
+      <ThemedSegmented
+        size="small"
+        value={productScope}
+        options={[
+          { label: t('app.kuaizhizao.sales.common.productScopeMake'), value: 'make' },
+          { label: t('app.kuaizhizao.sales.common.productScopeAll'), value: 'all' },
+        ]}
+        onChange={(val) => setProductScope((val as 'make' | 'all') ?? 'make')}
+      />
+    </Space>
+  );
 
   return (
     <>
@@ -71,12 +88,16 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
           const showTaxColumns = priceType === 'tax_inclusive';
           const detailColumns = [
                     {
-                      title: t('app.kuaizhizao.salesOrder.material'),
+                      title: productColumnTitle,
                       dataIndex: 'material_id',
                       width: DOCUMENT_DETAIL_COL_WIDTH.material,
                       ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: unknown, __: unknown, index: number) => (
-                        <ContractMaterialSelectCell index={index} materialList={materialList} />
+                        <ContractMaterialSelectCell
+                          index={index}
+                          materialList={materialList}
+                          sourceType={materialSourceType}
+                        />
                       ),
                     },
                     {
@@ -414,7 +435,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       icon={<AppstoreAddOutlined />}
                       onClick={onOpenMaterialPicker}
                     >
-                      {t('app.kuaizhizao.common.materialBatchSelect')}
+                      {t('app.kuaizhizao.sales.common.productBatchSelect')}
                     </Button>
                   </Space>
                 )}

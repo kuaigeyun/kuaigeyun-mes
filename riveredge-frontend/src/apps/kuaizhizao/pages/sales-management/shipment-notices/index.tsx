@@ -25,6 +25,7 @@ import {
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
@@ -88,10 +89,10 @@ const ShipmentNoticesPage: React.FC = () => {
       buildFactoryImportTemplate(
         t,
         [
-          { field: 'material', labelKey: 'app.kuaizhizao.shipmentNotice.import.materialCode', aliases: ['物料编号'] },
+          { field: 'material', labelKey: 'app.kuaizhizao.shipmentNotice.import.materialCode', aliases: ['产品编号'] },
           { field: 'quantity', labelKey: 'app.kuaizhizao.shipmentNotice.import.quantity', aliases: ['数量'] },
           { field: 'unitPrice', labelKey: 'app.kuaizhizao.shipmentNotice.import.unitPrice', aliases: ['单价'] },
-          { field: 'name', labelKey: 'app.kuaizhizao.shipmentNotice.import.materialName', aliases: ['物料名称'] },
+          { field: 'name', labelKey: 'app.kuaizhizao.shipmentNotice.import.materialName', aliases: ['产品名称'] },
           { field: 'specification', labelKey: 'app.kuaizhizao.shipmentNotice.import.specification', aliases: ['规格'] },
           { field: 'unit', labelKey: 'app.kuaizhizao.shipmentNotice.import.unit', aliases: ['单位'] },
         ],
@@ -153,7 +154,24 @@ const ShipmentNoticesPage: React.FC = () => {
   const editFormRef = useRef<any>(null);
   const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+  const [productScope, setProductScope] = useState<'make' | 'all'>('make');
   const [customerList, setCustomerList] = useState<any[]>([]);
+  const materialSourceType = productScope === 'make' ? 'Make' : undefined;
+  const productColumnTitle = (
+    <Space size={8} align="center">
+      <span>{t('app.kuaizhizao.salesOrder.material')}</span>
+      <ThemedSegmented
+        size="small"
+        value={productScope}
+        options={[
+          { label: t('app.kuaizhizao.sales.common.productScopeMake'), value: 'make' },
+          { label: t('app.kuaizhizao.sales.common.productScopeAll'), value: 'all' },
+        ]}
+        onChange={(val) => setProductScope((val as 'make' | 'all') ?? 'make')}
+      />
+    </Space>
+  );
+
   const [salesOrderList, setSalesOrderList] = useState<any[]>([]);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
@@ -197,7 +215,7 @@ const ShipmentNoticesPage: React.FC = () => {
         notice_quantity: 1,
         unit_price: (m as any).defaults?.defaultSalePrice ?? (m as any).defaults?.default_sale_price ?? 0,
       }));
-      // 如果当前只有一行且未选择物料，则替换该行
+      // 如果当前只有一行且未选择产品，则替换该行
       if (current.length === 1 && !current[0].material_id && !current[0].material_code) {
         createFormRef.current?.setFieldsValue({ items: newRows });
       } else {
@@ -804,13 +822,13 @@ const ShipmentNoticesPage: React.FC = () => {
               icon={<AppstoreAddOutlined />}
               onClick={() => setMaterialPickerOpen(true)}
             >
-              {t('app.kuaizhizao.common.materialBatchSelect')}
+              {t('app.kuaizhizao.sales.common.productBatchSelect')}
             </Button>
           </Space>
         )}
         columns={[
                 {
-                  title: t('app.kuaizhizao.salesOrder.material'),
+                  title: productColumnTitle,
                   dataIndex: 'material_id',
                   width: 220,
                   render: (_: any, __: any, index: number) => (
@@ -842,6 +860,7 @@ const ShipmentNoticesPage: React.FC = () => {
                               formItemProps={{ style: { margin: 0 } }}
                               showQuickCreate
                               showAdvancedSearch
+                              sourceType={materialSourceType}
                             />
                           </div>
                         );

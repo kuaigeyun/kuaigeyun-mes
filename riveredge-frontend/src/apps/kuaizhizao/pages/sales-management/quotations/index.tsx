@@ -409,9 +409,14 @@ const QuotationSalesmanField: React.FC<{ userList: User[]; loading: boolean }> =
   );
 };
 
-const QuotationMaterialSelectCell: React.FC<{ index: number; materialList: Material[] }> = ({
+const QuotationMaterialSelectCell: React.FC<{
+  index: number;
+  materialList: Material[];
+  sourceType?: string;
+}> = ({
   index,
   materialList,
+  sourceType,
 }) => {
   const { t } = useTranslation();
   const form = Form.useFormInstance();
@@ -469,6 +474,7 @@ const QuotationMaterialSelectCell: React.FC<{ index: number; materialList: Mater
           formItemProps={{ style: { margin: 0 } }}
           showQuickCreate
           showAdvancedSearch
+          sourceType={sourceType}
           onChange={onMaterialPicked}
         />
         <Form.Item name={[index, 'material_code']} hidden>
@@ -602,7 +608,7 @@ const QuotationsPage: React.FC = () => {
             field: 'material',
             required: true,
             labelKey: 'app.kuaizhizao.quotation.import.materialCode',
-            aliases: ['物料', '物料编号'],
+            aliases: ['产品', '产品编号'],
           },
           { field: 'quantity', required: true, labelKey: 'app.kuaizhizao.quotation.import.quantity', aliases: ['数量'] },
           { field: 'unitPrice', labelKey: 'app.kuaizhizao.quotation.import.unitPrice', aliases: ['单价'] },
@@ -691,7 +697,24 @@ const QuotationsPage: React.FC = () => {
   const [userList, setUserList] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [materialList, setMaterialList] = useState<any[]>([]);
+  const [productScope, setProductScope] = useState<'make' | 'all'>('make');
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+  const materialSourceType = productScope === 'make' ? 'Make' : undefined;
+  const productColumnTitle = (
+    <Space size={8} align="center">
+      <span>{t('app.kuaizhizao.salesOrder.material')}</span>
+      <ThemedSegmented
+        size="small"
+        value={productScope}
+        options={[
+          { label: t('app.kuaizhizao.sales.common.productScopeMake'), value: 'make' },
+          { label: t('app.kuaizhizao.sales.common.productScopeAll'), value: 'all' },
+        ]}
+        onChange={(val) => setProductScope((val as 'make' | 'all') ?? 'make')}
+      />
+    </Space>
+  );
+
   /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
   const [shippingMethodOptions, setShippingMethodOptions] = useState<Array<{ label: string; value: string }>>([]);
   /** 付款条件字典选项（数据字典 PAYMENT_TERMS） */
@@ -1327,7 +1350,7 @@ const QuotationsPage: React.FC = () => {
 
   /**
    * 处理列表页批量导入报价单
-   * 导入格式：报价单编号, 客户名称, 报价日期, 物料编号, 数量, 单价, 交货日期, 备注
+   * 导入格式：报价单编号, 客户名称, 报价日期, 产品编号, 数量, 单价, 交货日期, 备注
    * 同一报价单编号的多行会合并为一条报价单的多个明细
    */
   const handleListImport = async (data: any[][]) => {
@@ -2687,12 +2710,16 @@ const QuotationsPage: React.FC = () => {
           const showTaxColumns = priceType === 'tax_inclusive';
           const quotationDetailColumns = [
                       {
-                        title: t('app.kuaizhizao.salesOrder.material'),
+                        title: productColumnTitle,
                         dataIndex: 'material_id',
                         width: 280,
                         ...QUOTATION_DETAIL_TEXT_COL,
                         render: (_: unknown, __: unknown, index: number) => (
-                          <QuotationMaterialSelectCell index={index} materialList={materialList as Material[]} />
+                          <QuotationMaterialSelectCell
+                            index={index}
+                            materialList={materialList as Material[]}
+                            sourceType={materialSourceType}
+                          />
                         ),
                       },
                       {
@@ -2997,7 +3024,7 @@ const QuotationsPage: React.FC = () => {
                     ];
           return (
             <>
-              {/* 业务专属样式：1) 物料列让 Select 占满；2) 数字/文本输入选中态颜色。 */}
+              {/* 业务专属样式：1) 产品列让 Select 占满；2) 数字/文本输入选中态颜色。 */}
               <style>{`
                     .quotation-detail-table .quotation-material-cell .ant-form-item,
                     .quotation-detail-table .quotation-material-cell .ant-form-item-control,
@@ -3070,7 +3097,7 @@ const QuotationsPage: React.FC = () => {
                       icon={<AppstoreAddOutlined />}
                       onClick={() => setMaterialPickerOpen(true)}
                     >
-                      {t('app.kuaizhizao.common.materialBatchSelect')}
+                      {t('app.kuaizhizao.sales.common.productBatchSelect')}
                     </Button>
                   </Space>
                 )}

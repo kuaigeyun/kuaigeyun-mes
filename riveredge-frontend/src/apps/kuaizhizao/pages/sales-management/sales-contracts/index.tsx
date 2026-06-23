@@ -548,7 +548,7 @@ const SalesContractsPage: React.FC = () => {
 
       .then((res) => setMaterialList(res?.items ?? []))
 
-      .catch((e) => console.error('加载物料失败', e));
+      .catch((e) => console.error('加载产品失败', e));
 
   }, []);
 

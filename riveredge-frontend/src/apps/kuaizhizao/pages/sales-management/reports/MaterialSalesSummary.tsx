@@ -1,5 +1,5 @@
 /**
- * 存货销售汇总表（按物料汇总已出库数量与金额）
+ * 存货销售汇总表（按产品汇总已出库数量与金额）
  */
 import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';

@@ -88,9 +88,14 @@ export function resolveContractLineMaterialFields(
   return { material_code, material_name, material_unit };
 }
 
-export const ContractMaterialSelectCell: React.FC<{ index: number; materialList?: Material[] }> = ({
+export const ContractMaterialSelectCell: React.FC<{
+  index: number;
+  materialList?: Material[];
+  sourceType?: string;
+}> = ({
   index,
   materialList,
+  sourceType,
 }) => {
   const { t } = useTranslation();
   const form = Form.useFormInstance();
@@ -113,16 +118,16 @@ export const ContractMaterialSelectCell: React.FC<{ index: number; materialList?
       if (!material) return;
       form.setFieldValue(
         ['items', index, 'material_code'],
-        getMaterialField(material as Record<string, unknown>, 'mainCode') ??
-          getMaterialField(material as Record<string, unknown>, 'code'),
+        getMaterialField(material as unknown as Record<string, unknown>, 'mainCode') ??
+          getMaterialField(material as unknown as Record<string, unknown>, 'code'),
       );
       form.setFieldValue(
         ['items', index, 'material_name'],
-        getMaterialField(material as Record<string, unknown>, 'name'),
+        getMaterialField(material as unknown as Record<string, unknown>, 'name'),
       );
       form.setFieldValue(
         ['items', index, 'material_unit'],
-        getMaterialField(material as Record<string, unknown>, 'baseUnit'),
+        getMaterialField(material as unknown as Record<string, unknown>, 'baseUnit'),
       );
       form.setFieldValue(
         ['items', index, '_sourceType'],
@@ -161,6 +166,7 @@ export const ContractMaterialSelectCell: React.FC<{ index: number; materialList?
           formItemProps={{ style: { margin: 0 } }}
           showQuickCreate
           showAdvancedSearch
+          sourceType={sourceType}
           onChange={onMaterialPicked}
         />
         <Form.Item name={[index, 'material_code']} hidden>

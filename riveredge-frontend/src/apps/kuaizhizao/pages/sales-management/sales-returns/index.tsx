@@ -47,6 +47,7 @@ import { getDictionaryOptions } from '../../../../master-data/services/supply-ch
 import { initializeSystemDictionaries } from '../../../../../services/dataDictionary';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import type { Material } from '../../../../master-data/types/material';
 import { warehouseApi } from '../../../services/production';
 import type { SalesReturn, SalesReturnItem } from '../../../services/sales-return';
@@ -218,7 +219,24 @@ const SalesReturnsPage: React.FC = () => {
     [selectedRowKeys],
   );
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+  const [productScope, setProductScope] = useState<'make' | 'all'>('make');
   const [pullWarehouseId, setPullWarehouseId] = useState<number | undefined>(undefined);
+  const materialSourceType = productScope === 'make' ? 'Make' : undefined;
+  const productColumnTitle = (
+    <Space size={8} align="center">
+      <span>{t('app.kuaizhizao.salesOrder.material')}</span>
+      <ThemedSegmented
+        size="small"
+        value={productScope}
+        options={[
+          { label: t('app.kuaizhizao.sales.common.productScopeMake'), value: 'make' },
+          { label: t('app.kuaizhizao.sales.common.productScopeAll'), value: 'all' },
+        ]}
+        onChange={(val) => setProductScope((val as 'make' | 'all') ?? 'make')}
+      />
+    </Space>
+  );
+
   const [pullWarehouseName, setPullWarehouseName] = useState('');
   const formRef = useRef<ProFormInstance>(null);
 
@@ -623,7 +641,7 @@ const SalesReturnsPage: React.FC = () => {
     }
   };
 
-  // 物料选择器追加明细
+  // 产品选择器追加明细
   const appendItemsFromMaterials = (materials: Material[]) => {
     const currentItems = formRef.current?.getFieldValue('items') || [];
     const newItems = materials.map(m => ({
@@ -646,7 +664,7 @@ const SalesReturnsPage: React.FC = () => {
     const materialCodeKeys = [
       t('app.kuaizhizao.salesReturn.import.materialCode'),
       t('app.kuaizhizao.salesOrder.materialCode'),
-      '物料编号',
+      '产品编号',
     ];
     const returnQuantityKeys = [
       t('app.kuaizhizao.salesReturn.import.returnQuantity'),
@@ -1026,13 +1044,13 @@ const SalesReturnsPage: React.FC = () => {
                 icon={<AppstoreAddOutlined />}
                 onClick={() => setMaterialPickerOpen(true)}
               >
-                {t('app.kuaizhizao.common.materialBatchSelect')}
+                {t('app.kuaizhizao.sales.common.productBatchSelect')}
               </Button>
             </Space>
           )}
           columns={[
                     {
-                      title: t('app.kuaizhizao.salesOrder.material'),
+                      title: productColumnTitle,
                       dataIndex: 'material_id',
                       width: DOCUMENT_DETAIL_COL_WIDTH.material,
                       ...DOCUMENT_DETAIL_TEXT_COL,
@@ -1051,6 +1069,7 @@ const SalesReturnsPage: React.FC = () => {
                             material_spec: 'specification',
                             material_unit: 'baseUnit',
                           }}
+                          sourceType={materialSourceType}
                           showAdvancedSearch
                         />
                       ),

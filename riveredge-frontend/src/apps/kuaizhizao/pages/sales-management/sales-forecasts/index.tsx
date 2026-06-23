@@ -52,6 +52,7 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn'
 import { UniMaterialSelect } from '../../../../../components/uni-material-select'
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker'
+import { ThemedSegmented } from '../../../../../components/themed-segmented'
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select'
 import { UniTableDetail } from '../../../../../components/uni-table-detail'
 import {
@@ -170,7 +171,24 @@ export default function SalesForecastsPage() {
     navigate(SALES_FORECAST_LIST_PATH);
   }, [navigate]);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false)
+  const [productScope, setProductScope] = useState<'make' | 'all'>('make')
   const [importModalVisible, setImportModalVisible] = useState(false)
+  const materialSourceType = productScope === 'make' ? 'Make' : undefined
+  const productColumnTitle = (
+    <Space size={8} align="center">
+      <span>{t('app.kuaizhizao.salesForecast.material')}</span>
+      <ThemedSegmented
+        size="small"
+        value={productScope}
+        options={[
+          { label: t('app.kuaizhizao.sales.common.productScopeMake'), value: 'make' },
+          { label: t('app.kuaizhizao.sales.common.productScopeAll'), value: 'all' },
+        ]}
+        onChange={(val) => setProductScope((val as 'make' | 'all') ?? 'make')}
+      />
+    </Space>
+  )
+
   const [matrixModalVisible, setMatrixModalVisible] = useState(false)
   const [matrixMonths, setMatrixMonths] = useState<dayjs.Dayjs[]>([])
   const [matrixRows, setMatrixRows] = useState<any[]>([])
@@ -253,7 +271,7 @@ export default function SalesForecastsPage() {
         material_spec: m.specification ?? '',
         material_unit: m.baseUnit ?? defaultUnit,
       }))
-      // 如果当前只有一行且未选择物料，则替换该行
+      // 如果当前只有一行且未选择产品，则替换该行
       if (current.length === 1 && !current[0].material_id && !current[0].material_code) {
         formRef.current?.setFieldsValue({ items: newRows })
       } else {
@@ -1336,7 +1354,7 @@ export default function SalesForecastsPage() {
                 icon={<AppstoreAddOutlined />}
                 onClick={() => setMaterialPickerOpen(true)}
               >
-                {t('app.kuaizhizao.common.materialBatchSelect')}
+                {t('app.kuaizhizao.sales.common.productBatchSelect')}
               </Button>
               <Button
                 type="default"
@@ -1349,7 +1367,7 @@ export default function SalesForecastsPage() {
           )}
           columns={[
                   {
-                    title: t('app.kuaizhizao.salesForecast.material'),
+                    title: productColumnTitle,
                     dataIndex: 'material_id',
                     width: 260,
                     render: (_: any, __: any, index: number) => (
@@ -1367,6 +1385,7 @@ export default function SalesForecastsPage() {
                           material_spec: 'specification',
                           material_unit: 'baseUnit',
                         }}
+                        sourceType={materialSourceType}
                         formItemProps={{ style: { margin: 0 } }}
                         showAdvancedSearch
                       />

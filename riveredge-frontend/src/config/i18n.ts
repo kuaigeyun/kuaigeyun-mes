@@ -65,9 +65,15 @@ function mergeTranslationsWithMenuPriority(
     const useLocal =
       key.startsWith('path.') ||
       (key.startsWith('app.') && key.includes('.menu.')) ||
+      key.startsWith('app.kuaizhizao.salesOrder.') ||
+      key.startsWith('app.kuaizhizao.salesContract.') ||
+      key.startsWith('app.kuaizhizao.salesForecast.') ||
+      key.startsWith('app.kuaizhizao.salesReturn.') ||
+      key.startsWith('app.kuaizhizao.shipmentNotice.') ||
+      key.startsWith('app.kuaizhizao.quotation.') ||
+      key.startsWith('app.kuaizhizao.sales.common.') ||
       key.startsWith('pages.system.applications.') ||
       key.startsWith('components.tenantSelection.') ||
-      key.startsWith('app.kuaizhizao.quotation.') ||
       key.startsWith('pages.personal.messages.') ||
       key.startsWith('pages.system.files.') ||
       key.startsWith('dashboard.businessBoard.') ||
