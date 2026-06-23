@@ -24,11 +24,22 @@ import { UniImportSheetHost } from './uni-import-sheet-host';
 import { downloadImportTemplateXlsx, parseImportXlsxFile } from './uni-import-xlsx';
 import { UniImportMappingModal } from './uni-import-mapping-modal';
 import {
+  UniImportCustomModal,
+  type UniImportCustomModalApplyResult,
+} from './uni-import-custom-modal';
+import {
+  type UniRelationImportEntity,
+  type UniRelationImportWriteStrategy,
+  type UniRelationImportResult,
+} from './uni-import-relation-modal';
+import {
   UniImportPreviewModal,
   type ImportPrecheckResult,
 } from './uni-import-preview-modal';
 import { getImportDataRows } from './import-preview-utils';
 import { translatePathTitle } from '../../utils/menuTranslation';
+import { resolveSystemFieldKey } from './apply-import-mapping';
+import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 
 /**
  * Univer Import 导入弹窗组件属性
@@ -108,6 +119,42 @@ export interface UniImportProps {
    */
   enableMappingImport?: boolean;
   /**
+   * 是否显示「自定义导入」（默认：有 headers 时开启）
+   */
+  enableCustomImport?: boolean;
+  /**
+   * 是否显示「高级关联导入」（默认：onRelationImportSubmit 存在时开启）
+   */
+  enableRelationImport?: boolean;
+  /**
+   * 高级关联导入配置
+   */
+  relationImportConfig?: {
+    entities?: UniRelationImportEntity[];
+    defaultWriteStrategy?: UniRelationImportWriteStrategy;
+    supportedStrategies?: UniRelationImportWriteStrategy[];
+  };
+  /**
+   * 关联导入预检
+   */
+  onRelationImportPrecheck?: (payload: {
+    rawRows: string[][];
+    entities: UniRelationImportEntity[];
+    writeStrategy: UniRelationImportWriteStrategy;
+  }) => Promise<UniRelationImportResult | void>;
+  /**
+   * 关联导入提交
+   */
+  onRelationImportSubmit?: (payload: {
+    rawRows: string[][];
+    entities: UniRelationImportEntity[];
+    writeStrategy: UniRelationImportWriteStrategy;
+  }) => Promise<UniRelationImportResult | void>;
+  /**
+   * 自定义导入字段偏好键（不传时使用当前 pathname）
+   */
+  customImportPreferenceKey?: string;
+  /**
    * 确认入库前是否展示预检预览（默认：true）
    */
   enableImportPreview?: boolean;
@@ -147,6 +194,12 @@ export const UniImport: React.FC<UniImportProps> = ({
   enableXlsxTemplate,
   importFieldMap,
   enableMappingImport,
+  enableCustomImport,
+  enableRelationImport,
+  relationImportConfig,
+  onRelationImportPrecheck,
+  onRelationImportSubmit,
+  customImportPreferenceKey,
   enableImportPreview = true,
   importPreviewMaxRows = 10,
   importDataStartRow = 2,
@@ -154,6 +207,8 @@ export const UniImport: React.FC<UniImportProps> = ({
 }) => {
   const { t } = useTranslation();
   const location = useLocation();
+  const getPreference = useUserPreferenceStore((s) => s.getPreference);
+  const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
   const { message: messageApi } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [xlsxBusy, setXlsxBusy] = useState(false);
@@ -161,17 +216,56 @@ export const UniImport: React.FC<UniImportProps> = ({
   const [uploadedSheetRows, setUploadedSheetRows] = useState<string[][] | null>(null);
   const [mappingModalOpen, setMappingModalOpen] = useState(false);
   const [mappingRawRows, setMappingRawRows] = useState<string[][]>([]);
+  const [customModalOpen, setCustomModalOpen] = useState(false);
+  const [customImportFieldKeys, setCustomImportFieldKeys] = useState<string[] | null>(null);
+  const [customRelationEntities, setCustomRelationEntities] = useState<UniRelationImportEntity[]>(
+    relationImportConfig?.entities ?? ['material', 'processRoute', 'operation', 'performance'],
+  );
+  const [customWriteStrategy, setCustomWriteStrategy] = useState<UniRelationImportWriteStrategy>(
+    relationImportConfig?.defaultWriteStrategy ?? 'upsert',
+  );
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [previewData, setPreviewData] = useState<any[][]>([]);
   const [precheckLoading, setPrecheckLoading] = useState(false);
   const [precheckResult, setPrecheckResult] = useState<ImportPrecheckResult | null>(null);
   const univerInstanceRef = useRef<UniverSheetInstance | null>(null);
-  const headersRef = useRef(headers);
-  const exampleRowRef = useRef(exampleRow);
+  const headersRef = useRef<string[] | undefined>(headers);
+  const exampleRowRef = useRef<string[] | undefined>(exampleRow);
   const importFieldMapRef = useRef(importFieldMap);
-  headersRef.current = headers;
-  exampleRowRef.current = exampleRow;
   importFieldMapRef.current = importFieldMap;
+
+  const allFieldKeys = useMemo(
+    () => (headers ?? []).map((h) => resolveSystemFieldKey(h, importFieldMapRef.current)),
+    [headers],
+  );
+  const selectedImportFieldKeys = useMemo(
+    () => (customImportFieldKeys && customImportFieldKeys.length > 0 ? customImportFieldKeys : allFieldKeys),
+    [customImportFieldKeys, allFieldKeys],
+  );
+  const effectiveHeaders = useMemo(() => {
+    if (!headers?.length) return headers;
+    const selectedSet = new Set(selectedImportFieldKeys);
+    return headers.filter((h) => selectedSet.has(resolveSystemFieldKey(h, importFieldMapRef.current)));
+  }, [headers, selectedImportFieldKeys]);
+  const effectiveExampleRow = useMemo(() => {
+    if (!effectiveHeaders?.length) return exampleRow;
+    if (!headers?.length) return exampleRow;
+    const selectedSet = new Set(selectedImportFieldKeys);
+    const selectedIndexes = headers
+      .map((h, idx) => ({ idx, key: resolveSystemFieldKey(h, importFieldMapRef.current) }))
+      .filter((item) => selectedSet.has(item.key))
+      .map((item) => item.idx);
+    if (!exampleRow?.length) return selectedIndexes.map(() => '');
+    return selectedIndexes.map((idx) => String(exampleRow[idx] ?? ''));
+  }, [effectiveHeaders, headers, exampleRow, selectedImportFieldKeys]);
+
+  headersRef.current = effectiveHeaders;
+  exampleRowRef.current = effectiveExampleRow;
+
+  const importPreferenceSegment = useMemo(() => {
+    const raw = (customImportPreferenceKey?.trim() || location.pathname || 'default').toLowerCase();
+    return raw.replace(/[^a-z0-9_-]/g, '_');
+  }, [customImportPreferenceKey, location.pathname]);
 
   const resolvedTemplateFileName = useMemo(() => {
     if (templateFileName?.trim()) {
@@ -190,6 +284,17 @@ export const UniImport: React.FC<UniImportProps> = ({
 
   const showXlsxTools = enableXlsxTemplate ?? Boolean(headers?.length);
   const showMappingImport = enableMappingImport ?? Boolean(headers?.length);
+  const showCustomImport = enableCustomImport ?? Boolean(headers?.length);
+  const showRelationImport = enableRelationImport ?? Boolean(onRelationImportSubmit);
+  const relationDefaultEntities = useMemo<UniRelationImportEntity[]>(
+    () => relationImportConfig?.entities ?? ['material', 'processRoute', 'operation', 'performance'],
+    [relationImportConfig?.entities],
+  );
+  const relationSupportedStrategies = useMemo<UniRelationImportWriteStrategy[]>(
+    () => relationImportConfig?.supportedStrategies ?? ['upsert', 'create_only', 'link_only', 'strict_fail'],
+    [relationImportConfig?.supportedStrategies],
+  );
+  const relationDefaultWriteStrategy = relationImportConfig?.defaultWriteStrategy ?? 'upsert';
   // 与 app 主题一致：以 document.colorScheme 为准（主题编辑选择），未设置时才用系统偏好
   const colorScheme = document.documentElement.style.colorScheme;
   const isDark = colorScheme === 'dark'
@@ -200,11 +305,28 @@ export const UniImport: React.FC<UniImportProps> = ({
     setUploadedSheetRows(null);
     setMappingModalOpen(false);
     setMappingRawRows([]);
+    setCustomModalOpen(false);
+    setCustomImportFieldKeys(null);
+    setCustomRelationEntities(relationDefaultEntities);
+    setCustomWriteStrategy(relationDefaultWriteStrategy);
     setPreviewModalOpen(false);
     setPreviewData([]);
     setPrecheckResult(null);
     setPrecheckLoading(false);
   }, [open, visible]);
+
+  useEffect(() => {
+    if (!(open ?? visible)) return;
+    if (!allFieldKeys.length) return;
+    const savedMap = getPreference<Record<string, string[]>>('ui.import_field_selection', {});
+    const saved = Array.isArray(savedMap?.[importPreferenceSegment]) ? savedMap[importPreferenceSegment] : [];
+    if (!saved.length) {
+      setCustomImportFieldKeys(allFieldKeys);
+      return;
+    }
+    const validSaved = allFieldKeys.filter((key) => saved.includes(key));
+    setCustomImportFieldKeys(validSaved.length ? validSaved : allFieldKeys);
+  }, [open, visible, allFieldKeys, getPreference, importPreferenceSegment]);
 
   // 弹窗打开时拦截 Ctrl/Cmd+D，避免触发浏览器收藏
   useEffect(() => {
@@ -284,8 +406,56 @@ export const UniImport: React.FC<UniImportProps> = ({
     messageApi.success(t('components.uniImport.mappingApplySuccess'));
   };
 
+  const handleCustomApply = (result: UniImportCustomModalApplyResult) => {
+    setCustomImportFieldKeys(result.selectedFieldKeys);
+    setCustomRelationEntities(result.relationEntities);
+    setCustomWriteStrategy(result.writeStrategy);
+    const savedMap = getPreference<Record<string, string[]>>('ui.import_field_selection', {});
+    const nextMap = {
+      ...(savedMap && typeof savedMap === 'object' ? savedMap : {}),
+      [importPreferenceSegment]: result.selectedFieldKeys,
+    };
+    void updatePreferences({
+      ui: {
+        import_field_selection: nextMap,
+      },
+    });
+    setCustomModalOpen(false);
+    messageApi.success(
+      t('components.uniImport.customImportApplySuccess', { count: result.selectedFieldKeys.length }),
+    );
+  };
+
+  const shouldUseRelationImport = showRelationImport && customRelationEntities.length > 0 && !!onRelationImportSubmit;
+
   const runImportPrecheck = useCallback(
     async (data: any[][]) => {
+      const asStringRows = data.map((row) => row.map((cell) => String(cell ?? '')));
+      if (showRelationImport && customRelationEntities.length > 0 && onRelationImportPrecheck) {
+        setPrecheckLoading(true);
+        setPrecheckResult(null);
+        try {
+          const relation = await onRelationImportPrecheck({
+            rawRows: asStringRows,
+            entities: customRelationEntities,
+            writeStrategy: customWriteStrategy,
+          });
+          setPrecheckResult({
+            canImport: relation?.success !== false && !(relation?.errors?.length),
+            errors: relation?.errors,
+            warnings: relation?.warnings,
+          });
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : String(error);
+          setPrecheckResult({
+            canImport: false,
+            errors: [t('components.uniImport.previewPrecheckFailed', { message: msg })],
+          });
+        } finally {
+          setPrecheckLoading(false);
+        }
+        return;
+      }
       if (!onImportPrecheck) {
         setPrecheckResult(null);
         setPrecheckLoading(false);
@@ -306,7 +476,14 @@ export const UniImport: React.FC<UniImportProps> = ({
         setPrecheckLoading(false);
       }
     },
-    [onImportPrecheck, t],
+    [
+      showRelationImport,
+      customRelationEntities,
+      customWriteStrategy,
+      onRelationImportPrecheck,
+      onImportPrecheck,
+      t,
+    ],
   );
 
   const openImportPreview = (data: any[][]) => {
@@ -321,7 +498,29 @@ export const UniImport: React.FC<UniImportProps> = ({
     void runImportPrecheck(data);
   };
 
-  const commitImport = (data: any[][]) => {
+  const commitImport = async (data: any[][]) => {
+    if (shouldUseRelationImport && onRelationImportSubmit) {
+      const relationResult = await onRelationImportSubmit({
+        rawRows: data.map((row) => row.map((cell) => String(cell ?? ''))),
+        entities: customRelationEntities,
+        writeStrategy: customWriteStrategy,
+      });
+      if (relationResult?.message) {
+        messageApi.success(relationResult.message);
+      }
+      if (relationResult?.errors?.length) {
+        setPrecheckResult({
+          canImport: false,
+          errors: relationResult.errors,
+          warnings: relationResult.warnings,
+        });
+        return;
+      }
+      setPreviewModalOpen(false);
+      onCancel();
+      return;
+    }
+
     onConfirm(data);
     setPreviewModalOpen(false);
     onCancel();
@@ -331,7 +530,7 @@ export const UniImport: React.FC<UniImportProps> = ({
     if (precheckResult?.errors?.length) {
       return;
     }
-    commitImport(previewData);
+    void commitImport(previewData);
   };
 
   /**
@@ -704,13 +903,28 @@ export const UniImport: React.FC<UniImportProps> = ({
         return;
       }
 
+      const selectedFieldSet = customImportFieldKeys ? new Set(customImportFieldKeys) : null;
+      const projectedData =
+        selectedFieldSet && selectedFieldSet.size > 0 && headers?.length
+          ? (() => {
+              const sourceHeaders = headers;
+              const selectedIndexes = sourceHeaders
+                .map((header, idx) => ({
+                  idx,
+                  key: resolveSystemFieldKey(header, importFieldMapRef.current),
+                }))
+                .filter((x) => selectedFieldSet.has(x.key))
+                .map((x) => x.idx);
+              if (selectedIndexes.length === 0) return data;
+              return data.map((row) => selectedIndexes.map((colIdx) => row?.[colIdx] ?? ''));
+            })()
+          : data;
+
       if (enableImportPreview) {
-        openImportPreview(data);
+        openImportPreview(projectedData);
         return;
       }
-
-      onConfirm(data);
-      onCancel();
+      void commitImport(projectedData);
     } catch (error: any) {
       messageApi.error('获取表格数据失败：' + (error.message || '未知错误'));
     }
@@ -751,7 +965,7 @@ export const UniImport: React.FC<UniImportProps> = ({
               width: '100%',
             }}
           >
-            {showXlsxTools || showMappingImport ? (
+            {showXlsxTools || showMappingImport || showCustomImport ? (
               <Space wrap>
                 {showMappingImport && (
                   <Upload
@@ -764,6 +978,11 @@ export const UniImport: React.FC<UniImportProps> = ({
                       {t('components.uniImport.mappingImport')}
                     </Button>
                   </Upload>
+                )}
+                {showCustomImport && (
+                  <Button icon={<SwapOutlined />} disabled={loading || xlsxBusy} onClick={() => setCustomModalOpen(true)}>
+                    {t('components.uniImport.customImport')}
+                  </Button>
                 )}
                 {showXlsxTools && (
                   <>
@@ -827,8 +1046,8 @@ export const UniImport: React.FC<UniImportProps> = ({
         <UniImportSheetHost
           isDark={isDark}
           uploadedSheetRows={uploadedSheetRows}
-          headersRef={headersRef}
-          exampleRowRef={exampleRowRef}
+          headers={headersRef.current}
+          exampleRow={exampleRowRef.current}
           height={height}
           loading={loading}
           onLoadingChange={setLoading}
@@ -845,6 +1064,22 @@ export const UniImport: React.FC<UniImportProps> = ({
           rawRows={mappingRawRows}
           onCancel={() => setMappingModalOpen(false)}
           onApply={handleMappingApply}
+        />
+      )}
+      {showCustomImport && headers && headers.length > 0 && (
+        <UniImportCustomModal
+          open={customModalOpen}
+          headers={headers}
+          fieldMap={importFieldMapRef.current}
+          initialSelectedFieldKeys={selectedImportFieldKeys}
+          enableRelationImport={showRelationImport}
+          defaultRelationEntities={relationDefaultEntities}
+          defaultWriteStrategy={relationDefaultWriteStrategy}
+          supportedStrategies={relationSupportedStrategies}
+          initialRelationEntities={customRelationEntities}
+          initialWriteStrategy={customWriteStrategy}
+          onCancel={() => setCustomModalOpen(false)}
+          onApply={handleCustomApply}
         />
       )}
       <UniImportPreviewModal

@@ -5,7 +5,7 @@
 """
 
 from pydantic import BaseModel, Field, validator, model_validator, ConfigDict
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Literal
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -1171,6 +1171,46 @@ class BOMBatchImport(BaseModel):
         if not v or len(v) == 0:
             raise ValueError("至少需要添加一个BOM导入项")
         return v
+
+
+RelationImportEntity = Literal["material", "processRoute", "operation", "performance"]
+RelationImportWriteStrategy = Literal["upsert", "create_only", "link_only", "strict_fail"]
+
+
+class BOMRelationImportRequest(BaseModel):
+    """BOM 高级关联导入请求。"""
+
+    rows: List[List[str]] = Field(..., min_items=1, description="二维表数据，含表头与示例行")
+    entities: List[RelationImportEntity] = Field(
+        default_factory=list,
+        description="参与关联导入的实体：material/processRoute/operation/performance",
+    )
+    write_strategy: RelationImportWriteStrategy = Field(
+        "upsert",
+        description="写入策略：upsert/create_only/link_only/strict_fail",
+    )
+    dry_run: bool = Field(False, description="是否仅预检")
+
+    @validator("entities")
+    def validate_entities(cls, v):
+        if not v:
+            raise ValueError("至少选择一个关联实体")
+        return list(dict.fromkeys(v))
+
+
+class BOMRelationImportSummary(BaseModel):
+    created: int = Field(0, description="新增条数")
+    updated: int = Field(0, description="更新条数")
+    linked: int = Field(0, description="关联条数")
+    failed: int = Field(0, description="失败条数")
+
+
+class BOMRelationImportResponse(BaseModel):
+    success: bool = Field(True, description="是否成功")
+    message: Optional[str] = Field(None, description="提示消息")
+    summary: BOMRelationImportSummary = Field(default_factory=BOMRelationImportSummary, description="汇总")
+    errors: List[str] = Field(default_factory=list, description="错误列表")
+    warnings: List[str] = Field(default_factory=list, description="警告列表")
 
 
 class BOMVersionCreate(BaseModel):

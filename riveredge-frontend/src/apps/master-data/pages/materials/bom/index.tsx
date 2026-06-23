@@ -25,8 +25,9 @@ import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, flushDrawerOpen, MODAL_CONFIG, DRAWER_CONFIG, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { bomApi, materialApi } from '../../../services/material';
-import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImport, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent } from '../../../types/material';
+import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImport, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent, BOMRelationImportEntity, BOMRelationImportWriteStrategy } from '../../../types/material';
 import { testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
+import { batchSetFieldValues } from '../../../../../services/customField';
 
 const BOM_ISSUE_METHOD_VALUES = ['pick', 'backflush', 'none'] as const;
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
@@ -340,31 +341,83 @@ const BOMPage: React.FC = () => {
   // 批量导入加载状态
   const [batchImportLoading, setBatchImportLoading] = useState(false);
 
-  const bomImportTemplate = useMemo(
-    () =>
-      buildFactoryImportTemplate(
-        t,
-        [
-          { field: 'parentCode', required: true, labelKey: 'app.master-data.bom.importHeaderParentCode' },
-          { field: 'componentCode', required: true, labelKey: 'app.master-data.bom.importHeaderComponentCode' },
-          { field: 'quantity', required: true, labelKey: 'app.master-data.bom.importHeaderQuantity' },
-          { field: 'unit', labelKey: 'app.master-data.bom.importHeaderUnit' },
-          { field: 'wasteRate', labelKey: 'app.master-data.bom.importHeaderWasteRate' },
-          { field: 'isRequired', labelKey: 'app.master-data.bom.importHeaderIsRequired' },
-          { field: 'remark', labelKey: 'app.master-data.bom.importHeaderRemark' },
-        ],
-        [
-          t('app.master-data.bom.importExample.parentCode'),
-          t('app.master-data.bom.importExample.componentCode'),
-          t('app.master-data.bom.importExample.quantity'),
-          t('app.master-data.bom.importExample.unit'),
-          t('app.master-data.bom.importExample.wasteRate'),
-          t('app.master-data.bom.importExample.isRequired'),
-          '',
-        ],
-      ),
-    [t, i18n.language],
-  );
+  const bomImportTemplate = useMemo(() => {
+    const baseTemplate = buildFactoryImportTemplate(
+      t,
+      [
+        { field: 'parentCode', required: true, labelKey: 'app.master-data.bom.importHeaderParentCode' },
+        { field: 'componentCode', required: true, labelKey: 'app.master-data.bom.importHeaderComponentCode' },
+        { field: 'quantity', required: true, labelKey: 'app.master-data.bom.importHeaderQuantity' },
+        { field: 'unit', labelKey: 'app.master-data.bom.importHeaderUnit' },
+        { field: 'wasteRate', labelKey: 'app.master-data.bom.importHeaderWasteRate' },
+        { field: 'isRequired', labelKey: 'app.master-data.bom.importHeaderIsRequired' },
+        { field: 'remark', labelKey: 'app.master-data.bom.importHeaderRemark' },
+        { field: 'materialName', labelKey: 'app.master-data.bom.importHeaderMaterialName' },
+        { field: 'specification', labelKey: 'app.master-data.bom.importHeaderSpecification' },
+        { field: 'baseUnit', labelKey: 'app.master-data.bom.importHeaderBaseUnit' },
+        { field: 'processRouteCode', labelKey: 'app.master-data.bom.importHeaderProcessRouteCode' },
+        { field: 'processRouteName', labelKey: 'app.master-data.bom.importHeaderProcessRouteName' },
+        { field: 'operationCode', labelKey: 'app.master-data.bom.importHeaderOperationCode' },
+        { field: 'operationName', labelKey: 'app.master-data.bom.importHeaderOperationName' },
+        { field: 'employeeId', labelKey: 'app.master-data.bom.importHeaderEmployeeId' },
+        { field: 'employeeName', labelKey: 'app.master-data.bom.importHeaderEmployeeName' },
+        { field: 'calcMode', labelKey: 'app.master-data.bom.importHeaderCalcMode' },
+        { field: 'hourlyRate', labelKey: 'app.master-data.bom.importHeaderHourlyRate' },
+        { field: 'defaultPieceRate', labelKey: 'app.master-data.bom.importHeaderDefaultPieceRate' },
+        { field: 'baseSalary', labelKey: 'app.master-data.bom.importHeaderBaseSalary' },
+      ],
+      [
+        t('app.master-data.bom.importExample.parentCode'),
+        t('app.master-data.bom.importExample.componentCode'),
+        t('app.master-data.bom.importExample.quantity'),
+        t('app.master-data.bom.importExample.unit'),
+        t('app.master-data.bom.importExample.wasteRate'),
+        t('app.master-data.bom.importExample.isRequired'),
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+      ],
+    );
+
+    if (!bomListCustomFields.length) return baseTemplate;
+
+    const importHeaders = [...baseTemplate.importHeaders];
+    const importExampleRow = [...baseTemplate.importExampleRow];
+    const importHeaderMap = { ...baseTemplate.importHeaderMap };
+
+    const orderedCustomFields = [...bomListCustomFields].sort(
+      (a: any, b: any) => Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0),
+    );
+
+    orderedCustomFields.forEach((field: any) => {
+      const label = String(field?.label || field?.name || field?.code || '').trim();
+      if (!label || !field?.code) return;
+      const customKey = `custom:${field.code}`;
+      const header = field?.is_required ? `*${label}` : label;
+      importHeaders.push(header);
+      importExampleRow.push('');
+      importHeaderMap[header] = customKey;
+      importHeaderMap[label] = customKey;
+      importHeaderMap[field.code] = customKey;
+    });
+
+    return {
+      importHeaders,
+      importExampleRow,
+      importHeaderMap,
+    };
+  }, [t, i18n.language, bomListCustomFields]);
   
   // 版本管理Modal状态
   const [versionModalVisible, setVersionModalVisible] = useState(false);
@@ -1492,7 +1545,14 @@ const BOMPage: React.FC = () => {
 
       // 解析数据行
       const importItems: BOMBatchImportItem[] = [];
+      const importItemCustomFieldValues: Array<Record<string, any>> = [];
       const errors: string[] = [];
+      const customFieldCodeToIndex: Record<string, number> = {};
+      Object.entries(headerIndexMap).forEach(([fieldKey, colIndex]) => {
+        if (typeof fieldKey === 'string' && fieldKey.startsWith('custom:')) {
+          customFieldCodeToIndex[fieldKey.replace('custom:', '')] = colIndex;
+        }
+      });
 
       rows.forEach((row, rowIndex) => {
         if (!row || row.length === 0 || !row[headerIndexMap['parentCode']]) {
@@ -1573,6 +1633,36 @@ const BOMPage: React.FC = () => {
           isRequired: isRequired !== undefined ? isRequired : true,
           remark: remark || undefined,
         });
+
+        const rowCustomValues: Record<string, any> = {};
+        bomListCustomFields.forEach((field: any) => {
+          const colIdx = customFieldCodeToIndex[field.code];
+          if (colIdx === undefined) return;
+          const raw = row[colIdx];
+          const value = raw == null ? '' : String(raw).trim();
+          if (value === '') return;
+
+          if (field.field_type === 'number' || field.field_type === 'formula') {
+            const num = Number(value.replace(/,/g, ''));
+            if (Number.isFinite(num)) {
+              rowCustomValues[field.code] = num;
+            } else {
+              errors.push(`第 ${rowIndex + 3} 行：自定义字段 ${field.name || field.code} 不是有效数字`);
+            }
+            return;
+          }
+
+          if (field.field_type === 'multiselect') {
+            rowCustomValues[field.code] = value
+              .split(/[,，]/)
+              .map((item) => item.trim())
+              .filter(Boolean);
+            return;
+          }
+
+          rowCustomValues[field.code] = value;
+        });
+        importItemCustomFieldValues.push(rowCustomValues);
       });
 
       // 如果有错误，显示错误信息
@@ -1593,7 +1683,49 @@ const BOMPage: React.FC = () => {
         version: '1.0', // 默认版本
       };
 
-      await bomApi.batchImport(batchImportData);
+      const createdBoms = await bomApi.batchImport(batchImportData);
+      const hasCustomFieldImportData = importItemCustomFieldValues.some((row) => Object.keys(row).length > 0);
+
+      if (hasCustomFieldImportData && createdBoms.length > 0) {
+        // 与后端 batch_import_bom 的分组逻辑保持一致：按 parentCode 首次出现顺序分组，组内保持原顺序
+        const parentOrder: string[] = [];
+        const groupedIndexes = new Map<string, number[]>();
+        importItems.forEach((item, idx) => {
+          if (!groupedIndexes.has(item.parentCode)) {
+            groupedIndexes.set(item.parentCode, []);
+            parentOrder.push(item.parentCode);
+          }
+          groupedIndexes.get(item.parentCode)!.push(idx);
+        });
+        const backendOrderedImportIndexes = parentOrder.flatMap((parentCode) => groupedIndexes.get(parentCode) || []);
+
+        const fieldUuidByCode = new Map<string, string>();
+        bomListCustomFields.forEach((f: any) => {
+          if (f?.code && f?.uuid) fieldUuidByCode.set(String(f.code), String(f.uuid));
+        });
+
+        await Promise.all(
+          createdBoms.map(async (bomRow, createdIdx) => {
+            const importIdx = backendOrderedImportIndexes[createdIdx];
+            if (importIdx === undefined) return;
+            const rowValues = importItemCustomFieldValues[importIdx];
+            if (!rowValues || Object.keys(rowValues).length === 0) return;
+            const values = Object.entries(rowValues)
+              .map(([fieldCode, value]) => {
+                const fieldUuid = fieldUuidByCode.get(fieldCode);
+                if (!fieldUuid) return null;
+                return { field_uuid: fieldUuid, value };
+              })
+              .filter(Boolean) as Array<{ field_uuid: string; value: any }>;
+            if (!values.length) return;
+            await batchSetFieldValues({
+              record_id: bomRow.id,
+              record_table: BOM_CUSTOM_FIELD_TABLE,
+              values,
+            });
+          }),
+        );
+      }
       messageApi.success(t('app.master-data.bom.importSuccess', { count: importItems.length }));
       actionRef.current?.reload();
     } catch (error: any) {
@@ -1601,6 +1733,35 @@ const BOMPage: React.FC = () => {
     } finally {
       setBatchImportLoading(false);
     }
+  };
+
+  const handleRelationImportPrecheck = async (payload: {
+    rawRows: string[][];
+    entities: BOMRelationImportEntity[];
+    writeStrategy: BOMRelationImportWriteStrategy;
+  }) => {
+    return bomApi.relationImportPrecheck({
+      rows: payload.rawRows,
+      entities: payload.entities,
+      writeStrategy: payload.writeStrategy,
+    });
+  };
+
+  const handleRelationImportSubmit = async (payload: {
+    rawRows: string[][];
+    entities: BOMRelationImportEntity[];
+    writeStrategy: BOMRelationImportWriteStrategy;
+  }) => {
+    const result = await bomApi.relationImport({
+      rows: payload.rawRows,
+      entities: payload.entities,
+      writeStrategy: payload.writeStrategy,
+    });
+    if (result.success) {
+      messageApi.success(result.message || t('app.master-data.bom.importSuccess', { count: result.summary.created + result.summary.updated + result.summary.linked }));
+      actionRef.current?.reload();
+    }
+    return result;
   };
 
 
@@ -2721,6 +2882,15 @@ const BOMPage: React.FC = () => {
         ]}
         showImportButton={true}
         onImport={handleBatchImportConfirm}
+        enableCustomImport={true}
+        enableRelationImport={true}
+        relationImportConfig={{
+          entities: ['material', 'processRoute', 'operation', 'performance'],
+          defaultWriteStrategy: 'upsert',
+          supportedStrategies: ['upsert', 'create_only', 'link_only', 'strict_fail'],
+        }}
+        onRelationImportPrecheck={handleRelationImportPrecheck}
+        onRelationImportSubmit={handleRelationImportSubmit}
         importHeaders={bomImportTemplate.importHeaders}
         importExampleRow={bomImportTemplate.importExampleRow}
         importFieldMap={bomImportTemplate.importHeaderMap}

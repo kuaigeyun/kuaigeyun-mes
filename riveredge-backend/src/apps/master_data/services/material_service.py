@@ -22,7 +22,8 @@ from apps.master_data.constants.material_source_type import (
     is_canonical_material_source_type,
     normalize_material_source_type,
 )
-from apps.master_data.models.process import ProcessRoute
+from apps.master_data.models.process import ProcessRoute, Operation
+from apps.master_data.models.employee_performance import EmployeePerformanceConfig
 from apps.master_data.models.material_code_alias import MaterialCodeAlias
 from apps.master_data.services.material_code_service import MaterialCodeService
 from apps.master_data.schemas.material_schemas import (
@@ -42,6 +43,7 @@ from apps.master_data.schemas.material_schemas import (
     MaterialRewriteMainCodesFailedItem,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
     BOMBatchImport, BOMVersionCreate, BOMVersionCompare,
+    BOMRelationImportRequest, BOMRelationImportResponse, BOMRelationImportSummary,
     BOMGroupSummary,
 )
 from core.services.business.code_generation_service import CodeGenerationService
@@ -4701,6 +4703,376 @@ class MaterialService:
         logger.info(f"批量导入BOM成功 (Clean Replace)，共创建 {len(bom_list)} 条BOM记录")
         
         return [BOMResponse.model_validate(bom) for bom in bom_list]
+
+    @staticmethod
+    async def relation_import_bom(
+        tenant_id: int,
+        data: BOMRelationImportRequest,
+    ) -> BOMRelationImportResponse:
+        """BOM 高级关联导入：物料/工艺路线/工序/绩效 + BOM 明细一体化导入。"""
+
+        def _norm(value: Any) -> str:
+            return str(value or "").strip()
+
+        if not data.rows or len(data.rows) < 3:
+            raise ValidationError("导入数据至少需要表头、示例和一行业务数据")
+
+        raw_headers = data.rows[0] or []
+        headers = [_norm(h).lstrip("*") for h in raw_headers]
+        index_map = {h: idx for idx, h in enumerate(headers) if h}
+
+        def _idx(*keys: str) -> Optional[int]:
+            for k in keys:
+                if k in index_map:
+                    return index_map[k]
+            return None
+
+        parent_idx = _idx("父件编号", "parentCode", "parent_code")
+        comp_idx = _idx("子件编号", "componentCode", "component_code")
+        qty_idx = _idx("子件数量", "quantity", "qty")
+        unit_idx = _idx("子件单位", "unit")
+        waste_idx = _idx("损耗率", "wasteRate", "waste_rate")
+        required_idx = _idx("是否必选", "isRequired", "is_required")
+        remark_idx = _idx("备注", "remark")
+
+        material_name_idx = _idx("物料名称", "materialName", "material_name")
+        material_spec_idx = _idx("规格", "specification")
+        material_unit_idx = _idx("基础单位", "baseUnit", "base_unit")
+        route_code_idx = _idx("工艺路线编码", "processRouteCode", "process_route_code")
+        route_name_idx = _idx("工艺路线名称", "processRouteName", "process_route_name")
+        op_code_idx = _idx("工序编码", "operationCode", "operation_code")
+        op_name_idx = _idx("工序名称", "operationName", "operation_name")
+        employee_id_idx = _idx("员工ID", "employeeId", "employee_id")
+        employee_name_idx = _idx("员工姓名", "employeeName", "employee_name")
+        calc_mode_idx = _idx("绩效模式", "calcMode", "calc_mode")
+        hourly_rate_idx = _idx("工时单价", "hourlyRate", "hourly_rate")
+        piece_rate_idx = _idx("计件单价", "defaultPieceRate", "default_piece_rate")
+        base_salary_idx = _idx("保障工资", "baseSalary", "base_salary")
+
+        business_rows = [
+            row for row in data.rows[2:]
+            if row and any(_norm(c) for c in row)
+        ]
+        if not business_rows:
+            raise ValidationError("没有可导入的数据行")
+
+        summary = BOMRelationImportSummary()
+        warnings: List[str] = []
+        errors: List[str] = []
+        entities = set(data.entities or [])
+        strategy = data.write_strategy
+
+        material_codes: set[str] = set()
+        for row in business_rows:
+            if parent_idx is not None:
+                pc = _norm(row[parent_idx] if parent_idx < len(row) else "")
+                if pc:
+                    material_codes.add(pc)
+            if comp_idx is not None:
+                cc = _norm(row[comp_idx] if comp_idx < len(row) else "")
+                if cc:
+                    material_codes.add(cc)
+
+        code_to_material: Dict[str, Material] = {}
+        if material_codes:
+            mats = await Material.filter(
+                tenant_id=tenant_id,
+                main_code__in=list(material_codes),
+                deleted_at__isnull=True,
+            ).all()
+            code_to_material = {m.main_code: m for m in mats}
+
+        created_material_codes: set[str] = set()
+
+        async def _ensure_material(code: str, row: List[Any]) -> Optional[Material]:
+            if not code:
+                return None
+            existing = code_to_material.get(code)
+            if existing:
+                if strategy == "upsert" and "material" in entities:
+                    updates: Dict[str, Any] = {}
+                    if material_name_idx is not None and material_name_idx < len(row):
+                        n = _norm(row[material_name_idx])
+                        if n and n != (existing.name or ""):
+                            updates["name"] = n
+                    if material_spec_idx is not None and material_spec_idx < len(row):
+                        s = _norm(row[material_spec_idx])
+                        if s and s != (existing.specification or ""):
+                            updates["specification"] = s
+                    if material_unit_idx is not None and material_unit_idx < len(row):
+                        u = _norm(row[material_unit_idx])
+                        if u and u != (existing.base_unit or ""):
+                            updates["base_unit"] = u
+                    if updates and not data.dry_run:
+                        await existing.update_from_dict(updates).save()
+                    if updates:
+                        summary.updated += 1
+                return existing
+
+            if strategy in ("link_only", "strict_fail"):
+                errors.append(f"物料编码不存在：{code}")
+                return None
+
+            if "material" not in entities:
+                errors.append(f"物料编码不存在且未启用物料导入：{code}")
+                return None
+
+            unit = _norm(row[material_unit_idx]) if material_unit_idx is not None and material_unit_idx < len(row) else "个"
+            name = _norm(row[material_name_idx]) if material_name_idx is not None and material_name_idx < len(row) else code
+            spec = _norm(row[material_spec_idx]) if material_spec_idx is not None and material_spec_idx < len(row) else None
+
+            if data.dry_run:
+                summary.created += 1
+                return None
+
+            created = await Material.create(
+                tenant_id=tenant_id,
+                main_code=code,
+                code=code,
+                name=name or code,
+                specification=spec or None,
+                base_unit=unit or "个",
+                source_type="Make",
+                is_active=True,
+            )
+            code_to_material[code] = created
+            created_material_codes.add(code)
+            summary.created += 1
+            return created
+
+        route_map: Dict[str, ProcessRoute] = {}
+        op_map: Dict[str, Operation] = {}
+        if "processRoute" in entities:
+            route_codes = {
+                _norm(r[route_code_idx]) for r in business_rows
+                if route_code_idx is not None and route_code_idx < len(r) and _norm(r[route_code_idx])
+            }
+            if route_codes:
+                routes = await ProcessRoute.filter(
+                    tenant_id=tenant_id,
+                    code__in=list(route_codes),
+                    deleted_at__isnull=True,
+                ).all()
+                route_map = {r.code: r for r in routes}
+
+        if "operation" in entities:
+            op_codes = {
+                _norm(r[op_code_idx]) for r in business_rows
+                if op_code_idx is not None and op_code_idx < len(r) and _norm(r[op_code_idx])
+            }
+            if op_codes:
+                operations = await Operation.filter(
+                    tenant_id=tenant_id,
+                    code__in=list(op_codes),
+                    deleted_at__isnull=True,
+                ).all()
+                op_map = {o.code: o for o in operations}
+
+        if "performance" in entities:
+            employee_ids = []
+            for row in business_rows:
+                if employee_id_idx is None or employee_id_idx >= len(row):
+                    continue
+                val = _norm(row[employee_id_idx])
+                if val.isdigit():
+                    employee_ids.append(int(val))
+            config_map: Dict[int, EmployeePerformanceConfig] = {}
+            if employee_ids:
+                configs = await EmployeePerformanceConfig.filter(
+                    tenant_id=tenant_id,
+                    employee_id__in=list(set(employee_ids)),
+                    deleted_at__isnull=True,
+                ).all()
+                config_map = {c.employee_id: c for c in configs}
+
+            for row in business_rows:
+                if employee_id_idx is None or employee_id_idx >= len(row):
+                    continue
+                emp_str = _norm(row[employee_id_idx])
+                if not emp_str:
+                    continue
+                if not emp_str.isdigit():
+                    errors.append(f"员工ID非法：{emp_str}")
+                    continue
+                employee_id = int(emp_str)
+                existed = config_map.get(employee_id)
+
+                calc_mode = _norm(row[calc_mode_idx]) if calc_mode_idx is not None and calc_mode_idx < len(row) else "time"
+                hourly_rate = _norm(row[hourly_rate_idx]) if hourly_rate_idx is not None and hourly_rate_idx < len(row) else ""
+                piece_rate = _norm(row[piece_rate_idx]) if piece_rate_idx is not None and piece_rate_idx < len(row) else ""
+                base_salary = _norm(row[base_salary_idx]) if base_salary_idx is not None and base_salary_idx < len(row) else ""
+                employee_name = _norm(row[employee_name_idx]) if employee_name_idx is not None and employee_name_idx < len(row) else None
+
+                if existed is None:
+                    if strategy in ("link_only", "strict_fail"):
+                        errors.append(f"绩效配置不存在：employee_id={employee_id}")
+                        continue
+                    summary.created += 1
+                    if not data.dry_run:
+                        cfg = await EmployeePerformanceConfig.create(
+                            tenant_id=tenant_id,
+                            employee_id=employee_id,
+                            employee_name=employee_name,
+                            calc_mode=calc_mode or "time",
+                            hourly_rate=Decimal(hourly_rate) if hourly_rate else None,
+                            default_piece_rate=Decimal(piece_rate) if piece_rate else None,
+                            base_salary=Decimal(base_salary) if base_salary else None,
+                            is_active=True,
+                        )
+                        config_map[employee_id] = cfg
+                    continue
+
+                if strategy == "upsert":
+                    updates: Dict[str, Any] = {}
+                    if employee_name and employee_name != (existed.employee_name or ""):
+                        updates["employee_name"] = employee_name
+                    if calc_mode:
+                        updates["calc_mode"] = calc_mode
+                    if hourly_rate:
+                        updates["hourly_rate"] = Decimal(hourly_rate)
+                    if piece_rate:
+                        updates["default_piece_rate"] = Decimal(piece_rate)
+                    if base_salary:
+                        updates["base_salary"] = Decimal(base_salary)
+                    if updates:
+                        summary.updated += 1
+                        if not data.dry_run:
+                            await existed.update_from_dict(updates).save()
+
+        bom_items_payload: List[Dict[str, Any]] = []
+        for row_no, row in enumerate(business_rows, start=3):
+            parent_code = _norm(row[parent_idx]) if parent_idx is not None and parent_idx < len(row) else ""
+            component_code = _norm(row[comp_idx]) if comp_idx is not None and comp_idx < len(row) else ""
+            qty_str = _norm(row[qty_idx]) if qty_idx is not None and qty_idx < len(row) else ""
+
+            if not parent_code or not component_code or not qty_str:
+                errors.append(f"第 {row_no} 行缺少 BOM 必填字段（父件/子件/数量）")
+                continue
+
+            try:
+                qty = Decimal(qty_str.replace(",", ""))
+            except Exception:
+                errors.append(f"第 {row_no} 行数量格式非法：{qty_str}")
+                continue
+
+            if qty <= 0:
+                errors.append(f"第 {row_no} 行数量必须大于 0")
+                continue
+
+            # 物料存在性校验/补齐
+            await _ensure_material(parent_code, row)
+            await _ensure_material(component_code, row)
+
+            waste_rate = None
+            if waste_idx is not None and waste_idx < len(row):
+                waste_str = _norm(row[waste_idx]).replace("%", "")
+                if waste_str:
+                    try:
+                        waste_rate = Decimal(waste_str)
+                    except Exception:
+                        errors.append(f"第 {row_no} 行损耗率格式非法：{waste_str}")
+
+            is_required = True
+            if required_idx is not None and required_idx < len(row):
+                required_str = _norm(row[required_idx]).lower()
+                if required_str in ("否", "false", "0", "no", "n"):
+                    is_required = False
+
+            bom_items_payload.append({
+                "parent_code": parent_code,
+                "component_code": component_code,
+                "quantity": qty,
+                "unit": _norm(row[unit_idx]) if unit_idx is not None and unit_idx < len(row) else None,
+                "waste_rate": waste_rate,
+                "is_required": is_required,
+                "remark": _norm(row[remark_idx]) if remark_idx is not None and remark_idx < len(row) else None,
+            })
+
+            # process route upsert + material-link
+            if "processRoute" in entities and route_code_idx is not None and route_code_idx < len(row):
+                route_code = _norm(row[route_code_idx])
+                route_name = _norm(row[route_name_idx]) if route_name_idx is not None and route_name_idx < len(row) else route_code
+                if route_code:
+                    route = route_map.get(route_code)
+                    if route is None:
+                        if strategy in ("link_only", "strict_fail"):
+                            errors.append(f"工艺路线不存在：{route_code}")
+                        else:
+                            summary.created += 1
+                            if not data.dry_run:
+                                route = await ProcessRoute.create(
+                                    tenant_id=tenant_id,
+                                    code=route_code,
+                                    name=route_name or route_code,
+                                    version="1.0",
+                                    is_active=True,
+                                )
+                                route_map[route_code] = route
+                    elif strategy == "upsert" and route_name and route_name != route.name:
+                        summary.updated += 1
+                        if not data.dry_run:
+                            await route.update_from_dict({"name": route_name}).save()
+
+                    parent_mat = code_to_material.get(parent_code)
+                    route_obj = route_map.get(route_code)
+                    if parent_mat and route_obj and strategy in ("upsert", "link_only"):
+                        if parent_mat.process_route_id != route_obj.id:
+                            summary.linked += 1
+                            if not data.dry_run:
+                                await parent_mat.update_from_dict({"process_route_id": route_obj.id}).save()
+
+            if "operation" in entities and op_code_idx is not None and op_code_idx < len(row):
+                op_code = _norm(row[op_code_idx])
+                op_name = _norm(row[op_name_idx]) if op_name_idx is not None and op_name_idx < len(row) else op_code
+                if op_code:
+                    operation = op_map.get(op_code)
+                    if operation is None:
+                        if strategy in ("link_only", "strict_fail"):
+                            errors.append(f"工序不存在：{op_code}")
+                        else:
+                            summary.created += 1
+                            if not data.dry_run:
+                                operation = await Operation.create(
+                                    tenant_id=tenant_id,
+                                    code=op_code,
+                                    name=op_name or op_code,
+                                    is_active=True,
+                                )
+                                op_map[op_code] = operation
+                    elif strategy == "upsert" and op_name and op_name != operation.name:
+                        summary.updated += 1
+                        if not data.dry_run:
+                            await operation.update_from_dict({"name": op_name}).save()
+
+        if errors:
+            summary.failed += len(errors)
+            return BOMRelationImportResponse(
+                success=False,
+                message="关联导入校验未通过",
+                summary=summary,
+                errors=errors,
+                warnings=warnings,
+            )
+
+        if bom_items_payload:
+            summary.linked += len(bom_items_payload)
+            if not data.dry_run:
+                batch_data = BOMBatchImport.model_validate({
+                    "items": bom_items_payload,
+                    "version": "1.0",
+                })
+                await MaterialService.batch_import_bom(tenant_id, batch_data)
+        else:
+            warnings.append("未检测到有效 BOM 明细行，已跳过 BOM 导入")
+
+        msg = "预检通过" if data.dry_run else "关联导入成功"
+        return BOMRelationImportResponse(
+            success=True,
+            message=msg,
+            summary=summary,
+            errors=[],
+            warnings=warnings,
+        )
     
     @staticmethod
     async def detect_bom_cycle(

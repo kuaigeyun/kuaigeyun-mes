@@ -39,6 +39,7 @@ from apps.master_data.schemas.material_schemas import (
     MaterialRewriteMainCodesRequest, MaterialRewriteMainCodesResponse,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
     BOMBatchImport, BOMVersionCreate, BOMVersionCompare,
+    BOMRelationImportRequest, BOMRelationImportResponse,
     BOMGroupSummary, BOMBatchItemsRequest,
     MaterialGroupTreeResponse,
     MaterialCodeMappingCreate, MaterialCodeMappingUpdate, MaterialCodeMappingResponse,
@@ -810,6 +811,37 @@ async def batch_import_bom(
     """
     try:
         return await MaterialService.batch_import_bom(tenant_id, data)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except NotFoundError as e:
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/bom/relation-import/precheck", response_model=BOMRelationImportResponse, summary="Precheck BOM relation import")
+async def precheck_bom_relation_import(
+    data: BOMRelationImportRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """BOM 高级关联导入预检（不写入数据）。"""
+    try:
+        payload = data.model_copy(update={"dry_run": True})
+        return await MaterialService.relation_import_bom(tenant_id, payload)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except NotFoundError as e:
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/bom/relation-import", response_model=BOMRelationImportResponse, summary="Run BOM relation import")
+async def run_bom_relation_import(
+    data: BOMRelationImportRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """执行 BOM 高级关联导入。"""
+    try:
+        return await MaterialService.relation_import_bom(tenant_id, data)
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except NotFoundError as e:

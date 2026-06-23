@@ -744,6 +744,50 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   importFieldMap?: Record<string, string>
   /**
+   * 是否启用自定义导入字段选择
+   */
+  enableCustomImport?: boolean
+  /**
+   * 是否启用高级关联导入
+   */
+  enableRelationImport?: boolean
+  /**
+   * 高级关联导入配置
+   */
+  relationImportConfig?: {
+    entities?: Array<'material' | 'processRoute' | 'operation' | 'performance'>
+    defaultWriteStrategy?: 'upsert' | 'create_only' | 'link_only' | 'strict_fail'
+    supportedStrategies?: Array<'upsert' | 'create_only' | 'link_only' | 'strict_fail'>
+  }
+  /**
+   * 高级关联导入预检
+   */
+  onRelationImportPrecheck?: (payload: {
+    rawRows: string[][]
+    entities: Array<'material' | 'processRoute' | 'operation' | 'performance'>
+    writeStrategy: 'upsert' | 'create_only' | 'link_only' | 'strict_fail'
+  }) => Promise<{
+    success?: boolean
+    message?: string
+    summary?: { created?: number; updated?: number; linked?: number; failed?: number }
+    errors?: string[]
+    warnings?: string[]
+  } | void>
+  /**
+   * 高级关联导入提交
+   */
+  onRelationImportSubmit?: (payload: {
+    rawRows: string[][]
+    entities: Array<'material' | 'processRoute' | 'operation' | 'performance'>
+    writeStrategy: 'upsert' | 'create_only' | 'link_only' | 'strict_fail'
+  }) => Promise<{
+    success?: boolean
+    message?: string
+    summary?: { created?: number; updated?: number; linked?: number; failed?: number }
+    errors?: string[]
+    warnings?: string[]
+  } | void>
+  /**
    * 导入字段验证规则（可选）
    * 用于定义哪些字段是必填的，以及字段的验证规则
    * 格式：{ '字段名': { required: true, validator?: (value: any) => boolean } }
@@ -1164,6 +1208,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   importExampleRow,
   importTemplateName,
   importFieldMap,
+  enableCustomImport = false,
+  enableRelationImport = false,
+  relationImportConfig,
+  onRelationImportPrecheck,
+  onRelationImportSubmit,
   importFieldRules,
   autoGenerateImportConfig = true,
   showExportButton = true,
@@ -3794,6 +3843,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             headers={effectiveImportConfig.headers}
             exampleRow={effectiveImportConfig.exampleRow}
             importFieldMap={effectiveImportConfig.fieldMap}
+            enableCustomImport={enableCustomImport}
+            enableRelationImport={enableRelationImport}
+            relationImportConfig={relationImportConfig}
+            onRelationImportPrecheck={onRelationImportPrecheck}
+            onRelationImportSubmit={onRelationImportSubmit}
             templateDocumentName={importTemplateDocumentName}
             onImportPrecheck={onImportPrecheck}
           />

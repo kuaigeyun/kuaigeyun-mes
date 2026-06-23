@@ -714,6 +714,28 @@ export interface BOMBatchImport {
   versionRemark?: string; // 版本变更备注（可选，写入本版本所有BOM行）
 }
 
+export type BOMRelationImportEntity = 'material' | 'processRoute' | 'operation' | 'performance';
+export type BOMRelationImportWriteStrategy = 'upsert' | 'create_only' | 'link_only' | 'strict_fail';
+
+export interface BOMRelationImportRequest {
+  rows: string[][];
+  entities: BOMRelationImportEntity[];
+  writeStrategy: BOMRelationImportWriteStrategy;
+}
+
+export interface BOMRelationImportResult {
+  success: boolean;
+  message?: string;
+  summary: {
+    created: number;
+    updated: number;
+    linked: number;
+    failed: number;
+  };
+  errors: string[];
+  warnings: string[];
+}
+
 /**
  * BOM版本创建类型定义
  * 

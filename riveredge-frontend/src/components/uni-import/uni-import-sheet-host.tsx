@@ -4,7 +4,8 @@
  * 初始化只能在本组件 mount 后的 useLayoutEffect 中执行。
  */
 import React, { useLayoutEffect, useRef } from 'react';
-import { Spin, theme, type MessageInstance } from 'antd';
+import { Spin, theme } from 'antd';
+import type { MessageInstance } from 'antd/es/message/interface';
 
 import {
   createUniverSheetInstance,
@@ -33,11 +34,33 @@ function focusSheetContainer(container: HTMLElement) {
   }
 }
 
+function safeDisposeUniver(instance: UniverSheetInstance | null | undefined) {
+  if (!instance) return;
+  try {
+    instance.univer.dispose();
+  } catch (error: unknown) {
+    // 幂等清理：避免在节点已被移除时抛出 removeChild 竞态错误
+    const msg = error instanceof Error ? error.message : String(error);
+    if (!msg.includes("Failed to execute 'removeChild' on 'Node'")) {
+      console.warn('univer dispose failed:', error);
+    }
+  }
+}
+
+function safeClearContainer(container: HTMLElement | null | undefined) {
+  if (!container) return;
+  try {
+    container.textContent = '';
+  } catch (error) {
+    console.warn('clear univer container failed:', error);
+  }
+}
+
 export interface UniImportSheetHostProps {
   isDark: boolean;
   uploadedSheetRows: string[][] | null;
-  headersRef: React.RefObject<string[] | undefined>;
-  exampleRowRef: React.RefObject<string[] | undefined>;
+  headers?: string[];
+  exampleRow?: string[];
   height: number;
   loading: boolean;
   onLoadingChange: (loading: boolean) => void;
@@ -48,8 +71,8 @@ export interface UniImportSheetHostProps {
 export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
   isDark,
   uploadedSheetRows,
-  headersRef,
-  exampleRowRef,
+  headers,
+  exampleRow,
   height,
   loading,
   onLoadingChange,
@@ -58,6 +81,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
 }) => {
   const { token } = theme.useToken();
   const containerRef = useRef<HTMLDivElement>(null);
+  const mountSeqRef = useRef(0);
   const keyDownHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
@@ -70,14 +94,15 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
     let active = true;
     onLoadingChange(true);
 
-    const containerId = 'univer-sheet-import';
-    containerEl.id = containerId;
-    containerEl.replaceChildren();
+    safeClearContainer(containerEl);
+    const mountEl = document.createElement('div');
+    mountEl.style.width = '100%';
+    mountEl.style.height = '100%';
+    const containerId = `univer-sheet-import-${Date.now()}-${mountSeqRef.current++}`;
+    mountEl.id = containerId;
+    containerEl.appendChild(mountEl);
 
     const sheetRows = uploadedSheetRows ?? undefined;
-    const headers = headersRef.current;
-    const exampleRow = exampleRowRef.current;
-
     let pendingInstance: UniverSheetInstance | null = null;
 
     try {
@@ -94,7 +119,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
 
     runAfterUniverSheetsRenderServiceInit(() => {
       if (!active || !pendingInstance) {
-        pendingInstance?.univer.dispose();
+        safeDisposeUniver(pendingInstance);
         return;
       }
 
@@ -123,11 +148,12 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
         });
 
         if (!active) {
-          instance.univer.dispose();
+          safeDisposeUniver(instance);
           return;
         }
 
         instanceRef.current = instance;
+        relayoutUniverSheet(instance);
 
         const containerForResize = containerRef.current;
         if (containerForResize) {
@@ -197,7 +223,7 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
           const msg = error instanceof Error ? error.message : String(error);
           messageApi.error('表格加载失败：' + msg);
         }
-        instance.univer.dispose();
+        safeDisposeUniver(instance);
       }
     });
 
@@ -212,11 +238,17 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
       }
       const instance = instanceRef.current ?? pendingInstance;
       if (instance) {
-        instance.univer.dispose();
+        safeDisposeUniver(instance);
         instanceRef.current = null;
       }
+      const root = containerRef.current;
+      if (root && mountEl.parentNode === root) {
+        root.removeChild(mountEl);
+      } else {
+        safeClearContainer(root);
+      }
     };
-  }, [isDark, uploadedSheetRows, headersRef, exampleRowRef, instanceRef, messageApi, onLoadingChange]);
+  }, [isDark, uploadedSheetRows, headers, exampleRow, instanceRef, messageApi, onLoadingChange]);
 
   return (
     <div style={{ position: 'relative', height: '100%' }}>

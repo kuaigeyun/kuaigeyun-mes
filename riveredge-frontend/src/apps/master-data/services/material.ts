@@ -35,6 +35,8 @@ import type {
   BOMGroupSummary,
   BOMBatchCreate,
   BOMBatchImport,
+  BOMRelationImportRequest,
+  BOMRelationImportResult,
   BOMHierarchy,
   BOMHierarchyItem,
   BOMQuantityResult,
@@ -680,6 +682,22 @@ export const bomApi = {
     const raw = await api.post<unknown[]>('/apps/master-data/materials/bom/batch-import', payload);
     const arr = Array.isArray(raw) ? raw : [];
     return arr.map((item) => mapBomFromApi((item ?? {}) as Record<string, unknown>));
+  },
+  relationImportPrecheck: async (data: BOMRelationImportRequest): Promise<BOMRelationImportResult> => {
+    return api.post('/apps/master-data/materials/bom/relation-import/precheck', {
+      rows: data.rows,
+      entities: data.entities,
+      write_strategy: data.writeStrategy,
+      dry_run: true,
+    });
+  },
+  relationImport: async (data: BOMRelationImportRequest): Promise<BOMRelationImportResult> => {
+    return api.post('/apps/master-data/materials/bom/relation-import', {
+      rows: data.rows,
+      entities: data.entities,
+      write_strategy: data.writeStrategy,
+      dry_run: false,
+    });
   },
   
   /**
