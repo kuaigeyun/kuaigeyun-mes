@@ -4,6 +4,7 @@ import { BarChartOutlined } from '@ant-design/icons';
 import {
   MODULE_PANEL_TITLE_ICON_SIZE,
   MODULE_PANEL_TITLE_STYLE,
+  MODULE_CENTER_GUTTER,
 } from './constants';
 
 export interface ModuleChartPanelProps {
@@ -18,6 +19,8 @@ export interface ModuleChartPanelProps {
   height?: number;
   children: React.ReactNode;
   lg?: number;
+  /** grid：Ant Row 栅格；masonry：配合 ModuleActionMasonry 瀑布流 */
+  layout?: 'grid' | 'masonry';
 }
 
 export function ModuleChartPanel({
@@ -28,6 +31,7 @@ export function ModuleChartPanel({
   height = 280,
   children,
   lg = 12,
+  layout = 'grid',
 }: ModuleChartPanelProps) {
   const { token } = theme.useToken();
   const titleNode =
@@ -40,42 +44,64 @@ export function ModuleChartPanel({
       title
     );
 
-  return (
-    <Col xs={24} lg={lg} style={{ display: 'flex', minWidth: 0 }}>
-      <Card
-        title={titleNode}
-        extra={
-          segmented ? (
-            <Segmented
-              size="small"
-              value={segmented.value}
-              options={segmented.options}
-              onChange={(v) => segmented.onChange(String(v))}
-            />
-          ) : (
-            extra
-          )
-        }
-        style={{ borderRadius: token.borderRadiusLG, width: '100%', height: '100%' }}
-        styles={{
-          header: {
-            minHeight: 48,
-            padding: '12px 16px',
-            borderBottom: `1px solid ${token.colorSplit}`,
-          },
-          title: MODULE_PANEL_TITLE_STYLE,
-          body: {
-            padding: '12px 16px 8px',
-            minHeight: height,
-            display: 'flex',
-            flexDirection: 'column',
-          },
+  const card = (
+    <Card
+      title={titleNode}
+      extra={
+        segmented ? (
+          <Segmented
+            size="small"
+            value={segmented.value}
+            options={segmented.options}
+            onChange={(v) => segmented.onChange(String(v))}
+          />
+        ) : (
+          extra
+        )
+      }
+      style={{
+        borderRadius: token.borderRadiusLG,
+        width: '100%',
+        ...(layout === 'grid' ? { height: '100%' } : {}),
+      }}
+      styles={{
+        header: {
+          minHeight: 48,
+          padding: '12px 16px',
+          borderBottom: `1px solid ${token.colorSplit}`,
+        },
+        title: MODULE_PANEL_TITLE_STYLE,
+        body: {
+          padding: '12px 16px 8px',
+          minHeight: height,
+          display: 'flex',
+          flexDirection: 'column',
+        },
+      }}
+    >
+      <Spin spinning={!!loading} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {children}
+      </Spin>
+    </Card>
+  );
+
+  if (layout === 'masonry') {
+    return (
+      <div
+        style={{
+          breakInside: 'avoid',
+          marginBottom: MODULE_CENTER_GUTTER,
+          minWidth: 0,
         }}
       >
-        <Spin spinning={!!loading} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          {children}
-        </Spin>
-      </Card>
+        {card}
+      </div>
+    );
+  }
+
+  return (
+    <Col xs={24} lg={lg} style={{ display: 'flex', minWidth: 0 }}>
+      {card}
     </Col>
   );
 }

@@ -53,6 +53,7 @@ import {
   LoginDomainSettingsBlock,
   LoginDecorationSettingsBlock,
   LoginBackgroundSettingsBlock,
+  LoginFeatureSwitchesBlock,
 } from '../../../components/login-page-editor';
 import { isLoginVisualLayerEnabled, validateLoginVisualLayers } from '../../../utils/loginVisualLayers';
 import {
@@ -90,7 +91,6 @@ function getInitialValuesFromConfigStore(
     theme_borderRadius: themeConfig.borderRadius ?? 6,
     theme_fontSize: themeConfig.fontSize ?? 14,
     theme_compact: false,
-    enable_invitation: configs.enable_invitation !== false,
     enable_register: configs.enable_register !== false,
     enable_launch_wizard: configs.enable_launch_wizard !== false,
     enable_system_dashboard: configs.enable_system_dashboard !== false,
@@ -141,7 +141,6 @@ const DEFAULT_FORM_INITIAL = {
   date_format: 'YYYY-MM-DD',
   default_language: 'zh-CN',
   timezone: 'Asia/Shanghai',
-  enable_invitation: true,
   enable_register: true,
   enable_launch_wizard: true,
   enable_system_dashboard: true,
@@ -184,11 +183,10 @@ const SITE_SETTINGS_LOGIN_PAGE_TAB_FIELDS = [
   'login_client_win_enabled',
   'login_client_android_enabled',
   'login_quick_enabled',
+  'enable_register',
 ] as const;
 
 const SITE_SETTINGS_SYSTEM_TAB_FIELDS = [
-  'enable_invitation',
-  'enable_register',
   'enable_launch_wizard',
   'enable_system_dashboard',
   'security.token_check_interval',
@@ -725,7 +723,6 @@ const SiteSettingsPage: React.FC = () => {
         theme_borderRadius: themeConfig.borderRadius ?? 6,
         theme_fontSize: themeConfig.fontSize || 14,
         theme_compact: false,
-        enable_invitation: setting.settings?.enable_invitation !== false,
         enable_register: setting.settings?.enable_register !== false,
         enable_launch_wizard: setting.settings?.enable_launch_wizard !== false,
         enable_system_dashboard: setting.settings?.enable_system_dashboard !== false,
@@ -1091,14 +1088,13 @@ const SiteSettingsPage: React.FC = () => {
           login_client_win_enabled: values.login_client_win_enabled,
           login_client_android_enabled: values.login_client_android_enabled,
           login_quick_enabled: values.login_quick_enabled,
+          enable_register: values.enable_register,
         });
         shouldRefreshConfigs = true;
       } else if (saveTab === 'system') {
         const values = await form.validateFields([...SITE_SETTINGS_SYSTEM_TAB_FIELDS]);
         const sys = { ...systemSettingsRef.current, ...values };
         Object.assign(settings, {
-          enable_invitation: values.enable_invitation,
-          enable_register: values.enable_register,
           enable_launch_wizard: values.enable_launch_wizard,
           enable_system_dashboard: values.enable_system_dashboard,
         });
@@ -1478,16 +1474,6 @@ const SiteSettingsPage: React.FC = () => {
         <Card title={t('pages.system.siteSettings.tabFunction')} size="small">
           <Row gutter={[16, 0]}>
             <Col xs={24} sm={12} md={12} lg={12} xl={12}>
-              <Form.Item name="enable_invitation" label={t('pages.system.siteSettings.enableInvitation')} valuePropName="checked">
-                <Switch />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={12} lg={12} xl={12}>
-              <Form.Item name="enable_register" label={t('pages.system.siteSettings.enableRegister')} valuePropName="checked">
-                <Switch />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={12} lg={12} xl={12}>
               <Form.Item
                 name="enable_launch_wizard"
                 label={t('pages.system.siteSettings.enableLaunchWizard')}
@@ -1863,28 +1849,7 @@ const SiteSettingsPage: React.FC = () => {
               />
             </Col>
             <Col span={24}>
-              <Row gutter={[16, 0]}>
-                <Col xs={24} sm={12} md={6}>
-                  <Form.Item name="login_guest_enabled" label={t('pages.infra.platform.loginGuestEnabled')} valuePropName="checked">
-                    <Switch />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12} md={6}>
-                  <Form.Item name="login_quick_enabled" label={t('pages.infra.platform.loginQuickEnabled')} valuePropName="checked">
-                    <Switch />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12} md={6}>
-                  <Form.Item name="login_client_win_enabled" label={t('pages.infra.platform.loginClientWinEnabled')} valuePropName="checked">
-                    <Switch />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12} md={6}>
-                  <Form.Item name="login_client_android_enabled" label={t('pages.infra.platform.loginClientAndroidEnabled')} valuePropName="checked">
-                    <Switch />
-                  </Form.Item>
-                </Col>
-              </Row>
+              <LoginFeatureSwitchesBlock />
             </Col>
           </Row>
         </Card>

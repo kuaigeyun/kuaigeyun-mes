@@ -6,6 +6,7 @@ export { default as LoginLogoSettingsBlock } from './LoginLogoSettingsBlock';
 export { default as LoginDomainSettingsBlock } from './LoginDomainSettingsBlock';
 export { default as LoginDecorationSettingsBlock } from './LoginDecorationSettingsBlock';
 export { default as LoginBackgroundSettingsBlock } from './LoginBackgroundSettingsBlock';
+export { default as LoginFeatureSwitchesBlock } from './LoginFeatureSwitchesBlock';
 export { default as LoginDescriptionContent } from './LoginDescriptionContent';
 export type { LoginRichTextEditorProps, LoginRichTextEditorMode } from './LoginRichTextEditor';
 export type { LoginLeftColumnPreviewProps } from './LoginLeftColumnPreview';

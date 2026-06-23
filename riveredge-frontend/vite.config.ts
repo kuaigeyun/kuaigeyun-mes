@@ -372,13 +372,12 @@ export default defineConfig({
       '@tanstack/react-query',
       'zustand',
       'dayjs',
+      // Univer 依赖注入 token 须在同一预构建图内（dev 下 exclude 会导致多份 @univerjs/core / engine-render）
+      '@univerjs/presets',
+      '@univerjs/presets/preset-sheets-core',
     ],
     // 首屏不直接引用的大块头显式排除，让 Vite 在页面访问时再按需构建
     exclude: [
-      '@univerjs/design',
-      '@univerjs/ui',
-      '@univerjs/presets',
-      '@univerjs/sheets-ui',
       'echarts',
       'three',
       'monaco-editor',

@@ -39,6 +39,7 @@ export interface PlatformSettings {
   login_client_win_enabled?: boolean;
   login_client_android_enabled?: boolean;
   login_quick_enabled?: boolean;
+  enable_register?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -69,6 +70,7 @@ export interface PlatformSettingsUpdateRequest {
   login_client_win_enabled?: boolean;
   login_client_android_enabled?: boolean;
   login_quick_enabled?: boolean;
+  enable_register?: boolean;
 }
 
 /**

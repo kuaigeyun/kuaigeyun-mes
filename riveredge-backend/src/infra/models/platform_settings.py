@@ -175,7 +175,11 @@ class PlatformSettings(Model):
         default=True,
         description="登录页是否显示快捷登录（社交账号登录）"
     )
-    
+    enable_register = fields.BooleanField(
+        default=True,
+        description="是否启用公开注册（登录页注册链接）"
+    )
+
     # 时间字段
     created_at = fields.DatetimeField(
         default=now_utc,

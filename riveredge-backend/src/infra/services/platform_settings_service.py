@@ -125,6 +125,7 @@ class PlatformSettingsService:
                 login_client_win_enabled=data.login_client_win_enabled if data.login_client_win_enabled is not None else True,
                 login_client_android_enabled=data.login_client_android_enabled if data.login_client_android_enabled is not None else True,
                 login_quick_enabled=data.login_quick_enabled if data.login_quick_enabled is not None else True,
+                enable_register=data.enable_register if data.enable_register is not None else True,
             )
             settings = await PlatformSettings.create(**create_data.model_dump(exclude_unset=True))
         else:

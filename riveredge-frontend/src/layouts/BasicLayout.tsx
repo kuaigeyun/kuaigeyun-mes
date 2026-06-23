@@ -796,8 +796,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [breadcrumbVisible, setBreadcrumbVisible] = useState(true);
   /** 详情页等通过 riveredge:update-tab-title 推送的单号，用于面包屑末级展示 */
   const [customPageLabel, setCustomPageLabel] = useState<string | undefined>();
-  const [userOpenKeys, setUserOpenKeys] = useState<string[]>([]); // 用户手动展开的菜单 key
-  const [userClosedKeys, setUserClosedKeys] = useState<string[]>([]); // 用户手动收起的菜单 key
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const systemSettingsPanelRef = useRef<HTMLDivElement>(null);
   const systemSettingsTriggerRef = useRef<HTMLButtonElement>(null);
@@ -2100,52 +2098,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   };
 
   /**
-   * 计算应该展开的菜单 key（只展开当前路径的直接父菜单）
-   * 
-   * @param menuItems - 菜单项数组
-   * @param currentPath - 当前路径
-   * @returns 应该展开的菜单 key 数组
-   */
-  const calculateOpenKeys = React.useCallback((menuItems: MenuDataItem[], currentPath: string): string[] => {
-    const openKeys: string[] = [];
-
-    /**
-     * 递归查找包含当前路径的菜单项
-     * 
-     * @param items - 菜单项数组
-     * @param path - 当前路径
-     * @param parentKeys - 父菜单的 key 数组
-     * @returns 是否找到匹配的菜单项
-     */
-    const findParentMenu = (items: MenuDataItem[], path: string, parentKeys: string[] = []): boolean => {
-      for (const item of items) {
-        const itemKey = item.key || item.path;
-        if (!itemKey) continue;
-
-        // 如果当前路径完全匹配菜单项的 path，说明找到了目标菜单
-        if (item.path === path) {
-          // 将父菜单的 key 添加到 openKeys（不包括当前菜单本身）
-          openKeys.push(...parentKeys);
-          return true;
-        }
-
-        // 如果菜单项有子菜单，检查当前路径是否在该菜单项的子菜单中
-        if (item.children && item.children.length > 0) {
-          // 检查子菜单中是否有匹配的路径
-          const hasMatch = findParentMenu(item.children, path, [...parentKeys, itemKey as string]);
-          if (hasMatch) {
-            return true;
-          }
-        }
-      }
-      return false;
-    };
-
-    findParentMenu(menuItems, currentPath);
-    return openKeys;
-  }, []);
-
-  /**
    * 根据当前路径和统一菜单数据生成面包屑（使用 filteredMenuData，含应用菜单）
    */
   const generateBreadcrumb = useMemo(() => {
@@ -2317,21 +2269,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return breadcrumbItems.filter(item => item.title);
   }, [location.pathname, location.search, breadcrumbMenuData, navigate, t, customPageLabel]);
 
-  // 计算应该展开的菜单 key（只展开当前路径的直接父菜单）
-  const requiredOpenKeys = useMemo(() => {
-    return calculateOpenKeys(filteredMenuData, location.pathname);
-  }, [filteredMenuData, location.pathname, calculateOpenKeys]);
-
-  // 合并用户手动展开的菜单和当前路径的父菜单
-  // 遵循 Ant Design Pro Layout 原生行为：允许用户手动收起任何菜单，包括有激活子菜单的菜单组
-  const openKeys = useMemo(() => {
-    // 1. 从 requiredOpenKeys 中排除用户手动收起的菜单
-    const autoOpenKeys = requiredOpenKeys.filter(key => !userClosedKeys.includes(key));
-    // 2. 合并自动展开的菜单和用户手动展开的菜单
-    const merged = [...new Set([...autoOpenKeys, ...userOpenKeys])];
-    return merged;
-  }, [requiredOpenKeys, userOpenKeys, userClosedKeys]);
-
   /**
    * 计算应该选中的菜单 key（只选中精确匹配的路径，不选中父级菜单）
    * 
@@ -2379,17 +2316,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const selectedKeys = useMemo(() => {
     return calculateSelectedKeys(filteredMenuData, location.pathname);
   }, [filteredMenuData, location.pathname, calculateSelectedKeys]);
-
-  // 仅当「路径」变化时，为新路径的父级菜单清除收起状态，使新页面所在分组能自动展开。
-  // 不依赖 requiredOpenKeys，避免其引用变化时误执行、把用户刚收起的上级菜单重新展开（标准行为：任意菜单都可收起）。
-  useEffect(() => {
-    const shouldReopenKeys = requiredOpenKeys.filter(key => userClosedKeys.includes(key));
-    if (shouldReopenKeys.length > 0) {
-      setUserClosedKeys(prev => prev.filter(key => !shouldReopenKeys.includes(key)));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅路径变化时执行；requiredOpenKeys 同帧已更新
-  }, [location.pathname]);
-
 
   /**
    * 处理全屏切换 (浏览器级别，顶栏触发)
@@ -5273,8 +5199,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }}
         menuProps={{
           mode: 'inline',
-          openKeys: openKeys, // 受控的 openKeys，合并用户手动展开的菜单和当前路径的父菜单
-          selectedKeys: selectedKeys, // 受控的 selectedKeys，只选中精确匹配的路径
+          // openKeys / onOpenChange 交由 ProLayout BaseMenu 原生管理：路由变化时按 matchMenuKeys 自动收起其它分组（autoClose 默认开启）
+          selectedKeys: selectedKeys, // 只选中精确匹配的路径，不选中父级菜单
           // ⚠️ 关键修复：阻止 Ant Design Menu 的默认链接行为，防止整页刷新
           // Menu 会为有 path 的菜单项自动创建 <a> 标签，需要阻止默认行为
           onClick: (info) => {
@@ -5289,25 +5215,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 info.domEvent.preventDefault();
                 info.domEvent.stopPropagation();
               }
-            }
-          },
-          onOpenChange: (keys) => {
-            // 遵循 Ant Design Pro Layout 原生行为：允许用户手动收起任何菜单
-            // 1. 计算哪些菜单被收起了（从 requiredOpenKeys 中移除的）
-            const closedKeys = requiredOpenKeys.filter(key => !keys.includes(key));
-            if (closedKeys.length > 0) {
-              // 用户手动收起了某些菜单，记录这些菜单
-              setUserClosedKeys(prev => [...new Set([...prev, ...closedKeys])]);
-            }
-
-            // 2. 计算哪些菜单被展开了（不在 requiredOpenKeys 中的）
-            const manuallyOpenedKeys = keys.filter(key => !requiredOpenKeys.includes(key));
-            setUserOpenKeys(manuallyOpenedKeys);
-
-            // 3. 如果用户重新展开了之前手动收起的菜单，从 userClosedKeys 中移除
-            const reopenedKeys = userClosedKeys.filter(key => keys.includes(key));
-            if (reopenedKeys.length > 0) {
-              setUserClosedKeys(prev => prev.filter(key => !reopenedKeys.includes(key)));
             }
           },
         }}

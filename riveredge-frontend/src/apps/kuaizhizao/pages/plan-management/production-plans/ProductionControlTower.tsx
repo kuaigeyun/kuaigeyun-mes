@@ -15,13 +15,12 @@ import {
   AuditOutlined,
   ScheduleOutlined,
   ThunderboltOutlined,
-  FireOutlined
+  FireOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { apiRequest } from '../../../../../services/api';
 import dayjs from 'dayjs';
-import { Column } from '@ant-design/charts';
 import CoordinationPipelinePanel from './CoordinationPipelinePanel';
 import { ModuleKpiRow, ModuleShortcutGrid } from '../../../components/module-center';
 import { UniDashboard } from '../../../../../components/uni-dashboard';
@@ -31,7 +30,6 @@ const { Text } = Typography;
 
 type SummaryShape = {
   material_readiness: any[];
-  resource_load: any[];
   delivery_risks: any[];
   total_wip_count: number;
   total_risk_count: number;
@@ -207,83 +205,6 @@ const ProductionControlTower: React.FC = () => {
           >
             <CoordinationPipelinePanel onRefreshSummary={refreshSummary} />
           </Card>
-        </Col>
-
-        {/* 图表展示区 */}
-        <Col span={24}>
-          <Row gutter={[16, 16]} align="stretch">
-            {/* 关键工作中心负荷率对比 */}
-            <Col xs={24} lg={12} style={{ display: 'flex' }}>
-              <Card
-                loading={loading && !s}
-                title={<Space><DashboardOutlined style={{ color: token.colorPrimary }} /><span>{t('app.kuaizhizao.planControlTower.chart.workCenterLoad')}</span></Space>}
-                style={{ borderRadius: token.borderRadiusLG, flex: 1, display: 'flex', flexDirection: 'column', border: 'none', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)' }}
-                styles={{ body: { padding: '16px 24px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' } }}
-              >
-                {!s?.resource_load || s.resource_load.length === 0 ? (
-                  <Empty description={t('app.kuaizhizao.planControlTower.chart.noLoadData')} image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: '40px 0' }} />
-                ) : (
-                  <Column
-                    data={s.resource_load}
-                    xField="work_center_name"
-                    yField="load_rate"
-                    height={220}
-                    autoFit
-                    style={{
-                      fill: '#fa8c16',
-                      radiusTopLeft: 4,
-                      radiusTopRight: 4,
-                    }}
-                    scale={{
-                      y: {
-                        formatter: (val: any) => `${val}%`
-                      }
-                    }}
-                    axis={{
-                      x: { title: false },
-                      y: { title: false, grid: true }
-                    }}
-                  />
-                )}
-              </Card>
-            </Col>
-
-            {/* 工单物料齐套率分布 */}
-            <Col xs={24} lg={12} style={{ display: 'flex' }}>
-              <Card
-                loading={loading && !s}
-                title={<Space><CheckCircleOutlined style={{ color: '#52c41a' }} /><span>{t('app.kuaizhizao.planControlTower.chart.readinessRanking')}</span></Space>}
-                style={{ borderRadius: token.borderRadiusLG, flex: 1, display: 'flex', flexDirection: 'column', border: 'none', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)' }}
-                styles={{ body: { padding: '16px 24px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' } }}
-              >
-                {readinessList.length === 0 ? (
-                  <Empty description={t('app.kuaizhizao.planControlTower.chart.noReadinessData')} image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: '40px 0' }} />
-                ) : (
-                  <Column
-                    data={readinessList.slice(0, 8)}
-                    xField="work_order_code"
-                    yField="readiness_rate"
-                    height={220}
-                    autoFit
-                    style={{
-                      fill: token.colorPrimary,
-                      radiusTopLeft: 4,
-                      radiusTopRight: 4,
-                    }}
-                    scale={{
-                      y: {
-                        formatter: (val: any) => `${val}%`
-                      }
-                    }}
-                    axis={{
-                      x: { title: false },
-                      y: { title: false, grid: true }
-                    }}
-                  />
-                )}
-              </Card>
-            </Col>
-          </Row>
         </Col>
       </Row>
 

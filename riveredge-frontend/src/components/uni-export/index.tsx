@@ -7,23 +7,12 @@
  * @date 2026-01-27
  */
 
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { Modal, Button, Space, App } from 'antd';
 import { DownloadOutlined, CloseOutlined } from '@ant-design/icons';
 
-// 引入 Univer Sheet 样式
-import '@univerjs/design/lib/index.css';
-import '@univerjs/ui/lib/index.css';
-import '@univerjs/sheets-ui/lib/index.css';
-import '@univerjs/presets/lib/styles/preset-sheets-core.css';
-
-// 引入手动依赖注册所需模块
-// (已移除手动插件引用，因为改用 Preset 管理)
-
-// 引入 Univer 预设（与 Git 旧版一致：仅 Sheets）
-import { createUniver, defaultTheme, LocaleType, merge } from '@univerjs/presets';
-import { UniverSheetsCorePreset } from '@univerjs/presets/preset-sheets-core';
-import UniverPresetSheetsCoreZhCN from '@univerjs/presets/preset-sheets-core/locales/zh-CN';
+import type { UniverSheetInstance } from '../univer/bootstrap-sheet';
+import { UniExportSheetHost } from './uni-export-sheet-host';
 
 /**
  * Univer Export 导出弹窗组件属性
@@ -82,9 +71,6 @@ export interface UniExportProps {
 
 /** Univer 运行时可用的工作表 API（包内 FWorksheet 类型声明不完整） */
 type UniverActiveSheet = {
-  setCellValue: (row: number, col: number, value: unknown) => void;
-  setCellStyle?: (row: number, col: number, style: unknown) => void;
-  setColumnWidth: (index: number, width: number) => void;
   getRowCount: () => number;
   getColumnCount: () => number;
   getCellValue: (row: number, col: number) => unknown;
@@ -108,165 +94,19 @@ export const UniExport: React.FC<UniExportProps> = ({
   headers,
 }) => {
   const { message } = App.useApp();
-  const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
-  const univerInstanceRef = useRef<ReturnType<typeof createUniver> | null>(null);
-  const containerIdRef = useRef<string>('');
+  const univerInstanceRef = useRef<UniverSheetInstance | null>(null);
+  const handleSheetError = useCallback(
+    (errorMessage: string) => {
+      console.error('初始化 Univer Sheet 失败:', errorMessage);
+      message.error('初始化表格失败');
+    },
+    [message],
+  );
   // 与 app 主题一致：以 document.colorScheme 为准（主题编辑选择），未设置时才用系统偏好
   const colorScheme = document.documentElement.style.colorScheme;
   const isDark = colorScheme === 'dark'
     || (colorScheme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-
-  /**
-   * 初始化 Univer Sheet
-   */
-  useLayoutEffect(() => {
-    if (visible) {
-      const initUniver = async () => {
-        // 等待 DOM 更新
-        await new Promise(resolve => setTimeout(resolve, 50));
-
-        if (!containerRef.current) {
-          return;
-        }
-
-        try {
-          setLoading(true);
-
-          // 创建容器 ID（确保唯一）
-          const containerId = `univer-sheet-export-${Date.now()}`;
-          containerIdRef.current = containerId;
-          containerRef.current.id = containerId;
-
-          // 清空容器内容
-          containerRef.current.innerHTML = '';
-
-          // 等待 DOM 更新完成
-          await new Promise(resolve => setTimeout(resolve, 100));
-
-          // 使用预设方式创建 Univer 实例（isDark 随主题编辑切换，见 useLayoutEffect 依赖）
-          const { univer, univerAPI } = createUniver({
-            locale: LocaleType.ZH_CN,
-            locales: {
-              [LocaleType.ZH_CN]: merge({}, UniverPresetSheetsCoreZhCN),
-            },
-            theme: defaultTheme,
-            darkMode: isDark,
-            presets: [
-              UniverSheetsCorePreset({
-                container: containerId,
-              }),
-            ],
-          });
-
-          // 保存实例引用
-          univerInstanceRef.current = { univer, univerAPI };
-
-          // 准备单元格数据
-          const cellData: Record<string, Record<string, { v: any; m?: string; s?: any }>> = {};
-          const styles: Record<string, any> = {};
-
-          // 表头样式（浅蓝色背景，加粗字体）
-          const headerStyleId = 'headerStyle';
-          styles[headerStyleId] = {
-            bg: { rgb: 'E3F2FD' },
-            bl: 1,
-            bt: 1,
-            br: 1,
-            bb: 1,
-            fs: 12,
-            bd: 1,
-            cl: { rgb: '000000' },
-          };
-
-          // 准备数据
-          let rowCount = 0;
-          let columnCount = 0;
-
-          // 如果有初始数据，使用初始数据
-          if (data && data.length > 0) {
-            rowCount = data.length;
-            columnCount = Math.max(...data.map(row => row.length));
-
-            data.forEach((row, rowIndex) => {
-              const rowKey = String(rowIndex);
-              cellData[rowKey] = {};
-
-              row.forEach((cell, colIndex) => {
-                const colKey = String(colIndex);
-                const cellValue = cell !== null && cell !== undefined ? String(cell) : '';
-
-                cellData[rowKey][colKey] = {
-                  v: cellValue,
-                  m: cellValue,
-                  s: rowIndex === 0 && headers ? headerStyleId : undefined,
-                };
-              });
-            });
-          } else if (headers && headers.length > 0) {
-            // 如果有表头，填充表头
-            rowCount = 1;
-            columnCount = headers.length;
-
-            headers.forEach((header, colIndex) => {
-              const colKey = String(colIndex);
-              cellData['0'] = cellData['0'] || {};
-              cellData['0'][colKey] = {
-                v: header,
-                m: header,
-                s: headerStyleId,
-              };
-            });
-          } else {
-            // 默认空表格
-            rowCount = 100;
-            columnCount = 20;
-          }
-
-          // 设置工作表数据
-          const workbook = univerAPI.getActiveWorkbook();
-          const worksheet = (workbook?.getActiveSheet() ?? null) as UniverActiveSheet | null;
-          if (worksheet) {
-            // 设置单元格数据
-            Object.keys(cellData).forEach((rowKey) => {
-              Object.keys(cellData[rowKey]).forEach((colKey) => {
-                const cell = cellData[rowKey][colKey];
-                worksheet.setCellValue(Number(rowKey), Number(colKey), cell.v);
-                if (cell.s && worksheet.setCellStyle) {
-                  worksheet.setCellStyle(Number(rowKey), Number(colKey), styles[cell.s]);
-                }
-              });
-            });
-
-            // 设置列宽
-            for (let i = 0; i < columnCount; i++) {
-              worksheet.setColumnWidth(i, 100);
-            }
-          }
-
-          setLoading(false);
-        } catch (error) {
-          console.error('初始化 Univer Sheet 失败:', error);
-          message.error('初始化表格失败');
-          setLoading(false);
-        }
-      };
-
-      initUniver();
-    }
-
-    // 清理函数
-    return () => {
-      if (univerInstanceRef.current?.univer) {
-        try {
-          univerInstanceRef.current.univer.dispose();
-        } catch (error) {
-          console.error('清理 Univer 实例失败:', error);
-        }
-        univerInstanceRef.current = null;
-      }
-    };
-  }, [visible, isDark, data, headers]);
 
   /**
    * 处理确认导出
@@ -345,15 +185,14 @@ export const UniExport: React.FC<UniExportProps> = ({
       destroyOnHidden
       maskClosable={false}
     >
-      <div
-        ref={containerRef}
-        style={{
-          width: '100%',
-          height: height,
-          border: '1px solid var(--river-border-color)',
-          borderRadius: '4px',
-          overflow: 'hidden',
-        }}
+      <UniExportSheetHost
+        isDark={isDark}
+        data={data}
+        headers={headers}
+        height={height}
+        onLoadingChange={setLoading}
+        instanceRef={univerInstanceRef}
+        onError={handleSheetError}
       />
     </Modal>
   );

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Affix,
   Alert,
@@ -33,6 +33,9 @@ import { useRequest } from 'ahooks';
 import { coordinationBoardApi, productionControlApi } from '../../../services/production';
 import { getStatusLabel } from '../../../constants/documentStatus';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
+
+/** 单据跟踪左栏高度下限；实际高度跟随中栏，但不低于此值 */
+const COORDINATION_PIPELINE_BODY_MIN_HEIGHT = 480;
 
 const { Text, Link } = Typography;
 
@@ -443,6 +446,8 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
   const [selectedSalesOrderId, setSelectedSalesOrderId] = useState<number | undefined>();
   const [hoveredSalesOrderId, setHoveredSalesOrderId] = useState<number | null>(null);
   const [releasing, setReleasing] = useState(false);
+  const middleColRef = useRef<HTMLDivElement>(null);
+  const [bodyHeight, setBodyHeight] = useState(COORDINATION_PIPELINE_BODY_MIN_HEIGHT);
 
   const { data: activeList, loading: listLoading, refresh: refreshList } = useRequest(async () => {
     return coordinationBoardApi.listActiveOrders(30);
@@ -499,6 +504,22 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
     const found = p.stages.find((s) => s.status !== 'done' && s.status !== 'skipped');
     return found?.key ?? null;
   }, [p]);
+
+  const syncBodyHeight = useCallback(() => {
+    const el = middleColRef.current;
+    if (!el) return;
+    const measured = Math.ceil(el.getBoundingClientRect().height);
+    setBodyHeight(Math.max(measured, COORDINATION_PIPELINE_BODY_MIN_HEIGHT));
+  }, []);
+
+  useEffect(() => {
+    syncBodyHeight();
+    const el = middleColRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => syncBodyHeight());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [syncBodyHeight, selectedSalesOrderId, pipeline, pipelineLoading, groupedStages.length]);
 
   const handleRefresh = useCallback(() => {
     refreshList();
@@ -563,23 +584,35 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
 
   return (
     <div style={{ marginTop: 12, fontSize: TYPO.body }}>
-      <Row gutter={0} wrap={false}>
-        {/* 左栏：未完成订单 */}
+      <Row gutter={0} wrap={false} align="top">
+        {/* 左栏：高度 = max(中栏实测高度, minHeight)，列表区内部滚动 */}
         <Col
           flex="0 0 280px"
           style={{
             borderRight: `1px solid ${token.colorBorderSecondary}`,
             paddingRight: 16,
-            maxHeight: 'calc(100vh - 320px)',
-            overflowY: 'auto',
+            height: bodyHeight,
+            minHeight: COORDINATION_PIPELINE_BODY_MIN_HEIGHT,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexShrink: 0 }}>
             <Text strong style={{ fontSize: TYPO.panelTitle }}>{t('app.kuaizhizao.coordinationPipeline.incompleteOrders')}</Text>
             <Button type="text" icon={<ReloadOutlined />} onClick={handleRefresh} />
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+            }}
+          >
             {displayItems.map((item) => {
               const selected = item.sales_order_id === selectedSalesOrderId;
               const hovered = item.sales_order_id === hoveredSalesOrderId;
@@ -664,7 +697,7 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
           </div>
         </Col>
 
-        {/* 中栏：计划塔 */}
+        {/* 中栏：计划塔（高度由内容撑开，驱动左栏高度） */}
         <Col
           flex="1"
           style={{
@@ -674,6 +707,10 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
             borderRight: `1px solid ${token.colorBorderSecondary}`,
           }}
         >
+          <div
+            ref={middleColRef}
+            style={{ minHeight: COORDINATION_PIPELINE_BODY_MIN_HEIGHT }}
+          >
           {p?.dynamic_monitor_alerts?.length ? (
             <Alert
               type="warning"
@@ -825,6 +862,7 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
               <Empty description={t('app.kuaizhizao.coordinationPipeline.selectOrder')} />
             )}
           </Spin>
+          </div>
         </Col>
 
         {/* 右栏：关联单据 */}

@@ -1,5 +1,5 @@
-import React, { Suspense, lazy, useMemo, useState } from 'react';
-import { Table, Tag, Typography, Timeline } from 'antd';
+import React, { Suspense, lazy, useCallback, useMemo, useState } from 'react';
+import { Badge, Empty, Table, Tag, Typography, Timeline } from 'antd';
 import {
   FormOutlined,
   InteractionOutlined,
@@ -16,16 +16,17 @@ import { mesDashboardService } from '../../../services/dashboard';
 import { workOrderApi } from '../../../services/work-order';
 import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
 import { formatDateTime } from '../../../../../utils/format';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
   ModuleShortcutGrid,
   ModuleActionPanel,
+  ModuleActionMasonry,
   ModuleTodoList,
   ModuleChartPanel,
-  ModuleChartRow,
 } from '../../../components/module-center';
-import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
+import { translateWorkOrderLifecycleStatus } from '../../../utils/workOrderLifecycle';
 
 const { Text } = Typography;
 
@@ -34,10 +35,76 @@ const MfgTrendLine = lazy(async () => {
   return { default: (props: React.ComponentProps<typeof Line>) => <Line {...props} /> };
 });
 
-const MfgStatusColumn = lazy(async () => {
-  const { Column } = await import('@ant-design/charts');
-  return { default: (props: React.ComponentProps<typeof Column>) => <Column {...props} /> };
+const MfgStatusPie = lazy(async () => {
+  const { Pie } = await import('@ant-design/charts');
+  return { default: (props: React.ComponentProps<typeof Pie>) => <Pie {...props} /> };
 });
+
+const WIP_STATUSES = new Set(['released', 'in_progress', '已下达', '执行中', 'RELEASED', 'IN_PROGRESS']);
+const COMPLETED_STATUSES = new Set(['completed', 'cancelled', '已完成', '已取消', 'COMPLETED', 'CANCELLED']);
+
+type WorkOrderRow = {
+  id: number;
+  code?: string;
+  product_name?: string;
+  product_code?: string;
+  row_kind?: string;
+  quantity?: number;
+  completed_quantity?: number;
+  status?: string;
+  planned_end_date?: string;
+};
+
+type ProductionBroadcastItem = {
+  id: string;
+  operator_name?: string;
+  process_name?: string;
+  product_name?: string;
+  work_order_no?: string;
+  qualified_quantity?: number;
+  unqualified_quantity?: number;
+  created_at?: string;
+};
+
+function unwrapWorkOrderList(res: unknown): WorkOrderRow[] {
+  if (Array.isArray(res)) return res as WorkOrderRow[];
+  const payload = res as { data?: WorkOrderRow[]; items?: WorkOrderRow[] };
+  return payload?.data ?? payload?.items ?? [];
+}
+
+function isDashboardWorkOrderRow(row: WorkOrderRow): boolean {
+  const kind = row.row_kind;
+  return !kind || kind === 'work_order';
+}
+
+function renderDashboardWorkOrderStackedCell(
+  record: WorkOrderRow,
+  onOpen: (id: number) => void,
+) {
+  return (
+    <div
+      style={{ cursor: 'pointer', minWidth: 0 }}
+      onClick={() => onOpen(record.id)}
+    >
+      <UniTableStackedPrimaryCell
+        primary={String(record.product_name ?? record.product_code ?? '').trim() || '-'}
+        secondary={String(record.code ?? '').trim() || '-'}
+      />
+    </div>
+  );
+}
+
+function isWipWorkOrder(row: WorkOrderRow): boolean {
+  return WIP_STATUSES.has(String(row.status ?? ''));
+}
+
+function isOverdueWorkOrder(row: WorkOrderRow): boolean {
+  const status = String(row.status ?? '');
+  if (COMPLETED_STATUSES.has(status)) return false;
+  if (!WIP_STATUSES.has(status) && status !== 'draft' && status !== '草稿') return false;
+  if (!row.planned_end_date) return false;
+  return dayjs(row.planned_end_date).isBefore(dayjs(), 'day');
+}
 
 const ManufacturingDashboard: React.FC = () => {
   const { t } = useTranslation();
@@ -52,9 +119,9 @@ const ManufacturingDashboard: React.FC = () => {
     () => mesDashboardService.getTodosByModule('manufacturing', 8),
     'kz:manufacturing-dashboard:todos',
   );
-  const { data: recentOrdersResult, loading: ordersLoading } = useDashboardRequest(async () => {
-    const res = await workOrderApi.list({ limit: 8 });
-    return Array.isArray(res) ? res : res?.items || [];
+  const { data: workOrdersResult, loading: ordersLoading } = useDashboardRequest(async () => {
+    const res = await workOrderApi.list({ skip: 0, limit: 80, order_by: '-created_at' });
+    return unwrapWorkOrderList(res);
   }, 'kz:manufacturing-dashboard:orders');
   const { data: broadcast, loading: broadcastLoading } = useDashboardRequest(
     () => mesDashboardService.getProductionBroadcast(8),
@@ -66,8 +133,20 @@ const ManufacturingDashboard: React.FC = () => {
   );
 
   const s = summary as Record<string, number> | undefined;
-  const recentOrders = recentOrdersResult || [];
-  const recentBroadcast = (broadcast as { items?: unknown[] })?.items || [];
+  const allWorkOrders = workOrdersResult || [];
+  const wipOrders = useMemo(
+    () => allWorkOrders.filter((row) => isDashboardWorkOrderRow(row) && isWipWorkOrder(row)).slice(0, 6),
+    [allWorkOrders],
+  );
+  const overdueOrders = useMemo(
+    () =>
+      allWorkOrders
+        .filter((row) => isDashboardWorkOrderRow(row) && isOverdueWorkOrder(row))
+        .sort((a, b) => dayjs(a.planned_end_date).valueOf() - dayjs(b.planned_end_date).valueOf())
+        .slice(0, 6),
+    [allWorkOrders],
+  );
+  const recentBroadcast = ((broadcast as { items?: ProductionBroadcastItem[] })?.items || []) as ProductionBroadcastItem[];
   const todos = todosData?.items || [];
 
   const kpis: ModuleKpiDef[] = useMemo(
@@ -179,31 +258,106 @@ const ManufacturingDashboard: React.FC = () => {
     }));
   }, [trendData, trendType]);
 
+  const openWorkOrder = useCallback(
+    (id: number) => {
+      navigate(`/apps/kuaizhizao/production-execution/work-orders/${id}`);
+    },
+    [navigate],
+  );
+
+  const workOrderStackedColumn = useMemo(
+    () => ({
+      title: t('app.kuaizhizao.workOrder.colProductWorkOrderCode'),
+      key: 'workOrderStacked',
+      ellipsis: true,
+      render: (_: unknown, record: WorkOrderRow) =>
+        renderDashboardWorkOrderStackedCell(record, openWorkOrder),
+    }),
+    [openWorkOrder, t],
+  );
+
   const orderColumns = useMemo(
     () => [
-      {
-        title: t('app.kuaizhizao.productionExecutionDashboard.colWorkOrderCode'),
-        dataIndex: 'code',
-        render: (text: string, record: { id: number }) => (
-          <a onClick={() => navigate(`/apps/kuaizhizao/production-execution/work-orders/${record.id}`)}>
-            {text}
-          </a>
-        ),
-      },
+      workOrderStackedColumn,
       {
         title: t('app.kuaizhizao.productionExecutionDashboard.colProgress'),
-        width: 100,
-        render: (_: unknown, r: { completed_quantity?: number; quantity?: number }) =>
+        width: 96,
+        render: (_: unknown, r: WorkOrderRow) =>
           `${r.completed_quantity ?? 0}/${r.quantity ?? 0}`,
       },
       {
         title: t('common.status'),
         dataIndex: 'status',
-        width: 80,
-        render: (status: string) => <Tag color="processing">{status}</Tag>,
+        width: 88,
+        render: (status: string) => (
+          <Tag color="processing">{translateWorkOrderLifecycleStatus(t, status)}</Tag>
+        ),
       },
     ],
-    [navigate, t],
+    [t, workOrderStackedColumn],
+  );
+
+  const overdueColumns = useMemo(
+    () => [
+      workOrderStackedColumn,
+      {
+        title: t('app.kuaizhizao.productionExecutionDashboard.colPlannedEnd'),
+        dataIndex: 'planned_end_date',
+        width: 100,
+        render: (value: string) => (value ? formatDateTime(value, 'MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.productionExecutionDashboard.colOverdueDays'),
+        width: 72,
+        render: (_: unknown, r: WorkOrderRow) => {
+          if (!r.planned_end_date) return '-';
+          const days = dayjs().startOf('day').diff(dayjs(r.planned_end_date).startOf('day'), 'day');
+          return days > 0 ? t('app.kuaizhizao.productionExecutionDashboard.overdueDays', { days }) : '-';
+        },
+      },
+    ],
+    [t, workOrderStackedColumn],
+  );
+
+  const broadcastTimelineItems = useMemo(
+    () =>
+      recentBroadcast.slice(0, 5).map((item) => ({
+        key: item.id,
+        color: (item.unqualified_quantity ?? 0) > 0 ? 'red' : 'green',
+        children: (
+          <>
+            <Text style={{ fontSize: 12 }}>
+              <Text strong>{item.operator_name || '—'}</Text>
+              {t('app.kuaizhizao.productionExecutionDashboard.broadcastReportAt')}
+              <Text style={{ color: '#1890ff' }}>{item.process_name || '-'}</Text>
+              {t('app.kuaizhizao.productionExecutionDashboard.broadcastReportDone')}
+            </Text>
+            <div style={{ marginTop: 4 }}>
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {t('app.kuaizhizao.productionExecutionDashboard.broadcastWorkOrder')}: {item.work_order_no || '-'}
+                {' · '}
+                {t('app.kuaizhizao.productionExecutionDashboard.broadcastProduct')}: {item.product_name || '-'}
+              </Text>
+            </div>
+            <div style={{ marginTop: 4 }}>
+              <Badge status="success" text={`${t('app.kuaizhizao.productionExecutionDashboard.broadcastQualified')}: ${item.qualified_quantity ?? 0}`} />
+              {(item.unqualified_quantity ?? 0) > 0 && (
+                <Badge
+                  status="error"
+                  text={`${t('app.kuaizhizao.productionExecutionDashboard.broadcastUnqualified')}: ${item.unqualified_quantity}`}
+                  style={{ marginLeft: 12 }}
+                />
+              )}
+            </div>
+            <div>
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {item.created_at ? formatDateTime(item.created_at, 'MM-DD HH:mm') : ''}
+              </Text>
+            </div>
+          </>
+        ),
+      })),
+    [recentBroadcast, t],
   );
 
   return (
@@ -212,10 +366,10 @@ const ManufacturingDashboard: React.FC = () => {
       kpiRow={<ModuleKpiRow items={kpis} />}
       shortcutRow={<ModuleShortcutGrid items={shortcuts} />}
       actionRow={
-        <>
+        <ModuleActionMasonry>
           <ModuleActionPanel
+            layout="masonry"
             title={t('app.kuaizhizao.productionExecutionDashboard.todosTitle')}
-            lg={8}
             loading={todosLoading}
           >
             <ModuleTodoList
@@ -224,8 +378,8 @@ const ManufacturingDashboard: React.FC = () => {
             />
           </ModuleActionPanel>
           <ModuleActionPanel
+            layout="masonry"
             title={t('app.kuaizhizao.productionExecutionDashboard.wipOrdersTitle')}
-            lg={8}
             loading={ordersLoading}
             extra={
               <a onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}>
@@ -235,37 +389,48 @@ const ManufacturingDashboard: React.FC = () => {
           >
             <Table
               size="small"
-              dataSource={recentOrders.slice(0, 6)}
+              dataSource={wipOrders}
               pagination={false}
               rowKey="id"
               columns={orderColumns}
+              locale={{ emptyText: t('app.kuaizhizao.workOrder.emptyNoWip') }}
             />
           </ModuleActionPanel>
           <ModuleActionPanel
+            layout="masonry"
             title={t('app.kuaizhizao.productionExecutionDashboard.broadcastTitle')}
-            lg={8}
             loading={broadcastLoading}
           >
-            <Timeline
-              items={(recentBroadcast as { content?: string; created_at?: string }[]).slice(0, 5).map((item) => ({
-                children: (
-                  <>
-                    <Text style={{ fontSize: 12 }}>{item.content}</Text>
-                    <div>
-                      <Text type="secondary" style={{ fontSize: 11 }}>
-                        {item.created_at ? formatDateTime(item.created_at, 'MM-DD HH:mm') : ''}
-                      </Text>
-                    </div>
-                  </>
-                ),
-              }))}
+            {broadcastTimelineItems.length === 0 ? (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={t('app.kuaizhizao.productionExecutionDashboard.emptyBroadcast')}
+              />
+            ) : (
+              <Timeline items={broadcastTimelineItems} />
+            )}
+          </ModuleActionPanel>
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.productionExecutionDashboard.overdueOrdersTitle')}
+            loading={ordersLoading}
+            extra={
+              <a onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}>
+                {t('app.kuaizhizao.productionExecutionDashboard.all')}
+              </a>
+            }
+          >
+            <Table
+              size="small"
+              dataSource={overdueOrders}
+              pagination={false}
+              rowKey="id"
+              columns={overdueColumns}
+              locale={{ emptyText: t('app.kuaizhizao.productionExecutionDashboard.emptyOverdue') }}
             />
           </ModuleActionPanel>
-        </>
-      }
-      chartRow={
-        <ModuleChartRow>
           <ModuleChartPanel
+            layout="masonry"
             title={t('app.kuaizhizao.productionExecutionDashboard.trendTitle')}
             loading={trendLoading}
             segmented={{
@@ -284,18 +449,36 @@ const ManufacturingDashboard: React.FC = () => {
             }}
           >
             <Suspense fallback={null}>
-              <MfgTrendLine data={trendChartData} xField="date" yField="value" height={240} smooth />
+              <MfgTrendLine
+                data={trendChartData}
+                xField="date"
+                yField="value"
+                height={240}
+                autoFit
+                shapeField="smooth"
+                style={{ lineWidth: 2 }}
+              />
             </Suspense>
           </ModuleChartPanel>
           <ModuleChartPanel
+            layout="masonry"
             title={t('app.kuaizhizao.productionExecutionDashboard.statusDistributionTitle')}
             loading={summaryLoading}
           >
             <Suspense fallback={null}>
-              <MfgStatusColumn data={statusChartData} xField="status" yField="count" height={240} />
+              <MfgStatusPie
+                data={statusChartData}
+                angleField="count"
+                colorField="status"
+                radius={0.8}
+                innerRadius={0.6}
+                height={240}
+                autoFit
+                legend={{ color: { position: 'bottom' } }}
+              />
             </Suspense>
           </ModuleChartPanel>
-        </ModuleChartRow>
+        </ModuleActionMasonry>
       }
     />
   );

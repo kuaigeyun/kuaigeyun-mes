@@ -11,7 +11,7 @@
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Card, Button, Space, Upload, Form, ColorPicker, Row, Col, Input, Switch, Typography } from 'antd';
-import { UploadOutlined, DeleteOutlined } from '@ant-design/icons';
+import { UploadOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { UploadFile, UploadProps } from 'antd';
@@ -32,6 +32,7 @@ import {
   LoginLocaleSettingsFields,
   LoginDecorationSettingsBlock,
   LoginBackgroundSettingsBlock,
+  LoginFeatureSwitchesBlock,
 } from '../../../../components/login-page-editor';
 import { isLoginVisualLayerEnabled, validateLoginVisualLayers } from '../../../../utils/loginVisualLayers';
 
@@ -115,6 +116,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         login_client_win_enabled: data.login_client_win_enabled ?? true,
         login_client_android_enabled: data.login_client_android_enabled ?? true,
         login_quick_enabled: data.login_quick_enabled ?? true,
+        enable_register: data.enable_register ?? true,
       });
       queryClient.setQueryData(['platformSettings'], data);
       queryClient.invalidateQueries({ queryKey: ['platformSettings'] });
@@ -307,6 +309,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         login_client_win_enabled: settings.login_client_win_enabled ?? true,
         login_client_android_enabled: settings.login_client_android_enabled ?? true,
         login_quick_enabled: settings.login_quick_enabled ?? true,
+        enable_register: settings.enable_register !== false,
       });
       
       // 加载LOGO预览
@@ -558,6 +561,36 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
     messageApi.success(t('pages.infra.platform.loginBackgroundCleared'));
   };
 
+  const handleResetLoginPageSettings = async () => {
+    try {
+      await updateMutation.mutateAsync({
+        login_title: '',
+        login_title_en: '',
+        login_content: '',
+        login_content_en: '',
+        login_decoration_image: '',
+        login_background_image: '',
+        login_decoration_enabled: true,
+        login_background_enabled: true,
+        icp_license: '',
+        icp_license_en: '',
+        theme_color: '#1890ff',
+        login_guest_enabled: true,
+        login_client_win_enabled: true,
+        login_client_android_enabled: true,
+        login_quick_enabled: true,
+        enable_register: true,
+      });
+      setDecorationUrl(undefined);
+      setDecorationFileList([]);
+      setBackgroundUrl(undefined);
+      setBackgroundFileList([]);
+      messageApi.success(t('pages.infra.platform.loginPageResetSuccess'));
+    } catch {
+      messageApi.error(t('pages.infra.platform.loginPageResetFailed'));
+    }
+  };
+
   /**
    * 处理保存
    */
@@ -585,14 +618,42 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
           form={form}
           layout="vertical"
           onFinish={handleSave}
-          submitter={{
-            searchConfig: {
-              submitText: t('pages.infra.platform.saveButton'),
-            },
-            resetButtonProps: {
-              style: { display: 'none' },
-            },
-          }}
+          submitter={
+            mode === 'login'
+              ? {
+                  searchConfig: {
+                    submitText: t('pages.infra.platform.saveButton'),
+                  },
+                  resetButtonProps: {
+                    style: { display: 'none' },
+                  },
+                  render: (_props, dom) => (
+                    <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-start' }}>
+                      <Space>
+                        <Button
+                          icon={<ReloadOutlined />}
+                          onClick={() => queryClient.invalidateQueries({ queryKey: ['platformSettings'] })}
+                          loading={isLoading}
+                        >
+                          {t('pages.system.siteSettings.refresh')}
+                        </Button>
+                        <Button onClick={handleResetLoginPageSettings} loading={updateMutation.isPending}>
+                          {t('components.uniQuery.reset')}
+                        </Button>
+                        {dom}
+                      </Space>
+                    </div>
+                  ),
+                }
+              : {
+                  searchConfig: {
+                    submitText: t('pages.infra.platform.saveButton'),
+                  },
+                  resetButtonProps: {
+                    style: { display: 'none' },
+                  },
+                }
+          }
         >
           {mode === 'basic' ? (
             <>
@@ -735,128 +796,100 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
               </Row>
             </>
           ) : (
-            <>
-              <Row gutter={[16, 16]}>
-                <Col span={24}>
-                  <LoginPageEditorSplitPanel
-                    preview={
-                      <>
-                        <div className="login-page-editor-split-preview-header">
-                          <Typography.Text strong>{t('pages.system.siteSettings.loginLeftPreview')}</Typography.Text>
-                          <ThemedSegmented
-                            size="small"
-                            value={loginPreviewLocale}
-                            onChange={(value) => setLoginPreviewLocale(value as 'zh-CN' | 'en-US')}
-                            options={[
-                              { label: t('common.languages.zhCN'), value: 'zh-CN' },
-                              { label: t('common.languages.enUS'), value: 'en-US' },
-                            ]}
-                          />
-                        </div>
-                        <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-                          {t('pages.system.siteSettings.loginLeftPreviewHint')}
-                        </Typography.Text>
-                        <div className="login-page-editor-split-preview-body">
-                          <LoginLeftColumnPreview
-                            variant="editor-fill"
-                            themeColor={themeColorValue || '#1890ff'}
-                            locale={loginPreviewLocale}
-                            platformName={
-                              loginPreviewLocale === 'en-US' ? platformNameEnValue : platformNameValue
-                            }
-                            loginTitle={
-                              loginPreviewLocale === 'en-US' ? loginTitleEnValue : loginTitleValue
-                            }
-                            loginContent={
-                              loginPreviewLocale === 'en-US' ? loginContentEnValue : loginContentValue
-                            }
-                            logoUrl={logoUrl}
-                            decorationUrl={decorationLayerEnabled ? decorationUrl : undefined}
-                            backgroundUrl={backgroundLayerEnabled ? backgroundUrl : undefined}
-                            decorationEnabled={decorationLayerEnabled}
-                            backgroundEnabled={backgroundLayerEnabled}
-                          />
-                        </div>
-                      </>
-                    }
-                    settings={
-                      <div className="login-page-editor-split-settings-stack">
-                        <LoginLocaleSettingsFields
-                          key={loginPreviewLocale}
-                          locale={loginPreviewLocale}
-                          variant="platform"
-                        />
-                        <LoginDecorationSettingsBlock
-                          variant="platform"
-                          onAtLeastOneRequired={warnLoginVisualLayerAtLeastOne}
-                          decorationUrl={decorationUrl}
-                          decorationFileList={decorationFileList}
-                          onDecorationUpload={handleDecorationUpload}
-                          onClearDecoration={handleClearDecoration}
-                          hasDecorationValue={
-                            Boolean(decorationUrl || String(loginDecorationValue || '').trim())
-                          }
-                        />
-                        <LoginBackgroundSettingsBlock
-                          variant="platform"
-                          onAtLeastOneRequired={warnLoginVisualLayerAtLeastOne}
-                          backgroundUrl={backgroundUrl}
-                          backgroundFileList={backgroundFileList}
-                          onBackgroundUpload={handleBackgroundUpload}
-                          onClearBackground={handleClearBackground}
-                          hasBackgroundValue={
-                            Boolean(backgroundUrl || String(loginBackgroundValue || '').trim())
-                          }
-                        />
-                      </div>
-                    }
-                  />
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item
-                    name="theme_color"
-                    label={t('pages.infra.platform.themeColor')}
-                    tooltip={t('pages.infra.platform.themeColorTooltip')}
-                  >
-                    <ColorPicker
-                      showText
-                      format="hex"
-                      presets={[
-                        {
-                          label: t('pages.infra.platform.recommendedColors'),
-                          colors: ['#1890ff', '#F5222D', '#FA541C', '#FAAD14', '#13C2C2', '#52C41A', '#2F54EB', '#722ED1'],
-                        },
-                      ]}
-                      onChange={(value) => form.setFieldValue('theme_color', value.toHexString())}
-                    />
-                  </Form.Item>
-                </Col>
-                <Col span={24}>
+            <Row gutter={[0, 16]}>
+              <Col span={24}>
+                <Card title={t('pages.infra.platform.loginConfig')} size="small">
                   <Row gutter={[16, 16]}>
-                    <Col xs={24} sm={12} md={6}>
-                      <Form.Item name="login_guest_enabled" label={t('pages.infra.platform.loginGuestEnabled')} valuePropName="checked">
-                        <Switch />
-                      </Form.Item>
+                    <Col span={24}>
+                      <LoginPageEditorSplitPanel
+                        preview={
+                          <>
+                            <div className="login-page-editor-split-preview-header">
+                              <Typography.Text strong>{t('pages.system.siteSettings.loginLeftPreview')}</Typography.Text>
+                              <ThemedSegmented
+                                size="small"
+                                value={loginPreviewLocale}
+                                onChange={(value) => setLoginPreviewLocale(value as 'zh-CN' | 'en-US')}
+                                options={[
+                                  { label: t('common.languages.zhCN'), value: 'zh-CN' },
+                                  { label: t('common.languages.enUS'), value: 'en-US' },
+                                ]}
+                              />
+                            </div>
+                            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                              {t('pages.system.siteSettings.loginLeftPreviewHint')}
+                            </Typography.Text>
+                            <div className="login-page-editor-split-preview-body">
+                              <LoginLeftColumnPreview
+                                variant="editor-fill"
+                                themeColor={themeColorValue || '#1890ff'}
+                                locale={loginPreviewLocale}
+                                platformName={
+                                  loginPreviewLocale === 'en-US' ? platformNameEnValue : platformNameValue
+                                }
+                                loginTitle={
+                                  loginPreviewLocale === 'en-US' ? loginTitleEnValue : loginTitleValue
+                                }
+                                loginContent={
+                                  loginPreviewLocale === 'en-US' ? loginContentEnValue : loginContentValue
+                                }
+                                logoUrl={logoUrl}
+                                decorationUrl={decorationLayerEnabled ? decorationUrl : undefined}
+                                backgroundUrl={backgroundLayerEnabled ? backgroundUrl : undefined}
+                                decorationEnabled={decorationLayerEnabled}
+                                backgroundEnabled={backgroundLayerEnabled}
+                              />
+                            </div>
+                          </>
+                        }
+                        settings={
+                          <div className="login-page-editor-split-settings-stack">
+                            <LoginLocaleSettingsFields
+                              key={loginPreviewLocale}
+                              locale={loginPreviewLocale}
+                              variant="platform"
+                            />
+                            <LoginDecorationSettingsBlock
+                              variant="platform"
+                              onAtLeastOneRequired={warnLoginVisualLayerAtLeastOne}
+                              decorationUrl={decorationUrl}
+                              decorationFileList={decorationFileList}
+                              onDecorationUpload={handleDecorationUpload}
+                              onClearDecoration={handleClearDecoration}
+                              hasDecorationValue={
+                                Boolean(decorationUrl || String(loginDecorationValue || '').trim())
+                              }
+                            />
+                            <LoginBackgroundSettingsBlock
+                              variant="platform"
+                              onAtLeastOneRequired={warnLoginVisualLayerAtLeastOne}
+                              backgroundUrl={backgroundUrl}
+                              backgroundFileList={backgroundFileList}
+                              onBackgroundUpload={handleBackgroundUpload}
+                              onClearBackground={handleClearBackground}
+                              hasBackgroundValue={
+                                Boolean(backgroundUrl || String(loginBackgroundValue || '').trim())
+                              }
+                            />
+                            <Form.Item
+                              name="theme_color"
+                              label={t('pages.system.siteSettings.loginPageThemeColor')}
+                              tooltip={t('pages.infra.platform.themeColorTooltip')}
+                              getValueFromEvent={(c: any) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)}
+                            >
+                              <ColorPicker showText />
+                            </Form.Item>
+                          </div>
+                        }
+                      />
                     </Col>
-                    <Col xs={24} sm={12} md={6}>
-                      <Form.Item name="login_quick_enabled" label={t('pages.infra.platform.loginQuickEnabled')} valuePropName="checked">
-                        <Switch />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} sm={12} md={6}>
-                      <Form.Item name="login_client_win_enabled" label={t('pages.infra.platform.loginClientWinEnabled')} valuePropName="checked">
-                        <Switch />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} sm={12} md={6}>
-                      <Form.Item name="login_client_android_enabled" label={t('pages.infra.platform.loginClientAndroidEnabled')} valuePropName="checked">
-                        <Switch />
-                      </Form.Item>
+                    <Col span={24}>
+                      <LoginFeatureSwitchesBlock />
                     </Col>
                   </Row>
-                </Col>
-              </Row>
-            </>
+                </Card>
+              </Col>
+            </Row>
           )}
         </ProForm>
       </Card>

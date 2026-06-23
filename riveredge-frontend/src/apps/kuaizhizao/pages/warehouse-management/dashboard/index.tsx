@@ -24,9 +24,9 @@ import {
   ModuleKpiRow,
   ModuleShortcutGrid,
   ModuleActionPanel,
+  ModuleActionMasonry,
   ModuleTodoList,
   ModuleChartPanel,
-  ModuleChartRow,
 } from '../../../components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 
@@ -210,8 +210,10 @@ const WarehouseDashboard: React.FC = () => {
       {
         title: t('app.kuaizhizao.warehouseDashboard.colTime'),
         dataIndex: 'time',
-        width: 90,
-        render: formatTime,
+        width: 112,
+        render: (value: string) => (
+          <span style={{ whiteSpace: 'nowrap' }}>{formatTime(value)}</span>
+        ),
       },
     ],
     [formatTime, t],
@@ -223,10 +225,10 @@ const WarehouseDashboard: React.FC = () => {
       kpiRow={<ModuleKpiRow items={kpis} />}
       shortcutRow={<ModuleShortcutGrid items={shortcuts} colProps={{ xs: 12, sm: 8, md: 4 }} />}
       actionRow={
-        <>
+        <ModuleActionMasonry>
           <ModuleActionPanel
+            layout="masonry"
             title={t('app.kuaizhizao.warehouseDashboard.pendingInboundTitle')}
-            lg={12}
             extra={
               <a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inbound')}>
                 {t('app.kuaizhizao.warehouseDashboard.more')}
@@ -242,8 +244,8 @@ const WarehouseDashboard: React.FC = () => {
             />
           </ModuleActionPanel>
           <ModuleActionPanel
+            layout="masonry"
             title={t('app.kuaizhizao.warehouseDashboard.pendingOutboundTitle')}
-            lg={12}
             extra={
               <a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/outbound')}>
                 {t('app.kuaizhizao.warehouseDashboard.more')}
@@ -258,13 +260,9 @@ const WarehouseDashboard: React.FC = () => {
               columns={queueColumns}
             />
           </ModuleActionPanel>
-        </>
-      }
-      chartRow={
-        <ModuleChartRow>
           <ModuleActionPanel
+            layout="masonry"
             title={t('app.kuaizhizao.warehouseDashboard.todosTitle')}
-            lg={12}
             loading={todosLoading}
           >
             <ModuleTodoList
@@ -273,9 +271,9 @@ const WarehouseDashboard: React.FC = () => {
             />
           </ModuleActionPanel>
           <ModuleChartPanel
+            layout="masonry"
             title={t('app.kuaizhizao.warehouseDashboard.dailyTrendTitle')}
             loading={trendLoading}
-            lg={12}
             height={260}
           >
             <Suspense fallback={null}>
@@ -285,13 +283,15 @@ const WarehouseDashboard: React.FC = () => {
                 yField="value"
                 colorField="type"
                 height={260}
-                smooth
+                autoFit
+                shapeField="smooth"
+                style={{ lineWidth: 2 }}
                 axis={{ x: { title: false }, y: { title: false } }}
                 legend={{ color: { itemLabelFontSize: 13 } }}
               />
             </Suspense>
           </ModuleChartPanel>
-        </ModuleChartRow>
+        </ModuleActionMasonry>
       }
     />
   );

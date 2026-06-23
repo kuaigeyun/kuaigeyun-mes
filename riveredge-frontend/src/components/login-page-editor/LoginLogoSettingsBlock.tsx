@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Form, Input, Space, Typography, Upload } from 'antd';
+import { Button, Form, Input, Space, Upload } from 'antd';
 import { DeleteOutlined, UploadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { UploadFile, UploadProps } from 'antd';
@@ -30,24 +30,24 @@ const LoginLogoSettingsBlock: React.FC<LoginLogoSettingsBlockProps> = ({
   return (
     <div className="login-page-editor-settings-block">
       {!useCustomLoginLogo ? (
-        <Form.Item label={t('pages.system.siteSettings.loginLogo')} style={{ marginBottom: 0 }}>
-          <Space direction="vertical" size={8} style={{ width: '100%' }}>
-            <Typography.Text type="secondary">
-              {t('pages.system.siteSettings.loginLogoFollowingSiteLogo')}
-            </Typography.Text>
-            <Button onClick={onEnableCustomLoginLogo}>
-              {t('pages.system.siteSettings.enableCustomLoginLogo')}
-            </Button>
-          </Space>
+        <Form.Item
+          label={t('pages.system.siteSettings.loginLogo')}
+          extra={t('pages.system.siteSettings.loginLogoFollowingSiteLogo')}
+          style={{ marginBottom: 0 }}
+        >
+          <Button onClick={onEnableCustomLoginLogo}>
+            {t('pages.system.siteSettings.enableCustomLoginLogo')}
+          </Button>
         </Form.Item>
       ) : (
         <>
-          <Form.Item name="login_logo" label={t('pages.system.siteSettings.loginLogo')}>
+          <Form.Item
+            name="login_logo"
+            label={t('pages.system.siteSettings.loginLogo')}
+            extra={t('pages.system.siteSettings.loginLogoFollowSiteLogo')}
+          >
             <Input placeholder={t('pages.system.siteSettings.loginLogoPlaceholder')} />
           </Form.Item>
-          <Typography.Text type="secondary" style={{ display: 'block', marginTop: -8, marginBottom: 8 }}>
-            {t('pages.system.siteSettings.loginLogoFollowSiteLogo')}
-          </Typography.Text>
           <Space direction="vertical" size={8} style={{ width: '100%' }}>
             {loginLogoUrl && (
               <img
