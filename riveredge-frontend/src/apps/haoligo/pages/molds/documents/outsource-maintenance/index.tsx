@@ -76,6 +76,8 @@ import { canAuditMoldSheet } from '../../../../utils/moldSheetStatus';
 import { MoldSheetDetailAuditFooter } from '../../../../components/MoldSheetDetailAuditFooter';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { isMoldSheetApproved, moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
+import { OUTSOURCE_MAINTENANCE_REPAIR_STATUS_ENUM, outsourceMaintenanceRepairStatusTag } from '../../../../utils/outsourceMaintenanceRepairStatus';
+import { pickMoldSheetAuditListFilters } from '../../../../utils/moldSheetListFilters';
 import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
 import { fetchMoldsForPicker } from '../../../../utils/moldPicker';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
@@ -727,6 +729,15 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
       fieldProps: { allowClear: true },
       render: (_, r) => moldSheetAuditStatusTag(r.sheet_status),
     },
+    {
+      title: '维修状态',
+      dataIndex: 'repair_status',
+      width: 100,
+      valueType: 'select',
+      valueEnum: OUTSOURCE_MAINTENANCE_REPAIR_STATUS_ENUM,
+      fieldProps: { allowClear: true },
+      render: (_, r) => outsourceMaintenanceRepairStatusTag(r.repair_status),
+    },
     moldDocumentCreatedAtColumn<MoldOutsourceMaintenanceSheetRow>(),
     {
       title: '操作',
@@ -825,18 +836,14 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
             const current = params.current ?? 1;
             const pageSize = params.pageSize ?? 20;
             const skip = (current - 1) * pageSize;
+            const filters = pickMoldSheetAuditListFilters(searchFormValues);
             try {
               const res = await listMoldOutsourceMaintenanceSheets({
                 skip,
                 limit: pageSize,
-                sheet_status:
-                  typeof searchFormValues?.sheet_status === 'string' && searchFormValues.sheet_status
-                    ? searchFormValues.sheet_status
-                    : undefined,
-                keyword:
-                  typeof searchFormValues?.keyword === 'string' && searchFormValues.keyword.trim()
-                    ? searchFormValues.keyword.trim()
-                    : undefined,
+                sheet_status: filters.sheet_status,
+                repair_status: filters.repair_status,
+                keyword: filters.keyword,
               });
               return { data: res.items, success: true, total: res.total };
             } catch (e) {
@@ -844,7 +851,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1296 }}
+          scroll={{ x: 1396 }}
         />
       </ListPageTemplate>
 

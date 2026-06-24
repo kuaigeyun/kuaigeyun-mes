@@ -1082,11 +1082,21 @@ export interface EquipmentCapacityByEquipmentRow {
   achievement_rate_pct?: number | null;
 }
 
+export interface EquipmentCapacityByWorkshopRow {
+  workshop_id?: number | null;
+  workshop_name?: string;
+  record_count: number;
+  planned_qty_total?: string | number | null;
+  completed_qty_total: string | number;
+  achievement_rate_pct?: number | null;
+}
+
 export interface EquipmentCapacityReportResult {
   summary: EquipmentCapacitySummary;
-  group_by: 'detail' | 'equipment' | string;
+  group_by: 'detail' | 'equipment' | 'workshop' | string;
   items: EquipmentOutputRecordRow[];
   equipment_items: EquipmentCapacityByEquipmentRow[];
+  workshop_items: EquipmentCapacityByWorkshopRow[];
   total: number;
   skip: number;
   limit: number;
@@ -1096,12 +1106,21 @@ export function getEquipmentCapacityReport(params?: {
   skip?: number;
   limit?: number;
   equipment_id?: number;
+  workshop_id?: number;
   sheet_no?: string;
   work_order_no?: string;
+  finished_product_code?: string;
+  finished_product_name?: string;
+  operator_name?: string;
+  team_leader_name?: string;
   recorded_from?: string;
   recorded_to?: string;
+  startup_from?: string;
+  startup_to?: string;
+  completed_from?: string;
+  completed_to?: string;
   keyword?: string;
-  group_by?: 'detail' | 'equipment';
+  group_by?: 'detail' | 'equipment' | 'workshop';
 }): Promise<EquipmentCapacityReportResult> {
   return apiRequest(`${PREFIX}/equipment/reports/capacity`, { params });
 }
@@ -1186,6 +1205,188 @@ export function deleteEquipmentStatusAdjustment(rowId: number): Promise<void> {
   return apiRequest(`${PREFIX}/equipment/status-adjustments/${rowId}`, { method: 'DELETE' });
 }
 
+export type EquipmentAcceptanceWorkflowStatus =
+  | 'draft'
+  | 'commissioning'
+  | 'pending_trial'
+  | 'trial_recording'
+  | 'accepted'
+  | 'closed';
+
+export interface EquipmentAcceptanceRoundRow {
+  id: number;
+  uuid: string;
+  round_no: number;
+  commissioning_content?: string | null;
+  commissioning_result?: string | null;
+  commissioning_submitted_at?: string | null;
+  product_name?: string | null;
+  material_no?: string | null;
+  quantity?: string | number | null;
+  defect_qty?: string | number | null;
+  defect_reason?: string | null;
+  running_time?: string | number | null;
+  fault_time?: string | number | null;
+  capacity_per_hour?: string | number | null;
+  trial_result?: string | null;
+  pass_rate?: string | number | null;
+  commissioning_attachment_file_uuids?: string[];
+  trial_attachment_file_uuids?: string[];
+}
+
+export interface EquipmentAcceptanceSheetRow {
+  id: number;
+  uuid: string;
+  sheet_no?: string | null;
+  manufacturer_id?: number | null;
+  manufacturer_name?: string | null;
+  arrived_at?: string | null;
+  install_location?: string | null;
+  equipment_name?: string | null;
+  commissioning_user_ids?: number[];
+  submitted_notify_user_ids?: number[];
+  equipment_id?: number | null;
+  equipment_asset_code?: string | null;
+  workflow_status: EquipmentAcceptanceWorkflowStatus | string;
+  current_round: number;
+  accepted_at?: string | null;
+  accepted_by_user_id?: number | null;
+  ledger_action?: string | null;
+  reporter_user_id: number;
+  created_at: string;
+  rounds?: EquipmentAcceptanceRoundRow[];
+}
+
+export type EquipmentAcceptanceSheetCreatePayload = {
+  manufacturer_id?: number | null;
+  manufacturer_name?: string | null;
+  arrived_at?: string | null;
+  install_location?: string | null;
+  equipment_name: string;
+  commissioning_user_ids?: number[];
+  submitted_notify_user_ids?: number[];
+};
+
+export function listEquipmentAcceptanceSheets(params?: {
+  skip?: number;
+  limit?: number;
+  workflow_status?: string;
+  keyword?: string;
+  arrived_from?: string;
+  arrived_to?: string;
+}): Promise<PageResult<EquipmentAcceptanceSheetRow>> {
+  return apiRequest(`${PREFIX}/equipment/acceptance-sheets`, { params });
+}
+
+export function getEquipmentAcceptanceSheet(rowId: number): Promise<EquipmentAcceptanceSheetRow> {
+  return apiRequest(`${PREFIX}/equipment/acceptance-sheets/${rowId}`);
+}
+
+export function createEquipmentAcceptanceSheet(
+  body: EquipmentAcceptanceSheetCreatePayload,
+): Promise<EquipmentAcceptanceSheetRow> {
+  return apiRequest(`${PREFIX}/equipment/acceptance-sheets`, { method: 'POST', data: body });
+}
+
+export function deleteEquipmentAcceptanceSheet(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/equipment/acceptance-sheets/${rowId}`, { method: 'DELETE' });
+}
+
+export type EquipmentAcceptanceRoundCommissioningPayload = {
+  commissioning_content?: string | null;
+  commissioning_result?: string | null;
+  commissioning_attachment_file_uuids?: string[] | null;
+};
+
+export type EquipmentAcceptanceRoundTrialPayload = {
+  product_name?: string | null;
+  material_no?: string | null;
+  quantity?: number | null;
+  defect_qty?: number | null;
+  defect_reason?: string | null;
+  running_time?: number | null;
+  fault_time?: number | null;
+  capacity_per_hour?: number | null;
+  trial_result?: string | null;
+  trial_attachment_file_uuids?: string[] | null;
+};
+
+export function updateEquipmentAcceptanceRoundCommissioning(
+  sheetId: number,
+  roundNo: number,
+  body: EquipmentAcceptanceRoundCommissioningPayload,
+): Promise<EquipmentAcceptanceSheetRow> {
+  return apiRequest(`${PREFIX}/equipment/acceptance-sheets/${sheetId}/rounds/${roundNo}`, {
+    method: 'PATCH',
+    data: body,
+  });
+}
+
+export function submitEquipmentAcceptanceCommissioning(
+  sheetId: number,
+  body?: { submitted_notify_user_ids?: number[] },
+): Promise<EquipmentAcceptanceSheetRow> {
+  return apiRequest(`${PREFIX}/equipment/acceptance-sheets/${sheetId}/submit-commissioning`, {
+    method: 'POST',
+    data: body ?? {},
+  });
+}
+
+export function startEquipmentAcceptanceTrial(sheetId: number): Promise<EquipmentAcceptanceSheetRow> {
+  return apiRequest(`${PREFIX}/equipment/acceptance-sheets/${sheetId}/start-trial`, { method: 'POST' });
+}
+
+export function updateEquipmentAcceptanceRoundTrial(
+  sheetId: number,
+  roundNo: number,
+  body: EquipmentAcceptanceRoundTrialPayload,
+): Promise<EquipmentAcceptanceSheetRow> {
+  return apiRequest(`${PREFIX}/equipment/acceptance-sheets/${sheetId}/rounds/${roundNo}/trial`, {
+    method: 'PATCH',
+    data: body,
+  });
+}
+
+export function completeEquipmentAcceptanceTrial(
+  sheetId: number,
+  body?: { submitted_notify_user_ids?: number[] },
+): Promise<EquipmentAcceptanceSheetRow> {
+  return apiRequest(`${PREFIX}/equipment/acceptance-sheets/${sheetId}/complete-trial`, {
+    method: 'POST',
+    data: body ?? {},
+  });
+}
+
+export type EquipmentAcceptanceFinalizeLedgerPayload =
+  | {
+      mode: 'create';
+      asset_code: string;
+      name?: string | null;
+      category_id?: number | null;
+      workshop_id?: number | null;
+      manufacturer_id?: number | null;
+      manufacture_date?: string | null;
+      inspection_param_set_ids?: number[];
+      upkeep_param_set_id?: number | null;
+      criticality?: string | null;
+      operational_status?: string | null;
+      remark?: string | null;
+      image_file_uuids?: string[];
+      maintenance_cycle_by_yield?: number | string | null;
+      maintenance_cycle_by_days?: number | null;
+    }
+  | { mode: 'link'; equipment_id?: number | null };
+
+export function finalizeEquipmentAcceptanceLedger(
+  sheetId: number,
+  body: EquipmentAcceptanceFinalizeLedgerPayload,
+): Promise<EquipmentAcceptanceSheetRow> {
+  return apiRequest(`${PREFIX}/equipment/acceptance-sheets/${sheetId}/finalize-ledger`, {
+    method: 'POST',
+    data: body,
+  });
+}
+
 export function previewEquipmentOutputByWorkOrder(body: {
   work_order_no?: string | null;
 }): Promise<{
@@ -1196,6 +1397,424 @@ export function previewEquipmentOutputByWorkOrder(body: {
   dataset_row?: Record<string, unknown> | null;
 }> {
   return apiRequest(`${PREFIX}/equipment/output-records/preview-by-work-order`, { method: 'POST', data: body });
+}
+
+export type QualityTicketStatus = 'registered' | 'assigned' | 'processing' | 'completed';
+
+export interface QualityTicketBaseRow {
+  id: number;
+  uuid: string;
+  sheet_no?: string | null;
+  title?: string | null;
+  workshop_id?: number | null;
+  workshop_name?: string | null;
+  production_line?: string | null;
+  work_order_no?: string | null;
+  material_code_snapshot?: string | null;
+  model_snapshot?: string | null;
+  mold_code_snapshot?: string | null;
+  equipment_id?: number | null;
+  equipment_asset_code?: string | null;
+  equipment_name?: string | null;
+  problem_description?: string | null;
+  immediate_action?: string | null;
+  temporary_action?: string | null;
+  temporary_due_at?: string | null;
+  temporary_action_image_uuids?: string[];
+  temporary_submitted_at?: string | null;
+  long_term_action?: string | null;
+  long_term_due_at?: string | null;
+  long_term_action_image_uuids?: string[];
+  long_term_submitted_at?: string | null;
+  due_at?: string | null;
+  completed_at?: string | null;
+  status: QualityTicketStatus | string;
+  attachment_file_uuids?: string[];
+  registrant_user_id?: number | null;
+  registrant_name?: string | null;
+  responsible_user_id?: number | null;
+  responsible_user_ids?: number[];
+  overdue_notify_user_ids?: number[];
+  responsible_name?: string | null;
+  notify_user_ids?: number[];
+  reported_at?: string | null;
+  close_note?: string | null;
+  close_confirmed_at?: string | null;
+  close_confirmer_user_id?: number | null;
+  created_at?: string | null;
+}
+
+export interface QualityIssueRow extends QualityTicketBaseRow {
+  issue_type_codes?: string[];
+  defect_qty?: string | number | null;
+}
+
+export interface CustomerComplaintRow extends QualityTicketBaseRow {
+  customer_name?: string | null;
+  material_code?: string | null;
+  model?: string | null;
+  quantity?: string | number | null;
+  claim_amount?: string | number | null;
+}
+
+export interface LineStopFeedbackRow extends QualityTicketBaseRow {
+  stop_kind?: string | null;
+  stop_reason?: string | null;
+  stop_started_at?: string | null;
+  recovered_at?: string | null;
+}
+
+export type QualityIssueCreatePayload = {
+  title: string;
+  workshop_id?: number | null;
+  production_line?: string | null;
+  work_order_no?: string | null;
+  material_code_snapshot?: string | null;
+  model_snapshot?: string | null;
+  mold_code_snapshot?: string | null;
+  equipment_id?: number | null;
+  problem_description?: string | null;
+  immediate_action?: string | null;
+  long_term_action?: string | null;
+  due_at?: string | null;
+  temporary_due_at?: string | null;
+  long_term_due_at?: string | null;
+  attachment_file_uuids?: string[];
+  registrant_user_id?: number | null;
+  responsible_user_id?: number | null;
+  responsible_user_ids?: number[];
+  overdue_notify_user_ids?: number[];
+  notify_user_ids?: number[];
+  reported_at?: string | null;
+  issue_type_codes?: string[];
+  defect_qty?: number | null;
+};
+
+export type QualityIssueUpdatePayload = Partial<QualityIssueCreatePayload> & {
+  status?: QualityTicketStatus | string;
+  completed_at?: string | null;
+};
+
+export type CustomerComplaintCreatePayload = {
+  title: string;
+  workshop_id?: number | null;
+  production_line?: string | null;
+  work_order_no?: string | null;
+  material_code_snapshot?: string | null;
+  model_snapshot?: string | null;
+  mold_code_snapshot?: string | null;
+  equipment_id?: number | null;
+  problem_description?: string | null;
+  immediate_action?: string | null;
+  long_term_action?: string | null;
+  due_at?: string | null;
+  temporary_due_at?: string | null;
+  long_term_due_at?: string | null;
+  attachment_file_uuids?: string[];
+  registrant_user_id?: number | null;
+  responsible_user_id?: number | null;
+  responsible_user_ids?: number[];
+  overdue_notify_user_ids?: number[];
+  notify_user_ids?: number[];
+  reported_at?: string | null;
+  customer_name?: string | null;
+  material_code?: string | null;
+  model?: string | null;
+  quantity?: number | null;
+  claim_amount?: number | null;
+};
+
+export type CustomerComplaintUpdatePayload = Partial<CustomerComplaintCreatePayload> & {
+  status?: QualityTicketStatus | string;
+  completed_at?: string | null;
+};
+
+export type LineStopFeedbackCreatePayload = {
+  title: string;
+  workshop_id?: number | null;
+  production_line?: string | null;
+  work_order_no?: string | null;
+  material_code_snapshot?: string | null;
+  model_snapshot?: string | null;
+  mold_code_snapshot?: string | null;
+  equipment_id?: number | null;
+  problem_description?: string | null;
+  immediate_action?: string | null;
+  long_term_action?: string | null;
+  due_at?: string | null;
+  temporary_due_at?: string | null;
+  long_term_due_at?: string | null;
+  attachment_file_uuids?: string[];
+  registrant_user_id?: number | null;
+  responsible_user_id?: number | null;
+  responsible_user_ids?: number[];
+  overdue_notify_user_ids?: number[];
+  notify_user_ids?: number[];
+  reported_at?: string | null;
+  stop_kind?: string;
+  stop_reason?: string | null;
+  stop_started_at?: string | null;
+  recovered_at?: string | null;
+};
+
+export type LineStopFeedbackUpdatePayload = Partial<LineStopFeedbackCreatePayload> & {
+  status?: QualityTicketStatus | string;
+  completed_at?: string | null;
+};
+
+export interface QualityReportPayload {
+  report_key: string;
+  points: Array<{ label: string; value: number }>;
+  status_distribution?: Array<{ label: string; value: number }>;
+  monthly_trend?: Array<{ label: string; value: number }>;
+  dimension_ranking?: Array<{ label: string; value: number }>;
+  items?: Array<{
+    sheet_no: string;
+    status: string;
+    status_label: string;
+    summary: string;
+    dimension?: string | null;
+    reported_at?: string | null;
+    due_at?: string | null;
+    is_overdue: boolean;
+  }>;
+}
+
+export interface QualityWorkOrderScanPayload {
+  work_order_no: string;
+}
+
+export interface QualityWorkOrderScanOut {
+  work_order_no: string;
+  workshop_id?: number | null;
+  production_line?: string | null;
+  equipment_id?: number | null;
+  material_code_snapshot?: string | null;
+  model_snapshot?: string | null;
+  mold_code_snapshot?: string | null;
+}
+
+export interface QualityWorkOrderDatasetBindingPayload {
+  dataset_uuid?: string | null;
+  work_order_param_key?: string | null;
+  workshop_name_column?: string | null;
+  production_line_column?: string | null;
+  equipment_asset_code_column?: string | null;
+  mold_code_column?: string | null;
+  finished_product_code_column?: string | null;
+  finished_product_name_column?: string | null;
+}
+
+export function getQualityWorkOrderDatasetBinding(): Promise<QualityWorkOrderDatasetBindingPayload> {
+  return apiRequest(`${PREFIX}/quality/work-order-dataset-binding`);
+}
+
+export function putQualityWorkOrderDatasetBinding(
+  body: QualityWorkOrderDatasetBindingPayload,
+): Promise<QualityWorkOrderDatasetBindingPayload> {
+  return apiRequest(`${PREFIX}/quality/work-order-dataset-binding`, { method: 'PUT', data: body });
+}
+
+export function scanQualityWorkOrder(body: QualityWorkOrderScanPayload): Promise<QualityWorkOrderScanOut> {
+  return apiRequest(`${PREFIX}/quality/scan-work-order`, { method: 'POST', data: body });
+}
+
+export interface QualityRegisterSubmitPayload {
+  responsible_user_ids: number[];
+  overdue_notify_user_ids: number[];
+}
+
+export interface QualityTemporaryActionPayload {
+  responsible_user_ids?: number[];
+  overdue_notify_user_ids?: number[];
+  temporary_action: string;
+  temporary_due_at: string;
+  temporary_action_image_uuids: string[];
+}
+
+export interface QualityLongTermActionPayload {
+  long_term_action: string;
+  long_term_due_at: string;
+  long_term_action_image_uuids: string[];
+}
+
+export interface QualityHandleMeasuresPayload extends QualityTemporaryActionPayload, QualityLongTermActionPayload {
+  responsible_user_ids: number[];
+  overdue_notify_user_ids: number[];
+}
+
+export interface QualityCloseConfirmPayload {
+  close_note?: string | null;
+  recovered_at?: string | null;
+}
+
+export function listQualityIssues(params?: {
+  skip?: number;
+  limit?: number;
+  status?: string;
+  keyword?: string;
+}): Promise<PageResult<QualityIssueRow>> {
+  return apiRequest(`${PREFIX}/quality/issues`, { params });
+}
+
+export function getQualityIssue(rowId: number): Promise<QualityIssueRow> {
+  return apiRequest(`${PREFIX}/quality/issues/${rowId}`);
+}
+
+export function createQualityIssue(body: QualityIssueCreatePayload): Promise<QualityIssueRow> {
+  return apiRequest(`${PREFIX}/quality/issues`, { method: 'POST', data: body });
+}
+
+export function updateQualityIssue(rowId: number, body: QualityIssueUpdatePayload): Promise<QualityIssueRow> {
+  return apiRequest(`${PREFIX}/quality/issues/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function submitQualityIssue(rowId: number): Promise<QualityIssueRow> {
+  return apiRequest(`${PREFIX}/quality/issues/${rowId}/submit`, { method: 'POST' });
+}
+
+export function completeQualityIssue(rowId: number): Promise<QualityIssueRow> {
+  return apiRequest(`${PREFIX}/quality/issues/${rowId}/complete`, { method: 'POST' });
+}
+
+export function submitQualityIssueRegister(rowId: number, body: QualityRegisterSubmitPayload): Promise<QualityIssueRow> {
+  return apiRequest(`${PREFIX}/quality/issues/${rowId}/workflow/register-submit`, { method: 'POST', data: body });
+}
+
+export function submitQualityIssueTemporaryAction(rowId: number, body: QualityTemporaryActionPayload): Promise<QualityIssueRow> {
+  return apiRequest(`${PREFIX}/quality/issues/${rowId}/workflow/temporary-action`, { method: 'POST', data: body });
+}
+
+export function submitQualityIssueLongTermAction(rowId: number, body: QualityLongTermActionPayload): Promise<QualityIssueRow> {
+  return apiRequest(`${PREFIX}/quality/issues/${rowId}/workflow/long-term-action`, { method: 'POST', data: body });
+}
+
+export function submitQualityIssueHandleMeasures(rowId: number, body: QualityHandleMeasuresPayload): Promise<QualityIssueRow> {
+  return apiRequest(`${PREFIX}/quality/issues/${rowId}/workflow/handle-measures`, { method: 'POST', data: body });
+}
+
+export function confirmQualityIssueClose(rowId: number, body: QualityCloseConfirmPayload): Promise<QualityIssueRow> {
+  return apiRequest(`${PREFIX}/quality/issues/${rowId}/workflow/confirm-close`, { method: 'POST', data: body });
+}
+
+export function deleteQualityIssue(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/quality/issues/${rowId}`, { method: 'DELETE' });
+}
+
+export function listCustomerComplaints(params?: {
+  skip?: number;
+  limit?: number;
+  status?: string;
+  keyword?: string;
+}): Promise<PageResult<CustomerComplaintRow>> {
+  return apiRequest(`${PREFIX}/quality/complaints`, { params });
+}
+
+export function getCustomerComplaint(rowId: number): Promise<CustomerComplaintRow> {
+  return apiRequest(`${PREFIX}/quality/complaints/${rowId}`);
+}
+
+export function createCustomerComplaint(body: CustomerComplaintCreatePayload): Promise<CustomerComplaintRow> {
+  return apiRequest(`${PREFIX}/quality/complaints`, { method: 'POST', data: body });
+}
+
+export function updateCustomerComplaint(
+  rowId: number,
+  body: CustomerComplaintUpdatePayload,
+): Promise<CustomerComplaintRow> {
+  return apiRequest(`${PREFIX}/quality/complaints/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function submitCustomerComplaint(rowId: number): Promise<CustomerComplaintRow> {
+  return apiRequest(`${PREFIX}/quality/complaints/${rowId}/submit`, { method: 'POST' });
+}
+
+export function completeCustomerComplaint(rowId: number): Promise<CustomerComplaintRow> {
+  return apiRequest(`${PREFIX}/quality/complaints/${rowId}/complete`, { method: 'POST' });
+}
+
+export function submitCustomerComplaintRegister(rowId: number, body: QualityRegisterSubmitPayload): Promise<CustomerComplaintRow> {
+  return apiRequest(`${PREFIX}/quality/complaints/${rowId}/workflow/register-submit`, { method: 'POST', data: body });
+}
+
+export function submitCustomerComplaintTemporaryAction(rowId: number, body: QualityTemporaryActionPayload): Promise<CustomerComplaintRow> {
+  return apiRequest(`${PREFIX}/quality/complaints/${rowId}/workflow/temporary-action`, { method: 'POST', data: body });
+}
+
+export function submitCustomerComplaintLongTermAction(rowId: number, body: QualityLongTermActionPayload): Promise<CustomerComplaintRow> {
+  return apiRequest(`${PREFIX}/quality/complaints/${rowId}/workflow/long-term-action`, { method: 'POST', data: body });
+}
+
+export function submitCustomerComplaintHandleMeasures(rowId: number, body: QualityHandleMeasuresPayload): Promise<CustomerComplaintRow> {
+  return apiRequest(`${PREFIX}/quality/complaints/${rowId}/workflow/handle-measures`, { method: 'POST', data: body });
+}
+
+export function confirmCustomerComplaintClose(rowId: number, body: QualityCloseConfirmPayload): Promise<CustomerComplaintRow> {
+  return apiRequest(`${PREFIX}/quality/complaints/${rowId}/workflow/confirm-close`, { method: 'POST', data: body });
+}
+
+export function deleteCustomerComplaint(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/quality/complaints/${rowId}`, { method: 'DELETE' });
+}
+
+export function listLineStopFeedbacks(params?: {
+  skip?: number;
+  limit?: number;
+  status?: string;
+  keyword?: string;
+}): Promise<PageResult<LineStopFeedbackRow>> {
+  return apiRequest(`${PREFIX}/quality/line-stops`, { params });
+}
+
+export function getLineStopFeedback(rowId: number): Promise<LineStopFeedbackRow> {
+  return apiRequest(`${PREFIX}/quality/line-stops/${rowId}`);
+}
+
+export function createLineStopFeedback(body: LineStopFeedbackCreatePayload): Promise<LineStopFeedbackRow> {
+  return apiRequest(`${PREFIX}/quality/line-stops`, { method: 'POST', data: body });
+}
+
+export function updateLineStopFeedback(
+  rowId: number,
+  body: LineStopFeedbackUpdatePayload,
+): Promise<LineStopFeedbackRow> {
+  return apiRequest(`${PREFIX}/quality/line-stops/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function submitLineStopFeedback(rowId: number): Promise<LineStopFeedbackRow> {
+  return apiRequest(`${PREFIX}/quality/line-stops/${rowId}/submit`, { method: 'POST' });
+}
+
+export function completeLineStopFeedback(rowId: number): Promise<LineStopFeedbackRow> {
+  return apiRequest(`${PREFIX}/quality/line-stops/${rowId}/complete`, { method: 'POST' });
+}
+
+export function submitLineStopFeedbackRegister(rowId: number, body: QualityRegisterSubmitPayload): Promise<LineStopFeedbackRow> {
+  return apiRequest(`${PREFIX}/quality/line-stops/${rowId}/workflow/register-submit`, { method: 'POST', data: body });
+}
+
+export function submitLineStopFeedbackTemporaryAction(rowId: number, body: QualityTemporaryActionPayload): Promise<LineStopFeedbackRow> {
+  return apiRequest(`${PREFIX}/quality/line-stops/${rowId}/workflow/temporary-action`, { method: 'POST', data: body });
+}
+
+export function submitLineStopFeedbackLongTermAction(rowId: number, body: QualityLongTermActionPayload): Promise<LineStopFeedbackRow> {
+  return apiRequest(`${PREFIX}/quality/line-stops/${rowId}/workflow/long-term-action`, { method: 'POST', data: body });
+}
+
+export function submitLineStopFeedbackHandleMeasures(rowId: number, body: QualityHandleMeasuresPayload): Promise<LineStopFeedbackRow> {
+  return apiRequest(`${PREFIX}/quality/line-stops/${rowId}/workflow/handle-measures`, { method: 'POST', data: body });
+}
+
+export function confirmLineStopFeedbackClose(rowId: number, body: QualityCloseConfirmPayload): Promise<LineStopFeedbackRow> {
+  return apiRequest(`${PREFIX}/quality/line-stops/${rowId}/workflow/confirm-close`, { method: 'POST', data: body });
+}
+
+export function deleteLineStopFeedback(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/quality/line-stops/${rowId}`, { method: 'DELETE' });
+}
+
+export function getQualityReport(reportKey: 'issue-report' | 'complaint-report' | 'line-stop-report'): Promise<QualityReportPayload> {
+  return apiRequest(`${PREFIX}/quality/reports/${reportKey}`);
 }
 
 /** 模具台账（与后端 MoldOut 对齐） */
@@ -1913,6 +2532,8 @@ export interface MoldOutsourceMaintenanceSheetRow {
   created_at?: string | null;
   /** 是否可发起完修（维修类且尚无未驳回的关联完修单） */
   can_complete?: boolean;
+  /** 维修进度：维修中 / 完修待审 / 维修完成 */
+  repair_status?: string | null;
 }
 
 export type OutsourceMaintLinePayload = {
@@ -1943,6 +2564,7 @@ export function listMoldOutsourceMaintenanceSheets(params?: {
   limit?: number;
   keyword?: string;
   sheet_status?: string;
+  repair_status?: string;
   /** 仅返回尚未关联未删除外协维保完修单的外协维保单（完修单选源） */
   open_for_complete?: boolean;
 }): Promise<PageResult<MoldOutsourceMaintenanceSheetRow>> {

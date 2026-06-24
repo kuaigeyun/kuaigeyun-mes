@@ -906,8 +906,10 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       );
     }
 
-    // 选择框
-    if (valueType === 'select' && valueEnum) {
+    // 选择框（valueEnum / options / request）
+    if (valueType === 'select') {
+      const requestFn = (column as ProColumns<any>).request;
+      const options = (fieldProps as any)?.options;
       return (
         <SafeProFormSelect
           key={dataIndex as string}
@@ -915,6 +917,8 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
           label={title as string}
           placeholder={t('components.uniQuery.selectPlaceholder', { title: typeof title === 'string' ? title : '' })}
           valueEnum={valueEnum}
+          request={requestFn}
+          options={options}
           fieldProps={fieldProps as any}
         />
       );
@@ -2955,57 +2959,32 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   }, []);
 
   /**
-   * 加载钉住的搜索条件（最佳实践：统一清空和设置逻辑）
+   * 加载钉住的搜索条件：一次性写入 searchParamsRef，避免先清空再写入导致 reload 读到空筛选。
    */
   const handleLoadPinnedSearch = useCallback(async (search: SavedSearch) => {
     try {
-      // ⭐ 最佳实践：获取所有可搜索的列
       const searchableColumns = getSearchableColumns();
       const allFieldNames = searchableColumns
         .map((col) => col.dataIndex)
         .filter((name): name is string => typeof name === 'string');
-      
-      // ⭐ 最佳实践：创建空值对象，清空所有字段
-      const emptyValues: Record<string, any> = {};
-      allFieldNames.forEach((name) => {
-        emptyValues[name] = undefined;
-      });
-      
-      // ⭐ 最佳实践：统一清空所有表单
-      if (formRef.current) {
-        formRef.current.setFieldsValue(emptyValues);
-      }
-      if (searchParamsRef) {
-        commitListPageSearchParams(searchParamsRef, undefined, onSearchParamsApplied);
-      }
-      
-      // ⭐ 最佳实践：等待清空完成
-      await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => {
-          setTimeout(() => {
-            resolve();
-          }, 50);
-        });
-      });
-      
+
       const filteredParams = filterEmptyValues(search.search_params);
-      
+      const mergedFormValues: Record<string, unknown> = {};
+      allFieldNames.forEach((name) => {
+        mergedFormValues[name] = undefined;
+      });
+      Object.assign(mergedFormValues, filteredParams);
+
       if (formRef.current) {
-        formRef.current.setFieldsValue(filteredParams);
+        formRef.current.setFieldsValue(mergedFormValues);
       }
       commitListPageSearchParams(searchParamsRef, filteredParams, onSearchParamsApplied);
-      
+
       await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => {
-          setTimeout(() => {
-            resolve();
-          }, 50);
-        });
+        requestAnimationFrame(() => resolve());
       });
-      
-      if (actionRef.current) {
-        actionRef.current.reload(false);
-      }
+
+      actionRef.current?.reload?.();
     } catch (error) {
       console.error('加载钉住的搜索条件失败:', error);
     }

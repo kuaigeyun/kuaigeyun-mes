@@ -23,7 +23,7 @@ from apps.haoligo.api.routes_equipment_documents import (
     _serialize_output_record,
 )
 from apps.haoligo.utils.equipment_output_qty import normalize_equipment_output_qty
-from apps.haoligo.models.equipment import HaoligoEquipment
+from apps.haoligo.models.equipment import HaoligoEquipment, HaoligoWorkshop
 from apps.haoligo.models.equipment_operations import HaoligoEquipmentOutputRecord
 from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
@@ -182,24 +182,55 @@ def _apply_output_record_filters(
     qs,
     *,
     equipment_id: Optional[int],
+    workshop_id: Optional[int] = None,
     sheet_no: Optional[str],
     work_order_no: Optional[str],
+    finished_product_code: Optional[str] = None,
+    finished_product_name: Optional[str] = None,
+    operator_name: Optional[str] = None,
+    team_leader_name: Optional[str] = None,
     recorded_from: Optional[str],
     recorded_to: Optional[str],
+    startup_from: Optional[str] = None,
+    startup_to: Optional[str] = None,
+    completed_from: Optional[str] = None,
+    completed_to: Optional[str] = None,
     keyword: Optional[str],
 ):
     if equipment_id is not None:
         qs = qs.filter(equipment_id=equipment_id)
+    if workshop_id is not None:
+        qs = qs.filter(equipment__workshop_id=workshop_id)
     if sheet_no and sheet_no.strip():
         qs = qs.filter(sheet_no__icontains=sheet_no.strip())
     if work_order_no and work_order_no.strip():
         qs = qs.filter(work_order_no__icontains=work_order_no.strip())
+    if finished_product_code and finished_product_code.strip():
+        qs = qs.filter(finished_product_code__icontains=finished_product_code.strip())
+    if finished_product_name and finished_product_name.strip():
+        qs = qs.filter(finished_product_name__icontains=finished_product_name.strip())
+    if operator_name and operator_name.strip():
+        qs = qs.filter(operator_name__icontains=operator_name.strip())
+    if team_leader_name and team_leader_name.strip():
+        qs = qs.filter(team_leader_name__icontains=team_leader_name.strip())
     rf = _parse_dt(recorded_from)
     rt = _parse_dt(recorded_to)
     if rf:
         qs = qs.filter(recorded_at__gte=rf)
     if rt:
         qs = qs.filter(recorded_at__lte=rt)
+    sf = _parse_dt(startup_from)
+    st = _parse_dt(startup_to)
+    if sf:
+        qs = qs.filter(startup_at__gte=sf)
+    if st:
+        qs = qs.filter(startup_at__lte=st)
+    cf = _parse_dt(completed_from)
+    ct = _parse_dt(completed_to)
+    if cf:
+        qs = qs.filter(completed_at__gte=cf)
+    if ct:
+        qs = qs.filter(completed_at__lte=ct)
     if keyword and keyword.strip():
         k = keyword.strip()
         qs = qs.filter(
@@ -267,11 +298,21 @@ class CapacityByEquipmentRow(BaseModel):
     achievement_rate_pct: Optional[float] = None
 
 
+class CapacityByWorkshopRow(BaseModel):
+    workshop_id: Optional[int] = None
+    workshop_name: str = ""
+    record_count: int
+    planned_qty_total: Optional[Decimal] = None
+    completed_qty_total: Decimal
+    achievement_rate_pct: Optional[float] = None
+
+
 class CapacityReportOut(BaseModel):
     summary: CapacitySummary
     group_by: str
     items: List[OutputRecordOut] = Field(default_factory=list)
     equipment_items: List[CapacityByEquipmentRow] = Field(default_factory=list)
+    workshop_items: List[CapacityByWorkshopRow] = Field(default_factory=list)
     total: int = 0
     skip: int = 0
     limit: int = 20
@@ -289,21 +330,39 @@ async def capacity_report(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     equipment_id: Optional[int] = Query(None, ge=1),
+    workshop_id: Optional[int] = Query(None, ge=1),
     sheet_no: Optional[str] = None,
     work_order_no: Optional[str] = None,
+    finished_product_code: Optional[str] = None,
+    finished_product_name: Optional[str] = None,
+    operator_name: Optional[str] = None,
+    team_leader_name: Optional[str] = None,
     recorded_from: Optional[str] = None,
     recorded_to: Optional[str] = None,
+    startup_from: Optional[str] = None,
+    startup_to: Optional[str] = None,
+    completed_from: Optional[str] = None,
+    completed_to: Optional[str] = None,
     keyword: Optional[str] = None,
-    group_by: str = Query("detail", description="detail=产出明细；equipment=按设备汇总"),
+    group_by: str = Query("detail", description="detail=产出明细；equipment=按设备汇总；workshop=按车间汇总"),
 ):
     qs = tenant_alive(HaoligoEquipmentOutputRecord, tenant_id)
     qs = _apply_output_record_filters(
         qs,
         equipment_id=equipment_id,
+        workshop_id=workshop_id,
         sheet_no=sheet_no,
         work_order_no=work_order_no,
+        finished_product_code=finished_product_code,
+        finished_product_name=finished_product_name,
+        operator_name=operator_name,
+        team_leader_name=team_leader_name,
         recorded_from=recorded_from,
         recorded_to=recorded_to,
+        startup_from=startup_from,
+        startup_to=startup_to,
+        completed_from=completed_from,
+        completed_to=completed_to,
         keyword=keyword,
     )
     summary = await _summary_for_qs(qs)
@@ -347,6 +406,53 @@ async def capacity_report(
             summary=summary,
             group_by="equipment",
             equipment_items=equipment_items,
+            total=total,
+            skip=skip,
+            limit=limit,
+        )
+
+    if mode == "workshop":
+        agg_rows = (
+            await qs.annotate(
+                record_count=Count("id"),
+                planned_total=Sum("planned_qty"),
+                completed_total=Sum("completed_qty"),
+            )
+            .group_by("equipment__workshop_id")
+            .order_by("-completed_total")
+            .values("equipment__workshop_id", "record_count", "planned_total", "completed_total")
+        )
+        total = len(agg_rows)
+        page = agg_rows[skip : skip + limit]
+        ws_ids = [
+            int(r["equipment__workshop_id"])
+            for r in page
+            if r.get("equipment__workshop_id") is not None
+        ]
+        ws_map: dict[int, HaoligoWorkshop] = {}
+        if ws_ids:
+            wss = await tenant_alive(HaoligoWorkshop, tenant_id).filter(id__in=ws_ids)
+            ws_map = {w.id: w for w in wss}
+        workshop_items: List[CapacityByWorkshopRow] = []
+        for r in page:
+            wid = r.get("equipment__workshop_id")
+            ws = ws_map.get(int(wid)) if wid is not None else None
+            planned = r.get("planned_total")
+            completed = r.get("completed_total") or Decimal("0")
+            workshop_items.append(
+                CapacityByWorkshopRow(
+                    workshop_id=int(wid) if wid is not None else None,
+                    workshop_name=ws.name if ws else "",
+                    record_count=int(r.get("record_count") or 0),
+                    planned_qty_total=normalize_equipment_output_qty(planned),
+                    completed_qty_total=normalize_equipment_output_qty(completed, required=True),
+                    achievement_rate_pct=_achievement_rate_pct(planned, completed),
+                )
+            )
+        return CapacityReportOut(
+            summary=summary,
+            group_by="workshop",
+            workshop_items=workshop_items,
             total=total,
             skip=skip,
             limit=limit,

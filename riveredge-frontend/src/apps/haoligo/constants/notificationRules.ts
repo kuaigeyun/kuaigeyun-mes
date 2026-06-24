@@ -98,6 +98,16 @@ export const HAOLIGO_NOTIFICATION_DOCUMENT_OPTIONS = [
 
   {
 
+    value: 'haoligo_equipment_acceptance',
+
+    labelKey: 'app.haoligo.settings.notifications.document.equipment_acceptance',
+
+    fallback: '设备验收单',
+
+  },
+
+  {
+
     value: 'haoligo_patrol_issue_register',
 
     labelKey: 'app.haoligo.settings.notifications.document.patrol_issue_register',
@@ -431,6 +441,40 @@ export const HAOLIGO_NOTIFICATION_ACTION_OPTIONS: Record<
       labelKey: 'app.haoligo.settings.notifications.action.equipment_output_record.created',
 
       fallback: '保存',
+
+    },
+
+  ],
+
+  haoligo_equipment_acceptance: [
+
+    {
+
+      value: 'trial_pending',
+
+      labelKey: 'app.haoligo.settings.notifications.action.equipment_acceptance.trial_pending',
+
+      fallback: '待试产',
+
+    },
+
+    {
+
+      value: 'trial_failed',
+
+      labelKey: 'app.haoligo.settings.notifications.action.equipment_acceptance.trial_failed',
+
+      fallback: '试产不合格退回',
+
+    },
+
+    {
+
+      value: 'accepted',
+
+      labelKey: 'app.haoligo.settings.notifications.action.equipment_acceptance.accepted',
+
+      fallback: '验收合格',
 
     },
 

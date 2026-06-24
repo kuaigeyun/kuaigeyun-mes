@@ -122,6 +122,7 @@ _SYSTEM_DICTIONARY_REQUIRES_APPS: Dict[str, FrozenSet[str]] = {
     "HAOLIGO_MOLD_REPAIR_REASON": frozenset({"haoligo"}),
     "HAOLIGO_MOLD_MAINTENANCE_REASON": frozenset({"haoligo"}),
     "HAOLIGO_PATROL_ISSUE_TYPE": frozenset({"haoligo"}),
+    "HAOLIGO_QUALITY_ISSUE_TYPE": frozenset({"haoligo"}),
     "TOOL_STATUS": frozenset({"haoligo"}),
 }
 

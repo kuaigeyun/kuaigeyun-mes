@@ -20,6 +20,7 @@ const MASTER_LINKS: NavItem[] = [
 ];
 
 const REPORT_LINKS: NavItem[] = [
+  { to: '/apps/haoligo/equipment/documents/acceptance', titleKey: 'app.haoligo.menu.equipment.documents.acceptance' },
   { to: '/apps/haoligo/equipment/documents/spot-check', titleKey: 'app.haoligo.menu.equipment.documents.spot-check' },
   { to: '/apps/haoligo/equipment/documents/route-patrol', titleKey: 'app.haoligo.menu.equipment.documents.route-patrol' },
   { to: '/apps/haoligo/equipment/documents/upkeep-sheet', titleKey: 'app.haoligo.menu.equipment.documents.upkeep-sheet' },

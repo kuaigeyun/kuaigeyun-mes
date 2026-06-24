@@ -57,6 +57,29 @@ export function hasReviewPermission(user: CurrentUser | undefined, resourcePrefi
 
 const REVIEW_ACTION_LABEL_KEY = 'audit';
 
+/** 完整权限码 → i18n key（与 permission_action_spec.PERMISSION_CODE_DISPLAY_LABELS 对齐） */
+const PERMISSION_CODE_LABEL_I18N: Record<string, string> = {
+  'haoligo:equipment-documents-acceptance:submit': 'permission.haoligo.equipmentDocumentsAcceptance.submit',
+  'haoligo:equipment-documents-acceptance:execute': 'permission.haoligo.equipmentDocumentsAcceptance.execute',
+  'haoligo:equipment-documents-acceptance:complete': 'permission.haoligo.equipmentDocumentsAcceptance.complete',
+};
+
+/** 角色矩阵 / 功能权限树：权限码级展示名优先，否则按 action 走 permission.action.* */
+export function resolvePermissionLabel(
+  permissionCode: string | undefined,
+  action: string | undefined,
+  backendLabel: string | undefined,
+  t: (key: string, opts?: { defaultValue?: string }) => string,
+): string {
+  const code = (permissionCode || '').trim().toLowerCase();
+  const codeKey = code ? PERMISSION_CODE_LABEL_I18N[code] : undefined;
+  if (codeKey) {
+    const translated = t(codeKey, { defaultValue: '' });
+    if (translated && translated !== codeKey) return translated;
+  }
+  return resolvePermissionActionLabel(action, backendLabel, t);
+}
+
 /** 角色矩阵 / 功能权限树操作展示：按 action 走 permission.action.*，与 permission_action_spec 对齐 */
 export function resolvePermissionActionLabel(
   action: string | undefined,

@@ -70,7 +70,20 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
 }
 
 
-# 编写 manifest.permissions 时的动作顺序参考（角色矩阵唯一真源为 manifest 数组下标；本常量仅供开发脚本/人工对照，运行时不得用于 sort）
+# 同一 action 在不同模块语义不同时，按完整权限码覆盖展示文案（优先于 ACTION_DISPLAY_LABELS）
+PERMISSION_CODE_DISPLAY_LABELS: dict[str, str] = {
+    "haoligo:equipment-documents-acceptance:submit": "调试",
+    "haoligo:equipment-documents-acceptance:execute": "试产",
+    "haoligo:equipment-documents-acceptance:complete": "台账结案",
+}
+
+
+def permission_code_display_label(code: str) -> str:
+    normalized = (code or "").strip().lower()
+    return PERMISSION_CODE_DISPLAY_LABELS.get(normalized, "")
+
+
+# 编写 manifest.permissions 时的动作顺序参考
 MANIFEST_ACTION_ORDER: tuple[str, ...] = (
     "read",
     "create",

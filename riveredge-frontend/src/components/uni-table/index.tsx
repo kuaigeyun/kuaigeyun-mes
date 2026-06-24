@@ -2871,7 +2871,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         advancedSearchTableProps={{
           columns: processedColumns,
           formRef: formRef as React.MutableRefObject<ProFormInstance>,
-          actionRef: actionRefForProTable as React.MutableRefObject<ActionType>,
+          actionRef: outwardActionRef as React.MutableRefObject<ActionType>,
           searchParamsRef,
           pinnedSearchUiEpoch,
           onSearchParamsApplied: () => setPinnedSearchUiEpoch((e) => e + 1),
@@ -2900,6 +2900,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       pinnedSearchUiEpoch,
       processedColumns,
       searchParamsRef,
+      outwardActionRef,
       showAdvancedSearch,
       showFuzzySearch,
       t,

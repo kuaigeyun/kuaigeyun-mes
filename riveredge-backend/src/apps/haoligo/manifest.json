@@ -266,6 +266,13 @@
             "sort_order": 25,
             "children": [
               {
+                "title": "app.haoligo.menu.equipment.documents.acceptance",
+                "path": "/apps/haoligo/equipment/documents/acceptance",
+                "icon": "ClipboardCheck",
+                "permission": "haoligo:equipment-documents-acceptance:read",
+                "sort_order": 20
+              },
+              {
                 "title": "app.haoligo.menu.equipment.documents.spot-check",
                 "path": "/apps/haoligo/equipment/documents/spot-check",
                 "icon": "FileCheck",
@@ -402,6 +409,110 @@
                 "icon": "Sparkles",
                 "permission": "haoligo:patrol-reports-group-insights:read",
                 "sort_order": 24
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "app.haoligo.menu.quality",
+        "path": "/apps/haoligo/quality",
+        "icon": "ShieldCheck",
+        "permission": "haoligo:workspace:read",
+        "sort_order": 35,
+        "children": [
+          {
+            "title": "app.haoligo.menu.quality.group.documents",
+            "icon": "ClipboardList",
+            "permission": "haoligo:workspace:read",
+            "sort_order": 10,
+            "children": [
+              {
+                "title": "app.haoligo.menu.quality.group.register",
+                "icon": "FilePlus2",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 11,
+                "children": [
+                  {
+                    "title": "app.haoligo.menu.quality.issues.register",
+                    "path": "/apps/haoligo/quality/issues/register",
+                    "icon": "AlertTriangle",
+                    "permission": "haoligo:quality-issue-tracking:read",
+                    "sort_order": 11
+                  },
+                  {
+                    "title": "app.haoligo.menu.quality.complaints.register",
+                    "path": "/apps/haoligo/quality/complaints/register",
+                    "icon": "MessageSquareWarning",
+                    "permission": "haoligo:customer-complaint:read",
+                    "sort_order": 12
+                  },
+                  {
+                    "title": "app.haoligo.menu.quality.line-stops.register",
+                    "path": "/apps/haoligo/quality/line-stops/register",
+                    "icon": "PauseOctagon",
+                    "permission": "haoligo:line-stop-feedback:read",
+                    "sort_order": 13
+                  }
+                ]
+              },
+              {
+                "title": "app.haoligo.menu.quality.group.handle",
+                "icon": "ClipboardCheck",
+                "permission": "haoligo:workspace:read",
+                "sort_order": 12,
+                "children": [
+                  {
+                    "title": "app.haoligo.menu.quality.issues.handle",
+                    "path": "/apps/haoligo/quality/issues/handle",
+                    "icon": "AlertTriangle",
+                    "permission": "haoligo:quality-issue-tracking:read",
+                    "sort_order": 21
+                  },
+                  {
+                    "title": "app.haoligo.menu.quality.complaints.handle",
+                    "path": "/apps/haoligo/quality/complaints/handle",
+                    "icon": "MessageSquareWarning",
+                    "permission": "haoligo:customer-complaint:read",
+                    "sort_order": 22
+                  },
+                  {
+                    "title": "app.haoligo.menu.quality.line-stops.handle",
+                    "path": "/apps/haoligo/quality/line-stops/handle",
+                    "icon": "PauseOctagon",
+                    "permission": "haoligo:line-stop-feedback:read",
+                    "sort_order": 23
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "title": "app.haoligo.menu.quality.group.reports",
+            "icon": "BarChartBig",
+            "permission": "haoligo:workspace:read",
+            "sort_order": 20,
+            "children": [
+              {
+                "title": "app.haoligo.menu.quality.reports.issues",
+                "path": "/apps/haoligo/quality/reports/issues",
+                "icon": "PieChart",
+                "permission": "haoligo:quality-reports-issues:read",
+                "sort_order": 21
+              },
+              {
+                "title": "app.haoligo.menu.quality.reports.complaints",
+                "path": "/apps/haoligo/quality/reports/complaints",
+                "icon": "LineChart",
+                "permission": "haoligo:quality-reports-complaints:read",
+                "sort_order": 22
+              },
+              {
+                "title": "app.haoligo.menu.quality.reports.line-stops",
+                "path": "/apps/haoligo/quality/reports/line-stops",
+                "icon": "Activity",
+                "permission": "haoligo:quality-reports-line-stops:read",
+                "sort_order": 23
               }
             ]
           }
@@ -552,6 +663,14 @@
                 "internal_only": true
               },
               {
+                "key": "acceptance",
+                "label": "设备验收单",
+                "icon": "clipboard-check-outline",
+                "route": "/equip/acceptance",
+                "permission": "haoligo:equipment-documents-acceptance:read",
+                "internal_only": true
+              },
+              {
                 "key": "status-board",
                 "label": "状态看板",
                 "icon": "view-dashboard-outline",
@@ -595,6 +714,50 @@
                   "haoligo:patrol-reports-group-completion:read",
                   "haoligo:patrol-reports-group-area:read",
                   "haoligo:patrol-reports-group-insights:read"
+                ],
+                "internal_only": true
+              }
+            ]
+          },
+          {
+            "key": "quality",
+            "title": "品质",
+            "hide_when_external_partner": true,
+            "entries": [
+              {
+                "key": "quality-issues",
+                "label": "品质问题反馈",
+                "icon": "alert-circle-outline",
+                "route": "/quality/issues",
+                "permission": "haoligo:quality-issue-tracking:read",
+                "internal_only": true
+              },
+              {
+                "key": "quality-complaints",
+                "label": "客户投诉",
+                "icon": "message-alert-outline",
+                "route": "/quality/complaints",
+                "permission": "haoligo:customer-complaint:read",
+                "internal_only": true
+              },
+              {
+                "key": "quality-line-stops",
+                "label": "停线反馈",
+                "icon": "pause-circle-outline",
+                "route": "/quality/line-stops",
+                "permission": "haoligo:line-stop-feedback:read",
+                "internal_only": true
+              },
+              {
+                "key": "quality-dashboard",
+                "label": "品质看板",
+                "icon": "chart-bar",
+                "route": "/quality/dashboard",
+                "permission": "haoligo:workspace:read",
+                "permissions_any": [
+                  "haoligo:quality-reports-issues:read",
+                  "haoligo:quality-reports-complaints:read",
+                  "haoligo:quality-reports-line-stops:read"
                 ],
                 "internal_only": true
               }
@@ -921,12 +1084,111 @@
       "recorded_at",
       "remark"
     ],
+    "equipment.acceptance.create": [
+      "manufacturer_id",
+      "arrived_at",
+      "install_location",
+      "equipment_name",
+      "commissioning_user_ids",
+      "submitted_notify_user_ids"
+    ],
+    "equipment.acceptance.trial": [
+      "product_name",
+      "material_no",
+      "quantity",
+      "defect_qty",
+      "defect_reason",
+      "running_time",
+      "fault_time",
+      "capacity_per_hour",
+      "trial_result",
+      "pass_rate"
+    ],
     "patrol.hazard.remediate": [
       "solution_note",
       "after_image_file_ids",
       "handled_at",
       "handler_name"
+    ],
+    "quality.issue.register": [
+      "work_order_no",
+      "material_code_snapshot",
+      "model_snapshot",
+      "mold_code_snapshot",
+      "workshop_id",
+      "production_line",
+      "equipment_id",
+      "issue_type_codes",
+      "problem_description",
+      "defect_qty",
+      "attachment_file_uuids",
+      "responsible_user_ids",
+      "overdue_notify_user_ids",
+      "notify_user_ids",
+      "reported_at"
+    ],
+    "quality.issue.handle": [
+      "responsible_user_ids",
+      "temporary_action",
+      "temporary_due_at",
+      "temporary_action_image_uuids",
+      "long_term_action",
+      "long_term_due_at",
+      "long_term_action_image_uuids",
+      "overdue_notify_user_ids",
+      "close_note"
+    ],
+    "quality.complaint.register": [
+      "customer_name",
+      "material_code",
+      "model",
+      "quantity",
+      "problem_description",
+      "attachment_file_uuids",
+      "claim_amount",
+      "responsible_user_ids",
+      "overdue_notify_user_ids",
+      "notify_user_ids",
+      "reported_at"
+    ],
+    "quality.complaint.handle": [
+      "responsible_user_ids",
+      "temporary_action",
+      "temporary_due_at",
+      "temporary_action_image_uuids",
+      "long_term_action",
+      "long_term_due_at",
+      "long_term_action_image_uuids",
+      "overdue_notify_user_ids",
+      "close_note"
+    ],
+    "quality.line-stop.register": [
+      "stop_kind",
+      "workshop_id",
+      "production_line",
+      "equipment_id",
+      "stop_reason",
+      "stop_started_at",
+      "responsible_user_ids",
+      "overdue_notify_user_ids",
+      "notify_user_ids",
+      "reported_at"
+    ],
+    "quality.line-stop.handle": [
+      "responsible_user_ids",
+      "temporary_action",
+      "temporary_due_at",
+      "temporary_action_image_uuids",
+      "long_term_action",
+      "long_term_due_at",
+      "long_term_action_image_uuids",
+      "overdue_notify_user_ids",
+      "recovered_at"
     ]
+  },
+  "mobile_form_dictionaries": {
+    "patrol.hazard.register.issue_type_codes": "HAOLIGO_PATROL_ISSUE_TYPE",
+    "quality.issue.register.issue_type_codes": "HAOLIGO_QUALITY_ISSUE_TYPE"
   },
   "reference_resources": {
     "molds-ledger": {
@@ -1165,6 +1427,34 @@
       "haoligo:equipment-ledger",
       "system:user"
     ],
+    "equipment-documents-acceptance": [
+      "haoligo:equipment-ledger",
+      "haoligo:equipment-manufacturers",
+      "haoligo:master-data-factory-workshops",
+      "system:user",
+      "system:department"
+    ],
+    "quality-issue-tracking": [
+      "haoligo:equipment-ledger",
+      "haoligo:master-data-factory-workshops",
+      "system:user",
+      "system:department",
+      "system:data-dictionary"
+    ],
+    "customer-complaint": [
+      "haoligo:equipment-ledger",
+      "haoligo:master-data-factory-workshops",
+      "system:user",
+      "system:department",
+      "system:data-dictionary"
+    ],
+    "line-stop-feedback": [
+      "haoligo:equipment-ledger",
+      "haoligo:master-data-factory-workshops",
+      "system:user",
+      "system:department",
+      "system:data-dictionary"
+    ],
     "equipment-ledger": [
       "haoligo:equipment-categories",
       "haoligo:equipment-manufacturers",
@@ -1212,6 +1502,16 @@
     "haoligo:equipment-documents-status-adjustment:import",
     "haoligo:equipment-documents-status-adjustment:export",
     "haoligo:equipment-documents-status-adjustment:print",
+    "haoligo:equipment-documents-acceptance:read",
+    "haoligo:equipment-documents-acceptance:create",
+    "haoligo:equipment-documents-acceptance:delete",
+    "haoligo:equipment-documents-acceptance:update",
+    "haoligo:equipment-documents-acceptance:import",
+    "haoligo:equipment-documents-acceptance:export",
+    "haoligo:equipment-documents-acceptance:print",
+    "haoligo:equipment-documents-acceptance:submit",
+    "haoligo:equipment-documents-acceptance:execute",
+    "haoligo:equipment-documents-acceptance:complete",
     "haoligo:equipment-documents-upkeep-complete:read",
     "haoligo:equipment-documents-upkeep-complete:create",
     "haoligo:equipment-documents-upkeep-complete:delete",
@@ -1443,6 +1743,51 @@
     "haoligo:patrol-hazards:update",
     "haoligo:patrol-hazards:import",
     "haoligo:patrol-hazards:export",
+    "haoligo:quality-issue-tracking:read",
+    "haoligo:quality-issue-tracking:create",
+    "haoligo:quality-issue-tracking:delete",
+    "haoligo:quality-issue-tracking:update",
+    "haoligo:quality-issue-tracking:import",
+    "haoligo:quality-issue-tracking:export",
+    "haoligo:quality-issue-tracking:submit",
+    "haoligo:quality-issue-tracking:execute",
+    "haoligo:quality-issue-tracking:complete",
+    "haoligo:customer-complaint:read",
+    "haoligo:customer-complaint:create",
+    "haoligo:customer-complaint:delete",
+    "haoligo:customer-complaint:update",
+    "haoligo:customer-complaint:import",
+    "haoligo:customer-complaint:export",
+    "haoligo:customer-complaint:submit",
+    "haoligo:customer-complaint:execute",
+    "haoligo:customer-complaint:complete",
+    "haoligo:line-stop-feedback:read",
+    "haoligo:line-stop-feedback:create",
+    "haoligo:line-stop-feedback:delete",
+    "haoligo:line-stop-feedback:update",
+    "haoligo:line-stop-feedback:import",
+    "haoligo:line-stop-feedback:export",
+    "haoligo:line-stop-feedback:submit",
+    "haoligo:line-stop-feedback:execute",
+    "haoligo:line-stop-feedback:complete",
+    "haoligo:quality-reports-issues:read",
+    "haoligo:quality-reports-issues:create",
+    "haoligo:quality-reports-issues:delete",
+    "haoligo:quality-reports-issues:update",
+    "haoligo:quality-reports-issues:import",
+    "haoligo:quality-reports-issues:export",
+    "haoligo:quality-reports-complaints:read",
+    "haoligo:quality-reports-complaints:create",
+    "haoligo:quality-reports-complaints:delete",
+    "haoligo:quality-reports-complaints:update",
+    "haoligo:quality-reports-complaints:import",
+    "haoligo:quality-reports-complaints:export",
+    "haoligo:quality-reports-line-stops:read",
+    "haoligo:quality-reports-line-stops:create",
+    "haoligo:quality-reports-line-stops:delete",
+    "haoligo:quality-reports-line-stops:update",
+    "haoligo:quality-reports-line-stops:import",
+    "haoligo:quality-reports-line-stops:export",
     "haoligo:patrol-reports-group-area:read",
     "haoligo:patrol-reports-group-area:create",
     "haoligo:patrol-reports-group-area:delete",

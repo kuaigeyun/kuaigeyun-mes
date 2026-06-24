@@ -9,6 +9,7 @@ export const HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_COMPLETE = 'haoligo:equipment-doc
 export const HAOLIGO_RESOURCE_EQUIPMENT_OUTPUT_RECORD = 'haoligo:equipment-documents-output-record';
 export const HAOLIGO_RESOURCE_EQUIPMENT_STATUS_ADJUSTMENT =
   'haoligo:equipment-documents-status-adjustment';
+export const HAOLIGO_RESOURCE_EQUIPMENT_ACCEPTANCE = 'haoligo:equipment-documents-acceptance';
 export const HAOLIGO_RESOURCE_MOLD_UPKEEP = 'haoligo:molds-documents-upkeep';
 export const HAOLIGO_RESOURCE_MOLD_UPKEEP_COMPLETE = 'haoligo:molds-documents-upkeep-complete';
 export const HAOLIGO_RESOURCE_MOLD_REPAIR = 'haoligo:molds-documents-repair';

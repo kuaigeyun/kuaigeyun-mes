@@ -29,3 +29,60 @@ export function parseEquipmentReportRecordedRange(search: Record<string, unknown
 export function defaultEquipmentReportRecordedRange(): [Dayjs, Dayjs] {
   return [dayjs().startOf('month'), dayjs().endOf('day')];
 }
+
+function parseNamedDateRange(
+  search: Record<string, unknown> | undefined,
+  fieldKey: string,
+): { from?: string; to?: string } {
+  if (!search) return {};
+  const raw = search[fieldKey];
+  if (!Array.isArray(raw) || raw.length < 2) return {};
+  const a = raw[0] as string | Dayjs | Date | null | undefined;
+  const b = raw[1] as string | Dayjs | Date | null | undefined;
+  if (a == null || b == null) return {};
+  const d0 = dayjs(a as never);
+  const d1 = dayjs(b as never);
+  if (!d0.isValid() || !d1.isValid()) return {};
+  return {
+    from: d0.startOf('day').toISOString(),
+    to: d1.endOf('day').toISOString(),
+  };
+}
+
+function optionalTrimmedString(search: Record<string, unknown> | undefined, key: string): string | undefined {
+  const raw = search?.[key];
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim();
+  return trimmed || undefined;
+}
+
+function optionalPositiveInt(search: Record<string, unknown> | undefined, key: string): number | undefined {
+  const raw = search?.[key];
+  if (raw == null || raw === '') return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+/** 产能查询高级搜索 → API 查询参数 */
+export function parseEquipmentCapacitySearchParams(search: Record<string, unknown> | undefined) {
+  const recorded = parseEquipmentReportRecordedRange(search);
+  const startup = parseNamedDateRange(search, 'startup_at_range');
+  const completed = parseNamedDateRange(search, 'completed_at_range');
+  return {
+    recorded_from: recorded.recorded_from,
+    recorded_to: recorded.recorded_to,
+    startup_from: startup.from,
+    startup_to: startup.to,
+    completed_from: completed.from,
+    completed_to: completed.to,
+    equipment_id: optionalPositiveInt(search, 'equipment_id'),
+    workshop_id: optionalPositiveInt(search, 'workshop_id'),
+    sheet_no: optionalTrimmedString(search, 'sheet_no'),
+    work_order_no: optionalTrimmedString(search, 'work_order_no'),
+    finished_product_code: optionalTrimmedString(search, 'finished_product_code'),
+    finished_product_name: optionalTrimmedString(search, 'finished_product_name'),
+    operator_name: optionalTrimmedString(search, 'operator_name'),
+    team_leader_name: optionalTrimmedString(search, 'team_leader_name'),
+    keyword: optionalTrimmedString(search, 'keyword'),
+  };
+}

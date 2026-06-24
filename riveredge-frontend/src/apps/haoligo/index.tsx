@@ -36,6 +36,7 @@ const EquipmentDocumentsUpkeepSheetPage = lazy(() => import('./pages/equipment/d
 const EquipmentDocumentsUpkeepCompletePage = lazy(() => import('./pages/equipment/documents/upkeep-complete'));
 const EquipmentDocumentsOutputRecordPage = lazy(() => import('./pages/equipment/documents/output-record'));
 const EquipmentDocumentsStatusAdjustmentPage = lazy(() => import('./pages/equipment/documents/status-adjustment'));
+const EquipmentDocumentsAcceptancePage = lazy(() => import('./pages/equipment/documents/acceptance'));
 const MoldLedgerPage = lazy(() => import('./pages/molds/ledger'));
 const MoldUpkeepParamsPage = lazy(() => import('./pages/molds/upkeep-params'));
 const MoldUpkeepParamSetsPage = lazy(() => import('./pages/molds/upkeep-param-sets'));
@@ -62,6 +63,18 @@ const PatrolDailyFormPage = lazy(() => import('./pages/patrol/daily/form'));
 const PatrolHazardsPage = lazy(() => import('./pages/patrol/hazards'));
 const PatrolReportGroupPage = lazy(() => import('./pages/patrol/reports/PatrolReportGroupPage'));
 const PatrolReportLegacyRedirect = lazy(() => import('./pages/patrol/reports/PatrolReportLegacyRedirect'));
+const QualityIssuesPage = lazy(() => import('./pages/quality/issues'));
+const QualityComplaintsPage = lazy(() => import('./pages/quality/complaints'));
+const QualityLineStopsPage = lazy(() => import('./pages/quality/line-stops'));
+const QualityIssuesRegisterPage = lazy(() => import('./pages/quality/issues/register'));
+const QualityIssuesHandlePage = lazy(() => import('./pages/quality/issues/handle'));
+const QualityComplaintsRegisterPage = lazy(() => import('./pages/quality/complaints/register'));
+const QualityComplaintsHandlePage = lazy(() => import('./pages/quality/complaints/handle'));
+const QualityLineStopsRegisterPage = lazy(() => import('./pages/quality/line-stops/register'));
+const QualityLineStopsHandlePage = lazy(() => import('./pages/quality/line-stops/handle'));
+const QualityIssueReportPage = lazy(() => import('./pages/quality/reports/issues'));
+const QualityComplaintReportPage = lazy(() => import('./pages/quality/reports/complaints'));
+const QualityLineStopReportPage = lazy(() => import('./pages/quality/reports/line-stops'));
 const HaoligoApp: React.FC = () => (
   <Routes>
     <Route element={<HaoligoAppLayout />}>
@@ -101,6 +114,10 @@ const HaoligoApp: React.FC = () => (
       <Route
         path="equipment/documents/status-adjustment"
         element={withPageSuspense(EquipmentDocumentsStatusAdjustmentPage)}
+      />
+      <Route
+        path="equipment/documents/acceptance"
+        element={withPageSuspense(EquipmentDocumentsAcceptancePage)}
       />
       <Route
         path="equipment/settings/output-dataset"
@@ -236,6 +253,21 @@ const HaoligoApp: React.FC = () => (
           path="reports/patrol-records"
           element={<Navigate to="/apps/haoligo/equipment/documents/route-patrol" replace />}
         />
+      </Route>
+      <Route path="quality" element={<Outlet />}>
+        <Route index element={<Navigate to="/apps/haoligo/quality/issues/register" replace />} />
+        <Route path="issues" element={withPageSuspense(QualityIssuesPage)} />
+        <Route path="issues/register" element={withPageSuspense(QualityIssuesRegisterPage)} />
+        <Route path="issues/handle" element={withPageSuspense(QualityIssuesHandlePage)} />
+        <Route path="complaints" element={withPageSuspense(QualityComplaintsPage)} />
+        <Route path="complaints/register" element={withPageSuspense(QualityComplaintsRegisterPage)} />
+        <Route path="complaints/handle" element={withPageSuspense(QualityComplaintsHandlePage)} />
+        <Route path="line-stops" element={withPageSuspense(QualityLineStopsPage)} />
+        <Route path="line-stops/register" element={withPageSuspense(QualityLineStopsRegisterPage)} />
+        <Route path="line-stops/handle" element={withPageSuspense(QualityLineStopsHandlePage)} />
+        <Route path="reports/issues" element={withPageSuspense(QualityIssueReportPage)} />
+        <Route path="reports/complaints" element={withPageSuspense(QualityComplaintReportPage)} />
+        <Route path="reports/line-stops" element={withPageSuspense(QualityLineStopReportPage)} />
       </Route>
       <Route index element={<HaoligoDefaultRedirect />} />
     </Route>

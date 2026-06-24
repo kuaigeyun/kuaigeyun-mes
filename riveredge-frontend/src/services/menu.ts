@@ -64,6 +64,24 @@ export interface MenuOrderItem {
   sort_order: number;
 }
 
+export type CustomMenuLayoutNodeType = 'app_group' | 'custom_group' | 'menu_ref';
+
+export interface CustomMenuLayoutNode {
+  id: string;
+  type: CustomMenuLayoutNodeType;
+  title?: string;
+  icon?: string;
+  menu_uuid?: string;
+  menu_path?: string;
+  children: CustomMenuLayoutNode[];
+}
+
+export interface CustomMenuLayout {
+  enabled: boolean;
+  version: number;
+  nodes: CustomMenuLayoutNode[];
+}
+
 /**
  * 创建菜单
  */
@@ -107,6 +125,22 @@ export async function getMenuTree(params?: {
  */
 export async function getNavigationMenuTree(): Promise<MenuTree[]> {
   return apiRequest<MenuTree[]>('/core/menus/navigation-tree');
+}
+
+/** 获取租户级自组菜单布局（展示映射层） */
+export async function getMenuCustomLayout(): Promise<CustomMenuLayout> {
+  return apiRequest<CustomMenuLayout>('/core/menus/custom-layout');
+}
+
+/** 更新租户级自组菜单布局 */
+export async function updateMenuCustomLayout(data: {
+  enabled: boolean;
+  nodes: CustomMenuLayoutNode[];
+}): Promise<CustomMenuLayout> {
+  return apiRequest<CustomMenuLayout>('/core/menus/custom-layout', {
+    method: 'PUT',
+    data,
+  });
 }
 
 /**

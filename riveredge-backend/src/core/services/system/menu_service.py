@@ -16,8 +16,18 @@ from core.models.menu import Menu
 from core.models.permission import Permission
 from core.config.system_menu_config import LEGACY_SYSTEM_GROUP_ALIASES, SYSTEM_MENU_CONFIG
 from core.utils.timezone_utils import now_utc
-from core.schemas.menu import MenuCreate, MenuUpdate, MenuResponse, MenuTreeResponse, TenantBackendHomeResponse
+from core.schemas.menu import (
+    MenuCreate,
+    MenuUpdate,
+    MenuResponse,
+    MenuTreeResponse,
+    TenantBackendHomeResponse,
+    CustomMenuLayoutUpdate,
+    CustomMenuLayoutResponse,
+    CustomMenuLayoutNode,
+)
 from core.services.application.application_service import ApplicationService
+from core.services.system.site_setting_service import SiteSettingService
 from core.config.menu_takeover import merge_menu_meta_for_sync
 from core.config.menu_sync_is_active_policy import resolve_sync_is_active_for_existing_row
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -37,6 +47,7 @@ class ManifestMenuSortIndex(TypedDict):
 # 部署改动 manifest → 新进程重算指纹 → 键变化 → 自动重建一次。
 # 保证 manifest 仍是菜单顺序/结构的唯一真源，而无需每请求重读磁盘并重排。
 _MANIFEST_FINGERPRINT_CACHE: Optional[str] = None
+_CUSTOM_MENU_LAYOUT_KEY = "custom_menu_layout"
 
 
 class MenuService:
@@ -418,6 +429,129 @@ class MenuService:
         except Exception:
             # 缓存清除失败不影响主流程
             pass
+
+    @staticmethod
+    def _default_custom_menu_layout() -> Dict[str, Any]:
+        return {
+            "enabled": False,
+            "version": 0,
+            "nodes": [],
+        }
+
+    @staticmethod
+    def _normalize_custom_menu_layout(raw: Any) -> Dict[str, Any]:
+        base = MenuService._default_custom_menu_layout()
+        if not isinstance(raw, dict):
+            return base
+        enabled = bool(raw.get("enabled", False))
+        version = int(raw.get("version", 0) or 0)
+        nodes = raw.get("nodes")
+        if not isinstance(nodes, list):
+            nodes = []
+        return {
+            "enabled": enabled,
+            "version": max(0, version),
+            "nodes": nodes,
+        }
+
+    @staticmethod
+    def _iter_custom_layout_nodes(
+        nodes: List[CustomMenuLayoutNode],
+    ) -> List[CustomMenuLayoutNode]:
+        ordered: List[CustomMenuLayoutNode] = []
+
+        def walk(items: List[CustomMenuLayoutNode]) -> None:
+            for item in items:
+                ordered.append(item)
+                if item.children:
+                    walk(item.children)
+
+        walk(nodes)
+        return ordered
+
+    @staticmethod
+    def _collect_menu_tree_lookup(
+        roots: List[MenuTreeResponse],
+    ) -> Dict[str, MenuTreeResponse]:
+        by_uuid: Dict[str, MenuTreeResponse] = {}
+
+        def walk(items: List[MenuTreeResponse]) -> None:
+            for item in items:
+                by_uuid[str(item.uuid)] = item
+                if item.children:
+                    walk(item.children)
+
+        walk(roots)
+        return by_uuid
+
+    @staticmethod
+    def _validate_custom_menu_layout_nodes(
+        nodes: List[CustomMenuLayoutNode],
+        source_lookup: Dict[str, MenuTreeResponse],
+    ) -> None:
+        flat_nodes = MenuService._iter_custom_layout_nodes(nodes)
+        seen_ids: set[str] = set()
+        seen_menu_refs: set[str] = set()
+        for node in flat_nodes:
+            node_id = (node.id or "").strip()
+            if not node_id:
+                raise ValidationError("自组菜单节点 id 不能为空")
+            if node_id in seen_ids:
+                raise ValidationError(f"自组菜单节点 id 重复：{node_id}")
+            seen_ids.add(node_id)
+
+            if node.type != "menu_ref":
+                continue
+            menu_uuid = (node.menu_uuid or "").strip()
+            if menu_uuid in seen_menu_refs:
+                raise ValidationError(f"菜单引用重复：{menu_uuid}")
+            seen_menu_refs.add(menu_uuid)
+
+            source = source_lookup.get(menu_uuid)
+            if not source:
+                raise ValidationError(f"引用菜单不存在或已禁用：{menu_uuid}")
+
+            if node.menu_path and source.path and str(node.menu_path).strip() != str(source.path).strip():
+                raise ValidationError(f"菜单路径校验失败：{menu_uuid}")
+
+    @staticmethod
+    async def get_custom_menu_layout(tenant_id: int) -> CustomMenuLayoutResponse:
+        settings_row = await SiteSettingService.get_settings(tenant_id)
+        payload = MenuService._normalize_custom_menu_layout(
+            (settings_row.settings or {}).get(_CUSTOM_MENU_LAYOUT_KEY)
+        )
+        validated = CustomMenuLayoutResponse.model_validate(payload)
+        return validated
+
+    @staticmethod
+    async def update_custom_menu_layout(
+        tenant_id: int,
+        data: CustomMenuLayoutUpdate,
+    ) -> CustomMenuLayoutResponse:
+        source_tree = await MenuService.get_menu_tree(
+            tenant_id=tenant_id,
+            is_active=True,
+            use_cache=False,
+            cache_key_suffix="nav_v1",
+        )
+        source_lookup = MenuService._collect_menu_tree_lookup(source_tree)
+        MenuService._validate_custom_menu_layout_nodes(data.nodes, source_lookup)
+
+        settings_row = await SiteSettingService.get_settings(tenant_id)
+        current = MenuService._normalize_custom_menu_layout(
+            (settings_row.settings or {}).get(_CUSTOM_MENU_LAYOUT_KEY)
+        )
+        next_layout = {
+            "enabled": bool(data.enabled),
+            "version": int(current.get("version", 0) or 0) + 1,
+            "nodes": data.model_dump(mode="json").get("nodes", []),
+        }
+        merged_settings = dict(settings_row.settings or {})
+        merged_settings[_CUSTOM_MENU_LAYOUT_KEY] = next_layout
+        settings_row.settings = merged_settings
+        await settings_row.save(update_fields=["settings"])
+        await MenuService._clear_menu_cache(tenant_id)
+        return CustomMenuLayoutResponse.model_validate(next_layout)
     
     @staticmethod
     async def create_menu(

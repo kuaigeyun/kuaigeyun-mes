@@ -3,14 +3,14 @@ import { Checkbox, Tree, theme } from 'antd';
 import { AppstoreOutlined } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
 import type { FunctionGrantAction, FunctionGrantMenuNode } from '../../../../services/role';
-import { resolvePermissionActionLabel } from '../../../../utils/permissionContract';
+import { resolvePermissionLabel } from '../../../../utils/permissionContract';
 import { translateGrantMenuTitle } from './functionGrantTreeFilters';
 
 function grantActionLabel(
   action: FunctionGrantAction,
   t: (key: string, opts?: { defaultValue?: string }) => string,
 ): string {
-  return resolvePermissionActionLabel(action.action, action.label, t);
+  return resolvePermissionLabel(action.code, action.action, action.label, t);
 }
 
 export function codesFromAction(action: FunctionGrantAction): string[] {

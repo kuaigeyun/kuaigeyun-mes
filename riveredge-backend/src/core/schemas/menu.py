@@ -4,8 +4,8 @@
 定义菜单相关的 Pydantic Schema，用于数据验证和序列化。
 """
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 from uuid import UUID
 
@@ -156,6 +156,44 @@ class EffectiveHomeResponse(BaseModel):
     menu_uuid: Optional[str] = Field(None, description="命中菜单主页时的菜单 UUID")
 
 
+class CustomMenuLayoutNode(BaseModel):
+    """租户级自组菜单节点（展示映射层，不改 manifest / core_menus 真源）。"""
+
+    id: str = Field(..., description="节点唯一 ID（布局内唯一）")
+    type: Literal["app_group", "custom_group", "menu_ref"] = Field(..., description="节点类型")
+    title: Optional[str] = Field(None, description="展示标题（分组必填，menu_ref 可覆盖原菜单标题）")
+    icon: Optional[str] = Field(None, description="图标键（可覆盖）")
+    menu_uuid: Optional[str] = Field(None, description="menu_ref 引用的菜单 UUID")
+    menu_path: Optional[str] = Field(None, description="menu_ref 引用的菜单路径（冗余校验）")
+    children: List["CustomMenuLayoutNode"] = Field(default_factory=list, description="子节点")
+
+    @model_validator(mode="after")
+    def validate_by_type(self) -> "CustomMenuLayoutNode":
+        if self.type in ("app_group", "custom_group"):
+            if not (self.title or "").strip():
+                raise ValueError("分组节点 title 不能为空")
+        if self.type == "menu_ref":
+            if not (self.menu_uuid or "").strip():
+                raise ValueError("menu_ref 节点必须提供 menu_uuid")
+            if self.children:
+                raise ValueError("menu_ref 节点不允许 children")
+        return self
+
+
+class CustomMenuLayoutUpdate(BaseModel):
+    """更新租户级自组菜单布局。"""
+
+    enabled: bool = Field(False, description="是否启用自组菜单")
+    nodes: List[CustomMenuLayoutNode] = Field(default_factory=list, description="根节点列表")
+
+
+class CustomMenuLayoutResponse(CustomMenuLayoutUpdate):
+    """租户级自组菜单布局响应。"""
+
+    version: int = Field(0, description="布局版本（每次保存递增）")
+
+
 # 更新前向引用
 MenuTreeResponse.model_rebuild()
+CustomMenuLayoutNode.model_rebuild()
 

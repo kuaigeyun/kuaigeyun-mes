@@ -5,7 +5,7 @@ import {
   translateAppMenuItemName,
   translateMenuName,
 } from '../../../../utils/menuTranslation';
-import { resolvePermissionActionLabel } from '../../../../utils/permissionContract';
+import { resolvePermissionLabel } from '../../../../utils/permissionContract';
 
 export type FunctionGrantFilterMode = 'all' | 'app' | 'module' | 'search';
 
@@ -75,7 +75,7 @@ function actionMatchesSearch(
   kw: string,
   t: (key: string, opts?: { defaultValue?: string }) => string
 ): boolean {
-  const label = resolvePermissionActionLabel(action.action, action.label, t);
+  const label = resolvePermissionLabel(action.code, action.action, action.label, t);
   if ((action.code || '').toLowerCase().includes(kw)) return true;
   if ((action.label || '').toLowerCase().includes(kw)) return true;
   if (label.toLowerCase().includes(kw)) return true;

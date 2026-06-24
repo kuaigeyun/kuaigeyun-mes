@@ -14,8 +14,7 @@ from core.schemas.user_message import (
     UserMessageMarkReadRequest,
 )
 from core.services.user.user_message_service import UserMessageService
-from core.api.deps.deps import get_current_tenant
-from infra.api.deps.deps import get_current_user
+from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError
 
@@ -126,7 +125,4 @@ async def mark_messages_read(
     )
     
     return {"updated_count": updated_count}
-
-
-from typing import Dict
 

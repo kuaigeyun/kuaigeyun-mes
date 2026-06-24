@@ -43,12 +43,21 @@ from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
 from apps.haoligo.models.mold_outsource_maintenance_sheet import HaoligoMoldOutsourceMaintenanceSheet
 from apps.haoligo.models.patrol import HaoligoHazardReport
 from apps.haoligo.models.equipment_status_log import HaoligoEquipmentOperationalStatusLog
-from apps.haoligo.models.equipment_upkeep import HaoligoEquipmentUpkeepCompleteSheet, HaoligoEquipmentUpkeepSheet
+from apps.haoligo.models.equipment_acceptance import (
+    HaoligoEquipmentAcceptanceRound,
+    HaoligoEquipmentAcceptanceSheet,
+)
 from apps.haoligo.models.equipment_upkeep_param import (
     HaoligoEquipmentUpkeepParam,
     HaoligoEquipmentUpkeepParamSet,
     HaoligoEquipmentUpkeepParamSetItem,
 )
+from apps.haoligo.models.quality import (
+    HaoligoCustomerComplaint,
+    HaoligoLineStopFeedback,
+    HaoligoQualityIssueTracking,
+)
+from apps.haoligo.models.quality_dataset_binding import HaoligoQualityDatasetBinding
 
 __all__ = [
     "HaoligoEquipment",
@@ -68,6 +77,8 @@ __all__ = [
     "HaoligoEquipmentMaintenanceReport",
     "HaoligoEquipmentUpkeepSheet",
     "HaoligoEquipmentUpkeepCompleteSheet",
+    "HaoligoEquipmentAcceptanceSheet",
+    "HaoligoEquipmentAcceptanceRound",
     "HaoligoEquipmentUpkeepParam",
     "HaoligoEquipmentUpkeepParamSet",
     "HaoligoEquipmentUpkeepParamSetItem",
@@ -91,4 +102,8 @@ __all__ = [
     "HaoligoMoldOutsourceMaintenanceSheet",
     "HaoligoHazardReport",
     "HaoligoEquipmentOperationalStatusLog",
+    "HaoligoQualityIssueTracking",
+    "HaoligoCustomerComplaint",
+    "HaoligoLineStopFeedback",
+    "HaoligoQualityDatasetBinding",
 ]

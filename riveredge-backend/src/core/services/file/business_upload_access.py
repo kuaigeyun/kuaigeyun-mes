@@ -9,6 +9,7 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
     "haoligo_equipment": (
         "haoligo:equipment-ledger:create",
         "haoligo:equipment-ledger:update",
+        "haoligo:equipment-documents-acceptance:complete",
     ),
     "haoligo_equipment_upkeep": (
         "haoligo:equipment-documents-upkeep-sheet:create",
@@ -26,9 +27,30 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
         "haoligo:equipment-documents-route-patrol:create",
         "haoligo:equipment-documents-route-patrol:update",
     ),
+    "haoligo_equipment_acceptance": (
+        "haoligo:equipment-documents-acceptance:create",
+        "haoligo:equipment-documents-acceptance:update",
+        "haoligo:equipment-documents-acceptance:submit",
+        "haoligo:equipment-documents-acceptance:execute",
+        "haoligo:equipment-documents-acceptance:complete",
+    ),
     "haoligo_patrol_hazard": (
         "haoligo:patrol-hazards:create",
         "haoligo:patrol-hazards:update",
+    ),
+    "haoligo_quality_management": (
+        "haoligo:quality-issue-tracking:create",
+        "haoligo:quality-issue-tracking:update",
+        "haoligo:quality-issue-tracking:submit",
+        "haoligo:quality-issue-tracking:complete",
+        "haoligo:customer-complaint:create",
+        "haoligo:customer-complaint:update",
+        "haoligo:customer-complaint:submit",
+        "haoligo:customer-complaint:complete",
+        "haoligo:line-stop-feedback:create",
+        "haoligo:line-stop-feedback:update",
+        "haoligo:line-stop-feedback:submit",
+        "haoligo:line-stop-feedback:complete",
     ),
     "haoligo_mold_trial": (
         "haoligo:molds-documents-trial:create",

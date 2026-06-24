@@ -13,9 +13,9 @@
  */
 
 import { useMemo, useCallback, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MenuDataItem } from '@ant-design/pro-components';
-import { type MenuTree } from '../services/menu';
+import { getMenuCustomLayout, type MenuTree, type CustomMenuLayoutNode } from '../services/menu';
 import { refreshCurrentUserInStore } from '../services/auth';
 import { extractAppCodeFromPath, getAppDisplayName } from '../utils/menuTranslation';
 import { useGlobalStore } from '../stores';
@@ -26,6 +26,7 @@ import { NAVIGATION_MENU_TREE_QUERY_KEY, useNavigationMenuTreeQuery } from './us
 
 // 向后兼容：历史代码从本模块导入该常量
 export { NAVIGATION_MENU_TREE_QUERY_KEY };
+const MENU_CUSTOM_LAYOUT_QUERY_KEY = 'menuCustomLayout';
 
 function treeHasAppPath(nodes: MenuTree[]): boolean {
   for (const n of nodes) {
@@ -42,6 +43,97 @@ function collectApplicationRoots(tree: MenuTree[]): MenuTree[] {
   return tree.filter(
     (m) => m.path?.startsWith('/apps/') || treeHasAppPath(m.children ?? []),
   );
+}
+
+function flattenMenuTreeByUuid(nodes: MenuTree[]): Map<string, MenuTree> {
+  const byUuid = new Map<string, MenuTree>();
+  const walk = (items: MenuTree[]) => {
+    items.forEach((item) => {
+      if (item?.uuid) byUuid.set(String(item.uuid), item);
+      if (item.children?.length) walk(item.children);
+    });
+  };
+  walk(nodes);
+  return byUuid;
+}
+
+function cloneSourceMenuNode(
+  source: MenuTree,
+  nodeIdPrefix: string,
+  overrides?: { title?: string; icon?: string },
+): MenuTree {
+  const children = (source.children ?? []).map((child, idx) =>
+    cloneSourceMenuNode(child, `${nodeIdPrefix}-${idx}`),
+  );
+  return {
+    ...source,
+    uuid: `${nodeIdPrefix}-${source.uuid}`,
+    name: (overrides?.title || '').trim() || source.name,
+    icon: (overrides?.icon || '').trim() || source.icon,
+    children,
+  };
+}
+
+function buildMappedMenuTree(
+  nodes: CustomMenuLayoutNode[],
+  sourceByUuid: Map<string, MenuTree>,
+  parentPrefix: string,
+): MenuTree[] {
+  return nodes.map((node, index) => {
+    const nodeId = (node.id || '').trim() || `${parentPrefix}-${index}`;
+    if (node.type === 'menu_ref') {
+      const menuUuid = String(node.menu_uuid || '');
+      const source = sourceByUuid.get(menuUuid);
+      if (!source) {
+        return {
+          uuid: `${parentPrefix}-${nodeId}-missing`,
+          tenant_id: 0,
+          name: node.title?.trim() || menuUuid || 'missing',
+          path: undefined,
+          icon: node.icon,
+          component: undefined,
+          permission_code: undefined,
+          application_uuid: undefined,
+          parent_uuid: undefined,
+          sort_order: index,
+          is_active: true,
+          is_external: false,
+          external_url: undefined,
+          meta: { custom_layout_virtual: true, custom_layout_missing_ref: true },
+          created_at: '',
+          updated_at: '',
+          children: [],
+        };
+      }
+      return cloneSourceMenuNode(source, `${parentPrefix}-${nodeId}`, {
+        title: node.title,
+        icon: node.icon,
+      });
+    }
+
+    return {
+      uuid: `${parentPrefix}-${nodeId}`,
+      tenant_id: 0,
+      name: (node.title || '').trim() || (node.type === 'app_group' ? 'APP' : '分组'),
+      path: undefined,
+      icon: (node.icon || '').trim() || undefined,
+      component: undefined,
+      permission_code: undefined,
+      application_uuid: undefined,
+      parent_uuid: undefined,
+      sort_order: index,
+      is_active: true,
+      is_external: false,
+      external_url: undefined,
+      meta: {
+        custom_layout_virtual: true,
+        custom_layout_group_type: node.type,
+      },
+      created_at: '',
+      updated_at: '',
+      children: buildMappedMenuTree(node.children || [], sourceByUuid, `${parentPrefix}-${nodeId}`),
+    };
+  });
 }
 
 /** 上线向导关闭时从侧栏/面包屑隐藏的菜单路径（与站点设置 enable_launch_wizard 联动） */
@@ -172,25 +264,42 @@ export function useUnifiedMenuData(
   }, [currentUser?.id, currentUser?.is_tenant_admin, currentUser?.is_infra_admin, menuPermissionUser?.permissions?.length]);
 
   const { data: fullMenuTree, isLoading, refetch } = useNavigationMenuTreeQuery();
+  const { data: menuCustomLayout, isLoading: customLayoutLoading } = useQuery({
+    queryKey: [MENU_CUSTOM_LAYOUT_QUERY_KEY, currentUser?.tenant_id ?? null],
+    queryFn: () => getMenuCustomLayout(),
+    enabled: !!currentUser,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
 
   const applicationMenus = useMemo(() => {
     const tree = fullMenuTree ?? [];
     return collectApplicationRoots(tree);
   }, [fullMenuTree]);
 
+  const mappedApplicationMenus = useMemo(() => {
+    if (!menuCustomLayout?.enabled || !(menuCustomLayout.nodes || []).length) {
+      return applicationMenus;
+    }
+    const sourceByUuid = flattenMenuTreeByUuid(applicationMenus);
+    return buildMappedMenuTree(menuCustomLayout.nodes || [], sourceByUuid, 'custom-layout-root');
+  }, [applicationMenus, menuCustomLayout?.enabled, menuCustomLayout?.nodes]);
+
   // 蓝图下线后不再做业务配置过滤；菜单可见性完全由 is_active + 权限控制。
-  const filteredApplicationMenus = applicationMenus;
+  const filteredApplicationMenus = mappedApplicationMenus;
 
   useEffect(() => {
     if (applicationMenuVersion > 0) {
       queryClient.invalidateQueries({ queryKey: [NAVIGATION_MENU_TREE_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
+      queryClient.invalidateQueries({ queryKey: [MENU_CUSTOM_LAYOUT_QUERY_KEY] });
     }
   }, [applicationMenuVersion, queryClient]);
 
   useEffect(() => {
     if (currentUser?.permission_version != null) {
       queryClient.invalidateQueries({ queryKey: [NAVIGATION_MENU_TREE_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: [MENU_CUSTOM_LAYOUT_QUERY_KEY] });
     }
   }, [currentUser?.permission_version, queryClient]);
 
@@ -226,7 +335,9 @@ export function useUnifiedMenuData(
           };
           const firstPath = findFirstAppPath(visibleChildren);
           const code = firstPath ? extractAppCodeFromPath(firstPath) : null;
-          const appName = code ? getAppDisplayName(code, t, appMenu.name) : appMenu.name;
+          const appName = (appMenu.meta as any)?.custom_layout_virtual
+            ? appMenu.name
+            : (code ? getAppDisplayName(code, t, appMenu.name) : appMenu.name);
           appMenuItems.push({
             name: appName,
             label: appName,
@@ -297,7 +408,9 @@ export function useUnifiedMenuData(
         };
         const firstPath = findFirst(appMenu.children || []);
         const code = firstPath ? extractAppCodeFromPath(firstPath) : null;
-        const appName = code ? getAppDisplayName(code, t, appMenu.name) : appMenu.name;
+        const appName = (appMenu.meta as any)?.custom_layout_virtual
+          ? appMenu.name
+          : (code ? getAppDisplayName(code, t, appMenu.name) : appMenu.name);
         return {
           ...convertMenuTreeToMenuDataItem(appMenu, true),
           name: appName,
@@ -329,7 +442,7 @@ export function useUnifiedMenuData(
     sidebarMenuData,
     breadcrumbMenuData,
     applicationMenus: filteredApplicationMenus ?? [],
-    isLoading,
+    isLoading: isLoading || customLayoutLoading,
     refetch,
     invalidateAndRefetch,
   };

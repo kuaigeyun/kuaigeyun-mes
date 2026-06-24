@@ -3,7 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Col, Form, Row } from 'antd';
+import { Col, Form } from 'antd';
 import { ProFormSelect } from '@ant-design/pro-components';
 import { useDebounceFn } from 'ahooks';
 import { useTranslation } from 'react-i18next';
@@ -139,12 +139,14 @@ export const FormNotifyUsersSelect: React.FC<FormNotifyUsersSelectProps> = ({
       debounceTime={300}
       options={options}
       request={async (params) => fetchOptions(resolveSelectSearchKeyword(params))}
+      colProps={colSpan != null && !inline ? { span: colSpan } : undefined}
       fieldProps={{
         mode: 'multiple',
         showSearch: canInteract,
         filterOption: false,
         disabled: effectiveReadonly,
         loading,
+        style: { width: '100%' },
         placeholder: canInteract ? resolvedPh : '当前不可选择人员',
         notFoundContent: canInteract ? undefined : '当前不可选择人员',
         onSearch: canInteract ? debouncedFetch : undefined,
@@ -157,15 +159,8 @@ export const FormNotifyUsersSelect: React.FC<FormNotifyUsersSelectProps> = ({
     />
   );
 
-  if (colSpan != null) {
-    if (inline) {
-      return <Col span={colSpan}>{field}</Col>;
-    }
-    return (
-      <Row gutter={16}>
-        <Col span={colSpan}>{field}</Col>
-      </Row>
-    );
+  if (colSpan != null && inline) {
+    return <Col span={colSpan}>{field}</Col>;
   }
 
   return field;

@@ -506,6 +506,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/haoligo/equipment': ManufacturingIcons.wrench, // 好力 GO 设备管理
       '/apps/haoligo/molds': ManufacturingIcons.package, // 好力 GO 模具管理
       '/apps/haoligo/patrol': ManufacturingIcons.clipboardCheck, // 好力 GO 现场巡查（点检/记录）
+      '/apps/haoligo/quality': ManufacturingIcons['shield-check'], // 好力 GO 品质管理
     };
 
     // 精确路径匹配
@@ -550,6 +551,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
     'Warehouse': ManufacturingIcons.warehouse,
     'Quality Management': ManufacturingIcons.quality,
     'Quality': ManufacturingIcons.quality,
+    '品质管理': ManufacturingIcons['shield-check'],
     'Cost Management': ManufacturingIcons.calculator,
     'Cost': ManufacturingIcons.calculator,
     'Equipment Management': ManufacturingIcons.wrench,

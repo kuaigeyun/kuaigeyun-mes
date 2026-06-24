@@ -129,7 +129,7 @@ import {
   normalizeResourceKey,
 } from './components/roleGrantedResourceScope';
 import { resolveFieldPermissionLabel } from '../../../utils/fieldPermissionI18n';
-import { resolvePermissionActionLabel } from '../../../utils/permissionContract';
+import { resolvePermissionLabel } from '../../../utils/permissionContract';
 
 /** 权限树叶子节点展示名：数据范围走 permission.scope，其余走 permission.action */
 function permissionLeafDisplayLabel(
@@ -169,7 +169,7 @@ function permissionLeafDisplayLabel(
   }
 
   const actionSeg = parts[n - 1] || permission.action || '';
-  return resolvePermissionActionLabel(actionSeg, permission.name, t);
+  return resolvePermissionLabel(code, actionSeg, permission.name, t);
 }
 
 const FieldNameInput: React.FC<{

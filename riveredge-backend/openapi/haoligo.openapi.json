@@ -3935,6 +3935,433 @@
         }
       }
     },
+    "/api/v1/apps/haoligo/equipment/output-records": {
+      "get": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备单据"
+        ],
+        "summary": "设备产出单分页列表",
+        "operationId": "list_output_records_api_v1_apps_haoligo_equipment_output_records_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "equipment_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Equipment Id"
+            }
+          },
+          {
+            "name": "sheet_no",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sheet No"
+            }
+          },
+          {
+            "name": "work_order_no",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Work Order No"
+            }
+          },
+          {
+            "name": "recorded_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Recorded From"
+            }
+          },
+          {
+            "name": "recorded_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Recorded To"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备单据"
+        ],
+        "summary": "创建设备产出单",
+        "operationId": "create_output_record_api_v1_apps_haoligo_equipment_output_records_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutputRecordCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutputRecordOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/haoligo/equipment/output-records/{row_id}": {
+      "get": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备单据"
+        ],
+        "summary": "设备产出单详情",
+        "operationId": "get_output_record_api_v1_apps_haoligo_equipment_output_records__row_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutputRecordOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备单据"
+        ],
+        "summary": "更新设备产出单",
+        "operationId": "update_output_record_api_v1_apps_haoligo_equipment_output_records__row_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutputRecordUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutputRecordOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备单据"
+        ],
+        "summary": "软删除设备产出单",
+        "operationId": "delete_output_record_api_v1_apps_haoligo_equipment_output_records__row_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/apps/haoligo/equipment/spot-checks/preview-lines": {
       "get": {
         "tags": [
@@ -4931,433 +5358,6 @@
         }
       }
     },
-    "/api/v1/apps/haoligo/equipment/output-records": {
-      "get": {
-        "tags": [
-          "App · HaoliGO",
-          "App · HaoliGO · 设备单据"
-        ],
-        "summary": "设备产出单分页列表",
-        "operationId": "list_output_records_api_v1_apps_haoligo_equipment_output_records_get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "skip",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Skip"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 50,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "equipment_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 1
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Equipment Id"
-            }
-          },
-          {
-            "name": "sheet_no",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Sheet No"
-            }
-          },
-          {
-            "name": "work_order_no",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Work Order No"
-            }
-          },
-          {
-            "name": "recorded_from",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Recorded From"
-            }
-          },
-          {
-            "name": "recorded_to",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Recorded To"
-            }
-          },
-          {
-            "name": "keyword",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Keyword"
-            }
-          },
-          {
-            "name": "X-Tenant-ID",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Tenant-Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "App · HaoliGO",
-          "App · HaoliGO · 设备单据"
-        ],
-        "summary": "创建设备产出单",
-        "operationId": "create_output_record_api_v1_apps_haoligo_equipment_output_records_post",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "X-Tenant-ID",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Tenant-Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/OutputRecordCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OutputRecordOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/apps/haoligo/equipment/output-records/{row_id}": {
-      "get": {
-        "tags": [
-          "App · HaoliGO",
-          "App · HaoliGO · 设备单据"
-        ],
-        "summary": "设备产出单详情",
-        "operationId": "get_output_record_api_v1_apps_haoligo_equipment_output_records__row_id__get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "row_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Row Id"
-            }
-          },
-          {
-            "name": "X-Tenant-ID",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Tenant-Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OutputRecordOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "App · HaoliGO",
-          "App · HaoliGO · 设备单据"
-        ],
-        "summary": "更新设备产出单",
-        "operationId": "update_output_record_api_v1_apps_haoligo_equipment_output_records__row_id__patch",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "row_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Row Id"
-            }
-          },
-          {
-            "name": "X-Tenant-ID",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Tenant-Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/OutputRecordUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OutputRecordOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "App · HaoliGO",
-          "App · HaoliGO · 设备单据"
-        ],
-        "summary": "软删除设备产出单",
-        "operationId": "delete_output_record_api_v1_apps_haoligo_equipment_output_records__row_id__delete",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "row_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Row Id"
-            }
-          },
-          {
-            "name": "X-Tenant-ID",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Tenant-Id"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/apps/haoligo/equipment/upkeep-sheets": {
       "get": {
         "tags": [
@@ -5941,6 +5941,116 @@
         }
       }
     },
+    "/api/v1/apps/haoligo/equipment/upkeep-complete-sheets/notify-user-options": {
+      "get": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备维保完成单"
+        ],
+        "summary": "设备维保完成单通知人员候选",
+        "operationId": "list_upkeep_complete_notify_user_options_api_v1_apps_haoligo_equipment_upkeep_complete_sheets_notify_user_options_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "姓名/账号关键词",
+              "title": "Keyword"
+            },
+            "description": "姓名/账号关键词"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "selected_user_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "当前已选用户ID（用于补全回显）",
+              "title": "Selected User Ids"
+            },
+            "description": "当前已选用户ID（用于补全回显）"
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EquipmentUpkeepCompleteNotifyUserOptionOut"
+                  },
+                  "title": "Response List Upkeep Complete Notify User Options Api V1 Apps Haoligo Equipment Upkeep Complete Sheets Notify User Options Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/apps/haoligo/equipment/upkeep-complete-sheets/{row_id}": {
       "get": {
         "tags": [
@@ -6118,6 +6228,857 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/haoligo/equipment/acceptance-sheets": {
+      "get": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备验收单"
+        ],
+        "summary": "设备验收单分页列表",
+        "operationId": "list_acceptance_sheets_api_v1_apps_haoligo_equipment_acceptance_sheets_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "workflow_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow Status"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "name": "arrived_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Arrived From"
+            }
+          },
+          {
+            "name": "arrived_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Arrived To"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备验收单"
+        ],
+        "summary": "创建设备验收单",
+        "operationId": "create_acceptance_sheet_api_v1_apps_haoligo_equipment_acceptance_sheets_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptanceSheetCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptanceSheetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/haoligo/equipment/acceptance-sheets/{row_id}": {
+      "get": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备验收单"
+        ],
+        "summary": "设备验收单详情",
+        "operationId": "get_acceptance_sheet_api_v1_apps_haoligo_equipment_acceptance_sheets__row_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptanceSheetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备验收单"
+        ],
+        "summary": "更新设备验收单头",
+        "operationId": "update_acceptance_sheet_api_v1_apps_haoligo_equipment_acceptance_sheets__row_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptanceSheetUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptanceSheetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备验收单"
+        ],
+        "summary": "删除设备验收单",
+        "operationId": "delete_acceptance_sheet_api_v1_apps_haoligo_equipment_acceptance_sheets__row_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/haoligo/equipment/acceptance-sheets/{row_id}/rounds/{round_no}": {
+      "patch": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备验收单"
+        ],
+        "summary": "更新轮次调试信息",
+        "operationId": "update_round_commissioning_api_v1_apps_haoligo_equipment_acceptance_sheets__row_id__rounds__round_no__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "round_no",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Round No"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptanceRoundCommissioningUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptanceSheetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/haoligo/equipment/acceptance-sheets/{row_id}/submit-commissioning": {
+      "post": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备验收单"
+        ],
+        "summary": "提交试产（调试合格）",
+        "operationId": "submit_commissioning_api_v1_apps_haoligo_equipment_acceptance_sheets__row_id__submit_commissioning_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitCommissioningBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptanceSheetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/haoligo/equipment/acceptance-sheets/{row_id}/start-trial": {
+      "post": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备验收单"
+        ],
+        "summary": "开始试产",
+        "operationId": "start_trial_api_v1_apps_haoligo_equipment_acceptance_sheets__row_id__start_trial_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptanceSheetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/haoligo/equipment/acceptance-sheets/{row_id}/rounds/{round_no}/trial": {
+      "patch": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备验收单"
+        ],
+        "summary": "填写试产数据",
+        "operationId": "update_round_trial_api_v1_apps_haoligo_equipment_acceptance_sheets__row_id__rounds__round_no__trial_patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "round_no",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Round No"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptanceRoundTrialUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptanceSheetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/haoligo/equipment/acceptance-sheets/{row_id}/complete-trial": {
+      "post": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备验收单"
+        ],
+        "summary": "提交试产结论",
+        "operationId": "complete_trial_api_v1_apps_haoligo_equipment_acceptance_sheets__row_id__complete_trial_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteTrialBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptanceSheetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/haoligo/equipment/acceptance-sheets/{row_id}/finalize-ledger": {
+      "post": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 设备验收单"
+        ],
+        "summary": "验收台账结案（创建或关联设备）",
+        "operationId": "finalize_ledger_api_v1_apps_haoligo_equipment_acceptance_sheets__row_id__finalize_ledger_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinalizeLedgerBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptanceSheetOut"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -6951,11 +7912,11 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "detail=产出明细；equipment=按设备汇总",
+              "description": "detail=产出明细；equipment=按设备汇总；workshop=按车间汇总",
               "default": "detail",
               "title": "Group By"
             },
-            "description": "detail=产出明细；equipment=按设备汇总"
+            "description": "detail=产出明细；equipment=按设备汇总；workshop=按车间汇总"
           },
           {
             "name": "X-Tenant-ID",
@@ -9756,6 +10717,24 @@
               "title": "Sheet Status"
             },
             "description": "待审核 / 已通过 / 已驳回"
+          },
+          {
+            "name": "repair_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "维修进度：维修中 / 完修待审 / 维修完成（仅对已审核通过的维修单有效）",
+              "title": "Repair Status"
+            },
+            "description": "维修进度：维修中 / 完修待审 / 维修完成（仅对已审核通过的维修单有效）"
           },
           {
             "name": "open_for_complete",
@@ -13956,7 +14935,7 @@
           "App · HaoliGO",
           "App · HaoliGO · 模具"
         ],
-        "summary": "从绑定数据集同步模具代号/名称/单位/单模产能",
+        "summary": "从绑定数据集同步模具代号/名称/单位/单模产能/入厂时间",
         "operationId": "sync_mold_ledger_from_dataset_api_v1_apps_haoligo_molds_ledger_sync_from_dataset_post",
         "security": [
           {
@@ -14538,6 +15517,250 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/haoligo/notify-users/options": {
+      "get": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 通知人员候选"
+        ],
+        "summary": "好力GO单据通知人员候选",
+        "operationId": "list_haoligo_notify_user_options_api_v1_apps_haoligo_notify_users_options_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "姓名/账号关键词",
+              "title": "Keyword"
+            },
+            "description": "姓名/账号关键词"
+          },
+          {
+            "name": "selected_user_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "当前已选用户ID（用于补全回显）",
+              "title": "Selected User Ids"
+            },
+            "description": "当前已选用户ID（用于补全回显）"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HaoligoNotifyUserOptionOut"
+                  },
+                  "title": "Response List Haoligo Notify User Options Api V1 Apps Haoligo Notify Users Options Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/haoligo/mobile/push-devices/register": {
+      "post": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 移动端"
+        ],
+        "summary": "注册 FCM 推送 token",
+        "operationId": "register_mobile_push_device_api_v1_apps_haoligo_mobile_push_devices_register_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobilePushDeviceRegisterIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MobilePushDeviceRegisterOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/haoligo/mobile/push-devices/unregister": {
+      "post": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 移动端"
+        ],
+        "summary": "注销 FCM 推送 token",
+        "operationId": "unregister_mobile_push_device_api_v1_apps_haoligo_mobile_push_devices_unregister_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobilePushDeviceUnregisterIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Unregister Mobile Push Device Api V1 Apps Haoligo Mobile Push Devices Unregister Post"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -15770,6 +16993,718 @@
   },
   "components": {
     "schemas": {
+      "AcceptanceRoundCommissioningUpdate": {
+        "properties": {
+          "commissioning_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commissioning Content"
+          },
+          "commissioning_result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commissioning Result"
+          },
+          "commissioning_attachment_file_uuids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commissioning Attachment File Uuids"
+          }
+        },
+        "type": "object",
+        "title": "AcceptanceRoundCommissioningUpdate"
+      },
+      "AcceptanceRoundOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "uuid": {
+            "type": "string",
+            "title": "Uuid"
+          },
+          "round_no": {
+            "type": "integer",
+            "title": "Round No"
+          },
+          "commissioning_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commissioning Content"
+          },
+          "commissioning_result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commissioning Result"
+          },
+          "commissioning_submitted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commissioning Submitted At"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
+          },
+          "material_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Material No"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "defect_qty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defect Qty"
+          },
+          "defect_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defect Reason"
+          },
+          "running_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Running Time"
+          },
+          "fault_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fault Time"
+          },
+          "capacity_per_hour": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity Per Hour"
+          },
+          "trial_result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trial Result"
+          },
+          "pass_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pass Rate"
+          },
+          "commissioning_attachment_file_uuids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Commissioning Attachment File Uuids"
+          },
+          "trial_attachment_file_uuids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Trial Attachment File Uuids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "uuid",
+          "round_no"
+        ],
+        "title": "AcceptanceRoundOut"
+      },
+      "AcceptanceRoundTrialUpdate": {
+        "properties": {
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
+          },
+          "material_no": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Material No"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "defect_qty": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defect Qty"
+          },
+          "defect_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defect Reason"
+          },
+          "running_time": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Running Time"
+          },
+          "fault_time": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fault Time"
+          },
+          "capacity_per_hour": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity Per Hour"
+          },
+          "trial_result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trial Result"
+          },
+          "trial_attachment_file_uuids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trial Attachment File Uuids"
+          }
+        },
+        "type": "object",
+        "title": "AcceptanceRoundTrialUpdate"
+      },
+      "AcceptanceSheetCreate": {
+        "properties": {
+          "manufacturer_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer Id"
+          },
+          "manufacturer_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer Name"
+          },
+          "arrived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrived At"
+          },
+          "install_location": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Install Location"
+          },
+          "equipment_name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Equipment Name"
+          },
+          "commissioning_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Commissioning User Ids"
+          },
+          "submitted_notify_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Submitted Notify User Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "equipment_name"
+        ],
+        "title": "AcceptanceSheetCreate"
+      },
+      "AcceptanceSheetOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "uuid": {
+            "type": "string",
+            "title": "Uuid"
+          },
+          "sheet_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sheet No"
+          },
+          "manufacturer_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer Id"
+          },
+          "manufacturer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer Name"
+          },
+          "arrived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrived At"
+          },
+          "install_location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Install Location"
+          },
+          "equipment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment Name"
+          },
+          "commissioning_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Commissioning User Ids"
+          },
+          "submitted_notify_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Submitted Notify User Ids"
+          },
+          "equipment_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment Id"
+          },
+          "equipment_asset_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment Asset Code"
+          },
+          "workflow_status": {
+            "type": "string",
+            "title": "Workflow Status"
+          },
+          "current_round": {
+            "type": "integer",
+            "title": "Current Round"
+          },
+          "accepted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted At"
+          },
+          "accepted_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted By User Id"
+          },
+          "ledger_action": {
+            "type": "string",
+            "title": "Ledger Action",
+            "default": "none"
+          },
+          "reporter_user_id": {
+            "type": "integer",
+            "title": "Reporter User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "rounds": {
+            "items": {
+              "$ref": "#/components/schemas/AcceptanceRoundOut"
+            },
+            "type": "array",
+            "title": "Rounds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "uuid",
+          "workflow_status",
+          "current_round",
+          "reporter_user_id",
+          "created_at"
+        ],
+        "title": "AcceptanceSheetOut"
+      },
+      "AcceptanceSheetUpdate": {
+        "properties": {
+          "manufacturer_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer Id"
+          },
+          "manufacturer_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer Name"
+          },
+          "arrived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrived At"
+          },
+          "install_location": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Install Location"
+          },
+          "equipment_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment Name"
+          },
+          "commissioning_user_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commissioning User Ids"
+          },
+          "submitted_notify_user_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted Notify User Ids"
+          }
+        },
+        "type": "object",
+        "title": "AcceptanceSheetUpdate"
+      },
       "CapacityByEquipmentRow": {
         "properties": {
           "equipment_id": {
@@ -15825,6 +17760,62 @@
         ],
         "title": "CapacityByEquipmentRow"
       },
+      "CapacityByWorkshopRow": {
+        "properties": {
+          "workshop_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workshop Id"
+          },
+          "workshop_name": {
+            "type": "string",
+            "title": "Workshop Name",
+            "default": ""
+          },
+          "record_count": {
+            "type": "integer",
+            "title": "Record Count"
+          },
+          "planned_qty_total": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Qty Total"
+          },
+          "completed_qty_total": {
+            "type": "string",
+            "title": "Completed Qty Total"
+          },
+          "achievement_rate_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Achievement Rate Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "record_count",
+          "completed_qty_total"
+        ],
+        "title": "CapacityByWorkshopRow"
+      },
       "CapacityReportOut": {
         "properties": {
           "summary": {
@@ -15847,6 +17838,13 @@
             },
             "type": "array",
             "title": "Equipment Items"
+          },
+          "workshop_items": {
+            "items": {
+              "$ref": "#/components/schemas/CapacityByWorkshopRow"
+            },
+            "type": "array",
+            "title": "Workshop Items"
           },
           "total": {
             "type": "integer",
@@ -16066,6 +18064,26 @@
           "value"
         ],
         "title": "ChartPoint"
+      },
+      "CompleteTrialBody": {
+        "properties": {
+          "submitted_notify_user_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted Notify User Ids"
+          }
+        },
+        "type": "object",
+        "title": "CompleteTrialBody"
       },
       "EquipmentCreate": {
         "properties": {
@@ -17042,6 +19060,46 @@
         },
         "type": "object",
         "title": "EquipmentUpdate"
+      },
+      "EquipmentUpkeepCompleteNotifyUserOptionOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "EquipmentUpkeepCompleteNotifyUserOptionOut"
       },
       "EquipmentUpkeepCompleteSheetCreate": {
         "properties": {
@@ -18187,6 +20245,13 @@
               }
             ],
             "title": "Header Attachment File Uuids"
+          },
+          "complete_notify_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Complete Notify User Ids"
           }
         },
         "type": "object",
@@ -18349,6 +20414,13 @@
             "type": "integer",
             "title": "Reporter User Id"
           },
+          "complete_notify_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Complete Notify User Ids"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -18461,10 +20533,223 @@
               }
             ],
             "title": "Header Attachment File Uuids"
+          },
+          "complete_notify_user_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complete Notify User Ids"
           }
         },
         "type": "object",
         "title": "EquipmentUpkeepSheetUpdate"
+      },
+      "FinalizeLedgerBody": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "create",
+              "link"
+            ],
+            "title": "Mode"
+          },
+          "equipment_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment Id",
+            "description": "关联已有设备 ID（mode=link）"
+          },
+          "asset_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Code",
+            "description": "创建设备资产编号（mode=create）"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "设备名称（mode=create）"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "workshop_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workshop Id"
+          },
+          "manufacturer_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer Id"
+          },
+          "manufacture_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacture Date"
+          },
+          "inspection_param_set_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Inspection Param Set Ids"
+          },
+          "upkeep_param_set_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upkeep Param Set Id"
+          },
+          "criticality": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Criticality"
+          },
+          "operational_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operational Status"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "image_file_uuids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image File Uuids"
+          },
+          "maintenance_cycle_by_yield": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maintenance Cycle By Yield"
+          },
+          "maintenance_cycle_by_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maintenance Cycle By Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode"
+        ],
+        "title": "FinalizeLedgerBody"
       },
       "HTTPValidationError": {
         "properties": {
@@ -18526,6 +20811,46 @@
         ],
         "title": "HaoligoMeta",
         "description": "应用元信息（运维 / 移动端探测 base URL 与产品名）"
+      },
+      "HaoligoNotifyUserOptionOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "HaoligoNotifyUserOptionOut"
       },
       "HazardCreate": {
         "properties": {
@@ -20025,6 +22350,74 @@
         ],
         "title": "MobileBootstrapOut"
       },
+      "MobilePushDeviceRegisterIn": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Token",
+            "description": "FCM 原生 token"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "android | ios",
+            "default": "android"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id",
+            "description": "客户端稳定设备标识"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider",
+            "description": "推送通道，默认 fcm",
+            "default": "fcm"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "MobilePushDeviceRegisterIn"
+      },
+      "MobilePushDeviceRegisterOut": {
+        "properties": {
+          "registered": {
+            "type": "boolean",
+            "title": "Registered",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "MobilePushDeviceRegisterOut"
+      },
+      "MobilePushDeviceUnregisterIn": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Token",
+            "description": "要注销的 FCM token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "MobilePushDeviceUnregisterIn"
+      },
       "MobileReleaseApkOut": {
         "properties": {
           "url": {
@@ -21333,6 +23726,18 @@
             ],
             "title": "Purchase Vendor Name"
           },
+          "factory_entry_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factory Entry At"
+          },
           "status": {
             "type": "string",
             "maxLength": 32,
@@ -21484,6 +23889,17 @@
               }
             ],
             "title": "Mold Capacity Column"
+          },
+          "factory_entry_at_column": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factory Entry At Column"
           }
         },
         "type": "object",
@@ -21546,6 +23962,17 @@
               }
             ],
             "title": "Mold Capacity Column"
+          },
+          "factory_entry_at_column": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factory Entry At Column"
           }
         },
         "type": "object",
@@ -22276,6 +24703,15 @@
             ],
             "title": "Source Order No"
           },
+          "urgency_level": {
+            "type": "string",
+            "enum": [
+              "一般",
+              "紧急"
+            ],
+            "title": "Urgency Level",
+            "default": "一般"
+          },
           "header_attachment_file_uuids": {
             "anyOf": [
               {
@@ -22401,6 +24837,12 @@
               }
             ],
             "title": "Source Order No"
+          },
+          "urgency_level": {
+            "type": "string",
+            "title": "Urgency Level",
+            "description": "紧急程度：一般/紧急",
+            "default": "一般"
           },
           "header_attachment_file_uuids": {
             "items": {
@@ -22560,6 +25002,21 @@
               }
             ],
             "title": "Source Order No"
+          },
+          "urgency_level": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "一般",
+                  "紧急"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Urgency Level"
           },
           "header_attachment_file_uuids": {
             "anyOf": [
@@ -22782,6 +25239,18 @@
               }
             ],
             "title": "Purchase Vendor Name"
+          },
+          "factory_entry_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factory Entry At"
           },
           "status": {
             "type": "string",
@@ -23371,6 +25840,15 @@
             ],
             "title": "Source Order No"
           },
+          "urgency_level": {
+            "type": "string",
+            "enum": [
+              "一般",
+              "紧急"
+            ],
+            "title": "Urgency Level",
+            "default": "一般"
+          },
           "header_attachment_file_uuids": {
             "anyOf": [
               {
@@ -23513,6 +25991,12 @@
             ],
             "title": "Source Order No"
           },
+          "urgency_level": {
+            "type": "string",
+            "title": "Urgency Level",
+            "description": "紧急程度：一般/紧急",
+            "default": "一般"
+          },
           "header_attachment_file_uuids": {
             "items": {
               "type": "string"
@@ -23608,6 +26092,18 @@
             "title": "Can Complete",
             "description": "是否可发起完修：维修类且尚无未驳回的关联完修单",
             "default": false
+          },
+          "repair_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repair Status",
+            "description": "维修进度：维修中/完修待审/维修完成（仅审核已通过且为维修类时有值）"
           }
         },
         "type": "object",
@@ -23708,6 +26204,21 @@
               }
             ],
             "title": "Source Order No"
+          },
+          "urgency_level": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "一般",
+                  "紧急"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Urgency Level"
           },
           "header_attachment_file_uuids": {
             "anyOf": [
@@ -25305,6 +27816,18 @@
             ],
             "title": "Purchase Vendor Name"
           },
+          "factory_entry_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factory Entry At"
+          },
           "status": {
             "anyOf": [
               {
@@ -26305,14 +28828,6 @@
             ],
             "title": "Remark"
           },
-          "notify_user_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "title": "Notify User Ids",
-            "default": []
-          },
           "dataset_snapshot": {
             "anyOf": [
               {
@@ -26323,6 +28838,13 @@
               }
             ],
             "title": "Dataset Snapshot"
+          },
+          "notify_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Notify User Ids"
           }
         },
         "type": "object",
@@ -26503,8 +29025,7 @@
               "type": "integer"
             },
             "type": "array",
-            "title": "Notify User Ids",
-            "default": []
+            "title": "Notify User Ids"
           },
           "reporter_user_id": {
             "type": "integer",
@@ -26700,14 +29221,6 @@
             ],
             "title": "Remark"
           },
-          "notify_user_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "title": "Notify User Ids",
-            "default": []
-          },
           "dataset_snapshot": {
             "anyOf": [
               {
@@ -26718,6 +29231,20 @@
               }
             ],
             "title": "Dataset Snapshot"
+          },
+          "notify_user_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify User Ids"
           }
         },
         "type": "object",
@@ -27492,11 +30019,6 @@
           },
           "line_status": {
             "type": "string",
-            "enum": [
-              "normal",
-              "abnormal",
-              "not_producing"
-            ],
             "title": "Line Status",
             "default": "normal"
           },
@@ -27541,8 +30063,7 @@
           "equipment_id",
           "asset_code",
           "equipment_name",
-          "sequence",
-          "line_status"
+          "sequence"
         ],
         "title": "RoutePatrolLineOut"
       },
@@ -27554,11 +30075,6 @@
           },
           "line_status": {
             "type": "string",
-            "enum": [
-              "normal",
-              "abnormal",
-              "not_producing"
-            ],
             "title": "Line Status",
             "default": "normal"
           },
@@ -27599,8 +30115,7 @@
         },
         "type": "object",
         "required": [
-          "id",
-          "line_status"
+          "id"
         ],
         "title": "RoutePatrolLinePatchItem"
       },
@@ -28656,6 +31171,26 @@
         "type": "object",
         "title": "StatusAdjustmentUpdate"
       },
+      "SubmitCommissioningBody": {
+        "properties": {
+          "submitted_notify_user_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted Notify User Ids"
+          }
+        },
+        "type": "object",
+        "title": "SubmitCommissioningBody"
+      },
       "TrendSeries": {
         "properties": {
           "name": {
@@ -28717,6 +31252,14 @@
               }
             ],
             "title": "Department Uuid"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/UserDisplayRoleItem"
+            },
+            "type": "array",
+            "title": "Roles",
+            "description": "用户角色（展示用）"
           }
         },
         "type": "object",
@@ -28796,6 +31339,35 @@
           "items"
         ],
         "title": "UserDisplayResolveResponse"
+      },
+      "UserDisplayRoleItem": {
+        "properties": {
+          "uuid": {
+            "type": "string",
+            "title": "Uuid"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "uuid",
+          "name"
+        ],
+        "title": "UserDisplayRoleItem"
       },
       "ValidationError": {
         "properties": {

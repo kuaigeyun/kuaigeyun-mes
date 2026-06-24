@@ -21,6 +21,10 @@ DOC_MOLD_OUTSOURCE_MAINTENANCE_COMPLETE = "haoligo_mold_outsource_maintenance_co
 DOC_EQUIPMENT_UPKEEP_SHEET = "haoligo_equipment_upkeep_sheet"
 DOC_EQUIPMENT_UPKEEP_COMPLETE = "haoligo_equipment_upkeep_complete"
 DOC_EQUIPMENT_OUTPUT_RECORD = "haoligo_equipment_output_record"
+DOC_EQUIPMENT_ACCEPTANCE = "haoligo_equipment_acceptance"
+DOC_QUALITY_ISSUE_TRACKING = "haoligo_quality_issue_tracking"
+DOC_CUSTOMER_COMPLAINT = "haoligo_customer_complaint"
+DOC_LINE_STOP_FEEDBACK = "haoligo_line_stop_feedback"
 
 # ---------- 触发动作 ----------
 ACTION_SUBMITTED = "submitted"
@@ -35,6 +39,12 @@ ACTION_TRIAL_ADJUSTMENT_COMPLETE = "trial_adjustment_complete"
 ACTION_REVOKED = "revoked"
 ACTION_TRIAL_PRODUCTION_PENDING = "trial_production_pending"
 ACTION_TRIAL_RECALLED = "trial_recalled"
+ACTION_TRIAL_PENDING = "trial_pending"
+ACTION_TRIAL_FAILED = "trial_failed"
+ACTION_ACCEPTED = "accepted"
+ACTION_COMPLETED = "completed"
+ACTION_TEMPORARY_OVERDUE = "temporary_overdue"
+ACTION_LONG_TERM_OVERDUE = "long_term_overdue"
 
 
 async def _scope_supplier_bound(tenant_id: int, context: Dict[str, Any]) -> List[int]:

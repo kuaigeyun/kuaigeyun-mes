@@ -29,6 +29,9 @@ _require_haoligo_notify_user_picker_access = require_permission_codes(
     "haoligo:equipment-documents-route-patrol:read",
     "haoligo:patrol-daily-form:read",
     "haoligo:patrol-hazards:read",
+    "haoligo:quality-issue-tracking:read",
+    "haoligo:customer-complaint:read",
+    "haoligo:line-stop-feedback:read",
     require_all=False,
 )
 

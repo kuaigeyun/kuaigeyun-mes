@@ -51,12 +51,17 @@ def require_haoligo_shared_workshops_read(*, check_abac: bool = True):
 def resolve_haoligo_module_action(method: str, path: str) -> str:
     """HaoliGO 子路径 action；与 manifest STANDARD_ACTIONS 一一对应，禁止 approve/reject 合并为 audit。"""
     p = (path or "").lower()
+    m = (method or "").upper()
     if "/revoke-approval" in p:
         return "audit"
     if "/mark-adjustment-complete" in p:
         return "confirm_adjustment"
     if "/dispatch" in p:
         return "dispatch"
+    if "/confirm-close" in p:
+        return "complete"
+    if "/handle-measures" in p or "/temporary-action" in p or "/long-term-action" in p:
+        return "execute"
     if "/approve" in p:
         return "approve"
     if "/reject" in p:
@@ -65,7 +70,15 @@ def resolve_haoligo_module_action(method: str, path: str) -> str:
         return "audit"
     if "/recall" in p:
         return "recall"
-    m = (method or "").upper()
+    if "/acceptance-sheets/" in p:
+        if "/finalize-ledger" in p:
+            return "complete"
+        if "/start-trial" in p or "/complete-trial" in p:
+            return "execute"
+    if m in {"PUT", "PATCH"} and "/acceptance-sheets/" in p and "/rounds/" in p:
+        if "/trial" in p:
+            return "execute"
+        return "submit"
     if m == "GET":
         return "read"
     if m in {"PUT", "PATCH"}:
@@ -81,6 +94,8 @@ def resolve_haoligo_module_action(method: str, path: str) -> str:
             return "export"
         if any(k in p for k in ("/submit",)):
             return "submit"
+        if any(k in p for k in ("/complete",)):
+            return "complete"
         if any(k in p for k in ("/revoke", "/cancel", "/withdraw")):
             return "revoke"
         if any(k in p for k in ("/execute", "/confirm", "/checkin", "/checkout")):

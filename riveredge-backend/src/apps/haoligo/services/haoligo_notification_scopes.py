@@ -125,7 +125,16 @@ def _complete_permissions_from_context(context: Dict[str, Any]) -> List[str]:
             "haoligo:molds-documents-outsource-maintenance:complete",
             "haoligo:molds-documents-outsource-complete:create",
         ]
+    if doc == "haoligo_equipment_acceptance":
+        return ["haoligo:equipment-documents-acceptance:execute"]
     return []
+
+
+def _execute_permissions_from_context(context: Dict[str, Any]) -> List[str]:
+    doc = (context.get("trigger_document") or "").strip()
+    if doc == "haoligo_equipment_acceptance":
+        return ["haoligo:equipment-documents-acceptance:execute"]
+    return _complete_permissions_from_context(context)
 
 
 async def _scope_module_reviewers(tenant_id: int, context: Dict[str, Any]) -> List[int]:
@@ -138,6 +147,28 @@ async def _scope_module_reviewers(tenant_id: int, context: Dict[str, Any]) -> Li
 async def _scope_module_complete_operators(tenant_id: int, context: Dict[str, Any]) -> List[int]:
     codes = _complete_permissions_from_context(context)
     return await _merge_permission_holders(tenant_id, *codes)
+
+
+async def _scope_module_acceptance_execute_operators(tenant_id: int, context: Dict[str, Any]) -> List[int]:
+    codes = _execute_permissions_from_context(context)
+    return await _merge_permission_holders(tenant_id, *codes)
+
+
+async def _scope_commissioning_operators(tenant_id: int, context: Dict[str, Any]) -> List[int]:
+    raw = context.get("commissioning_user_ids")
+    if not isinstance(raw, list):
+        return []
+    seen: Set[int] = set()
+    out: List[int] = []
+    for item in raw:
+        try:
+            uid = int(item)
+        except (TypeError, ValueError):
+            continue
+        if uid > 0 and uid not in seen:
+            seen.add(uid)
+            out.append(uid)
+    return out
 
 
 async def _scope_source_applicant(tenant_id: int, context: Dict[str, Any]) -> List[int]:
@@ -180,6 +211,8 @@ async def _scope_recall_operators(tenant_id: int, context: Dict[str, Any]) -> Li
 def ensure_haoligo_extended_notification_scope_resolvers() -> None:
     register_notification_scope_resolver("module_reviewers", _scope_module_reviewers)
     register_notification_scope_resolver("module_complete_operators", _scope_module_complete_operators)
+    register_notification_scope_resolver("module_acceptance_execute_operators", _scope_module_acceptance_execute_operators)
+    register_notification_scope_resolver("commissioning_operators", _scope_commissioning_operators)
     register_notification_scope_resolver("source_applicant", _scope_source_applicant)
     register_notification_scope_resolver("source_auditor", _scope_source_auditor)
     register_notification_scope_resolver("production_trial_operator", _scope_production_trial_operator)

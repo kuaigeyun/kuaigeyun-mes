@@ -16,6 +16,7 @@ from core.config.permission_action_spec import (
     action_display_label,
     canonical_action,
     is_standard_action,
+    permission_code_display_label,
 )
 from core.services.authorization.menu_resource_resolver import REVIEW_ACTIONS, parse_permission_code
 
@@ -45,7 +46,10 @@ def review_permission_codes(app_code: str, module_code: str) -> list[str]:
 
 
 def display_label_for_permission_code(code: str) -> str:
-    """角色矩阵 / 权限同步展示名：由权限码 action 段映射，勿拼接 resource。"""
+    """角色矩阵 / 权限同步展示名：权限码级覆盖优先，否则由 action 段映射。"""
+    override = permission_code_display_label(code)
+    if override:
+        return override
     parsed = parse_permission_code(code or "")
     if not parsed:
         return ""

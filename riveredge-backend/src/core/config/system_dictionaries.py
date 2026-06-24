@@ -348,6 +348,22 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
         ],
     },
     {
+        "code": "HAOLIGO_QUALITY_ISSUE_TYPE",
+        "name": "品质问题类型",
+        "description": "好力 GO 品质问题登记中的问题类型（可在数据字典中增删改，支持表单内快速加入常见问题）",
+        "items": [
+            {"label": "外观不良", "value": "外观不良", "description": "", "sort_order": 1},
+            {"label": "尺寸超差", "value": "尺寸超差", "description": "", "sort_order": 2},
+            {"label": "功能异常", "value": "功能异常", "description": "", "sort_order": 3},
+            {"label": "装配不良", "value": "装配不良", "description": "", "sort_order": 4},
+            {"label": "材料不良", "value": "材料不良", "description": "", "sort_order": 5},
+            {"label": "工艺偏差", "value": "工艺偏差", "description": "", "sort_order": 6},
+            {"label": "漏检流出", "value": "漏检流出", "description": "", "sort_order": 7},
+            {"label": "客户反馈", "value": "客户反馈", "description": "", "sort_order": 8},
+            {"label": "其他", "value": "其他", "description": "", "sort_order": 99},
+        ],
+    },
+    {
         "code": "TOOL_STATUS",
         "name": "工装状态",
         "description": "工装台账中的工装状态",

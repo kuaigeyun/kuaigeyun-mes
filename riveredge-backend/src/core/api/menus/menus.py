@@ -18,6 +18,8 @@ from core.schemas.menu import (
     MenuListResponse,
     TenantBackendHomeResponse,
     EffectiveHomeResponse,
+    CustomMenuLayoutUpdate,
+    CustomMenuLayoutResponse,
 )
 from core.services.system.menu_service import MenuService
 from core.api.deps.deps import get_current_tenant
@@ -143,6 +145,30 @@ async def get_navigation_menu_tree(
         use_cache=use_cache,
         cache_key_suffix="nav_v1",
     )
+
+
+@router.get("/custom-layout", response_model=CustomMenuLayoutResponse)
+async def get_custom_menu_layout(
+    _auth: object = Depends(require_access("system.menu", "read")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取租户级自组菜单布局配置。"""
+    return await MenuService.get_custom_menu_layout(tenant_id=tenant_id)
+
+
+@router.put("/custom-layout", response_model=CustomMenuLayoutResponse)
+async def update_custom_menu_layout(
+    data: CustomMenuLayoutUpdate,
+    _auth: object = Depends(require_access("system.menu", "update")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新租户级自组菜单布局配置。"""
+    try:
+        return await MenuService.update_custom_menu_layout(tenant_id=tenant_id, data=data)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/backend-home", response_model=TenantBackendHomeResponse, summary="当前租户后台首页")
