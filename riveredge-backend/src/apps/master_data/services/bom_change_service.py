@@ -18,10 +18,6 @@ from apps.master_data.schemas.bom_change_schemas import (
     BOMChangeResponse,
     BOMChangeListResponse,
 )
-from apps.kuaiplm.services.engineering_change_audit import (
-    is_audit_required,
-    start_change_approval_flow,
-)
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
@@ -117,6 +113,11 @@ class BOMChangeService:
         change = await BOMChangeService._get_change_or_raise(tenant_id, change_id)
         if change.status != "draft":
             raise ValidationError(f"变更记录状态为 {change.status}，无法提交")
+
+        from apps.kuaiplm.services.engineering_change_audit import (
+            is_audit_required,
+            start_change_approval_flow,
+        )
 
         audit_required = await is_audit_required(tenant_id, "bom")
         if audit_required:
