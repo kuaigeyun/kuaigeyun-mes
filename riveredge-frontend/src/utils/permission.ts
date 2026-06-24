@@ -221,7 +221,7 @@ function isAppGroupPlaceholderItem(item: PermissionMenuItem): boolean {
 
 /**
  * 按权限过滤菜单树：先筛子节点；分组占位权限不阻断子树；有可见子节点则保留父节点。
- * hideInMenu 的隐藏路由不参与「可见子节点」判定，避免父菜单被误保留。
+ * 子项全部被滤掉时不保留带 path 的空壳父级。hideInMenu 的隐藏路由不参与「可见子节点」判定。
  */
 export function filterMenuItemsByPermission<T extends PermissionMenuItem>(
   items: T[],
@@ -245,7 +245,11 @@ export function filterMenuItemsByPermission<T extends PermissionMenuItem>(
         return { ...item, children: nextChildren };
       }
 
-      if (hasVisibleChildren) {
+      // 有子菜单但子项全部被权限滤掉时，不保留空壳父级（避免 workspace 占位权限导致无权限模块仍显示）
+      if (item.children?.length) {
+        if (!hasVisibleChildren) {
+          return null;
+        }
         return { ...item, children: nextChildren };
       }
 
