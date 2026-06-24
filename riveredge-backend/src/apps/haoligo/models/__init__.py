@@ -47,6 +47,10 @@ from apps.haoligo.models.equipment_acceptance import (
     HaoligoEquipmentAcceptanceRound,
     HaoligoEquipmentAcceptanceSheet,
 )
+from apps.haoligo.models.equipment_upkeep import (
+    HaoligoEquipmentUpkeepCompleteSheet,
+    HaoligoEquipmentUpkeepSheet,
+)
 from apps.haoligo.models.equipment_upkeep_param import (
     HaoligoEquipmentUpkeepParam,
     HaoligoEquipmentUpkeepParamSet,
