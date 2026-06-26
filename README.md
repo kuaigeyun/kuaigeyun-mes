@@ -51,7 +51,11 @@
 
 ## 微信沟通反馈群
 
-<img src="docs/screenshots/wechat/wechat.png" alt="微信沟通反馈群" width="280" />
+<img src="docs/screenshots/wechat/wechat.png" alt="快格云 MES 交流群" width="280" />
+
+扫码加入 **快格云 MES 交流群**，反馈问题与建议。
+
+> **甄别声明**：[https://www.gitcc.com/gaozong124/gao-mes](https://www.gitcc.com/gaozong124/gao-mes) **非快格云官方授权或收费项目**，与本项目（快格云制造）无关联。请用户注意甄别，勿向第三方付费购买所谓「官方版」或「授权版」。
 
 ## 致谢
 
