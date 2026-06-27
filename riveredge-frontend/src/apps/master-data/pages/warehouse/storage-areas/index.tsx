@@ -30,6 +30,10 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import {
+  MasterDataBatchActiveMenuButton,
+  useMasterDataBatchSetActive,
+} from '../../../hooks/useMasterDataBatchSetActive';
 
 /**
  * 库区管理列表页面组件
@@ -62,6 +66,14 @@ const StorageAreasPage: React.FC = () => {
     loadFieldValuesForDetail,
     resetDetailFieldValues,
   } = useCustomFieldsForList<StorageArea>({ tableName: 'master_data_warehouse_storage_areas' });
+
+  const { batchActiveMenuItems } = useMasterDataBatchSetActive({
+    update: storageAreaApi.update,
+    messageApi,
+    actionRef,
+    selectedRowKeys,
+    setSelectedRowKeys,
+  });
 
   /**
    * 当自定义字段加载完成后，刷新表格以显示自定义字段列
@@ -754,6 +766,13 @@ const StorageAreasPage: React.FC = () => {
         deleteConfirmDescription={(count) =>
           t('app.master-data.storageAreas.batchDeleteDescription', { count })
         }
+        toolBarActionsAfterDelete={[
+          <MasterDataBatchActiveMenuButton
+            menuKey="storage-areas-batch-active"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={batchActiveMenuItems}
+          />,
+        ]}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}

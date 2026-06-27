@@ -34,6 +34,10 @@ import {
 import { formatDateTime } from '../../../../../utils/format';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
+  MasterDataBatchActiveMenuButton,
+  useMasterDataBatchSetActive,
+} from '../../../hooks/useMasterDataBatchSetActive';
+import {
   resolvePresetOperationIndustryName,
   resolvePresetOperationNameByKey,
   resolvePresetOperationNameByName,
@@ -78,6 +82,14 @@ const OperationsPage: React.FC = () => {
     loadFieldValuesForDetail,
     resetDetailFieldValues,
   } = useCustomFieldsForList<Operation>({ tableName: 'master_data_operations' });
+
+  const { batchActiveMenuItems } = useMasterDataBatchSetActive({
+    update: operationApi.update,
+    messageApi,
+    actionRef,
+    selectedRowKeys,
+    setSelectedRowKeys,
+  });
 
   useEffect(() => {
     if (customFields.length > 0 && actionRef.current) {
@@ -761,6 +773,7 @@ const OperationsPage: React.FC = () => {
             selectedRowKeys={selectedRowKeys}
             buttonText={t('app.kuaiplm.phase2.common.batchActions')}
             menuItems={[
+              ...batchActiveMenuItems,
               {
                 key: 'batch-generate-qrcode',
                 label: t('app.kuaizhizao.workOrder.batchGenerateQrcode'),

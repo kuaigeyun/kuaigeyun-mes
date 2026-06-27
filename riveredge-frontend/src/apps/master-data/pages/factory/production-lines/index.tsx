@@ -34,6 +34,10 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import {
+  MasterDataBatchActiveMenuButton,
+  useMasterDataBatchSetActive,
+} from '../../../hooks/useMasterDataBatchSetActive';
 
 /**
  * 产线管理列表页面组件
@@ -65,6 +69,14 @@ const ProductionLinesPage: React.FC = () => {
     loadFieldValuesForDetail,
     resetDetailFieldValues,
   } = useCustomFieldsForList<ProductionLine>({ tableName: 'master_data_factory_production_lines' });
+
+  const { batchActiveMenuItems } = useMasterDataBatchSetActive({
+    update: productionLineApi.update,
+    messageApi,
+    actionRef,
+    selectedRowKeys,
+    setSelectedRowKeys,
+  });
 
   useEffect(() => {
     const loadWorkshops = async () => {
@@ -760,6 +772,13 @@ const ProductionLinesPage: React.FC = () => {
         deleteConfirmDescription={(count) =>
           t('app.master-data.productionLines.batchDeleteDescription', { count })
         }
+        toolBarActionsAfterDelete={[
+          <MasterDataBatchActiveMenuButton
+            menuKey="production-lines-batch-active"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={batchActiveMenuItems}
+          />,
+        ]}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}

@@ -22,6 +22,10 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import {
+  MasterDataBatchActiveMenuButton,
+  useMasterDataBatchSetActive,
+} from '../../../hooks/useMasterDataBatchSetActive';
 
 const WorkGroupsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -29,6 +33,14 @@ const WorkGroupsPage: React.FC = () => {
 
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const { batchActiveMenuItems } = useMasterDataBatchSetActive({
+    update: workGroupApi.update,
+    messageApi,
+    actionRef,
+    selectedRowKeys,
+    setSelectedRowKeys,
+  });
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
@@ -585,6 +597,13 @@ const WorkGroupsPage: React.FC = () => {
           deleteConfirmDescription={(count) =>
             t('app.master-data.workGroups.batchDeleteDescription', { count })
           }
+          toolBarActionsAfterDelete={[
+            <MasterDataBatchActiveMenuButton
+              menuKey="work-groups-batch-active"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={batchActiveMenuItems}
+            />,
+          ]}
           enableRowSelection
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}

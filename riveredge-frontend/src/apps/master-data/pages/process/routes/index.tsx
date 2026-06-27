@@ -29,6 +29,10 @@ import {
 } from '../../../utils/factoryImportTemplate';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
+  MasterDataBatchActiveMenuButton,
+  useMasterDataBatchSetActive,
+} from '../../../hooks/useMasterDataBatchSetActive';
+import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
@@ -59,6 +63,14 @@ const ProcessRoutesPage: React.FC = () => {
     loadFieldValuesForDetail,
     resetDetailFieldValues,
   } = useCustomFieldsForList<ProcessRoute>({ tableName: 'master_data_process_routes' });
+
+  const { batchActiveMenuItems } = useMasterDataBatchSetActive({
+    update: processRouteApi.update,
+    messageApi,
+    actionRef,
+    selectedRowKeys,
+    setSelectedRowKeys,
+  });
 
   useEffect(() => {
     if (customFields.length > 0 && actionRef.current) {
@@ -597,6 +609,13 @@ const ProcessRoutesPage: React.FC = () => {
         onDelete={handleBatchDelete}
         deleteConfirmTitle={t('common.confirmBatchDelete')}
         deleteConfirmDescription={(count) => t('common.confirmBatchDeleteContent', { count })}
+        toolBarActionsAfterDelete={[
+          <MasterDataBatchActiveMenuButton
+            menuKey="process-routes-batch-active"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={batchActiveMenuItems}
+          />,
+        ]}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}

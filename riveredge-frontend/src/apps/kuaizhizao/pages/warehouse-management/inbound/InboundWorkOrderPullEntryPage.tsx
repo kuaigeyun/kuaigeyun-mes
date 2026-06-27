@@ -181,7 +181,11 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
       messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.workOrder.fillReceiptQty'));
       return;
     }
-    if (maxQty > 0 && qty > maxQty) {
+    if (maxQty <= 0) {
+      messageApi.error(t('app.kuaizhizao.warehouseInbound.entry.workOrder.noPendingQty'));
+      return;
+    }
+    if (qty > maxQty) {
       messageApi.error(t('app.kuaizhizao.warehouseInbound.entry.workOrder.qtyExceedsPending', { max: maxQty }));
       return;
     }
@@ -356,10 +360,10 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
             <Button disabled={submitting || loading} onClick={leavePage}>
               {t('app.kuaizhizao.warehouseInbound.action.cancel')}
             </Button>
-            <Button loading={submitting} disabled={loading} onClick={() => void submit('draft')}>
+            <Button loading={submitting} disabled={loading || maxQty <= 0} onClick={() => void submit('draft')}>
               {t('app.kuaizhizao.warehouseInbound.action.generateDraft')}
             </Button>
-            <Button type="primary" loading={submitting} disabled={loading} onClick={() => void submit('confirm')}>
+            <Button type="primary" loading={submitting} disabled={loading || maxQty <= 0} onClick={() => void submit('confirm')}>
               {t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
             </Button>
           </Space>

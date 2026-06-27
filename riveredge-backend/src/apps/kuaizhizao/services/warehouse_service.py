@@ -1714,6 +1714,14 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             
             # 计算总数量
             total_quantity = sum(item.receipt_quantity for item in items) if items else 0
+
+            work_order_id = getattr(receipt_data, "work_order_id", None)
+            if work_order_id:
+                await self._assert_work_order_inbound_quantity(
+                    tenant_id,
+                    int(work_order_id),
+                    float(total_quantity or 0),
+                )
             
             # 创建入库单
             receipt = await FinishedGoodsReceipt.create(
@@ -2262,6 +2270,98 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         ).all()
         return sum(float(r.total_quantity or 0) for r in fg_rows + sf_rows)
 
+    async def _get_work_order_inbound_quota(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        *,
+        exclude_finished_receipt_id: Optional[int] = None,
+        exclude_semi_receipt_id: Optional[int] = None,
+    ) -> Dict[str, float]:
+        """工单可入库额度：计划数量（含超报上限）− 已占用入库单数量。"""
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.kuaizhizao.services.over_report_rules import (
+            max_completed_quantity_for_plan,
+            tuple_from_model,
+        )
+
+        work_order = await WorkOrder.get_or_none(
+            tenant_id=tenant_id,
+            id=work_order_id,
+            deleted_at__isnull=True,
+        )
+        if not work_order:
+            raise NotFoundError(f"工单不存在: {work_order_id}")
+
+        planned = float(work_order.quantity or 0)
+        mode, value = tuple_from_model(work_order)
+        max_qty = float(
+            max_completed_quantity_for_plan(work_order.quantity, mode, value)
+        )
+        received = await self._sum_work_order_inbound_quantity(tenant_id, work_order_id)
+
+        if exclude_finished_receipt_id:
+            excluded = await FinishedGoodsReceipt.get_or_none(
+                tenant_id=tenant_id,
+                id=exclude_finished_receipt_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            )
+            if excluded and excluded.status in self._WO_INBOUND_RECEIPT_COUNT_STATUSES:
+                received -= float(excluded.total_quantity or 0)
+
+        if exclude_semi_receipt_id:
+            from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
+
+            excluded = await SemiFinishedGoodsReceipt.get_or_none(
+                tenant_id=tenant_id,
+                id=exclude_semi_receipt_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            )
+            if excluded and excluded.status in self._WO_INBOUND_RECEIPT_COUNT_STATUSES:
+                received -= float(excluded.total_quantity or 0)
+
+        received = max(0.0, received)
+        pending = max(0.0, max_qty - received)
+        return {
+            "planned": planned,
+            "max_quantity": max_qty,
+            "received": received,
+            "pending": pending,
+        }
+
+    async def _assert_work_order_inbound_quantity(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        receipt_quantity: float,
+        *,
+        exclude_finished_receipt_id: Optional[int] = None,
+        exclude_semi_receipt_id: Optional[int] = None,
+    ) -> float:
+        """校验工单本次入库数量不超过可入库余量。"""
+        qty = float(receipt_quantity or 0)
+        if qty <= 0:
+            raise ValidationError("入库数量必须大于0")
+
+        quota = await self._get_work_order_inbound_quota(
+            tenant_id,
+            work_order_id,
+            exclude_finished_receipt_id=exclude_finished_receipt_id,
+            exclude_semi_receipt_id=exclude_semi_receipt_id,
+        )
+        pending = quota["pending"]
+        if pending <= 0:
+            raise BusinessLogicError(
+                f"工单可入库数量已用尽（计划 {quota['planned']}，已入库 {quota['received']}），无法再次下推入库"
+            )
+        if qty > pending + 1e-9:
+            raise ValidationError(
+                f"入库数量 {qty} 超过可入库数量 {pending}（上限 {quota['max_quantity']}，已入库 {quota['received']}）"
+            )
+        return pending
+
     async def _resolve_work_order_suggested_receipt_quantity(
         self,
         tenant_id: int,
@@ -2338,10 +2438,11 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             )
 
         planned = float(work_order.quantity or 0)
-        received = await self._sum_work_order_inbound_quantity(tenant_id, work_order_id)
-        pending = max(0.0, planned - received)
+        quota = await self._get_work_order_inbound_quota(tenant_id, work_order_id)
+        received = quota["received"]
+        pending = quota["pending"]
         suggested = await self._resolve_work_order_suggested_receipt_quantity(tenant_id, work_order_id)
-        receipt_qty = min(suggested, pending) if pending > 0 else suggested
+        receipt_qty = min(suggested, pending) if pending > 0 else 0.0
 
         material = await Material.get_or_none(
             tenant_id=tenant_id,
@@ -2436,6 +2537,11 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 tenant_id=tenant_id,
                 work_order_id=work_order_id,
                 receipt_quantity=receipt_quantity,
+            )
+            await self._assert_work_order_inbound_quantity(
+                tenant_id,
+                work_order_id,
+                receipt_quantity,
             )
             
             # 3. 获取仓库信息（如果未指定：按工单工作中心/车间/普通仓解析）

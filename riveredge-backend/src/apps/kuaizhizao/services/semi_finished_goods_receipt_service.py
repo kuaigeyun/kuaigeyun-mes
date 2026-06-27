@@ -73,6 +73,15 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                 items = getattr(receipt_data, "items", None) or []
             total_quantity = sum(item.receipt_quantity for item in items) if items else 0
 
+            if receipt_data.work_order_id:
+                from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+
+                await FinishedGoodsReceiptService()._assert_work_order_inbound_quantity(
+                    tenant_id,
+                    int(receipt_data.work_order_id),
+                    float(total_quantity or 0),
+                )
+
             receipt = await SemiFinishedGoodsReceipt.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -553,10 +562,11 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
 
         fg_svc = FinishedGoodsReceiptService()
         planned = float(work_order.quantity or 0)
-        received = await fg_svc._sum_work_order_inbound_quantity(tenant_id, work_order_id)
-        pending = max(0.0, planned - received)
+        quota = await fg_svc._get_work_order_inbound_quota(tenant_id, work_order_id)
+        received = quota["received"]
+        pending = quota["pending"]
         suggested = await fg_svc._resolve_work_order_suggested_receipt_quantity(tenant_id, work_order_id)
-        receipt_qty = min(suggested, pending) if pending > 0 else suggested
+        receipt_qty = min(suggested, pending) if pending > 0 else 0.0
 
         material = await Material.get_or_none(
             tenant_id=tenant_id,
@@ -646,6 +656,14 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                         receipt_quantity = total_qualified
             else:
                 receipt_quantity = float(receipt_quantity)
+
+            from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+
+            await FinishedGoodsReceiptService()._assert_work_order_inbound_quantity(
+                tenant_id,
+                work_order_id,
+                receipt_quantity,
+            )
 
             if not warehouse_id:
                 resolved = await self.resolve_default_inbound_warehouse_for_work_order(

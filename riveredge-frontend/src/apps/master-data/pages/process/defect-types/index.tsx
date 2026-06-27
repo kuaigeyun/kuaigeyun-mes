@@ -31,6 +31,10 @@ import {
 } from '../../../utils/factoryImportTemplate';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
+  MasterDataBatchActiveMenuButton,
+  useMasterDataBatchSetActive,
+} from '../../../hooks/useMasterDataBatchSetActive';
+import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
@@ -84,6 +88,14 @@ const DefectTypesPage: React.FC = () => {
     loadFieldValuesForDetail,
     resetDetailFieldValues,
   } = useCustomFieldsForList<DefectType>({ tableName: 'master_data_defect_types' });
+
+  const { batchActiveMenuItems } = useMasterDataBatchSetActive({
+    update: defectTypeApi.update,
+    messageApi,
+    actionRef,
+    selectedRowKeys,
+    setSelectedRowKeys,
+  });
 
   useEffect(() => {
     if (customFields.length > 0 && actionRef.current) {
@@ -573,6 +585,13 @@ const DefectTypesPage: React.FC = () => {
         onDelete={handleBatchDelete}
         deleteConfirmTitle={t('common.confirmBatchDelete')}
         deleteConfirmDescription={(count) => t('common.confirmBatchDeleteContent', { count })}
+        toolBarActionsAfterDelete={[
+          <MasterDataBatchActiveMenuButton
+            menuKey="defect-types-batch-active"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={batchActiveMenuItems}
+          />,
+        ]}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}

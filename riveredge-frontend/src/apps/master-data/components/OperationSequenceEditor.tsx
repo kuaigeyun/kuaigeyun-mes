@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Button,
@@ -25,15 +26,74 @@ import {
 import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../utils/globalSubmitShortcut';
 import { PlusOutlined, HolderOutlined } from '@ant-design/icons';
+import { SequenceIndexCell, StepDragHandleContext } from '../../../components/sequence-index-cell';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay, DragOverEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { operationApi } from '../services/process';
 import type { Operation } from '../types/process';
+import {
+  MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET,
+  MODAL_NESTED_ABOVE_PARENT_OFFSET,
+} from '../../../components/layout-templates/constants';
 
 const operationPickModalStyles = {
   body: { paddingTop: 8, paddingBottom: 12 },
 };
+
+const INSERT_LINE_STYLE: React.CSSProperties = {
+  height: 2,
+  backgroundColor: '#1890ff',
+  margin: 0,
+  boxShadow: '0 0 4px rgba(24, 144, 255, 0.5)',
+};
+
+function InsertLineRow({ colSpan }: { colSpan: number }) {
+  return (
+    <tr>
+      <td colSpan={colSpan} style={{ padding: 0, height: 0, lineHeight: 0 }}>
+        <div style={INSERT_LINE_STYLE} />
+      </td>
+    </tr>
+  );
+}
+
+function SortableOperationTableRow({
+  children,
+  ...props
+}: React.HTMLAttributes<HTMLTableRowElement> & { 'data-row-key'?: string | number }) {
+  const { token } = theme.useToken();
+  const rowKey = String(props['data-row-key'] ?? '');
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+    isOver,
+  } = useSortable({
+    id: rowKey,
+    disabled: !rowKey,
+  });
+  const style: React.CSSProperties = {
+    ...props.style,
+    transform: CSS.Transform.toString(transform),
+    transition: isDragging ? 'none' : transition,
+    opacity: isDragging ? 0.4 : 1,
+    backgroundColor: isDragging ? token.colorPrimaryBg : isOver && !isDragging ? token.colorFillSecondary : 'transparent',
+    boxShadow: isDragging ? token.boxShadowSecondary : 'none',
+    position: 'relative',
+  };
+  return (
+    <StepDragHandleContext.Provider value={{ attributes, listeners, setActivatorNodeRef }}>
+      <tr ref={setNodeRef} style={style} {...props}>
+        {children}
+      </tr>
+    </StepDragHandleContext.Provider>
+  );
+}
 
 function filterOperationList(ops: Operation[], keyword: string): Operation[] {
   const q = keyword.trim().toLowerCase();
@@ -68,6 +128,21 @@ export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
   const { token } = theme.useToken();
   const [keyword, setKeyword] = useState('');
   const filtered = useMemo(() => filterOperationList(operations, keyword), [operations, keyword]);
+  const filteredIdSet = useMemo(() => new Set(filtered.map((o) => o.uuid)), [filtered]);
+  const selectedOperations = useMemo(
+    () =>
+      multipleValue
+        .map((id) => operations.find((o) => o.uuid === id))
+        .filter((op): op is Operation => !!op),
+    [multipleValue, operations],
+  );
+
+  /** Checkbox.Group 仅上报当前可见项；保留不在当前搜索结果中的已选项 */
+  const handleMultipleChangeInView = (checkedInView: string[]) => {
+    if (!onMultipleChange) return;
+    const keptOutsideView = multipleValue.filter((id) => !filteredIdSet.has(id));
+    onMultipleChange([...keptOutsideView, ...checkedInView]);
+  };
 
   const handleSelectAllFiltered = () => {
     if (mode !== 'multiple' || !onMultipleChange) return;
@@ -111,6 +186,21 @@ export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
           </Space>
         </div>
       ) : null}
+      {mode === 'multiple' && selectedOperations.length > 0 ? (
+        <div style={{ marginBottom: 8 }}>
+          <Space wrap size={[4, 4]}>
+            {selectedOperations.map((op) => (
+              <Tag
+                key={op.uuid}
+                closable
+                onClose={() => onMultipleChange?.(multipleValue.filter((id) => id !== op.uuid))}
+              >
+                {op.code} - {op.name}
+              </Tag>
+            ))}
+          </Space>
+        </div>
+      ) : null}
       <div
         style={{
           maxHeight: 280,
@@ -133,7 +223,7 @@ export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
         ) : mode === 'multiple' ? (
           <Checkbox.Group
             value={multipleValue}
-            onChange={(v) => onMultipleChange?.(v as string[])}
+            onChange={(v) => handleMultipleChangeInView(v as string[])}
             style={{ width: '100%' }}
           >
             <Space direction="vertical" style={{ width: '100%' }} size={6}>
@@ -202,6 +292,10 @@ export interface OperationSequenceEditorProps {
   showNodeOperationColumn?: boolean;
   /** 产品工艺 Tab：显示标准工时、准备时间列 */
   showTimeColumns?: boolean;
+  /** 嵌套在 FormModal 内时传入，保证工序选择弹窗叠在父弹窗之上 */
+  nestedModalZIndex?: number;
+  /** 工序选择弹窗打开/关闭时通知父级（用于 Escape 等快捷键不关闭父弹窗） */
+  onPickModalOpenChange?: (open: boolean) => void;
 }
 
 export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = ({
@@ -209,9 +303,14 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   onChange,
   showNodeOperationColumn = false,
   showTimeColumns = false,
+  nestedModalZIndex,
+  onPickModalOpenChange,
 }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
+  const pickModalZIndex =
+    nestedModalZIndex ??
+    token.zIndexPopupBase + MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const [operations, setOperations] = useState<OperationItem[]>(value);
   const [allOperations, setAllOperations] = useState<Operation[]>([]);
   const [loading, setLoading] = useState(false);
@@ -224,7 +323,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   const [overId, setOverId] = useState<string | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -246,6 +345,10 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   useEffect(() => {
     setOperations(value);
   }, [value]);
+
+  useEffect(() => {
+    onPickModalOpenChange?.(addModalVisible || replaceModalVisible);
+  }, [addModalVisible, replaceModalVisible, onPickModalOpenChange]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -379,7 +482,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
 
   const tableColSpan =
     4 + (showNodeOperationColumn ? 1 : 0) + (showTimeColumns ? 2 : 0);
-  const actionTdIndex = tableColSpan - 1;
+  const sortableRowIds = useMemo(() => operations.map((op) => op.uuid), [operations]);
 
   const columns = [
     {
@@ -387,14 +490,11 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       key: 'index',
       width: 100,
       render: (_: any, __: OperationItem, index: number) => (
-        <Space>
-          <span className="drag-handle" style={{ color: '#1890ff', cursor: 'move', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, padding: 4, minWidth: 24, minHeight: 24 }} title={t('app.master-data.operationSequence.dragSort')}>
-            <HolderOutlined style={{ fontSize: 16 }} />
-          </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 28, height: 28, padding: '0 8px', backgroundColor: token.colorPrimaryBg, border: `1px solid ${token.colorPrimaryBorder}`, borderRadius: 6, color: token.colorPrimary, fontWeight: 600, fontSize: 13 }}>
-            {index + 1}
-          </span>
-        </Space>
+        <SequenceIndexCell
+          index={index}
+          token={token}
+          dragSortTitle={t('app.master-data.operationSequence.dragSort')}
+        />
       ),
     },
     {
@@ -506,10 +606,31 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
             value={record.overReportValue ?? 0}
             onChange={(v) => patchOverReport(record.uuid, { overReportValue: v ?? 0 })}
           />
-          <Button type="link" size="small" style={{ padding: '0 4px', flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); handleOpenReplaceModal(record.uuid); }}>
+          <Button
+            type="link"
+            htmlType="button"
+            size="small"
+            style={{ padding: '0 4px', flexShrink: 0 }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenReplaceModal(record.uuid);
+            }}
+          >
             {t('app.master-data.operationSequence.replace')}
           </Button>
-          <Button type="link" danger size="small" style={{ padding: '0 4px', flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); handleDeleteOperation(record.uuid); }}>
+          <Button
+            type="link"
+            danger
+            htmlType="button"
+            size="small"
+            style={{ padding: '0 4px', flexShrink: 0 }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteOperation(record.uuid);
+            }}
+          >
             {t('app.master-data.operationSequence.delete')}
           </Button>
         </div>
@@ -517,235 +638,17 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     },
   ];
 
-  const DraggableRow = ({ children, ...props }: any) => {
-    const index = operations.findIndex((op) => op.uuid === props['data-row-key']);
-    const operation = operations[index];
-    if (!operation) return <tr {...props}>{children}</tr>;
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: operation.uuid });
-    const isActiveOver = activeId && overId === operation.uuid && activeId !== operation.uuid;
-    const activeIndex = activeId ? operations.findIndex((op) => op.uuid === activeId) : -1;
-    const currentIndex = operations.findIndex((op) => op.uuid === operation.uuid);
-    const showInsertBefore = isActiveOver && activeIndex < currentIndex;
-    const showInsertAfter = isActiveOver && activeIndex > currentIndex;
-    const style = {
-      ...props.style,
-      transform: CSS.Transform.toString(transform),
-      transition: isDragging ? 'none' : transition,
-      opacity: isDragging ? 0.4 : 1,
-      backgroundColor: isDragging ? token.colorPrimaryBg : isOver && !isDragging ? token.colorFillSecondary : 'transparent',
-      boxShadow: isDragging ? token.boxShadowSecondary : 'none',
-      position: 'relative' as const,
-    };
-    return (
-      <tr ref={setNodeRef} style={style} {...props}>
-        {React.Children.map(children, (child, idx: number) => {
-          if (idx === 0 && React.isValidElement(child)) {
-            const rowEl = child as React.ReactElement<{ children?: React.ReactNode }>;
-            return React.cloneElement(rowEl, {
-              children: React.Children.map(rowEl.props.children, (cellContent) => {
-                if (React.isValidElement(cellContent) && cellContent.type === Space) {
-                  const spaceEl = cellContent as React.ReactElement<{ children?: React.ReactNode }>;
-                  return React.cloneElement(spaceEl, {
-                    children: React.Children.map(spaceEl.props.children, (item) => {
-                      const itemProps = React.isValidElement(item)
-                        ? (item.props as { className?: string })
-                        : undefined;
-                      if (React.isValidElement(item) && itemProps?.className === 'drag-handle') {
-                        return React.cloneElement(item, { ...attributes, ...listeners } as never);
-                      }
-                      return item;
-                    }),
-                  });
-                }
-                return cellContent;
-              }),
-            });
-          }
-          if (idx === actionTdIndex && React.isValidElement(child)) {
-            return React.cloneElement(
-              child as React.ReactElement<{ onClick?: (e: React.MouseEvent) => void }>,
-              {
-                onClick: (e: React.MouseEvent) => e.stopPropagation(),
-              },
-            );
-          }
-          return child;
-        })}
-      </tr>
-    );
-  };
-
   const activeOperation = activeId ? operations.find((op) => op.uuid === activeId) : null;
 
-  return (
-    <div style={{ width: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>{t('app.master-data.operationSequence.hint')}</span>
-        {operations.length > 0 && (
-          <Button type="dashed" icon={<PlusOutlined />} onClick={() => setAddModalVisible(true)} size="small">
-            {t('app.master-data.operationSequence.addOperation')}
-          </Button>
-        )}
-      </div>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
-        {operations.length > 0 ? (
-          <SortableContext items={operations.map((op) => op.uuid)} strategy={verticalListSortingStrategy}>
-            <div style={{ position: 'relative', width: '100%', margin: 0, padding: 0 }}>
-              <Table
-                columns={columns}
-                dataSource={operations}
-                rowKey="uuid"
-                pagination={false}
-                size="small"
-                components={{
-                  body: {
-                    wrapper: (props: any) => {
-                      const activeIndex = activeId ? operations.findIndex((op) => op.uuid === activeId) : -1;
-                      const overIndex = overId ? operations.findIndex((op) => op.uuid === overId) : -1;
-                      const showInsertLine = activeId && overId && activeId !== overId && activeIndex !== -1 && overIndex !== -1;
-                      const insertBefore = showInsertLine && activeIndex < overIndex;
-                      const insertAfter = showInsertLine && activeIndex > overIndex;
-                      const insertIndex = insertBefore ? overIndex : insertAfter ? overIndex + 1 : -1;
-                      return (
-                        <tbody {...props}>
-                          {operations.map((op, idx) => {
-                            const isInsertBefore = showInsertLine && insertIndex === idx && insertBefore;
-                            const isInsertAfter = showInsertLine && insertIndex === idx && insertAfter;
-                            return (
-                              <React.Fragment key={op.uuid}>
-                                {isInsertBefore && (
-                                  <tr>
-                                    <td colSpan={tableColSpan} style={{ padding: 0, height: 0, lineHeight: 0 }}>
-                                      <div style={{ height: 2, backgroundColor: '#1890ff', margin: 0, boxShadow: '0 0 4px rgba(24, 144, 255, 0.5)' }} />
-                                    </td>
-                                  </tr>
-                                )}
-                                <DraggableRow data-row-key={op.uuid}>
-                                  <td>
-                                    <Space>
-                                      <span className="drag-handle" style={{ color: '#1890ff', cursor: 'move', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, padding: 4, minWidth: 24, minHeight: 24 }} title={t('app.master-data.operationSequence.dragSort')}>
-                                        <HolderOutlined style={{ fontSize: 16 }} />
-                                      </span>
-                                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 28, height: 28, padding: '0 8px', backgroundColor: token.colorPrimaryBg, border: `1px solid ${token.colorPrimaryBorder}`, borderRadius: 6, color: token.colorPrimary, fontWeight: 600, fontSize: 13 }}>
-                                        {idx + 1}
-                                      </span>
-                                    </Space>
-                                  </td>
-                                  <td>
-                                    <div>
-                                      <div style={{ fontWeight: 500 }}>{op.code} - {op.name}</div>
-                                      {op.description && <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>{op.description}</div>}
-                                    </div>
-                                  </td>
-                                  <td>
-                                    <Tag color={op.reportingType === 'quantity' ? 'blue' : 'green'}>
-                                      {op.reportingType === 'quantity' ? t('app.master-data.operationSequence.reportingByQuantity') : op.reportingType === 'status' ? t('app.master-data.operationSequence.reportingByStatus') : '-'}
-                                    </Tag>
-                                  </td>
-                                  {showNodeOperationColumn && (
-                                    <td onClick={(e) => e.stopPropagation()}>
-                                      <Switch
-                                        size="small"
-                                        checked={!!op.isNodeOperation}
-                                        onChange={(c) => toggleNodeOperation(op.uuid, c)}
-                                      />
-                                    </td>
-                                  )}
-                                  <td onClick={(e) => e.stopPropagation()}>
-                                    <div
-                                      style={{
-                                        display: 'flex',
-                                        flexWrap: 'nowrap',
-                                        alignItems: 'center',
-                                        gap: 8,
-                                        whiteSpace: 'nowrap',
-                                      }}
-                                    >
-                                      <Select
-                                        size="small"
-                                        style={{ width: 100, flexShrink: 0 }}
-                                        value={op.overReportMode ?? 'none'}
-                                        options={[
-                                          { label: t('field.operation.overReportModeNone'), value: 'none' },
-                                          { label: t('field.operation.overReportModeFixed'), value: 'fixed' },
-                                          { label: t('field.operation.overReportModePercent'), value: 'percent' },
-                                        ]}
-                                        onChange={(v) => patchOverReport(op.uuid, { overReportMode: v as OperationItem['overReportMode'] })}
-                                      />
-                                      <InputNumber
-                                        size="small"
-                                        min={0}
-                                        style={{ width: 88, flexShrink: 0 }}
-                                        value={op.overReportValue ?? 0}
-                                        onChange={(v) => patchOverReport(op.uuid, { overReportValue: v ?? 0 })}
-                                      />
-                                      <Button type="link" size="small" style={{ padding: '0 4px', flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); handleOpenReplaceModal(op.uuid); }}>
-                                        {t('app.master-data.operationSequence.replace')}
-                                      </Button>
-                                      <Button type="link" danger size="small" style={{ padding: '0 4px', flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); handleDeleteOperation(op.uuid); }}>
-                                        {t('app.master-data.operationSequence.delete')}
-                                      </Button>
-                                    </div>
-                                  </td>
-                                </DraggableRow>
-                                {isInsertAfter && (
-                                  <tr>
-                                    <td colSpan={tableColSpan} style={{ padding: 0, height: 0, lineHeight: 0 }}>
-                                      <div style={{ height: 2, backgroundColor: '#1890ff', margin: 0, boxShadow: '0 0 4px rgba(24, 144, 255, 0.5)' }} />
-                                    </td>
-                                  </tr>
-                                )}
-                              </React.Fragment>
-                            );
-                          })}
-                        </tbody>
-                      );
-                    },
-                  },
-                }}
-                style={{ width: '100%' }}
-                scroll={{ x: showNodeOperationColumn ? 820 : 732 }}
-                locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noData')} /> }}
-              />
-            </div>
-          </SortableContext>
-        ) : (
-          <div
-            className="operation-sequence-editor-empty"
-            style={{
-              padding: 24,
-              background: token.colorFillAlter,
-              borderRadius: token.borderRadius,
-              border: '1px dashed var(--river-border-color)',
-              textAlign: 'center',
-            }}
-          >
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noDataAddHint')} />
-            <Button type="primary" ghost icon={<PlusOutlined />} onClick={() => setAddModalVisible(true)} style={{ marginTop: 12 }}>
-              {t('app.master-data.operationSequence.addOperation')}
-            </Button>
-          </div>
-        )}
-        <DragOverlay>
-          {activeOperation ? (
-            <div style={{ padding: '12px 16px', background: token.colorBgElevated, border: `1px solid ${token.colorPrimary}`, borderRadius: token.borderRadius, boxShadow: token.boxShadowSecondary, width: '100%', minWidth: 300 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <HolderOutlined style={{ color: token.colorPrimary, fontSize: 16 }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 500, color: token.colorText }}>{activeOperation.code} - {activeOperation.name}</div>
-                  {activeOperation.description && <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>{activeOperation.description}</div>}
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
-
+  const pickModals = (
+    <>
       <Modal
         title={t('app.master-data.operationSequence.selectOperation')}
         open={addModalVisible}
         centered
         width={520}
+        zIndex={pickModalZIndex}
+        getContainer={() => document.body}
         destroyOnHidden
         styles={operationPickModalStyles}
         onOk={handleAddOperation}
@@ -778,6 +681,8 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         open={replaceModalVisible}
         centered
         width={520}
+        zIndex={pickModalZIndex}
+        getContainer={() => document.body}
         destroyOnHidden
         styles={operationPickModalStyles}
         onOk={handleReplaceOperation}
@@ -821,6 +726,98 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           </Typography.Text>
         )}
       </Modal>
+    </>
+  );
+
+  return (
+    <div style={{ width: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>{t('app.master-data.operationSequence.hint')}</span>
+        {operations.length > 0 && (
+          <Button type="dashed" icon={<PlusOutlined />} onClick={() => setAddModalVisible(true)} size="small">
+            {t('app.master-data.operationSequence.addOperation')}
+          </Button>
+        )}
+      </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
+        {operations.length > 0 ? (
+          <SortableContext items={operations.map((op) => op.uuid)} strategy={verticalListSortingStrategy}>
+            <div style={{ position: 'relative', width: '100%', margin: 0, padding: 0 }}>
+              <Table
+                columns={columns}
+                dataSource={operations}
+                rowKey="uuid"
+                pagination={false}
+                size="small"
+                components={{
+                  body: {
+                    wrapper: (wrapperProps: React.HTMLAttributes<HTMLTableSectionElement>) => {
+                      const activeIndex = activeId ? operations.findIndex((op) => op.uuid === activeId) : -1;
+                      const overIndex = overId ? operations.findIndex((op) => op.uuid === overId) : -1;
+                      const showInsertLine =
+                        activeId && overId && activeId !== overId && activeIndex !== -1 && overIndex !== -1;
+                      const insertBefore = showInsertLine && activeIndex < overIndex;
+                      const insertAfter = showInsertLine && activeIndex > overIndex;
+                      const insertIndex = insertBefore ? overIndex : insertAfter ? overIndex + 1 : -1;
+                      const rowChildren = React.Children.toArray(wrapperProps.children);
+                      return (
+                        <tbody {...wrapperProps}>
+                          {rowChildren.map((child, idx) => {
+                            const isInsertBefore = showInsertLine && insertIndex === idx && insertBefore;
+                            const isInsertAfter = showInsertLine && insertIndex === idx && insertAfter;
+                            return (
+                              <React.Fragment key={sortableRowIds[idx] ?? idx}>
+                                {isInsertBefore ? <InsertLineRow colSpan={tableColSpan} /> : null}
+                                {child}
+                                {isInsertAfter ? <InsertLineRow colSpan={tableColSpan} /> : null}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      );
+                    },
+                    row: SortableOperationTableRow,
+                  },
+                }}
+                style={{ width: '100%' }}
+                scroll={{ x: showNodeOperationColumn ? 820 : 732 }}
+                locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noData')} /> }}
+              />
+            </div>
+          </SortableContext>
+        ) : (
+          <div
+            className="operation-sequence-editor-empty"
+            style={{
+              padding: 24,
+              background: token.colorFillAlter,
+              borderRadius: token.borderRadius,
+              border: '1px dashed var(--river-border-color)',
+              textAlign: 'center',
+            }}
+          >
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noDataAddHint')} />
+            <Button type="primary" ghost icon={<PlusOutlined />} onClick={() => setAddModalVisible(true)} style={{ marginTop: 12 }}>
+              {t('app.master-data.operationSequence.addOperation')}
+            </Button>
+          </div>
+        )}
+        <DragOverlay>
+          {activeOperation ? (
+            <div style={{ padding: '12px 16px', background: token.colorBgElevated, border: `1px solid ${token.colorPrimary}`, borderRadius: token.borderRadius, boxShadow: token.boxShadowSecondary, width: '100%', minWidth: 300 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <HolderOutlined style={{ color: token.colorPrimary, fontSize: 16 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 500, color: token.colorText }}>{activeOperation.code} - {activeOperation.name}</div>
+                  {activeOperation.description && <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>{activeOperation.description}</div>}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+
+      {typeof document !== 'undefined' ? createPortal(pickModals, document.body) : pickModals}
     </div>
   );
 };

@@ -35,6 +35,10 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import {
+  MasterDataBatchActiveMenuButton,
+  useMasterDataBatchSetActive,
+} from '../../../hooks/useMasterDataBatchSetActive';
 
 /**
  * 工位管理列表页面组件
@@ -67,6 +71,14 @@ const WorkstationsPage: React.FC = () => {
     loadFieldValuesForDetail,
     resetDetailFieldValues,
   } = useCustomFieldsForList<Workstation>({ tableName: 'master_data_factory_workstations' });
+
+  const { batchActiveMenuItems } = useMasterDataBatchSetActive({
+    update: workstationApi.update,
+    messageApi,
+    actionRef,
+    selectedRowKeys,
+    setSelectedRowKeys,
+  });
 
   useEffect(() => {
     const loadProductionLines = async () => {
@@ -767,6 +779,13 @@ const WorkstationsPage: React.FC = () => {
         deleteConfirmDescription={(count) =>
           t('app.master-data.workstations.batchDeleteDescription', { count })
         }
+        toolBarActionsAfterDelete={[
+          <MasterDataBatchActiveMenuButton
+            menuKey="workstations-batch-active"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={batchActiveMenuItems}
+          />,
+        ]}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}

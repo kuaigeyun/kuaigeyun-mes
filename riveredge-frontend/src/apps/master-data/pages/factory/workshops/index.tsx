@@ -37,6 +37,10 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import {
+  MasterDataBatchActiveMenuButton,
+  useMasterDataBatchSetActive,
+} from '../../../hooks/useMasterDataBatchSetActive';
 
 /**
  * 车间管理列表页面组件
@@ -66,6 +70,14 @@ const WorkshopsPage: React.FC = () => {
     loadFieldValuesForDetail,
     resetDetailFieldValues,
   } = useCustomFieldsForList<Workshop>({ tableName: 'master_data_factory_workshops' });
+
+  const { batchActiveMenuItems } = useMasterDataBatchSetActive({
+    update: workshopApi.update,
+    messageApi,
+    actionRef,
+    selectedRowKeys,
+    setSelectedRowKeys,
+  });
 
   /**
    * 加载厂区列表
@@ -758,6 +770,13 @@ const WorkshopsPage: React.FC = () => {
         deleteConfirmDescription={(count) =>
           t('app.master-data.workshops.batchDeleteDescription', { count })
         }
+        toolBarActionsAfterDelete={[
+          <MasterDataBatchActiveMenuButton
+            menuKey="workshops-batch-active"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={batchActiveMenuItems}
+          />,
+        ]}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}

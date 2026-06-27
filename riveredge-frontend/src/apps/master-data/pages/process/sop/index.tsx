@@ -24,6 +24,10 @@ import { UniDetail, detailDrawerDescriptionItems } from '../../../../../componen
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
+  MasterDataBatchActiveMenuButton,
+  useMasterDataBatchSetActive,
+} from '../../../hooks/useMasterDataBatchSetActive';
+import {
   CustomFieldsFormSection,
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -95,6 +99,14 @@ const SOPPage: React.FC = () => {
     loadFieldValuesForDetail: loadSopFieldValuesForDetail,
     resetDetailFieldValues: resetSopDetailFieldValues,
   } = useCustomFieldsForList<SOP>({ tableName: SOP_CUSTOM_FIELD_TABLE });
+
+  const { batchActiveMenuItems } = useMasterDataBatchSetActive({
+    update: sopApi.update,
+    messageApi,
+    actionRef,
+    selectedRowKeys,
+    setSelectedRowKeys,
+  });
 
   useEffect(() => {
     if (sopListCustomFields.length > 0 && actionRef.current) {
@@ -1005,6 +1017,13 @@ const SOPPage: React.FC = () => {
         onDelete={handleBatchDelete}
         deleteConfirmTitle={t('common.confirmBatchDelete')}
         deleteConfirmDescription={(count) => t('common.confirmBatchDeleteContent', { count })}
+        toolBarActionsAfterDelete={[
+          <MasterDataBatchActiveMenuButton
+            menuKey="sop-batch-active"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={batchActiveMenuItems}
+          />,
+        ]}
         toolBarActionsAfterBatch={[
           <Button {...rowActionKind('create')} key="batch-create" type="default" onClick={() => setCreateModalVisible(true)}>
             {t('app.master-data.sop.batchCreateByRoute')}

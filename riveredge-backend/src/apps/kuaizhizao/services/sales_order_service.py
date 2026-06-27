@@ -2335,6 +2335,53 @@ class SalesOrderService:
             logger.warning("销售订单自动下推需求计算失败，order_id=%s: %s", sales_order_id, exc)
             return {"success": False, "message": str(exc)}
 
+    @staticmethod
+    async def _load_material_fallback_for_items(
+        tenant_id: int,
+        items: List[SalesOrderItem],
+    ) -> Dict[int, Dict[str, str]]:
+        """明细行物料编码/名称为空时，从物料主数据补全（兼容历史数据）。"""
+        need_ids = {
+            int(it.material_id)
+            for it in items
+            if it.material_id
+            and (
+                not (getattr(it, "material_code", None) and str(it.material_code).strip())
+                or not (getattr(it, "material_name", None) and str(it.material_name).strip())
+            )
+        }
+        if not need_ids:
+            return {}
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            id__in=list(need_ids),
+            deleted_at__isnull=True,
+        ).all()
+        fallback: Dict[int, Dict[str, str]] = {}
+        for m in materials:
+            fallback[m.id] = {
+                "code": (m.main_code or getattr(m, "code", None) or "")[:50],
+                "name": (m.name or "")[:200],
+            }
+        return fallback
+
+    @staticmethod
+    def _resolve_item_material_display(
+        item: SalesOrderItem,
+        material_fallback: Dict[int, Dict[str, str]],
+    ) -> tuple[str, str]:
+        code = getattr(item, "material_code", None)
+        name = getattr(item, "material_name", None)
+        material_code = str(code).strip()[:50] if code and str(code).strip() else ""
+        material_name = str(name).strip()[:200] if name and str(name).strip() else ""
+        mf = material_fallback.get(int(item.material_id)) if item.material_id else None
+        if mf:
+            if not material_code:
+                material_code = mf.get("code") or ""
+            if not material_name:
+                material_name = mf.get("name") or ""
+        return material_code, material_name
+
     async def preview_push_sales_order_to_computation(
         self, tenant_id: int, sales_order_id: int
     ) -> Dict[str, Any]:
@@ -2354,15 +2401,17 @@ class SalesOrderService:
 
         demand = await self._get_linked_demand(tenant_id, sales_order_id)
         demand_exists = demand is not None
+        material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
 
         preview_items = []
         for it in items:
             qty = float(it.order_quantity or 0)
             if qty <= 0:
                 continue
+            material_code, material_name = self._resolve_item_material_display(it, material_fallback)
             preview_items.append({
-                "material_code": it.material_code,
-                "material_name": it.material_name,
+                "material_code": material_code,
+                "material_name": material_name,
                 "quantity": float(qty),
                 "delivery_date": str(it.delivery_date) if it.delivery_date else None,
             })
@@ -2586,14 +2635,16 @@ class SalesOrderService:
         if not items:
             raise BusinessLogicError("销售订单无明细，无法直推生产计划")
 
+        material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
         plan_items = []
         for it in items:
             qty = float(it.order_quantity or 0)
             if qty <= 0:
                 continue
+            material_code, material_name = self._resolve_item_material_display(it, material_fallback)
             plan_items.append({
-                "material_code": it.material_code,
-                "material_name": it.material_name,
+                "material_code": material_code,
+                "material_name": material_name,
                 "quantity": float(qty),
                 "delivery_date": str(it.delivery_date) if it.delivery_date else None,
                 "suggested_action": "生产",
@@ -2964,6 +3015,7 @@ class SalesOrderService:
             validate_material_source_config,
         )
 
+        material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
         preview_items: List[Dict[str, Any]] = []
         has_blocking_issues = False
         material_ids = [int(getattr(it, "material_id", 0) or 0) for it in items]
@@ -3003,11 +3055,12 @@ class SalesOrderService:
             errors = [str(e) for e in (source_errors or []) if str(e).strip()]
             if errors:
                 has_blocking_issues = True
+            material_code, material_name = self._resolve_item_material_display(it, material_fallback)
             preview_items.append(
                 {
                     "item_id": item_id,
-                    "material_code": it.material_code,
-                    "material_name": it.material_name,
+                    "material_code": material_code,
+                    "material_name": material_name,
                     "quantity": float(qty),
                     "pushed_quantity": float(pushed_by_material.get(mid, Decimal("0"))),
                     "max_push_quantity": float(max_qty),
@@ -3661,6 +3714,7 @@ class SalesOrderService:
         if not items:
             raise BusinessLogicError("销售订单无明细，无法下推发货通知单")
 
+        material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
         preview_items: List[Dict[str, Any]] = []
         for it in items:
             order_qty = Decimal(str(it.order_quantity or 0))
@@ -3671,11 +3725,12 @@ class SalesOrderService:
                 else (order_qty - delivered_qty)
             )
             remaining_qty = max(Decimal("0"), Decimal(str(remaining_qty)))
+            material_code, material_name = self._resolve_item_material_display(it, material_fallback)
             preview_items.append(
                 {
                     "item_id": int(it.id),
-                    "material_code": it.material_code,
-                    "material_name": it.material_name,
+                    "material_code": material_code,
+                    "material_name": material_name,
                     "quantity": float(order_qty),
                     "delivered_quantity": float(delivered_qty),
                     "max_push_quantity": float(remaining_qty),

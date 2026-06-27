@@ -5,9 +5,9 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormInstance, ProForm, ProFormDependency } from '@ant-design/pro-components';
-import { App, Tag } from 'antd';
+import { App, Tag, theme } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
-import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
+import { MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
 import { processRouteApi } from '../services/process';
 import { testGenerateCode, generateCode } from '../../../services/codeRule';
 import { getCodeRulePageConfig } from '../../../services/codeRule';
@@ -41,10 +41,14 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
   const formRef = useRef<ProFormInstance>();
   const [formLoading, setFormLoading] = useState(false);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [operationSequence, setOperationSequence] = useState<OperationItem[]>([]);
+  const [pickModalOpen, setPickModalOpen] = useState(false);
+  const operationPickModalZIndex =
+    token.zIndexPopupBase + MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET + MODAL_NESTED_ABOVE_PARENT_OFFSET;
 
   const {
     customFields,
@@ -64,14 +68,14 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
         e.preventDefault();
         formRef.current?.submit();
       }
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !pickModalOpen) {
         e.preventDefault();
         onClose();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose]);
+  }, [open, onClose, pickModalOpen]);
 
   useEffect(() => {
     if (!open) return;
@@ -331,6 +335,8 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
                 value={operationSequence}
                 onChange={setOperationSequence}
                 showNodeOperationColumn={!!allowOperationJump}
+                nestedModalZIndex={operationPickModalZIndex}
+                onPickModalOpenChange={setPickModalOpen}
               />
             )}
           </ProFormDependency>

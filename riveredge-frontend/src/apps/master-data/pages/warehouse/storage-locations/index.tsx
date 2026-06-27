@@ -22,6 +22,10 @@ import type { StorageLocation, StorageLocationCreate, StorageArea } from '../../
 import { batchImport } from '../../../../../utils/batchOperations';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
+  MasterDataBatchActiveMenuButton,
+  useMasterDataBatchSetActive,
+} from '../../../hooks/useMasterDataBatchSetActive';
+import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
@@ -62,6 +66,14 @@ const StorageLocationsPage: React.FC = () => {
     loadFieldValuesForDetail,
     resetDetailFieldValues,
   } = useCustomFieldsForList<StorageLocation>({ tableName: 'master_data_warehouse_storage_locations' });
+
+  const { batchActiveMenuItems } = useMasterDataBatchSetActive({
+    update: storageLocationApi.update,
+    messageApi,
+    actionRef,
+    selectedRowKeys,
+    setSelectedRowKeys,
+  });
 
   /**
    * 当自定义字段加载完成后，刷新表格以显示自定义字段列
@@ -752,6 +764,13 @@ const StorageLocationsPage: React.FC = () => {
         deleteConfirmDescription={(count) =>
           t('app.master-data.storageLocations.batchDeleteDescription', { count })
         }
+        toolBarActionsAfterDelete={[
+          <MasterDataBatchActiveMenuButton
+            menuKey="storage-locations-batch-active"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={batchActiveMenuItems}
+          />,
+        ]}
         toolBarActionsAfterBatch={[
           <Button {...rowActionKind('create')}
             key="batchCreate"

@@ -4530,7 +4530,7 @@ const SalesOrdersPage: React.FC = () => {
         }}
         okText={t('app.kuaizhizao.salesOrder.confirmPush')}
         cancelText={t('common.cancel')}
-        width={900}
+        width={1200}
         confirmLoading={pushPreviewConfirming}
         onOk={handlePushPreviewConfirm}
         okButtonProps={{ disabled: pushPreviewLoading || !pushPreviewData }}

@@ -35,6 +35,10 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import {
+  MasterDataBatchActiveMenuButton,
+  useMasterDataBatchSetActive,
+} from '../../../hooks/useMasterDataBatchSetActive';
 
 /**
  * 厂区管理列表页面组件
@@ -64,6 +68,14 @@ const PlantsPage: React.FC = () => {
     loadFieldValuesForDetail,
     resetDetailFieldValues,
   } = useCustomFieldsForList<Plant>({ tableName: 'master_data_factory_plants' });
+
+  const { batchActiveMenuItems } = useMasterDataBatchSetActive({
+    update: plantApi.update,
+    messageApi,
+    actionRef,
+    selectedRowKeys,
+    setSelectedRowKeys,
+  });
 
   useEffect(() => {
     if (customFields.length > 0 && actionRef.current) {
@@ -646,6 +658,13 @@ const PlantsPage: React.FC = () => {
           deleteConfirmDescription={(count) =>
             t('app.master-data.plants.batchDeleteDescription', { count })
           }
+          toolBarActionsAfterDelete={[
+            <MasterDataBatchActiveMenuButton
+              menuKey="plants-batch-active"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={batchActiveMenuItems}
+            />,
+          ]}
           enableRowSelection
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}

@@ -37,6 +37,10 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import {
+  MasterDataBatchActiveMenuButton,
+  useMasterDataBatchSetActive,
+} from '../../../hooks/useMasterDataBatchSetActive';
 
 /**
  * 仓库管理列表页面组件
@@ -72,6 +76,14 @@ const WarehousesPage: React.FC = () => {
     loadFieldValuesForDetail,
     resetDetailFieldValues,
   } = useCustomFieldsForList<Warehouse>({ tableName: 'master_data_warehouse_warehouses' });
+
+  const { batchActiveMenuItems } = useMasterDataBatchSetActive({
+    update: warehouseApi.update,
+    messageApi,
+    actionRef,
+    selectedRowKeys,
+    setSelectedRowKeys,
+  });
 
   /**
    * 当自定义字段加载完成后，刷新表格以显示自定义字段列
@@ -788,6 +800,13 @@ const WarehousesPage: React.FC = () => {
         deleteConfirmDescription={(count) =>
           t('app.master-data.warehouses.batchDeleteDescription', { count })
         }
+        toolBarActionsAfterDelete={[
+          <MasterDataBatchActiveMenuButton
+            menuKey="warehouses-batch-active"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={batchActiveMenuItems}
+          />,
+        ]}
         toolBarActionsAfterCreate={[
           trialRunMode ? (
             <Button {...rowActionKind('import')}

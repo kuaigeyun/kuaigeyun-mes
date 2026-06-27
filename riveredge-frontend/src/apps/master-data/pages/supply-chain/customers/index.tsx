@@ -46,6 +46,10 @@ import {
 } from '../../../utils/factoryImportTemplate';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
+  MasterDataBatchActiveMenuButton,
+  useMasterDataBatchSetActive,
+} from '../../../hooks/useMasterDataBatchSetActive';
+import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
@@ -92,6 +96,14 @@ const CustomersPage: React.FC = () => {
     loadFieldValuesForDetail,
     resetDetailFieldValues,
   } = useCustomFieldsForList<Customer>({ tableName: 'master_data_customers' });
+
+  const { batchActiveMenuItems } = useMasterDataBatchSetActive({
+    update: customerApi.update,
+    messageApi,
+    actionRef,
+    selectedRowKeys,
+    setSelectedRowKeys,
+  });
 
   useEffect(() => {
     if (customFields.length > 0 && actionRef.current) {
@@ -1012,6 +1024,13 @@ const CustomersPage: React.FC = () => {
         onDelete={handleBatchDelete}
         deleteConfirmTitle={t('common.confirmBatchDelete')}
         deleteConfirmDescription={(count) => t('common.confirmBatchDeleteContent', { count })}
+        toolBarActionsAfterDelete={[
+          <MasterDataBatchActiveMenuButton
+            menuKey="customers-batch-active"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={batchActiveMenuItems}
+          />,
+        ]}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
