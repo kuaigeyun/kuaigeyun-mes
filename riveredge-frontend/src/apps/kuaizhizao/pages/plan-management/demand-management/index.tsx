@@ -69,6 +69,9 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { getDemandLifecycle } from '../../../utils/demandLifecycle';
+import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { getDemandBusinessModeTagColor } from '../../../utils/businessMode';
 import { getDemandTypeTagProps, normalizeDemandTypeKey } from '../../../utils/demandType';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
@@ -564,6 +567,11 @@ const DemandManagementPage: React.FC = () => {
     () => withSingleNewShortcutHint(t('app.kuaizhizao.demandManagement.createPlan')),
     [t],
   );
+  const demandAuditEnabled = useAuditRequired('demand', false);
+  const demandAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<Demand>({ t, auditEnabled: demandAuditEnabled }),
+    [t, demandAuditEnabled],
+  );
 
   const columns: ProColumns<Demand>[] = useMemo(
     () => [
@@ -615,25 +623,16 @@ const DemandManagementPage: React.FC = () => {
         ATO: { text: t('app.kuaizhizao.demandManagement.businessModeAtoShort'), status: 'Warning' },
       },
     },
+    ...(demandAuditColumn ? [demandAuditColumn] : []),
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: 'lifecycle_stage',
       align: 'center' as const,
       fixed: 'right' as const,
       hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getDemandLifecycle(record);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      },
+      render: (_, record) => (
+        <ListUniLifecycleCell lifecycle={getDemandLifecycle(record as Record<string, unknown>, t)} />
+      ),
     },
     {
       title: t('common.actions'),
@@ -720,7 +719,7 @@ const DemandManagementPage: React.FC = () => {
       },
     },
   ],
-    [t, formatDemandTypeLabel, handleDelete, handleDetail, handleEdit, demandCanWithdrawComputation, handleWithdrawFromComputation]
+    [t, formatDemandTypeLabel, handleDelete, handleDetail, handleEdit, demandCanWithdrawComputation, handleWithdrawFromComputation, demandAuditColumn]
   );
 
   const statCards: StatCard[] = useMemo(
@@ -735,7 +734,7 @@ const DemandManagementPage: React.FC = () => {
           onClick:
             statistics.pending_review_count > 0
               ? () => {
-                  tableSearchFormRef.current?.setFieldsValue?.({ lifecycle: '待审核' });
+                  tableSearchFormRef.current?.setFieldsValue?.({ status: DemandStatus.PENDING_REVIEW });
                   actionRef.current?.reload?.();
                 }
               : undefined,

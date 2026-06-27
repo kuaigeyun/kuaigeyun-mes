@@ -56,8 +56,6 @@ def derive_shipment_notice_capabilities(
     notify_reason = "shipment_notice.notify.not_pending"
     if not _is_pending(status):
         notify_reason = "shipment_notice.notify.not_pending"
-    elif not has_warehouse:
-        notify_reason = "shipment_notice.notify.no_warehouse"
     elif not has_items:
         notify_reason = "shipment_notice.notify.no_items"
     else:

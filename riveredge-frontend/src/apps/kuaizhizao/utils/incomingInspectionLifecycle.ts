@@ -25,9 +25,8 @@ function isApproved(reviewStatus: string): boolean {
 }
 
 const MAIN_STAGES = [
-  { key: 'pending', label: '待检验' },
+  { key: 'pending_inspection', label: '待检验' },
   { key: 'inspected', label: '已检验' },
-  { key: 'approved', label: '已确认' },
 ] as const;
 
 function buildMainStages(currentKey: string, isException = false) {
@@ -58,10 +57,10 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
   }
   if (isApproved(reviewStatus) || status === '已审核' || status === 'audited' || status === 'approved') {
     return {
-      current_stage_key: 'approved',
-      current_stage_name: '已确认',
+      current_stage_key: 'inspected',
+      current_stage_name: '已检验',
       status: 'success',
-      main_stages: buildMainStages('approved'),
+      main_stages: buildMainStages('inspected'),
       next_step_suggestions: [],
     };
   }
@@ -75,10 +74,10 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
     };
   }
   return {
-    current_stage_key: 'pending',
+    current_stage_key: 'pending_inspection',
     current_stage_name: '待检验',
     status: 'normal',
-    main_stages: buildMainStages('pending'),
+    main_stages: buildMainStages('pending_inspection'),
     next_step_suggestions: ['执行检验'],
   };
 }
@@ -86,8 +85,8 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
 function normalizeInspectionLifecycle(result: LifecycleResult): LifecycleResult {
   const mainStages = (result.mainStages ?? []).filter((s) => s.key !== 'pending_review');
   let stageName = result.stageName ?? '';
-  if (stageName === '待审核') stageName = '已检验';
-  if (stageName === '已审核') stageName = '已确认';
+  if (stageName === '待审核') stageName = '—';
+  if (stageName === '已审核') stageName = '已检验';
   return { ...result, mainStages, stageName };
 }
 

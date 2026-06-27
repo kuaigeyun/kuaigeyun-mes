@@ -85,6 +85,18 @@ def test_revoke_approval_strictly_audited():
     assert caps.revoke_approval.allowed
 
 
+def test_revoke_approval_confirmed_effective():
+    caps = derive_sales_order_capabilities(_o(status="CONFIRMED", review_status="审核通过"))
+    assert caps.revoke_approval.allowed
+    caps2 = derive_sales_order_capabilities(_o(status="已生效", review_status="已通过"))
+    assert caps2.revoke_approval.allowed
+
+
+def test_revoke_approval_denied_when_closed():
+    caps = derive_sales_order_capabilities(_o(status="已关闭", review_status="审核通过"))
+    assert not caps.revoke_approval.allowed
+
+
 def test_create_change_order_when_locked():
     caps = derive_sales_order_capabilities(
         _o(status="已审核", review_status="审核通过"),

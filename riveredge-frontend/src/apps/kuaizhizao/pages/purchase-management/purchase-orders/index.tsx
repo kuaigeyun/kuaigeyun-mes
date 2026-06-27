@@ -14,7 +14,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
-import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, List, Typography, theme, Dropdown, Descriptions, Spin, Card, Select } from 'antd';
+import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, List, Typography, theme, Dropdown, Descriptions, Spin, Card, Select, Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   buildFactoryImportTemplate,
@@ -131,7 +131,7 @@ import {
   isAuditedStatus,
 } from '../../../constants/documentStatus';
 import { resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
-import { getPurchaseOrderLifecycle, buildPurchaseOrderLifecycleValueEnum, resolvePurchaseOrderListLifecycleParams } from '../../../utils/purchaseOrderLifecycle';
+import { getPurchaseOrderLifecycle, buildPurchaseOrderLifecycleValueEnum, resolvePurchaseOrderListLifecycleParams, isPurchaseOrderDeliveryOverdue } from '../../../utils/purchaseOrderLifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
@@ -391,6 +391,7 @@ const PurchaseOrdersPage: React.FC = () => {
 
   const tableSearchFormRef = useRef<any>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [highlightDeliveryOverdue, setHighlightDeliveryOverdue] = useState(false);
 
   const selectedOrdersForBatch = useMemo(
     () =>
@@ -398,6 +399,18 @@ const PurchaseOrdersPage: React.FC = () => {
         .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
         .filter((row): row is PurchaseOrder => row != null),
     [selectedRowKeys],
+  );
+
+  const purchaseOrderHighlightOverdueToolbar = useMemo(
+    () => (
+      <Space key="highlight-overdue-switch" align="center">
+        <Switch checked={highlightDeliveryOverdue} onChange={setHighlightDeliveryOverdue} />
+        <span style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
+          {t('app.kuaizhizao.purchaseOrder.highlightOverdue')}
+        </span>
+      </Space>
+    ),
+    [highlightDeliveryOverdue, t],
   );
 
   const purchaseOrderAuditBatchHandlers = useMemo(
@@ -2063,7 +2076,7 @@ const PurchaseOrdersPage: React.FC = () => {
           onClick:
             (statistics.pending_review_count ?? 0) > 0
               ? () => {
-                  tableSearchFormRef.current?.setFieldsValue?.({ lifecycle: '待审核' });
+                  tableSearchFormRef.current?.setFieldsValue?.({ status: 'PENDING_REVIEW' });
                   actionRef.current?.reload?.();
                 }
               : undefined,
@@ -2705,6 +2718,11 @@ const PurchaseOrdersPage: React.FC = () => {
 
   return (
     <>
+      <style>{`
+        .purchase-order-row-overdue td.ant-table-cell {
+          background: var(--ant-color-warning-bg) !important;
+        }
+      `}</style>
       <ListPageTemplate statCards={statCards}>
         <UniTable<PurchaseOrder>
           columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-orders"
@@ -2712,6 +2730,11 @@ const PurchaseOrdersPage: React.FC = () => {
           formRef={tableSearchFormRef}
           actionRef={actionRef}
           rowKey="id"
+          rowClassName={(record) =>
+            highlightDeliveryOverdue && isPurchaseOrderDeliveryOverdue(record, purchaseOrderAuditEnabled)
+              ? 'purchase-order-row-overdue'
+              : ''
+          }
           columns={columns}
           showAdvancedSearch={true}
           showCreateButton={false}
@@ -2841,6 +2864,7 @@ const PurchaseOrdersPage: React.FC = () => {
           }}
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
+          toolbar={{ actions: [purchaseOrderHighlightOverdueToolbar] }}
           request={async (params, _sort, _filter, searchFormValues) => {
             try {
               const apiParams: Record<string, unknown> = {

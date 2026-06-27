@@ -9,6 +9,7 @@ import { Button, DatePicker, Form, Input, InputNumber, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import PriceTypeSwitch from '../../../../../components/price-type-switch/PriceTypeSwitch';
+import { DEFAULT_SALES_PRICE_TYPE, salesFormPriceType } from '../shared/salesPriceType';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
   DOCUMENT_DETAIL_AMOUNT_STYLE,
@@ -84,7 +85,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
     <>
       <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
         {({ getFieldValue }) => {
-          const priceType = getFieldValue('price_type') ?? 'tax_exclusive';
+          const priceType = salesFormPriceType(getFieldValue('price_type'));
           const showTaxColumns = priceType === 'tax_inclusive';
           const detailColumns = [
                     {

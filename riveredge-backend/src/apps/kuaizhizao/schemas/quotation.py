@@ -13,6 +13,8 @@ from datetime import datetime, date
 from typing import Optional, List, Dict, Any
 from decimal import Decimal
 from pydantic import Field, model_validator
+
+from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
 from core.schemas.base import BaseSchema
 from apps.kuaizhizao.services.document_action_policy.types import QuotationCapabilities
 
@@ -89,7 +91,7 @@ class QuotationBase(BaseSchema):
     total_amount: Decimal = Field(Decimal("0"), ge=0, description="总金额（优惠后）")
     discount_amount: Decimal = Field(Decimal("0"), ge=0, description="整单优惠金额")
     price_type: Optional[str] = Field(
-        "tax_exclusive",
+        DEFAULT_SALES_PRICE_TYPE,
         max_length=20,
         description="价格类型：含税(tax_inclusive)/不含税(tax_exclusive)",
     )

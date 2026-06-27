@@ -58,6 +58,11 @@ export interface ShipmentNoticeItem {
   notes?: string;
 }
 
+export interface ShipmentNoticeNotifyPayload {
+  warehouse_id?: number;
+  warehouse_name?: string;
+}
+
 export const shipmentNoticeApi = {
   list: async (params?: Record<string, any>) =>
     apiRequest('/apps/kuaizhizao/shipment-notices', { method: 'GET', params }),
@@ -66,8 +71,8 @@ export const shipmentNoticeApi = {
     apiRequest(`/apps/kuaizhizao/shipment-notices/${id}`, { method: 'PUT', data }),
   delete: async (id: string) => apiRequest(`/apps/kuaizhizao/shipment-notices/${id}`, { method: 'DELETE' }),
   get: async (id: string) => apiRequest(`/apps/kuaizhizao/shipment-notices/${id}`, { method: 'GET' }),
-  notify: async (id: string) =>
-    apiRequest(`/apps/kuaizhizao/shipment-notices/${id}/notify`, { method: 'POST' }),
+  notify: async (id: string, data?: ShipmentNoticeNotifyPayload) =>
+    apiRequest(`/apps/kuaizhizao/shipment-notices/${id}/notify`, { method: 'POST', data: data ?? {} }),
   withdraw: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/shipment-notices/${id}/withdraw`, { method: 'POST' }),
 };

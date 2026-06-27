@@ -38,9 +38,22 @@ class ReceiptNoticeCreate(ReceiptNoticeBase):
     items: Optional[List["ReceiptNoticeItemCreate"]] = Field(None, description="通知明细列表")
 
 
-class ReceiptNoticeUpdate(ReceiptNoticeBase):
-    """收货通知单更新schema"""
+class ReceiptNoticeUpdate(BaseSchema):
+    """收货通知单更新 schema（字段均可选，与 service exclude_unset 部分更新一致）。"""
     notice_code: Optional[str] = Field(None, max_length=50, description="通知单编码")
+    purchase_order_id: Optional[int] = Field(None, description="采购订单ID")
+    purchase_order_code: Optional[str] = Field(None, max_length=50, description="采购订单编码")
+    supplier_id: Optional[int] = Field(None, description="供应商ID")
+    supplier_name: Optional[str] = Field(None, max_length=200, description="供应商名称")
+    supplier_contact: Optional[str] = Field(None, max_length=100, description="供应商联系人")
+    supplier_phone: Optional[str] = Field(None, max_length=50, description="供应商电话")
+    warehouse_id: Optional[int] = Field(None, description="入库仓库ID")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="入库仓库名称")
+    planned_receipt_date: Optional[date] = Field(None, description="计划收货日期")
+    status: Optional[str] = Field(None, max_length=20, description="通知状态")
+    notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    items: Optional[List["ReceiptNoticeItemCreate"]] = Field(None, description="通知明细列表")
 
 
 class ReceiptNoticeResponse(ReceiptNoticeBase):

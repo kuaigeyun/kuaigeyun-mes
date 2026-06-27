@@ -66,6 +66,7 @@ function inferAuditNodeKey(apiPrefix?: string): string {
   if (prefix.includes('/productions/reporting') || prefix.includes('/reporting')) return 'reporting_record';
   if (prefix.includes('/demands')) return 'demand';
   if (prefix.includes('/quotation')) return 'quotation';
+  if (prefix.includes('/shipment-notices')) return 'shipment_notice';
   return '';
 }
 
@@ -87,6 +88,7 @@ function inferResourcePrefix(apiPrefix?: string): string {
   if (prefix.includes('/apps/kuaizhizao/quality/incoming-inspection')) return 'kuaizhizao:incoming-inspection';
   if (prefix.includes('/apps/kuaizhizao/quality/process-inspection')) return 'kuaizhizao:process-inspection';
   if (prefix.includes('/apps/kuaizhizao/quality/finished-goods-inspection')) return 'kuaizhizao:finished-goods-inspection';
+  if (prefix.includes('/apps/kuaizhizao/shipment-notices')) return 'kuaizhizao:shipment-notice';
   if (prefix.includes('/apps/kuaicaiwu/finance/receivables')) return 'kuaicaiwu:receivable';
   if (prefix.includes('/apps/kuaicaiwu/finance/payables')) return 'kuaicaiwu:payable';
   if (prefix.includes('/apps/kuaicaiwu/finance/purchase-invoices')) return 'kuaicaiwu:purchase-invoice';
@@ -114,6 +116,8 @@ function inferResourceByNodeKey(nodeKey?: string): string {
     finished_goods_inspection: 'kuaizhizao:finished-goods-inspection',
     quality_inspection: 'kuaizhizao:quality-inspection',
     oqc_inspection: 'kuaizhizao:oqc-inspection',
+    shipment_notice: 'kuaizhizao:shipment-notice',
+    sales_delivery: 'kuaizhizao:outbound',
     receivable: 'kuaicaiwu:receivable',
     payable: 'kuaicaiwu:payable',
     bom_change: 'kuaiplm:change',
@@ -278,7 +282,6 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
 
   const enabledForLabels = auditFeatureEnabled;
   const approveLabel = enabledForLabels ? '审核' : '确认';
-  const revokeLabel = enabledForLabels ? '撤销审核' : '撤销';
   const effectiveSubmitLabel = !enabledForLabels && submitActionLabel.includes('审核')
     ? submitActionLabel.replace(/审核/g, '').trim() || '提交'
     : submitActionLabel;
@@ -364,7 +367,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     if (action === 'submit') return effectiveSubmitLabel;
     if (action === 'approve') return approveLabel;
     if (action === 'reject') return '驳回';
-    if (action === 'revoke') return revokeLabel;
+    if (action === 'revoke') return rowActionLabel('revoke');
     if (action === 'transfer') return '转交';
     if (action === 'add_sign') return '加签';
     if (action === 'delegate') return '委托';
@@ -506,8 +509,6 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     inlineButtons.push(
       renderActionButton('revoke', {
         key: 'audit-revoke',
-        label: revokeLabel,
-        labelKeep: true,
         loading: loadingAction === 'revoke',
         disabled: isBusy && loadingAction !== 'revoke',
         onClick: () => openActionModal('revoke'),

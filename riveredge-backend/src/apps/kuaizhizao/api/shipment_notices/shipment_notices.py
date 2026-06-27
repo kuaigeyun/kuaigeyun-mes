@@ -9,7 +9,7 @@ Date: 2026-02-22
 
 import uuid
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTTPException, status as http_status
+from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTTPException, status as http_status, Body
 from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
 
@@ -22,6 +22,7 @@ from apps.kuaizhizao.services.shipment_notice_service import ShipmentNoticeServi
 from apps.kuaizhizao.schemas.shipment_notice import (
     ShipmentNoticeCreate,
     ShipmentNoticeUpdate,
+    ShipmentNoticeNotify,
     ShipmentNoticeResponse,
     ShipmentNoticeListResponse,
     ShipmentNoticeWithItemsResponse,
@@ -156,9 +157,15 @@ async def delete_shipment_notice(
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/{notice_id}/notify", response_model=ShipmentNoticeResponse, summary="Notify warehouse")
+@router.post(
+    "/{notice_id}/notify",
+    response_model=ShipmentNoticeResponse,
+    summary="Notify warehouse",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:shipment-notice:update"))],
+)
 async def notify_warehouse(
     notice_id: int = Path(..., description="通知单ID"),
+    notify_data: ShipmentNoticeNotify = Body(default_factory=ShipmentNoticeNotify),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -168,10 +175,13 @@ async def notify_warehouse(
             tenant_id=tenant_id,
             notice_id=notice_id,
             notified_by=current_user.id,
+            notify_data=notify_data,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except ValidationError as e:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 

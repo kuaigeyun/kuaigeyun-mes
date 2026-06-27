@@ -883,8 +883,13 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
         records = await query.offset(skip).limit(limit).order_by("-reported_at").all()
         from core.services.approval.audit_record_enricher import enrich_items
+        from apps.kuaizhizao.services.document_lifecycle_service import get_reporting_record_lifecycle
 
-        rows = [ReportingRecordListResponse.model_validate(record) for record in records]
+        rows = []
+        for record in records:
+            resp = ReportingRecordListResponse.model_validate(record)
+            resp.lifecycle = get_reporting_record_lifecycle(record)
+            rows.append(resp)
         rows = await enrich_items(tenant_id, "reporting_record", rows)
         return enrich_reporting_record_list_capabilities(records, rows)
 

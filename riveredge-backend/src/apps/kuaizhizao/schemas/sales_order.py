@@ -15,6 +15,7 @@ from decimal import Decimal
 from pydantic import Field, field_validator, model_validator
 from core.schemas.base import BaseSchema
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
+from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
 from apps.kuaizhizao.services.document_action_policy.types import SalesOrderCapabilities
 
 
@@ -98,7 +99,7 @@ class SalesOrderBase(BaseSchema):
     # 金额信息
     total_quantity: Decimal = Field(Decimal("0"), ge=0, description="总数量")
     total_amount: Decimal = Field(Decimal("0"), ge=0, description="总金额")
-    price_type: Optional[str] = Field("tax_exclusive", max_length=20, description="价格类型：含税(tax_inclusive)/不含税(tax_exclusive)")
+    price_type: Optional[str] = Field(DEFAULT_SALES_PRICE_TYPE, max_length=20, description="价格类型：含税(tax_inclusive)/不含税(tax_exclusive)")
     discount_amount: Decimal = Field(Decimal("0"), ge=0, description="整单优惠金额")
     
     # 状态

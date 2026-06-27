@@ -74,9 +74,10 @@ def derive_sales_contract_capabilities(
         "sales_contract.update.not_draft" if not update_allowed else None,
     )
 
+    delete_allowed = _is_draft(status) or _is_pending_review(status)
     delete_cap = _cap(
-        _is_draft(status),
-        "sales_contract.delete.not_draft" if not _is_draft(status) else None,
+        delete_allowed,
+        "sales_contract.delete.not_draft" if not delete_allowed else None,
     )
 
     submit_cap = _cap(

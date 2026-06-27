@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from apps.kuaizhizao.services.document_action_policy.types import PurchaseInquiryCapabilities
+from core.schemas.base import BaseSchema
 
 
 class PurchaseInquiryItemBase(BaseModel):
@@ -139,8 +140,7 @@ class PurchaseInquiryUpdate(BaseModel):
     vendors: Optional[List[PurchaseInquiryVendorCreate]] = None
 
 
-class PurchaseInquiryResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class PurchaseInquiryResponse(BaseSchema):
 
     id: int
     tenant_id: int

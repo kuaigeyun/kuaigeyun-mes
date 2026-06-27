@@ -23,6 +23,8 @@ import {
   fetchShipmentNoticesForOqc,
 } from '../components/inspectionCreateSourceUtils';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { oqcInspectionRowGates } from '../../../../../hooks/useDocumentCapabilities';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
@@ -44,6 +46,11 @@ const OQCInspectionPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const oqcPerms = useResourcePermissions(OQC_RESOURCE);
   const { canCreate, canUpdate } = oqcPerms;
+  const oqcAuditEnabled = useAuditRequired('oqc_inspection', false);
+  const oqcAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<OQCInspection>({ t, auditEnabled: oqcAuditEnabled }),
+    [t, oqcAuditEnabled],
+  );
   const actionRef = useRef<ActionType>(null);
   const conductFormRef = useRef<any>(null);
   const [conductVisible, setConductVisible] = useState(false);
@@ -178,6 +185,7 @@ const OQCInspectionPage: React.FC = () => {
         width: 100,
         render: (_, row) => renderReleaseDecisionTag(t, row.release_decision),
       },
+      ...(oqcAuditColumn ? [oqcAuditColumn] : []),
       { title: t('app.kuaizhizao.quality.common.columns.status'), dataIndex: 'status', width: 90 },
       { title: t('app.kuaizhizao.quality.common.columns.createdAt'), dataIndex: 'created_at', valueType: 'dateTime', width: 170 },
       {
@@ -235,7 +243,7 @@ const OQCInspectionPage: React.FC = () => {
         },
       },
     ],
-    [t, oqcPerms],
+    [t, oqcPerms, oqcAuditColumn],
   );
 
   return (

@@ -43,9 +43,29 @@ class ShipmentNoticeCreate(ShipmentNoticeBase):
     items: Optional[List["ShipmentNoticeItemCreate"]] = Field(None, description="通知明细列表")
 
 
-class ShipmentNoticeUpdate(ShipmentNoticeBase):
-    """发货通知单更新schema"""
+class ShipmentNoticeUpdate(BaseSchema):
+    """发货通知单更新 schema（字段均可选，与 service exclude_unset 部分更新一致）。"""
     notice_code: Optional[str] = Field(None, max_length=50, description="通知单编码")
+    sales_order_id: Optional[int] = Field(None, description="销售订单ID")
+    sales_order_code: Optional[str] = Field(None, max_length=50, description="销售订单编码")
+    customer_id: Optional[int] = Field(None, description="客户ID")
+    customer_name: Optional[str] = Field(None, max_length=200, description="客户名称")
+    customer_contact: Optional[str] = Field(None, max_length=100, description="客户联系人")
+    customer_phone: Optional[str] = Field(None, max_length=50, description="客户电话")
+    warehouse_id: Optional[int] = Field(None, description="出库仓库ID")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="出库仓库名称")
+    planned_ship_date: Optional[date] = Field(None, description="计划发货日期")
+    shipping_address: Optional[str] = Field(None, description="收货地址")
+    status: Optional[str] = Field(None, max_length=20, description="通知状态")
+    notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    items: Optional[List["ShipmentNoticeItemCreate"]] = Field(None, description="通知明细列表")
+
+
+class ShipmentNoticeNotify(BaseSchema):
+    """通知仓库请求体（单据未指定仓库时须传入 warehouse_id）。"""
+    warehouse_id: Optional[int] = Field(None, description="出库仓库ID")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="出库仓库名称")
 
 
 class ShipmentNoticeResponse(ShipmentNoticeBase):

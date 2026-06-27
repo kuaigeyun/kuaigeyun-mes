@@ -10,6 +10,8 @@ status / review_status），因此列表无需逐行查实例——由 status / 
 phase 仍由 status / review_status 派生，UI 须展示审核状态列。
 
 phase ∈ ``draft`` | ``pending`` | ``approved`` | ``rejected`` | ``none``
+
+撤销审核落点见 ``audit_transition.resolve_revoke_landing_phase``（人工→pending，自动→draft）。
 """
 
 from __future__ import annotations
@@ -27,12 +29,18 @@ _APPROVED_ONGOING = {
     # 报价单：客户确认 / 已转单后不再展示反审核（与 revoke_review 仅允许「已发送」一致）
     "已接受", "accepted", "已转订单", "converted",
 }
+# 已通过态仍禁止撤销审核的主状态（终态 / 报价转单后）
+_REVOKE_DENIED_STATUSES = frozenset({
+    "completed", "已完成",
+    "closed", "已关闭",
+    "cancelled", "已取消",
+    "已接受", "accepted",
+    "已转订单", "converted",
+})
 _REJECTED_STATUS = {"rejected", "已驳回", "审核驳回"}
 _REVIEW_APPROVED = {"approved", "审核通过", "已通过", "通过", "已审核"}
 _REVIEW_REJECTED = {"rejected", "已驳回", "审核驳回"}
 _REVIEW_PENDING = {"待审核", "pending_review", "pending_approval", "已提交"}
-_DEMAND_REVOKABLE_CONFIRMED = {"confirmed", "已确认", "已生效"}
-_PURCHASE_ORDER_REVOKABLE_CONFIRMED = {"confirmed", "已确认"}
 
 # 提交后仍保持主状态为草稿、仅 review_status 进入待审的单据（如采购询价）
 _DRAFT_REVIEW_PENDING_ENTITY_TYPES = frozenset({"purchase_inquiry"})
@@ -48,7 +56,11 @@ _QUALITY_INSPECTION_PENDING_MAIN_STATUSES = frozenset({
     "已检验", "inspected", "待审核", "pending_review",
 })
 
-# phase -> 该相位下允许的审核动作（前端据此渲染按钮，无需任何本地状态数组）
+# 审核已通过、主 status 进入业务履约态（无 review_status 字段的单据）
+_ENTITY_APPROVED_BUSINESS_STATUSES: Dict[str, frozenset[str]] = {
+    "shipment_notice": frozenset({"待发货", "已通知", "已出库", "notified", "shipped"}),
+    "sales_delivery": frozenset({"待出库", "已出库", "completed", "已完成"}),
+}
 _ALLOWED_ACTIONS_BY_PHASE: Dict[str, List[str]] = {
     "draft": ["submit"],
     "rejected": ["submit"],
@@ -101,21 +113,15 @@ def derive_audit_phase(
         phase = "pending"
     elif s in _AUDITED_STRICT or s in _APPROVED_ONGOING or r in _REVIEW_APPROVED:
         phase = "approved"
+    elif entity_type in _ENTITY_APPROVED_BUSINESS_STATUSES and s in _ENTITY_APPROVED_BUSINESS_STATUSES[entity_type]:
+        phase = "approved"
     else:
         phase = "none"
 
     allowed = list(_ALLOWED_ACTIONS_BY_PHASE[phase])
-    # 反审核仅在「严格已审核」阶段可用；已确认/已生效/执行中等下游阶段默认不再展示审核动作。
-    # demand 特例：服务层允许 CONFIRMED -> PENDING_REVIEW（unapprove_demand），
-    # 审核相位必须与服务能力保持一致，避免出现“生命周期显示已审核但无撤销审核入口”的多源冲突。
+    # 已通过态默认允许 revoke；终态或报价转单后禁止（业务能力门控见 audit_capability_gate）
     if phase == "approved":
-        allow_revoke = bool(
-            s in _AUDITED_STRICT or (r in _REVIEW_APPROVED and s not in _APPROVED_ONGOING)
-        )
-        if entity_type == "demand" and s in _DEMAND_REVOKABLE_CONFIRMED:
-            allow_revoke = True
-        if entity_type == "purchase_order" and s in _PURCHASE_ORDER_REVOKABLE_CONFIRMED:
-            allow_revoke = True
+        allow_revoke = s not in _REVOKE_DENIED_STATUSES
         if not allow_revoke:
             allowed = []
 
@@ -125,12 +131,14 @@ def derive_audit_phase(
         else:
             allowed = []
 
-    # 审核关闭（自动通过）：仍展示 phase，但不提供人工审/反审/撤回（仅保留提交→后端自动通过）
+    # 审核关闭（自动通过）：不提供人工审/驳回；已通过态仍保留 revoke，便于撤回后再编辑
     if not enabled:
         if phase in ("draft", "rejected"):
             allowed = ["submit"]
         elif phase == "pending":
             allowed = ["withdraw"]
+        elif phase == "approved":
+            allowed = [a for a in allowed if a == "revoke"]
         else:
             allowed = []
 

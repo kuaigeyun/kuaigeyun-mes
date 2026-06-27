@@ -222,7 +222,7 @@ const LazyUniLifecycleStepper = lazy(() =>
   import('../../../../../components/uni-lifecycle').then(m => ({ default: m.UniLifecycleStepper }))
 )
 const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-material-select'))
-import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD } from '../../../utils/workOrderLifecycle'
+import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD, isWorkOrderPlannedEndOverdue } from '../../../utils/workOrderLifecycle'
 import { commitListPageSearchParams } from '../../../../../utils/listLifecycleStage'
 import { UniLifecycle } from '../../../../../components/uni-lifecycle'
 import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting'
@@ -714,14 +714,6 @@ function renderProductionManufacturingStacked(record: {
   )
 }
 
-function isWorkOrderListOverdue(record: WorkOrder): boolean {
-  return Boolean(
-    record.planned_end_date &&
-      ['released', 'in_progress', '已下达', '执行中'].includes(record.status || '') &&
-      dayjs(record.planned_end_date).isBefore(dayjs(), 'day'),
-  )
-}
-
 function renderWorkOrderListLifecycle(record: WorkOrder): React.ReactNode {
   const lifecycle = getWorkOrderLifecycle(record)
   const activeStage = lifecycle.mainStages?.find((s) => s.status === 'active')
@@ -949,7 +941,7 @@ function WorkOrderProductCodeCell({
           <>
             {renderWorkOrderPriorityTag(record.priority, secondaryTagStyle)}
             {renderWorkOrderTreeChildTags(record, secondaryTagStyle)}
-            {isWorkOrderListOverdue(record) ? (
+            {isWorkOrderPlannedEndOverdue(record) ? (
               <Tag color="error" style={secondaryTagStyle}>
                 逾期
               </Tag>
@@ -1296,6 +1288,7 @@ const WorkOrdersPage: React.FC = () => {
     actionRef.current?.reload?.()
   }, [])
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  const [highlightPlannedEndOverdue, setHighlightPlannedEndOverdue] = useState(false)
 
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['workOrderStatistics'] })
@@ -5948,16 +5941,6 @@ const WorkOrdersPage: React.FC = () => {
           derivedItems.push(
             makeItem('rework', t('app.kuaizhizao.workOrder.actionCreateRework'), () => handleCreateRework(record), { icon: <RetweetOutlined /> }),
           )
-          if (isReleased || isInProgress) {
-            derivedItems.push(
-              makeItem(
-                'pushProductionPickingOutbound',
-                pushToOutboundAction.label,
-                () => handlePushToProductionPickingOutbound(record),
-                { icon: <SendOutlined /> },
-              ),
-            )
-          }
           if (isCompleted) {
             derivedItems.push(
               makeItem(
@@ -5966,22 +5949,6 @@ const WorkOrdersPage: React.FC = () => {
                 () => {
                   void handleNotifyInbound(record)
                 },
-                { icon: <InboxOutlined /> },
-              ),
-            )
-            derivedItems.push(
-              makeItem(
-                'pushFinishedGoodsInbound',
-                pushToInboundAction.label,
-                () => handlePushToFinishedGoodsInbound(record),
-                { icon: <InboxOutlined /> },
-              ),
-            )
-            derivedItems.push(
-              makeItem(
-                'pushProductionReturnInbound',
-                pushToProductionReturnInboundAction.label,
-                () => handlePushToProductionReturnInbound(record),
                 { icon: <InboxOutlined /> },
               ),
             )
@@ -6183,9 +6150,24 @@ const WorkOrdersPage: React.FC = () => {
       if (anchorToRoot.has(key)) {
         return 'wo-operation-panel-anchor-row'
       }
+      if (highlightPlannedEndOverdue && isWorkOrderPlannedEndOverdue(record)) {
+        return 'work-order-row-overdue'
+      }
       return ''
     },
-    [operationExpandedRowKeys, workOrderTreeExpandedRowKeys],
+    [operationExpandedRowKeys, workOrderTreeExpandedRowKeys, highlightPlannedEndOverdue],
+  )
+
+  const workOrderHighlightOverdueToolbar = useMemo(
+    () => (
+      <Space key="highlight-overdue-switch" align="center">
+        <Switch checked={highlightPlannedEndOverdue} onChange={setHighlightPlannedEndOverdue} />
+        <span style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
+          {t('app.kuaizhizao.workOrder.highlightOverdue')}
+        </span>
+      </Space>
+    ),
+    [highlightPlannedEndOverdue, t],
   )
 
   const workOrderTableExpandable = useMemo(
@@ -6349,6 +6331,11 @@ const WorkOrdersPage: React.FC = () => {
 
   return (
     <>
+      <style>{`
+        .work-order-row-overdue td.ant-table-cell {
+          background: var(--ant-color-warning-bg) !important;
+        }
+      `}</style>
       <ListPageTemplate statCards={statCards}>
         <UniTable<WorkOrder>
           className="kuaizhizao-work-orders-table"
@@ -6427,6 +6414,7 @@ const WorkOrdersPage: React.FC = () => {
           }}
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
+          toolbar={{ actions: [workOrderHighlightOverdueToolbar] }}
           toolBarRender={() => [
             <UniPullCreateToolbar
               key="create-work-order-with-pull"

@@ -37,6 +37,11 @@ import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { deferConvertLineItemsByPriceType, setFormPriceType } from '../../../../../utils/priceTypeSwitch';
+import {
+  DEFAULT_SALES_PRICE_TYPE,
+  normalizeSalesPriceType,
+  salesFormPriceType,
+} from '../shared/salesPriceType';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { getMaterialField } from '../../../../../components/uni-material-batch-picker/utils';
@@ -307,7 +312,7 @@ const calcQuotationLineAmounts = (
   const qty = toSafeNumber(qtyInput);
   const unitPriceCents = toCents(priceInput);
   const taxRate = toSafeNumber(taxRateInput);
-  const priceType = priceTypeInput ?? 'tax_exclusive';
+  const priceType = salesFormPriceType(priceTypeInput);
 
   if (priceType === 'tax_inclusive') {
     const inclCents = Math.round(qty * unitPriceCents);
@@ -493,7 +498,7 @@ const QuotationMaterialSelectCell: React.FC<{
 /** 不含税模式下仅展示未税金额列；含税模式下列为可编辑价税合计，本组件仅用于不含税简化列 */
 const QuotationAmountCell: React.FC<{ index: number }> = ({ index }) => {
   const row = Form.useWatch(['items', index]);
-  const priceType = Form.useWatch('price_type') ?? 'tax_exclusive';
+  const priceType = salesFormPriceType(Form.useWatch('price_type'));
   const line = calcQuotationLineAmounts(row?.quote_quantity, row?.unit_price, row?.tax_rate, priceType);
   return (
     <AmountDisplay
@@ -678,7 +683,7 @@ const QuotationsPage: React.FC = () => {
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
   const formRef = useRef<any>(null);
-  const lastPriceTypeRef = useRef<'tax_exclusive' | 'tax_inclusive'>('tax_exclusive');
+  const lastPriceTypeRef = useRef<PriceTypeValue>(DEFAULT_SALES_PRICE_TYPE);
   const [quotationEditingIncl, setQuotationEditingIncl] = useState<{ index: number; value: number | null } | null>(
     null,
   );
@@ -1031,16 +1036,20 @@ const QuotationsPage: React.FC = () => {
         ];
         const canEdit = record.capabilities?.update?.allowed === true && quotationPerms.canUpdate;
         const deletable = record.capabilities?.delete?.allowed === true && quotationPerms.canDelete;
-        parts.push(
-          <Button {...rowActionKind('update')} key="e" disabled={!canEdit} onClick={() => canEdit && handleEdit(record)}>
-            {t('common.edit')}
-          </Button>
-        );
-        parts.push(
-          <Button {...rowActionKind('delete')} key="del" disabled={!deletable} onClick={() => deletable && handleDelete(record)}>
-            {t('common.delete')}
-          </Button>
-        );
+        if (canEdit) {
+          parts.push(
+            <Button {...rowActionKind('update')} key="e" onClick={() => handleEdit(record)}>
+              {t('common.edit')}
+            </Button>,
+          );
+        }
+        if (deletable) {
+          parts.push(
+            <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)}>
+              {t('common.delete')}
+            </Button>,
+          );
+        }
         parts.push(
           <UniWorkflowActions
             key="quotation-workflow"
@@ -1172,7 +1181,7 @@ const QuotationsPage: React.FC = () => {
   };
 
   const handleItemImport = (data: any[][]) => {
-    const priceTypeForm = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
+    const priceTypeForm = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
     const rows = data.slice(2);
     const newItems = rows
       .map((row) => {
@@ -2045,18 +2054,18 @@ const QuotationsPage: React.FC = () => {
     setPreviewCode(null);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
-    lastPriceTypeRef.current = 'tax_exclusive';
+    lastPriceTypeRef.current = DEFAULT_SALES_PRICE_TYPE;
     formRef.current?.setFieldsValue({
       items: [defaultQuoteItem],
       currency_code: defaultQuotationCurrency,
-      price_type: 'tax_exclusive',
+      price_type: DEFAULT_SALES_PRICE_TYPE,
       quotation_date: dayjs(),
     });
     setTimeout(() => {
       formRef.current?.setFieldsValue({
         items: [defaultQuoteItem],
         currency_code: defaultQuotationCurrency,
-        price_type: 'tax_exclusive',
+        price_type: DEFAULT_SALES_PRICE_TYPE,
         quotation_date: dayjs(),
       });
       if (prefillCustomerId != null) {
@@ -2129,7 +2138,7 @@ const QuotationsPage: React.FC = () => {
         currency_code: detail.currency_code ?? defaultQuotationCurrency,
         notes: detail.notes,
         attachments: mapAttachmentsToUploadList(detail.attachments),
-        price_type: detail.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
+        price_type: normalizeSalesPriceType(detail.price_type),
         discount_amount: Number(detail.discount_amount ?? 0) || 0,
         items: (detail.items || []).map((it) => ({
           material_id: it.material_id!,
@@ -2147,8 +2156,7 @@ const QuotationsPage: React.FC = () => {
       };
       setTimeout(() => {
         formRef.current?.setFieldsValue(editValues);
-        lastPriceTypeRef.current =
-          editValues.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive';
+        lastPriceTypeRef.current = normalizeSalesPriceType(editValues.price_type);
       }, 100);
     } catch {
       messageApi.error(t('app.kuaizhizao.quotation.detailFailed'));
@@ -2212,7 +2220,7 @@ const QuotationsPage: React.FC = () => {
         currency_code: values.currency_code ?? defaultQuotationCurrency,
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
-        price_type: values.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
+        price_type: normalizeSalesPriceType(values.price_type),
         discount_amount: Number(values.discount_amount ?? 0) || 0,
         items: submitItems,
       },
@@ -2299,7 +2307,7 @@ const QuotationsPage: React.FC = () => {
       currency_code: values.currency_code ?? defaultQuotationCurrency,
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
-      price_type: values.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
+      price_type: normalizeSalesPriceType(values.price_type),
       discount_amount: Number(values.discount_amount ?? 0) || 0,
       items: submitItems,
     });
@@ -2454,7 +2462,7 @@ const QuotationsPage: React.FC = () => {
       const quotationDate = formRef.current?.getFieldValue('quotation_date');
       const asOf =
         quotationDate != null ? (dayjs.isDayjs(quotationDate) ? quotationDate : dayjs(quotationDate)) : dayjs();
-      const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
+      const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
       const { unitPrice, taxRate } = await resolveOrderLineSalePrice(
         customerId ? Number(customerId) : undefined,
         materialId ? Number(materialId) : undefined,
@@ -2484,7 +2492,7 @@ const QuotationsPage: React.FC = () => {
 
   const appendQuotationItemsFromMaterials = useCallback(
     async (selected: Material[]) => {
-      const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
+      const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
       const mainDelivery = formRef.current?.getFieldValue('delivery_date');
       const defaultDelivery =
         mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
@@ -2709,11 +2717,11 @@ const QuotationsPage: React.FC = () => {
         </Col>
       </Row>
       <ProFormText name="customer_name" hidden />
-      <ProFormText name="price_type" hidden />
+      <ProFormText name="price_type" hidden initialValue={DEFAULT_SALES_PRICE_TYPE} />
 
       <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
         {({ getFieldValue }: any) => {
-          const priceType = getFieldValue('price_type') ?? 'tax_exclusive';
+          const priceType = salesFormPriceType(getFieldValue('price_type'));
           const showTaxColumns = priceType === 'tax_inclusive';
           const quotationDetailColumns = [
                       {
@@ -3206,7 +3214,7 @@ const QuotationsPage: React.FC = () => {
                     ? {
                         quotation_date: dayjs(),
                         currency_code: defaultQuotationCurrency,
-                        price_type: 'tax_exclusive',
+                        price_type: DEFAULT_SALES_PRICE_TYPE,
                         discount_amount: 0,
                       }
                     : undefined
@@ -3528,7 +3536,7 @@ const QuotationsPage: React.FC = () => {
                 const lifecycle = quotationLifecycleDetail;
                 const mainStages = lifecycle.mainStages ?? [];
                 return (
-                  <DetailLifecycleCollaborationBlock record={quotationDetail} auditEnabled={auditEnabled}>
+                  <DetailLifecycleCollaborationBlock record={quotationDetail} auditEnabled={quotationAuditRequired}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                       {mainStages.length > 0 ? (
                         <UniLifecycleStepper
@@ -3574,7 +3582,7 @@ const QuotationsPage: React.FC = () => {
                     tableLayout="fixed"
                     style={{ minWidth: QUOTATION_DETAIL_ITEMS_SCROLL_X }}
                     columns={(() => {
-                      const pt = quotationDetail.price_type ?? 'tax_exclusive';
+                      const pt = normalizeSalesPriceType(quotationDetail.price_type);
                       const showTax = pt === 'tax_inclusive';
                       type LineIt = NonNullable<Quotation['items']>[number];
                       return [

@@ -20,6 +20,11 @@ import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDa
 import { toApiDateString } from '../../../../../utils/formDate';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { deferConvertLineItemsByPriceType, setFormPriceType } from '../../../../../utils/priceTypeSwitch';
+import {
+  DEFAULT_SALES_PRICE_TYPE,
+  normalizeSalesPriceType,
+  salesFormPriceType,
+} from '../shared/salesPriceType';
 import type { PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 
 import type { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
@@ -664,7 +669,7 @@ const SalesContractsPage: React.FC = () => {
 
         contractDate != null ? (dayjs.isDayjs(contractDate) ? contractDate : dayjs(contractDate)) : dayjs();
 
-      const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
+      const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
 
       const full = material
         ? await resolveMaterialForPricing(material, materialList)
@@ -729,7 +734,7 @@ const SalesContractsPage: React.FC = () => {
 
         contractDate != null ? (dayjs.isDayjs(contractDate) ? contractDate : dayjs(contractDate)) : dayjs();
 
-      const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
+      const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
 
       const priced = await resolveSalesDocumentMaterialLinesPricing(selected, {
 
@@ -783,7 +788,7 @@ const SalesContractsPage: React.FC = () => {
 
   const handleItemImport = useCallback(
     (data: any[][]) => {
-      const priceTypeForm = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
+      const priceTypeForm = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
       const rows = data.slice(2);
       const newItems = rows
         .map((row) => {
@@ -929,7 +934,7 @@ const SalesContractsPage: React.FC = () => {
 
       valid_to: toApiDateString(values.valid_to),
 
-      price_type: values.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
+      price_type: normalizeSalesPriceType(values.price_type),
 
       currency_code: values.currency_code || 'CNY',
 
@@ -1009,7 +1014,7 @@ const SalesContractsPage: React.FC = () => {
         contract_type: 'single',
         contract_date: dayjs(),
         valid_from: dayjs(),
-        price_type: 'tax_exclusive',
+        price_type: DEFAULT_SALES_PRICE_TYPE,
         currency_code: 'CNY',
         discount_amount: 0,
         items: [{ ...defaultContractItem }],
@@ -1069,7 +1074,7 @@ const SalesContractsPage: React.FC = () => {
           contract_date: data.contract_date ? dayjs(data.contract_date) : undefined,
           valid_from: data.valid_from ? dayjs(data.valid_from) : undefined,
           valid_to: data.valid_to ? dayjs(data.valid_to) : undefined,
-          price_type: data.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
+          price_type: normalizeSalesPriceType(data.price_type),
           currency_code: data.currency_code || 'CNY',
           discount_amount: Number(data.discount_amount ?? 0) || 0,
           salesman_name: data.salesman_name,
@@ -1531,7 +1536,7 @@ const SalesContractsPage: React.FC = () => {
       </Row>
 
       <ProFormText name="customer_name" hidden />
-      <ProFormText name="price_type" hidden initialValue="tax_exclusive" />
+      <ProFormText name="price_type" hidden initialValue={DEFAULT_SALES_PRICE_TYPE} />
 
       <Row gutter={16}>
 
@@ -2613,48 +2618,42 @@ const SalesContractsPage: React.FC = () => {
         render: (_, record) => {
           const canEdit = record.capabilities?.update?.allowed === true && contractPerms.canUpdate;
           const canDelete = record.capabilities?.delete?.allowed === true && contractPerms.canDelete;
-          return [
-
-              <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record.id!)}>
-
-                {t('app.kuaizhizao.salesOrder.viewDetail')}
-
-              </Button>,
-
-              <Button {...rowActionKind('update')} key="edit" disabled={!canEdit} onClick={() => canEdit && handleEdit(record)}>
+          const parts: React.ReactNode[] = [
+            <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record.id!)}>
+              {t('app.kuaizhizao.salesOrder.viewDetail')}
+            </Button>,
+          ];
+          if (canEdit) {
+            parts.push(
+              <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
                 {t('common.edit')}
               </Button>,
-
-              <Button {...rowActionKind('delete')} key="del" disabled={!canDelete} onClick={() => canDelete && handleDeleteDraft(record)}>
+            );
+          }
+          if (canDelete) {
+            parts.push(
+              <Button {...rowActionKind('delete')} key="del" onClick={() => handleDeleteDraft(record)}>
                 {t('common.delete')}
               </Button>,
-
-              <UniWorkflowActions
-                key="contract-workflow"
-                {...rowActionKind('skip')}
-                record={record}
-                entityName={t('app.kuaizhizao.salesContract.entityName')}
-                auditNodeKey="sales_contract"
-                resourcePrefix="kuaizhizao:sales-contract"
-                unifiedAudit
-                statusField="status"
-                reviewStatusField="review_status"
-                pendingStatuses={['待审核', 'pending_review', 'PENDING_REVIEW', '已发送', 'sent']}
-                approvedStatuses={['已审核', '已确认', '审核通过', 'approved', 'APPROVED']}
-                rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
-              />,
-
-              record.capabilities?.push_to_sales_order?.allowed ? (
-
-                <Button {...rowActionKind('release')} key="release" onClick={() => openReleaseModal(record)}>
-
-                  {pushToSalesOrderAction.label}
-
-                </Button>
-
-              ) : null,
-
-            ].filter(Boolean);
+            );
+          }
+          parts.push(
+            <UniWorkflowActions
+              key="contract-workflow"
+              {...rowActionKind('skip')}
+              record={record}
+              entityName={t('app.kuaizhizao.salesContract.entityName')}
+              auditNodeKey="sales_contract"
+              resourcePrefix="kuaizhizao:sales-contract"
+              unifiedAudit
+              statusField="status"
+              reviewStatusField="review_status"
+              pendingStatuses={['待审核', 'pending_review', 'PENDING_REVIEW', '已发送', 'sent']}
+              approvedStatuses={['已审核', '已确认', '审核通过', 'approved', 'APPROVED']}
+              rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
+            />,
+          );
+          return parts;
         },
 
       },
@@ -2950,7 +2949,7 @@ const SalesContractsPage: React.FC = () => {
                   const text = first?.errors?.filter(Boolean)[0];
                   messageApi.error(text || t('components.layoutTemplates.formModal.checkFormHint'));
                 }}
-                initialValues={isCreatePage ? { items: [{ ...defaultContractItem }], discount_amount: 0 } : undefined}
+                initialValues={isCreatePage ? { items: [{ ...defaultContractItem }], discount_amount: 0, price_type: DEFAULT_SALES_PRICE_TYPE } : undefined}
               >
                 {renderCreateForm()}
               </ProForm>

@@ -6,17 +6,17 @@ import { createLifecycleResolver } from './createLifecycleResolver';
 
 export const getMaterialBorrowLifecycle = createLifecycleResolver({
   stageDefs: [
-    { key: 'pending', label: '待借出', labelKey: 'app.kuaizhizao.materialBorrow.status.pending' },
+    { key: 'pending_borrow', label: '待借出', labelKey: 'app.kuaizhizao.materialBorrow.status.pending' },
     { key: 'borrowed', label: '已借出', labelKey: 'app.kuaizhizao.materialBorrow.status.borrowed' },
     { key: 'cancelled', label: '已取消', labelKey: 'app.kuaizhizao.materialBorrow.status.cancelled' },
   ],
   statusToKey: {
-    待借出: 'pending',
+    待借出: 'pending_borrow',
     已借出: 'borrowed',
     已取消: 'cancelled',
   },
   nextStepSuggestions: {
-    pending: ['确认借出'],
+    pending_borrow: ['确认借出'],
     borrowed: ['归还'],
     cancelled: [],
   },

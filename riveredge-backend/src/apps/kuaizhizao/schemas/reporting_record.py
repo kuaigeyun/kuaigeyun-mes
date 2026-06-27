@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
+from core.schemas.base import BaseSchema
 from apps.kuaizhizao.services.document_action_policy.types import ReportingRecordCapabilities
 
 
@@ -99,7 +100,7 @@ class ReportingRecordResponse(ReportingRecordBase):
     )
 
 
-class ReportingRecordListResponse(BaseModel):
+class ReportingRecordListResponse(BaseSchema):
     """
     报工记录列表响应Schema
 
@@ -121,6 +122,7 @@ class ReportingRecordListResponse(BaseModel):
     status: str = Field(..., description="审核状态")
     reported_at: datetime = Field(..., description="报工时间")
     created_at: datetime = Field(..., description="创建时间")
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算）")
     capabilities: Optional[ReportingRecordCapabilities] = Field(
         None, description="业务态动作能力（document_action_policy）"
     )

@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 from apps.kuaizhizao.services.document_action_policy.types import SalesOrderChangeCapabilities
+from core.schemas.base import BaseSchema
 
 
 class OrderChangeItemBase(BaseModel):
@@ -73,7 +74,7 @@ class PurchaseOrderChangeUpdate(OrderChangeOrderBase):
     items: Optional[List[OrderChangeItemUpdate]] = None
 
 
-class OrderChangeListResponse(BaseModel):
+class OrderChangeListResponse(BaseSchema):
     id: int
     change_code: str
     source_order_id: int
@@ -94,9 +95,6 @@ class OrderChangeListResponse(BaseModel):
         None,
         description="业务态动作 capabilities（不含 RBAC）",
     )
-
-    class Config:
-        from_attributes = True
 
 
 class SalesOrderChangeListResponse(OrderChangeListResponse):

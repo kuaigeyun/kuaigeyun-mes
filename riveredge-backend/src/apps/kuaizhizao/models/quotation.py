@@ -9,6 +9,7 @@ Date: 2026-02-19
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
 
 
 class Quotation(BaseModel):
@@ -47,7 +48,7 @@ class Quotation(BaseModel):
     discount_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="整单优惠金额")
     price_type = fields.CharField(
         max_length=20,
-        default="tax_exclusive",
+        default=DEFAULT_SALES_PRICE_TYPE,
         description="价格类型：含税单价(tax_inclusive)/不含税单价(tax_exclusive)",
     )
 

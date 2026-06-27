@@ -11,6 +11,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from apps.kuaizhizao.services.document_action_policy.types import PurchaseRequisitionCapabilities
+from core.schemas.base import BaseSchema
 
 
 class PurchaseRequisitionItemBase(BaseModel):
@@ -58,9 +59,8 @@ class PurchaseRequisitionItemResponse(PurchaseRequisitionItemBase):
     updated_at: datetime
 
 
-class PurchaseRequisitionBase(BaseModel):
+class PurchaseRequisitionBase(BaseSchema):
     """采购申请头基础"""
-    model_config = ConfigDict(from_attributes=True)
 
     requisition_code: str = Field(..., max_length=50, description="申请编码")
     requisition_name: Optional[str] = Field(None, max_length=200, description="申请名称")

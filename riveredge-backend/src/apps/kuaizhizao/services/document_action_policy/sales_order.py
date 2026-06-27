@@ -210,13 +210,22 @@ def derive_sales_order_capabilities(
         withdraw_submit_reason if not withdraw_submit_allowed else None,
     )
 
-    # revoke_approval — 反审核（已审核或已驳回）
-    revoke_allowed = (
-        _is_strictly_audited_status(status) or _is_rejected_status(status)
-    ) and not _is_closed(status)
+    # revoke_approval — 已审核/已生效且审核通过，或已驳回（终态除外）
+    revoke_allowed = False
+    revoke_reason = "sales_order.revoke_approval.not_allowed"
+    if _is_rejected_status(status):
+        revoke_allowed = True
+        revoke_reason = None
+    elif _is_closed(status) or _is_completed_status(status) or _is_cancelled_status(status):
+        revoke_allowed = False
+    elif _is_review_approved(review_status) and (
+        _is_audited_status(status) or _is_confirmed(status)
+    ):
+        revoke_allowed = True
+        revoke_reason = None
     revoke_cap = _cap(
         revoke_allowed,
-        "sales_order.revoke_approval.not_allowed" if not revoke_allowed else None,
+        revoke_reason if not revoke_allowed else None,
     )
 
     push_ok, push_reason = _push_base(order)

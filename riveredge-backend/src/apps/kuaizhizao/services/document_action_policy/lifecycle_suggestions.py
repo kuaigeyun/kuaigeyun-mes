@@ -141,12 +141,10 @@ def sales_forecast_capabilities_to_suggestions(
 
 
 def sales_contract_capabilities_to_suggestions(caps: SalesContractCapabilities) -> List[str]:
+    """由 capabilities 派生 lifecycle next_step_suggestions（不含审核动作，审核见 audit 列）。"""
     suggestions: List[str] = []
-    _append_if_allowed(suggestions, caps.submit, "保存并提交审核")
-    _append_if_allowed(suggestions, caps.approve, "审核通过")
-    if caps.approve.allowed:
-        suggestions.append("驳回")
     _append_if_allowed(suggestions, caps.push_to_sales_order, "下推销售订单")
+    _append_if_allowed(suggestions, caps.create_change, "登记变更")
     _append_if_allowed(suggestions, caps.close, "关闭合同")
     return suggestions
 
@@ -176,7 +174,7 @@ def shipment_notice_capabilities_to_suggestions(
     _append_if_allowed(suggestions, caps.notify, "通知仓库")
     _append_if_allowed(suggestions, caps.update, "编辑通知明细")
     _append_if_allowed(suggestions, caps.withdraw, "撤回通知（回到待发货）")
-    if current_stage_key == "pending" and not suggestions:
+    if current_stage_key == "pending_ship" and not suggestions:
         return ["通知仓库", "编辑通知明细"]
     if current_stage_key == "notified" and not suggestions:
         return ["撤回通知（回到待发货）", "执行出库"]
@@ -191,7 +189,7 @@ def sales_return_capabilities_to_suggestions(
     suggestions: List[str] = []
     _append_if_allowed(suggestions, caps.confirm, "确认退货")
     _append_if_allowed(suggestions, caps.withdraw, "撤回确认（回到待退货）")
-    if current_stage_key == "pending":
+    if current_stage_key == "pending_return_goods":
         return suggestions or ["确认退货"]
     return suggestions
 

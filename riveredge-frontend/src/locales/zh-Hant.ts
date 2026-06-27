@@ -1670,6 +1670,7 @@ export default {
   'common.detail': '詳情',
   'common.view': '檢視',
   'common.delete': '刪除',
+  'common.remove': '移除',
   'common.fetchDetailFailed': '獲取詳情失敗',
   'common.selectMaterial': '選擇物料',
   'common.addDetail': '新增明細',

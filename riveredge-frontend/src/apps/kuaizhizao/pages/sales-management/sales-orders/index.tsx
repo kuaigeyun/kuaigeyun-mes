@@ -33,6 +33,11 @@ import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { deferConvertLineItemsByPriceType, setFormPriceType } from '../../../../../utils/priceTypeSwitch';
+import {
+  DEFAULT_SALES_PRICE_TYPE,
+  normalizeSalesPriceType,
+  salesFormPriceType,
+} from '../shared/salesPriceType';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import { MaterialInventoryIndicator } from '../../../components/MaterialInventoryIndicator';
 import { MaterialBomIndicator } from '../../../components/MaterialBomIndicator';
@@ -295,7 +300,7 @@ const calcSalesLineAmounts = (qtyInput: unknown, priceInput: unknown, taxRateInp
   const qty = toSafeNumber(qtyInput);
   const unitPriceCents = toCents(priceInput);
   const taxRate = toSafeNumber(taxRateInput);
-  const priceType = priceTypeInput ?? 'tax_exclusive';
+  const priceType = salesFormPriceType(priceTypeInput);
 
   if (priceType === 'tax_inclusive') {
     const inclCents = Math.round(qty * unitPriceCents);
@@ -597,7 +602,7 @@ const SalesOrdersPage: React.FC = () => {
   /** 价税合计正在编辑的行：{ index, value }，失焦时反算单价 */
   const [editingIncl, setEditingIncl] = useState<{ index: number; value: number | null } | null>(null);
   const editingInclValueRef = useRef<number | null>(null);
-  const lastPriceTypeRef = useRef<'tax_exclusive' | 'tax_inclusive'>('tax_exclusive');
+  const lastPriceTypeRef = useRef<PriceTypeValue>(DEFAULT_SALES_PRICE_TYPE);
 
   const [modalSubmitting, setModalSubmitting] = useState(false);
 
@@ -739,11 +744,11 @@ const SalesOrdersPage: React.FC = () => {
     formRef.current?.resetFields();
     setTimeout(() => {
       formRef.current?.setFieldsValue({
-        price_type: 'tax_exclusive',
+        price_type: DEFAULT_SALES_PRICE_TYPE,
         items: [defaultOrderItem],
         order_date: dayjs(),
       });
-      lastPriceTypeRef.current = 'tax_exclusive';
+      lastPriceTypeRef.current = DEFAULT_SALES_PRICE_TYPE;
       const prefillCustomerId = options?.customerId;
       if (prefillCustomerId != null) {
         const c = customers.find((x) => x.id === prefillCustomerId);
@@ -877,7 +882,7 @@ const SalesOrdersPage: React.FC = () => {
       };
       window.setTimeout(() => {
         formRef.current?.setFieldsValue(formData);
-        lastPriceTypeRef.current = ((formData as any)?.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive');
+        lastPriceTypeRef.current = normalizeSalesPriceType((formData as any)?.price_type);
         if (orderId != null) {
           loadSalesOrderFormFieldValues(orderId).then((fieldFormValues) => {
             formRef.current?.setFieldsValue(fieldFormValues);
@@ -1133,7 +1138,7 @@ const SalesOrdersPage: React.FC = () => {
       const taxR = (it: SalesOrderItem) => Number((it as any).tax_rate) || 0;
 
       // 计算金额汇总（对齐采购订单逻辑）
-      values.price_type = values.price_type || 'tax_exclusive';
+      values.price_type = values.price_type || DEFAULT_SALES_PRICE_TYPE;
       const feeDetails = values.fee_details ?? [];
       const sums = computeSalesDocumentTotals(
         validItems,
@@ -2209,7 +2214,7 @@ const SalesOrdersPage: React.FC = () => {
   };
 
   const handleItemImport = (data: any[][]) => {
-    const priceTypeForm = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
+    const priceTypeForm = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
     // 假设数据从第3行开始（0:表头, 1:示例）
     const rows = data.slice(2);
     const newItems = rows
@@ -2272,7 +2277,7 @@ const SalesOrdersPage: React.FC = () => {
       const material = materials.find((m) => m.id === Number(materialId));
       const orderDate = formRef.current?.getFieldValue('order_date');
       const asOf = orderDate != null ? (dayjs.isDayjs(orderDate) ? orderDate : dayjs(orderDate)) : dayjs();
-      const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
+      const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
       const full = material
         ? await resolveMaterialForPricing(material, materials)
         : undefined;
@@ -2304,7 +2309,7 @@ const SalesOrdersPage: React.FC = () => {
   /** 从产品多选面板批量追加明细行（与「添加明细」默认字段一致，数量默认为 1） */
   const appendOrderItemsFromMaterials = React.useCallback(
     async (selected: Material[]) => {
-      const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
+      const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
       const mainDelivery = formRef.current?.getFieldValue('delivery_date');
       const defaultDelivery = coerceFormDate(mainDelivery) ?? dayjs();
       const customerId = formRef.current?.getFieldValue('customer_id');
@@ -2540,6 +2545,18 @@ const SalesOrdersPage: React.FC = () => {
   );
   const canUseToolbarPush =
     selectedOrderForToolbar != null && salesOrderHasToolbarPushActions(selectedOrderForToolbar);
+
+  const salesOrderHighlightOverdueToolbar = useMemo(
+    () => (
+      <Space key="highlight-overdue-switch" align="center">
+        <Switch checked={highlightDeliveryOverdue} onChange={setHighlightDeliveryOverdue} />
+        <span style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
+          {t('app.kuaizhizao.salesOrder.highlightOverdue')}
+        </span>
+      </Space>
+    ),
+    [highlightDeliveryOverdue, t],
+  );
 
   const salesOrderToolbarRenderItems = useMemo(
     () => [
@@ -2993,7 +3010,7 @@ const SalesOrdersPage: React.FC = () => {
               onClick:
                 (statistics.pending_review_count ?? 0) > 0
                   ? () => {
-                      tableSearchFormRef.current?.setFieldsValue?.({ lifecycle: '待审核' });
+                      tableSearchFormRef.current?.setFieldsValue?.({ status: 'PENDING_REVIEW' });
                       actionRef.current?.reload?.();
                     }
                   : undefined,
@@ -3222,7 +3239,7 @@ const SalesOrdersPage: React.FC = () => {
         </Col>
       </Row>
       <ProFormText name="customer_name" hidden />
-      <ProFormText name="price_type" hidden initialValue="tax_exclusive" />
+      <ProFormText name="price_type" hidden initialValue={DEFAULT_SALES_PRICE_TYPE} />
       <CustomFieldsFormSection
         customFields={salesOrderFormCustomFields}
         customFieldValues={salesOrderFormCustomFieldValues}
@@ -3231,7 +3248,7 @@ const SalesOrdersPage: React.FC = () => {
 
           <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
             {({ getFieldValue: getFormValue }: any) => {
-              const priceType = getFormValue('price_type') ?? 'tax_exclusive';
+              const priceType = salesFormPriceType(getFormValue('price_type'));
               const showTaxColumns = priceType === 'tax_inclusive';
               const materialSourceType = productScope === 'make' ? 'Make' : undefined;
               const productColumnTitle = (
@@ -3767,7 +3784,7 @@ const SalesOrdersPage: React.FC = () => {
                 initialValues={
                   isCreatePage
                     ? {
-                        price_type: 'tax_exclusive',
+                        price_type: DEFAULT_SALES_PRICE_TYPE,
                         order_date: dayjs(),
                         currency_code: defaultSalesOrderCurrency,
                         items: [{ ...defaultOrderItem }],
@@ -4019,12 +4036,6 @@ const SalesOrdersPage: React.FC = () => {
               icon={<StopOutlined />}
               size="middle"
             />,
-            <Space key="highlight-overdue-switch" align="center">
-              <Switch checked={highlightDeliveryOverdue} onChange={setHighlightDeliveryOverdue} />
-              <span style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
-                {t('app.kuaizhizao.salesOrder.highlightOverdue')}
-              </span>
-            </Space>,
             <UniCapabilityBatchButton
               key="sales-order-batch-print"
               selectedRowKeys={selectedRowKeys}
@@ -4106,6 +4117,7 @@ const SalesOrdersPage: React.FC = () => {
           }}
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
+          toolbar={{ actions: [salesOrderHighlightOverdueToolbar] }}
           importHeaders={[
             t('app.kuaizhizao.salesOrder.orderDate'),
             t('app.kuaizhizao.salesOrder.deliveryDate'),

@@ -21,6 +21,8 @@ type MenuIconPickerProps = {
   searchPlaceholder?: string;
   clearText?: string;
   emptyText?: string;
+  size?: 'small' | 'middle' | 'large';
+  style?: React.CSSProperties;
 };
 
 const MenuIconPicker: React.FC<MenuIconPickerProps> = ({
@@ -30,6 +32,8 @@ const MenuIconPicker: React.FC<MenuIconPickerProps> = ({
   searchPlaceholder = '搜索图标',
   clearText = '清除',
   emptyText = '无匹配图标',
+  size = 'middle',
+  style,
 }) => {
   const [open, setOpen] = useState(false);
   const [keyword, setKeyword] = useState('');
@@ -133,10 +137,11 @@ const MenuIconPicker: React.FC<MenuIconPickerProps> = ({
     >
       <Input
         readOnly
+        size={size}
         value={value || ''}
         placeholder={placeholder}
-        style={{ cursor: 'pointer', width: '100%' }}
-        prefix={value ? renderMenuIconByKey(value, 16) : null}
+        style={{ cursor: 'pointer', width: '100%', ...style }}
+        prefix={value ? renderMenuIconByKey(value, size === 'small' ? 14 : 16) : null}
         suffix={
           value ? (
             <CloseCircleOutlined

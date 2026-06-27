@@ -46,20 +46,29 @@ export function getMaterialVariantAttrs(material?: Material | null): Record<stri
   >;
 }
 
+/** 物料是否启用属性管理（兼容 snake_case；表单开关优先于尚未保存的 material 快照） */
+export function resolveMaterialVariantManaged(
+  material?: Material | null,
+  variantManagedOverride?: boolean,
+): boolean {
+  if (variantManagedOverride !== undefined) return !!variantManagedOverride;
+  return !!(material?.variantManaged ?? (material as any)?.variant_managed);
+}
+
 /** 旧版在主物料上存多选数组（属性范围），不是单条 SKU */
 export function isLegacyScopeAttributes(attrs: Record<string, unknown>): boolean {
   return Object.values(attrs).some((v) => Array.isArray(v) && v.length > 1);
 }
 
 export function isVariantMasterMaterial(material?: Material | null): boolean {
-  if (!material?.variantManaged) return false;
+  if (!resolveMaterialVariantManaged(material)) return false;
   const attrs = getMaterialVariantAttrs(material);
   if (!attrs || Object.keys(attrs).length === 0) return true;
   return isLegacyScopeAttributes(attrs);
 }
 
 export function isVariantSkuMaterial(material?: Material | null): boolean {
-  if (!material?.variantManaged) return false;
+  if (!resolveMaterialVariantManaged(material)) return false;
   const attrs = getMaterialVariantAttrs(material);
   if (!attrs || Object.keys(attrs).length === 0) return false;
   return !isLegacyScopeAttributes(attrs);
@@ -189,6 +198,8 @@ async function resolveMasterMaterial(material: Material): Promise<Material | nul
 
 interface MaterialVariantCombinationsTableProps {
   material?: Material | null;
+  /** 表单内属性管理开关（未保存前 material 快照可能仍为 false） */
+  variantManaged?: boolean;
   isEdit?: boolean;
   pendingRows?: PendingVariantCombination[];
   onPendingRowsChange?: (rows: PendingVariantCombination[]) => void;
@@ -207,6 +218,7 @@ type TableRow = {
 
 export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinationsTableProps> = ({
   material,
+  variantManaged: variantManagedOverride,
   isEdit = false,
   pendingRows = [],
   onPendingRowsChange,
@@ -214,6 +226,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const effectiveVariantManaged = resolveMaterialVariantManaged(material, variantManagedOverride);
   const [definitions, setDefinitions] = useState<VariantAttributeDefinition[]>([]);
   const [definitionsLoading, setDefinitionsLoading] = useState(false);
   const [masterMaterial, setMasterMaterial] = useState<Material | null>(null);
@@ -259,21 +272,25 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!material?.variantManaged) {
+      if (!effectiveVariantManaged) {
         setMasterMaterial(null);
         return;
       }
-      if (isVariantMasterMaterial(material)) {
-        if (!cancelled) setMasterMaterial(material);
+      if (!material) {
+        if (!cancelled) setMasterMaterial(null);
         return;
       }
-      const master = await resolveMasterMaterial(material);
-      if (!cancelled) setMasterMaterial(master);
+      if (isVariantSkuMaterial(material)) {
+        const master = await resolveMasterMaterial(material);
+        if (!cancelled) setMasterMaterial(master);
+        return;
+      }
+      if (!cancelled) setMasterMaterial(material);
     })();
     return () => {
       cancelled = true;
     };
-  }, [material]);
+  }, [material, effectiveVariantManaged]);
 
   const loadVariants = useCallback(async () => {
     if (!masterSaved || !masterMaterial?.uuid) {
@@ -715,7 +732,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
     );
   }
 
-  if (!material?.variantManaged) {
+  if (!effectiveVariantManaged) {
     return (
       <Typography.Text type="secondary">
         {t('app.master-data.materials.notVariantMaster', '请先开启属性管理')}

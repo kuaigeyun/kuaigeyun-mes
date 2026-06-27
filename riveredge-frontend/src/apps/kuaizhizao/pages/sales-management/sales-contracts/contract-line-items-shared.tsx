@@ -13,6 +13,7 @@ import {
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { DOCUMENT_DETAIL_CONTROL_SIZE } from '../../../components/document-detail-table/documentDetailTable';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
+import { DEFAULT_SALES_PRICE_TYPE, salesFormPriceType } from '../shared/salesPriceType';
 
 export { convertUnitPriceByPriceType };
 
@@ -46,7 +47,7 @@ export const calcContractLineAmounts = (
   const qty = toSafeNumber(qtyInput);
   const unitPriceCents = toCents(priceInput);
   const taxRate = toSafeNumber(taxRateInput);
-  const priceType = priceTypeInput ?? 'tax_exclusive';
+  const priceType = salesFormPriceType(priceTypeInput);
 
   if (priceType === 'tax_inclusive') {
     const inclCents = Math.round(qty * unitPriceCents);
@@ -182,7 +183,7 @@ export const ContractMaterialSelectCell: React.FC<{
 
 export const ContractAmountCell: React.FC<{ index: number }> = ({ index }) => {
   const row = Form.useWatch(['items', index]);
-  const priceType = Form.useWatch('price_type') ?? 'tax_exclusive';
+  const priceType = salesFormPriceType(Form.useWatch('price_type'));
   const line = calcContractLineAmounts(row?.contract_quantity, row?.unit_price, row?.tax_rate, priceType);
   return <AmountDisplay resource={SC} fieldName="amount_without_tax" value={line.excl} />;
 };

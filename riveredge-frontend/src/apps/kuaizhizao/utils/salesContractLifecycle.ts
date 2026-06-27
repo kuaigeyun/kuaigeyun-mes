@@ -1,5 +1,6 @@
 /**
- * 销售合同生命周期：草稿 → 待审核 → 已生效 → 执行中 → 已完成 / 已到期
+ * 销售合同生命周期（模式 A）：已生效 → 执行中 → 已完成 / 已关闭 / 已到期
+ * 草稿/待审核/驳回仅由 record.audit +「审核状态」列展示，不在当前阶段出现。
  */
 
 import { createLifecycleResolver } from './createLifecycleResolver';
@@ -12,7 +13,6 @@ import {
 const P = 'app.kuaizhizao.salesContract';
 
 export const SALES_CONTRACT_LIFECYCLE_STAGE_LABELS = [
-  '草稿',
   '已生效',
   '执行中',
   '已完成',
@@ -21,7 +21,6 @@ export const SALES_CONTRACT_LIFECYCLE_STAGE_LABELS = [
 ] as const;
 
 const STAGE_I18N: Record<string, string> = {
-  草稿: `${P}.statusDraft`,
   已生效: `${P}.statusActive`,
   执行中: `${P}.statusExecuting`,
   已完成: `${P}.statusCompleted`,
@@ -31,17 +30,12 @@ const STAGE_I18N: Record<string, string> = {
 
 const baseResolver = createLifecycleResolver({
   stageDefs: [
-    { key: 'draft', label: '草稿', labelKey: `${P}.statusDraft` },
     { key: 'effective', label: '已生效', labelKey: `${P}.statusActive` },
     { key: 'executing', label: '执行中', labelKey: `${P}.statusExecuting` },
     { key: 'finished', label: '已完成', labelKey: `${P}.statusCompleted` },
     { key: 'closed', label: '已关闭', labelKey: `${P}.statusClosed` },
   ],
   statusToKey: {
-    草稿: 'draft',
-    DRAFT: 'draft',
-    待审核: 'draft',
-    PENDING_REVIEW: 'draft',
     已生效: 'effective',
     执行中: 'executing',
     已完成: 'finished',
@@ -54,14 +48,12 @@ const baseResolver = createLifecycleResolver({
   },
   successKeys: ['finished'],
   nextStepSuggestions: {
-    draft: ['保存并提交审核'],
     effective: ['下推销售订单', '登记变更'],
     executing: ['查看回款', '关闭合同'],
     finished: [],
     closed: [],
   },
   nextStepSuggestionKeys: {
-    draft: [`${P}.lifecycleNextSubmit`],
     effective: [`${P}.lifecycleNextReleaseOrder`, `${P}.lifecycleNextRegisterChange`],
     executing: [`${P}.lifecycleNextViewPayment`, `${P}.lifecycleNextCloseContract`],
     finished: [],
@@ -82,7 +74,7 @@ export function buildSalesContractLifecycleValueEnum(
   );
 }
 
-/** 合同列表 API 仍用 status 筛选；UI 生命周期阶段名与 status 取值一致 */
+/** 合同列表 API 仍用 status 筛选；生命周期列筛选项对应业务 status */
 export function resolveSalesContractListLifecycleParams(
   searchFormValues?: Record<string, unknown> | null,
   params?: Record<string, unknown> | null,
@@ -90,7 +82,9 @@ export function resolveSalesContractListLifecycleParams(
   const stage = resolveListLifecycleStageFromSearch(searchFormValues, params, {
     allowedStages: [...SALES_CONTRACT_LIFECYCLE_STAGE_LABELS, '已关闭'],
   });
-  const stageToStatus: Record<string, string> = {};
+  const stageToStatus: Record<string, string> = {
+    已到期: '已到期',
+  };
   const api = toListLifecycleStageApiParams(stage ? (stageToStatus[stage] ?? stage) : stage);
   return api.lifecycle_stage ? { status: api.lifecycle_stage } : {};
 }

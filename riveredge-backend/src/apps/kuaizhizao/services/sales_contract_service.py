@@ -14,6 +14,7 @@ from tortoise.exceptions import IntegrityError
 
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.constants import LEGACY_PENDING_VALUES, DemandStatus, ReviewStatus
+from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
 from apps.kuaizhizao.models.quotation import Quotation
 from apps.kuaizhizao.models.quotation_item import QuotationItem
 from apps.kuaizhizao.models.sales_contract import SalesContract
@@ -399,7 +400,7 @@ class SalesContractService(AppBaseService[SalesContract]):
                 total_quantity=total_qty,
                 total_amount=net_amt,
                 discount_amount=discount,
-                price_type=data.price_type or "tax_exclusive",
+                price_type=data.price_type or DEFAULT_SALES_PRICE_TYPE,
                 currency_code=data.currency_code or "CNY",
                 status="草稿",
                 review_status=ReviewStatus.PENDING,
@@ -709,6 +710,39 @@ class SalesContractService(AppBaseService[SalesContract]):
         if not contract:
             raise NotFoundError("销售合同不存在")
         assert_sales_contract_capability(contract, "submit")
+
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "sales_contract"
+        )
+        submitter_name = await self.get_user_name(submitted_by) or str(submitted_by)
+
+        if not audit_required:
+            contract.status = "已生效"
+            contract.review_status = ReviewStatus.APPROVED
+            contract.reviewer_id = submitted_by
+            contract.reviewer_name = submitter_name
+            contract.review_time = datetime.now()
+            contract.updated_by = submitted_by
+            await contract.save()
+            return await self.get_contract_by_id(tenant_id, contract_id)
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        instance = await ApprovalInstanceService.start_approval_for_node(
+            tenant_id=tenant_id,
+            user_id=submitted_by,
+            node_key="sales_contract",
+            entity_type="sales_contract",
+            entity_id=contract.id,
+            entity_uuid=str(contract.uuid),
+            title=f"销售合同审核: {contract.contract_code}",
+            content=f"客户: {contract.customer_name}, 金额: {contract.total_amount}",
+        )
+        if not instance:
+            raise BusinessLogicError(
+                "销售合同审核已开启但未找到可用的审批流程，请在配置中心检查 sales_contract 审批流程是否已激活"
+            )
+
         contract.status = "待审核"
         contract.review_status = ReviewStatus.PENDING
         contract.updated_by = submitted_by
@@ -788,14 +822,20 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract_id: int,
         operator_id: int,
     ) -> SalesContractResponse:
-        """撤回审核：已生效且未释放 → 待审核。"""
+        """撤销审核：人工审→待审核，自动审→草稿。"""
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
+
         contract = await SalesContract.get_or_none(
             tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True
         )
         if not contract:
             raise NotFoundError("销售合同不存在")
         assert_sales_contract_capability(contract, "revoke_approval")
-        contract.status = "待审核"
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "sales_contract"
+        )
+        landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+        contract.status = "待审核" if landing == "pending" else "草稿"
         contract.review_status = ReviewStatus.PENDING.value
         contract.reviewer_id = None
         contract.reviewer_name = None
@@ -1051,7 +1091,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             contract_date=quotation.quotation_date,
             valid_from=quotation.quotation_date,
             valid_to=quotation.valid_until,
-            price_type=getattr(quotation, "price_type", None) or "tax_exclusive",
+            price_type=getattr(quotation, "price_type", None) or DEFAULT_SALES_PRICE_TYPE,
             currency_code=quotation.currency_code or "CNY",
             salesman_id=quotation.salesman_id,
             salesman_name=quotation.salesman_name,

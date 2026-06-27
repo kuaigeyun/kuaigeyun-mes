@@ -23,6 +23,7 @@ from urllib.parse import urlsplit, parse_qs
 from core.services.print.print_template_service import PrintTemplateService
 from core.schemas.print_template import PrintTemplateRenderRequest
 from core.services.i18n.print_localization import PrintLocalization
+from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
 from apps.kuaizhizao.print.document_qrcode import attach_document_qrcode_fields
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from apps.kuaizhizao.services.document_lifecycle_service import _is_approved
@@ -1699,7 +1700,7 @@ class DocumentPrintService:
             "delivery_date": to_api_isoformat(quotation.delivery_date) if quotation.delivery_date else None,
             "total_quantity": str(quotation.total_quantity),
             "total_amount": str(quotation.total_amount),
-            "price_type": getattr(quotation, "price_type", None) or "tax_exclusive",
+            "price_type": getattr(quotation, "price_type", None) or DEFAULT_SALES_PRICE_TYPE,
             "status": quotation.status,
             "salesman_name": quotation.salesman_name,
             "shipping_address": quotation.shipping_address,
@@ -1780,7 +1781,7 @@ class DocumentPrintService:
             "released_amount": str(contract.released_amount or 0),
             "remaining_quantity": str(rem_qty),
             "remaining_amount": str(rem_amt),
-            "price_type": getattr(contract, "price_type", None) or "tax_exclusive",
+            "price_type": getattr(contract, "price_type", None) or DEFAULT_SALES_PRICE_TYPE,
             "status": contract.status,
             "salesman_name": contract.salesman_name,
             "shipping_address": contract.shipping_address,

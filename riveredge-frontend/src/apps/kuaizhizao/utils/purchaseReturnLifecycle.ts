@@ -18,7 +18,7 @@ function buildFallback(record: Record<string, unknown>): BackendLifecycle {
       current_stage_name: '已取消',
       status: 'exception',
       main_stages: [
-        { key: 'pending', label: '待退货', status: 'done' },
+        { key: 'pending_return_goods', label: '待退货', status: 'done' },
         { key: 'cancelled', label: '已取消', status: 'active' },
       ],
       next_step_suggestions: [],
@@ -30,18 +30,18 @@ function buildFallback(record: Record<string, unknown>): BackendLifecycle {
       current_stage_name: '已退货',
       status: 'success',
       main_stages: [
-        { key: 'pending', label: '待退货', status: 'done' },
+        { key: 'pending_return_goods', label: '待退货', status: 'done' },
         { key: 'done', label: '已退货', status: 'done' },
       ],
       next_step_suggestions: [],
     };
   }
   return {
-    current_stage_key: 'pending',
+    current_stage_key: 'pending_return_goods',
     current_stage_name: '待退货',
     status: 'normal',
     main_stages: [
-      { key: 'pending', label: '待退货', status: 'active' },
+      { key: 'pending_return_goods', label: '待退货', status: 'active' },
       { key: 'done', label: '已退货', status: 'pending' },
     ],
     next_step_suggestions: ['确认退货'],

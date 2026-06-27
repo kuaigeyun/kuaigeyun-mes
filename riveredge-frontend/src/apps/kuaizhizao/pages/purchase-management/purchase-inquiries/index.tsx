@@ -645,22 +645,6 @@ const PurchaseInquiriesPage: React.FC = () => {
           );
         }
 
-        if (isInquiryAwarded(record)) {
-          parts.push(
-            <Button
-              {...rowActionKind('release')}
-              key="convert-po"
-              disabled={!purchaseInquiryPerms.canUpdate}
-              onClick={() => {
-                if (!purchaseInquiryPerms.canUpdate) return;
-                void handleConvertPO(record);
-              }}
-            >
-              {pushToPurchaseOrderAction.label}
-            </Button>,
-          );
-        }
-
         parts.push(
           <UniWorkflowActions
             {...rowActionKind('skip')}
@@ -683,7 +667,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       },
     },
   ],
-    [auditEnabled, message, modal, openCompare, purchaseInquiryAuditColumn, purchaseInquiryLifecycleValueEnum, purchaseInquiryPerms.canDelete, purchaseInquiryPerms.canUpdate, pushToPurchaseOrderAction.label, t],
+    [auditEnabled, message, modal, openCompare, purchaseInquiryAuditColumn, purchaseInquiryLifecycleValueEnum, purchaseInquiryPerms.canDelete, purchaseInquiryPerms.canUpdate, t],
   );
 
   const request = useCallback(async (params: Record<string, unknown>) => {

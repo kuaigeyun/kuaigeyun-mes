@@ -894,7 +894,8 @@ class DemandService(AppBaseService[Demand]):
         """
         撤销审核需求
         
-        只有“已审核”或“已驳回”状态的需求可以撤销审核。撤销审核后状态恢复为“待审核”。
+        只有“已审核”或“已驳回”状态的需求可以撤销审核。
+        人工审→待审核；自动审→草稿。
         
         Args:
             tenant_id: 租户ID
@@ -925,6 +926,17 @@ class DemandService(AppBaseService[Demand]):
                 except BusinessLogicError:
                     raise
 
+            from core.services.approval.audit_transition import resolve_revoke_landing_phase
+            from infra.services.business_config_service import BusinessConfigService
+
+            audit_required = await BusinessConfigService().check_audit_required(tenant_id, "demand")
+            landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+            target_status = (
+                DemandStatus.PENDING_REVIEW
+                if landing == "pending"
+                else DemandStatus.DRAFT
+            )
+
             # 使用状态流转服务记录
             try:
                 from apps.kuaizhizao.services.state_transition_service import StateTransitionService
@@ -936,7 +948,7 @@ class DemandService(AppBaseService[Demand]):
                     entity_type="demand",
                     entity_id=demand_id,
                     from_state=demand.status,
-                    to_state=DemandStatus.PENDING_REVIEW,
+                    to_state=target_status,
                     operator_id=unapproved_by,
                     operator_name=operator_name,
                     transition_reason="撤销审核"
@@ -944,9 +956,9 @@ class DemandService(AppBaseService[Demand]):
             except Exception as e:
                 logger.warning(f"发送状态流转失败: {e}")
             
-            # 更新状态为待审核，重置审核信息
+            # 更新状态，重置审核信息
             await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
-                status=DemandStatus.PENDING_REVIEW,
+                status=target_status,
                 review_status=ReviewStatus.PENDING,
                 reviewer_id=None,
                 reviewer_name=None,

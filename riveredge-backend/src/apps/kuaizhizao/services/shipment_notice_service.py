@@ -24,6 +24,7 @@ from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.schemas.shipment_notice import (
     ShipmentNoticeCreate,
     ShipmentNoticeUpdate,
+    ShipmentNoticeNotify,
     ShipmentNoticeResponse,
     ShipmentNoticeListResponse,
     ShipmentNoticeWithItemsResponse,
@@ -39,6 +40,7 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
 from apps.kuaizhizao.services.inspection_policy_service import assert_oqc_for_outbound_lines
 from infra.services.business_config_service import BusinessConfigService
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
+from core.services.approval.audit_record_enricher import enrich_items
 
 
 async def _resolve_warehouse_name_by_id(
@@ -137,13 +139,16 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
     ) -> ShipmentNoticeResponse | ShipmentNoticeWithItemsResponse:
         item_count = await ShipmentNoticeItem.filter(tenant_id=tenant_id, notice_id=notice.id).count()
         delivery_withdrawable = await self._notice_delivery_withdrawable(tenant_id, notice)
-        return enrich_shipment_notice_capabilities_on_response(
+        enriched = enrich_shipment_notice_capabilities_on_response(
             notice,
             response,
             has_items=item_count > 0,
             has_warehouse=getattr(notice, "warehouse_id", None) is not None,
             delivery_withdrawable=delivery_withdrawable,
         )
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "shipment_notice", enriched)
 
     async def _validate_not_overdelivery_on_notify(
         self,
@@ -445,12 +450,12 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             resp = ShipmentNoticeListResponse.model_validate(r)
             resp.lifecycle = get_shipment_notice_lifecycle(r)
             list_responses.append(resp)
-        return enrich_shipment_notice_list_capabilities(
+        return await enrich_items(tenant_id, "shipment_notice", enrich_shipment_notice_list_capabilities(
             notices,
             list_responses,
             has_items_by_id=has_items_by_id,
             delivery_withdrawable_by_id=withdrawable_by_id,
-        )
+        ))
 
     async def update_shipment_notice(
         self,
@@ -611,6 +616,9 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         notice_id: int,
         operator_id: int,
     ) -> ShipmentNoticeResponse:
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
+        from core.services.approval.uni_audit_service import UniAuditService
+
         notice = await ShipmentNotice.get_or_none(
             tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
         )
@@ -622,19 +630,58 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "shipment_notice"
         )
-        if not audit_required:
-            raise BusinessLogicError("发货通知单审核未开启，无法撤销审核")
-        await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
-            status="待审核",
-            updated_by=operator_id,
+        landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+        target_status = "待审核" if landing == "pending" else "待发货"
+
+        async def _do_revoke() -> ShipmentNoticeResponse:
+            await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+                status=target_status,
+                updated_by=operator_id,
+            )
+            return await self.get_shipment_notice_by_id(tenant_id, notice_id)
+
+        return await UniAuditService.revoke_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="shipment_notice",
+            entity_id=notice_id,
+            operator_id=operator_id,
+            flow_revoke=_do_revoke,
         )
-        return await self.get_shipment_notice_by_id(tenant_id, notice_id)
+
+    async def _apply_notify_warehouse_if_needed(
+        self,
+        *,
+        tenant_id: int,
+        notice: ShipmentNotice,
+        notified_by: int,
+        notify_data: Optional[ShipmentNoticeNotify],
+    ) -> ShipmentNotice:
+        if getattr(notice, "warehouse_id", None) is not None:
+            return notice
+
+        warehouse_id = getattr(notify_data, "warehouse_id", None) if notify_data else None
+        if warehouse_id is None:
+            raise ValidationError("请指定出库仓库")
+
+        warehouse_name = await _resolve_warehouse_name_by_id(
+            tenant_id=tenant_id,
+            warehouse_id=int(warehouse_id),
+            preferred_name=getattr(notify_data, "warehouse_name", None) if notify_data else None,
+        )
+        await ShipmentNotice.filter(tenant_id=tenant_id, id=notice.id).update(
+            warehouse_id=int(warehouse_id),
+            warehouse_name=warehouse_name,
+            updated_by=notified_by,
+        )
+        return await ShipmentNotice.get(tenant_id=tenant_id, id=notice.id)
 
     async def notify_warehouse(
         self,
         tenant_id: int,
         notice_id: int,
-        notified_by: int
+        notified_by: int,
+        *,
+        notify_data: Optional[ShipmentNoticeNotify] = None,
     ) -> ShipmentNoticeResponse:
         """通知仓库（标记为已通知）"""
         notice = await ShipmentNotice.get_or_none(tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True)
@@ -645,7 +692,13 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             notice,
             "notify",
             has_items=item_count > 0,
-            has_warehouse=getattr(notice, "warehouse_id", None) is not None,
+        )
+
+        notice = await self._apply_notify_warehouse_if_needed(
+            tenant_id=tenant_id,
+            notice=notice,
+            notified_by=notified_by,
+            notify_data=notify_data,
         )
 
         await self._validate_not_overdelivery_on_notify(
@@ -699,7 +752,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             
         notice_warehouse_id = getattr(notice, "warehouse_id", None)
         if notice_warehouse_id is None:
-            raise ValidationError("发货通知单缺少仓库，无法生成销售出库单")
+            raise ValidationError("请指定出库仓库")
         notice_warehouse_id = int(notice_warehouse_id)
         notice_warehouse_name = await _resolve_warehouse_name_by_id(
             tenant_id=tenant_id,

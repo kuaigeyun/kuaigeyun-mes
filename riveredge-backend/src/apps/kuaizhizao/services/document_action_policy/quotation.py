@@ -125,9 +125,9 @@ def derive_quotation_capabilities(
         "quotation.approve.not_pending" if not approve_allowed else None,
     )
 
-    # revoke_approval — 已发送 + 已通过（不回草稿）
+    # revoke_approval — 已发送 + 已通过（人工审→待审核，自动审→草稿）
     revoke_reason = "quotation.revoke_approval.not_allowed"
-    if audit_required and st == "已发送":
+    if st == "已发送":
         if _is_approved(rs):
             revoke_allowed = True
             revoke_reason = None
@@ -317,8 +317,10 @@ def quotation_capabilities_to_suggestions(
             suggestions.append("转销售订单（下推）")
     if caps.print_formal.allowed and (audit_required or caps.confirm_customer.allowed):
         suggestions.append("生成正式报价 PDF")
-    if audit_required and caps.confirm_customer.allowed:
-        suggestions.append("撤回审核（回到待审核）")
+    if caps.revoke_approval.allowed:
+        suggestions.append(
+            "撤销审核（回到待审核）" if audit_required else "撤销审核（回到草稿）"
+        )
     if conversion_downstream_missing:
         suggestions.extend(
             [

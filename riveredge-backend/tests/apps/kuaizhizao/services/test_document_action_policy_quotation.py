@@ -151,6 +151,51 @@ def test_assert_capability_raises():
         )
 
 
+def test_sent_auto_approved_revoke_allowed_without_manual_audit():
+    caps = derive_quotation_capabilities(
+        _q(status="已发送", review_status="审核通过"),
+        audit_required=False,
+    )
+    assert caps.revoke_approval.allowed
+    assert caps.confirm_customer.allowed
+
+
+def test_audit_phase_auto_mode_approved_allows_revoke():
+    from core.services.approval.audit_phase import derive_audit_phase
+
+    audit = derive_audit_phase(
+        "quotation",
+        "已发送",
+        "审核通过",
+        enabled=False,
+    )
+    assert audit["mode"] == "auto"
+    assert audit["phase"] == "approved"
+    assert "revoke" in audit["allowed_actions"]
+
+
+def test_audit_phase_auto_mode_draft_allows_submit_after_revoke():
+    from core.services.approval.audit_phase import derive_audit_phase
+
+    audit = derive_audit_phase("quotation", "草稿", "", enabled=False)
+    assert audit["phase"] == "draft"
+    assert "submit" in audit["allowed_actions"]
+
+
+def test_audit_phase_manual_mode_pending_allows_withdraw_not_submit():
+    from core.services.approval.audit_phase import derive_audit_phase
+
+    audit = derive_audit_phase(
+        "quotation",
+        "已发送",
+        "待审核",
+        enabled=True,
+    )
+    assert audit["phase"] == "pending"
+    assert "withdraw" in audit["allowed_actions"]
+    assert "submit" not in audit["allowed_actions"]
+
+
 def test_audit_phase_no_revoke_on_accepted():
     from core.services.approval.audit_phase import derive_audit_phase
 

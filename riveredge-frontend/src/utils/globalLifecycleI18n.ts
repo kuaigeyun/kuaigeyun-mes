@@ -23,7 +23,7 @@ const DOCUMENT_STATUS_STAGE_KEYS = new Set([
   'in_progress',
   'delivered',
   'completed',
-  'pending',
+  // 注意：pending 不在此集合 — documentStatus.pending=「待审核」，业务轴须用 pending_ship / pending_inbound 等专用 key
   'submitted',
   'released',
   'split',
@@ -123,6 +123,12 @@ export const LIFECYCLE_ONLY_STAGE_KEYS = [
   'no_revisit_needed',
   'recorded',
   'pending_ship',
+  'pending_borrow',
+  'pending_send',
+  'pending_receive',
+  'pending_material_return',
+  'pending_calculation',
+  'planned',
   'pending_return_goods',
   'returned_goods',
   'pending_inspection',
@@ -171,9 +177,12 @@ export const LIFECYCLE_ZH_LABEL_TO_KEY: Record<string, string> = {
   已退料: 'returned',
   待领料: 'pending_picking',
   已领料: 'completed',
-  待借出: 'borrowed',
+  待借出: 'pending_borrow',
   已借出: 'borrowed',
   待发货: 'pending_ship',
+  待发送: 'pending_send',
+  待收货: 'pending_receive',
+  待归还: 'pending_material_return',
   已通知: 'notified',
   待退货: 'pending_return_goods',
   已退货: 'returned_goods',
@@ -194,7 +203,8 @@ export const LIFECYCLE_ZH_LABEL_TO_KEY: Record<string, string> = {
   进行中: 'running',
   完成: 'completed',
   失败: 'failed',
-  待处理: 'pending',
+  待计算: 'pending_calculation',
+  计划中: 'planned',
   处理中: 'processing',
   已解决: 'resolved',
   调查中: 'investigating',
@@ -269,14 +279,62 @@ export function translateLifecycleStageByKey(
   return label;
 }
 
+/** documentStatus.* 中与审核态同名、不可用作业务 stage.key 的项（业务轴应使用 pending_ship 等专用 key） */
+const AUDIT_SEMANTIC_DOCUMENT_STATUS_KEYS = new Set([
+  'draft',
+  'pending',
+  'pending_review',
+  'audited',
+  'rejected',
+  'approved',
+]);
+
 export function translateLifecycleSubStage(
   t: LifecycleTranslateFn,
   stage: SubStage,
   stageLabelKeysByKey?: Record<string, string>,
 ): SubStage {
-  const mergedKeys = { ...getGlobalLifecycleStageLabelKeys(), ...stageLabelKeysByKey };
+  const globalKeys = getGlobalLifecycleStageLabelKeys();
+  const mergedKeys = { ...globalKeys, ...stageLabelKeysByKey };
+
+  const moduleKey = stageLabelKeysByKey?.[stage.key];
+  if (moduleKey) {
+    const translated = t(moduleKey);
+    if (translated && translated !== moduleKey) {
+      return { ...stage, label: translated };
+    }
+  }
+
+  const backendLabel = (stage.label ?? '').trim();
+  if (
+    backendLabel &&
+    backendLabel !== '-' &&
+    backendLabel !== '—' &&
+    AUDIT_SEMANTIC_DOCUMENT_STATUS_KEYS.has(stage.key)
+  ) {
+    const docKey = globalKeys[stage.key];
+    const docTranslated = docKey ? t(docKey) : undefined;
+    if (!docTranslated || docTranslated === backendLabel) {
+      if (docTranslated) {
+        return { ...stage, label: docTranslated };
+      }
+    }
+    const label = translateLifecycleStageByKey(t, stage.key, backendLabel);
+    return { ...stage, label: label || backendLabel };
+  }
+
   const i18nKey = mergedKeys[stage.key];
-  const label = i18nKey ? t(i18nKey) : translateLifecycleStageByKey(t, stage.key, stage.label);
+  if (i18nKey) {
+    const translated = t(i18nKey);
+    if (translated && translated !== i18nKey) {
+      return { ...stage, label: translated };
+    }
+  }
+
+  const resolvedKey = resolveLifecycleStageI18nKey(stage.key);
+  const label = resolvedKey
+    ? t(resolvedKey)
+    : translateLifecycleStageByKey(t, stage.key, stage.label);
   return { ...stage, label: label || stage.label };
 }
 
@@ -306,11 +364,32 @@ export function translateLifecycleResult(
     return stages[stages.length - 1]?.key;
   })();
 
-  let stageName = result.stageName;
-  if (terminalKey && mergedKeys[terminalKey]) {
-    stageName = t(mergedKeys[terminalKey]);
-  } else if (stageName) {
-    stageName = translateLifecycleStageByKey(t, terminalKey, stageName);
+  let stageName = (result.stageName ?? '').trim();
+  const backendStageName = stageName;
+
+  if (terminalKey && moduleStageLabelKeys?.[terminalKey]) {
+    const translated = t(moduleStageLabelKeys[terminalKey]!);
+    if (translated && translated !== moduleStageLabelKeys[terminalKey]) {
+      stageName = translated;
+    }
+  } else if (
+    backendStageName &&
+    backendStageName !== '-' &&
+    backendStageName !== '—' &&
+    terminalKey &&
+    AUDIT_SEMANTIC_DOCUMENT_STATUS_KEYS.has(terminalKey)
+  ) {
+    const docKey = getGlobalLifecycleStageLabelKeys()[terminalKey];
+    const docTranslated = docKey ? t(docKey) : undefined;
+    if (docTranslated && docTranslated === backendStageName) {
+      stageName = docTranslated;
+    } else {
+      stageName = translateLifecycleStageByKey(t, terminalKey, backendStageName);
+    }
+  } else if (terminalKey && mergedKeys[terminalKey]) {
+    stageName = t(mergedKeys[terminalKey]!);
+  } else if (backendStageName) {
+    stageName = translateLifecycleStageByKey(t, terminalKey, backendStageName);
   }
 
   let subLabel = result.subLabel;

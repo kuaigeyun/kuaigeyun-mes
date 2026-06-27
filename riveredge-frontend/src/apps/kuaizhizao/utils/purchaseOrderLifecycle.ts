@@ -3,6 +3,7 @@
  * 主轴：草稿→待审核→已审核→已确认→执行中→账款发票→已完成
  */
 
+import dayjs from 'dayjs';
 import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
@@ -254,6 +255,7 @@ export function mapPurchaseOrderLifecycleStageToApiParams(
 export interface PurchaseOrderLike {
   status?: string;
   review_status?: string;
+  delivery_date?: string;
   lifecycle?: unknown;
 }
 
@@ -386,5 +388,53 @@ export function getPurchaseOrderLifecycle(
       nextStepSuggestions: auditRequired ? ['提交审核'] : ['提交确认'],
     },
     auditRequired,
+  );
+}
+
+/** 不视为「交货逾期」高亮的生命周期阶段（与列表 KPI 语义一致） */
+const PURCHASE_DELIVERY_OVERDUE_EXCLUDED_STAGES = new Set([
+  '已完成',
+  '已取消',
+  '草稿',
+  '已驳回',
+  '账款发票',
+]);
+
+function isPurchaseOrderDeliveryHighlightExcluded(
+  record: PurchaseOrderLike,
+  auditRequired: boolean,
+): boolean {
+  if (isCompleted(record.status) || isCancelled(record.status)) return true;
+  const lifecycle = getPurchaseOrderLifecycle(record, auditRequired);
+  const stage = (lifecycle.stageName ?? '').trim();
+  return PURCHASE_DELIVERY_OVERDUE_EXCLUDED_STAGES.has(stage);
+}
+
+/**
+ * 要求到货日已早于今天，且订单仍在履约链路中（与 purchase-orders/statistics overdue_count 口径一致）。
+ */
+export function isPurchaseOrderDeliveryOverdue(
+  record: PurchaseOrderLike,
+  auditRequired = true,
+): boolean {
+  const raw = record.delivery_date;
+  if (raw == null || String(raw).trim() === '') return false;
+  const d = dayjs(raw);
+  if (!d.isValid() || !d.isBefore(dayjs(), 'day')) return false;
+
+  const reviewStatus = norm(record.review_status as string);
+  if (isRejected(reviewStatus)) return false;
+
+  if (isPurchaseOrderDeliveryHighlightExcluded(record, auditRequired)) return false;
+
+  const status = norm(record.status as string);
+  if (isDraft(status)) return false;
+  if (isPendingReview(status) && !isApproved(reviewStatus)) return false;
+
+  return (
+    isAudited(status)
+    || isConfirmed(status)
+    || isInProgress(status)
+    || isApproved(reviewStatus)
   );
 }

@@ -469,6 +469,8 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         from apps.kuaizhizao.services.document_action_policy.oqc_inspection import (
             assert_oqc_inspection_capability,
         )
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
+        from infra.services.business_config_service import BusinessConfigService
 
         row = await OQCInspection.get_or_none(
             id=inspection_id, tenant_id=tenant_id, deleted_at__isnull=True
@@ -476,8 +478,12 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         if not row:
             raise NotFoundError("OQC 检验单不存在")
         assert_oqc_inspection_capability(row, "revoke_approval")
+        audit_required = await BusinessConfigService().check_audit_required(
+            tenant_id, "oqc_inspection"
+        )
+        landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
         row.status = "已检验"
-        row.review_status = "待审核"
+        row.review_status = "待审核" if landing == "pending" else ""
         row.reviewer_id = None
         row.reviewer_name = None
         row.review_time = None

@@ -1094,24 +1094,20 @@ export default function SalesForecastsPage() {
             {t('common.detail')}
           </Button>,
         ];
-        parts.push(
-          <Tooltip {...rowActionKind('update')}
-            key="edit-tip"
-            title={!canEdit ? t('app.kuaizhizao.salesForecast.editDisabledTip') : undefined}
-          >
-            <span>
-              <Button
-                type="link"
-                size="small"
-                icon={<EditOutlined />}
-                disabled={!canEdit}
-                onClick={() => canEdit && record.id != null && handleEdit(record.id)}
-              >
-                {t('common.edit')}
-              </Button>
-            </span>
-          </Tooltip>,
-        );
+        if (canEdit) {
+          parts.push(
+            <Button
+              {...rowActionKind('update')}
+              key="edit"
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => record.id != null && handleEdit(record.id)}
+            >
+              {t('common.edit')}
+            </Button>,
+          );
+        }
         parts.push(
           <UniWorkflowActions {...rowActionKind('skip')}
             key="workflow-actions"
@@ -1134,25 +1130,21 @@ export default function SalesForecastsPage() {
             }}
           />
         );
-        parts.push(
-          <Tooltip {...rowActionKind('delete')}
-            key="del-tip"
-            title={!canDelete ? t('app.kuaizhizao.salesForecast.deleteDisabledTip') : undefined}
-          >
-            <span>
-              <Button
-                type="link"
-                danger
-                size="small"
-                icon={<DeleteOutlined />}
-                disabled={!canDelete}
-                onClick={() => canDelete && record.id != null && handleDelete([record.id])}
-              >
-                {t('common.delete')}
-              </Button>
-            </span>
-          </Tooltip>,
-        );
+        if (canDelete) {
+          parts.push(
+            <Button
+              {...rowActionKind('delete')}
+              key="del"
+              type="link"
+              danger
+              size="small"
+              icon={<DeleteOutlined />}
+              onClick={() => record.id != null && handleDelete([record.id])}
+            >
+              {t('common.delete')}
+            </Button>,
+          );
+        }
         return renderSalesForecastRowActions(parts, `sf-${record.id ?? record._rowKey ?? 'row'}`);
       },
       onCell: (record) => {
@@ -1237,7 +1229,7 @@ export default function SalesForecastsPage() {
               description: (statistics?.pending_review_count ?? 0) > 0 ? <div style={{ color: '#faad14' }}>{t('app.kuaizhizao.salesForecast.statPendingAction')}</div> : undefined,
               backgroundChart: renderTrendChart(statistics?.trend_pending_review ?? [], '#faad14'),
               onClick: (statistics?.pending_review_count ?? 0) > 0 ? () => {
-                tableSearchFormRef.current?.setFieldsValue?.({ lifecycle: '待审核' });
+                tableSearchFormRef.current?.setFieldsValue?.({ status: 'PENDING_REVIEW' });
                 actionRef.current?.reload?.();
               } : undefined,
             }]

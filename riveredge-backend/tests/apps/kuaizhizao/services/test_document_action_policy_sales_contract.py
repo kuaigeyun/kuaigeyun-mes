@@ -36,6 +36,13 @@ def test_draft_crud():
     assert not caps.push_to_sales_order.allowed
 
 
+def test_pending_review_delete_allowed():
+    caps = derive_sales_contract_capabilities(_c(status="待审核", review_status="PENDING"))
+    assert caps.update.allowed
+    assert caps.delete.allowed
+    assert not caps.submit.allowed
+
+
 def test_effective_push_with_remaining():
     caps = derive_sales_contract_capabilities(
         _c(status="已生效", review_status="APPROVED"),

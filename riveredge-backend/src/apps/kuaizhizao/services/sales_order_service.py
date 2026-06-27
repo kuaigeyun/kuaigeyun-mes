@@ -55,6 +55,7 @@ from apps.kuaizhizao.constants import (
     REVIEW_STATUS_ALIASES,
     normalize_status,
 )
+from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
 from core.services.authorization.data_scope_service import DataScopeService
 from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
@@ -549,6 +550,12 @@ class SalesOrderService:
             pushed_to_computation=bool(demand and getattr(demand, "pushed_to_computation", False)),
             milestones=milestones,
         )
+        raw_review_status = getattr(order, "review_status", None)
+        normalized_review_status = (
+            raw_review_status
+            if str(raw_review_status or "").strip()
+            else ReviewStatus.PENDING
+        )
         base = {
             "id": order.id,
             "uuid": str(order.uuid),
@@ -563,14 +570,14 @@ class SalesOrderService:
             "customer_phone": order.customer_phone,
             "total_quantity": order.total_quantity if order.total_quantity is not None else Decimal("0"),
             "total_amount": order.total_amount if order.total_amount is not None else Decimal("0"),
-            "price_type": getattr(order, "price_type", None) or "tax_exclusive",
+            "price_type": getattr(order, "price_type", None) or DEFAULT_SALES_PRICE_TYPE,
             "discount_amount": getattr(order, "discount_amount", None) or Decimal("0"),
             "status": order.status,
             "submit_time": getattr(order, "submit_time", None),
             "reviewer_id": getattr(order, "reviewer_id", None),
             "reviewer_name": getattr(order, "reviewer_name", None),
             "review_time": getattr(order, "review_time", None),
-            "review_status": order.review_status,
+            "review_status": normalized_review_status,
             "review_remarks": getattr(order, "review_remarks", None),
             "salesman_id": getattr(order, "salesman_id", None),
             "salesman_name": getattr(order, "salesman_name", None),
@@ -2249,6 +2256,17 @@ class SalesOrderService:
 
         from core.services.approval.uni_audit_service import UniAuditService
 
+        from core.services.approval.audit_transition import (
+            resolve_revoke_landing_phase,
+            resolve_sales_order_revoke_state,
+        )
+
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "sales_order"
+        )
+        landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+        revoke_state = resolve_sales_order_revoke_state(landing=landing)
+
         async def _do_revoke() -> SalesOrderResponse:
             # 历史兼容：若历史订单曾产生 Demand 且已下推需求计算，则先执行撤回下推。
             demand = await self._get_linked_demand(tenant_id, sales_order_id)
@@ -2259,8 +2277,8 @@ class SalesOrderService:
             unapprover_name = await AppBaseService().get_user_name(unapproved_by)
             async with in_transaction():
                 await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
-                    status=DemandStatus.PENDING_REVIEW,
-                    review_status=ReviewStatus.PENDING,
+                    status=revoke_state["status"],
+                    review_status=revoke_state["review_status"],
                     reviewer_id=None,
                     reviewer_name=None,
                     review_time=None,
@@ -2269,7 +2287,7 @@ class SalesOrderService:
                 )
                 await self._log_state_transition(
                     tenant_id, sales_order_id,
-                    order.status, DemandStatus.PENDING_REVIEW,
+                    order.status, revoke_state["status"],
                     unapproved_by, unapprover_name, "反审核",
                 )
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
@@ -3179,6 +3197,9 @@ class SalesOrderService:
         await self._assert_sales_order_capability_for_order(tenant_id, order, "withdraw_submit")
 
         prev_status = order.status
+        from core.services.approval.audit_transition import resolve_sales_order_revoke_state
+
+        draft_state = resolve_sales_order_revoke_state(landing="draft")
         async with in_transaction():
             from core.services.approval.approval_instance_service import ApprovalInstanceService
             await ApprovalInstanceService.cancel_approval(
@@ -3188,8 +3209,8 @@ class SalesOrderService:
                 operator_id=withdrawn_by,
             )
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
-                status=DemandStatus.DRAFT,
-                review_status=ReviewStatus.PENDING,
+                status=draft_state["status"],
+                review_status=draft_state["review_status"],
                 reviewer_id=None,
                 reviewer_name=None,
                 review_time=None,
@@ -3202,7 +3223,7 @@ class SalesOrderService:
                 tenant_id,
                 sales_order_id,
                 prev_status,
-                DemandStatus.DRAFT,
+                draft_state["status"],
                 withdrawn_by,
                 withdrawer_name,
                 "撤回提交",

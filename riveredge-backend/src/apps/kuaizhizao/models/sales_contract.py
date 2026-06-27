@@ -9,6 +9,7 @@ Date: 2026-05-30
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
 
 
 class SalesContract(BaseModel):
@@ -45,7 +46,7 @@ class SalesContract(BaseModel):
 
     price_type = fields.CharField(
         max_length=20,
-        default="tax_exclusive",
+        default=DEFAULT_SALES_PRICE_TYPE,
         description="价格类型：tax_inclusive / tax_exclusive",
     )
     currency_code = fields.CharField(max_length=20, null=True, default="CNY", description="币种")

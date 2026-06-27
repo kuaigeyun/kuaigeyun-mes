@@ -773,8 +773,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         requisition_id: int,
         operator_id: Optional[int] = None,
     ) -> PurchaseRequisitionResponse:
-        """撤回审核：将已通过/部分转单/全部转单的采购申请撤回为待审核，可重新审核"""
+        """撤销审核：人工审→待审核，自动审→草稿。"""
         from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, normalize_status
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
 
         req = await PurchaseRequisition.get_or_none(
             tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
@@ -784,7 +785,15 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
         assert_purchase_requisition_capability(req, "revoke_approval")
 
-        req.status = "草稿"  # 撤回后回到草稿状态，允许修改或删除
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "purchase_request"
+        )
+        landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+        req.status = (
+            DocumentStatus.PENDING_REVIEW.value
+            if landing == "pending"
+            else "草稿"
+        )
         req.review_status = ReviewStatus.PENDING.value
         req.reviewer_id = None
         req.reviewer_name = None

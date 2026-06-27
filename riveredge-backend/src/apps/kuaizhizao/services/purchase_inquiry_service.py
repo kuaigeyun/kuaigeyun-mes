@@ -909,14 +909,26 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         return await self.get_inquiry_by_id(tenant_id, inquiry_id)
 
     async def withdraw_approval(self, tenant_id: int, inquiry_id: int, user_id: int) -> PurchaseInquiryResponse:
+        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
+
         inquiry = await PurchaseInquiry.get_or_none(
             tenant_id=tenant_id, id=inquiry_id, deleted_at__isnull=True
         )
         if not inquiry:
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
         assert_purchase_inquiry_capability(inquiry, "revoke_approval")
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "purchase_inquiry"
+        )
+        landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+        review_status = (
+            DocumentStatus.PENDING_REVIEW.value
+            if landing == "pending"
+            else ""
+        )
         await inquiry.update_from_dict({
-            "review_status": ReviewStatus.PENDING.value,
+            "review_status": review_status,
             "reviewer_id": None,
             "reviewer_name": None,
             "review_time": None,

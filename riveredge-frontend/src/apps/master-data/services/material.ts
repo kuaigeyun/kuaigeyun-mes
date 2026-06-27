@@ -73,6 +73,12 @@ function normalizeMaterialRow(item: Material): Material {
   const processRouteId = row.processRouteId ?? row.process_route_id
   if (processRouteName !== undefined) row.processRouteName = processRouteName
   if (processRouteId !== undefined) row.processRouteId = processRouteId
+  if (row.variantManaged === undefined && row.variant_managed !== undefined) {
+    row.variantManaged = row.variant_managed
+  }
+  if (row.variantAttributes === undefined && row.variant_attributes !== undefined) {
+    row.variantAttributes = row.variant_attributes
+  }
   return row as Material
 }
 

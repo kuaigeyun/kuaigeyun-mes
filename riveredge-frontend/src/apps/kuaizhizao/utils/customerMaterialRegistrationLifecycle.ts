@@ -6,17 +6,17 @@ import { createLifecycleResolver } from './createLifecycleResolver';
 
 export const getCustomerMaterialRegistrationLifecycle = createLifecycleResolver({
   stageDefs: [
-    { key: 'pending', label: '待入库' },
+    { key: 'pending_inbound', label: '待入库' },
     { key: 'processed', label: '已入库' },
     { key: 'cancelled', label: '已取消' },
   ],
   statusToKey: {
-    pending: 'pending',
+    pending: 'pending_inbound',
     processed: 'processed',
     cancelled: 'cancelled',
   },
   nextStepSuggestions: {
-    pending: ['确认入库'],
+    pending_inbound: ['确认入库'],
     processed: [],
     cancelled: [],
   },

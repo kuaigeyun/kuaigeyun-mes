@@ -2601,13 +2601,9 @@ const ApplicationListPage: React.FC = () => {
         onClose={() => setEditModalVisible(false)}
         onFinish={async (values: any) => {
           if (editingApp) {
-            const isCustomName = values.name !== editingApp.name || editingApp.is_custom_name;
             const isCustomSort = values.sort_order !== (editingApp.sort_order ?? 0) || editingApp.is_custom_sort;
             await handleUpdateAppConfig(editingApp, {
-              name: values.name,
-              description: values.description?.trim() || undefined,
               sort_order: values.sort_order,
-              is_custom_name: isCustomName,
               is_custom_sort: isCustomSort,
             });
           }
@@ -2637,7 +2633,6 @@ const ApplicationListPage: React.FC = () => {
                     setSubmitting(true);
                     try {
                       await updateApplication(editingApp.uuid, {
-                        is_custom_name: false,
                         is_custom_sort: false,
                       });
                       await syncApplicationManifest(editingApp.code);
@@ -2662,12 +2657,12 @@ const ApplicationListPage: React.FC = () => {
         <ProFormText
           name="name"
           label={t('pages.system.applications.nameLabel')}
+          fieldProps={{ disabled: true }}
         />
         <ProFormTextArea
           name="description"
           label={t('pages.system.applications.descriptionLabel')}
-          placeholder={t('pages.system.applications.descriptionPlaceholder')}
-          fieldProps={{ rows: 3 }}
+          fieldProps={{ disabled: true, rows: 3 }}
         />
         <ProFormDigit
           name="sort_order"

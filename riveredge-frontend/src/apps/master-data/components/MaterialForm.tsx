@@ -177,7 +177,9 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   useEffect(() => {
     if (!open) {
       setPendingVariantRows([]);
+      return;
     }
+    setActiveTab('basic');
   }, [open]);
 
   const emitAgentDebugLog = useCallback(
@@ -1352,6 +1354,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
               children: (
                 <MaterialVariantCombinationsTable
                   material={material}
+                  variantManaged={variantManaged}
                   isEdit={isEdit}
                   pendingRows={pendingVariantRows}
                   onPendingRowsChange={setPendingVariantRows}
@@ -1362,7 +1365,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
               key: 'units',
               label: t('app.master-data.materialForm.multiUnit'),
               children: (
-                <MaterialUnitsManager formRef={formRef} />
+                <MaterialUnitsManager />
               ),
             },
             {
@@ -1479,14 +1482,11 @@ const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = () => {
 };
 
 /**
- * 多单位管理组件
+ * 多单位管理组件（须在 ProForm 内渲染，通过 Form 上下文订阅字段）
  */
-interface MaterialUnitsManagerProps {
-  formRef: any;
-}
-
-const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) => {
+const MaterialUnitsManager: React.FC = () => {
   const { t } = useTranslation();
+  const form = Form.useFormInstance();
   const [units, setUnits] = useState<MaterialUnit[]>([]);
   const [scenarios, setScenarios] = useState<{
     purchase?: string;
@@ -1530,14 +1530,17 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
     loadUnitOptions();
   }, []);
 
-  // 订阅表单字段变化（替代原 setInterval 轮询）
-  const watchedUnits = Form.useWatch('units', formRef?.current);
-  const watchedBaseUnit = Form.useWatch('baseUnit', formRef?.current);
+  // 订阅表单字段变化（须用 Form 上下文实例，formRef.current 在 Modal 重建时可能为 null）
+  const watchedUnits = Form.useWatch('units', form);
+  const watchedBaseUnit = Form.useWatch('baseUnit', form);
 
   useEffect(() => {
     if (watchedUnits && (watchedUnits.units || watchedUnits.scenarios)) {
       setUnits(watchedUnits.units || []);
       setScenarios(watchedUnits.scenarios || {});
+    } else if (watchedUnits == null) {
+      setUnits([]);
+      setScenarios({});
     }
   }, [watchedUnits]);
 
@@ -1582,7 +1585,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
 
   // 更新表单值
   const updateFormValue = (newUnits: MaterialUnit[], newScenarios: typeof scenarios) => {
-    formRef?.current?.setFieldsValue({
+    form.setFieldsValue({
       units: {
         units: newUnits,
         scenarios: newScenarios,

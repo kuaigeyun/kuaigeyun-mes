@@ -125,7 +125,23 @@ from apps.kuaizhizao.services.document_action_policy.types import (
     NonconformingLedgerCapabilities,
 )
 
+from core.services.approval.audit_capability_gate import gate_audit_allowed_actions
+
 T = TypeVar("T")
+
+
+def _attach_capabilities_to_response(response: T, caps: Any) -> T:
+    """写入 capabilities，并按 capabilities 裁剪 audit.allowed_actions。"""
+    audit = getattr(response, "audit", None)
+    if audit is None and isinstance(response, dict):
+        audit = response.get("audit")
+    gated_audit = gate_audit_allowed_actions(audit, caps)
+    updates: dict = {"capabilities": caps}
+    if gated_audit is not None:
+        updates["audit"] = gated_audit
+    if hasattr(response, "model_copy"):
+        return response.model_copy(update=updates)
+    return response
 
 
 async def batch_document_item_counts(
@@ -189,7 +205,7 @@ async def enrich_quotation_capabilities_on_model(
         contract_downstream_missing=contract_downstream_missing,
     )
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -214,7 +230,7 @@ async def enrich_quotation_list_capabilities(
             contract_downstream_missing=contract_missing_map.get(qid, False),
         )
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -252,7 +268,7 @@ def enrich_sales_order_capabilities_on_response(
         computation_pushed_blocks_withdraw=computation_pushed_blocks_withdraw,
     )
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -280,7 +296,7 @@ def enrich_sales_order_list_capabilities(
             computation_pushed_blocks_withdraw=blocks_map.get(oid, False),
         )
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -311,7 +327,7 @@ def enrich_sales_order_change_capabilities_on_response(
 ) -> T:
     caps = derive_sales_order_change_capabilities(doc, has_change_content=has_change_content)
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -330,7 +346,7 @@ def enrich_sales_contract_capabilities_on_response(
         remaining_amount=remaining_amount,
     )
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -372,7 +388,7 @@ def enrich_sales_forecast_capabilities_on_response(
         has_items=has_items,
     )
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -397,7 +413,7 @@ def enrich_sales_forecast_list_capabilities(
             has_items=items_map.get(fid, True),
         )
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -433,7 +449,7 @@ def enrich_shipment_notice_capabilities_on_response(
         delivery_withdrawable=delivery_withdrawable,
     )
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -457,7 +473,7 @@ def enrich_shipment_notice_list_capabilities(
             delivery_withdrawable=withdraw_map.get(nid, True),
         )
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -486,7 +502,7 @@ def enrich_sales_return_capabilities_on_response(
 ) -> T:
     caps = derive_sales_return_capabilities(return_doc, has_items=has_items)
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -568,7 +584,7 @@ def enrich_production_plan_capabilities_on_response(
         has_production_items=has_production_items,
     )
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -589,7 +605,7 @@ async def enrich_production_plan_list_capabilities(
             has_production_items=has_prod_map.get(pid, False),
         )
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -616,7 +632,7 @@ def enrich_demand_computation_capabilities_on_response(
 ) -> T:
     caps = derive_demand_computation_capabilities(computation)
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -628,7 +644,7 @@ def enrich_demand_computation_list_capabilities(
     for comp_model, resp in zip(computations, responses):
         caps = derive_demand_computation_capabilities(comp_model)
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -637,7 +653,7 @@ def enrich_demand_computation_list_capabilities(
 def enrich_demand_capabilities_on_response(demand: Any, response: T) -> T:
     caps = derive_demand_capabilities(demand)
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -649,7 +665,7 @@ def enrich_demand_list_capabilities(
     for demand_model, resp in zip(demands, responses):
         caps = derive_demand_capabilities(demand_model)
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -658,7 +674,7 @@ def enrich_demand_list_capabilities(
 def enrich_purchase_requisition_capabilities_on_response(req: Any, response: T) -> T:
     caps = derive_purchase_requisition_capabilities(req)
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -670,7 +686,7 @@ def enrich_purchase_requisition_list_capabilities(
     for req_model, resp in zip(reqs, responses):
         caps = derive_purchase_requisition_capabilities(req_model)
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -679,7 +695,7 @@ def enrich_purchase_requisition_list_capabilities(
 def enrich_purchase_inquiry_capabilities_on_response(inquiry: Any, response: T) -> T:
     caps = derive_purchase_inquiry_capabilities(inquiry)
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -691,7 +707,7 @@ def enrich_purchase_inquiry_list_capabilities(
     for inquiry_model, resp in zip(inquiries, responses):
         caps = derive_purchase_inquiry_capabilities(inquiry_model)
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -791,7 +807,7 @@ def enrich_purchase_order_capabilities_on_response(
         has_downstream=has_downstream,
     )
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -834,7 +850,7 @@ async def enrich_purchase_order_list_capabilities(
             has_downstream=downstream_map.get(oid, False),
         )
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -848,7 +864,7 @@ def enrich_purchase_order_change_capabilities_on_response(
 ) -> T:
     caps = derive_purchase_order_change_capabilities(doc, has_change_content=has_change_content)
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -867,7 +883,7 @@ def enrich_receipt_notice_capabilities_on_response(
         receipt_withdrawable=receipt_withdrawable,
     )
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -891,7 +907,7 @@ def enrich_receipt_notice_list_capabilities(
             receipt_withdrawable=withdraw_map.get(nid, True),
         )
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -905,7 +921,7 @@ def enrich_purchase_return_capabilities_on_response(
 ) -> T:
     caps = derive_purchase_return_capabilities(return_doc, has_items=has_items)
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -921,7 +937,7 @@ def enrich_purchase_return_list_capabilities(
         rid = int(getattr(doc, "id", 0) or 0)
         caps = derive_purchase_return_capabilities(doc, has_items=items_map.get(rid, True))
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -930,7 +946,7 @@ def enrich_purchase_return_list_capabilities(
 def enrich_work_order_capabilities_on_response(wo: Any, response: T) -> T:
     caps = derive_work_order_capabilities(wo)
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -942,7 +958,7 @@ def enrich_work_order_list_capabilities(
     for wo, resp in zip(work_orders, responses):
         caps = derive_work_order_capabilities(wo)
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -958,7 +974,7 @@ def enrich_work_order_list_item_dicts(item_dicts: List[dict]) -> List[dict]:
 def enrich_reporting_record_capabilities_on_response(record: Any, response: T) -> T:
     caps = derive_reporting_record_capabilities(record)
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -970,7 +986,7 @@ def enrich_reporting_record_list_capabilities(
     for record, resp in zip(records, responses):
         caps = derive_reporting_record_capabilities(record)
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -979,7 +995,7 @@ def enrich_reporting_record_list_capabilities(
 def enrich_exception_process_record_capabilities_on_response(record: Any, response: T) -> T:
     caps = derive_exception_process_record_capabilities(record)
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -991,7 +1007,7 @@ def enrich_exception_process_record_list_capabilities(
     for record, resp in zip(records, responses):
         caps = derive_exception_process_record_capabilities(record)
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -1000,7 +1016,7 @@ def enrich_exception_process_record_list_capabilities(
 def enrich_packing_binding_capabilities_on_response(binding: Any, response: T) -> T:
     caps = derive_packing_binding_capabilities(binding)
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -1012,7 +1028,7 @@ def enrich_packing_binding_list_capabilities(
     for binding, resp in zip(bindings, responses):
         caps = derive_packing_binding_capabilities(binding)
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -1027,7 +1043,7 @@ def enrich_outbound_hub_list_capabilities(
     for record, resp in zip(records, responses):
         caps = derive_outbound_hub_capabilities(record, outbound_type=outbound_type)
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -1039,7 +1055,7 @@ def enrich_customer_material_registration_capabilities_on_response(
 ) -> T:
     caps = derive_customer_material_registration_capabilities(registration)
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -1051,7 +1067,7 @@ def enrich_customer_material_registration_list_capabilities(
     for registration, resp in zip(registrations, responses):
         caps = derive_customer_material_registration_capabilities(registration)
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -1065,7 +1081,7 @@ def enrich_inventory_alert_list_capabilities(
     for alert, resp in zip(alerts, responses):
         caps = derive_inventory_alert_capabilities(alert)
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -1079,7 +1095,7 @@ def enrich_replenishment_suggestion_list_capabilities(
     for suggestion, resp in zip(suggestions, responses):
         caps = derive_replenishment_suggestion_capabilities(suggestion)
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -1096,7 +1112,7 @@ def enrich_quality_inspection_capabilities_on_response(
         supports_purchase_return=supports_purchase_return,
     )
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -1113,7 +1129,7 @@ def enrich_quality_inspection_list_capabilities(
             supports_purchase_return=supports_purchase_return,
         )
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -1122,7 +1138,7 @@ def enrich_quality_inspection_list_capabilities(
 def enrich_oqc_inspection_capabilities_on_response(inspection: Any, response: T) -> T:
     caps = derive_oqc_inspection_capabilities(inspection)
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -1134,7 +1150,7 @@ def enrich_oqc_inspection_list_capabilities(
     for inspection, resp in zip(inspections, responses):
         caps = derive_oqc_inspection_capabilities(inspection)
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -1143,7 +1159,7 @@ def enrich_oqc_inspection_list_capabilities(
 def enrich_eight_d_report_capabilities_on_response(report: Any, response: T) -> T:
     caps = derive_eight_d_report_capabilities(report)
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -1155,7 +1171,7 @@ def enrich_eight_d_report_list_capabilities(
     for report, resp in zip(reports, responses):
         caps = derive_eight_d_report_capabilities(report)
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out
@@ -1192,7 +1208,7 @@ def enrich_nonconforming_ledger_capabilities_on_response(
         has_linked_8d_report=has_linked_8d_report,
     )
     if hasattr(response, "model_copy"):
-        return response.model_copy(update={"capabilities": caps})
+        return _attach_capabilities_to_response(response, caps)
     return response
 
 
@@ -1211,7 +1227,7 @@ async def enrich_nonconforming_ledger_list_capabilities(
             has_linked_8d_report=linked_map.get(rid, False),
         )
         if hasattr(resp, "model_copy"):
-            out.append(resp.model_copy(update={"capabilities": caps}))
+            out.append(_attach_capabilities_to_response(resp, caps))
         else:
             out.append(resp)
     return out

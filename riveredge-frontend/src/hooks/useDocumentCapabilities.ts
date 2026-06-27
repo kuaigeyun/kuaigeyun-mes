@@ -332,9 +332,9 @@ type SalesReturnRecord = import('../apps/kuaizhizao/services/sales-return').Sale
 
 export function shipmentNoticeBatchNotifyAllowed(
   records: ShipmentNoticeRecord[],
-  canSubmit: boolean,
+  canUpdate: boolean,
 ): boolean {
-  return batchSomeCapabilityAllowed(records, canSubmit, (r) => r.capabilities?.notify);
+  return batchSomeCapabilityAllowed(records, canUpdate, (r) => r.capabilities?.notify);
 }
 
 export function shipmentNoticeBatchWithdrawAllowed(
@@ -577,7 +577,7 @@ export function useShipmentNoticeCapabilities(
     () => ({
       update: capView(caps?.update, perms.canUpdate, permDeniedTitle, t, SHIPMENT_NOTICE_CAPABILITY_REASON_MESSAGES, 'app.kuaizhizao.shipmentNotice.capability'),
       delete: capView(caps?.delete, perms.canDelete, permDeniedTitle, t, SHIPMENT_NOTICE_CAPABILITY_REASON_MESSAGES, 'app.kuaizhizao.shipmentNotice.capability'),
-      notify: capView(caps?.notify, perms.canAction?.('submit') ?? false, permDeniedTitle, t, SHIPMENT_NOTICE_CAPABILITY_REASON_MESSAGES, 'app.kuaizhizao.shipmentNotice.capability'),
+      notify: capView(caps?.notify, perms.canUpdate, permDeniedTitle, t, SHIPMENT_NOTICE_CAPABILITY_REASON_MESSAGES, 'app.kuaizhizao.shipmentNotice.capability'),
       withdraw: capView(caps?.withdraw, perms.canAction?.('revoke') ?? false, permDeniedTitle, t, SHIPMENT_NOTICE_CAPABILITY_REASON_MESSAGES, 'app.kuaizhizao.shipmentNotice.capability'),
       print: capView(caps?.print, perms.canPrint, permDeniedTitle, t, SHIPMENT_NOTICE_CAPABILITY_REASON_MESSAGES, 'app.kuaizhizao.shipmentNotice.capability'),
     }),

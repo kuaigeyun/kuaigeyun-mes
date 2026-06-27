@@ -868,9 +868,11 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         order_id: int,
         operator_id: int,
     ) -> PurchaseOrderResponse:
-        """撤销审核：已确认/已驳回 → 待审核"""
+        """撤销审核：人工审→待审核，自动审→草稿。"""
         from apps.kuaizhizao.services.document_action_policy.enricher import purchase_order_has_downstream
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
         from core.services.approval.uni_audit_service import UniAuditService
+        from infra.services.business_config_service import BusinessConfigService
 
         order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
         if not order:
@@ -883,9 +885,19 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             has_downstream=has_downstream,
         )
 
+        audit_required = await BusinessConfigService().check_audit_required(
+            tenant_id, "purchase_order"
+        )
+        landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+        target_status = (
+            DocumentStatus.PENDING_REVIEW.value
+            if landing == "pending"
+            else DocumentStatus.DRAFT.value
+        )
+
         async def _do_revoke() -> PurchaseOrderResponse:
             await order.update_from_dict({
-                "status": DocumentStatus.PENDING_REVIEW.value,
+                "status": target_status,
                 "review_status": ReviewStatus.PENDING.value,
                 "reviewer_id": None,
                 "reviewer_name": None,

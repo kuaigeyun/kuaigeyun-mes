@@ -54,6 +54,7 @@ import {
   AppstoreOutlined,
   BarsOutlined,
   BarChartOutlined,
+  PieChartOutlined,
   TabletOutlined,
   QuestionCircleOutlined,
   ProjectOutlined,
@@ -2441,11 +2442,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     (_props: unknown, defaultDom: React.ReactNode[]) => {
       if (!statCardsCtx?.enabled) return defaultDom
       const toggleNode = (
-        <span
-          key="uni-stat-cards-toggle"
-          style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
-          onClick={statCardsCtx.toggle}
-        >
+        <span key="uni-stat-cards-toggle" onClick={statCardsCtx.toggle}>
           <Tooltip
             title={t(
               statCardsCtx.visible
@@ -2453,11 +2450,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 : 'components.uniTable.showStatCards',
             )}
           >
-            <BarChartOutlined
-              style={{
-                fontSize: 16,
-                color: statCardsCtx.visible ? undefined : token.colorTextQuaternary,
-              }}
+            <PieChartOutlined
+              style={
+                statCardsCtx.visible
+                  ? undefined
+                  : { color: token.colorTextQuaternary }
+              }
             />
           </Tooltip>
         </span>
@@ -3194,6 +3192,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 const {
                   toolBarRender,
                   search,
+                  toolbar: _omitToolbar,
                   pagination: _omitPagination,
                   scroll: userScroll,
                   rowSelection: _omitRowSelection,

@@ -3002,7 +3002,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         resp = SalesDeliveryWithItemsResponse.model_validate(delivery)
         resp.lifecycle = get_sales_delivery_lifecycle(delivery)
         resp.items = [SalesDeliveryItemResponse.model_validate(i) for i in items]
-        return resp
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "sales_delivery", resp)
 
     async def list_sales_deliveries(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[SalesDeliveryResponse]:
         """获取销售出库单列表"""
@@ -3029,7 +3031,11 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             # 列表与详情共用生命周期计算，避免出库 Hub 列表显示「生命周期缺失」
             resp.lifecycle = get_sales_delivery_lifecycle(delivery, milestones=[])
             out.append(resp)
-        return enrich_outbound_hub_list_capabilities(deliveries, out, "sales_delivery")
+        from core.services.approval.audit_record_enricher import enrich_items
+
+        return await enrich_items(tenant_id, "sales_delivery", enrich_outbound_hub_list_capabilities(
+            deliveries, out, "sales_delivery"
+        ))
 
     async def update_sales_delivery(
         self,
@@ -3234,6 +3240,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         delivery_id: int,
         operator_id: int,
     ) -> SalesDeliveryResponse:
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
+        from core.services.approval.uni_audit_service import UniAuditService
+
         delivery = await SalesDelivery.get_or_none(
             id=delivery_id,
             tenant_id=tenant_id,
@@ -3244,15 +3253,30 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         status = str(delivery.status or "").strip()
         if status != "待出库":
             raise BusinessLogicError(f"当前状态不可撤销审核: {status or '-'}")
-        await SalesDelivery.filter(tenant_id=tenant_id, id=delivery_id).update(
-            status="待审核",
-            review_status="待审核",
-            reviewer_id=None,
-            reviewer_name=None,
-            review_time=None,
-            updated_by=operator_id,
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "sales_delivery"
         )
-        return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+        landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+        target_status = "待审核" if landing == "pending" else "草稿"
+
+        async def _do_revoke() -> SalesDeliveryResponse:
+            await SalesDelivery.filter(tenant_id=tenant_id, id=delivery_id).update(
+                status=target_status,
+                review_status="待审核",
+                reviewer_id=None,
+                reviewer_name=None,
+                review_time=None,
+                updated_by=operator_id,
+            )
+            return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+
+        return await UniAuditService.revoke_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="sales_delivery",
+            entity_id=delivery_id,
+            operator_id=operator_id,
+            flow_revoke=_do_revoke,
+        )
 
     async def withdraw_delivery_confirmation(
         self,

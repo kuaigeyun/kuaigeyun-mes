@@ -357,7 +357,7 @@ async def revoke_review_quotation(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """已发送且已通过 → 回到待审核。"""
+    """已发送且已通过 → 人工审回到待审核，自动审回到草稿。"""
     try:
         return await quotation_service.revoke_review_quotation(
             tenant_id=tenant_id,

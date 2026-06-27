@@ -98,7 +98,7 @@ export function resolveAuditActionVisibility(
     showWithdraw: manualAuditEnabled && isPending,
     showApprove: manualAuditEnabled && isPending,
     showReject: manualAuditEnabled && isPending,
-    showRevoke: manualAuditEnabled && isApproved,
+    showRevoke: isApproved,
     showAuditHub: manualAuditEnabled && isPending,
   };
 }

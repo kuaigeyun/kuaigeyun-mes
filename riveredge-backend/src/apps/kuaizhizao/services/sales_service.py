@@ -641,8 +641,9 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         forecast_id: int,
         withdrawn_by: int,
     ) -> SalesForecastResponse:
-        """撤回审核：已审核 -> 待审核（若已存在下游则禁止撤回）。"""
+        """撤回审核：人工审→待审核，自动审→草稿。"""
         from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
 
         forecast_row = await SalesForecast.get_or_none(
             tenant_id=tenant_id, id=forecast_id, deleted_at__isnull=True
@@ -656,9 +657,21 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             has_downstream=has_downstream,
         )
 
+        from infra.services.business_config_service import BusinessConfigService
+
+        audit_required = await BusinessConfigService().check_audit_required(
+            tenant_id, "sales_forecast"
+        )
+        landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+        target_status = (
+            DocumentStatus.PENDING_REVIEW.value
+            if landing == "pending"
+            else DocumentStatus.DRAFT.value
+        )
+
         async with in_transaction():
             await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
-                status=DocumentStatus.PENDING_REVIEW.value,
+                status=target_status,
                 review_status=ReviewStatus.PENDING.value,
                 reviewer_id=None,
                 reviewer_name=None,

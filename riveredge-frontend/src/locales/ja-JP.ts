@@ -1669,6 +1669,7 @@ export default {
   'common.detail': '詳細',
   'common.view': 'ビュー',
   'common.delete': '消去',
+  'common.remove': '外す',
   'common.fetchDetailFailed': '詳細の取得に失敗しました',
   'common.selectMaterial': '素材の選択',
   'common.addDetail': '詳細の追加',

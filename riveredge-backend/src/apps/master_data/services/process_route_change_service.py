@@ -189,8 +189,14 @@ class ProcessRouteChangeService:
         if change.status != "approved":
             raise ValidationError(f"变更记录状态为 {change.status}，无法反审核")
 
+        from apps.kuaiplm.services.engineering_change_audit import is_audit_required
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
+
+        audit_required = await is_audit_required(tenant_id, "process_route")
+        landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+
         async def _do_revoke() -> ProcessRouteChangeResponse:
-            change.status = "draft"
+            change.status = "pending" if landing == "pending" else "draft"
             change.approver_id = None
             change.approval_comment = None
             await change.save()

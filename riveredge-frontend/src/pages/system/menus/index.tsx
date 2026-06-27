@@ -19,7 +19,7 @@ import {
   HomeOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
-import { App, Button, Tag, Space, Popconfirm, Tooltip, Descriptions, Col, Modal, Switch, Card, Input, Select, Typography, Empty, Row } from 'antd';
+import { App, Button, Tag, Space, Popconfirm, Tooltip, Descriptions, Col, Modal, Spin } from 'antd';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
 import { UniTable } from '../../../components/uni-table';
@@ -32,7 +32,6 @@ import {
   deleteMenu,
   Menu,
   MenuTree,
-  CustomMenuLayoutNode,
   getTenantBackendHome,
   setMenuAsBackendHome,
   clearTenantBackendHome,
@@ -49,7 +48,13 @@ import { useTranslation } from 'react-i18next';
 import {
   mapMenuTreeWithTranslatedLabels,
   translateAppMenuItemName,
+  translateMenuName,
 } from '../../../utils/menuTranslation';
+import CustomMenuLayoutEditor, {
+  buildCustomLayoutPayload,
+  parseCustomLayoutEditorState,
+  type CustomLayoutEditorState,
+} from './CustomMenuLayoutEditor';
 
 // 菜单图标展示（与侧栏 ManufacturingIcons 一致）
 const IconItem = ({ icon }: { icon?: string }) => renderMenuIconByKey(icon, 16);
@@ -67,19 +72,6 @@ function findMenuInTree(uuid: string | undefined | null, nodes: MenuTree[]): Men
 }
 
 const trimField = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
-
-type CustomLayoutGroup = {
-  id: string;
-  type: 'app_group' | 'custom_group';
-  title: string;
-  icon?: string;
-  menuUuids: string[];
-};
-
-type MenuOverride = {
-  title?: string;
-  icon?: string;
-};
 
 const CUSTOM_LAYOUT_QUERY_KEY = ['menuCustomLayout'] as const;
 
@@ -195,9 +187,11 @@ const MenuListPage: React.FC = () => {
   const [customLayoutModalOpen, setCustomLayoutModalOpen] = useState(false);
   const [customLayoutLoading, setCustomLayoutLoading] = useState(false);
   const [customLayoutSaving, setCustomLayoutSaving] = useState(false);
-  const [customLayoutEnabled, setCustomLayoutEnabled] = useState(false);
-  const [customLayoutGroups, setCustomLayoutGroups] = useState<CustomLayoutGroup[]>([]);
-  const [customLayoutMenuOverrides, setCustomLayoutMenuOverrides] = useState<Record<string, MenuOverride>>({});
+  const [customLayoutEditorState, setCustomLayoutEditorState] = useState<CustomLayoutEditorState>({
+    enabled: false,
+    appGroups: [],
+    menuOverrides: {},
+  });
   const [customLayoutSourceTree, setCustomLayoutSourceTree] = useState<MenuTree[]>([]);
   const [customLayoutMenuSearch, setCustomLayoutMenuSearch] = useState('');
   const [customLayoutActiveGroupId, setCustomLayoutActiveGroupId] = useState<string | undefined>(undefined);
@@ -217,26 +211,6 @@ const MenuListPage: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: [...EFFECTIVE_HOME_QUERY_KEY] });
   }, [queryClient]);
 
-  const customLayoutMenuLibrary = useMemo(() => {
-    const rows: Array<{ key: string; title: string; description: string }> = [];
-    const walk = (nodes: MenuTree[], appLabel?: string) => {
-      nodes.forEach((node) => {
-        const currentAppLabel = appLabel || (node.path?.split('/')?.[2] || node.name);
-        if (node.path) {
-          const translated = translateAppMenuItemName(node.name, node.path, t, node.children);
-          rows.push({
-            key: node.uuid,
-            title: translated || node.name,
-            description: `${currentAppLabel} · ${node.path}`,
-          });
-        }
-        if (node.children?.length) walk(node.children, currentAppLabel);
-      });
-    };
-    walk(customLayoutSourceTree);
-    return rows;
-  }, [customLayoutSourceTree, t]);
-
   const customLayoutMenuLookup = useMemo(() => {
     const byUuid = new Map<string, MenuTree>();
     const walk = (nodes: MenuTree[]) => {
@@ -249,79 +223,6 @@ const MenuListPage: React.FC = () => {
     return byUuid;
   }, [customLayoutSourceTree]);
 
-  const parseCustomLayoutToState = useCallback((nodes: CustomMenuLayoutNode[]) => {
-    const groups: CustomLayoutGroup[] = [];
-    const menuOverrides: Record<string, MenuOverride> = {};
-
-    nodes.forEach((root, idx) => {
-      const groupId = root.id || `group-${idx + 1}`;
-      const groupType = root.type === 'app_group' ? 'app_group' : 'custom_group';
-      const group: CustomLayoutGroup = {
-        id: groupId,
-        type: groupType,
-        title: root.title || (groupType === 'app_group' ? t('pages.system.menus.customLayoutDefaultAppGroup') : t('pages.system.menus.customLayoutDefaultGroup')),
-        icon: root.icon,
-        menuUuids: [],
-      };
-      (root.children || []).forEach((child) => {
-        if (child.type !== 'menu_ref' || !child.menu_uuid) return;
-        const menuUuid = String(child.menu_uuid);
-        group.menuUuids.push(menuUuid);
-        if (child.title || child.icon) {
-          menuOverrides[menuUuid] = {
-            title: child.title || undefined,
-            icon: child.icon || undefined,
-          };
-        }
-      });
-      groups.push(group);
-    });
-    return { groups, menuOverrides };
-  }, [t]);
-
-  const buildCustomLayoutPayload = useCallback((): { enabled: boolean; nodes: CustomMenuLayoutNode[] } => {
-    const groups = [...customLayoutGroups];
-    const assignedMenuUuids = groups.flatMap((g) => g.menuUuids);
-    if (assignedMenuUuids.length > 0 && groups.length === 0) {
-      groups.push({
-        id: 'app-group-auto',
-        type: 'app_group',
-        title: t('pages.system.menus.customLayoutDefaultAppGroup'),
-        menuUuids: assignedMenuUuids,
-      });
-    }
-    const nodes: CustomMenuLayoutNode[] = groups.map((group) => ({
-      id: group.id,
-      type: group.type,
-      title: group.title,
-      icon: group.icon,
-      children: (group.menuUuids || [])
-        .map((uuid) => {
-          const source = customLayoutMenuLookup.get(uuid);
-          const override = customLayoutMenuOverrides[uuid] || {};
-          return {
-            id: `${group.id}-${uuid}`,
-            type: 'menu_ref',
-            menu_uuid: uuid,
-            menu_path: source?.path,
-            title: override.title || undefined,
-            icon: override.icon || undefined,
-            children: [],
-          } as CustomMenuLayoutNode;
-        }),
-    }));
-    return {
-      enabled: customLayoutEnabled,
-      nodes,
-    };
-  }, [
-    customLayoutEnabled,
-    customLayoutGroups,
-    customLayoutMenuLookup,
-    customLayoutMenuOverrides,
-    t,
-  ]);
-
   const handleOpenCustomLayoutModal = useCallback(async () => {
     try {
       setCustomLayoutLoading(true);
@@ -331,22 +232,20 @@ const MenuListPage: React.FC = () => {
         getNavigationMenuTree(),
       ]);
       setCustomLayoutSourceTree(sourceTree);
-      const parsed = parseCustomLayoutToState(layout.nodes || []);
-      setCustomLayoutEnabled(!!layout.enabled);
-      setCustomLayoutGroups(parsed.groups);
-      setCustomLayoutMenuOverrides(parsed.menuOverrides);
-      setCustomLayoutActiveGroupId(parsed.groups[0]?.id);
+      const parsed = parseCustomLayoutEditorState(layout.nodes || [], t);
+      setCustomLayoutEditorState({ ...parsed, enabled: !!layout.enabled });
+      setCustomLayoutActiveGroupId(parsed.appGroups[0]?.id);
     } catch (error: any) {
       messageApi.error(error?.message || t('pages.system.menus.customLayoutLoadFailed'));
     } finally {
       setCustomLayoutLoading(false);
     }
-  }, [messageApi, parseCustomLayoutToState, t]);
+  }, [messageApi, t]);
 
   const handleSaveCustomLayout = useCallback(async () => {
     try {
       setCustomLayoutSaving(true);
-      const payload = buildCustomLayoutPayload();
+      const payload = buildCustomLayoutPayload(customLayoutEditorState, customLayoutMenuLookup);
       await updateMenuCustomLayout(payload);
       messageApi.success(t('pages.system.menus.customLayoutSaveSuccess'));
       setCustomLayoutModalOpen(false);
@@ -357,58 +256,7 @@ const MenuListPage: React.FC = () => {
     } finally {
       setCustomLayoutSaving(false);
     }
-  }, [buildCustomLayoutPayload, messageApi, refreshLayoutMenus, t]);
-
-  const handleAddCustomLayoutGroup = useCallback((type: 'app_group' | 'custom_group') => {
-    const id = `${type}-${Date.now()}`;
-    setCustomLayoutGroups((prev) => [
-      ...prev,
-      {
-        id,
-        type,
-        title: type === 'app_group' ? t('pages.system.menus.customLayoutDefaultAppGroup') : t('pages.system.menus.customLayoutDefaultGroup'),
-        menuUuids: [],
-      },
-    ]);
-    setCustomLayoutActiveGroupId(id);
-  }, [t]);
-
-  const assignedMenuUuids = useMemo(
-    () => new Set(customLayoutGroups.flatMap((g) => g.menuUuids)),
-    [customLayoutGroups],
-  );
-
-  const customLayoutAvailableMenus = useMemo(() => {
-    const kw = customLayoutMenuSearch.trim().toLowerCase();
-    return customLayoutMenuLibrary.filter((item) => {
-      if (assignedMenuUuids.has(item.key)) return false;
-      if (!kw) return true;
-      return `${item.title} ${item.description}`.toLowerCase().includes(kw);
-    });
-  }, [assignedMenuUuids, customLayoutMenuLibrary, customLayoutMenuSearch]);
-
-  const handleQuickAddMenuToActiveGroup = useCallback((menuUuid: string) => {
-    let targetGroupId = customLayoutActiveGroupId;
-    if (!targetGroupId) {
-      const id = `custom_group-${Date.now()}`;
-      const nextGroup: CustomLayoutGroup = {
-        id,
-        type: 'custom_group',
-        title: t('pages.system.menus.customLayoutDefaultGroup'),
-        menuUuids: [menuUuid],
-      };
-      setCustomLayoutGroups((prev) => [...prev, nextGroup]);
-      setCustomLayoutActiveGroupId(id);
-      return;
-    }
-    setCustomLayoutGroups((prev) =>
-      prev.map((group) => {
-        if (group.id !== targetGroupId) return group;
-        if (group.menuUuids.includes(menuUuid)) return group;
-        return { ...group, menuUuids: [...group.menuUuids, menuUuid] };
-      }),
-    );
-  }, [customLayoutActiveGroupId, t]);
+  }, [customLayoutEditorState, customLayoutMenuLookup, messageApi, refreshLayoutMenus, t]);
 
   const handleSetBackendHome = useCallback(
     async (record: Menu) => {
@@ -1080,250 +928,17 @@ const MenuListPage: React.FC = () => {
           confirmLoading={customLayoutSaving}
           destroyOnHidden
         >
-          <Space direction="vertical" style={{ width: '100%' }} size={12}>
-            <Space align="center" size={12}>
-              <Typography.Text>{t('pages.system.menus.customLayoutEnabled')}</Typography.Text>
-              <Switch checked={customLayoutEnabled} onChange={setCustomLayoutEnabled} />
-            </Space>
-            <Row gutter={12}>
-              <Col span={10}>
-                <Card title={t('pages.system.menus.customLayoutTransferSource')} size="small">
-                  <Space direction="vertical" style={{ width: '100%' }} size={8}>
-                    <Select
-                      allowClear
-                      placeholder={t('pages.system.menus.customLayoutGroupSelectForQuickAdd')}
-                      value={customLayoutActiveGroupId}
-                      onChange={(value) => setCustomLayoutActiveGroupId(value)}
-                      options={customLayoutGroups.map((g) => ({
-                        value: g.id,
-                        label: `${g.type === 'app_group'
-                          ? t('pages.system.menus.customLayoutGroupTypeApp')
-                          : t('pages.system.menus.customLayoutGroupTypeCustom')} · ${g.title || g.id}`,
-                      }))}
-                    />
-                    <Input
-                      value={customLayoutMenuSearch}
-                      onChange={(e) => setCustomLayoutMenuSearch(e.target.value)}
-                      placeholder={t('pages.system.menus.customLayoutSearchMenuPlaceholder')}
-                    />
-                    <div style={{ maxHeight: 460, overflowY: 'auto' }}>
-                      <Space direction="vertical" style={{ width: '100%' }} size={6}>
-                        {customLayoutAvailableMenus.length === 0 ? (
-                          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('pages.system.menus.customLayoutNoAvailableMenus')} />
-                        ) : customLayoutAvailableMenus.map((item) => (
-                          <Card key={item.key} size="small" styles={{ body: { padding: 10 } }}>
-                            <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start">
-                              <div style={{ minWidth: 0 }}>
-                                <Typography.Text ellipsis>{item.title}</Typography.Text>
-                                <br />
-                                <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis>
-                                  {item.description}
-                                </Typography.Text>
-                              </div>
-                              <Button size="small" type="primary" onClick={() => handleQuickAddMenuToActiveGroup(item.key)}>
-                                {t('pages.system.menus.customLayoutQuickAdd')}
-                              </Button>
-                            </Space>
-                          </Card>
-                        ))}
-                      </Space>
-                    </div>
-                  </Space>
-                </Card>
-              </Col>
-              <Col span={14}>
-                <Space style={{ marginBottom: 8 }}>
-                  <Button onClick={() => handleAddCustomLayoutGroup('app_group')}>
-                    {t('pages.system.menus.customLayoutAddAppGroup')}
-                  </Button>
-                  <Button onClick={() => handleAddCustomLayoutGroup('custom_group')}>
-                    {t('pages.system.menus.customLayoutAddGroup')}
-                  </Button>
-                </Space>
-                {customLayoutGroups.length === 0 ? (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('pages.system.menus.customLayoutNoGroups')} />
-                ) : (
-                  <Space direction="vertical" style={{ width: '100%', maxHeight: 500, overflowY: 'auto' }} size={8}>
-                    {customLayoutGroups.map((group, groupIndex) => (
-                      <Card
-                        key={group.id}
-                        size="small"
-                        title={
-                          <Space>
-                            <Tag color={group.type === 'app_group' ? 'blue' : 'default'}>
-                              {group.type === 'app_group'
-                                ? t('pages.system.menus.customLayoutGroupTypeApp')
-                                : t('pages.system.menus.customLayoutGroupTypeCustom')}
-                            </Tag>
-                            <Input
-                              value={group.title}
-                              onChange={(e) =>
-                                setCustomLayoutGroups((prev) =>
-                                  prev.map((g) => (g.id === group.id ? { ...g, title: e.target.value } : g)),
-                                )
-                              }
-                              style={{ width: 220 }}
-                              placeholder={t('pages.system.menus.customLayoutGroupTitle')}
-                            />
-                            <MenuIconPicker
-                              value={group.icon}
-                              onChange={(icon) =>
-                                setCustomLayoutGroups((prev) =>
-                                  prev.map((g) => (g.id === group.id ? { ...g, icon } : g)),
-                                )
-                              }
-                            />
-                          </Space>
-                        }
-                        extra={
-                          <Space>
-                            <Button
-                              size="small"
-                              disabled={groupIndex === 0}
-                              onClick={() =>
-                                setCustomLayoutGroups((prev) => {
-                                  const next = [...prev];
-                                  if (groupIndex <= 0) return next;
-                                  [next[groupIndex - 1], next[groupIndex]] = [next[groupIndex], next[groupIndex - 1]];
-                                  return next;
-                                })
-                              }
-                            >
-                              ↑
-                            </Button>
-                            <Button
-                              size="small"
-                              disabled={groupIndex === customLayoutGroups.length - 1}
-                              onClick={() =>
-                                setCustomLayoutGroups((prev) => {
-                                  const next = [...prev];
-                                  if (groupIndex >= next.length - 1) return next;
-                                  [next[groupIndex + 1], next[groupIndex]] = [next[groupIndex], next[groupIndex + 1]];
-                                  return next;
-                                })
-                              }
-                            >
-                              ↓
-                            </Button>
-                            <Button
-                              size="small"
-                              danger
-                              onClick={() => {
-                                setCustomLayoutGroups((prev) => prev.filter((g) => g.id !== group.id));
-                                setCustomLayoutActiveGroupId((prev) => (prev === group.id ? undefined : prev));
-                              }}
-                            >
-                              {t('common.delete')}
-                            </Button>
-                          </Space>
-                        }
-                      >
-                        <Select
-                          mode="multiple"
-                          style={{ width: '100%' }}
-                          value={group.menuUuids}
-                          onChange={(value) =>
-                            setCustomLayoutGroups((prev) =>
-                              prev.map((g) =>
-                                g.id === group.id ? { ...g, menuUuids: value as string[] } : g,
-                              ),
-                            )
-                          }
-                          options={customLayoutMenuLibrary.map((item) => ({ value: item.key, label: item.title }))}
-                          placeholder={t('pages.system.menus.customLayoutGroupMenus')}
-                        />
-                        <Space direction="vertical" style={{ width: '100%', marginTop: 8 }} size={6}>
-                          {group.menuUuids.map((menuUuid, menuIndex) => {
-                            const source = customLayoutMenuLookup.get(menuUuid);
-                            if (!source) return null;
-                            const override = customLayoutMenuOverrides[menuUuid] || {};
-                            return (
-                              <Space key={`${group.id}-${menuUuid}`} style={{ width: '100%', justifyContent: 'space-between' }} align="center">
-                                <Space align="center">
-                                  <Button
-                                    size="small"
-                                    disabled={menuIndex === 0}
-                                    onClick={() =>
-                                      setCustomLayoutGroups((prev) =>
-                                        prev.map((g) => {
-                                          if (g.id !== group.id) return g;
-                                          const nextMenus = [...g.menuUuids];
-                                          [nextMenus[menuIndex - 1], nextMenus[menuIndex]] = [nextMenus[menuIndex], nextMenus[menuIndex - 1]];
-                                          return { ...g, menuUuids: nextMenus };
-                                        }),
-                                      )
-                                    }
-                                  >
-                                    ↑
-                                  </Button>
-                                  <Button
-                                    size="small"
-                                    disabled={menuIndex === group.menuUuids.length - 1}
-                                    onClick={() =>
-                                      setCustomLayoutGroups((prev) =>
-                                        prev.map((g) => {
-                                          if (g.id !== group.id) return g;
-                                          const nextMenus = [...g.menuUuids];
-                                          [nextMenus[menuIndex + 1], nextMenus[menuIndex]] = [nextMenus[menuIndex], nextMenus[menuIndex + 1]];
-                                          return { ...g, menuUuids: nextMenus };
-                                        }),
-                                      )
-                                    }
-                                  >
-                                    ↓
-                                  </Button>
-                                  <Typography.Text style={{ width: 220 }} ellipsis>
-                                    {translateAppMenuItemName(source.name, source.path, t, source.children)}
-                                  </Typography.Text>
-                                </Space>
-                                <Space>
-                                  <Input
-                                    value={override.title}
-                                    onChange={(e) =>
-                                      setCustomLayoutMenuOverrides((prev) => ({
-                                        ...prev,
-                                        [menuUuid]: { ...prev[menuUuid], title: e.target.value || undefined },
-                                      }))
-                                    }
-                                    placeholder={t('pages.system.menus.customLayoutMenuTitleOverride')}
-                                    style={{ width: 200 }}
-                                  />
-                                  <MenuIconPicker
-                                    value={override.icon}
-                                    onChange={(icon) =>
-                                      setCustomLayoutMenuOverrides((prev) => ({
-                                        ...prev,
-                                        [menuUuid]: { ...prev[menuUuid], icon: icon || undefined },
-                                      }))
-                                    }
-                                  />
-                                  <Button
-                                    size="small"
-                                    danger
-                                    onClick={() =>
-                                      setCustomLayoutGroups((prev) =>
-                                        prev.map((g) =>
-                                          g.id === group.id
-                                            ? { ...g, menuUuids: g.menuUuids.filter((id) => id !== menuUuid) }
-                                            : g,
-                                        ),
-                                      )
-                                    }
-                                  >
-                                    {t('common.remove')}
-                                  </Button>
-                                </Space>
-                              </Space>
-                            );
-                          })}
-                        </Space>
-                      </Card>
-                    ))}
-                  </Space>
-                )}
-              </Col>
-            </Row>
-          </Space>
+          <Spin spinning={customLayoutLoading}>
+            <CustomMenuLayoutEditor
+              sourceTree={customLayoutSourceTree}
+              state={customLayoutEditorState}
+              activeGroupId={customLayoutActiveGroupId}
+              menuSearch={customLayoutMenuSearch}
+              onStateChange={(patch) => setCustomLayoutEditorState((prev) => ({ ...prev, ...patch }))}
+              onActiveGroupIdChange={setCustomLayoutActiveGroupId}
+              onMenuSearchChange={setCustomLayoutMenuSearch}
+            />
+          </Spin>
         </Modal>
     </ListPageTemplate>
   );

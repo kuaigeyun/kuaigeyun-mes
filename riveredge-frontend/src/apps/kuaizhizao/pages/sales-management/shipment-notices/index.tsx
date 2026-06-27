@@ -10,9 +10,13 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
+import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col, Typography, Dropdown, Spin, Empty, Descriptions } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, DownOutlined, PrinterOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
@@ -22,7 +26,7 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import { UniCapabilityBatchButton, UniBatchButton } from '../../../../../components/uni-batch';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
@@ -112,11 +116,18 @@ const ShipmentNoticesPage: React.FC = () => {
   const shipmentNoticeEntityName = t('app.kuaizhizao.shipmentNotice.entityName');
   const statusMap = useMemo(
     () => ({
+      待审核: { text: t('app.kuaizhizao.salesContract.statusPending'), color: 'processing' },
+      已驳回: { text: t('app.kuaizhizao.productionPlan.statusRejected'), color: 'error' },
       待发货: { text: t('app.kuaizhizao.shipmentNotice.statusPending'), color: 'default' },
       已通知: { text: t('app.kuaizhizao.shipmentNotice.statusNotified'), color: 'processing' },
       已出库: { text: t('app.kuaizhizao.shipmentNotice.statusShipped'), color: 'success' },
     }),
     [t, i18n.language],
+  );
+  const shipmentNoticeAuditEnabled = useAuditRequired('shipment_notice', false);
+  const shipmentNoticeAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<ShipmentNotice>({ t, auditEnabled: shipmentNoticeAuditEnabled }),
+    [t, shipmentNoticeAuditEnabled],
   );
   const defaultUnit = t('app.kuaizhizao.shipmentNotice.defaultUnit');
   const defaultNoticeItem = useMemo(
@@ -178,6 +189,10 @@ const ShipmentNoticesPage: React.FC = () => {
   const [importVisible, setImportVisible] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const tableRowsRef = useRef<ShipmentNotice[]>([]);
+  const [notifyWarehouseModalOpen, setNotifyWarehouseModalOpen] = useState(false);
+  const [notifyWarehouseTarget, setNotifyWarehouseTarget] = useState<ShipmentNotice | null>(null);
+  const [notifyWarehouseSubmitting, setNotifyWarehouseSubmitting] = useState(false);
+  const notifyWarehouseFormRef = useRef<ProFormInstance>();
 
   const selectedNoticesForBatch = useMemo(
     () =>
@@ -258,6 +273,7 @@ const ShipmentNoticesPage: React.FC = () => {
     { title: t('app.kuaizhizao.shipmentNotice.plannedShipDate'), dataIndex: 'planned_ship_date', valueType: 'date', width: 120 },
     { title: t('app.kuaizhizao.shipmentNotice.notifiedAt'), dataIndex: 'notified_at', valueType: 'dateTime', width: 160 },
     { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
+    shipmentNoticeAuditColumn,
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
@@ -269,12 +285,17 @@ const ShipmentNoticesPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      width: 200,
+      width: 240,
       fixed: 'right',
       render: (_, record) => renderShipmentNoticeRowActions([
         <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)}>{t('common.detail')}</Button>,
         record.capabilities?.update?.allowed && shipmentNoticePerms.canUpdate ? (
           <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>{t('common.edit')}</Button>
+        ) : null,
+        record.capabilities?.notify?.allowed && shipmentNoticePerms.canUpdate ? (
+          <Button {...rowActionKind('dispatch')} key="notify" icon={<SendOutlined />} onClick={() => handleNotify(record as ShipmentNotice)}>
+            {t('app.kuaizhizao.shipmentNotice.notifyWarehouse')}
+          </Button>
         ) : null,
         record.capabilities?.delete?.allowed && shipmentNoticePerms.canDelete ? (
           <Button {...rowActionKind('delete')} key="delete" onClick={() => handleDelete(record as ShipmentNotice)}>{t('common.delete')}</Button>
@@ -330,6 +351,105 @@ const ShipmentNoticesPage: React.FC = () => {
       messageApi.error(t('app.kuaizhizao.shipmentNotice.loadDetailFailed'));
     }
   };
+
+  const executeNotify = useCallback(async (
+    record: ShipmentNotice,
+    warehouse?: { warehouse_id: number; warehouse_name?: string },
+  ) => {
+    const res = (await shipmentNoticeApi.notify(record.id!.toString(), warehouse)) as ShipmentNotice;
+    messageApi.success(
+      res?.sales_delivery_code
+        ? t('app.kuaizhizao.shipmentNotice.notifySuccessWithDelivery', { deliveryCode: res.sales_delivery_code })
+        : t('app.kuaizhizao.shipmentNotice.notifySuccess'),
+    );
+    if (noticeDetail?.id === record.id) {
+      const fresh = await shipmentNoticeApi.get(record.id!.toString());
+      setNoticeDetail(fresh as ShipmentNoticeDetail);
+    }
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+  }, [invalidateMenuBadgeCounts, messageApi, noticeDetail?.id, t]);
+
+  const handleNotify = (record: ShipmentNotice) => {
+    if (!record.warehouse_id) {
+      setNotifyWarehouseTarget(record);
+      setNotifyWarehouseModalOpen(true);
+      setTimeout(() => {
+        notifyWarehouseFormRef.current?.resetFields();
+      }, 0);
+      return;
+    }
+    Modal.confirm({
+      title: t('app.kuaizhizao.shipmentNotice.notifyWarehouse'),
+      content: t('app.kuaizhizao.shipmentNotice.notifyConfirmContent', { code: record.notice_code }),
+      onOk: async () => {
+        try {
+          await executeNotify(record);
+        } catch (error: any) {
+          messageApi.error(error.message || t('app.kuaizhizao.shipmentNotice.notifyFailed'));
+        }
+      },
+    });
+  };
+
+  const handleNotifyWarehouseModalOk = async () => {
+    if (!notifyWarehouseTarget?.id) return;
+    try {
+      const values = await notifyWarehouseFormRef.current?.validateFields();
+      setNotifyWarehouseSubmitting(true);
+      await executeNotify(notifyWarehouseTarget, {
+        warehouse_id: Number(values.warehouse_id),
+        warehouse_name: values.warehouse_name ? String(values.warehouse_name) : undefined,
+      });
+      setNotifyWarehouseModalOpen(false);
+      setNotifyWarehouseTarget(null);
+      setSelectedRowKeys([]);
+    } catch (error: any) {
+      if (error?.errorFields) return;
+      messageApi.error(error.message || t('app.kuaizhizao.shipmentNotice.notifyFailed'));
+    } finally {
+      setNotifyWarehouseSubmitting(false);
+    }
+  };
+
+  const handleBatchNotify = useCallback(async (keys: React.Key[]) => {
+    if (!shipmentNoticePerms.canUpdate) return;
+    const records = keys
+      .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+      .filter((row): row is ShipmentNotice => row != null)
+      .filter((row) => row.capabilities?.notify?.allowed === true);
+    if (records.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.shipmentNotice.batchNotifyNotAllowed'));
+      return;
+    }
+    if (records.length === 1 && !records[0].warehouse_id) {
+      handleNotify(records[0]);
+      return;
+    }
+    if (records.some((row) => !row.warehouse_id)) {
+      messageApi.warning(t('app.kuaizhizao.shipmentNotice.batchNotifyMissingWarehouse'));
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const record of records) {
+      try {
+        await executeNotify(record);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) {
+      messageApi.success(t('components.uniBatch.capability.success', { count: success }));
+      setSelectedRowKeys([]);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    }
+    if (failed > 0) {
+      messageApi.warning(t('components.uniBatch.capability.partial', { success, failed }));
+    }
+  }, [executeNotify, invalidateMenuBadgeCounts, messageApi, shipmentNoticePerms.canUpdate, t]);
 
   const handleWithdraw = (record: ShipmentNotice) => {
     Modal.confirm({
@@ -1042,30 +1162,33 @@ const ShipmentNoticesPage: React.FC = () => {
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.shipmentNotice.confirmBatchDelete', { count })}
           toolBarActionsAfterBatch={[
-            <UniCapabilityBatchButton
+            <UniBatchButton
               key="shipment-notice-notify"
               selectedRowKeys={selectedRowKeys}
-              selectedRecords={selectedNoticesForBatch}
-              capabilityKey="notify"
-              permAllowed={shipmentNoticePerms.canAction?.('submit') ?? false}
-              batchAllowed={shipmentNoticeBatchNotifyAllowed}
-              onRun={(id) => shipmentNoticeApi.notify(String(id))}
-              notAllowedMessage={t('app.kuaizhizao.shipmentNotice.batchNotifyNotAllowed')}
-              onSuccess={() => {
-                setSelectedRowKeys([]);
-                invalidateMenuBadgeCounts();
-                actionRef.current?.reload();
-              }}
+              disabled={!shipmentNoticeBatchNotifyAllowed(selectedNoticesForBatch, shipmentNoticePerms.canUpdate)}
               requireConfirm
-              labels={{
-                single: t('app.kuaizhizao.shipmentNotice.notifyWarehouse'),
-                batch: t('app.kuaizhizao.shipmentNotice.batchNotifyWarehouse'),
-              }}
+              confirmTitle={
+                selectedRowKeys.length <= 1
+                  ? t('app.kuaizhizao.shipmentNotice.notifyWarehouse')
+                  : t('app.kuaizhizao.shipmentNotice.batchNotifyWarehouse')
+              }
+              confirmDescription={
+                selectedRowKeys.length <= 1
+                  ? t('app.kuaizhizao.shipmentNotice.notifyConfirmContent', {
+                      code: selectedNoticesForBatch[0]?.notice_code ?? '',
+                    })
+                  : undefined
+              }
+              onAction={handleBatchNotify}
               icon={<SendOutlined />}
               size="middle"
               color="green"
               variant="solid"
-            />,
+            >
+              {selectedRowKeys.length <= 1
+                ? t('app.kuaizhizao.shipmentNotice.notifyWarehouse')
+                : t('app.kuaizhizao.shipmentNotice.batchNotifyWarehouse')}
+            </UniBatchButton>,
             <UniCapabilityBatchButton
               key="shipment-notice-withdraw"
               selectedRowKeys={selectedRowKeys}
@@ -1217,18 +1340,53 @@ const ShipmentNoticesPage: React.FC = () => {
         column={3}
         dataSource={noticeDetail || undefined}
         extra={
-          noticeDetail?.id != null &&
-          !(
-            noticeDetail.capabilities?.print?.allowed === false ||
-            !shipmentNoticePerms.canPrint
-          ) ? (
+          noticeDetail?.id != null ? (
             <Space size="small">
-              <Button
-                icon={<PrinterOutlined />}
-                onClick={() => openPrint({ documentType: 'shipment_notice', documentId: noticeDetail.id! })}
-              >
-                {t('components.uniAction.print')}
-              </Button>
+              <UniWorkflowActions {...rowActionKind('skip')}
+                record={noticeDetail}
+                entityName={shipmentNoticeEntityName}
+                auditNodeKey="shipment_notice"
+                resourcePrefix={SHIPMENT_NOTICE_RESOURCE}
+                statusField="status"
+                draftStatuses={['草稿', 'draft']}
+                pendingStatuses={['待审核', 'pending_review', 'pending_approval']}
+                approvedStatuses={['待发货', '已通知', '已出库']}
+                rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
+                onSuccess={async () => {
+                  actionRef.current?.reload();
+                  invalidateMenuBadgeCounts();
+                  setTrackingRefreshKey((k) => k + 1);
+                  if (noticeDetail?.id) {
+                    const updated = await shipmentNoticeApi.get(String(noticeDetail.id));
+                    setNoticeDetail(updated as ShipmentNoticeDetail);
+                  }
+                }}
+              />
+              {noticeDetail.capabilities?.notify?.allowed && shipmentNoticePerms.canUpdate ? (
+                <Button
+                  {...rowActionKind('dispatch')}
+                  icon={<SendOutlined />}
+                  onClick={() => handleNotify(noticeDetail)}
+                >
+                  {t('app.kuaizhizao.shipmentNotice.notifyWarehouse')}
+                </Button>
+              ) : null}
+              {noticeDetail.capabilities?.withdraw?.allowed && shipmentNoticePerms.canAction?.('revoke') ? (
+                <Button {...rowActionKind('revoke')} onClick={() => handleWithdraw(noticeDetail)}>
+                  {t('app.kuaizhizao.shipmentNotice.withdrawNotify')}
+                </Button>
+              ) : null}
+              {!(
+                noticeDetail.capabilities?.print?.allowed === false ||
+                !shipmentNoticePerms.canPrint
+              ) ? (
+                <Button
+                  icon={<PrinterOutlined />}
+                  onClick={() => openPrint({ documentType: 'shipment_notice', documentId: noticeDetail.id! })}
+                >
+                  {t('components.uniAction.print')}
+                </Button>
+              ) : null}
             </Space>
           ) : null
         }
@@ -1269,13 +1427,15 @@ const ShipmentNoticesPage: React.FC = () => {
                     const mainStages = lc.mainStages ?? [];
                     if (mainStages.length === 0) return null;
                     return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        showLabels
-                        status={lc.status}
-                        nextStepSuggestions={lc.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
+                      <DetailLifecycleCollaborationBlock record={noticeDetail} auditEnabled={shipmentNoticeAuditEnabled}>
+                        <UniLifecycleStepper
+                          steps={mainStages}
+                          showLabels
+                          status={lc.status}
+                          nextStepSuggestions={lc.nextStepSuggestions}
+                          hideNextStepSuggestions
+                        />
+                      </DetailLifecycleCollaborationBlock>
                     );
                   })()}
                   {noticeDetail.id != null ? (
@@ -1390,6 +1550,42 @@ const ShipmentNoticesPage: React.FC = () => {
       >
         {renderEditForm()}
       </FormModalTemplate>
+
+      <Modal
+        title={t('app.kuaizhizao.shipmentNotice.notifyWarehouseSelectTitle')}
+        open={notifyWarehouseModalOpen}
+        onCancel={() => {
+          setNotifyWarehouseModalOpen(false);
+          setNotifyWarehouseTarget(null);
+        }}
+        onOk={() => void handleNotifyWarehouseModalOk()}
+        confirmLoading={notifyWarehouseSubmitting}
+        okText={t('app.kuaizhizao.shipmentNotice.notifyWarehouse')}
+        cancelText={t('common.cancel')}
+        destroyOnHidden
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+      >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
+          {t('app.kuaizhizao.shipmentNotice.notifyWarehouseSelectContent', {
+            code: notifyWarehouseTarget?.notice_code ?? '',
+          })}
+        </Typography.Paragraph>
+        <ProForm
+          formRef={notifyWarehouseFormRef}
+          submitter={false}
+          layout="vertical"
+        >
+          <UniWarehouseSelect
+            name="warehouse_id"
+            label={t('app.kuaizhizao.shipmentNotice.outboundWarehouse')}
+            required
+            onChange={(_, wh) => {
+              notifyWarehouseFormRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' });
+            }}
+          />
+          <ProFormText name="warehouse_name" hidden />
+        </ProForm>
+      </Modal>
 
       <UniMaterialBatchPicker
         open={materialPickerOpen}

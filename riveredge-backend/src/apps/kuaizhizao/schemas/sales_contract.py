@@ -7,8 +7,10 @@ from decimal import Decimal
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from apps.kuaizhizao.services.document_action_policy.types import SalesContractCapabilities
+from core.schemas.base import BaseSchema
 
 from apps.kuaizhizao.schemas.sales_contract_term import SalesContractTermSnapshot
+from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
 
 
 class SalesContractItemCreate(BaseModel):
@@ -73,7 +75,7 @@ class SalesContractCreate(BaseModel):
     contract_date: date
     valid_from: Optional[date] = None
     valid_to: Optional[date] = None
-    price_type: str = "tax_exclusive"
+    price_type: str = DEFAULT_SALES_PRICE_TYPE
     currency_code: Optional[str] = "CNY"
     salesman_id: Optional[int] = None
     salesman_name: Optional[str] = None
@@ -115,7 +117,7 @@ class SalesContractUpdate(BaseModel):
     milestones: Optional[List[SalesContractMilestoneCreate]] = None
 
 
-class SalesContractResponse(BaseModel):
+class SalesContractResponse(BaseSchema):
     id: int
     uuid: str
     tenant_id: int
@@ -171,9 +173,6 @@ class SalesContractResponse(BaseModel):
         None,
         description="业务态动作 capabilities（不含 RBAC）",
     )
-
-    class Config:
-        from_attributes = True
 
 
 class SalesContractListResponse(BaseModel):

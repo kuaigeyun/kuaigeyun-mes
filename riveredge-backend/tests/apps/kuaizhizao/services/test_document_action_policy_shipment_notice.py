@@ -25,10 +25,15 @@ def test_pending_update_delete_notify():
     assert not caps.withdraw.allowed
 
 
-def test_notify_requires_warehouse_and_items():
+def test_notify_allowed_without_warehouse_on_notice():
     caps = derive_shipment_notice_capabilities(_n(warehouse_id=None), has_items=True, has_warehouse=False)
+    assert caps.notify.allowed
+
+
+def test_notify_requires_items():
+    caps = derive_shipment_notice_capabilities(_n(), has_items=False)
     assert not caps.notify.allowed
-    assert caps.notify.reason == "shipment_notice.notify.no_warehouse"
+    assert caps.notify.reason == "shipment_notice.notify.no_items"
 
 
 def test_notified_withdraw():

@@ -15,6 +15,7 @@ from tortoise.transactions import in_transaction
 from loguru import logger
 
 from apps.kuaizhizao.models.quotation import Quotation
+from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE, normalize_price_type
 from apps.kuaizhizao.models.quotation_item import QuotationItem
 from apps.master_data.models.customer import Customer
 from apps.kuaizhizao.models.sales_order import SalesOrder
@@ -252,7 +253,7 @@ class QuotationService:
         q = qty or Decimal("0")
         up = unit_price or Decimal("0")
         tr = tax_rate if tax_rate is not None else Decimal("0")
-        pt = (price_type or "tax_exclusive").strip()
+        pt = normalize_price_type(price_type)
         unit_cents = int((up * Decimal("100")).to_integral_value(rounding=ROUND_HALF_UP))
         if pt == "tax_inclusive":
             incl_cents = int((q * Decimal(unit_cents)).to_integral_value(rounding=ROUND_HALF_UP))
@@ -345,7 +346,7 @@ class QuotationService:
             "total_quantity": quotation.total_quantity,
             "total_amount": quotation.total_amount,
             "discount_amount": getattr(quotation, "discount_amount", None) or Decimal("0"),
-            "price_type": getattr(quotation, "price_type", None) or "tax_exclusive",
+            "price_type": getattr(quotation, "price_type", None) or DEFAULT_SALES_PRICE_TYPE,
             "status": quotation.status,
             "reviewer_id": quotation.reviewer_id,
             "reviewer_name": quotation.reviewer_name,
@@ -611,7 +612,7 @@ class QuotationService:
 
             total_qty = Decimal("0")
             total_amt = Decimal("0")
-            pt = str(q_dict.get("price_type") or "tax_exclusive")
+            pt = str(q_dict.get("price_type") or DEFAULT_SALES_PRICE_TYPE)
             for item_data in quotation_data.items:
                 qty = item_data.quote_quantity
                 unit_pr = item_data.unit_price or Decimal("0")
@@ -852,35 +853,73 @@ class QuotationService:
         quotation_id: int,
         operator_id: int,
     ) -> QuotationResponse:
-        """撤回审核：已发送 + 已通过 → 回到待审核（不回草稿）。"""
+        """撤销审核：已发送 + 已通过 → 人工审回到待审核，自动审回到草稿。"""
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
+        from core.services.approval.uni_audit_service import UniAuditService
+
         quotation = await Quotation.get_or_none(
             tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
         )
         if not quotation:
             raise NotFoundError(f"报价单不存在: {quotation_id}")
         await self._assert_quotation_capability(tenant_id, quotation, "revoke_approval")
-        from apps.common.base_service import AppBaseService
 
-        op_name = await AppBaseService().get_user_name(operator_id)
-        async with in_transaction():
-            await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
-                review_status="待审核",
-                reviewer_id=None,
-                reviewer_name=None,
-                review_time=None,
-                review_remarks=None,
-                updated_by=operator_id,
-            )
-            await self._log_quotation_state_transition(
-                tenant_id,
-                quotation_id,
-                "已通过",
-                "待审核",
-                operator_id,
-                op_name,
-                "撤回审核",
-            )
-        return await self.get_quotation_by_id(tenant_id, quotation_id, include_items=True)
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "quotation"
+        )
+        landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+
+        async def _do_revoke() -> QuotationResponse:
+            from apps.common.base_service import AppBaseService
+
+            op_name = await AppBaseService().get_user_name(operator_id)
+            async with in_transaction():
+                if landing == "draft":
+                    await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
+                        status="草稿",
+                        review_status="",
+                        reviewer_id=None,
+                        reviewer_name=None,
+                        review_time=None,
+                        review_remarks=None,
+                        updated_by=operator_id,
+                    )
+                    await self._log_quotation_state_transition(
+                        tenant_id,
+                        quotation_id,
+                        "已通过",
+                        "草稿",
+                        operator_id,
+                        op_name,
+                        "撤销审核",
+                    )
+                else:
+                    await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
+                        review_status="待审核",
+                        reviewer_id=None,
+                        reviewer_name=None,
+                        review_time=None,
+                        review_remarks=None,
+                        updated_by=operator_id,
+                    )
+                    await self._log_quotation_state_transition(
+                        tenant_id,
+                        quotation_id,
+                        "已通过",
+                        "待审核",
+                        operator_id,
+                        op_name,
+                        "撤销审核",
+                    )
+            return await self.get_quotation_by_id(tenant_id, quotation_id, include_items=True)
+
+        return await UniAuditService.revoke_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="quotation",
+            entity_id=quotation_id,
+            operator_id=operator_id,
+            flow_revoke=_do_revoke,
+        )
 
     async def confirm_customer_quotation(
         self,
@@ -1349,7 +1388,7 @@ class QuotationService:
                 total_qty = Decimal("0")
                 total_amt = Decimal("0")
                 q_row = await Quotation.get(id=quotation_id)
-                pt = str(getattr(q_row, "price_type", None) or "tax_exclusive")
+                pt = str(getattr(q_row, "price_type", None) or DEFAULT_SALES_PRICE_TYPE)
                 for item_data in quotation_data.items:
                     qty = item_data.quote_quantity
                     unit_pr = item_data.unit_price or Decimal("0")
@@ -1447,7 +1486,7 @@ class QuotationService:
         item_override = overrides.pop("items", None)
 
         row_price_type = str(
-            overrides.get("price_type", getattr(latest, "price_type", None) or "tax_exclusive")
+            overrides.get("price_type", getattr(latest, "price_type", None) or DEFAULT_SALES_PRICE_TYPE)
         )
 
         async with in_transaction():
@@ -1694,7 +1733,7 @@ class QuotationService:
             min(valid_dates) if valid_dates else order_date
         )
 
-        q_price_type = getattr(quotation, "price_type", None) or "tax_exclusive"
+        q_price_type = getattr(quotation, "price_type", None) or DEFAULT_SALES_PRICE_TYPE
 
         all_items = await QuotationItem.filter(
             tenant_id=tenant_id, quotation_id=quotation_id

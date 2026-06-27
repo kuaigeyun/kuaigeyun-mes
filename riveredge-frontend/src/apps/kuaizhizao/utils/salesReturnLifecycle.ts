@@ -4,20 +4,20 @@ const P = 'app.kuaizhizao.salesReturn';
 
 export const getSalesReturnLifecycle = createLifecycleResolver({
   stageDefs: [
-    { key: 'pending', label: '待退货', labelKey: `${P}.statusPending` },
+    { key: 'pending_return_goods', label: '待退货', labelKey: `${P}.statusPending` },
     { key: 'completed', label: '已退货', labelKey: `${P}.statusReturned` },
   ],
   statusToKey: {
-    待退货: 'pending',
+    待退货: 'pending_return_goods',
     已退货: 'completed',
-    草稿: 'pending',
+    草稿: 'pending_return_goods',
   },
   nextStepSuggestions: {
-    pending: ['确认退货'],
+    pending_return_goods: ['确认退货'],
     completed: ['撤回确认（回到待退货）'],
   },
   nextStepSuggestionKeys: {
-    pending: [`${P}.lifecycleNextConfirmReturn`],
+    pending_return_goods: [`${P}.lifecycleNextConfirmReturn`],
     completed: [`${P}.lifecycleNextWithdrawConfirm`],
   },
   successKeys: ['completed'],

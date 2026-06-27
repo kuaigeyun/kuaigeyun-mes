@@ -65,6 +65,8 @@ import {
 } from '../../../../../components/layout-templates';
 import { reportingApi, workOrderApi, materialBindingApi, getReportingStatistics } from '../../../services/production';
 import { getReportingLifecycle, reportingRecordUniAuditProps } from '../../../utils/reportingLifecycle';
+import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
@@ -248,6 +250,10 @@ const ReportingPage: React.FC = () => {
   const tableRowsRef = useRef<ReportingRecord[]>([]);
   const reportingPerms = useResourcePermissions(REPORTING_RESOURCE);
   const reportingAuditEnabled = useAuditRequired('reporting_record', false);
+  const reportingAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<ReportingRecord>({ t, auditEnabled: reportingAuditEnabled }),
+    [t, reportingAuditEnabled],
+  );
 
   const reportingAuditBatchHandlers = useMemo(
     () => ({
@@ -1178,26 +1184,16 @@ const ReportingPage: React.FC = () => {
       width: 160,
       defaultSortOrder: 'descend',
     },
+    ...(reportingAuditColumn ? [reportingAuditColumn] : []),
     {
       title: t('app.kuaizhizao.workReporting.colLifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
       hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getReportingLifecycle(record);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      },
+      render: (_, record) => (
+        <ListUniLifecycleCell lifecycle={getReportingLifecycle(record as Record<string, unknown>, t)} />
+      ),
     },
     {
       title: t('common.actions'),
@@ -1207,7 +1203,7 @@ const ReportingPage: React.FC = () => {
       render: (_, record) =>
         renderReportingRowActions(renderReportingRowActionNodes(record), `rr-${record.id}`),
     },
-  ], [t]);
+  ], [t, reportingAuditColumn]);
 
 
   const reportingDetailBaseColumns: ProDescriptionsItemProps<ReportingRecord>[] = useMemo(
