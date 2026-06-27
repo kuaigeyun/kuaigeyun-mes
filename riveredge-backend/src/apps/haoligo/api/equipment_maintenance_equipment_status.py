@@ -6,9 +6,7 @@ from decimal import Decimal
 from typing import Optional
 
 from apps.haoligo.api._qs import tenant_alive
-from apps.haoligo.constants.equipment_maintenance import (
-    EQUIPMENT_MAINTENANCE_REPAIR_RESULT_TO_OPERATIONAL_STATUS,
-)
+from apps.haoligo.constants.repair_result_items import operational_status_from_repair_results
 from apps.haoligo.models.equipment import HaoligoEquipment
 from apps.haoligo.models.equipment_status_log import HaoligoEquipmentOperationalStatusLog
 from apps.haoligo.models.equipment_upkeep import HaoligoEquipmentUpkeepCompleteSheet, HaoligoEquipmentUpkeepSheet
@@ -101,7 +99,7 @@ async def resolve_latest_complete_operational_status(tenant_id: int, equipment_i
     rr = (row.repair_result or "").strip()
     if not rr:
         return None
-    return EQUIPMENT_MAINTENANCE_REPAIR_RESULT_TO_OPERATIONAL_STATUS.get(rr)
+    return operational_status_from_repair_results(rr)
 
 
 async def refresh_equipment_status_after_maintenance_change(

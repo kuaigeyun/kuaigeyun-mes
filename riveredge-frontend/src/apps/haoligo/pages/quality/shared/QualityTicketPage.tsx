@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionType, ProColumns, ProForm, ProFormDateTimePicker, ProFormDependency, ProFormDigit, ProFormInstance, ProFormRadio, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Col, Descriptions, Divider, Space, Tag, Typography, Upload } from 'antd';
+import { App, Button, Col, Descriptions, Divider, Form, Space, Tag, Typography, Upload } from 'antd';
+import { SettingOutlined } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -22,12 +23,22 @@ import {
   type WorkshopRow,
 } from '../../../services/haoligo';
 import { withMoldPictureCardUploadClass } from '../../../utils/moldPictureCardUpload';
-import { qualityStatusTagColor, qualityStatusText, resolveQualityWorkflowAction, QUALITY_NOTIFICATION_DOCUMENT } from '../../../utils/qualityMeta';
-import { resolveQualityOverdueNotifySeedIds } from '../../../utils/qualityOverdueNotify';
+import { qualityStatusTagColor, qualityStatusText, resolveQualityWorkflowAction, QUALITY_NOTIFICATION_DOCUMENT, QUALITY_ISSUE_RESPONSIBLE_USER_LABEL, QUALITY_ISSUE_NOTIFY_USER_LABEL, QUALITY_COMPLAINT_NOTIFY_USER_LABEL, QUALITY_LINE_STOP_NOTIFY_USER_LABEL, QUALITY_LINE_STOP_RESPONSIBLE_USER_LABEL, QUALITY_ISSUE_KIND_OPTIONS, qualityIssueKindLabel, qualityIssueOverdueNotifyHint, qualityComplaintOverdueNotifyHint, qualityLineStopOverdueNotifyHint, QUALITY_OVERDUE_NOTIFY_HINT, QUALITY_OVERDUE_NOTIFY_SETTING_TOOLBAR_LABEL, calcQualityIssueDefectRate, formatQualityIssueDefectRate } from '../../../utils/qualityMeta';
+import { formatQualityMeasureOverdueAt } from '../../../utils/qualityMeasureOverdue';
+import {
+  resolveQualityComplaintOverdueNotifySeedIds,
+  resolveQualityIssueOverdueNotifySeedIds,
+  resolveQualityLineStopOverdueNotifySeedIds,
+  resolveQualityOverdueNotifySeedIds,
+} from '../../../utils/qualityOverdueNotify';
 import { formatDateTime } from '../../../../../utils/format';
 import { PatrolImagePreview } from '../../patrol/shared/PatrolImagePreview';
 import { normUploadUuids, uuidsToSecureUploadFileList } from '../../patrol/shared/uploadHelpers';
 import QualityWorkOrderDatasetBindingModal from './QualityWorkOrderDatasetBindingModal';
+import { QualityTicketOverdueNotifySettingModal } from './QualityTicketOverdueNotifySettingModal';
+import { getQualityComplaintOverdueNotifyIds } from '../../../utils/qualityComplaintOverdueNotifyDefaults';
+import { getQualityIssueOverdueNotifyIdsForKind, resolveQualityIssueKindForOverdueNotify } from '../../../utils/qualityIssueOverdueNotifyDefaults';
+import { getQualityLineStopOverdueNotifyIdsForKind } from '../../../utils/qualityLineStopOverdueNotifyDefaults';
 
 type WorkflowStep = 'temporary' | 'long_term' | 'close' | 'measures';
 
@@ -83,6 +94,8 @@ function resolveQualityAutoTitle(
 const HANDLE_UPDATABLE_KEYS = [
   'responsible_user_ids',
   'overdue_notify_user_ids',
+  'temporary_overdue_notify_user_ids',
+  'long_term_overdue_notify_user_ids',
   'temporary_action',
   'temporary_due_at',
   'temporary_action_image_uuids',
@@ -145,11 +158,18 @@ type BaseRow = {
   close_confirmed_at?: string | null;
   responsible_user_ids?: number[] | null;
   overdue_notify_user_ids?: number[] | null;
+  temporary_overdue_notify_user_ids?: number[] | null;
+  long_term_overdue_notify_user_ids?: number[] | null;
   work_order_no?: string | null;
   material_code_snapshot?: string | null;
   model_snapshot?: string | null;
   mold_code_snapshot?: string | null;
+  planned_qty?: number | string | null;
+  completed_qty?: number | string | null;
   defect_qty?: number | string | null;
+  defect_rate?: number | string | null;
+  issue_kind?: string | null;
+  equipment_id?: number | null;
   recovered_at?: string | null;
   attachment_file_uuids?: string[] | null;
   stop_kind?: string | null;
@@ -158,6 +178,7 @@ type BaseRow = {
   customer_name?: string | null;
   material_code?: string | null;
   model?: string | null;
+  batch_no?: string | null;
   quantity?: number | string | null;
   claim_amount?: number | string | null;
   responsible_name?: string | null;
@@ -249,6 +270,12 @@ export function QualityTicketPage<T extends BaseRow>({
   const [prefillBusy, setPrefillBusy] = useState(false);
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep | null>(null);
   const [loadedDetail, setLoadedDetail] = useState<T | null>(null);
+  const [overdueNotifySettingOpen, setOverdueNotifySettingOpen] = useState(false);
+  const [haoligoParameters, setHaoligoParameters] = useState<Record<string, unknown>>({});
+  const [measureOverdueNotifySeed, setMeasureOverdueNotifySeed] = useState<{
+    temporary: number[];
+    long_term: number[];
+  }>({ temporary: [], long_term: [] });
   const defaultStatus = 'all';
   const showRegisterAsDetail = viewMode === 'handle' && editingId != null && !detailMode;
 
@@ -273,6 +300,19 @@ export function QualityTicketPage<T extends BaseRow>({
       cancelled = true;
     };
   }, [showWorkOrderFields]);
+
+  useEffect(() => {
+    if (!combinedHandleMeasures) return;
+    let cancelled = false;
+    void getBusinessConfig()
+      .then((config) => {
+        if (!cancelled) setHaoligoParameters(config?.parameters?.haoligo ?? {});
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [combinedHandleMeasures]);
 
   const canPrefillFromDataset = useMemo(() => {
     const b = workOrderBinding;
@@ -495,6 +535,20 @@ export function QualityTicketPage<T extends BaseRow>({
             .filter((x) => Number.isFinite(x) && x > 0)
         : [];
     }
+    if ('temporary_overdue_notify_user_ids' in out) {
+      out.temporary_overdue_notify_user_ids = Array.isArray(out.temporary_overdue_notify_user_ids)
+        ? out.temporary_overdue_notify_user_ids
+            .map((x) => Number(x))
+            .filter((x) => Number.isFinite(x) && x > 0)
+        : [];
+    }
+    if ('long_term_overdue_notify_user_ids' in out) {
+      out.long_term_overdue_notify_user_ids = Array.isArray(out.long_term_overdue_notify_user_ids)
+        ? out.long_term_overdue_notify_user_ids
+            .map((x) => Number(x))
+            .filter((x) => Number.isFinite(x) && x > 0)
+        : [];
+    }
     if ('attachment_file_uuids' in out) {
       out.attachment_file_uuids = Array.isArray(out.attachment_file_uuids)
         ? out.attachment_file_uuids.map((x) => String(x)).filter((x) => x.trim())
@@ -519,6 +573,7 @@ export function QualityTicketPage<T extends BaseRow>({
     if (!id) {
       setWorkflowStep(null);
       setLoadedDetail(null);
+      setMeasureOverdueNotifySeed({ temporary: [], long_term: [] });
       setTemporaryActionImageUuids([]);
       setLongTermActionImageUuids([]);
       setCreateFormInitialValues(buildCreateInitialValues());
@@ -557,15 +612,88 @@ export function QualityTicketPage<T extends BaseRow>({
       if (viewMode === 'handle' && !readonly) {
         try {
           const config = await getBusinessConfig();
-          const seedIds = await resolveQualityOverdueNotifySeedIds(
-            config?.parameters?.notifications,
-            qualityNotificationDocument,
-            detail.overdue_notify_user_ids,
-          );
-          if (seedIds.length) {
-            const currentOverdue = parseNotifyUserIds(formRef.current?.getFieldValue('overdue_notify_user_ids'));
-            if (!currentOverdue.length) {
-              formRef.current?.setFieldsValue({ overdue_notify_user_ids: seedIds });
+          setHaoligoParameters(config?.parameters?.haoligo ?? {});
+          if (combinedHandleMeasures) {
+            const haoligoParams = config?.parameters?.haoligo;
+            const patch: Record<string, number[]> = {};
+            let tempSeed: number[] = [];
+            let longSeed: number[] = [];
+            if (isIssueForm) {
+              const issueKind = detail.issue_kind;
+              const equipmentId = detail.equipment_id;
+              tempSeed = await resolveQualityIssueOverdueNotifySeedIds(
+                config?.parameters?.notifications,
+                qualityNotificationDocument,
+                'temporary_overdue',
+                issueKind,
+                detail.temporary_overdue_notify_user_ids ?? detail.overdue_notify_user_ids,
+                haoligoParams,
+                equipmentId,
+              );
+              longSeed = await resolveQualityIssueOverdueNotifySeedIds(
+                config?.parameters?.notifications,
+                qualityNotificationDocument,
+                'long_term_overdue',
+                issueKind,
+                detail.long_term_overdue_notify_user_ids ?? detail.overdue_notify_user_ids,
+                haoligoParams,
+                equipmentId,
+              );
+            } else if (isLineStopForm) {
+              const stopKind = detail.stop_kind;
+              tempSeed = await resolveQualityLineStopOverdueNotifySeedIds(
+                config?.parameters?.notifications,
+                qualityNotificationDocument,
+                'temporary_overdue',
+                stopKind,
+                detail.temporary_overdue_notify_user_ids ?? detail.overdue_notify_user_ids,
+                haoligoParams,
+              );
+              longSeed = await resolveQualityLineStopOverdueNotifySeedIds(
+                config?.parameters?.notifications,
+                qualityNotificationDocument,
+                'long_term_overdue',
+                stopKind,
+                detail.long_term_overdue_notify_user_ids ?? detail.overdue_notify_user_ids,
+                haoligoParams,
+              );
+            } else if (isComplaintForm) {
+              tempSeed = await resolveQualityComplaintOverdueNotifySeedIds(
+                config?.parameters?.notifications,
+                qualityNotificationDocument,
+                'temporary_overdue',
+                detail.temporary_overdue_notify_user_ids ?? detail.overdue_notify_user_ids,
+                haoligoParams,
+              );
+              longSeed = await resolveQualityComplaintOverdueNotifySeedIds(
+                config?.parameters?.notifications,
+                qualityNotificationDocument,
+                'long_term_overdue',
+                detail.long_term_overdue_notify_user_ids ?? detail.overdue_notify_user_ids,
+                haoligoParams,
+              );
+            }
+            if (!parseNotifyUserIds(formRef.current?.getFieldValue('temporary_overdue_notify_user_ids')).length && tempSeed.length) {
+              patch.temporary_overdue_notify_user_ids = tempSeed;
+            }
+            if (!parseNotifyUserIds(formRef.current?.getFieldValue('long_term_overdue_notify_user_ids')).length && longSeed.length) {
+              patch.long_term_overdue_notify_user_ids = longSeed;
+            }
+            if (Object.keys(patch).length) {
+              formRef.current?.setFieldsValue(patch);
+            }
+            setMeasureOverdueNotifySeed({ temporary: tempSeed, long_term: longSeed });
+          } else {
+            const seedIds = await resolveQualityOverdueNotifySeedIds(
+              config?.parameters?.notifications,
+              qualityNotificationDocument,
+              detail.overdue_notify_user_ids,
+            );
+            if (seedIds.length) {
+              const currentOverdue = parseNotifyUserIds(formRef.current?.getFieldValue('overdue_notify_user_ids'));
+              if (!currentOverdue.length) {
+                formRef.current?.setFieldsValue({ overdue_notify_user_ids: seedIds });
+              }
             }
           }
         } catch {
@@ -600,10 +728,7 @@ export function QualityTicketPage<T extends BaseRow>({
         const responsibleUserIds = Array.isArray(row.responsible_user_ids)
           ? row.responsible_user_ids.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0)
           : [];
-        const overdueNotifyUserIds = Array.isArray(row.overdue_notify_user_ids)
-          ? row.overdue_notify_user_ids.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0)
-          : [];
-        await registerSubmitFn(row.id, { responsible_user_ids: responsibleUserIds, overdue_notify_user_ids: overdueNotifyUserIds });
+        await registerSubmitFn(row.id, { responsible_user_ids: responsibleUserIds, overdue_notify_user_ids: [] });
       } else {
         await submitFn(row.id);
       }
@@ -657,7 +782,18 @@ export function QualityTicketPage<T extends BaseRow>({
         }
         const payload = normalizePayload({
           responsible_user_ids: responsibleUserIds,
-          overdue_notify_user_ids: parseNotifyUserIds(values.overdue_notify_user_ids),
+          overdue_notify_user_ids: combinedHandleMeasures
+            ? parseNotifyUserIds([
+                ...parseNotifyUserIds(values.temporary_overdue_notify_user_ids),
+                ...parseNotifyUserIds(values.long_term_overdue_notify_user_ids),
+              ])
+            : parseNotifyUserIds(values.overdue_notify_user_ids),
+          ...(combinedHandleMeasures
+            ? {
+                temporary_overdue_notify_user_ids: parseNotifyUserIds(values.temporary_overdue_notify_user_ids),
+                long_term_overdue_notify_user_ids: parseNotifyUserIds(values.long_term_overdue_notify_user_ids),
+              }
+            : {}),
           temporary_action: temporaryAction,
           temporary_due_at: values.temporary_due_at,
           temporary_action_image_uuids: temporaryActionImageUuids,
@@ -668,6 +804,8 @@ export function QualityTicketPage<T extends BaseRow>({
         await submitHandleMeasuresFn(editingId, payload as {
           responsible_user_ids: number[];
           overdue_notify_user_ids: number[];
+          temporary_overdue_notify_user_ids?: number[];
+          long_term_overdue_notify_user_ids?: number[];
           temporary_action: string;
           temporary_due_at: string;
           temporary_action_image_uuids: string[];
@@ -823,7 +961,39 @@ export function QualityTicketPage<T extends BaseRow>({
 
   const isComplaintForm = formProfile === 'complaint';
   const isLineStopForm = formProfile === 'line-stop';
+  const isIssueForm = formProfile === 'default';
   const attachmentLabel = showWorkOrderFields || isComplaintForm ? '上传照片' : '附件';
+
+  const issueKindField = (
+    <ProFormRadio.Group
+      name="issue_kind"
+      label="问题类型"
+      initialValue="equipment"
+      rules={detailMode ? undefined : [{ required: true, message: '请选择问题类型' }]}
+      options={QUALITY_ISSUE_KIND_OPTIONS.map((item) => ({ label: item.label, value: item.value }))}
+      fieldProps={{ optionType: 'button', buttonStyle: 'solid', disabled: detailMode }}
+      colProps={{ span: FORM_LAYOUT.FULL_COL_SPAN }}
+    />
+  );
+
+  const issueQtyFields = (
+    <>
+      <ProFormDigit name="planned_qty" label="计划数量" min={0} colProps={{ span: 12 }} />
+      <ProFormDigit name="completed_qty" label="完成数量" min={0} colProps={{ span: 12 }} />
+      <ProFormDigit name="defect_qty" label="不良数量" min={0} colProps={{ span: 12 }} />
+      <ProFormDependency name={['defect_qty', 'completed_qty']}>
+        {({ defect_qty: defectQty, completed_qty: completedQty }) => (
+          <Col span={12}>
+            <Form.Item label="不良率">
+              <Typography.Text>
+                {formatQualityIssueDefectRate(calcQualityIssueDefectRate(completedQty, defectQty))}
+              </Typography.Text>
+            </Form.Item>
+          </Col>
+        )}
+      </ProFormDependency>
+    </>
+  );
 
   const registerDetailSection = useMemo(() => {
     if (!showRegisterAsDetail || !loadedDetail) return null;
@@ -868,7 +1038,10 @@ export function QualityTicketPage<T extends BaseRow>({
         <Descriptions.Item key="model" label="型号">
           {formatDisplayText(d.model)}
         </Descriptions.Item>,
-        <Descriptions.Item key="quantity" label="数量">
+        <Descriptions.Item key="batch_no" label="批次号">
+          {formatDisplayText(d.batch_no)}
+        </Descriptions.Item>,
+        <Descriptions.Item key="quantity" label="不良数量">
           {formatDisplayText(d.quantity)}
         </Descriptions.Item>,
         <Descriptions.Item key="claim_amount" label="赔偿金额">
@@ -889,23 +1062,39 @@ export function QualityTicketPage<T extends BaseRow>({
         <Descriptions.Item key="model" label="型号">
           {formatDisplayText(d.model_snapshot)}
         </Descriptions.Item>,
-        <Descriptions.Item key="equipment" label="设备">
-          {formatEquipmentLabel(d)}
-        </Descriptions.Item>,
         <Descriptions.Item key="mold_code" label="模具号">
           {formatDisplayText(d.mold_code_snapshot)}
         </Descriptions.Item>,
-        <Descriptions.Item key="production_line" label="产线">
-          {formatDisplayText(d.production_line)}
+        <Descriptions.Item key="issue_kind" label="问题类型">
+          {qualityIssueKindLabel(d.issue_kind)}
         </Descriptions.Item>,
         <Descriptions.Item key="problem_description" label="问题描述" span={2}>
           {formatDisplayText(d.problem_description)}
         </Descriptions.Item>,
+        <Descriptions.Item key="planned_qty" label="计划数量">
+          {formatDisplayText(d.planned_qty)}
+        </Descriptions.Item>,
+        <Descriptions.Item key="completed_qty" label="完成数量">
+          {formatDisplayText(d.completed_qty)}
+        </Descriptions.Item>,
         <Descriptions.Item key="defect_qty" label="不良数量">
           {formatDisplayText(d.defect_qty)}
         </Descriptions.Item>,
+        <Descriptions.Item key="defect_rate" label="不良率">
+          {formatQualityIssueDefectRate(
+            d.defect_rate != null && d.defect_rate !== ''
+              ? Number(d.defect_rate)
+              : calcQualityIssueDefectRate(d.completed_qty, d.defect_qty),
+          )}
+        </Descriptions.Item>,
         <Descriptions.Item key="workshop" label="责任车间">
           {formatDisplayText(d.workshop_name)}
+        </Descriptions.Item>,
+        <Descriptions.Item key="production_line" label="产线">
+          {formatDisplayText(d.production_line)}
+        </Descriptions.Item>,
+        <Descriptions.Item key="equipment" label="设备">
+          {formatEquipmentLabel(d)}
         </Descriptions.Item>,
       );
     } else {
@@ -919,11 +1108,27 @@ export function QualityTicketPage<T extends BaseRow>({
         <Descriptions.Item key="production_line" label="产线">
           {formatDisplayText(d.production_line)}
         </Descriptions.Item>,
+        <Descriptions.Item key="issue_kind" label="问题类型">
+          {qualityIssueKindLabel(d.issue_kind)}
+        </Descriptions.Item>,
         <Descriptions.Item key="problem_description" label="问题描述" span={2}>
           {formatDisplayText(d.problem_description)}
         </Descriptions.Item>,
+        <Descriptions.Item key="planned_qty" label="计划数量">
+          {formatDisplayText(d.planned_qty)}
+        </Descriptions.Item>,
+        <Descriptions.Item key="completed_qty" label="完成数量">
+          {formatDisplayText(d.completed_qty)}
+        </Descriptions.Item>,
         <Descriptions.Item key="defect_qty" label="不良数量">
           {formatDisplayText(d.defect_qty)}
+        </Descriptions.Item>,
+        <Descriptions.Item key="defect_rate" label="不良率">
+          {formatQualityIssueDefectRate(
+            d.defect_rate != null && d.defect_rate !== ''
+              ? Number(d.defect_rate)
+              : calcQualityIssueDefectRate(d.completed_qty, d.defect_qty),
+          )}
         </Descriptions.Item>,
       );
     }
@@ -934,7 +1139,7 @@ export function QualityTicketPage<T extends BaseRow>({
     );
     if (d.responsible_name) {
       items.push(
-        <Descriptions.Item key="responsible_name" label="责任人">
+        <Descriptions.Item key="responsible_name" label={isIssueForm ? QUALITY_ISSUE_RESPONSIBLE_USER_LABEL : isLineStopForm ? QUALITY_LINE_STOP_RESPONSIBLE_USER_LABEL : '责任人'}>
           {d.responsible_name}
         </Descriptions.Item>,
       );
@@ -955,7 +1160,7 @@ export function QualityTicketPage<T extends BaseRow>({
         <Divider style={{ margin: '16px 0 0' }} />
       </Col>
     );
-  }, [attachmentFiles, attachmentLabel, isComplaintForm, isLineStopForm, loadedDetail, showRegisterAsDetail, showWorkOrderFields]);
+  }, [attachmentFiles, attachmentLabel, isComplaintForm, isIssueForm, isLineStopForm, loadedDetail, showRegisterAsDetail, showWorkOrderFields]);
 
   const attachmentField = (
     <Col span={FORM_LAYOUT.FULL_COL_SPAN}>
@@ -1003,12 +1208,81 @@ export function QualityTicketPage<T extends BaseRow>({
     [detailMode],
   );
 
-  const overdueNotifyHint = useMemo(() => {
-    if (isLineStopForm) {
-      return '逾期将按停线类型自动提醒对应部长，可在下方调整提醒对象';
+  const measureOverdueNotifyHintText = useMemo(() => {
+    if (isIssueForm) {
+      const kind = resolveQualityIssueKindForOverdueNotify({
+        issue_kind: loadedDetail?.issue_kind,
+        equipment_id: loadedDetail?.equipment_id,
+      }) ?? loadedDetail?.issue_kind;
+      return qualityIssueOverdueNotifyHint(kind);
     }
-    return '逾期将自动提醒品质部长、生产部长、工程部长，可在下方调整提醒对象';
-  }, [isLineStopForm]);
+    if (isLineStopForm) return qualityLineStopOverdueNotifyHint(loadedDetail?.stop_kind);
+    if (isComplaintForm) return qualityComplaintOverdueNotifyHint();
+    return QUALITY_OVERDUE_NOTIFY_HINT;
+  }, [isComplaintForm, isIssueForm, isLineStopForm, loadedDetail?.equipment_id, loadedDetail?.issue_kind, loadedDetail?.stop_kind]);
+
+  const applyMeasureOverdueNotifyFromConfig = useCallback(() => {
+    let ids: number[] = [];
+    if (isIssueForm) {
+      const resolvedKind = resolveQualityIssueKindForOverdueNotify({
+        issue_kind: loadedDetail?.issue_kind ?? formRef.current?.getFieldValue('issue_kind'),
+        equipment_id: loadedDetail?.equipment_id ?? formRef.current?.getFieldValue('equipment_id'),
+      });
+      ids = getQualityIssueOverdueNotifyIdsForKind(haoligoParameters, resolvedKind);
+    } else if (isLineStopForm) {
+      ids = getQualityLineStopOverdueNotifyIdsForKind(
+        haoligoParameters,
+        loadedDetail?.stop_kind ?? formRef.current?.getFieldValue('stop_kind'),
+      );
+    } else if (isComplaintForm) {
+      ids = getQualityComplaintOverdueNotifyIds(haoligoParameters);
+    }
+    if (!ids.length) return;
+    formRef.current?.setFieldsValue({
+      temporary_overdue_notify_user_ids: ids,
+      long_term_overdue_notify_user_ids: ids,
+    });
+    setMeasureOverdueNotifySeed({ temporary: ids, long_term: ids });
+  }, [haoligoParameters, isComplaintForm, isIssueForm, isLineStopForm, loadedDetail?.equipment_id, loadedDetail?.issue_kind, loadedDetail?.stop_kind]);
+
+  const measureOverdueNotifyField = (
+    fieldName: 'temporary_overdue_notify_user_ids' | 'long_term_overdue_notify_user_ids',
+  ) => (
+    <>
+      <FormNotifyUsersSelect
+        name={fieldName}
+        label="逾期提醒人"
+        searchUsers={searchUsers}
+        readonly={detailMode}
+        colSpan={FORM_LAYOUT.FULL_COL_SPAN}
+        seedUserIds={
+          fieldName === 'temporary_overdue_notify_user_ids'
+            ? measureOverdueNotifySeed.temporary
+            : measureOverdueNotifySeed.long_term
+        }
+      />
+      <Col span={FORM_LAYOUT.FULL_COL_SPAN}>
+        <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
+          {measureOverdueNotifyHintText}
+        </Typography.Text>
+      </Col>
+    </>
+  );
+
+  const measureOverdueDateField = (
+    dueFieldName: 'temporary_due_at' | 'long_term_due_at',
+    label: string,
+  ) => (
+    <ProFormDependency name={[dueFieldName]}>
+      {(values) => (
+        <Col span={12}>
+          <Form.Item label={label}>
+            <Typography.Text>{formatQualityMeasureOverdueAt(values[dueFieldName])}</Typography.Text>
+          </Form.Item>
+        </Col>
+      )}
+    </ProFormDependency>
+  );
 
   const handleFields =
     viewMode !== 'register' ? (
@@ -1027,33 +1301,39 @@ export function QualityTicketPage<T extends BaseRow>({
             {showTemporaryMeasureFields ? (
               <>
                 <ProFormTextArea name="temporary_action" label="临时措施" colProps={{ span: 24 }} />
-                <ProFormDateTimePicker name="temporary_due_at" label="临时措施预计完成时间" colProps={{ span: 12 }} fieldProps={dateTimeFieldProps} />
+                <ProFormDateTimePicker
+                  name="temporary_due_at"
+                  label="临时措施预计完成时间"
+                  colProps={{ span: 12 }}
+                  fieldProps={dateTimeFieldProps}
+                />
+                {combinedHandleMeasures ? (
+                  <>
+                    {measureOverdueDateField('temporary_due_at', '临时措施逾期时间')}
+                    {measureOverdueNotifyField('temporary_overdue_notify_user_ids')}
+                  </>
+                ) : null}
                 {measureImageUploadField('临时措施落实情况', temporaryActionImageUuids, setTemporaryActionImageUuids)}
               </>
             ) : null}
             {showLongTermMeasureFields ? (
               <>
                 <ProFormTextArea name="long_term_action" label="长期措施" colProps={{ span: 24 }} />
-                <ProFormDateTimePicker name="long_term_due_at" label="长期措施预计完成时间" colProps={{ span: 12 }} fieldProps={dateTimeFieldProps} />
+                <ProFormDateTimePicker
+                  name="long_term_due_at"
+                  label="长期措施预计完成时间"
+                  colProps={{ span: 12 }}
+                  fieldProps={dateTimeFieldProps}
+                />
+                {combinedHandleMeasures ? (
+                  <>
+                    {measureOverdueDateField('long_term_due_at', '长期措施逾期时间')}
+                    {measureOverdueNotifyField('long_term_overdue_notify_user_ids')}
+                  </>
+                ) : null}
                 {measureImageUploadField('长期措施落实情况', longTermActionImageUuids, setLongTermActionImageUuids)}
               </>
             ) : null}
-          </>
-        ) : null}
-        {showHandleResponsibleFields ? (
-          <>
-            <FormNotifyUsersSelect
-              name="overdue_notify_user_ids"
-              label="逾期提醒对象"
-              searchUsers={searchUsers}
-              readonly={detailMode}
-              colSpan={FORM_LAYOUT.FULL_COL_SPAN}
-            />
-            <Col span={FORM_LAYOUT.FULL_COL_SPAN}>
-              <Typography.Text type="secondary" style={{ display: 'block', marginTop: -8, marginBottom: 8, fontSize: 12 }}>
-                {overdueNotifyHint}
-              </Typography.Text>
-            </Col>
           </>
         ) : null}
         {showCloseFields && !isComplaintForm ? (
@@ -1074,21 +1354,20 @@ export function QualityTicketPage<T extends BaseRow>({
     <>
       <FormNotifyUsersSelect
         name="responsible_user_ids"
-        label={isComplaintForm ? '提交相应责任人' : '责任人（多人）'}
-        searchUsers={searchUsers}
-        readonly={detailMode}
-        colSpan={FORM_LAYOUT.DEFAULT_COL_SPAN}
-      />
-      <FormNotifyUsersSelect
-        name="overdue_notify_user_ids"
-        label="逾期提醒对象"
+        label={isComplaintForm ? '提交相应责任人' : isIssueForm ? QUALITY_ISSUE_RESPONSIBLE_USER_LABEL : QUALITY_LINE_STOP_RESPONSIBLE_USER_LABEL}
         searchUsers={searchUsers}
         readonly={detailMode}
         colSpan={FORM_LAYOUT.DEFAULT_COL_SPAN}
       />
       <FormNotifyUsersSelect
         name="notify_user_ids"
-        label="通知人"
+        label={
+          isIssueForm
+            ? QUALITY_ISSUE_NOTIFY_USER_LABEL
+            : isComplaintForm
+              ? QUALITY_COMPLAINT_NOTIFY_USER_LABEL
+              : QUALITY_LINE_STOP_NOTIFY_USER_LABEL
+        }
         searchUsers={searchUsers}
         readonly={detailMode}
         colSpan={FORM_LAYOUT.DEFAULT_COL_SPAN}
@@ -1109,6 +1388,19 @@ export function QualityTicketPage<T extends BaseRow>({
           showCreateButton={viewMode !== 'handle'}
           createButtonText={`新建${title}`}
           onCreate={() => void openModal(undefined, false)}
+          toolBarActions={
+            combinedHandleMeasures
+              ? [
+                  <Button
+                    key="overdue-notify-setting"
+                    icon={<SettingOutlined />}
+                    onClick={() => setOverdueNotifySettingOpen(true)}
+                  >
+                    {QUALITY_OVERDUE_NOTIFY_SETTING_TOOLBAR_LABEL}
+                  </Button>,
+                ]
+              : []
+          }
           showDatasetConfigButton={showWorkOrderFields}
           onDatasetConfig={showWorkOrderFields ? () => setBindingModalOpen(true) : undefined}
           request={async (params, _sort, _filter, searchFormValues) => {
@@ -1221,7 +1513,8 @@ export function QualityTicketPage<T extends BaseRow>({
             <ProFormText name="customer_name" label="客户信息" colProps={{ span: FORM_LAYOUT.FULL_COL_SPAN }} />
             <ProFormText name="material_code" label="物料号" colProps={{ span: 12 }} />
             <ProFormText name="model" label="型号" colProps={{ span: 12 }} />
-            <ProFormDigit name="quantity" label="数量" min={0} colProps={{ span: 12 }} />
+            <ProFormText name="batch_no" label="批次号" colProps={{ span: 12 }} />
+            <ProFormDigit name="quantity" label="不良数量" min={0} colProps={{ span: 12 }} />
             <ProFormTextArea name="problem_description" label="描述不良现象" colProps={{ span: FORM_LAYOUT.FULL_COL_SPAN }} />
             {attachmentField}
             <ProFormDigit name="claim_amount" label="赔偿金额" min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
@@ -1252,24 +1545,26 @@ export function QualityTicketPage<T extends BaseRow>({
             />
             <ProFormText name="material_code_snapshot" label="物料号" colProps={{ span: 12 }} />
             <ProFormText name="model_snapshot" label="型号" colProps={{ span: 12 }} />
-            <ProFormSelect name="equipment_id" label="设备" request={equipmentOptionsRequest} showSearch colProps={{ span: 12 }} />
             <ProFormText name="mold_code_snapshot" label="模具号" colProps={{ span: 12 }} />
-            <ProFormText name="production_line" label="产线" colProps={{ span: 12 }} />
+            {issueKindField}
             <ProFormTextArea name="problem_description" label="问题描述" colProps={{ span: FORM_LAYOUT.FULL_COL_SPAN }} />
             {renderExtraFields?.({ readOnly: detailMode })}
             {attachmentField}
-            <ProFormDigit name="defect_qty" label="不良数量" min={0} colProps={{ span: 12 }} />
+            {issueQtyFields}
             <ProFormSelect name="workshop_id" label="责任车间" request={workshopOptionsRequest} showSearch colProps={{ span: 12 }} />
+            <ProFormText name="production_line" label="产线" colProps={{ span: 12 }} />
+            <ProFormSelect name="equipment_id" label="设备" request={equipmentOptionsRequest} showSearch colProps={{ span: 12 }} />
           </>
         ) : (
           <>
             <ProFormSelect name="workshop_id" label="责任车间" request={workshopOptionsRequest} showSearch colProps={{ span: 12 }} />
             <ProFormSelect name="equipment_id" label="关联设备" request={equipmentOptionsRequest} showSearch colProps={{ span: 12 }} />
             <ProFormText name="production_line" label="产线" colProps={{ span: 12 }} />
+            {issueKindField}
             <ProFormTextArea name="problem_description" label="问题描述" colProps={{ span: FORM_LAYOUT.FULL_COL_SPAN }} />
             {renderExtraFields?.({ readOnly: detailMode })}
             {attachmentField}
-            <ProFormDigit name="defect_qty" label="不良数量" min={0} colProps={{ span: 12 }} />
+            {issueQtyFields}
           </>
         )
         ) : null}
@@ -1288,21 +1583,14 @@ export function QualityTicketPage<T extends BaseRow>({
               <>
                 <FormNotifyUsersSelect
                   name="responsible_user_ids"
-                  label="责任人（多人）"
-                  searchUsers={searchUsers}
-                  readonly={detailMode}
-                  colSpan={FORM_LAYOUT.DEFAULT_COL_SPAN}
-                />
-                <FormNotifyUsersSelect
-                  name="overdue_notify_user_ids"
-                  label="逾期提醒对象"
+                  label={QUALITY_LINE_STOP_RESPONSIBLE_USER_LABEL}
                   searchUsers={searchUsers}
                   readonly={detailMode}
                   colSpan={FORM_LAYOUT.DEFAULT_COL_SPAN}
                 />
                 <FormNotifyUsersSelect
                   name="notify_user_ids"
-                  label="通知人"
+                  label={QUALITY_LINE_STOP_NOTIFY_USER_LABEL}
                   searchUsers={searchUsers}
                   readonly={detailMode}
                   colSpan={FORM_LAYOUT.DEFAULT_COL_SPAN}
@@ -1350,6 +1638,18 @@ export function QualityTicketPage<T extends BaseRow>({
           binding={workOrderBinding}
           onClose={() => setBindingModalOpen(false)}
           onSaved={(saved) => setWorkOrderBinding(saved?.dataset_uuid?.trim() ? saved : null)}
+        />
+      ) : null}
+      {combinedHandleMeasures ? (
+        <QualityTicketOverdueNotifySettingModal
+          profile={formProfile}
+          open={overdueNotifySettingOpen}
+          onOpenChange={setOverdueNotifySettingOpen}
+          searchUsers={searchUsers}
+          onSaved={(haoligoParams) => {
+            setHaoligoParameters(haoligoParams);
+            applyMeasureOverdueNotifyFromConfig();
+          }}
         />
       ) : null}
     </>

@@ -76,7 +76,7 @@ class HaoligoEquipmentUpkeepCompleteSheet(HaoligoTenantModel):
     upkeep_param_set_id = fields.IntField(null=True, description="保养完修使用的方案 id")
     upkeep_record_lines = fields.JSONField(null=True, description="保养完修按保养项填写的记录行")
     repair_content = fields.TextField(null=True, description="维修完修内容")
-    repair_result = fields.CharField(max_length=32, null=True, description="维修完修结果")
+    repair_result = fields.TextField(null=True, description="维修完修结果（多项「、」分隔，含标准选项与自定义）")
     clear_total_production = fields.BooleanField(default=False, description="保养完修是否清空累计产量")
     complete_notify_user_ids = fields.JSONField(
         default=list,

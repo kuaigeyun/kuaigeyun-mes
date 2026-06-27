@@ -11,6 +11,10 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._mold_sheet_keyword import (
+    apply_mold_line_items_sheet_keyword_filter,
+    outsource_complete_header_keyword_q,
+)
 from apps.haoligo.api._mold_maintenance_mold_status import (
     apply_upkeep_clear_from_outsource_complete_sheet_on_approve,
     refresh_mold_status_after_maintenance_completed,
@@ -532,15 +536,13 @@ async def list_outsource_maintenance_complete_sheets(
     created_to: Optional[datetime] = Query(None, description="创建时间止（含）"),
 ):
     qs = tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id)
-    if keyword and keyword.strip():
-        k = keyword.strip()
-        qs = qs.filter(
-            Q(source_order_no__icontains=k)
-            | Q(sheet_no__icontains=k)
-            | Q(outsourced_unit_name__icontains=k)
-            | Q(applicant_name__icontains=k)
-            | Q(department_name__icontains=k)
-        )
+    qs = await apply_mold_line_items_sheet_keyword_filter(
+        qs,
+        tenant_id,
+        keyword,
+        outsource_complete_header_keyword_q,
+        HaoligoMoldOutsourceMaintenanceCompleteSheet,
+    )
     if sheet_status and sheet_status.strip():
         qs = qs.filter(sheet_status=sheet_status.strip())
     if created_from is not None:
@@ -697,15 +699,13 @@ async def list_pending_audit_outsource_maintenance_complete_sheets(
     qs = await apply_outsource_sheet_scope(
         qs, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
     )
-    if keyword and keyword.strip():
-        k = keyword.strip()
-        qs = qs.filter(
-            Q(source_order_no__icontains=k)
-            | Q(sheet_no__icontains=k)
-            | Q(outsourced_unit_name__icontains=k)
-            | Q(department_name__icontains=k)
-            | Q(applicant_name__icontains=k)
-        )
+    qs = await apply_mold_line_items_sheet_keyword_filter(
+        qs,
+        tenant_id,
+        keyword,
+        outsource_complete_header_keyword_q,
+        HaoligoMoldOutsourceMaintenanceCompleteSheet,
+    )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     items = [await _serialize(r) for r in rows]
@@ -730,15 +730,13 @@ async def list_audit_outsource_maintenance_complete_sheets_mine(
     st = (sheet_status or "").strip()
     if st and st in OUTSOURCE_MAINTENANCE_COMPLETE_SHEET_STATUS_SET:
         qs = qs.filter(sheet_status=st)
-    if keyword and keyword.strip():
-        k = keyword.strip()
-        qs = qs.filter(
-            Q(source_order_no__icontains=k)
-            | Q(sheet_no__icontains=k)
-            | Q(outsourced_unit_name__icontains=k)
-            | Q(department_name__icontains=k)
-            | Q(applicant_name__icontains=k)
-        )
+    qs = await apply_mold_line_items_sheet_keyword_filter(
+        qs,
+        tenant_id,
+        keyword,
+        outsource_complete_header_keyword_q,
+        HaoligoMoldOutsourceMaintenanceCompleteSheet,
+    )
     qs = await apply_outsource_sheet_scope(
         qs, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
     )
@@ -768,14 +766,13 @@ async def list_pending_outsource_maintenance_complete_sheets_mine(
     qs = await apply_outsource_sheet_scope(
         qs, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
     )
-    if keyword and keyword.strip():
-        k = keyword.strip()
-        qs = qs.filter(
-            Q(source_order_no__icontains=k)
-            | Q(sheet_no__icontains=k)
-            | Q(outsourced_unit_name__icontains=k)
-            | Q(department_name__icontains=k)
-        )
+    qs = await apply_mold_line_items_sheet_keyword_filter(
+        qs,
+        tenant_id,
+        keyword,
+        outsource_complete_header_keyword_q,
+        HaoligoMoldOutsourceMaintenanceCompleteSheet,
+    )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     items = [await _serialize(r) for r in rows]

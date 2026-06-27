@@ -19,6 +19,8 @@ export type NotifyUsersSearchFn = (
 export type FormNotifyUsersSelectProps = {
   name?: string;
   label?: string;
+  /** 标签右侧附加操作（如「设定」按钮） */
+  labelAddon?: React.ReactNode;
   placeholder?: string;
   readonly?: boolean;
   /** 配置中心「开单默认人员」；表单未填时写入并用于回显选项 */
@@ -55,6 +57,7 @@ export function resolveSelectSearchKeyword(params?: unknown): string | undefined
 export const FormNotifyUsersSelect: React.FC<FormNotifyUsersSelectProps> = ({
   name = 'report_notify_user_ids',
   label,
+  labelAddon,
   placeholder,
   readonly,
   seedUserIds,
@@ -68,6 +71,14 @@ export const FormNotifyUsersSelect: React.FC<FormNotifyUsersSelectProps> = ({
   const canPick = canPickUsersForDisplay(currentUser);
   const canInteract = !isReadonlyMode && (Boolean(searchUsers) || canPick);
   const resolvedLabel = label ?? t('app.haoligo.equipment.documents.formReportNotifyUsers');
+  const formLabel = labelAddon
+    ? (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <span>{resolvedLabel}</span>
+          {labelAddon}
+        </span>
+      )
+    : resolvedLabel;
   const resolvedPh = placeholder ?? t('app.haoligo.equipment.documents.formReportNotifyUsersPh');
 
   const form = Form.useFormInstance();
@@ -135,7 +146,7 @@ export const FormNotifyUsersSelect: React.FC<FormNotifyUsersSelectProps> = ({
   const field = (
     <ProFormSelect
       name={name}
-      label={resolvedLabel}
+      label={formLabel}
       debounceTime={300}
       options={options}
       request={async (params) => fetchOptions(resolveSelectSearchKeyword(params))}

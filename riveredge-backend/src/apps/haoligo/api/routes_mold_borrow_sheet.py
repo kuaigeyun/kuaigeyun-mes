@@ -11,6 +11,10 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._mold_sheet_keyword import (
+    apply_direct_mold_field_keyword_filter,
+    borrow_sheet_header_keyword_q,
+)
 from apps.haoligo.api._mold_processing_time import (
     borrow_return_status_label,
     outstanding_borrow_ids_for_tenant,
@@ -400,17 +404,9 @@ async def list_borrow_sheets(
     keyword: Optional[str] = Query(None),
 ):
     qs = tenant_alive(HaoligoMoldBorrowSheet, tenant_id)
-    if keyword and keyword.strip():
-        k = keyword.strip()
-        qs = qs.filter(
-            Q(source_order_no__icontains=k)
-            | Q(sheet_no__icontains=k)
-            | Q(mold_code__icontains=k)
-            | Q(mold_name__icontains=k)
-            | Q(department_name__icontains=k)
-            | Q(finished_product_code__icontains=k)
-            | Q(finished_product_name__icontains=k)
-        )
+    qs = await apply_direct_mold_field_keyword_filter(
+        qs, tenant_id, keyword, borrow_sheet_header_keyword_q
+    )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     outstanding_ids = await outstanding_borrow_ids_for_tenant(tenant_id)

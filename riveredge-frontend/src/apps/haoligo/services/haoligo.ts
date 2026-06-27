@@ -1435,6 +1435,8 @@ export interface QualityTicketBaseRow {
   responsible_user_id?: number | null;
   responsible_user_ids?: number[];
   overdue_notify_user_ids?: number[];
+  temporary_overdue_notify_user_ids?: number[];
+  long_term_overdue_notify_user_ids?: number[];
   responsible_name?: string | null;
   notify_user_ids?: number[];
   reported_at?: string | null;
@@ -1446,13 +1448,18 @@ export interface QualityTicketBaseRow {
 
 export interface QualityIssueRow extends QualityTicketBaseRow {
   issue_type_codes?: string[];
+  issue_kind?: string | null;
+  planned_qty?: string | number | null;
+  completed_qty?: string | number | null;
   defect_qty?: string | number | null;
+  defect_rate?: string | number | null;
 }
 
 export interface CustomerComplaintRow extends QualityTicketBaseRow {
   customer_name?: string | null;
   material_code?: string | null;
   model?: string | null;
+  batch_no?: string | null;
   quantity?: string | number | null;
   claim_amount?: string | number | null;
 }
@@ -1487,6 +1494,9 @@ export type QualityIssueCreatePayload = {
   notify_user_ids?: number[];
   reported_at?: string | null;
   issue_type_codes?: string[];
+  issue_kind?: string | null;
+  planned_qty?: number | null;
+  completed_qty?: number | null;
   defect_qty?: number | null;
 };
 
@@ -1520,6 +1530,7 @@ export type CustomerComplaintCreatePayload = {
   customer_name?: string | null;
   material_code?: string | null;
   model?: string | null;
+  batch_no?: string | null;
   quantity?: number | null;
   claim_amount?: number | null;
 };
@@ -1627,6 +1638,7 @@ export interface QualityRegisterSubmitPayload {
 export interface QualityTemporaryActionPayload {
   responsible_user_ids?: number[];
   overdue_notify_user_ids?: number[];
+  temporary_overdue_notify_user_ids?: number[];
   temporary_action: string;
   temporary_due_at: string;
   temporary_action_image_uuids: string[];
@@ -1641,6 +1653,8 @@ export interface QualityLongTermActionPayload {
 export interface QualityHandleMeasuresPayload extends QualityTemporaryActionPayload, QualityLongTermActionPayload {
   responsible_user_ids: number[];
   overdue_notify_user_ids: number[];
+  temporary_overdue_notify_user_ids?: number[];
+  long_term_overdue_notify_user_ids?: number[];
 }
 
 export interface QualityCloseConfirmPayload {

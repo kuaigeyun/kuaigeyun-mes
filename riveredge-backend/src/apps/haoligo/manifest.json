@@ -618,6 +618,14 @@
             "hide_when_external_partner": true,
             "entries": [
               {
+                "key": "acceptance",
+                "label": "新设备验收单",
+                "icon": "clipboard-check-outline",
+                "route": "/equip/acceptance",
+                "permission": "haoligo:equipment-documents-acceptance:read",
+                "internal_only": true
+              },
+              {
                 "key": "spot-check",
                 "label": "设备点检单",
                 "icon": "clipboard-check-outline",
@@ -660,14 +668,6 @@
                 "icon": "chart-line",
                 "route": "/equip/output-record",
                 "permission": "haoligo:equipment-documents-output-record:read",
-                "internal_only": true
-              },
-              {
-                "key": "acceptance",
-                "label": "设备验收单",
-                "icon": "clipboard-check-outline",
-                "route": "/equip/acceptance",
-                "permission": "haoligo:equipment-documents-acceptance:read",
                 "internal_only": true
               },
               {
@@ -725,26 +725,50 @@
             "hide_when_external_partner": true,
             "entries": [
               {
-                "key": "quality-issues",
-                "label": "品质问题反馈",
+                "key": "quality-issues-register",
+                "label": "品质问题登记",
                 "icon": "alert-circle-outline",
-                "route": "/quality/issues",
+                "route": "/quality/issues/register",
                 "permission": "haoligo:quality-issue-tracking:read",
                 "internal_only": true
               },
               {
-                "key": "quality-complaints",
-                "label": "客户投诉",
+                "key": "quality-issues-handle",
+                "label": "品质问题处理",
+                "icon": "format-list-bulleted",
+                "route": "/quality/issues/handle",
+                "permission": "haoligo:quality-issue-tracking:read",
+                "internal_only": true
+              },
+              {
+                "key": "quality-complaints-register",
+                "label": "客户投诉登记",
                 "icon": "message-alert-outline",
-                "route": "/quality/complaints",
+                "route": "/quality/complaints/register",
                 "permission": "haoligo:customer-complaint:read",
                 "internal_only": true
               },
               {
-                "key": "quality-line-stops",
-                "label": "停线反馈",
+                "key": "quality-complaints-handle",
+                "label": "客户投诉处理",
+                "icon": "format-list-bulleted",
+                "route": "/quality/complaints/handle",
+                "permission": "haoligo:customer-complaint:read",
+                "internal_only": true
+              },
+              {
+                "key": "quality-line-stops-register",
+                "label": "停线反馈登记",
                 "icon": "pause-circle-outline",
-                "route": "/quality/line-stops",
+                "route": "/quality/line-stops/register",
+                "permission": "haoligo:line-stop-feedback:read",
+                "internal_only": true
+              },
+              {
+                "key": "quality-line-stops-handle",
+                "label": "停线反馈处理",
+                "icon": "format-list-bulleted",
+                "route": "/quality/line-stops/handle",
                 "permission": "haoligo:line-stop-feedback:read",
                 "internal_only": true
               },
@@ -1119,11 +1143,13 @@
       "production_line",
       "equipment_id",
       "issue_type_codes",
+      "issue_kind",
       "problem_description",
+      "planned_qty",
+      "completed_qty",
       "defect_qty",
       "attachment_file_uuids",
       "responsible_user_ids",
-      "overdue_notify_user_ids",
       "notify_user_ids",
       "reported_at"
     ],
@@ -1131,9 +1157,11 @@
       "responsible_user_ids",
       "temporary_action",
       "temporary_due_at",
+      "temporary_overdue_notify_user_ids",
       "temporary_action_image_uuids",
       "long_term_action",
       "long_term_due_at",
+      "long_term_overdue_notify_user_ids",
       "long_term_action_image_uuids",
       "overdue_notify_user_ids",
       "close_note"
@@ -1142,12 +1170,12 @@
       "customer_name",
       "material_code",
       "model",
+      "batch_no",
       "quantity",
       "problem_description",
       "attachment_file_uuids",
       "claim_amount",
       "responsible_user_ids",
-      "overdue_notify_user_ids",
       "notify_user_ids",
       "reported_at"
     ],
@@ -1155,9 +1183,11 @@
       "responsible_user_ids",
       "temporary_action",
       "temporary_due_at",
+      "temporary_overdue_notify_user_ids",
       "temporary_action_image_uuids",
       "long_term_action",
       "long_term_due_at",
+      "long_term_overdue_notify_user_ids",
       "long_term_action_image_uuids",
       "overdue_notify_user_ids",
       "close_note"
@@ -1170,7 +1200,6 @@
       "stop_reason",
       "stop_started_at",
       "responsible_user_ids",
-      "overdue_notify_user_ids",
       "notify_user_ids",
       "reported_at"
     ],
@@ -1178,9 +1207,11 @@
       "responsible_user_ids",
       "temporary_action",
       "temporary_due_at",
+      "temporary_overdue_notify_user_ids",
       "temporary_action_image_uuids",
       "long_term_action",
       "long_term_due_at",
+      "long_term_overdue_notify_user_ids",
       "long_term_action_image_uuids",
       "overdue_notify_user_ids",
       "recovered_at"

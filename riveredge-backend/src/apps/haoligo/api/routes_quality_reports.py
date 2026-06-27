@@ -165,7 +165,7 @@ async def _report_items(
             CASE
                 WHEN COALESCE(t.status, '') <> 'completed'
                      AND t.due_at IS NOT NULL
-                     AND t.due_at < CURRENT_TIMESTAMP
+                     AND t.due_at + INTERVAL '1 day' < CURRENT_TIMESTAMP
                 THEN TRUE
                 ELSE FALSE
             END AS is_overdue
@@ -207,7 +207,7 @@ async def _issue_report_points(tenant_id: int) -> List[ChartPoint]:
                     CASE
                         WHEN status <> 'completed'
                              AND due_at IS NOT NULL
-                             AND due_at < CURRENT_TIMESTAMP
+                             AND due_at + INTERVAL '1 day' < CURRENT_TIMESTAMP
                         THEN 1 ELSE 0
                     END
                 )::float AS overdue_count,

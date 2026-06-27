@@ -437,10 +437,15 @@ async def delete_acceptance_sheet(
     _: Annotated[User, Depends(get_current_user)],
 ):
     row = await _load_sheet(tenant_id, row_id)
-    if row.workflow_status not in {WORKFLOW_DRAFT, WORKFLOW_COMMISSIONING}:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅草稿或调试中状态可删除")
-    row.deleted_at = timezone.now()
-    await row.save()
+    now = timezone.now()
+    async with in_transaction():
+        row.deleted_at = now
+        await row.save()
+        await (
+            tenant_alive(HaoligoEquipmentAcceptanceRound, tenant_id)
+            .filter(header_id=row.id)
+            .update(deleted_at=now)
+        )
     return {"ok": True}
 
 

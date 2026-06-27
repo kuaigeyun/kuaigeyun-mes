@@ -44,10 +44,6 @@ const WORKFLOW_STATUSES: EquipmentAcceptanceWorkflowStatus[] = [
   'closed',
 ];
 
-function canDeleteAcceptance(row: EquipmentAcceptanceSheetRow): boolean {
-  return row.workflow_status === 'draft' || row.workflow_status === 'commissioning';
-}
-
 type AcceptanceWorkflowAction = 'commissioning' | 'trial' | 'ledger';
 
 function resolveAcceptanceWorkflowAction(
@@ -142,6 +138,25 @@ const AcceptanceDocumentsPage: React.FC = () => {
       } catch (e) {
         messageApi.error((e as Error).message || t('common.batchDeleteFailed'));
       }
+    },
+    [messageApi, reload, t],
+  );
+
+  const handleDeleteOne = useCallback(
+    (row: EquipmentAcceptanceSheetRow) => {
+      Modal.confirm({
+        title: t('app.haoligo.equipment.documents.deleteConfirm'),
+        okType: 'danger',
+        onOk: async () => {
+          try {
+            await deleteEquipmentAcceptanceSheet(row.id);
+            messageApi.success(t('app.haoligo.equipment.updateSuccess'));
+            reload();
+          } catch (e) {
+            messageApi.error((e as Error).message || t('common.deleteFailed'));
+          }
+        },
+      });
     },
     [messageApi, reload, t],
   );
@@ -255,20 +270,11 @@ const AcceptanceDocumentsPage: React.FC = () => {
                   {t('app.haoligo.equipment.documents.actionView')}
                 </Button>
               )}
-              {canDeleteAcceptance(row) && (perms.canAction?.('delete') ?? false) ? (
+              {(perms.canAction?.('delete') ?? false) ? (
                 <Button
                   {...rowActionKind('delete')}
                   key="delete"
-                  onClick={() => {
-                    Modal.confirm({
-                      title: t('app.haoligo.equipment.documents.deleteConfirm'),
-                      onOk: async () => {
-                        await deleteEquipmentAcceptanceSheet(row.id);
-                        messageApi.success(t('app.haoligo.equipment.updateSuccess'));
-                        reload();
-                      },
-                    });
-                  }}
+                  onClick={() => handleDeleteOne(row)}
                 >
                   {t('app.haoligo.equipment.documents.actionDelete')}
                 </Button>
@@ -278,7 +284,7 @@ const AcceptanceDocumentsPage: React.FC = () => {
         },
       },
     ],
-    [t, workflowLabel, messageApi, reload, perms],
+    [t, workflowLabel, messageApi, reload, perms, handleDeleteOne],
   );
 
   const handleCreate = async () => {

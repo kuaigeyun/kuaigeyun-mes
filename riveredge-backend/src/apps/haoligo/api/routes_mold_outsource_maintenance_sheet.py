@@ -10,6 +10,10 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._mold_sheet_keyword import (
+    apply_mold_line_items_sheet_keyword_filter,
+    outsource_maintenance_header_keyword_q,
+)
 from apps.haoligo.api._mold_maintenance_mold_status import (
     apply_mold_status_on_maintenance_sheet_created,
     refresh_mold_status_if_no_open_maintenance_sheet,
@@ -478,17 +482,13 @@ async def list_outsource_maintenance_sheets(
         qs = qs.filter(sheet_status=SHEET_STATUS_APPROVED)
     if open_for_complete and linked_complete_ids:
         qs = qs.filter(~Q(id__in=list(linked_complete_ids)))
-    if keyword and keyword.strip():
-        k = keyword.strip()
-        qs = qs.filter(
-            Q(outsourced_unit_name__icontains=k)
-            | Q(outsourced_unit_code__icontains=k)
-            | Q(department_name__icontains=k)
-            | Q(applicant_name__icontains=k)
-            | Q(sheet_no__icontains=k)
-            | Q(source_order_no__icontains=k)
-            | Q(service_type__icontains=k)
-        )
+    qs = await apply_mold_line_items_sheet_keyword_filter(
+        qs,
+        tenant_id,
+        keyword,
+        outsource_maintenance_header_keyword_q,
+        HaoligoMoldOutsourceMaintenanceSheet,
+    )
     qs = await apply_outsource_sheet_scope(
         qs, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
     )

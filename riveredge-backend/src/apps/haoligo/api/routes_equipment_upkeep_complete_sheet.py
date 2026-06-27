@@ -18,10 +18,10 @@ from apps.haoligo.api.equipment_maintenance_equipment_status import (
 )
 from apps.haoligo.api.routes_mold_maintenance_sheet import _resolve_applicant_only, _validate_leaf_department
 from apps.haoligo.services.spot_check_side_effects import normalize_report_user_ids
-from apps.haoligo.constants.equipment_maintenance import (
-    EQUIPMENT_MAINTENANCE_REPAIR_RESULTS,
-    EQUIPMENT_MAINTENANCE_REPAIR_RESULT_SET,
-    normalize_equipment_service_type,
+from apps.haoligo.constants.equipment_maintenance import normalize_equipment_service_type
+from apps.haoligo.constants.repair_result_items import (
+    REPAIR_RESULT_STORED_MAX_LEN,
+    normalize_repair_result_storage,
 )
 from apps.haoligo.constants.equipment_sheet_rule_codes import HAOLIGO_EQUIPMENT_UPKEEP_COMPLETE_SHEET_NO
 from apps.haoligo.models.equipment_upkeep import HaoligoEquipmentUpkeepCompleteSheet, HaoligoEquipmentUpkeepSheet
@@ -196,14 +196,7 @@ def _apply_complete_fields(
         cc = _clip_text(completion_content, label="保养完成说明", required=False)
         return cc, None, None
     rc = _clip_text(repair_content, label="维修内容", required=True)
-    rr = _strip_opt(repair_result)
-    if not rr:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请选择维修结果")
-    if rr not in EQUIPMENT_MAINTENANCE_REPAIR_RESULT_SET:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"维修结果无效，须为：{'、'.join(EQUIPMENT_MAINTENANCE_REPAIR_RESULTS)}",
-        )
+    rr = normalize_repair_result_storage(repair_result)
     return None, rc, rr
 
 
@@ -264,7 +257,7 @@ class EquipmentUpkeepCompleteSheetCreate(BaseModel):
         description="按保养项填写的记录",
     )
     repair_content: Optional[str] = Field(None, description="维修内容")
-    repair_result: Optional[str] = Field(None, max_length=32, description="维修结果")
+    repair_result: Optional[str] = Field(None, max_length=REPAIR_RESULT_STORED_MAX_LEN, description="维修结果（多项）")
     clear_total_production: Optional[bool] = Field(None, description="保养完修是否清空累计产量")
     complete_notify_user_ids: Optional[List[int]] = None
 

@@ -9,6 +9,10 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._mold_sheet_keyword import (
+    apply_direct_mold_field_keyword_filter,
+    trial_sheet_header_keyword_q,
+)
 from apps.haoligo.api._data_scope import (
     RESOURCE_TRIAL_RECORD,
     RESOURCE_TRIAL_SHEET,
@@ -458,16 +462,9 @@ async def list_trial_sheets(
         qs = qs.filter(trial_result=trial_result.strip())
     if failure_pending:
         qs = qs.filter(pending_trial_failure_exception_q())
-    if keyword and keyword.strip():
-        k = keyword.strip()
-        qs = qs.filter(
-            Q(purchase_order_no__icontains=k)
-            | Q(sheet_no__icontains=k)
-            | Q(mold_code__icontains=k)
-            | Q(mold_name__icontains=k)
-            | Q(supplier_name__icontains=k)
-            | Q(trial_user_name__icontains=k)
-        )
+    qs = await apply_direct_mold_field_keyword_filter(
+        qs, tenant_id, keyword, trial_sheet_header_keyword_q
+    )
     if created_from is not None:
         qs = qs.filter(created_at__gte=created_from)
     if created_to is not None:

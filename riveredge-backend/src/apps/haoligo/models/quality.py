@@ -72,7 +72,23 @@ class HaoligoQualityIssueTracking(_HaoligoQualityBase):
         indexes = [("tenant_id",), ("status",), ("reported_at",), ("sheet_no",)]
 
     issue_type_codes = fields.JSONField(default=list, description="问题类型编码列表")
+    issue_kind = fields.CharField(
+        max_length=32,
+        null=True,
+        description="问题类型：equipment(设备品质问题)/product(产品品质问题)",
+    )
+    temporary_overdue_notify_user_ids = fields.JSONField(
+        default=list,
+        description="临时措施逾期提醒对象用户 ID 列表",
+    )
+    long_term_overdue_notify_user_ids = fields.JSONField(
+        default=list,
+        description="长期措施逾期提醒对象用户 ID 列表",
+    )
+    planned_qty = fields.DecimalField(max_digits=18, decimal_places=6, null=True, description="计划数量")
+    completed_qty = fields.DecimalField(max_digits=18, decimal_places=6, null=True, description="完成数量")
     defect_qty = fields.DecimalField(max_digits=18, decimal_places=6, null=True, description="不良数量")
+    defect_rate = fields.DecimalField(max_digits=8, decimal_places=2, null=True, description="不良率（%）")
 
 
 class HaoligoCustomerComplaint(_HaoligoQualityBase):
@@ -83,10 +99,19 @@ class HaoligoCustomerComplaint(_HaoligoQualityBase):
         table_description = "好力GO - 客户投诉"
         indexes = [("tenant_id",), ("status",), ("reported_at",), ("sheet_no",)]
 
+    temporary_overdue_notify_user_ids = fields.JSONField(
+        default=list,
+        description="临时措施逾期提醒对象用户 ID 列表",
+    )
+    long_term_overdue_notify_user_ids = fields.JSONField(
+        default=list,
+        description="长期措施逾期提醒对象用户 ID 列表",
+    )
     customer_name = fields.CharField(max_length=200, null=True, description="客户名称")
     material_code = fields.CharField(max_length=100, null=True, description="物料号")
     model = fields.CharField(max_length=100, null=True, description="型号")
-    quantity = fields.DecimalField(max_digits=18, decimal_places=6, null=True, description="数量")
+    batch_no = fields.CharField(max_length=100, null=True, description="批次号")
+    quantity = fields.DecimalField(max_digits=18, decimal_places=6, null=True, description="不良数量")
     claim_amount = fields.DecimalField(max_digits=18, decimal_places=2, null=True, description="赔偿金额")
 
 
@@ -98,6 +123,14 @@ class HaoligoLineStopFeedback(_HaoligoQualityBase):
         table_description = "好力GO - 停线（机）反馈"
         indexes = [("tenant_id",), ("status",), ("reported_at",), ("sheet_no",)]
 
+    temporary_overdue_notify_user_ids = fields.JSONField(
+        default=list,
+        description="临时措施逾期提醒对象用户 ID 列表",
+    )
+    long_term_overdue_notify_user_ids = fields.JSONField(
+        default=list,
+        description="长期措施逾期提醒对象用户 ID 列表",
+    )
     stop_kind = fields.CharField(max_length=32, default="equipment", description="停线类型：equipment/quality")
     stop_reason = fields.TextField(null=True, description="停线原因")
     stop_started_at = fields.DatetimeField(null=True, description="停线开始时间")

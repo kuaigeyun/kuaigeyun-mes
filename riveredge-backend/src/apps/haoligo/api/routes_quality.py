@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Annotated, Any, Callable, List, Optional, TypeVar
 from uuid import UUID
@@ -34,6 +34,7 @@ from apps.haoligo.services.haoligo_business_notification import (
     DOC_QUALITY_ISSUE_TRACKING,
     dispatch_haoligo_notification,
 )
+from apps.haoligo.services.quality_issue_calc import calc_defect_rate
 from apps.haoligo.services.spot_check_side_effects import normalize_report_user_ids, validate_report_notify_users
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.schemas.dataset import ExecuteQueryRequest
@@ -43,6 +44,7 @@ from infra.models.user import User
 router = APIRouter(prefix="/quality", tags=["App · HaoliGO · 品质管理"])
 
 _ALLOWED_STATUSES = {"registered", "assigned", "processing", "completed"}
+_ALLOWED_ISSUE_KINDS = {"equipment", "product"}
 _T = TypeVar("_T")
 
 
@@ -111,11 +113,26 @@ class QualityBaseOut(BaseModel):
 
 class QualityIssueOut(QualityBaseOut):
     issue_type_codes: List[str] = Field(default_factory=list)
+    issue_kind: Optional[str] = None
+    temporary_overdue_notify_user_ids: List[int] = Field(default_factory=list)
+    long_term_overdue_notify_user_ids: List[int] = Field(default_factory=list)
+    planned_qty: Optional[Decimal] = None
+    completed_qty: Optional[Decimal] = None
     defect_qty: Optional[Decimal] = None
+    defect_rate: Optional[Decimal] = None
 
     @field_validator("issue_type_codes", mode="before")
     @classmethod
     def _coerce_issue_type_codes(cls, v: Any) -> List[Any]:
+        return [] if v is None else v
+
+    @field_validator(
+        "temporary_overdue_notify_user_ids",
+        "long_term_overdue_notify_user_ids",
+        mode="before",
+    )
+    @classmethod
+    def _coerce_issue_overdue_notify_ids(cls, v: Any) -> List[Any]:
         return [] if v is None else v
 
 
@@ -123,8 +140,20 @@ class CustomerComplaintOut(QualityBaseOut):
     customer_name: Optional[str] = None
     material_code: Optional[str] = None
     model: Optional[str] = None
+    batch_no: Optional[str] = None
     quantity: Optional[Decimal] = None
     claim_amount: Optional[Decimal] = None
+    temporary_overdue_notify_user_ids: List[int] = Field(default_factory=list)
+    long_term_overdue_notify_user_ids: List[int] = Field(default_factory=list)
+
+    @field_validator(
+        "temporary_overdue_notify_user_ids",
+        "long_term_overdue_notify_user_ids",
+        mode="before",
+    )
+    @classmethod
+    def _coerce_complaint_overdue_notify_ids(cls, v: Any) -> List[Any]:
+        return [] if v is None else v
 
 
 class LineStopOut(QualityBaseOut):
@@ -132,6 +161,17 @@ class LineStopOut(QualityBaseOut):
     stop_reason: Optional[str] = None
     stop_started_at: Optional[datetime] = None
     recovered_at: Optional[datetime] = None
+    temporary_overdue_notify_user_ids: List[int] = Field(default_factory=list)
+    long_term_overdue_notify_user_ids: List[int] = Field(default_factory=list)
+
+    @field_validator(
+        "temporary_overdue_notify_user_ids",
+        "long_term_overdue_notify_user_ids",
+        mode="before",
+    )
+    @classmethod
+    def _coerce_line_stop_overdue_notify_ids(cls, v: Any) -> List[Any]:
+        return [] if v is None else v
 
 
 class QualityBaseCreate(BaseModel):
@@ -189,11 +229,19 @@ class QualityBaseUpdate(BaseModel):
 
 class QualityIssueCreate(QualityBaseCreate):
     issue_type_codes: List[str] = Field(default_factory=list)
+    issue_kind: Optional[str] = Field(None, max_length=32)
+    planned_qty: Optional[Decimal] = None
+    completed_qty: Optional[Decimal] = None
     defect_qty: Optional[Decimal] = None
 
 
 class QualityIssueUpdate(QualityBaseUpdate):
     issue_type_codes: Optional[List[str]] = None
+    issue_kind: Optional[str] = Field(None, max_length=32)
+    temporary_overdue_notify_user_ids: Optional[List[int]] = None
+    long_term_overdue_notify_user_ids: Optional[List[int]] = None
+    planned_qty: Optional[Decimal] = None
+    completed_qty: Optional[Decimal] = None
     defect_qty: Optional[Decimal] = None
 
 
@@ -201,6 +249,7 @@ class CustomerComplaintCreate(QualityBaseCreate):
     customer_name: Optional[str] = Field(None, max_length=200)
     material_code: Optional[str] = Field(None, max_length=100)
     model: Optional[str] = Field(None, max_length=100)
+    batch_no: Optional[str] = Field(None, max_length=100)
     quantity: Optional[Decimal] = None
     claim_amount: Optional[Decimal] = None
 
@@ -209,8 +258,11 @@ class CustomerComplaintUpdate(QualityBaseUpdate):
     customer_name: Optional[str] = Field(None, max_length=200)
     material_code: Optional[str] = Field(None, max_length=100)
     model: Optional[str] = Field(None, max_length=100)
+    batch_no: Optional[str] = Field(None, max_length=100)
     quantity: Optional[Decimal] = None
     claim_amount: Optional[Decimal] = None
+    temporary_overdue_notify_user_ids: Optional[List[int]] = None
+    long_term_overdue_notify_user_ids: Optional[List[int]] = None
 
 
 class LineStopCreate(QualityBaseCreate):
@@ -225,6 +277,8 @@ class LineStopUpdate(QualityBaseUpdate):
     stop_reason: Optional[str] = None
     stop_started_at: Optional[datetime] = None
     recovered_at: Optional[datetime] = None
+    temporary_overdue_notify_user_ids: Optional[List[int]] = None
+    long_term_overdue_notify_user_ids: Optional[List[int]] = None
 
 
 class RegisterSubmitPayload(BaseModel):
@@ -235,6 +289,7 @@ class RegisterSubmitPayload(BaseModel):
 class TemporaryActionPayload(BaseModel):
     responsible_user_ids: List[int] = Field(default_factory=list)
     overdue_notify_user_ids: List[int] = Field(default_factory=list)
+    temporary_overdue_notify_user_ids: List[int] = Field(default_factory=list)
     temporary_action: str = Field(min_length=1)
     temporary_due_at: datetime
     temporary_action_image_uuids: List[str] = Field(default_factory=list)
@@ -251,6 +306,8 @@ class HandleMeasuresPayload(BaseModel):
 
     responsible_user_ids: List[int] = Field(min_length=1)
     overdue_notify_user_ids: List[int] = Field(default_factory=list)
+    temporary_overdue_notify_user_ids: List[int] = Field(default_factory=list)
+    long_term_overdue_notify_user_ids: List[int] = Field(default_factory=list)
     temporary_action: str = Field(min_length=1)
     temporary_due_at: datetime
     temporary_action_image_uuids: List[str] = Field(default_factory=list)
@@ -384,6 +441,69 @@ async def _normalize_overdue_notify_users(tenant_id: int, user_ids: Optional[Lis
     return ids
 
 
+def _merge_overdue_notify_user_ids(*groups: Optional[List[int]]) -> List[int]:
+    merged: List[int] = []
+    seen: set[int] = set()
+    for group in groups:
+        for raw in group or []:
+            uid = int(raw)
+            if uid > 0 and uid not in seen:
+                seen.add(uid)
+                merged.append(uid)
+    return merged
+
+
+async def _prepare_split_overdue_notify_users(
+    tenant_id: int,
+    body: HandleMeasuresPayload,
+) -> tuple[List[int], List[int], List[int]]:
+    overdue_notify_user_ids = await _normalize_overdue_notify_users(tenant_id, body.overdue_notify_user_ids)
+    temporary_overdue_notify_user_ids = await _normalize_overdue_notify_users(
+        tenant_id,
+        body.temporary_overdue_notify_user_ids or body.overdue_notify_user_ids,
+    )
+    long_term_overdue_notify_user_ids = await _normalize_overdue_notify_users(
+        tenant_id,
+        body.long_term_overdue_notify_user_ids or body.overdue_notify_user_ids,
+    )
+    merged = _merge_overdue_notify_user_ids(
+        overdue_notify_user_ids,
+        temporary_overdue_notify_user_ids,
+        long_term_overdue_notify_user_ids,
+    )
+    return merged, temporary_overdue_notify_user_ids, long_term_overdue_notify_user_ids
+
+
+def _row_temporary_overdue_notify_user_ids(row: Any) -> List[int]:
+    if hasattr(row, "temporary_overdue_notify_user_ids"):
+        ids = normalize_report_user_ids(row.temporary_overdue_notify_user_ids)
+        if ids:
+            return ids
+    return normalize_report_user_ids(row.overdue_notify_user_ids)
+
+
+def _row_long_term_overdue_notify_user_ids(row: Any) -> List[int]:
+    if hasattr(row, "long_term_overdue_notify_user_ids"):
+        ids = normalize_report_user_ids(row.long_term_overdue_notify_user_ids)
+        if ids:
+            return ids
+    return normalize_report_user_ids(row.overdue_notify_user_ids)
+
+
+def _normalize_issue_kind(value: Optional[str]) -> Optional[str]:
+    kind = (value or "").strip().lower()
+    if not kind:
+        return None
+    if kind not in _ALLOWED_ISSUE_KINDS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="问题类型无效")
+    return kind
+
+
+def _require_issue_kind(issue_kind: Optional[str]) -> None:
+    if not _normalize_issue_kind(issue_kind):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请选择问题类型")
+
+
 def _require_register_fields(
     *,
     problem_description: Optional[str],
@@ -397,6 +517,28 @@ def _require_register_fields(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="责任车间必填")
     if defect_qty is not None and defect_qty <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不良数量必须大于 0")
+
+
+def _validate_issue_qty_fields(
+    *,
+    planned_qty: Optional[Decimal] = None,
+    completed_qty: Optional[Decimal] = None,
+    defect_qty: Optional[Decimal] = None,
+) -> None:
+    if planned_qty is not None and planned_qty < 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="计划数量不能为负")
+    if completed_qty is not None and completed_qty < 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="完成数量不能为负")
+    if defect_qty is not None and defect_qty <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不良数量必须大于 0")
+
+
+def _resolve_issue_defect_rate(
+    *,
+    completed_qty: Optional[Decimal],
+    defect_qty: Optional[Decimal],
+) -> Optional[Decimal]:
+    return calc_defect_rate(completed_qty, defect_qty)
 
 
 def _require_complaint_register_fields(
@@ -550,9 +692,18 @@ async def _scan_work_order_snapshot(tenant_id: int, work_order_no: str) -> WorkO
 
 async def _dispatch_overdue_for_model(tenant_id: int, model: Any, doc_type: str) -> OverdueDispatchResult:
     now = timezone.now()
+    overdue_before = now - timedelta(days=1)
     qs = tenant_alive(model, tenant_id).filter(status__in=["assigned", "processing"])
-    temp_rows = await qs.filter(temporary_due_at__lt=now).all()
-    long_rows = await qs.filter(long_term_due_at__lt=now).all()
+    temp_rows = await qs.filter(
+        temporary_submitted_at__isnull=False,
+        temporary_due_at__isnull=False,
+        temporary_due_at__lt=overdue_before,
+    ).all()
+    long_rows = await qs.filter(
+        long_term_submitted_at__isnull=False,
+        long_term_due_at__isnull=False,
+        long_term_due_at__lt=overdue_before,
+    ).all()
     res = OverdueDispatchResult()
     for row in temp_rows:
         await _dispatch_quality_notification(
@@ -563,7 +714,7 @@ async def _dispatch_overdue_for_model(tenant_id: int, model: Any, doc_type: str)
             sheet_no=row.sheet_no or "",
             title=row.title or "",
             recipient_user_id=None,
-            user_specified_user_ids=normalize_report_user_ids(row.overdue_notify_user_ids),
+            user_specified_user_ids=_row_temporary_overdue_notify_user_ids(row),
         )
         res.temporary_overdue += 1
     for row in long_rows:
@@ -575,7 +726,7 @@ async def _dispatch_overdue_for_model(tenant_id: int, model: Any, doc_type: str)
             sheet_no=row.sheet_no or "",
             title=row.title or "",
             recipient_user_id=None,
-            user_specified_user_ids=normalize_report_user_ids(row.overdue_notify_user_ids),
+            user_specified_user_ids=_row_long_term_overdue_notify_user_ids(row),
         )
         res.long_term_overdue += 1
     return res
@@ -725,6 +876,14 @@ async def create_quality_issue(
         workshop_id=body.workshop_id,
         defect_qty=body.defect_qty,
     )
+    _require_issue_kind(body.issue_kind)
+    issue_kind = _normalize_issue_kind(body.issue_kind)
+    _validate_issue_qty_fields(
+        planned_qty=body.planned_qty,
+        completed_qty=body.completed_qty,
+        defect_qty=body.defect_qty,
+    )
+    defect_rate = _resolve_issue_defect_rate(completed_qty=body.completed_qty, defect_qty=body.defect_qty)
     notify_user_ids = await _normalize_notify_users(tenant_id, body.notify_user_ids)
     responsible_user_ids = await _normalize_responsible_users(tenant_id, body.responsible_user_ids)
     overdue_notify_user_ids = await _normalize_overdue_notify_users(tenant_id, body.overdue_notify_user_ids)
@@ -770,7 +929,11 @@ async def create_quality_issue(
             notify_user_ids=notify_user_ids,
             reported_at=body.reported_at or timezone.now(),
             issue_type_codes=issue_codes,
+            issue_kind=issue_kind,
+            planned_qty=body.planned_qty,
+            completed_qty=body.completed_qty,
             defect_qty=body.defect_qty,
+            defect_rate=defect_rate,
         )
     return await _serialize_common(row, tenant_id, QualityIssueOut)
 
@@ -805,6 +968,16 @@ async def update_quality_issue(
         data["responsible_user_ids"] = await _normalize_responsible_users(tenant_id, data["responsible_user_ids"])
     if "overdue_notify_user_ids" in data:
         data["overdue_notify_user_ids"] = await _normalize_overdue_notify_users(tenant_id, data["overdue_notify_user_ids"])
+    if "temporary_overdue_notify_user_ids" in data:
+        data["temporary_overdue_notify_user_ids"] = await _normalize_overdue_notify_users(
+            tenant_id,
+            data["temporary_overdue_notify_user_ids"],
+        )
+    if "long_term_overdue_notify_user_ids" in data:
+        data["long_term_overdue_notify_user_ids"] = await _normalize_overdue_notify_users(
+            tenant_id,
+            data["long_term_overdue_notify_user_ids"],
+        )
     if "responsible_user_id" in data and data["responsible_user_id"] is not None:
         uid, name = await resolve_tenant_user(tenant_id, int(data["responsible_user_id"]))
         data["responsible_user_id"] = uid
@@ -813,6 +986,17 @@ async def update_quality_issue(
         data["status"] = _ensure_status(data["status"])
     if "issue_type_codes" in data and data["issue_type_codes"] is not None:
         data["issue_type_codes"] = [str(x).strip() for x in data["issue_type_codes"] if str(x).strip()]
+    if "issue_kind" in data:
+        data["issue_kind"] = _normalize_issue_kind(data.get("issue_kind"))
+    if any(k in data for k in ("planned_qty", "completed_qty", "defect_qty")):
+        _validate_issue_qty_fields(
+            planned_qty=data.get("planned_qty", row.planned_qty),
+            completed_qty=data.get("completed_qty", row.completed_qty),
+            defect_qty=data.get("defect_qty", row.defect_qty),
+        )
+        completed_qty = data.get("completed_qty", row.completed_qty)
+        defect_qty = data.get("defect_qty", row.defect_qty)
+        data["defect_rate"] = _resolve_issue_defect_rate(completed_qty=completed_qty, defect_qty=defect_qty)
     for k, v in data.items():
         setattr(row, k, v)
     await row.save()
@@ -832,13 +1016,11 @@ async def submit_quality_issue_register(
     if (row.status or "").strip().lower() not in {"registered", "assigned", "processing"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前状态不能执行登记提交")
     responsible_user_ids = await _normalize_responsible_users(tenant_id, body.responsible_user_ids)
-    overdue_notify_user_ids = await _normalize_overdue_notify_users(tenant_id, body.overdue_notify_user_ids)
     recipients = normalize_report_user_ids(responsible_user_ids)
     if not recipients:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先选择责任人")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先选择车间品质/工程负责人")
     row.responsible_user_ids = recipients
     row.responsible_user_id = recipients[0]
-    row.overdue_notify_user_ids = overdue_notify_user_ids
     row.status = "processing"
     await row.save()
     await _dispatch_quality_notification(
@@ -873,6 +1055,9 @@ async def submit_quality_issue_temporary_action(
             row.responsible_user_id = responsible_user_ids[0]
     if body.overdue_notify_user_ids:
         row.overdue_notify_user_ids = await _normalize_overdue_notify_users(tenant_id, body.overdue_notify_user_ids)
+    temp_overdue_ids = body.temporary_overdue_notify_user_ids or body.overdue_notify_user_ids
+    if temp_overdue_ids:
+        row.temporary_overdue_notify_user_ids = await _normalize_overdue_notify_users(tenant_id, temp_overdue_ids)
     row.temporary_action = body.temporary_action.strip()
     row.temporary_due_at = body.temporary_due_at
     row.temporary_action_image_uuids = [str(x).strip() for x in body.temporary_action_image_uuids if str(x).strip()]
@@ -918,11 +1103,15 @@ async def submit_quality_issue_handle_measures(
     responsible_user_ids = await _normalize_responsible_users(tenant_id, body.responsible_user_ids)
     if not responsible_user_ids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先选择责任人")
-    overdue_notify_user_ids = await _normalize_overdue_notify_users(tenant_id, body.overdue_notify_user_ids)
+    overdue_notify_user_ids, temporary_overdue_notify_user_ids, long_term_overdue_notify_user_ids = (
+        await _prepare_split_overdue_notify_users(tenant_id, body)
+    )
     now = timezone.now()
     row.responsible_user_ids = responsible_user_ids
     row.responsible_user_id = responsible_user_ids[0]
     row.overdue_notify_user_ids = overdue_notify_user_ids
+    row.temporary_overdue_notify_user_ids = temporary_overdue_notify_user_ids
+    row.long_term_overdue_notify_user_ids = long_term_overdue_notify_user_ids
     row.temporary_action = body.temporary_action.strip()
     row.temporary_due_at = body.temporary_due_at
     row.temporary_action_image_uuids = [str(x).strip() for x in body.temporary_action_image_uuids if str(x).strip()]
@@ -1128,6 +1317,16 @@ async def update_customer_complaint(
         data["responsible_user_ids"] = await _normalize_responsible_users(tenant_id, data["responsible_user_ids"])
     if "overdue_notify_user_ids" in data:
         data["overdue_notify_user_ids"] = await _normalize_overdue_notify_users(tenant_id, data["overdue_notify_user_ids"])
+    if "temporary_overdue_notify_user_ids" in data:
+        data["temporary_overdue_notify_user_ids"] = await _normalize_overdue_notify_users(
+            tenant_id,
+            data["temporary_overdue_notify_user_ids"],
+        )
+    if "long_term_overdue_notify_user_ids" in data:
+        data["long_term_overdue_notify_user_ids"] = await _normalize_overdue_notify_users(
+            tenant_id,
+            data["long_term_overdue_notify_user_ids"],
+        )
     if "responsible_user_id" in data and data["responsible_user_id"] is not None:
         uid, name = await resolve_tenant_user(tenant_id, int(data["responsible_user_id"]))
         data["responsible_user_id"] = uid
@@ -1153,13 +1352,11 @@ async def submit_customer_complaint_register(
     if (row.status or "").strip().lower() not in {"registered", "assigned", "processing"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前状态不能执行登记提交")
     responsible_user_ids = await _normalize_responsible_users(tenant_id, body.responsible_user_ids)
-    overdue_notify_user_ids = await _normalize_overdue_notify_users(tenant_id, body.overdue_notify_user_ids)
     recipients = normalize_report_user_ids(responsible_user_ids)
     if not recipients:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先选择责任人")
     row.responsible_user_ids = recipients
     row.responsible_user_id = recipients[0]
-    row.overdue_notify_user_ids = overdue_notify_user_ids
     row.status = "processing"
     await row.save()
     await _dispatch_quality_notification(
@@ -1194,6 +1391,9 @@ async def submit_customer_complaint_temporary_action(
             row.responsible_user_id = responsible_user_ids[0]
     if body.overdue_notify_user_ids:
         row.overdue_notify_user_ids = await _normalize_overdue_notify_users(tenant_id, body.overdue_notify_user_ids)
+    temp_overdue_ids = body.temporary_overdue_notify_user_ids or body.overdue_notify_user_ids
+    if temp_overdue_ids:
+        row.temporary_overdue_notify_user_ids = await _normalize_overdue_notify_users(tenant_id, temp_overdue_ids)
     row.temporary_action = body.temporary_action.strip()
     row.temporary_due_at = body.temporary_due_at
     row.temporary_action_image_uuids = [str(x).strip() for x in body.temporary_action_image_uuids if str(x).strip()]
@@ -1239,11 +1439,15 @@ async def submit_customer_complaint_handle_measures(
     responsible_user_ids = await _normalize_responsible_users(tenant_id, body.responsible_user_ids)
     if not responsible_user_ids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先选择责任人")
-    overdue_notify_user_ids = await _normalize_overdue_notify_users(tenant_id, body.overdue_notify_user_ids)
+    overdue_notify_user_ids, temporary_overdue_notify_user_ids, long_term_overdue_notify_user_ids = (
+        await _prepare_split_overdue_notify_users(tenant_id, body)
+    )
     now = timezone.now()
     row.responsible_user_ids = responsible_user_ids
     row.responsible_user_id = responsible_user_ids[0]
     row.overdue_notify_user_ids = overdue_notify_user_ids
+    row.temporary_overdue_notify_user_ids = temporary_overdue_notify_user_ids
+    row.long_term_overdue_notify_user_ids = long_term_overdue_notify_user_ids
     row.temporary_action = body.temporary_action.strip()
     row.temporary_due_at = body.temporary_due_at
     row.temporary_action_image_uuids = [str(x).strip() for x in body.temporary_action_image_uuids if str(x).strip()]
@@ -1448,6 +1652,16 @@ async def update_line_stop_feedback(
         data["responsible_user_ids"] = await _normalize_responsible_users(tenant_id, data["responsible_user_ids"])
     if "overdue_notify_user_ids" in data:
         data["overdue_notify_user_ids"] = await _normalize_overdue_notify_users(tenant_id, data["overdue_notify_user_ids"])
+    if "temporary_overdue_notify_user_ids" in data:
+        data["temporary_overdue_notify_user_ids"] = await _normalize_overdue_notify_users(
+            tenant_id,
+            data["temporary_overdue_notify_user_ids"],
+        )
+    if "long_term_overdue_notify_user_ids" in data:
+        data["long_term_overdue_notify_user_ids"] = await _normalize_overdue_notify_users(
+            tenant_id,
+            data["long_term_overdue_notify_user_ids"],
+        )
     if "responsible_user_id" in data and data["responsible_user_id"] is not None:
         uid, name = await resolve_tenant_user(tenant_id, int(data["responsible_user_id"]))
         data["responsible_user_id"] = uid
@@ -1473,13 +1687,11 @@ async def submit_line_stop_feedback_register(
     if (row.status or "").strip().lower() not in {"registered", "assigned", "processing"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前状态不能执行登记提交")
     responsible_user_ids = await _normalize_responsible_users(tenant_id, body.responsible_user_ids)
-    overdue_notify_user_ids = await _normalize_overdue_notify_users(tenant_id, body.overdue_notify_user_ids)
     recipients = normalize_report_user_ids(responsible_user_ids)
     if not recipients:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先选择责任人")
     row.responsible_user_ids = recipients
     row.responsible_user_id = recipients[0]
-    row.overdue_notify_user_ids = overdue_notify_user_ids
     row.status = "processing"
     await row.save()
     await _dispatch_quality_notification(
@@ -1514,6 +1726,9 @@ async def submit_line_stop_feedback_temporary_action(
             row.responsible_user_id = responsible_user_ids[0]
     if body.overdue_notify_user_ids:
         row.overdue_notify_user_ids = await _normalize_overdue_notify_users(tenant_id, body.overdue_notify_user_ids)
+    temp_overdue_ids = body.temporary_overdue_notify_user_ids or body.overdue_notify_user_ids
+    if temp_overdue_ids:
+        row.temporary_overdue_notify_user_ids = await _normalize_overdue_notify_users(tenant_id, temp_overdue_ids)
     row.temporary_action = body.temporary_action.strip()
     row.temporary_due_at = body.temporary_due_at
     row.temporary_action_image_uuids = [str(x).strip() for x in body.temporary_action_image_uuids if str(x).strip()]
@@ -1559,11 +1774,15 @@ async def submit_line_stop_feedback_handle_measures(
     responsible_user_ids = await _normalize_responsible_users(tenant_id, body.responsible_user_ids)
     if not responsible_user_ids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先选择责任人")
-    overdue_notify_user_ids = await _normalize_overdue_notify_users(tenant_id, body.overdue_notify_user_ids)
+    overdue_notify_user_ids, temporary_overdue_notify_user_ids, long_term_overdue_notify_user_ids = (
+        await _prepare_split_overdue_notify_users(tenant_id, body)
+    )
     now = timezone.now()
     row.responsible_user_ids = responsible_user_ids
     row.responsible_user_id = responsible_user_ids[0]
     row.overdue_notify_user_ids = overdue_notify_user_ids
+    row.temporary_overdue_notify_user_ids = temporary_overdue_notify_user_ids
+    row.long_term_overdue_notify_user_ids = long_term_overdue_notify_user_ids
     row.temporary_action = body.temporary_action.strip()
     row.temporary_due_at = body.temporary_due_at
     row.temporary_action_image_uuids = [str(x).strip() for x in body.temporary_action_image_uuids if str(x).strip()]

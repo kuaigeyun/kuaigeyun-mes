@@ -10,6 +10,10 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._mold_sheet_keyword import (
+    apply_mold_line_items_sheet_keyword_filter,
+    inhouse_maintenance_header_keyword_q,
+)
 from apps.haoligo.api._mold_maintenance_mold_status import (
     apply_mold_status_on_maintenance_sheet_created,
     refresh_mold_status_if_no_open_maintenance_sheet,
@@ -460,15 +464,13 @@ async def list_maintenance_sheets(
         lid = list(linked_complete_ids)
         if lid:
             qs = qs.filter(~Q(id__in=lid))
-    if keyword and keyword.strip():
-        k = keyword.strip()
-        qs = qs.filter(
-            Q(department_name__icontains=k)
-            | Q(applicant_name__icontains=k)
-            | Q(sheet_no__icontains=k)
-            | Q(source_order_no__icontains=k)
-            | Q(service_type__icontains=k)
-        )
+    qs = await apply_mold_line_items_sheet_keyword_filter(
+        qs,
+        tenant_id,
+        keyword,
+        inhouse_maintenance_header_keyword_q,
+        HaoligoMoldMaintenanceSheet,
+    )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     items = [_serialize(r, linked_complete_ids=linked_complete_ids) for r in rows]

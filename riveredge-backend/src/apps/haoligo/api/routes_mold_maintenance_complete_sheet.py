@@ -9,6 +9,10 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._mold_sheet_keyword import (
+    apply_mold_line_items_sheet_keyword_filter,
+    inhouse_maintenance_header_keyword_q,
+)
 from apps.haoligo.api._mold_maintenance_mold_status import (
     apply_upkeep_clear_from_inhouse_complete_sheet,
     inhouse_complete_line_clears_total_for_mold,
@@ -436,15 +440,13 @@ async def list_maintenance_complete_sheets(
     created_to: Optional[datetime] = Query(None, description="创建时间止（含）"),
 ):
     qs = tenant_alive(HaoligoMoldMaintenanceCompleteSheet, tenant_id)
-    if keyword and keyword.strip():
-        k = keyword.strip()
-        qs = qs.filter(
-            Q(source_order_no__icontains=k)
-            | Q(sheet_no__icontains=k)
-            | Q(service_type__icontains=k)
-            | Q(applicant_name__icontains=k)
-            | Q(department_name__icontains=k)
-        )
+    qs = await apply_mold_line_items_sheet_keyword_filter(
+        qs,
+        tenant_id,
+        keyword,
+        inhouse_maintenance_header_keyword_q,
+        HaoligoMoldMaintenanceCompleteSheet,
+    )
     if service_type and str(service_type).strip() in ("维修", "保养"):
         qs = qs.filter(service_type=str(service_type).strip())
     if created_from is not None:
