@@ -3,9 +3,59 @@
 
 每个单据类型（销售订单、需求等）在此单独配置其阶段列表；
 根据单据当前数据计算当前阶段及各节点状态（done/active/pending），供前端 UniLifecycleStepper 展示。
+
+审核可视化模式（与 docs/core/document-action-contract.md 一致）：
+  A — 串行门禁：lifecycle 主轴仅业务态，审核由 record.audit + 列表「审核状态」列展示
+  B — 正交叠加：lifecycle 主轴仅业务态，审核由 record.audit + AuditPhaseBadge 展示
+  N — 无审核：纯执行/仓储流，lifecycle 不含审核节点
+  C — 审核即全部生命周期（HaoliGO 模具 sheet_status，不在本模块）
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
+
+LifecycleAuditMode = Literal["A", "B", "N"]
+
+# 各单据 lifecycle 审核可视化模式（唯一分类真源）
+LIFECYCLE_AUDIT_MODE: Dict[str, LifecycleAuditMode] = {
+    "sales_order": "A",
+    "sales_forecast": "A",
+    "purchase_order": "A",
+    "demand": "A",
+    "sales_contract": "A",
+    "sales_order_change": "A",
+    "purchase_order_change": "A",
+    "production_plan": "A",
+    "purchase_requisition": "A",
+    "incoming_inspection": "A",
+    "process_inspection": "A",
+    "finished_goods_inspection": "A",
+    "oqc_inspection": "A",
+    "quotation": "B",
+    "purchase_inquiry": "B",
+    "work_order": "N",
+    "purchase_receipt": "N",
+    "sales_delivery": "N",
+    "shipment_notice": "N",
+    "sales_return": "N",
+    "inbound": "N",
+    "outbound": "N",
+    "batching_order": "N",
+    "inventory_transfer": "N",
+    "stocktaking": "N",
+    "material_borrow": "N",
+    "other_inbound": "N",
+    "other_outbound": "N",
+    "assembly_order": "N",
+    "disassembly_order": "N",
+    "exception_process": "N",
+    "equipment_fault": "N",
+    "maintenance_plan": "N",
+    "scrap_record": "N",
+    "demand_computation": "N",
+    "rework_order": "N",
+    "outsource_work_order": "N",
+    "outsource_order": "N",
+}
 from functools import wraps
 from decimal import Decimal
 from loguru import logger
@@ -22,22 +72,23 @@ from apps.kuaizhizao.constants import (
 
 
 # ---------------------------------------------------------------------------
-# 销售订单生命周期节点（后端单独控制）
-# 各阶段含义：草稿→待审核→已审核→已生效→执行中→已交货→账款发票→已完成
-# - 已生效：订单已确认/已下推，可开始执行，但尚未开始生产（无工单、交货0）
-# - 执行中：已开始执行（BOM/需求/工单/生产/交货进行中）
-# - 账款发票：交货闭环后至开票/收款完成前
+# 销售订单生命周期节点（业务主轴，不含审核；审核态由 record.audit 独立列展示）
 # ---------------------------------------------------------------------------
 SALES_ORDER_MAIN_STAGES = [
     {"key": "draft", "label": "草稿"},
-    {"key": "pending_review", "label": "待审核"},
-    {"key": "audited", "label": "已审核"},
     {"key": "effective", "label": "已生效"},
     {"key": "executing", "label": "执行中"},
     {"key": "delivered", "label": "已交货"},
     {"key": "invoicing", "label": "账款发票处理"},
     {"key": "completed", "label": "已完成"},
 ]
+
+
+def _audit_entity_visual_stage_key(internal_key: str, *, pre_effective: str = "draft") -> str:
+    """模式 A：审核相关 internal key 映射到审核前业务阶段。"""
+    if internal_key in ("pending_review", "audited", "rejected"):
+        return pre_effective
+    return internal_key
 
 SALES_ORDER_EXEC_SUB_STAGES = [
     {"key": "bom_check", "label": "BOM检查"},
@@ -67,9 +118,6 @@ WORK_ORDER_MAIN_STAGES = [
 # ---------------------------------------------------------------------------
 DEMAND_MAIN_STAGES = [
     {"key": "draft", "label": "草稿"},
-    {"key": "pending_review", "label": "待审核"},
-    {"key": "rejected", "label": "已驳回"},
-    {"key": "audited", "label": "已审核"},
     {"key": "pushed", "label": "已下推计算"},
 ]
 
@@ -139,6 +187,35 @@ def _is_closed(status: Optional[str]) -> bool:
     return s in ("CLOSED", "已关闭", "closed")
 
 
+def _sales_order_lifecycle_suggestions(
+    order: Any,
+    *,
+    items: Optional[List[Any]] = None,
+    pushed_to_computation: bool = False,
+    current_stage_key: Optional[str] = None,
+    exec_active_key: Optional[str] = None,
+) -> List[str]:
+    from apps.kuaizhizao.services.document_action_policy.lifecycle_suggestions import (
+        sales_order_capabilities_to_suggestions,
+    )
+    from apps.kuaizhizao.services.document_action_policy.sales_order import (
+        derive_sales_order_capabilities,
+    )
+
+    has_wo = any(getattr(it, "work_order_id", None) for it in (items or []))
+    caps = derive_sales_order_capabilities(
+        order,
+        pushed_to_computation=pushed_to_computation,
+        has_items=bool(items),
+        has_line_work_orders=has_wo,
+    )
+    return sales_order_capabilities_to_suggestions(
+        caps,
+        current_stage_key=current_stage_key,
+        exec_active_key=exec_active_key,
+    )
+
+
 def normalize_sales_order_lifecycle_filter(stage: Optional[str]) -> str:
     """列表 lifecycle_stage 筛选值归一化（与前端 normalizeStageName 对齐）。"""
     s = _norm(stage)
@@ -202,14 +279,27 @@ def get_sales_order_lifecycle(
     collection = collection_progress if collection_progress is not None else invoice
     pushed = pushed_to_computation or getattr(order, "planning_pushed_to_computation", False)
 
+    def _so_sugg(stage_key: str, exec_key: Optional[str] = None) -> List[str]:
+        return _sales_order_lifecycle_suggestions(
+            order,
+            items=items,
+            pushed_to_computation=pushed,
+            current_stage_key=stage_key,
+            exec_active_key=exec_key,
+        )
+
     if _is_rejected(review_status):
         return {
-            "current_stage_key": "pending_review",
+            "current_stage_key": "draft",
             "current_stage_name": "已驳回",
             "status": "exception",
-            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "pending_review", is_exception=True),
+            "main_stages": _build_main_stages(
+                SALES_ORDER_MAIN_STAGES,
+                _audit_entity_visual_stage_key("pending_review"),
+                is_exception=True,
+            ),
             "sub_stages": None,
-            "next_step_suggestions": ["修改订单后重新提交审核"],
+            "next_step_suggestions": _so_sugg("pending_review"),
         }
     if _is_cancelled(status):
         return {
@@ -237,17 +327,20 @@ def get_sales_order_lifecycle(
             "status": "normal",
             "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "draft"),
             "sub_stages": None,
-            "next_step_suggestions": ["提交审核"],
+            "next_step_suggestions": _so_sugg("draft"),
         }
     # 以 review_status 为准：若已审核通过则显示已审核，避免 status 未同步导致 lifecycle 显示待审核
     if _is_pending_review(status) and not _is_approved(review_status):
         return {
-            "current_stage_key": "pending_review",
-            "current_stage_name": "待审核",
+            "current_stage_key": "draft",
+            "current_stage_name": "草稿",
             "status": "normal",
-            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "pending_review"),
+            "main_stages": _build_main_stages(
+                SALES_ORDER_MAIN_STAGES,
+                _audit_entity_visual_stage_key("pending_review"),
+            ),
             "sub_stages": None,
-            "next_step_suggestions": ["审核通过", "驳回"],
+            "next_step_suggestions": _so_sugg("pending_review"),
         }
 
     effective = _is_approved(review_status) and (
@@ -255,12 +348,15 @@ def get_sales_order_lifecycle(
     )
     if _is_audited(status) and not effective:
         return {
-            "current_stage_key": "audited",
-            "current_stage_name": "已审核",
+            "current_stage_key": "draft",
+            "current_stage_name": "草稿",
             "status": "normal",
-            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "audited"),
+            "main_stages": _build_main_stages(
+                SALES_ORDER_MAIN_STAGES,
+                _audit_entity_visual_stage_key("audited"),
+            ),
             "sub_stages": None,
-            "next_step_suggestions": ["下推需求计算"],
+            "next_step_suggestions": _so_sugg("audited"),
         }
 
     if effective and delivery >= 100 and invoice >= 100:
@@ -289,18 +385,14 @@ def get_sales_order_lifecycle(
                 "percent": round(collection, 1),
             },
         ]
-        suggestions: List[str] = []
-        if invoice_amt < 100:
-            suggestions.append("下推销售发票")
-        if collection < 100:
-            suggestions.append("登记收款与对账")
+        suggestions = _so_sugg("invoicing")
         return {
             "current_stage_key": "invoicing",
             "current_stage_name": "账款发票处理",
             "status": "normal",
             "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "invoicing"),
             "sub_stages": finance_sub_stages,
-            "next_step_suggestions": suggestions or ["下推销售发票", "登记收款与对账"],
+            "next_step_suggestions": suggestions,
         }
     # 已生效：订单已确认/已下推，但尚未开始执行（无工单、无交货进度）
     if effective and delivery <= 0:
@@ -314,7 +406,7 @@ def get_sales_order_lifecycle(
                 "status": "normal",
                 "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "effective"),
                 "sub_stages": None,
-                "next_step_suggestions": ["前往需求计算执行 MRP", "建立工单"],
+                "next_step_suggestions": _so_sugg("effective"),
             }
     if effective and delivery < 100:
         milestones = milestones or []
@@ -336,17 +428,8 @@ def get_sales_order_lifecycle(
                     ss["status"] = "active"
                     break
 
-        # 根据当前 active 子阶段给出建议
-        exec_suggestions = {
-            "bom_check": ["完成 BOM 检查"],
-            "demand_compute": ["执行需求计算（MRP）"],
-            "production_plan": ["制定生产计划"],
-            "work_order_released": ["下达工单"],
-            "shipment_waiting": ["准备出库"],
-            "delivered": ["销售交货"],
-        }
         active_key = next((s["key"] for s in sub_stages if s["status"] == "active"), None)
-        suggestions = exec_suggestions.get(active_key, ["推进执行进度"])
+        suggestions = _so_sugg("executing", active_key)
         return {
             "current_stage_key": "executing",
             "current_stage_name": "执行中",
@@ -358,12 +441,15 @@ def get_sales_order_lifecycle(
         }
 
     return {
-        "current_stage_key": "audited",
-        "current_stage_name": "已审核",
+        "current_stage_key": "draft",
+        "current_stage_name": "草稿",
         "status": "normal",
-        "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "audited"),
+        "main_stages": _build_main_stages(
+            SALES_ORDER_MAIN_STAGES,
+            _audit_entity_visual_stage_key("audited"),
+        ),
         "sub_stages": None,
-        "next_step_suggestions": ["下推需求计算"],
+        "next_step_suggestions": _so_sugg("audited"),
         "milestones": milestones,
     }
 
@@ -389,34 +475,27 @@ def get_demand_lifecycle(
     # 1. 异常分支：驳回
     if _is_rejected(review_status):
         return {
-            "current_stage_key": "rejected",
+            "current_stage_key": "draft",
             "current_stage_name": "已驳回",
             "status": "exception",
-            "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "rejected", is_exception=True),
+            "main_stages": _build_main_stages(
+                DEMAND_MAIN_STAGES,
+                _audit_entity_visual_stage_key("rejected"),
+                is_exception=True,
+            ),
             "sub_stages": origin_sub,
             "next_step_suggestions": ["修改后重新提交上游审核"],
         }
 
-    # 2. 草稿
-    if _is_draft(status):
+    # 2. 草稿（含待审核）
+    if _is_draft(status) or (_is_pending_review(status) and not _is_approved(review_status)):
         return {
             "current_stage_key": "draft",
             "current_stage_name": "草稿",
             "status": "normal",
             "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "draft"),
             "sub_stages": origin_sub,
-            "next_step_suggestions": ["提交审核"],
-        }
-
-    # 3. 待审核
-    if _is_pending_review(status) and not _is_approved(review_status):
-        return {
-            "current_stage_key": "pending_review",
-            "current_stage_name": "待审核",
-            "status": "normal",
-            "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "pending_review"),
-            "sub_stages": origin_sub,
-            "next_step_suggestions": ["审核通过", "驳回"],
+            "next_step_suggestions": ["提交审核"] if _is_draft(status) else ["审核通过", "驳回"],
         }
 
     # 4. 已审核与下推判断
@@ -436,22 +515,25 @@ def get_demand_lifecycle(
     
     if audited:
         return {
-            "current_stage_key": "audited",
-            "current_stage_name": "已审核",
+            "current_stage_key": "draft",
+            "current_stage_name": "草稿",
             "status": "normal",
-            "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "audited"),
+            "main_stages": _build_main_stages(
+                DEMAND_MAIN_STAGES,
+                _audit_entity_visual_stage_key("audited"),
+            ),
             "sub_stages": origin_sub,
             "next_step_suggestions": ["下推需求计算"],
         }
 
     # 默认兜底
     return {
-        "current_stage_key": "audited" if audited else "draft",
-        "current_stage_name": "已审核" if audited else "草稿",
+        "current_stage_key": "draft",
+        "current_stage_name": "草稿",
         "status": "normal",
-        "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "audited" if audited else "draft"),
+        "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "draft"),
         "sub_stages": origin_sub,
-        "next_step_suggestions": ["下推需求计算"] if audited else ["提交审核"],
+        "next_step_suggestions": ["提交审核"],
     }
 
 
@@ -591,8 +673,6 @@ def get_work_order_lifecycle(
 # ---------------------------------------------------------------------------
 PURCHASE_ORDER_MAIN_STAGES = [
     {"key": "draft", "label": "草稿"},
-    {"key": "pending_review", "label": "待审核"},
-    {"key": "audited", "label": "已审核"},
     {"key": "confirmed", "label": "已确认"},
     {"key": "executing", "label": "执行中"},
     {"key": "invoicing", "label": "账款发票"},
@@ -616,6 +696,20 @@ def get_purchase_order_lifecycle(
     review_status = _norm(getattr(order, "review_status", None))
     milestones = milestones or []
     actions = {m.get("action") for m in milestones}
+
+    from apps.kuaizhizao.services.document_action_policy.lifecycle_suggestions import (
+        purchase_order_capabilities_to_suggestions,
+    )
+    from apps.kuaizhizao.services.document_action_policy.purchase_order import (
+        derive_purchase_order_capabilities,
+    )
+
+    def _po_sugg(stage_key: str) -> List[str]:
+        caps = derive_purchase_order_capabilities(order)
+        return purchase_order_capabilities_to_suggestions(
+            caps,
+            current_stage_key=stage_key,
+        )
 
     exec_started = bool(
         actions
@@ -668,12 +762,16 @@ def get_purchase_order_lifecycle(
 
     if _is_rejected(review_status) or status in ("REJECTED", "已驳回", "rejected"):
         return {
-            "current_stage_key": "pending_review",
+            "current_stage_key": "draft",
             "current_stage_name": "已驳回",
             "status": "exception",
-            "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "pending_review", is_exception=True),
+            "main_stages": _build_main_stages(
+                PURCHASE_ORDER_MAIN_STAGES,
+                _audit_entity_visual_stage_key("pending_review"),
+                is_exception=True,
+            ),
             "sub_stages": sub_stages,
-            "next_step_suggestions": ["修改后重新提交审核"],
+            "next_step_suggestions": _po_sugg("pending_review"),
             "milestones": milestones,
         }
     if _is_cancelled(status):
@@ -693,27 +791,33 @@ def get_purchase_order_lifecycle(
             "status": "normal",
             "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "draft"),
             "sub_stages": None,
-            "next_step_suggestions": ["提交审核"],
+            "next_step_suggestions": _po_sugg("draft"),
             "milestones": milestones,
         }
     if _is_pending_review(status) and not _is_approved(review_status):
         return {
-            "current_stage_key": "pending_review",
-            "current_stage_name": "待审核",
+            "current_stage_key": "draft",
+            "current_stage_name": "草稿",
             "status": "normal",
-            "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "pending_review"),
+            "main_stages": _build_main_stages(
+                PURCHASE_ORDER_MAIN_STAGES,
+                _audit_entity_visual_stage_key("pending_review"),
+            ),
             "sub_stages": sub_stages,
-            "next_step_suggestions": ["审核通过", "驳回"],
+            "next_step_suggestions": _po_sugg("pending_review"),
             "milestones": milestones,
         }
     if _is_audited(status) and _is_approved(review_status) and not _is_confirmed(status):
         return {
-            "current_stage_key": "audited",
-            "current_stage_name": "已审核",
+            "current_stage_key": "draft",
+            "current_stage_name": "草稿",
             "status": "normal",
-            "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "audited"),
+            "main_stages": _build_main_stages(
+                PURCHASE_ORDER_MAIN_STAGES,
+                _audit_entity_visual_stage_key("audited"),
+            ),
             "sub_stages": sub_stages,
-            "next_step_suggestions": ["确认订单"],
+            "next_step_suggestions": _po_sugg("audited"),
             "milestones": milestones,
         }
 
@@ -762,12 +866,15 @@ def get_purchase_order_lifecycle(
         }
 
     return {
-        "current_stage_key": "audited",
-        "current_stage_name": "已审核",
+        "current_stage_key": "draft",
+        "current_stage_name": "草稿",
         "status": "normal",
-        "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "audited"),
+        "main_stages": _build_main_stages(
+            PURCHASE_ORDER_MAIN_STAGES,
+            _audit_entity_visual_stage_key("audited"),
+        ),
         "sub_stages": sub_stages,
-        "next_step_suggestions": ["确认订单", "下推收货通知"],
+        "next_step_suggestions": _po_sugg("audited"),
         "milestones": milestones,
     }
 
@@ -795,23 +902,49 @@ def get_sales_forecast_lifecycle(
     pushed = pushed_to_computation or getattr(forecast, "planning_pushed_to_computation", False)
     milestones = milestones or []
 
+    from apps.kuaizhizao.services.document_action_policy.lifecycle_suggestions import (
+        sales_forecast_capabilities_to_suggestions,
+    )
+    from apps.kuaizhizao.services.document_action_policy.sales_forecast import (
+        derive_sales_forecast_capabilities,
+    )
+
+    def _sf_sugg(stage_key: str) -> List[str]:
+        caps = derive_sales_forecast_capabilities(
+            forecast,
+            pushed_to_computation=pushed,
+            has_items=bool(items),
+        )
+        return sales_forecast_capabilities_to_suggestions(
+            caps,
+            current_stage_key=stage_key,
+        )
+
     if _is_rejected(review_status):
         return {
-            "current_stage_key": "pending_review",
+            "current_stage_key": "draft",
             "current_stage_name": "已驳回",
             "status": "exception",
-            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "pending_review", is_exception=True),
+            "main_stages": _build_main_stages(
+                SALES_ORDER_MAIN_STAGES,
+                _audit_entity_visual_stage_key("pending_review"),
+                is_exception=True,
+            ),
             "sub_stages": None,
-            "next_step_suggestions": ["修改预测后重新提交审核"],
+            "next_step_suggestions": _sf_sugg("pending_review"),
         }
     if status in ("已驳回", "REJECTED", "rejected"):
         return {
-            "current_stage_key": "pending_review",
+            "current_stage_key": "draft",
             "current_stage_name": "已驳回",
             "status": "exception",
-            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "pending_review", is_exception=True),
+            "main_stages": _build_main_stages(
+                SALES_ORDER_MAIN_STAGES,
+                _audit_entity_visual_stage_key("pending_review"),
+                is_exception=True,
+            ),
             "sub_stages": None,
-            "next_step_suggestions": ["修改预测后重新提交审核"],
+            "next_step_suggestions": _sf_sugg("pending_review"),
         }
     if _is_cancelled(status):
         return {
@@ -830,27 +963,33 @@ def get_sales_forecast_lifecycle(
             "status": "normal",
             "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "draft"),
             "sub_stages": None,
-            "next_step_suggestions": ["提交审核"],
+            "next_step_suggestions": _sf_sugg("draft"),
         }
     if _is_pending_review(status) and not _is_approved(review_status):
         return {
-            "current_stage_key": "pending_review",
-            "current_stage_name": "待审核",
+            "current_stage_key": "draft",
+            "current_stage_name": "草稿",
             "status": "normal",
-            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "pending_review"),
+            "main_stages": _build_main_stages(
+                SALES_ORDER_MAIN_STAGES,
+                _audit_entity_visual_stage_key("pending_review"),
+            ),
             "sub_stages": None,
-            "next_step_suggestions": ["审核通过", "驳回", "撤回提交（回到草稿）"],
+            "next_step_suggestions": _sf_sugg("pending_review"),
         }
 
     effective = _is_approved(review_status) and (_is_confirmed(status) or pushed)
     if _is_audited(status) and not effective:
         return {
-            "current_stage_key": "audited",
-            "current_stage_name": "已审核",
+            "current_stage_key": "draft",
+            "current_stage_name": "草稿",
             "status": "normal",
-            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "audited"),
+            "main_stages": _build_main_stages(
+                SALES_ORDER_MAIN_STAGES,
+                _audit_entity_visual_stage_key("audited"),
+            ),
             "sub_stages": None,
-            "next_step_suggestions": ["下推需求计算"],
+            "next_step_suggestions": _sf_sugg("audited"),
         }
 
     if effective and delivery >= 100 and invoice >= 100:
@@ -923,22 +1062,24 @@ def get_sales_forecast_lifecycle(
         }
 
     return {
-        "current_stage_key": "audited",
-        "current_stage_name": "已审核",
+        "current_stage_key": "draft",
+        "current_stage_name": "草稿",
         "status": "normal",
-        "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "audited"),
+        "main_stages": _build_main_stages(
+            SALES_ORDER_MAIN_STAGES,
+            _audit_entity_visual_stage_key("audited"),
+        ),
         "sub_stages": None,
-        "next_step_suggestions": ["下推需求计算"],
+        "next_step_suggestions": _sf_sugg("audited"),
         "milestones": milestones,
     }
 
 
 # ---------------------------------------------------------------------------
-# 生产计划生命周期节点（草稿→已审核→已执行）
+# 生产计划生命周期节点（业务主轴：草稿→已执行；审核由 record.audit 独立列展示）
 # ---------------------------------------------------------------------------
 PRODUCTION_PLAN_MAIN_STAGES = [
     {"key": "draft", "label": "草稿"},
-    {"key": "audited", "label": "已审核"},
     {"key": "executed", "label": "已执行"},
 ]
 
@@ -993,10 +1134,13 @@ def get_production_plan_lifecycle(
             "milestones": milestones,
         }
     return {
-        "current_stage_key": "audited",
-        "current_stage_name": "已审核",
+        "current_stage_key": "draft",
+        "current_stage_name": "草稿",
         "status": "normal",
-        "main_stages": _build_main_stages(PRODUCTION_PLAN_MAIN_STAGES, "audited"),
+        "main_stages": _build_main_stages(
+            PRODUCTION_PLAN_MAIN_STAGES,
+            _audit_entity_visual_stage_key("audited"),
+        ),
         "sub_stages": None,
         "next_step_suggestions": ["执行计划"],
         "milestones": milestones,
@@ -1017,9 +1161,9 @@ def get_rework_order_lifecycle(
 # ---------------------------------------------------------------------------
 # 采购申请生命周期（草稿→待审核→已通过/已驳回→部分转单→全部转单）
 # ---------------------------------------------------------------------------
+# 采购申请 lifecycle 主轴仅业务态；待审/已审由 record.audit 独立列展示
 PURCHASE_REQUISITION_MAIN_STAGES = [
     {"key": "draft", "label": "草稿"},
-    {"key": "pending_review", "label": "待审核"},
     {"key": "approved", "label": "已通过"},
     {"key": "partial", "label": "部分转单"},
     {"key": "full", "label": "全部转单"},
@@ -1068,16 +1212,24 @@ def get_purchase_requisition_lifecycle(
     }.get(status_norm, "draft")
     if not audit_required and flow_class == "pending_review":
         flow_class = "approved"
-    stage_name = PURCHASE_REQUISITION_FLOW_LABELS.get(flow_class, "草稿")
-    main_stages_def = PURCHASE_REQUISITION_MAIN_STAGES if audit_required else PURCHASE_REQUISITION_MAIN_STAGES_NO_AUDIT
     is_rejected = status_norm == DocumentStatus.REJECTED.value
+    visual_key = flow_class
+    if audit_required and flow_class == "pending_review":
+        visual_key = _audit_entity_visual_stage_key("pending_review")
+    stage_name = PURCHASE_REQUISITION_FLOW_LABELS.get(
+        visual_key if visual_key != "pending_review" else "draft",
+        "草稿",
+    )
+    if is_rejected:
+        stage_name = "已驳回"
+    main_stages_def = PURCHASE_REQUISITION_MAIN_STAGES
     return {
         "status_class": status_raw,
         "flow_class": flow_class,
-        "current_stage_key": flow_class,
+        "current_stage_key": visual_key,
         "current_stage_name": stage_name,
         "status": "exception" if is_rejected else "success" if flow_class == "full" else "normal",
-        "main_stages": _build_main_stages(main_stages_def, flow_class, is_exception=is_rejected),
+        "main_stages": _build_main_stages(main_stages_def, visual_key, is_exception=is_rejected),
         "sub_stages": None,
         "next_step_suggestions": ["下推采购订单"] if flow_class in ("approved", "partial") else [],
         "milestones": milestones,
@@ -1157,24 +1309,26 @@ def get_purchase_inquiry_lifecycle(
         "converted": "已转单",
     }.get(key, status or "草稿")
     if review_status in ("PENDING", "待审核") and key == "draft" and audit_required:
-        stage_name = "待审核"
+        stage_name = "草稿"
         key = "draft"
-    suggestions = []
-    if key == "draft":
-        suggestions = ["发布询价"]
-    elif key == "quoting":
-        suggestions = ["录入报价", "截止询价"]
-    elif key == "pending_compare":
-        suggestions = ["比价定标"]
-    elif key == "awarded":
-        suggestions = ["转采购订单"]
+    from apps.kuaizhizao.services.document_action_policy.lifecycle_suggestions import (
+        purchase_inquiry_capabilities_to_suggestions,
+    )
+    from apps.kuaizhizao.services.document_action_policy.purchase_inquiry import (
+        derive_purchase_inquiry_capabilities,
+    )
+
+    cap_suggestions = purchase_inquiry_capabilities_to_suggestions(
+        derive_purchase_inquiry_capabilities(inquiry),
+        current_stage_key=key,
+    )
     return {
         "current_stage_key": key,
         "current_stage_name": stage_name,
         "status": "success" if key == "converted" else "normal",
         "main_stages": _build_main_stages(PURCHASE_INQUIRY_MAIN_STAGES, key),
         "sub_stages": None,
-        "next_step_suggestions": suggestions,
+        "next_step_suggestions": cap_suggestions,
         "milestones": milestones,
     }
 
@@ -1288,13 +1442,24 @@ def get_shipment_notice_lifecycle(
         {"key": "checking", "label": "出库复核", "status": "done" if is_shipped else ("active" if is_notified else "pending")},
     ]
 
+    from apps.kuaizhizao.services.document_action_policy.lifecycle_suggestions import (
+        shipment_notice_capabilities_to_suggestions,
+    )
+    from apps.kuaizhizao.services.document_action_policy.shipment_notice import (
+        derive_shipment_notice_capabilities,
+    )
+    cap_suggestions = shipment_notice_capabilities_to_suggestions(
+        derive_shipment_notice_capabilities(notice),
+        current_stage_key=key,
+    )
+
     return {
         "current_stage_key": key,
         "current_stage_name": stage_name,
         "status": "success" if key == "shipped" else "normal",
         "main_stages": _build_main_stages(SHIPMENT_NOTICE_MAIN_STAGES, key),
         "sub_stages": sub_stages,
-        "next_step_suggestions": ["通知仓库", "编辑通知明细"] if key == "pending" else (["撤回通知（回到待发货）", "执行出库"] if key == "notified" else []),
+        "next_step_suggestions": cap_suggestions,
         "milestones": milestones,
     }
 
@@ -1304,8 +1469,6 @@ def get_shipment_notice_lifecycle(
 # ---------------------------------------------------------------------------
 ORDER_CHANGE_MAIN_STAGES = [
     {"key": "draft", "label": "草稿"},
-    {"key": "pending_review", "label": "待审核"},
-    {"key": "audited", "label": "已审核"},
     {"key": "applied", "label": "已生效"},
 ]
 
@@ -1330,21 +1493,40 @@ def get_sales_order_change_lifecycle(
             "milestones": [],
         }
     elif s in ("PENDING_REVIEW", "待审核"):
-        key = "pending_review"
-        stage_name = "待审核"
+        key = "draft"
+        stage_name = "草稿"
     elif s in ("AUDITED", "已审核") or _is_approved(review_status):
-        key = "audited"
-        stage_name = "已审核"
+        key = "draft"
+        stage_name = "草稿"
     else:
         key = "draft"
         stage_name = "草稿"
+
+    from apps.kuaizhizao.services.document_action_policy.lifecycle_suggestions import (
+        sales_order_change_capabilities_to_suggestions,
+    )
+    from apps.kuaizhizao.services.document_action_policy.sales_order_change import (
+        derive_sales_order_change_capabilities,
+    )
+
+    class _ChangeShim:
+        pass
+
+    shim = _ChangeShim()
+    shim.status = s
+    shim.review_status = review_status
+    cap_suggestions = sales_order_change_capabilities_to_suggestions(
+        derive_sales_order_change_capabilities(shim),
+        current_stage_key=key,
+    )
+
     return {
         "current_stage_key": key,
         "current_stage_name": stage_name,
         "status": "success" if key == "applied" else "normal",
         "main_stages": _build_main_stages(ORDER_CHANGE_MAIN_STAGES, key),
         "sub_stages": [],
-        "next_step_suggestions": ["提交审核"] if key == "draft" else (["生效回写"] if key == "audited" else []),
+        "next_step_suggestions": cap_suggestions,
         "milestones": [],
     }
 
@@ -1383,13 +1565,24 @@ def get_sales_return_lifecycle(
         {"key": "stock_in", "label": "退货入库", "status": "done" if is_completed else "pending"},
     ]
 
+    from apps.kuaizhizao.services.document_action_policy.lifecycle_suggestions import (
+        sales_return_capabilities_to_suggestions,
+    )
+    from apps.kuaizhizao.services.document_action_policy.sales_return import (
+        derive_sales_return_capabilities,
+    )
+    cap_suggestions = sales_return_capabilities_to_suggestions(
+        derive_sales_return_capabilities(sales_return),
+        current_stage_key=key,
+    )
+
     return {
         "current_stage_key": key,
         "current_stage_name": stage_name,
         "status": "success" if is_completed else "normal",
         "main_stages": _build_main_stages(SALES_RETURN_MAIN_STAGES, key),
         "sub_stages": sub_stages,
-        "next_step_suggestions": ["确认退货"] if key == "pending" else ["撤回确认（回到待退货）"],
+        "next_step_suggestions": cap_suggestions,
         "milestones": milestones,
     }
 
@@ -1400,7 +1593,6 @@ def get_sales_return_lifecycle(
 INCOMING_INSPECTION_MAIN_STAGES = [
     {"key": "pending", "label": "待检验"},
     {"key": "inspected", "label": "已检验"},
-    {"key": "pending_review", "label": "待审核"},
     {"key": "approved", "label": "已审核"},
 ]
 
@@ -1415,6 +1607,20 @@ def get_incoming_inspection_lifecycle(
     milestones = milestones or []
     actions = {m.get("action") for m in milestones}
 
+    from apps.kuaizhizao.services.document_action_policy.lifecycle_suggestions import (
+        quality_inspection_capabilities_to_suggestions,
+    )
+    from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+        derive_quality_inspection_capabilities,
+    )
+
+    def _qi_sugg(stage_key: str) -> List[str]:
+        caps = derive_quality_inspection_capabilities(inspection)
+        return quality_inspection_capabilities_to_suggestions(
+            caps,
+            current_stage_key=stage_key,
+        )
+
     # 计算子阶段
     is_done = (status in ("已审核", "audited", "approved") or _is_approved(review_status))
     sub_stages = [
@@ -1425,12 +1631,16 @@ def get_incoming_inspection_lifecycle(
 
     if _is_rejected(review_status) or status in ("已驳回", "rejected"):
         return {
-            "current_stage_key": "pending_review",
+            "current_stage_key": "inspected",
             "current_stage_name": "已驳回",
             "status": "exception",
-            "main_stages": _build_main_stages(INCOMING_INSPECTION_MAIN_STAGES, "pending_review", is_exception=True),
+            "main_stages": _build_main_stages(
+                INCOMING_INSPECTION_MAIN_STAGES,
+                "inspected",
+                is_exception=True,
+            ),
             "sub_stages": sub_stages,
-            "next_step_suggestions": ["修改并重新提交"],
+            "next_step_suggestions": _qi_sugg("pending_review"),
             "milestones": milestones,
         }
     if is_done:
@@ -1446,12 +1656,12 @@ def get_incoming_inspection_lifecycle(
         }
     if status in ("已检验", "inspected"):
         return {
-            "current_stage_key": "pending_review",
-            "current_stage_name": "待审核",
+            "current_stage_key": "inspected",
+            "current_stage_name": "已检验",
             "status": "normal",
-            "main_stages": _build_main_stages(INCOMING_INSPECTION_MAIN_STAGES, "pending_review"),
+            "main_stages": _build_main_stages(INCOMING_INSPECTION_MAIN_STAGES, "inspected"),
             "sub_stages": sub_stages,
-            "next_step_suggestions": ["审核"],
+            "next_step_suggestions": _qi_sugg("pending_review"),
             "milestones": milestones,
         }
     return {
@@ -1460,7 +1670,7 @@ def get_incoming_inspection_lifecycle(
         "status": "normal",
         "main_stages": _build_main_stages(INCOMING_INSPECTION_MAIN_STAGES, "pending"),
         "sub_stages": sub_stages,
-        "next_step_suggestions": ["执行检验"],
+        "next_step_suggestions": _qi_sugg("pending"),
         "milestones": milestones,
     }
 
@@ -1485,27 +1695,18 @@ def get_finished_goods_inspection_lifecycle(
 
 
 # ---------------------------------------------------------------------------
-# 报价单生命周期
-# 启用审核：草稿 → 待审核 → 已报价 → 客户确认 → 已转订单
-# 关闭审核：草稿 → 已报价 → 客户确认 → 已转订单（提交后视同已审核）
+# 报价单生命周期（模式 B：主轴仅业务态 draft→已报价→客户确认→已转订单；审核由 record.audit 展示）
 # ---------------------------------------------------------------------------
-QUOTATION_MAIN_STAGES_AUDIT = [
-    {"key": "draft", "label": "草稿"},
-    {"key": "pending_review", "label": "待审核"},
-    {"key": "generated", "label": "已报价"},
-    {"key": "customer_confirmed", "label": "客户确认"},
-    {"key": "converted", "label": "已转订单"},
-]
-
-QUOTATION_MAIN_STAGES_NO_AUDIT = [
+QUOTATION_MAIN_STAGES = [
     {"key": "draft", "label": "草稿"},
     {"key": "generated", "label": "已报价"},
     {"key": "customer_confirmed", "label": "客户确认"},
     {"key": "converted", "label": "已转订单"},
 ]
 
-# 兼容旧引用
-QUOTATION_MAIN_STAGES = QUOTATION_MAIN_STAGES_NO_AUDIT
+# 兼容旧引用（audit 节点已移出主轴）
+QUOTATION_MAIN_STAGES_NO_AUDIT = QUOTATION_MAIN_STAGES
+QUOTATION_MAIN_STAGES_AUDIT = QUOTATION_MAIN_STAGES
 
 
 def _quotation_review_pending(review_status: Optional[str]) -> bool:
@@ -1605,7 +1806,7 @@ def get_quotation_lifecycle(
     converted_sales_order_missing: bool = False,
     audit_required: bool = True,
 ) -> Dict[str, Any]:
-    """报价单生命周期：结合 status 与 review_status 映射为主轴四节点（见 QUOTATION_MAIN_STAGES）。"""
+    """报价单生命周期：主轴四节点（模式 B）；审核相位不在 main_stages 中。"""
     from apps.kuaizhizao.services.document_action_policy.quotation import (
         derive_quotation_capabilities,
         quotation_capabilities_to_suggestions,
@@ -1626,9 +1827,7 @@ def get_quotation_lifecycle(
         conversion_downstream_missing=converted_sales_order_missing,
     )
 
-    stage_defs = (
-        QUOTATION_MAIN_STAGES_AUDIT if audit_required else QUOTATION_MAIN_STAGES_NO_AUDIT
-    )
+    stage_defs = QUOTATION_MAIN_STAGES
 
     def _ret(
         key: str,
@@ -1658,11 +1857,10 @@ def get_quotation_lifecycle(
         )
 
     if status in ("已拒绝", "rejected") or _is_rejected(review_status):
-        reject_key = "pending_review" if audit_required else "generated"
         return _merge_quotation_version_meta(
             quotation,
             _ret(
-                reject_key,
+                "generated",
                 "已驳回",
                 "exception",
                 exc=True,
@@ -1690,15 +1888,6 @@ def get_quotation_lifecycle(
         )
 
     if status == "已发送":
-        if audit_required and _quotation_review_pending(review_status):
-            return _merge_quotation_version_meta(
-                quotation,
-                _ret(
-                    "pending_review",
-                    "待审核",
-                    "normal",
-                ),
-            )
         return _merge_quotation_version_meta(
             quotation,
             _ret(
@@ -1718,7 +1907,6 @@ def get_quotation_lifecycle(
 # ---------------------------------------------------------------------------
 SALES_CONTRACT_MAIN_STAGES_FINISHED = [
     {"key": "draft", "label": "草稿"},
-    {"key": "pending_review", "label": "待审核"},
     {"key": "effective", "label": "已生效"},
     {"key": "executing", "label": "执行中"},
     {"key": "finished", "label": "已完成"},
@@ -1726,7 +1914,6 @@ SALES_CONTRACT_MAIN_STAGES_FINISHED = [
 
 SALES_CONTRACT_MAIN_STAGES_CLOSED = [
     {"key": "draft", "label": "草稿"},
-    {"key": "pending_review", "label": "待审核"},
     {"key": "effective", "label": "已生效"},
     {"key": "executing", "label": "执行中"},
     {"key": "closed", "label": "已关闭"},
@@ -1769,7 +1956,12 @@ def get_sales_contract_lifecycle(
 
     if status in ("待审核", "pending_review"):
         if _quotation_review_pending(review_status) or review_status in ("", "pending", "待审核"):
-            return _ret("pending_review", "待审核", "normal", ["审核通过", "审核驳回"])
+            return _ret(
+                _audit_entity_visual_stage_key("pending_review"),
+                "草稿",
+                "normal",
+                ["审核通过", "审核驳回"],
+            )
         if _is_approved(review_status):
             return _ret("effective", "已生效", "success", ["下推销售订单"])
 
@@ -2283,11 +2475,10 @@ def get_maintenance_plan_lifecycle(
     }
 
 # ---------------------------------------------------------------------------
-# 报废单生命周期
+# 报废单 lifecycle 主轴（审核由 record.audit 独立列展示）
 # ---------------------------------------------------------------------------
 SCRAP_RECORD_MAIN_STAGES = [
-    {"key": "pending", "label": "待审核"},
-    {"key": "audited", "label": "已审核"},
+    {"key": "draft", "label": "草稿"},
     {"key": "completed", "label": "已入库/处理"},
 ]
 
@@ -2299,21 +2490,21 @@ def get_scrap_record_lifecycle(
     status = _norm(getattr(record, "status", None))
     review_status = _norm(getattr(record, "review_status", None))
     milestones = milestones or []
-    
-    if _is_approved(review_status) or status in ("已审核", "audited"):
-        key = "audited"
-        if status in ("已完成", "completed", "已入库"):
-            key = "completed"
+
+    if status in ("已完成", "completed", "已入库"):
+        key = "completed"
+        stage_name = "已入库/处理"
     else:
-        key = "pending"
-        
+        key = "draft"
+        stage_name = "草稿"
+
     return {
         "current_stage_key": key,
-        "current_stage_name": "待审核" if key == "pending" else "已完成" if key == "completed" else "已审核",
+        "current_stage_name": stage_name,
         "status": "success" if key == "completed" else "normal",
         "main_stages": _build_main_stages(SCRAP_RECORD_MAIN_STAGES, key),
         "sub_stages": None,
-        "next_step_suggestions": ["审核通过"] if key == "pending" else ["确认入库"] if key == "audited" else [],
+        "next_step_suggestions": ["确认入库"] if key == "draft" and _is_approved(review_status) else [],
         "milestones": milestones,
     }
 # ---------------------------------------------------------------------------

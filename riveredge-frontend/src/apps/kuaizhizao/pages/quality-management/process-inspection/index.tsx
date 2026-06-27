@@ -54,6 +54,7 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
 import { qualityApi, workOrderApi } from '../../../services/production';
@@ -263,6 +264,10 @@ const ProcessInspectionPage: React.FC = () => {
   const processInspectionDetailDrawerZIndex = token.zIndexPopupBase;
   const processPerms = useResourcePermissions(PROCESS_RESOURCE);
   const processAuditEnabled = useAuditRequired('process_inspection');
+  const processAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<ProcessInspection>({ t, auditEnabled: processAuditEnabled }),
+    [t, processAuditEnabled],
+  );
   const ncPerms = useResourcePermissions(NC_RESOURCE);
   const { canRead: canReadNcLedger } = useResourcePermissions(NC_RESOURCE);
   const actionRef = useRef<ActionType>(null);
@@ -683,36 +688,33 @@ const ProcessInspectionPage: React.FC = () => {
         {t('app.kuaizhizao.quality.common.actions.detail')}
       </Button>,
     ];
-    if (gates.approve.allowed) {
-      nodes.push(
-        <UniWorkflowActions
-          {...rowActionKind('skip')}
-          key="wf"
-          record={record}
-          {...qualityInspectionUniAuditProps({
-            entityType: 'process_inspection',
-            resourcePrefix: PROCESS_RESOURCE,
-            entityName: t('app.kuaizhizao.quality.common.entity.processInspection'),
-            workflowAuditEnabled: processAuditEnabled,
-            onSuccess: () => {
-              actionRef.current?.reload();
-              if (inspectionDetail?.id === record.id) {
-                qualityApi.processInspection
-                  .get(record.id!.toString())
-                  .then(async (d) => {
-                    setInspectionDetail(d);
-                    setPiTrackingRefreshKey((k) => k + 1);
-                    if (record.id != null) {
-                      await loadInspectionFieldValuesForDetail(record.id);
-                    }
-                  })
-                  .catch(() => {});
-              }
-            },
-          })}
-        />,
-      );
-    }
+    nodes.push(
+      <UniWorkflowActions
+        {...rowActionKind('skip')}
+        key="wf"
+        record={record}
+        {...qualityInspectionUniAuditProps({
+          entityType: 'process_inspection',
+          resourcePrefix: PROCESS_RESOURCE,
+          entityName: t('app.kuaizhizao.quality.common.entity.processInspection'),
+          onSuccess: () => {
+            actionRef.current?.reload();
+            if (inspectionDetail?.id === record.id) {
+              qualityApi.processInspection
+                .get(record.id!.toString())
+                .then(async (d) => {
+                  setInspectionDetail(d);
+                  setPiTrackingRefreshKey((k) => k + 1);
+                  if (record.id != null) {
+                    await loadInspectionFieldValuesForDetail(record.id);
+                  }
+                })
+                .catch(() => {});
+            }
+          },
+        })}
+      />,
+    );
     if (gates.createDefect.allowed) {
       nodes.push(
         <Button {...rowActionKind('create')}
@@ -816,6 +818,7 @@ const ProcessInspectionPage: React.FC = () => {
       render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     ...inspectionCustomFieldColumns,
+    ...(processAuditColumn ? [processAuditColumn] : []),
     {
       title: t('app.kuaizhizao.quality.common.columns.lifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -847,7 +850,7 @@ const ProcessInspectionPage: React.FC = () => {
         renderProcessRowActions(renderProcessRowNodes(record), `proc-${record.id ?? 'row'}`),
     },
   ],
-    [t, inspectionCustomFieldColumns],
+    [t, processAuditColumn, inspectionCustomFieldColumns],
   );
 
   return (
@@ -1131,7 +1134,7 @@ const ProcessInspectionPage: React.FC = () => {
         columns={[]}
         column={3}
         extra={
-          inspectionDetail && qualityInspectionRowGates(inspectionDetail, processPerms, ncPerms, t).approve.allowed ? (
+          inspectionDetail ? (
             <UniWorkflowActions
               {...rowActionKind('skip')}
               record={inspectionDetail}
@@ -1139,7 +1142,6 @@ const ProcessInspectionPage: React.FC = () => {
                 entityType: 'process_inspection',
                 resourcePrefix: PROCESS_RESOURCE,
                 entityName: t('app.kuaizhizao.quality.common.entity.processInspection'),
-                workflowAuditEnabled: processAuditEnabled,
                 theme: 'default',
                 onSuccess: () => {
                   actionRef.current?.reload();

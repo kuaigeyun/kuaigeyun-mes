@@ -55,6 +55,8 @@ import { parseVariantAttributesValue } from '../../../../master-data/components/
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET, PAGE_SPACING, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE } from '../../../../../components/layout-templates';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
+import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
+import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
 import { AmountDisplay } from '../../../../../components/permission';
 import { DocumentAmountSummaryWatch } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
@@ -906,6 +908,10 @@ const QuotationsPage: React.FC = () => {
   }, []);
 
   /** 高级搜索与列表列统一定义，避免 dataIndex 重复 */
+  const quotationAuditColumn = createListAuditPhaseColumn<Quotation>({
+    t,
+    auditEnabled: quotationAuditRequired,
+  });
   const columns: ProColumns<Quotation>[] = [
     {
       title: t('app.kuaizhizao.quotation.colCustomerQuotation'),
@@ -998,6 +1004,7 @@ const QuotationsPage: React.FC = () => {
       hideInSearch: true,
       defaultSortOrder: 'descend',
     },
+    ...(quotationAuditColumn ? [quotationAuditColumn] : []),
     {
       title: t('app.kuaizhizao.quotation.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
@@ -3521,18 +3528,19 @@ const QuotationsPage: React.FC = () => {
                 const lifecycle = quotationLifecycleDetail;
                 const mainStages = lifecycle.mainStages ?? [];
                 return (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {mainStages.length > 0 ? (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        status={lifecycle.status}
-                        showLabels
-                        nextStepSuggestions={lifecycle.nextStepSuggestions}
-                        hideNextStepSuggestions={hideQuotationStepperNextRow}
-                      />
-                    ) : null}
-                    {quotationDetail.id != null ? (
-                      <DetailDrawerInlineFullChain
+                  <DetailLifecycleCollaborationBlock record={quotationDetail} auditEnabled={auditEnabled}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      {mainStages.length > 0 ? (
+                        <UniLifecycleStepper
+                          steps={mainStages}
+                          status={lifecycle.status}
+                          showLabels
+                          nextStepSuggestions={lifecycle.nextStepSuggestions}
+                          hideNextStepSuggestions={hideQuotationStepperNextRow}
+                        />
+                      ) : null}
+                      {quotationDetail.id != null ? (
+                        <DetailDrawerInlineFullChain
                         documentType="quotation"
                         documentId={quotationDetail.id}
                         active={detailDrawerVisible}
@@ -3550,7 +3558,8 @@ const QuotationsPage: React.FC = () => {
                         }
                       />
                     ) : null}
-                  </div>
+                    </div>
+                  </DetailLifecycleCollaborationBlock>
                 );
               })()
             : undefined

@@ -220,8 +220,13 @@ function isAppGroupPlaceholderItem(item: PermissionMenuItem): boolean {
 }
 
 /**
- * 按权限过滤菜单树：先筛子节点；分组占位权限不阻断子树；有可见子节点则保留父节点。
- * 子项全部被滤掉时不保留带 path 的空壳父级。hideInMenu 的隐藏路由不参与「可见子节点」判定。
+ * 按权限过滤菜单树。
+ *
+ * 节点分类（唯一判定依据，禁止按 path 白名单补丁）：
+ * - **可导航项**：自身有 `path` 且非 `hideInMenu` → 是否展示只看本节点 permissionCodes
+ * - **分组壳**：无 `path`（或自身 hideInMenu）→ 仅当有可见子节点时保留
+ *
+ * `hideInMenu` 子路由（设计器等）不参与「可见子节点」计数，但可挂在可导航项下供面包屑/路由树使用。
  */
 export function filterMenuItemsByPermission<T extends PermissionMenuItem>(
   items: T[],
@@ -239,18 +244,21 @@ export function filterMenuItemsByPermission<T extends PermissionMenuItem>(
       const hasVisibleChildren = (nextChildren ?? []).some(
         (child) => !child.hideInMenu && !isAppGroupPlaceholderItem(child),
       );
+      const isNavigableMenuEntry = Boolean(item.path) && !item.hideInMenu;
 
       // 应用分组标题不参与权限/path 剔除（子项为占位符，真实菜单项为同级兄弟节点）
       if (isAppGroupTitleItem(item)) {
         return { ...item, children: nextChildren };
       }
 
-      // 有子菜单但子项全部被权限滤掉时，不保留空壳父级（避免 workspace 占位权限导致无权限模块仍显示）
       if (item.children?.length) {
-        if (!hasVisibleChildren) {
+        if (hasVisibleChildren) {
+          return { ...item, children: nextChildren };
+        }
+        // 无可见子节点：分组壳剔除；可导航列表页（含仅挂 hideInMenu 设计器子路由）继续按本节点权限判定
+        if (!isNavigableMenuEntry) {
           return null;
         }
-        return { ...item, children: nextChildren };
       }
 
       // 隐藏路由（设计器等）仅作路由注册，不应单独撑开侧栏/系统配置父菜单
@@ -265,7 +273,7 @@ export function filterMenuItemsByPermission<T extends PermissionMenuItem>(
         }
       }
 
-      if (!item.path && !hasVisibleChildren) {
+      if (!isNavigableMenuEntry && !hasVisibleChildren) {
         return null;
       }
 

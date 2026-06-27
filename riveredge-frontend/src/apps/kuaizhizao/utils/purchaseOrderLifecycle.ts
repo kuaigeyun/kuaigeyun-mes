@@ -8,22 +8,19 @@ import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 import { deriveLifecycleRingPercent } from '../../../utils/lifecycleRingPercent';
 import { resolveListLifecycleStageFromSearch } from '../../../utils/listLifecycleStage';
+import { mapAuditLifecycleStageToApiParams } from './auditListFilter';
 
-const MAIN_STAGE_KEYS_AUDIT = [
+const MAIN_STAGE_KEYS = [
   'draft',
-  'pending_review',
-  'audited',
   'confirmed',
   'executing',
   'invoicing',
   'completed',
 ] as const;
-const MAIN_STAGE_KEYS_NO_AUDIT = ['draft', 'confirmed', 'executing', 'invoicing', 'completed'] as const;
+const MAIN_STAGE_KEYS_NO_AUDIT = MAIN_STAGE_KEYS;
 
 const MAIN_STAGE_LABELS = {
   draft: '草稿',
-  pending_review: '待审核',
-  audited: '已审核',
   confirmed: '已确认',
   executing: '执行中',
   invoicing: '账款发票',
@@ -117,22 +114,11 @@ const CN_STAGE_NAMES = new Set([
   '已取消',
 ]);
 
-function buildMainStages(stageName: string, auditRequired: boolean): SubStage[] {
+function buildMainStages(stageName: string): SubStage[] {
   const normalized = normalizeStageName(stageName);
-  const order = auditRequired ? MAIN_STAGE_KEYS_AUDIT : MAIN_STAGE_KEYS_NO_AUDIT;
+  const order = [...MAIN_STAGE_KEYS];
 
-  const stageToIndexAudit: Record<string, number> = {
-    草稿: 0,
-    待审核: 1,
-    已审核: 2,
-    已确认: 3,
-    执行中: 4,
-    账款发票: 5,
-    已完成: 6,
-    已驳回: 1,
-    已取消: 0,
-  };
-  const stageToIndexNoAudit: Record<string, number> = {
+  const stageToIndex: Record<string, number> = {
     草稿: 0,
     已确认: 1,
     执行中: 2,
@@ -141,12 +127,10 @@ function buildMainStages(stageName: string, auditRequired: boolean): SubStage[] 
     已驳回: 0,
     已取消: 0,
     待审核: 0,
-    已审核: 1,
+    已审核: 0,
   };
 
-  const currentIdx = auditRequired
-    ? (stageToIndexAudit[normalized] ?? 0)
-    : (stageToIndexNoAudit[normalized] ?? 0);
+  const currentIdx = stageToIndex[normalized] ?? 0;
   const isCompletedStage = normalized === '已完成';
 
   return order.map((key, idx) => {
@@ -166,34 +150,39 @@ function ringPercentFromStages(stages: SubStage[]): number {
 function adaptForAuditSwitch(result: LifecycleResult, auditRequired: boolean): LifecycleResult {
   const base: LifecycleResult = { ...result, subStages: result.subStages };
   const stageRaw = normalizeStageName(base.stageName);
+  let stageName = stageRaw;
+  if (stageName === '待审核' || stageName === '已审核') {
+    stageName = '草稿';
+  }
+
+  let next = [...(base.nextStepSuggestions ?? [])];
+  if (!auditRequired) {
+    next = next
+      .map((s) => s.replace(/提交审核/g, '提交').replace(/审核通过/g, '确认'))
+      .filter((s) => !s.includes('审核'));
+  }
+
+  const mainStages = (base.mainStages ?? []).filter(
+    (s) => s.key !== 'pending_review' && s.key !== 'audited',
+  );
 
   if (stageRaw && CN_STAGE_NAMES.has(stageRaw)) {
-    let next = [...(base.nextStepSuggestions ?? [])];
-    if (!auditRequired) {
-      next = next
-        .map((s) => s.replace(/提交审核/g, '提交').replace(/审核通过/g, '确认'))
-        .filter((s) => !s.includes('审核'));
-    }
     return {
       ...base,
-      stageName: stageRaw,
-      mainStages: buildMainStages(stageRaw, auditRequired),
+      stageName,
+      mainStages: mainStages.length ? mainStages : buildMainStages(stageName),
       nextStepSuggestions: next,
     };
   }
 
-  let mainStages = base.mainStages ?? [];
-  if (!auditRequired) {
-    mainStages = mainStages.filter((s) => s.key !== 'pending_review' && s.key !== 'audited');
-  }
-  return { ...base, mainStages };
+  return { ...base, stageName, mainStages, nextStepSuggestions: next };
 }
 
 export const PURCHASE_ORDER_EXCEPTION_LIFECYCLE_STAGES = ['已驳回', '已取消'] as const;
 
 export function getPurchaseOrderLifecycleStageLabels(auditRequired = true): string[] {
-  const keys = auditRequired ? MAIN_STAGE_KEYS_AUDIT : MAIN_STAGE_KEYS_NO_AUDIT;
-  return [...keys.map((k) => MAIN_STAGE_LABELS[k]), ...PURCHASE_ORDER_EXCEPTION_LIFECYCLE_STAGES];
+  void auditRequired;
+  return [...MAIN_STAGE_KEYS.map((k) => MAIN_STAGE_LABELS[k]), ...PURCHASE_ORDER_EXCEPTION_LIFECYCLE_STAGES];
 }
 
 type LifecycleTranslate = (key: string, defaultValue?: string) => string;
@@ -289,7 +278,7 @@ export function getPurchaseOrderLifecycle(
   const reviewStatus = norm(record?.review_status as string);
 
   if (isRejected(reviewStatus) || status === 'REJECTED' || status === '已驳回') {
-    const mainStages = buildMainStages('已驳回', auditRequired);
+    const mainStages = buildMainStages('已驳回');
     return adaptForAuditSwitch(
       {
         percent: ringPercentFromStages(mainStages),
@@ -302,7 +291,7 @@ export function getPurchaseOrderLifecycle(
     );
   }
   if (isCancelled(status)) {
-    const mainStages = buildMainStages('已取消', auditRequired);
+    const mainStages = buildMainStages('已取消');
     return adaptForAuditSwitch(
       {
         percent: ringPercentFromStages(mainStages),
@@ -315,7 +304,7 @@ export function getPurchaseOrderLifecycle(
     );
   }
   if (isDraft(status)) {
-    const mainStages = buildMainStages('草稿', auditRequired);
+    const mainStages = buildMainStages('草稿');
     return adaptForAuditSwitch(
       {
         percent: ringPercentFromStages(mainStages),
@@ -327,7 +316,7 @@ export function getPurchaseOrderLifecycle(
     );
   }
   if (isPendingReview(status) && !isApproved(reviewStatus)) {
-    const mainStages = buildMainStages('待审核', auditRequired);
+    const mainStages = buildMainStages('待审核');
     return adaptForAuditSwitch(
       {
         percent: ringPercentFromStages(mainStages),
@@ -339,7 +328,7 @@ export function getPurchaseOrderLifecycle(
     );
   }
   if (isAudited(status) && isApproved(reviewStatus) && !isConfirmed(status)) {
-    const mainStages = buildMainStages('已审核', auditRequired);
+    const mainStages = buildMainStages('已审核');
     return adaptForAuditSwitch(
       {
         percent: ringPercentFromStages(mainStages),
@@ -351,7 +340,7 @@ export function getPurchaseOrderLifecycle(
     );
   }
   if (isCompleted(status)) {
-    const mainStages = buildMainStages('已完成', auditRequired);
+    const mainStages = buildMainStages('已完成');
     return adaptForAuditSwitch(
       {
         percent: ringPercentFromStages(mainStages),
@@ -364,7 +353,7 @@ export function getPurchaseOrderLifecycle(
     );
   }
   if (isInProgress(status)) {
-    const mainStages = buildMainStages('执行中', auditRequired);
+    const mainStages = buildMainStages('执行中');
     return adaptForAuditSwitch(
       {
         percent: ringPercentFromStages(mainStages),
@@ -376,7 +365,7 @@ export function getPurchaseOrderLifecycle(
     );
   }
   if (isApproved(reviewStatus) && (isConfirmed(status) || isAudited(status))) {
-    const mainStages = buildMainStages('已确认', auditRequired);
+    const mainStages = buildMainStages('已确认');
     return adaptForAuditSwitch(
       {
         percent: ringPercentFromStages(mainStages),
@@ -388,7 +377,7 @@ export function getPurchaseOrderLifecycle(
     );
   }
 
-  const fallback = buildMainStages('草稿', auditRequired);
+  const fallback = buildMainStages('草稿');
   return adaptForAuditSwitch(
     {
       percent: ringPercentFromStages(fallback),

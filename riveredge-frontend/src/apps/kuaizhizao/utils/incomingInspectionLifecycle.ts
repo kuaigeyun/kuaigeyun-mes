@@ -1,6 +1,6 @@
 /**
- * 来料/工序/成品检验单生命周期：待检验→已检验→待审核→已审核/已驳回
- * 优先使用后端下发的 record.lifecycle，无则前端兜底。
+ * 来料/工序/成品检验单生命周期：待检验→已检验→已确认
+ * 优先使用后端 record.lifecycle；单据审核态由 record.audit 独立列展示。
  */
 
 import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
@@ -24,71 +24,80 @@ function isApproved(reviewStatus: string): boolean {
   return APPROVED_VALUES.includes(norm(reviewStatus));
 }
 
+const MAIN_STAGES = [
+  { key: 'pending', label: '待检验' },
+  { key: 'inspected', label: '已检验' },
+  { key: 'approved', label: '已确认' },
+] as const;
+
+function buildMainStages(currentKey: string, isException = false) {
+  const order = MAIN_STAGES.map((s) => s.key);
+  const idx = order.indexOf(currentKey);
+  const currentIdx = idx >= 0 ? idx : 0;
+  return MAIN_STAGES.map((s, i) => {
+    let status: 'done' | 'active' | 'pending' = 'pending';
+    if (i < currentIdx) status = 'done';
+    else if (i === currentIdx) status = 'active';
+    if (isException && s.key === currentKey) status = 'active';
+    return { key: s.key, label: s.label, status };
+  });
+}
+
 function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecycle {
   const status = norm(record?.status as string);
   const reviewStatus = norm(record?.review_status as string);
 
   if (isRejected(reviewStatus, status)) {
     return {
-      current_stage_key: 'pending_review',
+      current_stage_key: 'inspected',
       current_stage_name: '已驳回',
       status: 'exception',
-      main_stages: [
-        { key: 'pending', label: '待检验', status: 'done' },
-        { key: 'inspected', label: '已检验', status: 'done' },
-        { key: 'pending_review', label: '待审核', status: 'active' },
-        { key: 'approved', label: '已审核', status: 'pending' },
-      ],
+      main_stages: buildMainStages('inspected', true),
       next_step_suggestions: [],
     };
   }
-  if (isApproved(reviewStatus) || status === '已审核' || status === 'audited') {
+  if (isApproved(reviewStatus) || status === '已审核' || status === 'audited' || status === 'approved') {
     return {
       current_stage_key: 'approved',
-      current_stage_name: '已审核',
+      current_stage_name: '已确认',
       status: 'success',
-      main_stages: [
-        { key: 'pending', label: '待检验', status: 'done' },
-        { key: 'inspected', label: '已检验', status: 'done' },
-        { key: 'pending_review', label: '待审核', status: 'done' },
-        { key: 'approved', label: '已审核', status: 'active' },
-      ],
+      main_stages: buildMainStages('approved'),
       next_step_suggestions: [],
     };
   }
   if (status === '已检验' || status === 'inspected') {
     return {
-      current_stage_key: 'pending_review',
-      current_stage_name: '待审核',
+      current_stage_key: 'inspected',
+      current_stage_name: '已检验',
       status: 'normal',
-      main_stages: [
-        { key: 'pending', label: '待检验', status: 'done' },
-        { key: 'inspected', label: '已检验', status: 'done' },
-        { key: 'pending_review', label: '待审核', status: 'active' },
-        { key: 'approved', label: '已审核', status: 'pending' },
-      ],
-      next_step_suggestions: ['审核'],
+      main_stages: buildMainStages('inspected'),
+      next_step_suggestions: ['提交审核'],
     };
   }
   return {
     current_stage_key: 'pending',
     current_stage_name: '待检验',
     status: 'normal',
-    main_stages: [
-      { key: 'pending', label: '待检验', status: 'active' },
-      { key: 'inspected', label: '已检验', status: 'pending' },
-      { key: 'pending_review', label: '待审核', status: 'pending' },
-      { key: 'approved', label: '已审核', status: 'pending' },
-    ],
+    main_stages: buildMainStages('pending'),
     next_step_suggestions: ['执行检验'],
   };
 }
 
+function normalizeInspectionLifecycle(result: LifecycleResult): LifecycleResult {
+  const mainStages = (result.mainStages ?? []).filter((s) => s.key !== 'pending_review');
+  let stageName = result.stageName ?? '';
+  if (stageName === '待审核') stageName = '已检验';
+  if (stageName === '已审核') stageName = '已确认';
+  return { ...result, mainStages, stageName };
+}
+
 export function getIncomingInspectionLifecycle(
-  record: Record<string, unknown> | null | undefined
+  record: Record<string, unknown> | null | undefined,
 ): LifecycleResult {
   if (!record) return { percent: 0, stageName: '-', mainStages: [] };
   const backend = (record as Record<string, unknown>).lifecycle as BackendLifecycle | undefined;
-  if (backend?.main_stages?.length) return parseBackendLifecycle(backend);
-  return parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>));
+  if (backend?.main_stages?.length) {
+    return normalizeInspectionLifecycle(parseBackendLifecycle(backend));
+  }
+  return normalizeInspectionLifecycle(parseBackendLifecycle(buildFallbackLifecycle(record)));
 }

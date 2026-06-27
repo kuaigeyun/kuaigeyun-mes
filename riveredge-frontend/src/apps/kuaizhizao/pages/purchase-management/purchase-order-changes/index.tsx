@@ -21,7 +21,9 @@ import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFI
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
+import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
+import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -369,6 +371,10 @@ const PurchaseOrderChangesPage: React.FC = () => {
     () => buildOrderChangeLifecycleValueEnum(t),
     [t],
   );
+  const purchaseOrderChangeAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<PurchaseOrderChange>({ t, auditEnabled }),
+    [t, auditEnabled],
+  );
 
   const columns: ProColumns<PurchaseOrderChange>[] = useMemo(
     () => [
@@ -401,16 +407,17 @@ const PurchaseOrderChangesPage: React.FC = () => {
         width: 100,
         render: (_, r) => (r.delta_amount != null ? Number(r.delta_amount).toFixed(2) : '-'),
       },
+      ...(purchaseOrderChangeAuditColumn ? [purchaseOrderChangeAuditColumn] : []),
       {
         title: t('app.kuaizhizao.purchaseOrderChange.colLifecycle'),
         dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
         valueType: 'select',
         valueEnum: orderChangeLifecycleValueEnum,
-        render: (_, record) => {
-          const lc = getOrderChangeLifecycle(record as Record<string, unknown>, t);
-          const tag = getDocumentLifecycleStageTagProps(lc.stageName ?? '-');
-          return <Tag color={tag.color}>{lc.stageName}</Tag>;
-        },
+        render: (_, record) => (
+          <ListUniLifecycleCell
+            lifecycle={getOrderChangeLifecycle(record as Record<string, unknown>, t)}
+          />
+        ),
       },
       { title: t('app.kuaizhizao.purchaseOrderChange.colChangeReason'), dataIndex: 'change_reason', ellipsis: true, hideInSearch: true },
       {
@@ -451,7 +458,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
         ],
       },
     ],
-    [message, modal, orderChangeLifecycleValueEnum, t],
+    [auditEnabled, message, modal, orderChangeLifecycleValueEnum, purchaseOrderChangeAuditColumn, t],
   );
 
   const request = useCallback(async (params: Record<string, unknown>) => {
@@ -644,8 +651,6 @@ const PurchaseOrderChangesPage: React.FC = () => {
                 pendingStatuses={['PENDING_REVIEW', '待审核']}
                 approvedStatuses={['AUDITED', '已审核', 'APPLIED', '已生效']}
                 rejectedStatuses={['REJECTED', '已驳回']}
-                autoApproveWhenSubmit={!auditEnabled}
-                workflowAuditEnabled={auditEnabled}
                 onSuccess={async () => {
                   actionRef.current?.reload();
                   if (detail.id) setDetail(await getPurchaseOrderChange(detail.id));
@@ -657,7 +662,9 @@ const PurchaseOrderChangesPage: React.FC = () => {
       >
         {detail && (
           <>
-            <UniLifecycle {...getOrderChangeLifecycle(detail as Record<string, unknown>, t)} />
+            <DetailLifecycleCollaborationBlock record={detail} auditEnabled={auditEnabled}>
+              <UniLifecycle {...getOrderChangeLifecycle(detail as Record<string, unknown>, t)} />
+            </DetailLifecycleCollaborationBlock>
             <Descriptions column={2} size="small" style={{ marginTop: 16 }}>
               <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colSourceOrderCode')}>{detail.source_order_code}</Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colVersion')}>V{detail.change_version}</Descriptions.Item>

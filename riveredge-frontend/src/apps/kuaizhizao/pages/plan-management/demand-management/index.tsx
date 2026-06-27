@@ -702,7 +702,6 @@ const DemandManagementPage: React.FC = () => {
             record={record}
             entityName={t('app.kuaizhizao.demandManagement.entityName')}
             auditNodeKey="demand"
-            workflowAuditEnabled={true}
             statusField="status"
             reviewStatusField="review_status"
             draftStatuses={[DemandStatus.DRAFT, '草稿']}
@@ -1389,7 +1388,6 @@ const DemandManagementPage: React.FC = () => {
                 record={currentDemand}
                 entityName={t('app.kuaizhizao.demandManagement.entityName')}
                 auditNodeKey="demand"
-                workflowAuditEnabled={true}
                 statusField="status"
                 reviewStatusField="review_status"
                 draftStatuses={[DemandStatus.DRAFT, '草稿']}

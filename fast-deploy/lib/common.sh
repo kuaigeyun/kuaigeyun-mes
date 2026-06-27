@@ -34,6 +34,10 @@ log_warn()  { echo -e "\033[1;33m[$(date +'%H:%M:%S')] WARN: $*\033[0m"; }
 log_ok()    { echo -e "\033[0;32m[$(date +'%H:%M:%S')] OK: $*\033[0m"; }
 log_error() { echo -e "\033[0;31m[$(date +'%H:%M:%S')] ERROR: $*\033[0m" >&2; }
 
+print_support_contact() {
+    echo "  联系反馈: WeChat lu_dingjie"
+}
+
 ensure_logs_dir() { mkdir -p "$LOGS_DIR"; }
 
 ensure_logs_dir_writable() {
@@ -1446,6 +1450,7 @@ print_configure_summary() {
     else
         echo "  访问地址: http://${server_ip}:${FRONTEND_PORT} (Web) / http://${server_ip}:${BACKEND_PORT} (API)"
     fi
+    print_support_contact
 }
 
 configure_prompt_database_edit() {
@@ -2125,6 +2130,7 @@ cmd_start_dev() {
     log_ok "RiverEdge 开发环境已就绪"
     echo "  Web:  http://127.0.0.1:${FRONTEND_PORT}"
     echo "  API:  http://127.0.0.1:${BACKEND_PORT}"
+    print_support_contact
 }
 
 cmd_start_prod() {
@@ -2158,6 +2164,7 @@ cmd_start_prod() {
     elif [ -z "$CADDY_DOMAIN" ]; then
         echo "  本机: http://127.0.0.1:${PROXY_PORT}"
     fi
+    print_support_contact
 }
 
 cmd_stop_dev() {

@@ -10,29 +10,24 @@ import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycl
 import type { SalesOrder } from '../services/sales-order';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
-import { deriveLifecycleRingPercent } from '../../../utils/lifecycleRingPercent';
 import { applyLifecycleI18n, type LifecycleTranslateFn } from './lifecycleI18n';
 import {
   resolveListLifecycleStageFromSearch,
   toListLifecycleStageApiParams,
 } from '../../../utils/listLifecycleStage';
+import { mapAuditLifecycleStageToApiParams } from './auditListFilter';
 
-const MAIN_STAGE_KEYS_AUDIT = [
+const MAIN_STAGE_KEYS = [
   'draft',
-  'pending_review',
-  'audited',
   'effective',
   'executing',
   'delivered',
   'invoicing',
   'completed',
 ] as const;
-const MAIN_STAGE_KEYS_NO_AUDIT = ['draft', 'effective', 'executing', 'delivered', 'invoicing', 'completed'] as const;
 
 const MAIN_STAGE_LABELS = {
   draft: '草稿',
-  pending_review: '待审核',
-  audited: '已审核',
   effective: '已生效',
   executing: '执行中',
   delivered: '发货出库',
@@ -117,32 +112,15 @@ function normalizeStageName(name: string | undefined): string {
   return n || '';
 }
 
-/** 主生命周期节点（启用审核：含待审核/已审核；关闭审核：草稿后直接走已生效及后续） */
-function buildMainStages(stageName: string, auditRequired: boolean): SubStage[] {
+/** 主生命周期节点（业务主轴，审核态由独立列展示） */
+function buildMainStages(stageName: string): SubStage[] {
   const normalized = normalizeStageName(stageName);
-  const order = auditRequired ? MAIN_STAGE_KEYS_AUDIT : MAIN_STAGE_KEYS_NO_AUDIT;
+  const order = MAIN_STAGE_KEYS;
 
-  const stageToIndexAudit: Record<string, number> = {
+  const stageToIndex: Record<string, number> = {
     草稿: 0,
-    待审核: 1,
-    已审核: 2,
-    已生效: 3,
-    执行中: 4,
-    已交货: 5,
-    发货出库: 5,
-    invoicing: 6,
-    账款发票: 6,
-    账款发票处理: 6,
-    已完成: 7,
-    已驳回: 1,
-    已取消: 0,
-    已关闭: 7,
-  };
-
-  const stageToIndexNoAudit: Record<string, number> = {
-    草稿: 0,
-    待审核: 1,
-    已审核: 1,
+    待审核: 0,
+    已审核: 0,
     已生效: 1,
     执行中: 2,
     已交货: 3,
@@ -151,12 +129,11 @@ function buildMainStages(stageName: string, auditRequired: boolean): SubStage[] 
     账款发票: 4,
     账款发票处理: 4,
     已完成: 5,
-    已驳回: 1,
+    已驳回: 0,
     已取消: 0,
-    已关闭: 7,
+    已关闭: 5,
   };
 
-  const stageToIndex = auditRequired ? stageToIndexAudit : stageToIndexNoAudit;
   const currentIdx = stageToIndex[normalized] ?? 0;
   const isCompleted = normalized === '已完成';
 
@@ -169,53 +146,27 @@ function buildMainStages(stageName: string, auditRequired: boolean): SubStage[] 
   });
 }
 
-const CN_STAGE_NAMES = new Set([
-  '草稿',
-  '待审核',
-  '已审核',
-  '已生效',
-  '执行中',
-  '已交货',
-  '发货出库',
-  '账款发票',
-  '账款发票处理',
-  '已完成',
-  '已驳回',
-  '已取消',
-  '已关闭',
-]);
-
-/** 由主线节点推导圆环进度（与 parseBackendLifecycle 规则一致） */
-function ringPercentFromStages(stages: SubStage[]): number {
-  const p = deriveLifecycleRingPercent(stages.map(({ status }) => ({ status })));
-  return p ?? 0;
-}
-
 function adaptForAuditSwitch(result: LifecycleResult, auditRequired: boolean): LifecycleResult {
-  const base: LifecycleResult = { ...result };
-  const stageRaw = normalizeStageName(base.stageName);
+  const stageRaw = normalizeStageName(result.stageName);
+  if (!stageRaw) return result;
 
-  if (stageRaw && CN_STAGE_NAMES.has(stageRaw)) {
-    let next = [...(base.nextStepSuggestions ?? [])];
-
-    if (!auditRequired) {
-      next = next.map((s) => s.replace(/提交审核/g, '提交').replace(/审核通过/g, '确认')).filter((s) => !s.includes('审核'));
-    }
-
-    return {
-      ...base,
-      stageName: stageRaw,
-      mainStages: buildMainStages(stageRaw, auditRequired),
-      nextStepSuggestions: next,
-    };
-  }
-
-  let mainStages = base.mainStages ?? [];
+  let next = [...(result.nextStepSuggestions ?? [])];
   if (!auditRequired) {
-    mainStages = mainStages.filter((s) => s.key !== 'pending_review' && s.key !== 'audited');
+    next = next
+      .map((s) => s.replace(/提交审核/g, '提交').replace(/审核通过/g, '确认'))
+      .filter((s) => !s.includes('审核'));
   }
 
-  return { ...base, mainStages };
+  const mainStages = result.mainStages?.length
+    ? result.mainStages.filter((s) => s.key !== 'pending_review' && s.key !== 'audited')
+    : buildMainStages(stageRaw);
+
+  return {
+    ...result,
+    stageName: stageRaw,
+    mainStages,
+    nextStepSuggestions: next,
+  };
 }
 
 const SALES_ORDER_LIFECYCLE_STAGE_I18N: Record<string, string> = {
@@ -236,8 +187,8 @@ export const SALES_ORDER_EXCEPTION_LIFECYCLE_STAGES = ['已驳回', '已取消',
 
 /** 列表筛选 / 钉住 Tab：与生命周期主轴一致（不含历史别名如「已交货」「账款发票」） */
 export function getSalesOrderLifecycleStageLabels(auditRequired = true): string[] {
-  const keys = auditRequired ? MAIN_STAGE_KEYS_AUDIT : MAIN_STAGE_KEYS_NO_AUDIT;
-  return [...keys.map((k) => MAIN_STAGE_LABELS[k]), ...SALES_ORDER_EXCEPTION_LIFECYCLE_STAGES];
+  void auditRequired;
+  return [...MAIN_STAGE_KEYS.map((k) => MAIN_STAGE_LABELS[k]), ...SALES_ORDER_EXCEPTION_LIFECYCLE_STAGES];
 }
 
 type LifecycleTranslate = (key: string, defaultValue?: string) => string;
@@ -259,10 +210,13 @@ export function buildSalesOrderLifecycleValueEnum(
 export function resolveSalesOrderListLifecycleParams(
   searchFormValues?: Record<string, unknown> | null,
   params?: Record<string, unknown> | null,
-): { lifecycle_stage?: string } {
+): { lifecycle_stage?: string; status?: string; review_status?: string } {
   const stage = resolveListLifecycleStageFromSearch(searchFormValues, params);
   const normalized = stage ? normalizeStageName(stage) : '';
-  return toListLifecycleStageApiParams(normalized || undefined);
+  if (!normalized) return {};
+  const auditParams = mapAuditLifecycleStageToApiParams(normalized);
+  if (auditParams) return auditParams;
+  return toListLifecycleStageApiParams(normalized);
 }
 
 /** @deprecated 使用 resolveSalesOrderListLifecycleParams */
@@ -278,198 +232,31 @@ export function mapSalesOrderLifecycleStageToApiParams(
 
 /**
  * 根据销售订单计算生命周期结果，供 UniLifecycle 使用。
- * 优先使用后端下发的 lifecycle（节点由后端控制），无则前端兜底计算。
+ * 仅使用后端下发的 lifecycle（无则显示「生命周期缺失」）。
  */
-function computeSalesOrderLifecycle(record: SalesOrder, auditRequired = true): LifecycleResult {
+function parseSalesOrderBackendLifecycle(record: SalesOrder, auditRequired = true): LifecycleResult {
   const backend = (record as Record<string, unknown>).lifecycle as BackendLifecycle | undefined;
-  if (backend?.main_stages?.length) {
-    const result = parseBackendLifecycle(backend);
-    const enriched: LifecycleResult = {
-      ...result,
-      ...(record.invoice_progress != null &&
-      normalizeStageName(result.stageName) === '账款发票处理'
-        ? {
-            subPercent: Number(record.invoice_progress),
-            subLabel: '账款',
-          }
-        : {}),
+  if (!backend?.main_stages?.length) {
+    return {
+      percent: 0,
+      stageName: '生命周期缺失',
+      status: 'exception',
+      mainStages: [],
     };
-    const s = norm(record?.status);
-    const r = norm(record?.review_status);
-    const isRecordAudited =
-      (s === 'AUDITED' || s === '已审核') && (r === 'APPROVED' || r === '审核通过' || r === '通过' || r === '已通过');
-    if (isRecordAudited && enriched.stageName === '待审核') {
-      return adaptForAuditSwitch({ ...enriched, stageName: '已审核' }, auditRequired);
-    }
-    return adaptForAuditSwitch(enriched, auditRequired);
-  }
-  const status = norm(record?.status);
-  const reviewStatus = norm(record?.review_status);
-  const delivery = deliveryProgress(record);
-  const invoice = invoiceProgress(record);
-
-  // 异常分支
-  if (isRejected(reviewStatus)) {
-    const mainStages = buildMainStages('已驳回', auditRequired);
-    return adaptForAuditSwitch(
-      {
-        percent: ringPercentFromStages(mainStages),
-        stageName: '已驳回',
-        status: 'exception',
-        mainStages,
-        nextStepSuggestions: auditRequired ? ['修改订单后重新提交审核'] : ['修改订单后重新提交'],
-      },
-      auditRequired,
-    );
-  }
-  if (isCancelled(status)) {
-    const mainStages = buildMainStages('已取消', auditRequired);
-    return adaptForAuditSwitch(
-      {
-        percent: ringPercentFromStages(mainStages),
-        stageName: '已取消',
-        status: 'exception',
-        mainStages,
-        nextStepSuggestions: [],
-      },
-      auditRequired,
-    );
-  }
-  if (isClosed(status)) {
-    const mainStages = buildMainStages('已完成', auditRequired);
-    return adaptForAuditSwitch(
-      {
-        percent: ringPercentFromStages(mainStages),
-        stageName: '已关闭',
-        status: 'normal',
-        mainStages,
-        nextStepSuggestions: [],
-      },
-      auditRequired,
-    );
   }
 
-  // 主流程
-  if (isDraft(status)) {
-    const mainStages = buildMainStages('草稿', auditRequired);
-    return adaptForAuditSwitch(
-      {
-        percent: ringPercentFromStages(mainStages),
-        stageName: '草稿',
-        mainStages,
-        nextStepSuggestions: auditRequired ? ['提交审核'] : ['提交'],
-      },
-      auditRequired,
-    );
-  }
-  if (isPendingReview(status) && isApproved(reviewStatus)) {
-    const mainStages = buildMainStages('已审核', auditRequired);
-    return adaptForAuditSwitch(
-      {
-        percent: ringPercentFromStages(mainStages),
-        stageName: '已审核',
-        mainStages,
-        nextStepSuggestions: ['下推需求计算或确认生效'],
-      },
-      auditRequired,
-    );
-  }
-  if (isPendingReview(status) && !isApproved(reviewStatus)) {
-    const mainStages = buildMainStages('待审核', auditRequired);
-    return adaptForAuditSwitch(
-      {
-        percent: ringPercentFromStages(mainStages),
-        stageName: '待审核',
-        mainStages,
-        nextStepSuggestions: auditRequired ? ['审核通过', '驳回'] : [],
-      },
-      auditRequired,
-    );
-  }
-  if (isAudited(status) && !isEffective(record)) {
-    const mainStages = buildMainStages('已审核', auditRequired);
-    return adaptForAuditSwitch(
-      {
-        percent: ringPercentFromStages(mainStages),
-        stageName: '已审核',
-        mainStages,
-        nextStepSuggestions: ['下推需求计算', '确认订单生效'],
-      },
-      auditRequired,
-    );
-  }
-  if (isEffective(record) && delivery >= 100 && invoice >= 100) {
-    const mainStages = buildMainStages('已完成', auditRequired);
-    return adaptForAuditSwitch(
-      {
-        percent: ringPercentFromStages(mainStages),
-        stageName: '已完成',
-        status: 'success',
-        mainStages,
-        nextStepSuggestions: [],
-      },
-      auditRequired,
-    );
-  }
-  if (isEffective(record) && delivery >= 100 && invoice < 100) {
-    const mainStages = buildMainStages('账款发票处理', auditRequired);
-    const baseRing = ringPercentFromStages(mainStages);
-    return adaptForAuditSwitch(
-      {
-        percent: Math.min(100, Math.round(baseRing + ((100 - baseRing) * invoice) / 100)),
-        stageName: '账款发票处理',
-        subPercent: invoice,
-        subLabel: '开票',
-        mainStages,
-        nextStepSuggestions: ['下推销售发票', '登记收款与对账'],
-      },
-      auditRequired,
-    );
-  }
-  /** 已生效：订单已确认/已下推，但尚未开始执行（无工单、无交货进度） */
-  if (isEffective(record) && delivery <= 0) {
-    const hasWO = hasWorkOrder(record);
-    const pushed = !!record.pushed_to_computation;
-    if (!pushed && !hasWO) {
-      const mainStages = buildMainStages('已生效', auditRequired);
-      return adaptForAuditSwitch(
-        {
-          percent: ringPercentFromStages(mainStages),
-          stageName: '已生效',
-          mainStages,
-          nextStepSuggestions: ['前往需求计算执行 MRP', '建立工单'],
-        },
-        auditRequired,
-      );
-    }
-  }
-  /** 执行中：圆环进度由主线节点序号推导；交货进度由 subPercent 展示 */
-  if (isEffective(record) && delivery < 100) {
-    const mainStages = buildMainStages('执行中', auditRequired);
-    return adaptForAuditSwitch(
-      {
-        percent: ringPercentFromStages(mainStages),
-        stageName: '执行中',
-        subPercent: delivery,
-        subLabel: '交货',
-        mainStages,
-        nextStepSuggestions:
-          delivery > 0 ? ['完成发货出库', '跟进开票'] : ['制定生产计划', '推进工单与出库'],
-      },
-      auditRequired,
-    );
-  }
-
-  const fallbackAudited = buildMainStages('已审核', auditRequired);
-  return adaptForAuditSwitch(
-    {
-      percent: ringPercentFromStages(fallbackAudited),
-      stageName: '已审核',
-      mainStages: fallbackAudited,
-      nextStepSuggestions: ['下推需求计算'],
-    },
-    auditRequired,
-  );
+  const result = parseBackendLifecycle(backend);
+  const enriched: LifecycleResult = {
+    ...result,
+    ...(record.invoice_progress != null &&
+    normalizeStageName(result.stageName) === '账款发票处理'
+      ? {
+          subPercent: Number(record.invoice_progress),
+          subLabel: '账款',
+        }
+      : {}),
+  };
+  return adaptForAuditSwitch(enriched, auditRequired);
 }
 
 const SHIPPABLE_STAGE = '可发货';
@@ -526,7 +313,7 @@ export function getSalesOrderLifecycle(
   auditRequired = true,
   t?: LifecycleTranslateFn,
 ): LifecycleResult {
-  let result = applyShippableLifecycleHint(record, computeSalesOrderLifecycle(record, auditRequired));
+  let result = applyShippableLifecycleHint(record, parseSalesOrderBackendLifecycle(record, auditRequired));
   if (t) {
     result = applyLifecycleI18n(result, t, SALES_ORDER_STAGE_I18N_BY_KEY);
   }
@@ -536,16 +323,18 @@ export function getSalesOrderLifecycle(
 /** 批量撤回：撤销提交（生命周期「待审核」「已生效」） */
 export function canWithdrawSalesOrderRecord(record: SalesOrder, auditRequired = true): boolean {
   if (isSalesOrderClosed(record)) return false;
+  const phase = String((record as { audit?: { phase?: string } }).audit?.phase ?? '').toLowerCase();
+  if (auditRequired && phase === 'pending') return true;
   const stage = (getSalesOrderLifecycle(record, auditRequired).stageName ?? '').trim();
-  if (stage === '待审核' || stage === '已生效') return true;
+  if (stage === '已生效') return true;
   return canWithdrawSubmittedOrder(record.status);
 }
 
-/** 批量反审核：撤销审核（生命周期「已审核」） */
+/** 批量反审核：撤销审核（audit.phase=approved 或严格已审核态） */
 export function canUnapproveSalesOrderRecord(record: SalesOrder, auditRequired = true): boolean {
   if (isSalesOrderClosed(record)) return false;
-  const stage = (getSalesOrderLifecycle(record, auditRequired).stageName ?? '').trim();
-  if (stage === '已审核') return true;
+  const phase = String((record as { audit?: { phase?: string } }).audit?.phase ?? '').toLowerCase();
+  if (auditRequired && phase === 'approved') return true;
   return isStrictlyAuditedStatus(record.status);
 }
 

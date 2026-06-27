@@ -13,7 +13,7 @@ export function resolveLifecycleDisplayLabel(lifecycle: LifecycleResult): string
   return stages.filter((s) => s.status === 'done').at(-1)?.label ?? '-';
 }
 
-/** 列表「生命周期」列统一渲染 */
+/** 列表「生命周期」列统一渲染（仅业务主轴，不含审核态） */
 export function ListUniLifecycleCell({
   lifecycle,
   withSubStages = false,

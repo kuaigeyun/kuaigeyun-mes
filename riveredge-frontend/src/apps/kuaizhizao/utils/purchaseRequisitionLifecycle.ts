@@ -6,35 +6,24 @@ import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycl
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 
-const MAIN_STAGE_KEYS_AUDIT = ['draft', 'pending_review', 'approved', 'partial', 'full'] as const;
+const MAIN_STAGE_KEYS_AUDIT = ['draft', 'approved', 'partial', 'full'] as const;
 const MAIN_STAGE_KEYS_NO_AUDIT = ['draft', 'approved', 'partial', 'full'] as const;
 const MAIN_STAGE_LABELS: Record<string, string> = {
   draft: '草稿',
-  pending_review: '待审核',
   approved: '已通过',
   partial: '部分转单',
   full: '全部转单',
 };
 
-function buildMainStages(currentKey: string, auditRequired: boolean): SubStage[] {
-  const order = auditRequired ? [...MAIN_STAGE_KEYS_AUDIT] : [...MAIN_STAGE_KEYS_NO_AUDIT];
-  const stageToIndexAudit: Record<string, number> = {
+function buildMainStages(currentKey: string): SubStage[] {
+  const order = [...MAIN_STAGE_KEYS_NO_AUDIT];
+  const stageToIndex: Record<string, number> = {
     草稿: 0,
-    待审核: 1,
-    已驳回: 1,
-    已通过: 2,
-    部分转单: 3,
-    全部转单: 4,
-  };
-  const stageToIndexNoAudit: Record<string, number> = {
-    草稿: 0,
-    待审核: 1,
-    已驳回: 1,
+    已驳回: 0,
     已通过: 1,
     部分转单: 2,
     全部转单: 3,
   };
-  const stageToIndex = auditRequired ? stageToIndexAudit : stageToIndexNoAudit;
   const currentIdx = stageToIndex[currentKey] ?? 0;
   return order.map((key, idx) => {
     let status: SubStage['status'] = 'pending';
@@ -51,9 +40,8 @@ export interface PurchaseRequisitionLike {
 
 /** 列表筛选 / 钉住 Tab：与生命周期主轴一致 */
 export function getPurchaseRequisitionLifecycleStageLabels(auditRequired = true): string[] {
-  return auditRequired
-    ? ['草稿', '待审核', '已驳回', '已通过', '部分转单', '全部转单']
-    : ['草稿', '已通过', '已驳回', '部分转单', '全部转单'];
+  void auditRequired;
+  return ['草稿', '已驳回', '已通过', '部分转单', '全部转单'];
 }
 
 import {
@@ -67,7 +55,6 @@ export const PURCHASE_REQUISITION_LIST_LIFECYCLE_FIELD = LIST_LIFECYCLE_STAGE_FI
 
 const PURCHASE_REQUISITION_STAGE_LABELS = [
   '草稿',
-  '待审核',
   '已驳回',
   '已通过',
   '部分转单',
@@ -98,7 +85,6 @@ export function buildPurchaseRequisitionLifecycleValueEnum(
 ): Record<string, { text: string; status?: 'Default' | 'Processing' | 'Error' | 'Success' | 'Warning' }> {
   const statusByStage: Record<string, 'Default' | 'Processing' | 'Error' | 'Success' | 'Warning'> = {
     草稿: 'Default',
-    待审核: 'Processing',
     已驳回: 'Error',
     已通过: 'Success',
     部分转单: 'Warning',
@@ -119,7 +105,9 @@ export function getPurchaseRequisitionLifecycle(
   if (!record) return { percent: 0, stageName: '-', mainStages: [] };
   const backend = (record?.lifecycle ?? (record as Record<string, unknown>).lifecycle) as BackendLifecycle | undefined;
   if (backend?.main_stages?.length) {
-    return parseBackendLifecycle(backend);
+    const result = parseBackendLifecycle(backend);
+    const mainStages = (result.mainStages ?? []).filter((s) => s.key !== 'pending_review');
+    return { ...result, mainStages };
   }
   return {
     percent: 0,

@@ -52,6 +52,7 @@ import {
 } from '../shared/documentFieldAlignment';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
+import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 import { getSalesOrderLifecycle, isSalesOrderDeliveryOverdue, isSalesOrderLineDeliveryOverdue, buildSalesOrderLifecycleValueEnum, resolveSalesOrderListLifecycleParams } from '../../../utils/salesOrderLifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import {
@@ -183,6 +184,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { isManualAuditEnabled } from '../../../../../utils/auditMode';
 import { rowActionKind, rowActionAddFollowUpFromDocument } from '../../../../../components/uni-action';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
@@ -563,6 +565,14 @@ const SalesOrdersPage: React.FC = () => {
   }, [auditEnabled]);
   const lifecycleValueEnum = useMemo(
     () => buildSalesOrderLifecycleValueEnum(t, auditEnabled),
+    [t, auditEnabled],
+  );
+  const salesOrderAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<SalesOrder>({ t, auditEnabled }),
+    [t, auditEnabled],
+  );
+  const salesOrderLineAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<SalesOrderItemRow>({ t, auditEnabled }),
     [t, auditEnabled],
   );
   const salesNodeEnabled = {
@@ -2700,6 +2710,7 @@ const SalesOrdersPage: React.FC = () => {
         return <Tooltip title={`${Math.round(percent)}%`}><Progress percent={Math.round(percent)} size="small" showInfo={false} style={{ margin: 0 }} /></Tooltip>;
       },
     },
+    salesOrderAuditColumn,
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
@@ -2736,12 +2747,15 @@ const SalesOrdersPage: React.FC = () => {
             entityName={t('app.kuaizhizao.salesOrder.entityName')}
             entityType="sales_order"
             unifiedAudit
-            autoApproveWhenSubmit={!auditEnabled}
             resourcePrefix="kuaizhizao:sales-order"
             theme="link"
             size="small"
             onSuccess={() => { invalidateOrdersCache(); invalidateMenuBadge(); invalidateStatistics(); actionRef.current?.reload(); }}
-            confirmMessages={{ submit: auditEnabled ? t('app.kuaizhizao.salesOrder.submitConfirmAudit') : t('app.kuaizhizao.salesOrder.submitConfirmAuto') }}
+            confirmMessages={{
+              submit: isManualAuditEnabled(record.audit)
+                ? t('app.kuaizhizao.salesOrder.submitConfirmAudit')
+                : t('app.kuaizhizao.salesOrder.submitConfirmAuto'),
+            }}
           />
         );
         parts.push(
@@ -2855,6 +2869,7 @@ const SalesOrdersPage: React.FC = () => {
       width: 70,
       render: (_: unknown, record: SalesOrderItemRow) => <MaterialBomIndicator materialId={record.material_id} />,
     },
+    salesOrderLineAuditColumn,
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
@@ -4203,7 +4218,6 @@ const SalesOrdersPage: React.FC = () => {
                   entityName={t('app.kuaizhizao.salesOrder.entityName')}
                   entityType="sales_order"
                   unifiedAudit
-                  autoApproveWhenSubmit={!auditEnabled}
                   resourcePrefix="kuaizhizao:sales-order"
                   theme="default"
                   onSuccess={() => {
@@ -4212,7 +4226,7 @@ const SalesOrdersPage: React.FC = () => {
                     refreshDrawerOrder(currentSalesOrder?.id);
                   }}
                   confirmMessages={{
-                    submit: auditEnabled
+                    submit: isManualAuditEnabled(currentSalesOrder.audit)
                       ? t('app.kuaizhizao.salesOrder.submitConfirmAudit')
                       : t('app.kuaizhizao.salesOrder.submitConfirmAuto'),
                   }}
@@ -4238,6 +4252,7 @@ const SalesOrdersPage: React.FC = () => {
                 drawerVisible={drawerVisible}
                 onCloseDrawer={() => setDrawerVisible(false)}
                 navigate={navigate}
+                auditEnabled={auditEnabled}
               />
             }
             lines={<SalesOrderDetailLinesPane />}

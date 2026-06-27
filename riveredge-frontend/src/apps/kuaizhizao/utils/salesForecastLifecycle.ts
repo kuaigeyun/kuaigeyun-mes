@@ -148,24 +148,20 @@ function buildForecastExecutionSubStages(record: Record<string, unknown>): SubSt
 }
 
 function adaptForAuditSwitch(result: LifecycleResult, auditRequired: boolean): LifecycleResult {
-  if (auditRequired) return result;
-  const stageName = result.stageName === '待审核' ? '已审核' : result.stageName;
-  const mainStages = (result.mainStages ?? []).filter((s) => s.key !== 'pending_review');
-  const hasActive = mainStages.some((s) => s.status === 'active');
-  if (!hasActive) {
-    const auditedIdx = mainStages.findIndex((s) => s.key === 'audited');
-    if (auditedIdx >= 0) {
-      mainStages.forEach((s, idx) => {
-        if (idx < auditedIdx) s.status = 'done';
-        else if (idx === auditedIdx) s.status = 'active';
-        else s.status = 'pending';
-      });
-    }
+  let next = [...(result.nextStepSuggestions ?? [])];
+  if (!auditRequired) {
+    next = next
+      .map((s) => s.replace(/提交审核/g, '提交').replace(/审核通过/g, '确认'))
+      .filter((s) => !s.includes('审核'));
   }
-  const nextStepSuggestions = (result.nextStepSuggestions ?? [])
-    .map((s) => s.replace('提交审核', '提交').replace('审核通过', '确认'))
-    .filter((s) => !s.includes('驳回'));
-  return { ...result, stageName, mainStages, nextStepSuggestions };
+  const mainStages = (result.mainStages ?? []).filter(
+    (s) => s.key !== 'pending_review' && s.key !== 'audited',
+  );
+  let stageName = result.stageName ?? '';
+  if (stageName === '待审核' || stageName === '已审核') {
+    stageName = '草稿';
+  }
+  return { ...result, stageName, mainStages, nextStepSuggestions: next };
 }
 
 function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecycle {

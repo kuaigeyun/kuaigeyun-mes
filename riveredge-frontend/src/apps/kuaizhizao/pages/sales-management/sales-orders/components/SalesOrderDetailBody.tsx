@@ -18,6 +18,7 @@ import { DictionaryLabel } from '../../../../../../components/dictionary-label';
 import { MaterialBomIndicator } from '../../../../components/MaterialBomIndicator';
 import { MaterialInventoryIndicator } from '../../../../components/MaterialInventoryIndicator';
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
+import { DetailLifecycleCollaborationBlock } from '../../../../../../components/uni-audit/DetailAuditPhaseRow';
 import type { LifecycleResult } from '../../../../../../components/uni-lifecycle/types';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
 import { DetailDrawerSection, DetailDrawerInlineFullChain } from '../../../../../../components/layout-templates';
@@ -362,12 +363,14 @@ export interface SalesOrderDetailCollaborationPaneProps {
   drawerVisible?: boolean;
   onCloseDrawer?: () => void;
   navigate?: NavigateFunction;
+  auditEnabled?: boolean;
 }
 
 export const SalesOrderDetailCollaborationPane: React.FC<SalesOrderDetailCollaborationPaneProps> = ({
   drawerVisible = true,
   onCloseDrawer,
   navigate: navigateProp,
+  auditEnabled = true,
 }) => {
   const { t } = useTranslation();
   const navigateHook = useNavigate();
@@ -379,28 +382,29 @@ export const SalesOrderDetailCollaborationPane: React.FC<SalesOrderDetailCollabo
   const closeDrawer = onCloseDrawer ?? (() => {});
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {mainStages.length > 0 && (
-        <UniLifecycleStepper
-          steps={mainStages}
-          status={lifecycle.status}
-          showLabels
-          nextStepSuggestions={lifecycle.nextStepSuggestions}
-          hideNextStepSuggestions={hideStepperNext}
-        />
-      )}
-      {subStages.length > 0 && (
-        <UniLifecycleStepper
-          steps={subStages}
-          status={lifecycle.status}
-          showLabels
-          nodeSize={36}
-          connectorWidth={36}
-          stepLabelMaxWidth={120}
-        />
-      )}
-      {order.id != null ? (
-        <DetailDrawerInlineFullChain
+    <DetailLifecycleCollaborationBlock record={order} auditEnabled={auditEnabled}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {mainStages.length > 0 && (
+          <UniLifecycleStepper
+            steps={mainStages}
+            status={lifecycle.status}
+            showLabels
+            nextStepSuggestions={lifecycle.nextStepSuggestions}
+            hideNextStepSuggestions={hideStepperNext}
+          />
+        )}
+        {subStages.length > 0 && (
+          <UniLifecycleStepper
+            steps={subStages}
+            status={lifecycle.status}
+            showLabels
+            nodeSize={36}
+            connectorWidth={36}
+            stepLabelMaxWidth={120}
+          />
+        )}
+        {order.id != null ? (
+          <DetailDrawerInlineFullChain
           documentType="sales_order"
           documentId={order.id}
           active={drawerVisible}
@@ -473,7 +477,8 @@ export const SalesOrderDetailCollaborationPane: React.FC<SalesOrderDetailCollabo
           )}
         />
       ) : null}
-    </div>
+      </div>
+    </DetailLifecycleCollaborationBlock>
   );
 };
 

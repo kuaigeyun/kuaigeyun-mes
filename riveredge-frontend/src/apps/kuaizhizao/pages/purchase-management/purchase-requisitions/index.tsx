@@ -80,6 +80,7 @@ import { formatPurchaseRequisitionSourceType } from '../../../utils/purchaseRequ
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { useDocumentTracking, DocumentTrackingTimelineBody } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
@@ -89,6 +90,7 @@ import { useGlobalStore } from '../../../../../stores';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { formatDateTime } from '../../../../../utils/format';
@@ -379,6 +381,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const lifecycleValueEnum = useMemo(
     () => buildPurchaseRequisitionLifecycleValueEnum(purchaseRequestAuditEnabled),
     [purchaseRequestAuditEnabled],
+  );
+  const purchaseRequisitionAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<PurchaseRequisition>({ t, auditEnabled: purchaseRequestAuditEnabled }),
+    [t, purchaseRequestAuditEnabled],
   );
 
   const initPurchaseRequisitionCreateForm = useCallback(async () => {
@@ -1157,6 +1163,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       hideInSearch: true,
       defaultSortOrder: 'descend',
     },
+    ...(purchaseRequisitionAuditColumn ? [purchaseRequisitionAuditColumn] : []),
     {
       title: t('app.kuaizhizao.purchaseRequisition.col.lifecycle'),
       key: 'lifecycle',
@@ -1208,7 +1215,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
               theme="link"
               size="small"
               confirmMessages={{ revoke: t('app.kuaizhizao.purchaseRequisition.workflowRevokeConfirm') }}
-              workflowAuditEnabled={purchaseRequestAuditEnabled}
               onSuccess={() => actionRef.current?.reload()}
             />
           </span>
@@ -1223,7 +1229,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         return parts;
       },
     },
-  ], [t, purchaseRequestAuditEnabled, lifecycleValueEnum, handleDetail, handleEdit, handleDeleteOne]);
+  ], [t, purchaseRequestAuditEnabled, purchaseRequisitionAuditColumn, lifecycleValueEnum, handleDetail, handleEdit, handleDeleteOne]);
 
   const renderPurchaseRequisitionForm = () => (
     <>
@@ -1777,7 +1783,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     theme="default"
                     size="small"
                     confirmMessages={{ revoke: t('app.kuaizhizao.purchaseRequisition.workflowRevokeConfirm') }}
-                    workflowAuditEnabled={purchaseRequestAuditEnabled}
                     onSuccess={async () => {
                       invalidateMenuBadgeCounts();
 
@@ -1905,7 +1910,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     const lifecycle = getPurchaseRequisitionLifecycle(currentReq, purchaseRequestAuditEnabled);
                     const mainStages = lifecycle.mainStages ?? [];
                     return (
-                      <>
+                      <DetailLifecycleCollaborationBlock
+                        record={currentReq}
+                        auditEnabled={purchaseRequestAuditEnabled}
+                      >
                         {mainStages.length > 0 && (
                           <UniLifecycleStepper
                             steps={mainStages}
@@ -1915,7 +1923,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                             hideNextStepSuggestions
                           />
                         )}
-                      </>
+                      </DetailLifecycleCollaborationBlock>
                     );
                   })()}
                   {currentReq.id != null ? (

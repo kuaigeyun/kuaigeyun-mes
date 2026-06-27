@@ -1,9 +1,13 @@
 """审核相位单一派生。
 
-`record.audit = { entity_type, phase, enabled, allowed_actions }` 是前端 uni-audit 的
+`record.audit = { entity_type, phase, enabled, mode, allowed_actions }` 是前端 uni-audit 的
 **唯一来源**。ApprovalInstance 是运行时唯一写者（完成回调把结果写回单据
 status / review_status），因此列表无需逐行查实例——由 status / review_status
 确定性派生 phase 即可。
+
+``enabled``（= manual）：是否启用**人工**审批流（绑定流程且开关打开）。
+``enabled=False`` 表示 **自动通过审核**（提交即写入已通过态），**不是**跳过审核；
+phase 仍由 status / review_status 派生，UI 须展示审核状态列。
 
 phase ∈ ``draft`` | ``pending`` | ``approved`` | ``rejected`` | ``none``
 """
@@ -121,9 +125,19 @@ def derive_audit_phase(
         else:
             allowed = []
 
+    # 审核关闭（自动通过）：仍展示 phase，但不提供人工审/反审/撤回（仅保留提交→后端自动通过）
+    if not enabled:
+        if phase in ("draft", "rejected"):
+            allowed = ["submit"]
+        elif phase == "pending":
+            allowed = ["withdraw"]
+        else:
+            allowed = []
+
     return {
         "entity_type": entity_type,
         "phase": phase,
         "enabled": bool(enabled),
+        "mode": "manual" if enabled else "auto",
         "allowed_actions": allowed,
     }

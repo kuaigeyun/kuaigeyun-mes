@@ -951,7 +951,6 @@ const ReportingPage: React.FC = () => {
           {...reportingRecordUniAuditProps({
             resourcePrefix: REPORTING_RESOURCE,
             entityName: t('app.kuaizhizao.workReporting.entityName'),
-            workflowAuditEnabled: reportingAuditEnabled,
             onSuccess: () => handleReportingWorkflowSuccess(record),
           })}
         />
@@ -1809,7 +1808,6 @@ const ReportingPage: React.FC = () => {
               {...reportingRecordUniAuditProps({
                 resourcePrefix: REPORTING_RESOURCE,
                 entityName: t('app.kuaizhizao.workReporting.entityName'),
-                workflowAuditEnabled: reportingAuditEnabled,
                 theme: 'default',
                 onSuccess: () => handleReportingWorkflowSuccess(reportingDetail),
               })}

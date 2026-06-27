@@ -67,7 +67,7 @@ const ReportList: React.FC = () => {
       search: false,
     },
     {
-      title: '生命周期',
+      title: '当前阶段',
       dataIndex: 'lifecycle_stage',
       key: 'lifecycle',
       width: 200,

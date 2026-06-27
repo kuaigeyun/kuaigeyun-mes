@@ -217,7 +217,6 @@ const ChangeManagementPage: React.FC = () => {
                 auditNodeKey={auditNodeKeyForRow(row)}
                 entityType={row.audit?.entity_type || auditNodeKeyForRow(row)}
                 resourcePrefix="kuaiplm:change"
-                workflowAuditEnabled={rowAuditEnabled}
                 pendingStatuses={['pending', 'pending_review', '待审批']}
                 approvedStatuses={['approved', '已审批']}
                 draftStatuses={['draft', '草稿']}

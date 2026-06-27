@@ -26,6 +26,7 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -504,6 +505,10 @@ const PurchaseInquiriesPage: React.FC = () => {
     () => buildPurchaseInquiryLifecycleValueEnum(t),
     [t],
   );
+  const purchaseInquiryAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<PurchaseInquiry>({ t, auditEnabled }),
+    [t, auditEnabled],
+  );
 
   const columns: ProColumns<PurchaseInquiry>[] = useMemo(
     () => [
@@ -530,6 +535,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       width: 120,
       render: (_, r) => (r.quote_deadline ? formatDateTime(r.quote_deadline, 'YYYY-MM-DD') : '-'),
     },
+    ...(purchaseInquiryAuditColumn ? [purchaseInquiryAuditColumn] : []),
     {
       title: t('app.kuaizhizao.purchaseInquiry.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
@@ -667,8 +673,6 @@ const PurchaseInquiriesPage: React.FC = () => {
             pendingStatuses={['PENDING', 'PENDING_REVIEW', '待审核']}
             approvedStatuses={['APPROVED', '已通过', '审核通过']}
             rejectedStatuses={['REJECTED', '已驳回']}
-            autoApproveWhenSubmit={!auditEnabled}
-            workflowAuditEnabled={auditEnabled}
             onSuccess={() => {
               actionRef.current?.reload();
             }}
@@ -679,7 +683,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       },
     },
   ],
-    [auditEnabled, message, modal, openCompare, purchaseInquiryLifecycleValueEnum, purchaseInquiryPerms.canDelete, purchaseInquiryPerms.canUpdate, pushToPurchaseOrderAction.label, t],
+    [auditEnabled, message, modal, openCompare, purchaseInquiryAuditColumn, purchaseInquiryLifecycleValueEnum, purchaseInquiryPerms.canDelete, purchaseInquiryPerms.canUpdate, pushToPurchaseOrderAction.label, t],
   );
 
   const request = useCallback(async (params: Record<string, unknown>) => {
@@ -1259,8 +1263,6 @@ const PurchaseInquiriesPage: React.FC = () => {
                 pendingStatuses={['PENDING', 'PENDING_REVIEW', '待审核']}
                 approvedStatuses={['APPROVED', '已通过', '审核通过']}
                 rejectedStatuses={['REJECTED', '已驳回']}
-                autoApproveWhenSubmit={!auditEnabled}
-                workflowAuditEnabled={auditEnabled}
                 onSuccess={async () => {
                   actionRef.current?.reload();
                   if (detail.id) setDetail(await getPurchaseInquiry(detail.id));

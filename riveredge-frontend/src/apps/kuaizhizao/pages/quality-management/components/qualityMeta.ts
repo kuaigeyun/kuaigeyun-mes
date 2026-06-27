@@ -315,7 +315,6 @@ export function qualityInspectionUniAuditProps(opts: {
   entityType: QualityInspectionAuditEntityType;
   resourcePrefix: string;
   entityName: string;
-  workflowAuditEnabled: boolean;
   onSuccess: () => void;
   theme?: 'default' | 'link';
   size?: 'small' | 'middle' | 'large';
@@ -324,7 +323,6 @@ export function qualityInspectionUniAuditProps(opts: {
     entityType: opts.entityType,
     unifiedAudit: true as const,
     resourcePrefix: opts.resourcePrefix,
-    workflowAuditEnabled: opts.workflowAuditEnabled,
     entityName: opts.entityName,
     statusField: 'status',
     reviewStatusField: 'review_status',

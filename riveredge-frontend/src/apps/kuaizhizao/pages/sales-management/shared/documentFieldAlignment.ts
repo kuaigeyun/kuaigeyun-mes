@@ -75,6 +75,8 @@ export const SALES_DOC_LIST_FIELD_RANK = {
   total_amount: 61,
   released_amount: 62,
   // 生命周期与系统字段
+  audit_phase: 89,
+  phase: 89,
   lifecycle_stage: 90,
   status: 91,
   updated_at: 92,

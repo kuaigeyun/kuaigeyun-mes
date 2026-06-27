@@ -55,6 +55,8 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
+import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
 import { qualityApi } from '../../../services/production';
@@ -226,6 +228,10 @@ const IncomingInspectionPage: React.FC = () => {
   const invalidateStats = () => queryClient.invalidateQueries({ queryKey: ['incoming-inspection-statistics'] });
   const incomingPerms = useResourcePermissions(INCOMING_RESOURCE);
   const incomingAuditEnabled = useAuditRequired('incoming_inspection');
+  const incomingAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<IncomingInspection>({ t, auditEnabled: incomingAuditEnabled }),
+    [t, incomingAuditEnabled],
+  );
   const ncPerms = useResourcePermissions(NC_RESOURCE);
   const { canRead: canReadNcLedger } = useResourcePermissions(NC_RESOURCE);
   const disposalFallback = useMemo(() => getQualityIncomingDisposalFallback(t), [t]);
@@ -692,37 +698,34 @@ const IncomingInspectionPage: React.FC = () => {
         {t('app.kuaizhizao.quality.common.actions.detail')}
       </Button>,
     ];
-    if (gates.approve.allowed) {
-      nodes.push(
-        <UniWorkflowActions
-          {...rowActionKind('skip')}
-          key="wf"
-          record={record}
-          {...qualityInspectionUniAuditProps({
-            entityType: 'incoming_inspection',
-            resourcePrefix: INCOMING_RESOURCE,
-            entityName: t('app.kuaizhizao.quality.common.entity.incomingInspection'),
-            workflowAuditEnabled: incomingAuditEnabled,
-            onSuccess: () => {
-              actionRef.current?.reload();
-              invalidateStats();
-              if (inspectionDetail?.id === record.id) {
-                qualityApi.incomingInspection
-                  .get(record.id!.toString())
-                  .then(async (d) => {
-                    setInspectionDetail(d);
-                    setIiTrackingRefreshKey((k) => k + 1);
-                    if (record.id != null) {
-                      await loadInspectionFieldValuesForDetail(record.id);
-                    }
-                  })
-                  .catch(() => {});
-              }
-            },
-          })}
-        />,
-      );
-    }
+    nodes.push(
+      <UniWorkflowActions
+        {...rowActionKind('skip')}
+        key="wf"
+        record={record}
+        {...qualityInspectionUniAuditProps({
+          entityType: 'incoming_inspection',
+          resourcePrefix: INCOMING_RESOURCE,
+          entityName: t('app.kuaizhizao.quality.common.entity.incomingInspection'),
+          onSuccess: () => {
+            actionRef.current?.reload();
+            invalidateStats();
+            if (inspectionDetail?.id === record.id) {
+              qualityApi.incomingInspection
+                .get(record.id!.toString())
+                .then(async (d) => {
+                  setInspectionDetail(d);
+                  setIiTrackingRefreshKey((k) => k + 1);
+                  if (record.id != null) {
+                    await loadInspectionFieldValuesForDetail(record.id);
+                  }
+                })
+                .catch(() => {});
+            }
+          },
+        })}
+      />,
+    );
     if (gates.createDefect.allowed) {
       nodes.push(
         <Button {...rowActionKind('create')}
@@ -848,6 +851,7 @@ const IncomingInspectionPage: React.FC = () => {
       render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     ...inspectionCustomFieldColumns,
+    ...(incomingAuditColumn ? [incomingAuditColumn] : []),
     {
       title: t('app.kuaizhizao.quality.common.columns.lifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -879,7 +883,7 @@ const IncomingInspectionPage: React.FC = () => {
         renderIncomingRowActions(renderIncomingRowNodes(record), `inc-${record.id ?? 'row'}`),
     },
   ],
-    [t, inspectionCustomFieldColumns],
+    [t, incomingAuditColumn, inspectionCustomFieldColumns],
   );
 
   return (
@@ -1117,7 +1121,7 @@ const IncomingInspectionPage: React.FC = () => {
         columns={[]}
         column={3}
         extra={
-          inspectionDetail && qualityInspectionRowGates(inspectionDetail, incomingPerms, ncPerms, t).approve.allowed ? (
+          inspectionDetail ? (
             <UniWorkflowActions
               {...rowActionKind('skip')}
               record={inspectionDetail}
@@ -1125,7 +1129,6 @@ const IncomingInspectionPage: React.FC = () => {
                 entityType: 'incoming_inspection',
                 resourcePrefix: INCOMING_RESOURCE,
                 entityName: t('app.kuaizhizao.quality.common.entity.incomingInspection'),
-                workflowAuditEnabled: incomingAuditEnabled,
                 theme: 'default',
                 onSuccess: () => {
                   actionRef.current?.reload();
@@ -1182,23 +1185,27 @@ const IncomingInspectionPage: React.FC = () => {
               </DetailDrawerSection>
 
               <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.lifecycle')}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lc = getIncomingInspectionLifecycle(inspectionDetail as Record<string, unknown>);
-                    const mainStages = lc.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        showLabels
-                        status={lc.status}
-                        nextStepSuggestions={lc.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                  {inspectionDetail.id != null ? (
-                    <DetailDrawerInlineFullChain
+                <DetailLifecycleCollaborationBlock
+                  record={inspectionDetail}
+                  auditEnabled={incomingAuditEnabled}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {(() => {
+                      const lc = getIncomingInspectionLifecycle(inspectionDetail as Record<string, unknown>);
+                      const mainStages = lc.mainStages ?? [];
+                      if (mainStages.length === 0) return null;
+                      return (
+                        <UniLifecycleStepper
+                          steps={mainStages}
+                          showLabels
+                          status={lc.status}
+                          nextStepSuggestions={lc.nextStepSuggestions}
+                          hideNextStepSuggestions
+                        />
+                      );
+                    })()}
+                    {inspectionDetail.id != null ? (
+                      <DetailDrawerInlineFullChain
                       documentType='incoming_inspection'
                       documentId={inspectionDetail.id}
                       active={detailVisible}
@@ -1216,7 +1223,8 @@ const IncomingInspectionPage: React.FC = () => {
                 )}
                     />
                   ) : null}
-                </div>
+                  </div>
+                </DetailLifecycleCollaborationBlock>
               </DetailDrawerSection>
 
               <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.detailInfo')}>

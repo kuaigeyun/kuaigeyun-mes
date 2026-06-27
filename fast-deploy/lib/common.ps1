@@ -37,6 +37,10 @@ function Write-LogWarn($msg)  { Write-Host "[$(Get-Date -Format 'HH:mm:ss')] WAR
 function Write-LogOk($msg)    { Write-Host "[$(Get-Date -Format 'HH:mm:ss')] OK: $msg" -ForegroundColor Green }
 function Write-LogError($msg) { Write-Host "[$(Get-Date -Format 'HH:mm:ss')] ERROR: $msg" -ForegroundColor Red }
 
+function Write-SupportContact {
+    Write-Host '  联系反馈: WeChat lu_dingjie'
+}
+
 function Ensure-LogsDir {
     if (-not (Test-Path $script:LogsDir)) { New-Item -ItemType Directory -Path $script:LogsDir -Force | Out-Null }
 }
@@ -769,6 +773,7 @@ function Invoke-Configure {
     } else {
         Write-Host "  访问地址: http://${serverIp}:$($script:FRONTEND_PORT) (Web) / http://${serverIp}:$($script:BACKEND_PORT) (API)"
     }
+    Write-SupportContact
 }
 
 function Ensure-PyzbarWindowsNative {
@@ -1129,6 +1134,7 @@ function Invoke-StartDev {
     Write-LogOk 'RiverEdge 开发环境已就绪'
     Write-Host "  Web:  http://127.0.0.1:$($script:FRONTEND_PORT)"
     Write-Host "  API:  http://127.0.0.1:$($script:BACKEND_PORT)"
+    Write-SupportContact
 }
 
 function Invoke-StartProd {
@@ -1148,6 +1154,7 @@ function Invoke-StartProd {
     } elseif (-not $script:CADDY_DOMAIN) {
         Write-Host "  本机: http://127.0.0.1:$($script:PROXY_PORT)"
     }
+    Write-SupportContact
 }
 
 function Invoke-StopDev {

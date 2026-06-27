@@ -51,6 +51,8 @@ import { OrderChangeItemsTable } from '../../../components/order-change/OrderCha
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
 import { isSourceOrderEligibleForChange } from '../../../utils/orderChangeSourceOrder';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
+import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
+import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
@@ -366,6 +368,10 @@ const SalesOrderChangesPage: React.FC = () => {
     () => buildOrderChangeLifecycleValueEnum(t),
     [t],
   );
+  const orderChangeAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<SalesOrderChange>({ t, auditEnabled }),
+    [t, auditEnabled],
+  );
 
   const columns: ProColumns<SalesOrderChange>[] = [
     {
@@ -416,6 +422,7 @@ const SalesOrderChangesPage: React.FC = () => {
       uniTableKeepWidth: true,
       render: (_, r) => (r.delta_amount != null ? Number(r.delta_amount).toFixed(2) : '-'),
     },
+    ...(orderChangeAuditColumn ? [orderChangeAuditColumn] : []),
     {
       title: t('app.kuaizhizao.salesOrderChange.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
@@ -692,8 +699,6 @@ const SalesOrderChangesPage: React.FC = () => {
                 pendingStatuses={['PENDING_REVIEW', '待审核']}
                 approvedStatuses={['AUDITED', '已审核', 'APPLIED', '已生效']}
                 rejectedStatuses={['REJECTED', '已驳回']}
-                autoApproveWhenSubmit={!auditEnabled}
-                workflowAuditEnabled={auditEnabled}
                 onSuccess={async () => {
                   actionRef.current?.reload();
                   if (detail.id) setDetail(await getSalesOrderChange(detail.id));
@@ -718,13 +723,15 @@ const SalesOrderChangesPage: React.FC = () => {
               const mainStages = lc.mainStages ?? [];
               if (!mainStages.length) return null;
               return (
-                <UniLifecycleStepper
-                  steps={mainStages}
-                  status={lc.status}
-                  showLabels
-                  nextStepSuggestions={lc.nextStepSuggestions}
-                  hideNextStepSuggestions
-                />
+                <DetailLifecycleCollaborationBlock record={detail} auditEnabled={auditEnabled}>
+                  <UniLifecycleStepper
+                    steps={mainStages}
+                    status={lc.status}
+                    showLabels
+                    nextStepSuggestions={lc.nextStepSuggestions}
+                    hideNextStepSuggestions
+                  />
+                </DetailLifecycleCollaborationBlock>
               );
             })()}
             <Descriptions column={2} size="small" style={{ marginTop: 16 }}>

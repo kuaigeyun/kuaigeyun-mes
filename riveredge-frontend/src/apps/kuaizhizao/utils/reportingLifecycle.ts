@@ -61,7 +61,6 @@ export function getReportingLifecycle(
 export function reportingRecordUniAuditProps(opts: {
   resourcePrefix: string;
   entityName: string;
-  workflowAuditEnabled: boolean;
   onSuccess: () => void;
   theme?: 'default' | 'link';
   size?: 'small' | 'middle' | 'large';
@@ -70,7 +69,6 @@ export function reportingRecordUniAuditProps(opts: {
     entityType: 'reporting_record' as const,
     unifiedAudit: true as const,
     resourcePrefix: opts.resourcePrefix,
-    workflowAuditEnabled: opts.workflowAuditEnabled,
     entityName: opts.entityName,
     statusField: 'status',
     draftStatuses: [] as string[],

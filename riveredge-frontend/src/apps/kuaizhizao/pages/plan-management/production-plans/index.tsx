@@ -43,6 +43,8 @@ import {
 } from '../../../../../components/layout-templates';
 import { planningApi } from '../../../services/production';
 import { getProductionPlanLifecycle } from '../../../utils/productionPlanLifecycle';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
+import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -219,6 +221,10 @@ const ProductionPlansPage: React.FC = () => {
   const { token } = useToken();
   const productionPlanPerms = useResourcePermissions(PRODUCTION_PLAN_RESOURCE);
   const productionPlanAuditRequired = useAuditRequired('production_plan', false);
+  const productionPlanAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<ProductionPlan>({ t, auditEnabled: productionPlanAuditRequired }),
+    [t, productionPlanAuditRequired],
+  );
   const tableRowsRef = useRef<ProductionPlan[]>([]);
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -413,13 +419,13 @@ const ProductionPlansPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => `${record.plan_start_date} ~ ${record.plan_end_date}`,
     },
+    ...(productionPlanAuditColumn ? [productionPlanAuditColumn] : []),
     {
       title: t('app.kuaizhizao.productionPlan.colLifecycle'),
       dataIndex: 'lifecycle_stage',
       valueType: 'select',
       valueEnum: {
         草稿: { text: t('app.kuaizhizao.productionPlan.statusDraft') },
-        已审核: { text: t('app.kuaizhizao.productionPlan.statusApproved') },
         已执行: { text: t('app.kuaizhizao.productionPlan.statusExecuted') },
         已取消: { text: t('app.kuaizhizao.productionPlan.statusCancelled') },
         已驳回: { text: t('app.kuaizhizao.productionPlan.statusRejected') },
@@ -509,7 +515,7 @@ const ProductionPlansPage: React.FC = () => {
         </Space>
       ),
     },
-  ], [t, productionPlanCustomFieldColumns, currentPlan?.id, resolveProductionPlanStatusLabel]);
+  ], [t, productionPlanAuditColumn, productionPlanCustomFieldColumns, currentPlan?.id, resolveProductionPlanStatusLabel]);
 
   // 处理详情查看
   const handleDetail = async (record: ProductionPlan) => {
@@ -1132,16 +1138,17 @@ const ProductionPlansPage: React.FC = () => {
                 if (mainStages.length === 0) return null;
                 return (
                   <DetailDrawerSection title={t('app.kuaizhizao.productionPlan.colLifecycle')}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                      {mainStages.length > 0 && (
-                        <UniLifecycleStepper
-                          steps={mainStages}
-                          status={lifecycle.status}
-                          showLabels
-                          nextStepSuggestions={lifecycle.nextStepSuggestions}
-                        />
-                      )}
-                    </div>
+                    <DetailLifecycleCollaborationBlock
+                      record={currentPlan}
+                      auditEnabled={productionPlanAuditRequired}
+                    >
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        status={lifecycle.status}
+                        showLabels
+                        nextStepSuggestions={lifecycle.nextStepSuggestions}
+                      />
+                    </DetailLifecycleCollaborationBlock>
                   </DetailDrawerSection>
                 );
               })()}

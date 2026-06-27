@@ -53,6 +53,7 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
 import { qualityApi } from '../../../services/production';
@@ -250,6 +251,10 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   }, [disposalFallback]);
   const finishedPerms = useResourcePermissions(FINISHED_RESOURCE);
   const finishedAuditEnabled = useAuditRequired('finished_goods_inspection');
+  const finishedAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<FinishedGoodsInspection>({ t, auditEnabled: finishedAuditEnabled }),
+    [t, finishedAuditEnabled],
+  );
   const ncPerms = useResourcePermissions(NC_RESOURCE);
   const { canPrint: canPrintCertificate } = useResourcePermissions(FINISHED_RESOURCE);
   const { canRead: canReadNcLedger } = useResourcePermissions(NC_RESOURCE);
@@ -653,36 +658,33 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         {t('app.kuaizhizao.quality.common.actions.detail')}
       </Button>,
     ];
-    if (gates.approve.allowed) {
-      nodes.push(
-        <UniWorkflowActions
-          {...rowActionKind('skip')}
-          key="wf"
-          record={record}
-          {...qualityInspectionUniAuditProps({
-            entityType: 'finished_goods_inspection',
-            resourcePrefix: FINISHED_RESOURCE,
-            entityName: t('app.kuaizhizao.quality.common.entity.finishedInspection'),
-            workflowAuditEnabled: finishedAuditEnabled,
-            onSuccess: () => {
-              actionRef.current?.reload();
-              if (inspectionDetail?.id === record.id) {
-                qualityApi.finishedGoodsInspection
-                  .get(record.id!.toString())
-                  .then(async (d) => {
-                    setInspectionDetail(d);
-                    setFgiTrackingRefreshKey((k) => k + 1);
-                    if (record.id != null) {
-                      await loadInspectionFieldValuesForDetail(record.id);
-                    }
-                  })
-                  .catch(() => {});
-              }
-            },
-          })}
-        />,
-      );
-    }
+    nodes.push(
+      <UniWorkflowActions
+        {...rowActionKind('skip')}
+        key="wf"
+        record={record}
+        {...qualityInspectionUniAuditProps({
+          entityType: 'finished_goods_inspection',
+          resourcePrefix: FINISHED_RESOURCE,
+          entityName: t('app.kuaizhizao.quality.common.entity.finishedInspection'),
+          onSuccess: () => {
+            actionRef.current?.reload();
+            if (inspectionDetail?.id === record.id) {
+              qualityApi.finishedGoodsInspection
+                .get(record.id!.toString())
+                .then(async (d) => {
+                  setInspectionDetail(d);
+                  setFgiTrackingRefreshKey((k) => k + 1);
+                  if (record.id != null) {
+                    await loadInspectionFieldValuesForDetail(record.id);
+                  }
+                })
+                .catch(() => {});
+            }
+          },
+        })}
+      />,
+    );
     if (gates.createDefect.allowed) {
       nodes.push(
         <Button {...rowActionKind('create')}
@@ -808,6 +810,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     ...inspectionCustomFieldColumns,
+    ...(finishedAuditColumn ? [finishedAuditColumn] : []),
     {
       title: t('app.kuaizhizao.quality.common.columns.lifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -839,7 +842,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         renderFinishedRowActions(renderFinishedRowNodes(record), `fg-${record.id ?? 'row'}`),
     },
   ],
-    [t, inspectionCustomFieldColumns],
+    [t, finishedAuditColumn, inspectionCustomFieldColumns],
   );
 
   // 检验明细表格列定义 (当前未使用)
@@ -1116,32 +1119,29 @@ const FinishedGoodsInspectionPage: React.FC = () => {
                   {t('app.kuaizhizao.quality.finished.actions.printCertificate')}
                 </Button>
               ) : null}
-              {qualityInspectionRowGates(inspectionDetail, finishedPerms, ncPerms, t).approve.allowed ? (
-                <UniWorkflowActions
-                  {...rowActionKind('skip')}
-                  record={inspectionDetail}
-                  {...qualityInspectionUniAuditProps({
-                    entityType: 'finished_goods_inspection',
-                    resourcePrefix: FINISHED_RESOURCE,
-                    entityName: t('app.kuaizhizao.quality.common.entity.finishedInspection'),
-                    workflowAuditEnabled: finishedAuditEnabled,
-                    theme: 'default',
-                    onSuccess: () => {
-                      actionRef.current?.reload();
-                      if (inspectionDetail?.id) {
-                        qualityApi.finishedGoodsInspection
-                          .get(inspectionDetail.id.toString())
-                          .then(async (d) => {
-                            setInspectionDetail(d);
-                            setFgiTrackingRefreshKey((k) => k + 1);
-                            await loadInspectionFieldValuesForDetail(inspectionDetail.id!);
-                          })
-                          .catch(() => {});
-                      }
-                    },
-                  })}
-                />
-              ) : null}
+              <UniWorkflowActions
+                {...rowActionKind('skip')}
+                record={inspectionDetail}
+                {...qualityInspectionUniAuditProps({
+                  entityType: 'finished_goods_inspection',
+                  resourcePrefix: FINISHED_RESOURCE,
+                  entityName: t('app.kuaizhizao.quality.common.entity.finishedInspection'),
+                  theme: 'default',
+                  onSuccess: () => {
+                    actionRef.current?.reload();
+                    if (inspectionDetail?.id) {
+                      qualityApi.finishedGoodsInspection
+                        .get(inspectionDetail.id.toString())
+                        .then(async (d) => {
+                          setInspectionDetail(d);
+                          setFgiTrackingRefreshKey((k) => k + 1);
+                          await loadInspectionFieldValuesForDetail(inspectionDetail.id!);
+                        })
+                        .catch(() => {});
+                    }
+                  },
+                })}
+              />
             </Space>
           )
         }

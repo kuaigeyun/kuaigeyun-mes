@@ -135,6 +135,7 @@ import { getPurchaseOrderLifecycle, buildPurchaseOrderLifecycleValueEnum, resolv
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -482,6 +483,10 @@ const PurchaseOrdersPage: React.FC = () => {
     () => buildPurchaseOrderLifecycleValueEnum(t, purchaseOrderAuditEnabled),
     [t, purchaseOrderAuditEnabled],
   );
+  const purchaseOrderAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<PurchaseOrder>({ t, auditEnabled: purchaseOrderAuditEnabled }),
+    [t, purchaseOrderAuditEnabled],
+  );
 
   // 供应商列表、订单类型、币种
   const [supplierList, setSupplierList] = useState<any[]>([]);
@@ -789,6 +794,7 @@ const PurchaseOrdersPage: React.FC = () => {
       hideInSearch: true,
       defaultSortOrder: 'descend',
     },
+    ...(purchaseOrderAuditColumn ? [purchaseOrderAuditColumn] : []),
     {
       title: t('app.kuaizhizao.purchaseOrder.col.lifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
@@ -843,7 +849,6 @@ const PurchaseOrdersPage: React.FC = () => {
             approvedStatuses={PO_WORKFLOW_APPROVED_STATUSES}
             rejectedStatuses={PO_WORKFLOW_REJECTED_STATUSES}
             submitActionLabel={t('app.kuaizhizao.purchaseOrder.submitForReview')}
-            workflowAuditEnabled={purchaseOrderAuditEnabled}
             theme="link"
             size="small"
             onSuccess={() => {
@@ -857,7 +862,7 @@ const PurchaseOrdersPage: React.FC = () => {
         return parts;
       },
     },
-  ], [t, purchaseOrderAuditEnabled, lifecycleValueEnum, purchaseOrderCustomFieldColumns, purchaseOrderPerms]);
+  ], [t, purchaseOrderAuditEnabled, lifecycleValueEnum, purchaseOrderAuditColumn, purchaseOrderCustomFieldColumns, purchaseOrderPerms]);
 
   const [pushToNoticeLoading, setPushToNoticeLoading] = useState(false);
   const [pushToInvoiceLoading, setPushToInvoiceLoading] = useState(false);
@@ -3085,7 +3090,6 @@ const PurchaseOrdersPage: React.FC = () => {
                       approvedStatuses={PO_WORKFLOW_APPROVED_STATUSES}
                       rejectedStatuses={PO_WORKFLOW_REJECTED_STATUSES}
                       submitActionLabel={t('app.kuaizhizao.purchaseOrder.submitForReview')}
-                      workflowAuditEnabled={purchaseOrderAuditEnabled}
                       theme="link"
                       size="small"
                       onSuccess={() => {

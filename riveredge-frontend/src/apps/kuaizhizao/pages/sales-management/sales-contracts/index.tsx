@@ -201,6 +201,7 @@ import {
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
+import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 
 import salesContractApi, {
 
@@ -428,6 +429,10 @@ const SalesContractsPage: React.FC = () => {
 
   const contractPerms = useResourcePermissions(SALES_CONTRACT_RESOURCE);
   const contractAuditRequired = useAuditRequired('sales_contract', false);
+  const contractAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<SalesContract>({ t, auditEnabled: contractAuditRequired }),
+    [t, contractAuditRequired],
+  );
 
   const actionRef = useRef<ActionType>();
 
@@ -2573,6 +2578,8 @@ const SalesContractsPage: React.FC = () => {
 
       },
 
+      ...(contractAuditColumn ? [contractAuditColumn] : []),
+
       {
 
         title: t('app.kuaizhizao.salesOrder.lifecycle'),
@@ -2656,6 +2663,7 @@ const SalesContractsPage: React.FC = () => {
 
     [
       t,
+      contractAuditColumn,
       contractTypeLabels,
       statusLabels,
       renderContractStatus,

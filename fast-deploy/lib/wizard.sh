@@ -1254,6 +1254,9 @@ wizard_show_summary() {
     wizard_panel_line "${WIZARD_DIM}./fast-deploy/deploy.sh stop${WIZARD_RESET}    停止服务"
     wizard_panel_line "${WIZARD_DIM}./fast-deploy/deploy.sh update${WIZARD_RESET}   拉代码更新"
     wizard_panel_line "${WIZARD_DIM}./fast-deploy/deploy.sh check${WIZARD_RESET}    环境检测"
+    wizard_panel_mid
+    wizard_panel_section "SUPPORT 联系反馈"
+    wizard_panel_kv "WeChat" "lu_dingjie"
     wizard_panel_bot
     echo ""
     wizard_say "感谢使用 RiverEdge，祝运行顺利。"

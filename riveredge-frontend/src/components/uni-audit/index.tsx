@@ -5,6 +5,7 @@ import { apiRequest } from '../../services/api';
 import { prepareRowActionButton, rowActionKind, type RowActionPermissionKind } from '../uni-action';
 import { rowActionLabel } from '../uni-action/actionCatalog';
 import { useAuditRequired } from '../../hooks/useAuditRequired';
+import { isManualAuditEnabled, resolveAuditActionVisibility } from '../../utils/auditMode';
 import { useGlobalStore } from '../../stores';
 import { hasModulePermission, hasReviewPermission } from '../../utils/permissionContract';
 import { isAdminBypass, resolveUserForMenuPermission } from '../../utils/permission';
@@ -33,7 +34,9 @@ export interface UniAuditActionsProps {
   pendingStatuses?: string[];
   approvedStatuses?: string[];
   rejectedStatuses?: string[];
+  /** @deprecated 由 record.audit.mode 决定，无需传入 */
   autoApproveWhenSubmit?: boolean;
+  /** @deprecated 由 record.audit.enabled/mode 决定，无需传入 */
   workflowAuditEnabled?: boolean;
   auditNodeKey?: string;
   submitActionLabel?: string;
@@ -185,7 +188,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const resolvedEntityType = entityType || inferredNodeKey || auditEntityType;
 
   const inferredAuditEnabled = useAuditRequired(inferredNodeKey || auditEntityType, false);
-  const effectiveAuditEnabled = workflowAuditEnabled ?? (resolvedEntityType ? inferredAuditEnabled : false);
+  const fallbackManualAuditEnabled = workflowAuditEnabled ?? (resolvedEntityType ? inferredAuditEnabled : false);
   const resolvedResource = (
     resourcePrefix
     || inferResourcePrefix(apiPrefix)
@@ -202,18 +205,32 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const recordId = (record?.[rowKey] ?? 0) as number;
 
   const auditAuthoritative = Boolean(auditState);
-  const allowedActions: string[] = Array.isArray(auditState?.allowed_actions)
-    ? (auditState!.allowed_actions as string[])
-    : [];
 
   const isDraft = matchesAnyStatus(status, draftStatuses) || matchesAnyStatus(reviewStatus, draftStatuses);
   const isPending = matchesAnyStatus(status, pendingStatuses) || matchesAnyStatus(reviewStatus, pendingStatuses);
   const isApproved = matchesAnyStatus(status, approvedStatuses) || matchesAnyStatus(reviewStatus, approvedStatuses);
   const isRejected = matchesAnyStatus(status, rejectedStatuses) || matchesAnyStatus(reviewStatus, rejectedStatuses);
-  const auditFeatureEnabled = auditAuthoritative
-    ? Boolean(auditState?.enabled)
-    : effectiveAuditEnabled;
-  const canShowAuditSemanticActions = auditFeatureEnabled;
+
+  const actionVisibility = resolveAuditActionVisibility(auditState, {
+    isDraft,
+    isPending,
+    isApproved,
+    isRejected,
+    manualAuditEnabled: auditState
+      ? isManualAuditEnabled(auditState)
+      : fallbackManualAuditEnabled,
+  });
+
+  const {
+    allowedActions,
+    manualAuditEnabled: auditFeatureEnabled,
+    showSubmit,
+    showWithdraw,
+    showApprove,
+    showReject,
+    showRevoke,
+    showAuditHub,
+  } = actionVisibility;
 
   const unifiedOpts = {
     unifiedAudit,
@@ -223,27 +240,6 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   };
   const routeViaUnified = (action: UniAuditAction) =>
     usesUnifiedAuditForAction(action, unifiedOpts);
-  const anyUnifiedAudit =
-    unifiedAudit || (Boolean(resolvedEntityType) && !apiPrefix && Object.keys(actions).length === 0);
-
-  const useAuthoritativeActions = auditAuthoritative;
-  const showSubmit = useAuthoritativeActions
-    ? allowedActions.includes('submit')
-    : isDraft || isRejected;
-  const showWithdraw = canShowAuditSemanticActions && (useAuthoritativeActions
-    ? allowedActions.includes('withdraw')
-    : isPending);
-  const showApprove = canShowAuditSemanticActions && (useAuthoritativeActions
-    ? allowedActions.includes('approve')
-    : isPending);
-  const showReject = canShowAuditSemanticActions && (useAuthoritativeActions
-    ? allowedActions.includes('reject')
-    : isPending);
-  const showRevoke = canShowAuditSemanticActions && (useAuthoritativeActions
-    ? allowedActions.includes('revoke')
-    : isApproved);
-
-  const showAuditHub = showWithdraw || showApprove || showReject;
 
   const channelByAction: Record<UniAuditAction, boolean> = {
     submit:

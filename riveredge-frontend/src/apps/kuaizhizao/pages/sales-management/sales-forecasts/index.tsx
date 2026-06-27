@@ -99,6 +99,7 @@ import { getSalesForecastLifecycle } from '../../../utils/salesForecastLifecycle
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage'
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell'
+import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn'
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions'
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel'
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter'
@@ -193,6 +194,10 @@ export default function SalesForecastsPage() {
   const [matrixMonths, setMatrixMonths] = useState<dayjs.Dayjs[]>([])
   const [matrixRows, setMatrixRows] = useState<any[]>([])
   const auditEnabled = useAuditRequired('sales_forecast', false)
+  const salesForecastAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<ForecastTableRow>({ t, auditEnabled }),
+    [t, auditEnabled],
+  )
   const forecastPerms = useResourcePermissions(SALES_FORECAST_RESOURCE)
   const permDeniedTitle = t('common.noPermission')
   const detailCapabilityGates = useSalesForecastCapabilities(currentForecast, forecastPerms, t, permDeniedTitle)
@@ -1050,6 +1055,7 @@ export default function SalesForecastsPage() {
       hideInSearch: true,
       ...orderLevelCellProps(),
     },
+    ...(salesForecastAuditColumn ? [salesForecastAuditColumn] : []),
     {
       title: t('app.kuaizhizao.salesForecast.lifecycleColumn'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
@@ -1058,8 +1064,6 @@ export default function SalesForecastsPage() {
       fixed: 'right' as const,
       valueEnum: {
         草稿: { text: t('app.kuaizhizao.salesForecast.statusDraft') },
-        待审核: { text: t('app.kuaizhizao.salesForecast.statusPending') },
-        已审核: { text: t('app.kuaizhizao.salesForecast.statusApproved') },
         已下推: { text: t('app.kuaizhizao.salesForecast.statusPushed') },
         已生效: { text: t('app.kuaizhizao.salesForecast.lifecycleEffective') },
         执行中: { text: t('app.kuaizhizao.salesForecast.lifecycleExecuting') },
@@ -1119,8 +1123,6 @@ export default function SalesForecastsPage() {
             pendingStatuses={['待审核', 'PENDING_REVIEW']}
             approvedStatuses={['已审核', 'AUDITED', 'APPROVED', '审核通过', '通过', '已通过']}
             rejectedStatuses={['已驳回', 'REJECTED', '审核驳回']}
-            autoApproveWhenSubmit={!auditEnabled}
-            workflowAuditEnabled={auditEnabled}
             theme="link"
             size="small"
             onSuccess={() => {
@@ -1897,8 +1899,6 @@ export default function SalesForecastsPage() {
                 pendingStatuses={['待审核', 'PENDING_REVIEW']}
                 approvedStatuses={['已审核', 'AUDITED', 'APPROVED', '审核通过', '通过', '已通过']}
                 rejectedStatuses={['已驳回', 'REJECTED', '审核驳回']}
-                autoApproveWhenSubmit={!auditEnabled}
-                workflowAuditEnabled={auditEnabled}
                 onSuccess={() => {
                   invalidateForecastCache();
                   invalidateStatistics();
