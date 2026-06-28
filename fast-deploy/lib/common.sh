@@ -3271,20 +3271,29 @@ cmd_install() {
 }
 
 cmd_update_dev() {
+    sync_git_from_origin || exit 1
     cmd_migrate
     cmd_stop_dev
     record_deploy_release_metadata
     cmd_start_dev
 }
 
-cmd_update_prod() {
+sync_git_from_origin() {
     load_deploy_env
     local branch="${GIT_BRANCH:-develop}"
-    log_info "拉取代码 (origin/$branch)..."
-    (cd "$PROJECT_ROOT" && git fetch origin && git checkout "$branch" && git pull origin "$branch") || {
-        log_error "git pull 失败"
-        exit 1
+    log_info "同步远程代码 (origin/$branch，丢弃本地差异)..."
+    (cd "$PROJECT_ROOT" && \
+        git fetch origin && \
+        git checkout "$branch" && \
+        git reset --hard "origin/$branch") || {
+        log_error "同步远程代码失败 (origin/$branch)"
+        return 1
     }
+    log_ok "代码已与 origin/$branch 对齐"
+}
+
+cmd_update_prod() {
+    sync_git_from_origin || exit 1
     cmd_migrate
     cmd_stop_prod
     cmd_ensure_frontend_dist

@@ -1182,14 +1182,7 @@ wizard_deploy_app() {
 }
 
 wizard_git_pull() {
-    local branch="${GIT_BRANCH:-develop}"
-    log_info "拉取代码 (origin/${branch})..."
-    (
-        cd "$PROJECT_ROOT"
-        git fetch origin
-        git checkout "$branch"
-        git pull origin "$branch"
-    )
+    sync_git_from_origin
 }
 
 wizard_update_app() {
@@ -1202,7 +1195,7 @@ wizard_update_app() {
     wizard_say "详细日志: ${log}"
     echo ""
 
-    wizard_run_deploy_step pull "拉取最新代码" "$log" wizard_git_pull || return 1
+    wizard_run_deploy_step pull "同步远程代码（reset --hard）" "$log" wizard_git_pull || return 1
     wizard_run_deploy_step migrate "执行数据库迁移" "$log" cmd_migrate || return 1
 
     if [ "$DEPLOY_MODE" = "prod" ]; then

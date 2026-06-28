@@ -1393,7 +1393,27 @@ function Invoke-Install {
     if (-not (Invoke-Check)) { throw '环境检测仍有未满足项' }
 }
 
+function Sync-GitFromOrigin {
+    Load-DeployEnv
+    $branch = if ($script:GIT_BRANCH) { $script:GIT_BRANCH } elseif ($env:GIT_BRANCH) { $env:GIT_BRANCH } else { 'develop' }
+    Write-LogInfo "同步远程代码 (origin/$branch，丢弃本地差异)..."
+    Push-Location $script:ProjectRoot
+    try {
+        git fetch origin
+        if ($LASTEXITCODE -ne 0) { throw 'git fetch 失败' }
+        git checkout $branch
+        if ($LASTEXITCODE -ne 0) { throw "git checkout $branch 失败" }
+        git reset --hard "origin/$branch"
+        if ($LASTEXITCODE -ne 0) { throw "git reset --hard origin/$branch 失败" }
+    } catch {
+        Write-LogError "同步远程代码失败 (origin/$branch): $_"
+        throw
+    } finally { Pop-Location }
+    Write-LogOk "代码已与 origin/$branch 对齐"
+}
+
 function Invoke-UpdateDev {
+    Sync-GitFromOrigin
     Invoke-Migrate
     Invoke-StopDev
     Record-DeployReleaseMetadata
@@ -1401,16 +1421,7 @@ function Invoke-UpdateDev {
 }
 
 function Invoke-UpdateProd {
-    Load-DeployEnv
-    $branch = if ($env:GIT_BRANCH) { $env:GIT_BRANCH } else { 'develop' }
-    Write-LogInfo "拉取代码 (origin/$branch)..."
-    Push-Location $script:ProjectRoot
-    try {
-        git fetch origin
-        git checkout $branch
-        git pull origin $branch
-        if ($LASTEXITCODE -ne 0) { throw 'git pull 失败' }
-    } finally { Pop-Location }
+    Sync-GitFromOrigin
     Invoke-Migrate
     Invoke-StopProd
     Ensure-FrontendDist
