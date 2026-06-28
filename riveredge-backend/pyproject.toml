@@ -39,8 +39,8 @@ dependencies = [
     "pyaxmlparser>=0.3.31",
 ]
 
-# Playwright：仅 HTML→PDF。生产默认可不装（见 Launch.prod.sh 使用默认 uv sync / 不加 --extra pdf）；需要时再：
-#   uv sync --no-install-project --extra pdf && uv run --extra pdf playwright install chromium
+# Playwright：HTML→PDF。fast-deploy 在 PLAYWRIGHT_POSTINSTALL_ENABLE=1 时 uv sync --extra pdf 并安装 Chromium。
+# 浏览器目录见 deploy.env PLAYWRIGHT_BROWSERS_PATH（默认 .playwright-browsers/）。
 [project.optional-dependencies]
 pdf = [
     "playwright>=1.57.0,<1.58",

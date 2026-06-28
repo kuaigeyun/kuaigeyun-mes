@@ -73,6 +73,11 @@ fix_systemd_runtime_permissions() {
             sudo chown -R "${service_user}:${service_group}" "$dir" 2>/dev/null || true
         fi
     done
+    load_deploy_env
+    local pw_dir
+    pw_dir="$(resolve_playwright_browsers_path)"
+    mkdir -p "$pw_dir"
+    sudo chown -R "${service_user}:${service_group}" "$pw_dir" 2>/dev/null || true
     log_ok "运行时目录权限已就绪"
     return 0
 }
@@ -106,6 +111,8 @@ load_deploy_env() {
             TASKIQ_WORKERS=2
         fi
     fi
+    PLAYWRIGHT_POSTINSTALL_ENABLE="${PLAYWRIGHT_POSTINSTALL_ENABLE:-1}"
+    PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$PROJECT_ROOT/.playwright-browsers}"
 }
 
 is_windows_gitbash() {
@@ -1600,11 +1607,102 @@ sync_backend_deps() {
         export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
         export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
         export UV_HTTP_TIMEOUT="${UV_HTTP_TIMEOUT:-600}"
-        "$(resolve_uv)" sync --no-install-project
+        local sync_args=(sync --no-install-project)
+        if playwright_postinstall_enabled; then
+            sync_args+=(--extra pdf)
+        fi
+        "$(resolve_uv)" "${sync_args[@]}"
     ) || { log_error "Python 依赖同步失败"; exit 1; }
     if is_windows_gitbash; then
         ensure_pyzbar_windows_native
     fi
+}
+
+playwright_postinstall_enabled() {
+    [ "${PLAYWRIGHT_POSTINSTALL_ENABLE:-1}" != "0" ]
+}
+
+resolve_playwright_browsers_path() {
+    load_deploy_env
+    echo "${PLAYWRIGHT_BROWSERS_PATH:-$PROJECT_ROOT/.playwright-browsers}"
+}
+
+playwright_export_env() {
+    if ! playwright_postinstall_enabled; then
+        return 0
+    fi
+    export PLAYWRIGHT_BROWSERS_PATH="$(resolve_playwright_browsers_path)"
+    mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
+}
+
+playwright_uv_extra_args() {
+    if playwright_postinstall_enabled; then
+        printf '%s' '--extra pdf'
+    fi
+}
+
+_playwright_chromium_probe() {
+    local uv_bin="$1"
+    playwright_export_env
+    (cd "$BACKEND_DIR" && export PYTHONPATH="$BACKEND_DIR/src" && \
+        "$uv_bin" run --extra pdf python - <<'PY' >/dev/null 2>&1
+import os
+import sys
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    exe = p.chromium.executable_path
+    if exe and os.path.isfile(exe):
+        sys.exit(0)
+sys.exit(1)
+PY
+    )
+}
+
+playwright_current_version() {
+    local uv_bin
+    uv_bin="$(resolve_uv)"
+    playwright_export_env
+    (cd "$BACKEND_DIR" && export PYTHONPATH="$BACKEND_DIR/src" && \
+        "$uv_bin" run --extra pdf python -m playwright --version 2>/dev/null | head -1 | awk '{print $2}') || true
+}
+
+playwright_write_chromium_marker() {
+    local marker="$LOGS_DIR/playwright-chromium.ready"
+    local ver
+    ver="$(playwright_current_version)"
+    { echo "${ver:-unknown}"; date -u +%Y-%m-%dT%H:%M:%SZ; } > "$marker"
+}
+
+playwright_chromium_marker_stale() {
+    local marker="$LOGS_DIR/playwright-chromium.ready"
+    local cur marker_ver
+    [ -f "$marker" ] || return 0
+    cur="$(playwright_current_version)"
+    marker_ver="$(head -1 "$marker" 2>/dev/null | tr -d '[:space:]')"
+    [ -z "$cur" ] && return 0
+    [ "$cur" != "$marker_ver" ]
+}
+
+_wait_playwright_install_job() {
+    local pidf="$LOGS_DIR/playwright-install.pid"
+    local timeout="${1:-600}"
+    local waited=0
+    while [ $waited -lt "$timeout" ]; do
+        if [ ! -f "$pidf" ]; then
+            return 0
+        fi
+        local pid
+        pid="$(tr -d '[:space:]' < "$pidf" 2>/dev/null || true)"
+        if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
+            rm -f "$pidf"
+            return 0
+        fi
+        sleep 2
+        waited=$((waited + 2))
+    done
+    log_warn "Playwright 补装等待超时（${timeout}s），详见 $LOGS_DIR/playwright-install.log"
+    return 1
 }
 
 ensure_pyzbar_windows_native() {
@@ -1626,13 +1724,14 @@ ensure_pyzbar_windows_native() {
 }
 
 check_playwright() {
-    if [ "${PLAYWRIGHT_POSTINSTALL_ENABLE:-1}" = "0" ]; then
+    if ! playwright_postinstall_enabled; then
         echo "skipped"
         return
     fi
     [ -d "$BACKEND_DIR" ] || { echo "missing"; return; }
     local uv_bin
     uv_bin="$(resolve_uv)"
+    playwright_export_env
     if (cd "$BACKEND_DIR" && export PYTHONPATH="$BACKEND_DIR/src" && \
         "$uv_bin" run --extra pdf python -m playwright --version >/dev/null 2>&1); then
         echo "ok"
@@ -1642,14 +1741,11 @@ check_playwright() {
 }
 
 check_playwright_chromium() {
-    if [ "${PLAYWRIGHT_POSTINSTALL_ENABLE:-1}" = "0" ]; then
+    if ! playwright_postinstall_enabled; then
         echo "skipped"
         return
     fi
     ensure_logs_dir
-    local marker="$LOGS_DIR/playwright-chromium.ready"
-    [ -f "$marker" ] && { echo "ok"; return; }
-
     local pidf="$LOGS_DIR/playwright-install.pid"
     if [ -f "$pidf" ]; then
         local pid
@@ -1669,36 +1765,84 @@ check_playwright_chromium() {
     esac
 
     uv_bin="$(resolve_uv)"
-    if (cd "$BACKEND_DIR" && export PYTHONPATH="$BACKEND_DIR/src" && \
-        "$uv_bin" run --extra pdf python - <<'PY' >/dev/null 2>&1
-import os
-import sys
-from playwright.sync_api import sync_playwright
-
-with sync_playwright() as p:
-    exe = p.chromium.executable_path
-    if exe and os.path.isfile(exe):
-        sys.exit(0)
-sys.exit(1)
-PY
-    ); then
+    if _playwright_chromium_probe "$uv_bin"; then
+        if playwright_chromium_marker_stale; then
+            playwright_write_chromium_marker
+        fi
         echo "ok"
     else
         echo "missing"
     fi
 }
 
+ensure_playwright_chromium_sync() {
+    if ! playwright_postinstall_enabled; then
+        return 0
+    fi
+    ensure_logs_dir
+    [ -d "$BACKEND_DIR" ] || return 0
+
+    local st
+    st="$(check_playwright_chromium)"
+    case "$st" in
+        ok|skipped) return 0 ;;
+        installing)
+            log_info "等待 Playwright Chromium 补装完成..."
+            _wait_playwright_install_job 600 || true
+            st="$(check_playwright_chromium)"
+            [ "$st" = "ok" ] && return 0
+            ;;
+    esac
+
+    local uv_bin logf marker
+    uv_bin="$(resolve_uv)"
+    logf="$LOGS_DIR/playwright-install.log"
+    marker="$LOGS_DIR/playwright-chromium.ready"
+    playwright_export_env
+
+    log_info "安装 Playwright Chromium（生产同步，路径: ${PLAYWRIGHT_BROWSERS_PATH}）..."
+    (
+        cd "$BACKEND_DIR" || exit 1
+        export PYTHONPATH="$BACKEND_DIR/src"
+        if ! "$uv_bin" run --extra pdf python -m playwright --version >>"$logf" 2>&1; then
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] skip: Playwright 模块不可用" >>"$logf"
+            exit 1
+        fi
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] start: playwright install chromium (sync)" >>"$logf"
+        if "$uv_bin" run --extra pdf python -m playwright install chromium >>"$logf" 2>&1; then
+            playwright_write_chromium_marker
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] ok: Playwright Chromium 安装完成" >>"$logf"
+        else
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] fail: Playwright Chromium 安装失败" >>"$logf"
+            exit 1
+        fi
+    ) || {
+        log_error "Playwright Chromium 安装失败，详见 $logf"
+        return 1
+    }
+    log_ok "Playwright Chromium 已就绪"
+    return 0
+}
+
 ensure_playwright_chromium_postinstall() {
-    # 非阻断后置补装：后台下载 Chromium，不阻塞 start 主流程
-    if [ "${PLAYWRIGHT_POSTINSTALL_ENABLE:-1}" = "0" ]; then
+    # 开发环境后台补装，不阻塞 start 主流程
+    if ! playwright_postinstall_enabled; then
         return 0
     fi
     ensure_logs_dir
     local marker="$LOGS_DIR/playwright-chromium.ready"
     local logf="$LOGS_DIR/playwright-install.log"
     local pidf="$LOGS_DIR/playwright-install.pid"
-    [ -f "$marker" ] && return 0
     [ -d "$BACKEND_DIR" ] || return 0
+
+    local uv_bin
+    uv_bin="$(resolve_uv)"
+    if _playwright_chromium_probe "$uv_bin"; then
+        if playwright_chromium_marker_stale; then
+            playwright_write_chromium_marker
+        fi
+        return 0
+    fi
 
     if [ -f "$pidf" ]; then
         local pid
@@ -1710,20 +1854,21 @@ ensure_playwright_chromium_postinstall() {
         rm -f "$pidf"
     fi
 
-    local uv_bin
-    uv_bin="$(resolve_uv)"
+    rm -f "$marker"
+    playwright_export_env
 
     log_info "补装 Playwright Chromium 运行时（后台执行，不阻塞启动）..."
     (
         cd "$BACKEND_DIR" || exit 1
         export PYTHONPATH="$BACKEND_DIR/src"
+        export PLAYWRIGHT_BROWSERS_PATH
         if ! "$uv_bin" run --extra pdf python -m playwright --version >>"$logf" 2>&1; then
             echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] skip: Playwright 模块不可用" >>"$logf"
             exit 0
         fi
         echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] start: playwright install chromium" >>"$logf"
         if "$uv_bin" run --extra pdf python -m playwright install chromium >>"$logf" 2>&1; then
-            date -u +%Y-%m-%dT%H:%M:%SZ > "$marker"
+            playwright_write_chromium_marker
             echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] ok: Playwright Chromium 补装完成" >>"$logf"
         else
             echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] fail: Playwright Chromium 补装失败" >>"$logf"
@@ -1975,7 +2120,8 @@ start_backend_prod() {
         export DEBUG=false
         export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
         export PYTHONPATH="$BACKEND_DIR/src"
-        nohup "$(resolve_uv)" run uvicorn server.main:app \
+        playwright_export_env
+        nohup "$(resolve_uv)" run --extra pdf uvicorn server.main:app \
             --host 127.0.0.1 --port "$BACKEND_PORT" --workers 1 \
             > "$LOGS_DIR/backend.log" 2>&1 &
         echo $! > "$LOGS_DIR/backend.pid"
@@ -2001,7 +2147,8 @@ start_worker_prod() {
             export ENVIRONMENT=production
             export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
             export PYTHONPATH="$BACKEND_DIR/src"
-            nohup "$(resolve_uv)" run taskiq worker --app-dir src --fs-discover \
+            playwright_export_env
+            nohup "$(resolve_uv)" run --extra pdf taskiq worker --app-dir src --fs-discover \
                 --workers "$TASKIQ_WORKERS" \
                 core.tasks.taskiq_app:broker \
                 > "$LOGS_DIR/worker.log" 2>&1 &
@@ -2019,7 +2166,8 @@ start_worker_prod() {
             export ENVIRONMENT=production
             export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
             export PYTHONPATH="$BACKEND_DIR/src"
-            nohup "$(resolve_uv)" run taskiq scheduler --app-dir src --fs-discover core.tasks.taskiq_app:scheduler \
+            playwright_export_env
+            nohup "$(resolve_uv)" run --extra pdf taskiq scheduler --app-dir src --fs-discover core.tasks.taskiq_app:scheduler \
                 > "$LOGS_DIR/scheduler.log" 2>&1 &
             echo $! > "$LOGS_DIR/scheduler.pid"
         )
@@ -2147,13 +2295,13 @@ cmd_start_prod() {
         fi
     fi
     record_deploy_release_metadata
+    ensure_playwright_chromium_sync || exit 1
     start_backend_prod
     start_worker_prod
     if ! start_caddy_prod; then
         rollback_partial_prod_start
         exit 1
     fi
-    ensure_playwright_chromium_postinstall
     log_ok "RiverEdge 生产环境已就绪"
     local access_ip="${SERVER_IP:-127.0.0.1}"
     local web_url
@@ -2326,10 +2474,11 @@ resolve_service_user() {
 
 render_systemd_unit() {
     local service_user=$1 uv_bin=$2 caddy_bin=$3
-    local service_home service_group
+    local service_home service_group pw_path
     service_home="$(getent passwd "$service_user" | cut -d: -f6)"
     [ -n "$service_home" ] || { log_error "用户不存在: $service_user"; return 1; }
     service_group="$(id -gn "$service_user")"
+    pw_path="$(resolve_playwright_browsers_path)"
     sed \
         -e "s|{{SERVICE_USER}}|${service_user}|g" \
         -e "s|{{SERVICE_GROUP}}|${service_group}|g" \
@@ -2338,6 +2487,7 @@ render_systemd_unit() {
         -e "s|{{SERVICE_SCRIPT}}|${SYSTEMD_SERVICE_SCRIPT}|g" \
         -e "s|{{UV_BIN}}|${uv_bin}|g" \
         -e "s|{{CADDY_BIN}}|${caddy_bin}|g" \
+        -e "s|{{PLAYWRIGHT_BROWSERS_PATH}}|${pw_path}|g" \
         "$SYSTEMD_UNIT_TEMPLATE"
 }
 
@@ -3083,7 +3233,7 @@ cmd_check() {
         ok) log_ok "Chromium (Playwright)" ;;
         skipped) log_ok "Chromium — 已跳过 (PLAYWRIGHT_POSTINSTALL_ENABLE=0)" ;;
         installing) log_warn "Chromium — 后台补装进行中（见 .logs/playwright-install.log）" ;;
-        missing) log_warn "Chromium — 未安装（启动服务时会后台补装）" ;;
+        missing) log_warn "Chromium — 未安装（生产 start 会同步安装）" ;;
         *) log_warn "Chromium: $st" ;;
     esac
     return $failed

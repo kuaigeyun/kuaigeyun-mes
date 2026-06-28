@@ -71,6 +71,10 @@ function Load-DeployEnv {
     if (-not $script:TASKIQ_WORKERS) {
         if ($script:DeployMode -eq 'prod') { $script:TASKIQ_WORKERS = 1 } else { $script:TASKIQ_WORKERS = 2 }
     }
+    if (-not $script:PLAYWRIGHT_POSTINSTALL_ENABLE) { $script:PLAYWRIGHT_POSTINSTALL_ENABLE = '1' }
+    if (-not $script:PLAYWRIGHT_BROWSERS_PATH) {
+        $script:PLAYWRIGHT_BROWSERS_PATH = Join-Path $script:ProjectRoot '.playwright-browsers'
+    }
 }
 
 function Apply-CN-Mirrors {
@@ -793,16 +797,128 @@ function Ensure-PyzbarWindowsNative {
     } finally { Pop-Location }
 }
 
+function Test-PlaywrightPostInstallEnabled {
+    Load-DeployEnv
+    return ($script:PLAYWRIGHT_POSTINSTALL_ENABLE -ne '0')
+}
+
+function Resolve-PlaywrightBrowsersPath {
+    Load-DeployEnv
+    if ($script:PLAYWRIGHT_BROWSERS_PATH) { return $script:PLAYWRIGHT_BROWSERS_PATH }
+    return (Join-Path $script:ProjectRoot '.playwright-browsers')
+}
+
+function Set-PlaywrightEnv {
+    if (-not (Test-PlaywrightPostInstallEnabled)) { return }
+    $path = Resolve-PlaywrightBrowsersPath
+    $env:PLAYWRIGHT_BROWSERS_PATH = $path
+    if (-not (Test-Path $path)) { New-Item -ItemType Directory -Path $path -Force | Out-Null }
+}
+
+function Test-PlaywrightChromiumProbe {
+    Set-PlaywrightEnv
+    $uv = Resolve-Uv
+    Push-Location $script:BackendDir
+    try {
+        $env:PYTHONPATH = Join-Path $script:BackendDir 'src'
+        $code = @'
+import os
+import sys
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    exe = p.chromium.executable_path
+    if exe and os.path.isfile(exe):
+        sys.exit(0)
+sys.exit(1)
+'@
+        & $uv run --extra pdf python -c $code 2>$null
+        return ($LASTEXITCODE -eq 0)
+    } finally { Pop-Location }
+}
+
+function Get-PlaywrightCurrentVersion {
+    Set-PlaywrightEnv
+    $uv = Resolve-Uv
+    Push-Location $script:BackendDir
+    try {
+        $env:PYTHONPATH = Join-Path $script:BackendDir 'src'
+        $out = & $uv run --extra pdf python -m playwright --version 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $out) { return '' }
+        return ($out -split '\s+')[1]
+    } finally { Pop-Location }
+}
+
+function Set-PlaywrightChromiumMarker {
+    Ensure-LogsDir
+    $marker = Join-Path $script:LogsDir 'playwright-chromium.ready'
+    $ver = Get-PlaywrightCurrentVersion
+    if (-not $ver) { $ver = 'unknown' }
+    Set-Content -Path $marker -Value @($ver, (Get-Date -Format o)) -Encoding UTF8
+}
+
+function Test-PlaywrightChromiumMarkerStale {
+    Ensure-LogsDir
+    $marker = Join-Path $script:LogsDir 'playwright-chromium.ready'
+    if (-not (Test-Path $marker)) { return $true }
+    $cur = Get-PlaywrightCurrentVersion
+    if (-not $cur) { return $true }
+    $markerVer = (Get-Content $marker -TotalCount 1 -ErrorAction SilentlyContinue).Trim()
+    return ($cur -ne $markerVer)
+}
+
+function Ensure-PlaywrightChromiumSync {
+    if (-not (Test-PlaywrightPostInstallEnabled)) { return }
+    if (-not (Test-Path $script:BackendDir)) { return }
+    Ensure-LogsDir
+    $logFile = Join-Path $script:LogsDir 'playwright-install.log'
+
+    if (Test-PlaywrightChromiumProbe) {
+        if (Test-PlaywrightChromiumMarkerStale) { Set-PlaywrightChromiumMarker }
+        return
+    }
+
+    $running = Get-Job -Name 'RiverEdgePlaywrightInstall' -ErrorAction SilentlyContinue |
+        Where-Object { $_.State -eq 'Running' }
+    if ($running) {
+        Write-LogInfo '等待 Playwright Chromium 后台补装完成...'
+        Wait-Job -Job $running -Timeout 600 | Out-Null
+        if (Test-PlaywrightChromiumProbe) { return }
+    }
+
+    Set-PlaywrightEnv
+    $uv = Resolve-Uv
+    $browserPath = $env:PLAYWRIGHT_BROWSERS_PATH
+    Write-LogInfo "安装 Playwright Chromium（生产同步，路径: $browserPath）..."
+    Push-Location $script:BackendDir
+    try {
+        $env:PYTHONPATH = Join-Path $script:BackendDir 'src'
+        & $uv run --extra pdf python -m playwright --version *>> $logFile
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Playwright 模块不可用，请先 Sync-BackendDeps'
+        }
+        Add-Content $logFile "[$(Get-Date -Format o)] start: playwright install chromium (sync)"
+        & $uv run --extra pdf python -m playwright install chromium *>> $logFile
+        if ($LASTEXITCODE -ne 0) { throw "Playwright Chromium 安装失败，详见 $logFile" }
+        Set-PlaywrightChromiumMarker
+        Add-Content $logFile "[$(Get-Date -Format o)] ok: Playwright Chromium 安装完成"
+    } finally { Pop-Location }
+    Write-LogOk 'Playwright Chromium 已就绪'
+}
+
 function Ensure-PlaywrightChromiumPostInstall {
-    # 非阻断后置补装：后台下载 Chromium，不阻塞 start 主流程
-    $enabled = if ($env:PLAYWRIGHT_POSTINSTALL_ENABLE) { $env:PLAYWRIGHT_POSTINSTALL_ENABLE } else { '1' }
-    if ($enabled -eq '0') { return }
+    # 开发环境后台补装，不阻塞 start 主流程
+    if (-not (Test-PlaywrightPostInstallEnabled)) { return }
     Ensure-LogsDir
     $marker = Join-Path $script:LogsDir 'playwright-chromium.ready'
     $logFile = Join-Path $script:LogsDir 'playwright-install.log'
     $pidf = Join-Path $script:LogsDir 'playwright-install.pid'
-    if (Test-Path $marker) { return }
     if (-not (Test-Path $script:BackendDir)) { return }
+
+    if ((Test-PlaywrightChromiumProbe)) {
+        if (Test-PlaywrightChromiumMarkerStale) { Set-PlaywrightChromiumMarker }
+        return
+    }
 
     $running = Get-Job -Name 'RiverEdgePlaywrightInstall' -ErrorAction SilentlyContinue |
         Where-Object { $_.State -eq 'Running' }
@@ -811,12 +927,17 @@ function Ensure-PlaywrightChromiumPostInstall {
         return
     }
 
+    if (Test-Path $marker) { Remove-Item $marker -Force }
+
     Write-LogInfo '补装 Playwright Chromium 运行时（后台执行，不阻塞启动）...'
     $uv = Resolve-Uv
     $backendDir = $script:BackendDir
+    $browserPath = Resolve-PlaywrightBrowsersPath
     Start-Job -Name 'RiverEdgePlaywrightInstall' -ScriptBlock {
-        param($BackendDir, $Uv, $Marker, $LogFile, $PidFile)
+        param($BackendDir, $Uv, $Marker, $LogFile, $PidFile, $BrowsersPath)
         $env:PYTHONPATH = Join-Path $BackendDir 'src'
+        $env:PLAYWRIGHT_BROWSERS_PATH = $BrowsersPath
+        if (-not (Test-Path $BrowsersPath)) { New-Item -ItemType Directory -Path $BrowsersPath -Force | Out-Null }
         Push-Location $BackendDir
         try {
             & $Uv run --extra pdf python -m playwright --version *>> $LogFile
@@ -827,7 +948,9 @@ function Ensure-PlaywrightChromiumPostInstall {
             Add-Content $LogFile "[$(Get-Date -Format o)] start: playwright install chromium"
             & $Uv run --extra pdf python -m playwright install chromium *>> $LogFile
             if ($LASTEXITCODE -eq 0) {
-                Set-Content -Path $Marker -Value (Get-Date -Format o) -Encoding UTF8
+                $ver = (& $Uv run --extra pdf python -m playwright --version 2>$null) -split '\s+' | Select-Object -Skip 1 -First 1
+                if (-not $ver) { $ver = 'unknown' }
+                Set-Content -Path $Marker -Value @($ver, (Get-Date -Format o)) -Encoding UTF8
                 Add-Content $LogFile "[$(Get-Date -Format o)] ok: Playwright Chromium 补装完成"
             } else {
                 Add-Content $LogFile "[$(Get-Date -Format o)] fail: Playwright Chromium 补装失败"
@@ -836,7 +959,7 @@ function Ensure-PlaywrightChromiumPostInstall {
             Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
             Pop-Location
         }
-    } -ArgumentList $backendDir, $uv, $marker, $logFile, $pidf | Out-Null
+    } -ArgumentList $backendDir, $uv, $marker, $logFile, $pidf, $browserPath | Out-Null
     Write-LogInfo "Playwright 补装已在后台运行，详见 $logFile"
 }
 
@@ -849,7 +972,9 @@ function Sync-BackendDeps {
         $env:SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir
         $env:UV_LINK_MODE = 'copy'
         $env:UV_HTTP_TIMEOUT = '600'
-        & $uv sync --no-install-project
+        $syncArgs = @('sync', '--no-install-project')
+        if (Test-PlaywrightPostInstallEnabled) { $syncArgs += '--extra', 'pdf' }
+        & $uv @syncArgs
         if ($LASTEXITCODE -ne 0) { throw 'uv sync 失败' }
     } finally { Pop-Location }
     Ensure-PyzbarWindowsNative
@@ -1047,10 +1172,12 @@ function Start-BackendProd {
     Sync-BackendDeps
     Write-LogInfo "启动后端 (prod, :$($script:BACKEND_PORT))..."
     $uv = Resolve-Uv
-    $args = @('run','uvicorn','server.main:app','--host','127.0.0.1',"--port",$script:BACKEND_PORT,'--workers','1')
+    Set-PlaywrightEnv
+    $args = @('run','--extra','pdf','uvicorn','server.main:app','--host','127.0.0.1',"--port",$script:BACKEND_PORT,'--workers','1')
     Start-ProcessBackground 'backend' $uv $args @{
         PORT = $script:BACKEND_PORT; HOST = '127.0.0.1'; ENVIRONMENT = 'production'; DEBUG = 'false'
-        SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir; PYTHONPATH = (Join-Path $script:BackendDir 'src'); WORKDIR = $script:BackendDir
+        SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir; PYTHONPATH = (Join-Path $script:BackendDir 'src')
+        PLAYWRIGHT_BROWSERS_PATH = $env:PLAYWRIGHT_BROWSERS_PATH; WORKDIR = $script:BackendDir
     }
     Start-Sleep -Seconds 3
     try {
@@ -1067,10 +1194,12 @@ function Start-WorkerProd {
     if (-not (Test-PidFileAlive $workerPidFile)) {
         Remove-Item $workerPidFile -Force -ErrorAction SilentlyContinue
         Write-LogInfo '启动 Taskiq Worker...'
-        $args = @('run','taskiq','worker','--app-dir','src','--fs-discover','--workers',"$($script:TASKIQ_WORKERS)",'core.tasks.taskiq_app:broker')
+        Set-PlaywrightEnv
+        $args = @('run','--extra','pdf','taskiq','worker','--app-dir','src','--fs-discover','--workers',"$($script:TASKIQ_WORKERS)",'core.tasks.taskiq_app:broker')
         Start-ProcessBackground 'worker' $uv $args @{
             ENVIRONMENT = 'production'; SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir
-            PYTHONPATH = (Join-Path $script:BackendDir 'src'); WORKDIR = $script:BackendDir
+            PYTHONPATH = (Join-Path $script:BackendDir 'src'); PLAYWRIGHT_BROWSERS_PATH = $env:PLAYWRIGHT_BROWSERS_PATH
+            WORKDIR = $script:BackendDir
         }
         if (-not (Wait-ProcessStable 'Worker' $workerPidFile $workerLogFile 12)) { throw 'Worker 启动失败' }
     } else {
@@ -1081,10 +1210,12 @@ function Start-WorkerProd {
     if (-not (Test-PidFileAlive $schedulerPidFile)) {
         Remove-Item $schedulerPidFile -Force -ErrorAction SilentlyContinue
         Write-LogInfo '启动 Taskiq Scheduler...'
-        $args = @('run','taskiq','scheduler','--app-dir','src','--fs-discover','core.tasks.taskiq_app:scheduler')
+        Set-PlaywrightEnv
+        $args = @('run','--extra','pdf','taskiq','scheduler','--app-dir','src','--fs-discover','core.tasks.taskiq_app:scheduler')
         Start-ProcessBackground 'scheduler' $uv $args @{
             ENVIRONMENT = 'production'; SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir
-            PYTHONPATH = (Join-Path $script:BackendDir 'src'); WORKDIR = $script:BackendDir
+            PYTHONPATH = (Join-Path $script:BackendDir 'src'); PLAYWRIGHT_BROWSERS_PATH = $env:PLAYWRIGHT_BROWSERS_PATH
+            WORKDIR = $script:BackendDir
         }
         if (-not (Wait-ProcessStable 'Scheduler' $schedulerPidFile $schedulerLogFile 12)) { throw 'Scheduler 启动失败' }
     } else {
@@ -1141,10 +1272,10 @@ function Invoke-StartProd {
     Ensure-LogsDir
     Load-DeployEnv
     if (-not (Test-Path (Join-Path $script:FrontendDir 'dist\index.html'))) { throw '缺少前端 dist，请先运行 build' }
+    Ensure-PlaywrightChromiumSync
     Start-BackendProd
     Start-WorkerProd
     Start-CaddyProd
-    Ensure-PlaywrightChromiumPostInstall
     Write-LogOk 'RiverEdge 生产环境已就绪'
     $accessIp = if ($script:SERVER_IP) { $script:SERVER_IP } else { '127.0.0.1' }
     $webUrl = Resolve-ProdWebUrl $accessIp
@@ -1456,6 +1587,7 @@ function Install-RiverEdgeBootTask {
         "UV_BIN=$uv"
         "CADDY_BIN=$caddy"
         "SERVICE_USER=$env:USERNAME"
+        "PLAYWRIGHT_BROWSERS_PATH=$(Resolve-PlaywrightBrowsersPath)"
     )
     Set-Content -Path $script:BootEnvFile -Value $bootEnv -Encoding UTF8
 
