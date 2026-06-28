@@ -31,6 +31,8 @@ export interface RouteFormModalProps {
   onClose: () => void;
   editUuid: string | null;
   onSuccess: (route: ProcessRoute) => void;
+  /** 嵌套在其它 Modal 内时抬高层级 */
+  zIndex?: number;
 }
 
 export const RouteFormModal: React.FC<RouteFormModalProps> = ({
@@ -38,6 +40,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
   onClose,
   editUuid,
   onSuccess,
+  zIndex,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -48,7 +51,9 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
   const [operationSequence, setOperationSequence] = useState<OperationItem[]>([]);
   const [pickModalOpen, setPickModalOpen] = useState(false);
   const operationPickModalZIndex =
-    token.zIndexPopupBase + MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET + MODAL_NESTED_ABOVE_PARENT_OFFSET;
+    zIndex != null
+      ? zIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET
+      : token.zIndexPopupBase + MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET + MODAL_NESTED_ABOVE_PARENT_OFFSET;
 
   const {
     customFields,
@@ -302,6 +307,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
       layout="vertical"
       grid
       className="process-route-modal"
+      zIndex={zIndex}
     >
       <style>{`
         .process-route-modal .modal-content-scroll { overflow-x: auto; }

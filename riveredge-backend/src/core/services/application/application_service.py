@@ -216,6 +216,32 @@ class ApplicationService:
         return await ApplicationService.get_application_by_code(tenant_id, code)
     
     @staticmethod
+    async def _reconcile_duplicate_application_rows(tenant_id: int) -> int:
+        """软删除同租户下同 code 的重复应用行（保留 id 最小者）。"""
+        conn = await get_db_connection()
+        try:
+            result = await conn.execute(
+                """
+                UPDATE core_applications AS dup
+                SET deleted_at = NOW(), updated_at = NOW()
+                WHERE dup.tenant_id = $1
+                  AND dup.deleted_at IS NULL
+                  AND dup.id NOT IN (
+                      SELECT MIN(id)
+                      FROM core_applications
+                      WHERE tenant_id = $1 AND deleted_at IS NULL
+                      GROUP BY code
+                  )
+                """,
+                tenant_id,
+            )
+            if result.startswith("UPDATE "):
+                return int(result.split(" ")[1])
+            return 0
+        finally:
+            await conn.close()
+
+    @staticmethod
     async def create_application(
         tenant_id: int,
         data: ApplicationCreate
@@ -269,7 +295,21 @@ class ApplicationService:
                 RETURNING *
             """
 
-            row = await conn.fetchrow(query, *values)
+            try:
+                row = await conn.fetchrow(query, *values)
+            except asyncpg.UniqueViolationError:
+                existing = await conn.fetchval(
+                    "SELECT id FROM core_applications WHERE tenant_id = $1 AND code = $2 AND deleted_at IS NULL",
+                    tenant_id,
+                    data.code,
+                )
+                if existing:
+                    row = await conn.fetchrow(
+                        "SELECT * FROM core_applications WHERE id = $1",
+                        existing,
+                    )
+                else:
+                    raise ValidationError(f"应用代码 {data.code} 已存在")
             return dict(row)
 
         finally:
@@ -1099,6 +1139,14 @@ class ApplicationService:
         plugins = ApplicationService._scan_plugin_manifests()
         logger.info(f"扫描到 {len(plugins)} 个插件清单")
 
+        removed_dupes = await ApplicationService._reconcile_duplicate_application_rows(tenant_id)
+        if removed_dupes:
+            logger.warning(
+                "组织 {} 存在重复应用行，已软删除 {} 条（保留同 code 最小 id）",
+                tenant_id,
+                removed_dupes,
+            )
+
         # 一次性按 tenant 取出所有已存在应用（code -> row），消除 N+1 启动期 DB 查询
         existing_by_code: Dict[str, Dict[str, Any]] = {}
         try:
@@ -1117,8 +1165,27 @@ class ApplicationService:
                         except Exception:
                             app_dict['menu_config'] = None
                     app_code = app_dict.get('code')
-                    if app_code:
+                    if not app_code:
+                        continue
+                    prev = existing_by_code.get(app_code)
+                    if prev is None:
                         existing_by_code[app_code] = app_dict
+                        continue
+                    keep, drop = prev, app_dict
+                    if int(app_dict.get('id') or 0) < int(prev.get('id') or 0):
+                        keep, drop = app_dict, prev
+                    existing_by_code[app_code] = keep
+                    drop_id = drop.get('id')
+                    if drop_id:
+                        await conn.execute(
+                            """
+                            UPDATE core_applications
+                            SET deleted_at = NOW(), updated_at = NOW()
+                            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+                            """,
+                            drop_id,
+                            tenant_id,
+                        )
             finally:
                 await conn.close()
         except Exception as e:

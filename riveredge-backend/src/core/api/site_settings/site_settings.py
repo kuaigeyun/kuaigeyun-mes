@@ -475,6 +475,9 @@ async def create_subtenant_from_site_settings(
         await _rollback_created_tenant(tenant.id)
         raise
 
+    from core.services.tenant.tenant_init_data_service import TenantInitDataService
+
+    await TenantInitDataService.set_tenant_data_initializing(tenant.id, True)
     schedule_initialize_tenant_data(tenant.id)
     return tenant
 

@@ -20,12 +20,14 @@ import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stacke
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
 import { FormModalTemplate } from '../../../components/layout-templates';
-import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
+import { MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
+import { UniDropdown } from '../../../components/uni-dropdown';
 import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency, ProFormUploadButton, ProFormItem } from '@ant-design/pro-components';
 import {
   formatMaterialGroupLabel,
   type Material,
+  type MaterialGroup,
   type MaterialCreate,
   type MaterialUpdate,
   type DepartmentCodeMapping,
@@ -36,11 +38,11 @@ import {
 } from '../types/material';
 import type { Customer } from '../types/supply-chain';
 import type { Supplier } from '../types/supply-chain';
-import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { customerApi, supplierApi, unwrapSupplyPagedList } from '../services/supply-chain';
 import { warehouseApi, storageLocationApi, storageAreaApi } from '../services/warehouse';
 import { processRouteApi, operationApi } from '../services/process';
 import { materialCodeMappingApi } from '../services/material';
+import { bomApi } from '../services/material';
 import type { Warehouse, StorageLocation, StorageArea } from '../types/warehouse';
 import type { ProcessRoute, Operation } from '../types/process';
 import {
@@ -61,6 +63,11 @@ import { buildImageUploadFileUrls, getFileByUuid, uploadMultipleFiles } from '..
 import { batchRuleApi, serialRuleApi } from '../services/batchSerialRules';
 import { saveSuspendedModal } from '../utils/suspendedModal';
 import { buildMaterialSourceTypeOptions } from '../utils/materialSourceType';
+import { MaterialGroupFormModal } from './MaterialGroupFormModal';
+import { RouteFormModal } from './RouteFormModal';
+import { SupplierFormModal } from './SupplierFormModal';
+import { OperationFormModal } from './OperationFormModal';
+import { DEFAULT_MATERIAL_BASE_UNIT } from '../constants/materialDefaults';
 import { QualityMasterDataHint } from '../../kuaizhizao/pages/quality-management/components/QualityMasterDataHint';
 import {
   InspectionStagesEditor,
@@ -91,7 +98,7 @@ const SYSTEM_DEFAULT_RULE_VALUE = '__SYSTEM_DEFAULT__';
 
 /** 每种物料来源类型的合法字段白名单（用于过滤混合字段） */
 const SOURCE_CONFIG_FIELDS: Record<string, string[]> = {
-  Make: ['manufacturing_mode', 'production_lead_time', 'min_production_batch', 'production_waste_rate'],
+  Make: ['manufacturing_mode', 'production_lead_time', 'min_production_batch'],
   Buy: ['purchase_price', 'purchase_lead_time', 'min_purchase_batch', 'default_supplier_id', 'default_supplier_name'],
   Outsource: ['outsource_supplier_id', 'outsource_supplier_name', 'outsource_lead_time', 'min_outsource_batch', 'outsource_operation', 'outsource_price', 'material_provided_by'],
   Phantom: [],
@@ -140,6 +147,8 @@ export interface MaterialFormProps {
   initialValues?: Partial<MaterialCreate | MaterialUpdate>;
   /** 暂存 Modal 时的返回路径，设置后点击表单内链接会先暂存表单再跳转 */
   suspendedModalReturnPath?: string;
+  /** 物料分组列表变更后回调（如快速新增分组后刷新父级列表） */
+  onMaterialGroupsChange?: () => void;
 }
 
 /**
@@ -155,10 +164,20 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   loading = false,
   initialValues,
   suspendedModalReturnPath,
+  onMaterialGroupsChange,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
   const formRef = useRef<ProFormInstance>();
+  const [localMaterialGroups, setLocalMaterialGroups] = useState<MaterialGroup[]>(materialGroups);
+  const [groupFormModalOpen, setGroupFormModalOpen] = useState(false);
+  const [routeFormModalOpen, setRouteFormModalOpen] = useState(false);
+  const [supplierFormModalOpen, setSupplierFormModalOpen] = useState(false);
+  const [operationFormModalOpen, setOperationFormModalOpen] = useState(false);
+  const [supplierQuickCreateField, setSupplierQuickCreateField] = useState<
+    'default_supplier_id' | 'outsource_supplier_id'
+  >('default_supplier_id');
   
   const {
     customFields,
@@ -175,42 +194,24 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   const [pendingVariantRows, setPendingVariantRows] = useState<PendingVariantCombination[]>([]);
 
   useEffect(() => {
+    setLocalMaterialGroups(materialGroups);
+  }, [materialGroups]);
+
+  useEffect(() => {
     if (!open) {
       setPendingVariantRows([]);
+      setGroupFormModalOpen(false);
+      setRouteFormModalOpen(false);
+      setSupplierFormModalOpen(false);
+      setOperationFormModalOpen(false);
       return;
     }
     setActiveTab('basic');
   }, [open]);
 
-  const emitAgentDebugLog = useCallback(
-    (runId: string, hypothesisId: string, location: string, message: string, data: Record<string, any>) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e3a76' },
-        body: JSON.stringify({
-          sessionId: '8e3a76',
-          runId,
-          hypothesisId,
-          location,
-          message,
-          data,
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-    },
-    []
-  );
-
   // 打开表单时同步 variantManaged 状态（编辑已有属性物料时，属性管理标签页需可用）
   useEffect(() => {
     if (open) {
-      emitAgentDebugLog('run-2', 'H6', 'MaterialForm.tsx:open-effect', 'material form opened', {
-        isEdit,
-        hasMaterial: !!material,
-        materialUuid: (material as any)?.uuid ?? null,
-      });
       const iv = initialValues as { variantManaged?: boolean; variant_managed?: boolean } | undefined;
       const vm =
         material?.variantManaged ??
@@ -220,7 +221,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         false;
       setVariantManaged(!!vm);
     }
-  }, [open, isEdit, material, material?.variantManaged, (material as any)?.variant_managed, initialValues, emitAgentDebugLog]);
+  }, [open, isEdit, material, material?.variantManaged, (material as any)?.variant_managed, initialValues]);
   
   // 客户和供应商列表
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -369,7 +370,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     const context: Record<string, any> = {};
     
     if (groupId != null && !(typeof groupId === 'string' && groupId === '')) {
-      const group = materialGroups.find(g => Number(g.id) === Number(groupId));
+      const group = localMaterialGroups.find(g => Number(g.id) === Number(groupId));
       if (group) {
         const leafCode = (group.code ?? '').toString().trim();
         context.leaf_group_code = leafCode;
@@ -409,23 +410,79 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     } catch (error) {
       console.warn(t('app.master-data.materialForm.autoGenerateCodeFailed'), error);
     }
-  }, [isEdit, materialGroups, t]);
+  }, [isEdit, localMaterialGroups, t]);
 
   /**
    * 当物料分组加载完成且已选择分组时，重新生成编号（确保 scope_fields 隔离计数生效）
    * 场景：用户在选择分组时 materialGroups 可能尚未加载，导致 context 缺少 group_code
    */
   useEffect(() => {
-    if (isEdit || !isAutoGenerateEnabled('master-data-material') || materialGroups.length === 0) return;
+    if (isEdit || !isAutoGenerateEnabled('master-data-material') || localMaterialGroups.length === 0) return;
     const groupId = formRef.current?.getFieldValue('groupId');
     if (groupId == null || groupId === '') return;
-    const group = materialGroups.find(g => Number(g.id) === Number(groupId));
+    const group = localMaterialGroups.find(g => Number(g.id) === Number(groupId));
     if (group) {
       const sourceType = formRef.current?.getFieldValue('sourceType');
       const name = formRef.current?.getFieldValue('name');
       generateCode(groupId, sourceType, name, true);
     }
-  }, [materialGroups, isEdit, generateCode]);
+  }, [localMaterialGroups, isEdit, generateCode]);
+
+  const handleMaterialGroupQuickCreateSuccess = useCallback(
+    (created: MaterialGroup) => {
+      setLocalMaterialGroups((prev) => {
+        if (prev.some((g) => g.id === created.id)) return prev;
+        return [...prev, created];
+      });
+      formRef.current?.setFieldsValue({ groupId: created.id });
+      if (!isEdit && isAutoGenerateEnabled('master-data-material')) {
+        const sourceType = formRef.current?.getFieldValue('sourceType');
+        const name = formRef.current?.getFieldValue('name');
+        void generateCode(created.id, sourceType, name, true);
+      }
+      onMaterialGroupsChange?.();
+    },
+    [generateCode, isEdit, onMaterialGroupsChange],
+  );
+
+  const handleProcessRouteQuickCreateSuccess = useCallback((created: ProcessRoute) => {
+    setProcessRoutes((prev) => {
+      if (prev.some((r) => r.uuid === created.uuid)) return prev;
+      return [...prev, created];
+    });
+    const currentDefaults = formRef.current?.getFieldValue('defaults') ?? {};
+    formRef.current?.setFieldsValue({
+      defaults: { ...currentDefaults, defaultProcessRouteUuid: created.uuid },
+      'defaults.defaultProcessRouteUuid': created.uuid,
+    });
+  }, []);
+
+  const handleSupplierQuickCreateSuccess = useCallback((created: Supplier) => {
+    setSuppliers((prev) => {
+      if (prev.some((s) => s.id === created.id)) return prev;
+      return [...prev, created];
+    });
+    const currentConfig = formRef.current?.getFieldValue('sourceConfig') ?? {};
+    const field = supplierQuickCreateField;
+    formRef.current?.setFieldsValue({
+      sourceConfig: { ...currentConfig, [field]: created.id },
+      [`sourceConfig.${field}`]: created.id,
+    });
+  }, [supplierQuickCreateField]);
+
+  const handleOperationQuickCreateSuccess = useCallback((created: Operation) => {
+    setOperations((prev) => {
+      if (prev.some((o) => o.uuid === created.uuid)) return prev;
+      return [...prev, created];
+    });
+    const uuid = created.uuid;
+    if (!uuid) return;
+    const currentConfig = formRef.current?.getFieldValue('sourceConfig') ?? {};
+    formRef.current?.setFieldsValue({
+      sourceConfig: { ...currentConfig, outsource_operation: uuid },
+      'sourceConfig.outsource_operation': uuid,
+    });
+  }, []);
 
   /**
    * 初始化数据
@@ -602,13 +659,6 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         }
         
         if (Object.keys(formDefaults).length > 0) {
-          emitAgentDebugLog('run-1', 'H5', 'MaterialForm.tsx:553', 'edit defaults prepared for setFieldsValue', {
-            materialUuid: (material as any)?.uuid,
-            materialDefaultsKeys: Object.keys(materialDefaults || {}),
-            formDefaultsKeys: Object.keys(formDefaults || {}),
-            defaultTaxRate: formDefaults?.defaultTaxRate,
-            defaultSalePrice: formDefaults?.defaultSalePrice,
-          });
           setTimeout(() => {
             const fieldsToSet: any = { defaults: formDefaults };
             // ProForm 在 name 使用 "defaults.xxx" 时，需要同步写入扁平 key 才能稳定回显
@@ -616,16 +666,6 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
               fieldsToSet[`defaults.${key}`] = formDefaults[key];
             });
             formRef.current?.setFieldsValue(fieldsToSet);
-            emitAgentDebugLog('run-4', 'H10', 'MaterialForm.tsx:560', 'edit defaults flatten setFieldsValue applied', {
-              defaultsKeysSet: Object.keys((fieldsToSet && fieldsToSet.defaults) || {}),
-              flatDefaultsKeyCount: Object.keys(fieldsToSet).filter((k) => k.startsWith('defaults.')).length,
-              flatDefaultTaxRate: fieldsToSet['defaults.defaultTaxRate'] ?? null,
-              flatDefaultSalePrice: fieldsToSet['defaults.defaultSalePrice'] ?? null,
-            });
-            emitAgentDebugLog('run-1', 'H5', 'MaterialForm.tsx:560', 'edit defaults setFieldsValue applied', {
-              defaultsKeysSet: Object.keys((fieldsToSet && fieldsToSet.defaults) || {}),
-              flatRouteSet: fieldsToSet['defaults.defaultProcessRouteUuid'] ?? null,
-            });
           }, 100);
         }
         
@@ -774,12 +814,6 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
    */
   const handleSubmit = async (values: any) => {
     try {
-      emitAgentDebugLog('run-1', 'H1', 'MaterialForm.tsx:688', 'submit started', {
-        isEdit,
-        valueKeys: Object.keys(values || {}),
-        hasDefaultsObject: !!values?.defaults,
-        hasFlatDefaultTaxRate: values?.['defaults.defaultTaxRate'] !== undefined,
-      });
       if (customerCodes.some((code) => code.code?.trim() && !(code.customerId > 0))) {
         messageApi.error(t('app.master-data.codeMapping.selectCustomer'));
         throw new Error(t('app.master-data.codeMapping.selectCustomer'));
@@ -890,13 +924,6 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         ...(values['defaults.defaultProcessRouteUuid'] !== undefined && { defaultProcessRouteUuid: values['defaults.defaultProcessRouteUuid'] }),
       };
       const processedDefaults: any = { ...existingDefaults, ...formDefaults };
-      emitAgentDebugLog('run-1', 'H2', 'MaterialForm.tsx:775', 'defaults merged', {
-        rawDefaultsKeys: Object.keys(formDefaultsRaw || {}),
-        flatDefaultsKeys: Object.keys(flatDefaultsFromValues || {}),
-        mergedDefaultsKeys: Object.keys(processedDefaults || {}),
-        defaultTaxRate: processedDefaults?.defaultTaxRate,
-        defaultSalePrice: processedDefaults?.defaultSalePrice,
-      });
       
       // 将 ID 数组转换为对象数组
       if (formDefaults.defaultSupplierIds && Array.isArray(formDefaults.defaultSupplierIds)) {
@@ -1090,12 +1117,6 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         over_report_mode: values.overReportMode || 'none',
         over_report_value: values.overReportValue ?? 0,
       };
-      emitAgentDebugLog('run-1', 'H3', 'MaterialForm.tsx:859', 'submit payload built', {
-        hasDefaultsPayload: submitData.defaults !== undefined,
-        payloadDefaultsKeys: Object.keys(submitData.defaults || {}),
-        payloadDefaultTaxRate: submitData.defaults?.defaultTaxRate,
-        payloadDefaultSalePrice: submitData.defaults?.defaultSalePrice,
-      });
       
       // 移除 undefined 值
       Object.keys(submitData).forEach(key => {
@@ -1134,10 +1155,6 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       if (Number.isFinite(recordIdForCustom) && recordIdForCustom > 0) {
         await saveCustomFieldValues(recordIdForCustom, cfValues);
       }
-      
-      emitAgentDebugLog('run-1', 'H4', 'MaterialForm.tsx:894', 'onFinish resolved', {
-        resultType: typeof result,
-      });
       
       // 如果是新建模式，需要等待物料创建完成后再保存外部系统编号映射
       // 如果是编辑模式，外部系统编号映射已经在 CodeMappingTab 中单独管理
@@ -1255,7 +1272,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         formRef={formRef}
         initialValues={(() => {
           let vals = !isEdit && !(initialValues?.baseUnit != null && initialValues?.baseUnit !== '')
-            ? { ...initialValues, baseUnit: 'PC' }
+            ? { ...initialValues, baseUnit: DEFAULT_MATERIAL_BASE_UNIT }
             : initialValues;
           const normalizedSourceTypes = normalizeSourceTypeValues(
             (vals as any)?.sourceType,
@@ -1311,13 +1328,14 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                   <BasicInfoTab
                     part={1}
                     formRef={formRef}
-                    materialGroups={materialGroups}
+                    materialGroups={localMaterialGroups}
                     isEdit={isEdit}
                     suspendedModalReturnPath={suspendedModalReturnPath}
                     customFields={customFields}
                     customFieldValues={customFieldValues}
                     variantManaged={variantManaged}
                     onVariantManagedChange={handleVariantManagedChange}
+                    onQuickAddMaterialGroup={() => setGroupFormModalOpen(true)}
                   />
 
                   <MaterialSourceTab
@@ -1332,6 +1350,16 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                     sourceTypeOptions={sourceTypeOptions}
                     suspendedModalReturnPath={suspendedModalReturnPath}
                     materialUuid={isEdit && material ? material.uuid : undefined}
+                    onQuickAddProcessRoute={() => setRouteFormModalOpen(true)}
+                    onQuickAddSupplier={() => {
+                      setSupplierQuickCreateField('default_supplier_id');
+                      setSupplierFormModalOpen(true);
+                    }}
+                    onQuickAddOutsourceSupplier={() => {
+                      setSupplierQuickCreateField('outsource_supplier_id');
+                      setSupplierFormModalOpen(true);
+                    }}
+                    onQuickAddOperation={() => setOperationFormModalOpen(true)}
                   />
                   <BasicInfoTab 
                     part={2} 
@@ -1420,6 +1448,42 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           ]}
         />
       </FormModalTemplate>
+      {groupFormModalOpen ? (
+      <MaterialGroupFormModal
+        open
+        onClose={() => setGroupFormModalOpen(false)}
+        onSuccess={handleMaterialGroupQuickCreateSuccess}
+        materialGroups={localMaterialGroups}
+        zIndex={token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET}
+      />
+      ) : null}
+      {routeFormModalOpen ? (
+      <RouteFormModal
+        open
+        onClose={() => setRouteFormModalOpen(false)}
+        editUuid={null}
+        onSuccess={handleProcessRouteQuickCreateSuccess}
+        zIndex={token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET}
+      />
+      ) : null}
+      {supplierFormModalOpen ? (
+      <SupplierFormModal
+        open
+        onClose={() => setSupplierFormModalOpen(false)}
+        editUuid={null}
+        onSuccess={handleSupplierQuickCreateSuccess}
+        zIndex={token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET}
+      />
+      ) : null}
+      {operationFormModalOpen ? (
+      <OperationFormModal
+        open
+        onClose={() => setOperationFormModalOpen(false)}
+        editUuid={null}
+        onSuccess={handleOperationQuickCreateSuccess}
+        zIndex={token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET}
+      />
+      ) : null}
     </>
   );
 };
@@ -1444,6 +1508,7 @@ interface BasicInfoTabProps {
   customFieldValues?: Record<string, any>;
   variantManaged?: boolean;
   onVariantManagedChange?: (checked: boolean) => void;
+  onQuickAddMaterialGroup?: () => void;
 }
 
 const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = () => {
@@ -1815,6 +1880,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
   customFieldValues = {},
   variantManaged,
   onVariantManagedChange,
+  onQuickAddMaterialGroup,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -1986,16 +2052,30 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
           />
         </div>
         <div className="material-form-basic-grid__cell">
-          <SafeProFormSelect
+          <ProFormItem
             name="groupId"
             label={t('app.master-data.materialForm.materialGroup')}
-            placeholder={t('app.master-data.materialForm.materialGroupPlaceholder')}
-            options={materialGroups.map(g => ({
-              label: formatMaterialGroupLabel(g),
-              value: g.id,
-            }))}
-            fieldProps={{ showSearch: true, allowClear: true, style: { width: '100%' } }}
-          />
+          >
+            <UniDropdown
+              placeholder={t('app.master-data.materialForm.materialGroupPlaceholder')}
+              options={materialGroups.map((g) => ({
+                label: formatMaterialGroupLabel(g),
+                value: g.id,
+              }))}
+              showSearch
+              allowClear
+              style={{ width: '100%' }}
+              optionFilterProp="label"
+              quickCreate={
+                onQuickAddMaterialGroup
+                  ? {
+                      label: t('app.master-data.materialForm.quickAddMaterialGroup'),
+                      onClick: () => onQuickAddMaterialGroup(),
+                    }
+                  : undefined
+              }
+            />
+          </ProFormItem>
         </div>
         <div className="material-form-basic-grid__cell">
           <DictionarySelect
@@ -3171,6 +3251,10 @@ interface MaterialSourceTabProps {
   sourceTypeOptions: Array<{ label: string; value: string }>;
   suspendedModalReturnPath?: string;
   materialUuid?: string;
+  onQuickAddProcessRoute?: () => void;
+  onQuickAddSupplier?: () => void;
+  onQuickAddOutsourceSupplier?: () => void;
+  onQuickAddOperation?: () => void;
 }
 
 const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
@@ -3185,9 +3269,14 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
   sourceTypeOptions,
   suspendedModalReturnPath,
   materialUuid,
+  onQuickAddProcessRoute,
+  onQuickAddSupplier,
+  onQuickAddOutsourceSupplier,
+  onQuickAddOperation,
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
   const [sourceTypes, setSourceTypes] = useState<string[]>(() =>
     normalizeSourceTypeValues(
@@ -3199,14 +3288,92 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
     { label: t('app.master-data.materialForm.manufacturingFabrication'), value: 'fabrication' },
     { label: t('app.master-data.materialForm.manufacturingAssembly'), value: 'assembly' },
   ], [t]);
+  const manufacturingModeHintMap = useMemo(
+    (): Record<string, string> => ({
+      fabrication: t('app.master-data.materialForm.manufacturingFabricationHint'),
+      assembly: t('app.master-data.materialForm.manufacturingAssemblyHint'),
+    }),
+    [t],
+  );
 
-  const handleGotoProcessRoutes = () => {
-    if (suspendedModalReturnPath) {
-      const values = formRef?.current?.getFieldsValue?.() ?? {};
-      saveSuspendedModal(suspendedModalReturnPath, values);
+  const materialId = material?.id;
+  const [bomVersionRows, setBomVersionRows] = useState<
+    Array<{ version: string; uuid: string; isDefault: boolean; bomCode?: string }>
+  >([]);
+  const [bomVersionsLoading, setBomVersionsLoading] = useState(false);
+  const [selectedBomVersion, setSelectedBomVersion] = useState<string | undefined>();
+
+  const loadBomVersions = useCallback(async () => {
+    if (!materialId) {
+      setBomVersionRows([]);
+      setSelectedBomVersion(undefined);
+      return;
     }
-    navigate('/apps/master-data/process/routes');
+    setBomVersionsLoading(true);
+    try {
+      const items = await bomApi.getByMaterial(materialId, undefined, false, true);
+      const byVersion = new Map<string, { version: string; uuid: string; isDefault: boolean; bomCode?: string }>();
+      for (const item of items) {
+        const version = item.version ?? '1.0';
+        const existing = byVersion.get(version);
+        if (!existing) {
+          byVersion.set(version, {
+            version,
+            uuid: String(item.uuid ?? ''),
+            isDefault: Boolean(item.isDefault),
+            bomCode: item.bomCode,
+          });
+        } else if (item.isDefault && item.uuid) {
+          existing.isDefault = true;
+          existing.uuid = String(item.uuid);
+        }
+      }
+      const rows = [...byVersion.values()].sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }));
+      setBomVersionRows(rows);
+      const defaultRow = rows.find((r) => r.isDefault) ?? rows[0];
+      setSelectedBomVersion(defaultRow?.version);
+    } catch (e: unknown) {
+      messageApi.error((e as Error).message || t('app.master-data.materialForm.fetchBomVersionsFailed'));
+      setBomVersionRows([]);
+      setSelectedBomVersion(undefined);
+    } finally {
+      setBomVersionsLoading(false);
+    }
+  }, [materialId, messageApi, t]);
+
+  useEffect(() => {
+    if (!sourceTypes.includes('Make')) {
+      setBomVersionRows([]);
+      setSelectedBomVersion(undefined);
+      return;
+    }
+    void loadBomVersions();
+  }, [loadBomVersions, sourceTypes]);
+
+  const goBomDesigner = (version?: string) => {
+    if (!materialId) return;
+    const p = new URLSearchParams();
+    p.set('materialId', String(materialId));
+    if (version) p.set('version', version);
+    navigate(`/apps/master-data/process/engineering-bom/designer?${p}`);
   };
+
+  const handleDefaultBomVersionChange = async (version: string | undefined) => {
+    if (!version || !materialId) return;
+    const row = bomVersionRows.find((r) => r.version === version);
+    if (!row?.uuid) return;
+    try {
+      await bomApi.update(row.uuid, { isDefault: true });
+      setBomVersionRows((prev) =>
+        prev.map((r) => ({ ...r, isDefault: r.version === version })),
+      );
+      setSelectedBomVersion(version);
+      messageApi.success(t('app.master-data.bom.setDefaultSuccess'));
+    } catch (e: unknown) {
+      messageApi.error((e as Error).message || t('common.operationFailed'));
+    }
+  };
+
 
   useEffect(() => {
     const nextSourceTypes = normalizeSourceTypeValues(
@@ -3236,7 +3403,6 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
         manufacturing_mode: manufacturingMode ?? newConfig.manufacturing_mode,
         production_lead_time: newConfig.production_lead_time,
         min_production_batch: newConfig.min_production_batch,
-        production_waste_rate: newConfig.production_waste_rate,
       };
     } else if (value === 'Buy') {
       newConfig = {
@@ -3297,58 +3463,105 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
           if (currentSourceType === 'Make') {
             return (
               <Row gutter={16} style={{ marginTop: 0 }}>
-                <Col span={12}>
-                  <Row gutter={16}>
-                    <Col span={12}>
+                <Col span={4}>
+                  <ProFormDependency name={['sourceConfig.manufacturing_mode']}>
+                    {({ 'sourceConfig.manufacturing_mode': mode }) => (
                       <ProFormSelect
                         name="sourceConfig.manufacturing_mode"
                         label={t('app.master-data.materialForm.manufacturingMode')}
                         placeholder={t('app.master-data.materialForm.manufacturingModePlaceholder')}
                         options={manufacturingModeOptions}
+                        extra={
+                          mode && manufacturingModeHintMap[mode as string]
+                            ? manufacturingModeHintMap[mode as string]
+                            : t('app.master-data.materialForm.manufacturingModeExtra')
+                        }
                         fieldProps={{ allowClear: true }}
                       />
-                    </Col>
-                    <Col span={12}>
-                      <ProFormSelect
-                        name="defaults.defaultProcessRouteUuid"
-                        label={
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            <span>{t('app.master-data.source.defaultProcessRoute')}</span>
-                            <Tooltip title={t('app.master-data.source.defaultProcessRouteMaterialHint')}>
-                              <QuestionCircleOutlined
-                                style={{ color: 'rgba(0,0,0,.45)', fontSize: 14, cursor: 'help' }}
-                              />
-                            </Tooltip>
-                            <Typography.Link
-                              style={{ fontSize: 12 }}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                const q = materialUuid
-                                  ? `?materialUuid=${encodeURIComponent(materialUuid)}`
-                                  : '';
-                                navigate(`/apps/master-data/process/product-process${q}`);
-                              }}
-                            >
-                              {t('app.master-data.menu.process.product-process')}
-                            </Typography.Link>
-                          </span>
-                        }
-                        placeholder={t('app.master-data.source.selectProcessRoute')}
-                        options={processRoutes.map((pr) => ({
-                          label: `${pr.code} - ${pr.name}`,
-                          value: pr.uuid,
-                        }))}
-                        fieldProps={{
-                          allowClear: true,
-                          showSearch: true,
-                          loading: processRoutesLoading,
-                          optionFilterProp: 'label',
-                        }}
-                      />
-                    </Col>
-                  </Row>
+                    )}
+                  </ProFormDependency>
                 </Col>
-                <Col span={4}>
+                <Col span={5}>
+                  <ProFormItem
+                    name="defaults.defaultProcessRouteUuid"
+                    label={
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span>{t('app.master-data.source.defaultProcessRoute')}</span>
+                        <Tooltip title={t('app.master-data.source.defaultProcessRouteMaterialHint')}>
+                          <QuestionCircleOutlined
+                            style={{ color: 'rgba(0,0,0,.45)', fontSize: 14, cursor: 'help' }}
+                          />
+                        </Tooltip>
+                      </span>
+                    }
+                  >
+                    <UniDropdown
+                      placeholder={t('app.master-data.source.selectProcessRoute')}
+                      options={processRoutes.map((pr) => ({
+                        label: `${pr.code} - ${pr.name}`,
+                        value: pr.uuid,
+                      }))}
+                      allowClear
+                      showSearch
+                      loading={processRoutesLoading}
+                      optionFilterProp="label"
+                      style={{ width: '100%' }}
+                      quickCreate={
+                        onQuickAddProcessRoute
+                          ? {
+                              label: t('app.master-data.materialForm.quickAddProcessRoute'),
+                              onClick: () => onQuickAddProcessRoute(),
+                            }
+                          : undefined
+                      }
+                    />
+                  </ProFormItem>
+                </Col>
+                <Col span={5}>
+                  <ProFormItem
+                    label={
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span>{t('app.master-data.source.defaultBomVersion')}</span>
+                        <Tooltip title={t('app.master-data.source.defaultBomVersionHint')}>
+                          <QuestionCircleOutlined
+                            style={{ color: 'rgba(0,0,0,.45)', fontSize: 14, cursor: 'help' }}
+                          />
+                        </Tooltip>
+                      </span>
+                    }
+                  >
+                    <UniDropdown
+                      placeholder={
+                        materialId
+                          ? t('app.master-data.source.selectDefaultBomVersion')
+                          : t('app.master-data.source.saveMaterialFirstForBom')
+                      }
+                      disabled={!materialId}
+                      loading={bomVersionsLoading}
+                      allowClear={false}
+                      showSearch
+                      optionFilterProp="label"
+                      style={{ width: '100%' }}
+                      value={selectedBomVersion}
+                      options={bomVersionRows.map((row) => ({
+                        value: row.version,
+                        label: row.isDefault
+                          ? `${row.version} ${t('app.kuaizhizao.demandComputation.bomVersionDefault')}`
+                          : row.version,
+                      }))}
+                      onChange={(val) => handleDefaultBomVersionChange(val as string | undefined)}
+                      quickCreate={
+                        materialId
+                          ? {
+                              label: t('app.master-data.materialForm.quickMaintainBom'),
+                              onClick: () => goBomDesigner(),
+                            }
+                          : undefined
+                      }
+                    />
+                  </ProFormItem>
+                </Col>
+                <Col span={5}>
                   <ProFormDigit
                     name="sourceConfig.production_lead_time"
                     label={t('app.master-data.source.productionLeadTime')}
@@ -3356,21 +3569,12 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                     min={0}
                   />
                 </Col>
-                <Col span={4}>
+                <Col span={5}>
                   <ProFormDigit
                     name="sourceConfig.min_production_batch"
                     label={t('app.master-data.source.minProductionBatch')}
                     placeholder={t('app.master-data.source.minBatchPlaceholder')}
                     min={0}
-                  />
-                </Col>
-                <Col span={4}>
-                  <ProFormDigit
-                    name="sourceConfig.production_waste_rate"
-                    label={t('app.master-data.source.productionWasteRate')}
-                    placeholder={t('app.master-data.source.wasteRatePlaceholder')}
-                    min={0}
-                    max={100}
                   />
                 </Col>
               </Row>
@@ -3380,19 +3584,28 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
             return (
               <Row gutter={16} style={{ marginTop: 0 }}>
                 <Col span={12}>
-                  <SafeProFormSelect
+                  <ProFormItem
                     name="sourceConfig.default_supplier_id"
                     label={t('app.master-data.source.defaultSupplier')}
-                    placeholder={t('app.master-data.source.selectDefaultSupplier')}
-                    options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
-                    fieldProps={{
-                      loading: suppliersLoading,
-                      showSearch: true,
-                      filterOption: (input: string, option: any) =>
-                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                      allowClear: true,
-                    }}
-                  />
+                  >
+                    <UniDropdown
+                      placeholder={t('app.master-data.source.selectDefaultSupplier')}
+                      options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                      loading={suppliersLoading}
+                      showSearch
+                      allowClear
+                      style={{ width: '100%' }}
+                      optionFilterProp="label"
+                      quickCreate={
+                        onQuickAddSupplier
+                          ? {
+                              label: t('app.master-data.materialForm.quickAddSupplier'),
+                              onClick: () => onQuickAddSupplier(),
+                            }
+                          : undefined
+                      }
+                    />
+                  </ProFormItem>
                 </Col>
                 <Col span={4}>
                   <ProFormDigit
@@ -3426,34 +3639,52 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
             return (
               <Row gutter={16} style={{ marginTop: 0 }}>
                 <Col span={6}>
-                  <SafeProFormSelect
+                  <ProFormItem
                     name="sourceConfig.outsource_supplier_id"
                     label={t('app.master-data.source.outsourceSupplier')}
-                    placeholder={t('app.master-data.source.selectOutsourceSupplier')}
                     rules={[{ required: true, message: t('app.master-data.source.selectOutsourceSupplier') }]}
-                    options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
-                    fieldProps={{
-                      loading: suppliersLoading,
-                      showSearch: true,
-                      filterOption: (input: string, option: any) =>
-                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                    }}
-                  />
+                  >
+                    <UniDropdown
+                      placeholder={t('app.master-data.source.selectOutsourceSupplier')}
+                      options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                      loading={suppliersLoading}
+                      showSearch
+                      style={{ width: '100%' }}
+                      optionFilterProp="label"
+                      quickCreate={
+                        onQuickAddOutsourceSupplier
+                          ? {
+                              label: t('app.master-data.materialForm.quickAddSupplier'),
+                              onClick: () => onQuickAddOutsourceSupplier(),
+                            }
+                          : undefined
+                      }
+                    />
+                  </ProFormItem>
                 </Col>
                 <Col span={6}>
-                  <SafeProFormSelect
+                  <ProFormItem
                     name="sourceConfig.outsource_operation"
                     label={t('app.master-data.source.outsourceOperation')}
-                    placeholder={t('app.master-data.source.selectOutsourceOperation')}
                     rules={[{ required: true, message: t('app.master-data.source.selectOutsourceOperation') }]}
-                    options={operations.map(op => ({ label: `${op.code} - ${op.name}`, value: op.uuid }))}
-                    fieldProps={{
-                      loading: operationsLoading,
-                      showSearch: true,
-                      filterOption: (input: string, option: any) =>
-                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                    }}
-                  />
+                  >
+                    <UniDropdown
+                      placeholder={t('app.master-data.source.selectOutsourceOperation')}
+                      options={operations.map((op) => ({ label: `${op.code} - ${op.name}`, value: op.uuid }))}
+                      loading={operationsLoading}
+                      showSearch
+                      style={{ width: '100%' }}
+                      optionFilterProp="label"
+                      quickCreate={
+                        onQuickAddOperation
+                          ? {
+                              label: t('app.master-data.materialForm.quickAddOperation'),
+                              onClick: () => onQuickAddOperation(),
+                            }
+                          : undefined
+                      }
+                    />
+                  </ProFormItem>
                 </Col>
                 <Col span={4}>
                   <ProFormDigit

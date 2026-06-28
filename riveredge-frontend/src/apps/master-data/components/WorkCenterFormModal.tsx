@@ -26,6 +26,7 @@ export interface WorkCenterFormModalProps {
   onClose: () => void;
   editUuid: string | null;
   onSuccess: (workCenter: WorkCenter) => void;
+  zIndex?: number;
 }
 
 export const WorkCenterFormModal: React.FC<WorkCenterFormModalProps> = ({
@@ -33,6 +34,7 @@ export const WorkCenterFormModal: React.FC<WorkCenterFormModalProps> = ({
   onClose,
   editUuid,
   onSuccess,
+  zIndex,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -202,6 +204,7 @@ export const WorkCenterFormModal: React.FC<WorkCenterFormModalProps> = ({
       initialValues={{ isActive: true }}
       layout="vertical"
       grid
+      zIndex={zIndex}
     >
       <SchemaFormRenderer
         schema={workCenterFormSchema}
@@ -233,7 +236,11 @@ export const WorkCenterFormModal: React.FC<WorkCenterFormModalProps> = ({
       editUuid={null}
       onClose={() => setWorkstationQuickCreateVisible(false)}
       onSuccess={handleWorkstationQuickCreateSuccess}
-      zIndex={token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET}
+      zIndex={
+        zIndex != null
+          ? zIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET
+          : token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET
+      }
     />
     </>
   );

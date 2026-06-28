@@ -60,7 +60,10 @@ export interface SchemaFormRendererProps {
   /** select 类型字段的 options，key 为字段名 */
   optionsMap?: Record<string, Array<{ value: any; label: string }>>;
   /** select 类型字段的 UniDropdown 增强配置（快速新建/高级搜索） */
-  dropdownEnhanceMap?: Record<string, { quickCreate?: QuickCreateConfig; advancedSearch?: AdvancedSearchConfig }>;
+  dropdownEnhanceMap?: Record<
+    string,
+    { quickCreate?: QuickCreateConfig; quickCreates?: QuickCreateConfig[]; advancedSearch?: AdvancedSearchConfig }
+  >;
   /** treeSelect 类型字段的 treeData，key 为字段名，格式 { title, value, key, children? } */
   treeDataMap?: Record<string, Array<{ title: string; value: string; key?: string; children?: any[] }>>;
   /** 编辑时是否允许修改编号字段（默认 false，编辑时编号禁用） */
@@ -217,6 +220,7 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
                   allowClear={field.allowClear ?? true}
                   mode={field.mode}
                   quickCreate={dropdownEnhance.quickCreate}
+                  quickCreates={dropdownEnhance.quickCreates}
                   advancedSearch={dropdownEnhance.advancedSearch}
                   {...field.fieldProps}
                 />

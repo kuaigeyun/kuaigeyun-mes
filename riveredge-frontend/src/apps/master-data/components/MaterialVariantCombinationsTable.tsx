@@ -29,6 +29,7 @@ import {
   buildVariantComboImportTemplate,
   parseVariantComboImportRows,
 } from '../utils/variantComboImport';
+import { DEFAULT_MATERIAL_BASE_UNIT } from '../constants/materialDefaults';
 
 const LazyUniImport = lazy(() =>
   import('../../../components/uni-import').then((m) => ({ default: m.UniImport })),
@@ -365,7 +366,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
         name: base?.name,
         groupId: base?.groupId ?? (base as any)?.group_id,
         specification: base?.specification,
-        baseUnit: base?.baseUnit ?? (base as any)?.base_unit ?? 'PC',
+        baseUnit: base?.baseUnit ?? (base as any)?.base_unit ?? DEFAULT_MATERIAL_BASE_UNIT,
         variantManaged: true,
         variantAttributes,
         sourceType: base?.sourceType ?? (base as any)?.source_type,
@@ -534,7 +535,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
           name: material.name,
           groupId: material.groupId ?? (material as any).group_id,
           specification: material.specification,
-          baseUnit: material.baseUnit ?? (material as any).base_unit ?? 'PC',
+          baseUnit: material.baseUnit ?? (material as any).base_unit ?? DEFAULT_MATERIAL_BASE_UNIT,
           variantManaged: true,
           variantAttributes: combo,
           sourceType: material.sourceType ?? (material as any).source_type,
@@ -629,7 +630,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
           name: base.name,
           groupId: base.groupId ?? (base as any).group_id,
           specification: base.specification,
-          baseUnit: base.baseUnit ?? (base as any).base_unit ?? 'PC',
+          baseUnit: base.baseUnit ?? (base as any).base_unit ?? DEFAULT_MATERIAL_BASE_UNIT,
           variantManaged: true,
           variantAttributes: normalized,
           sourceType: base.sourceType ?? (base as any).source_type,
@@ -920,7 +921,7 @@ export async function flushPendingVariantCombinations(
       name: master.name,
       groupId: master.groupId ?? (master as any).group_id,
       specification: master.specification,
-      baseUnit: master.baseUnit ?? (master as any).base_unit ?? 'PC',
+      baseUnit: master.baseUnit ?? (master as any).base_unit ?? DEFAULT_MATERIAL_BASE_UNIT,
       variantManaged: true,
       variantAttributes: normalizeScalarAttrs(row.variantAttributes),
       sourceType: master.sourceType ?? (master as any).source_type,

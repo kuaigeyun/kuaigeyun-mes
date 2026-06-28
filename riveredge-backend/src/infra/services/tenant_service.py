@@ -783,6 +783,27 @@ class TenantService:
         from core.services.tenant.tenant_init_data_service import TenantInitDataService
         from infra.domain.tenant_context import set_current_tenant_id
 
+        await TenantInitDataService.set_tenant_data_initializing(tenant_id, True)
+        try:
+            await self._initialize_tenant_data_body(
+                tenant_id,
+                init_data_options=init_data_options,
+                current_user_id=current_user_id,
+                industry_preset=industry_preset,
+            )
+        finally:
+            await TenantInitDataService.set_tenant_data_initializing(tenant_id, False)
+
+    async def _initialize_tenant_data_body(
+        self,
+        tenant_id: int,
+        init_data_options: Optional[List[str]] = None,
+        current_user_id: Optional[int] = None,
+        industry_preset: Optional[str] = None,
+    ) -> None:
+        from core.services.tenant.tenant_init_data_service import TenantInitDataService
+        from infra.domain.tenant_context import set_current_tenant_id
+
         # 设置组织上下文，确保初始化过程中的查询使用正确的 tenant_id
         set_current_tenant_id(tenant_id)
 

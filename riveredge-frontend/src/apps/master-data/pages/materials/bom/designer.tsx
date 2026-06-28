@@ -57,6 +57,7 @@ import {
   getViewportHeightExpr,
 } from '../../../../../components/layout-templates';
 import { MaterialForm } from '../../../components/MaterialForm';
+import { DEFAULT_MATERIAL_BASE_UNIT } from '../../../constants/materialDefaults';
 import FabricationRawMaterialWizard from '../../../components/FabricationRawMaterialWizard';
 import {
   isFabricationMaterial,
@@ -3374,7 +3375,7 @@ const BOMDesignerPage: React.FC = () => {
                 undefined,
               specification: materialToEdit.specification ?? (materialToEdit as any).specification,
               baseUnit:
-                materialToEdit.baseUnit ?? (materialToEdit as any).base_unit ?? 'PC',
+                materialToEdit.baseUnit ?? (materialToEdit as any).base_unit ?? DEFAULT_MATERIAL_BASE_UNIT,
               batchManaged:
                 materialToEdit.batchManaged ?? (materialToEdit as any).batch_managed ?? false,
               variantManaged:

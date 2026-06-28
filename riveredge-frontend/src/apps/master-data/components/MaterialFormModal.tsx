@@ -5,7 +5,7 @@
  * 供 UniMaterialSelect 等组件进行「快速新建物料」使用。
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { MaterialForm } from './MaterialForm';
@@ -35,18 +35,19 @@ export const MaterialFormModal: React.FC<MaterialFormModalProps> = ({
   const [materialGroups, setMaterialGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // 加载物料分组
+  const loadMaterialGroups = useCallback(() => {
+    materialGroupApi.list({ limit: 1000 })
+      .then((res) => setMaterialGroups(res || []))
+      .catch((err) => {
+        console.error('Failed to load material groups:', err);
+      });
+  }, []);
+
   useEffect(() => {
     if (open) {
-      materialGroupApi.list({ limit: 1000 })
-        .then(res => {
-          setMaterialGroups(res || []);
-        })
-        .catch(err => {
-          console.error('Failed to load material groups:', err);
-        });
+      loadMaterialGroups();
     }
-  }, [open]);
+  }, [open, loadMaterialGroups]);
 
   const handleFinish = async (values: any) => {
     setLoading(true);
@@ -71,6 +72,7 @@ export const MaterialFormModal: React.FC<MaterialFormModalProps> = ({
       onClose={onClose}
       onFinish={handleFinish}
       materialGroups={materialGroups}
+      onMaterialGroupsChange={loadMaterialGroups}
       loading={loading}
       initialValues={initialValues}
       isEdit={false}

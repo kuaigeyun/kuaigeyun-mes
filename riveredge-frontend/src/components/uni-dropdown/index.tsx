@@ -16,6 +16,8 @@ import { AdvancedSearchModal } from './AdvancedSearchModal';
 export interface UniDropdownProps extends Omit<SelectProps, 'dropdownRender' | 'popupRender' | 'optionRender'> {
   /** 快速新建配置，不传则不显示 */
   quickCreate?: QuickCreateConfig;
+  /** 多个快速新建入口（与 quickCreate 可同时存在，均会展示） */
+  quickCreates?: QuickCreateConfig[];
   /** 选项行快速编辑（右侧编辑图标），不传则不显示 */
   quickEdit?: QuickEditConfig;
   /** 高级搜索配置，不传则不显示 */
@@ -43,6 +45,7 @@ function mergeSelectPopupStyles(stylesProp: SelectProps['styles'] | undefined): 
 
 export const UniDropdown = forwardRef<any, UniDropdownProps>(({
   quickCreate,
+  quickCreates,
   quickEdit,
   advancedSearch,
   onChange,
@@ -139,9 +142,16 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
     [onChange]
   );
 
+  const quickCreateEntries = useMemo(() => {
+    const entries: QuickCreateConfig[] = [];
+    if (quickCreate) entries.push(quickCreate);
+    if (quickCreates?.length) entries.push(...quickCreates);
+    return entries;
+  }, [quickCreate, quickCreates]);
+
   const popupRender = useCallback(
     (menu: React.ReactElement) => {
-      const hasFooter = quickCreate || advancedSearch;
+      const hasFooter = quickCreateEntries.length > 0 || advancedSearch;
       if (!hasFooter) {
         return menu;
       }
@@ -159,28 +169,25 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
         fontSize: 12,
         color: token.colorTextSecondary,
       };
+      const runQuickCreate = (cfg: QuickCreateConfig) => {
+        innerSelectRef.current?.blur?.();
+        requestAnimationFrame(() => {
+          cfg.onClick(anchorWrapRef.current ?? undefined);
+        });
+      };
       return (
         <>
           {menu}
           <div style={footerStyle}>
-            {quickCreate && (
+            {quickCreateEntries.map((cfg, index) => (
               <div
+                key={`${cfg.label ?? 'quick-create'}-${index}`}
                 role="button"
                 tabIndex={0}
                 style={itemStyle}
-                onClick={() => {
-                  innerSelectRef.current?.blur?.();
-                  requestAnimationFrame(() => {
-                    quickCreate.onClick(anchorWrapRef.current ?? undefined);
-                  });
-                }}
+                onClick={() => runQuickCreate(cfg)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    innerSelectRef.current?.blur?.();
-                    requestAnimationFrame(() => {
-                      quickCreate.onClick(anchorWrapRef.current ?? undefined);
-                    });
-                  }
+                  if (e.key === 'Enter') runQuickCreate(cfg);
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor = token.colorFillTertiary;
@@ -192,9 +199,9 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
                 }}
               >
                 <PlusOutlined />
-                {quickCreate.label ?? '快速新建'}
+                {cfg.label ?? '快速新建'}
               </div>
-            )}
+            ))}
             {advancedSearch && (
               <div
                 role="button"
@@ -219,7 +226,7 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
         </>
       );
     },
-    [quickCreate, advancedSearch, token]
+    [quickCreateEntries, advancedSearch, token]
   );
 
   return (

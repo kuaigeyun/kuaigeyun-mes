@@ -24,7 +24,7 @@ export const operationFormSchema: FieldConfig[] = [
     colSpan: 12,
     rules: [{ required: true, messageKey: 'field.operation.nameRequired' }],
   },
-  { type: 'slot', name: '__inspectionBlock__', slotKey: 'inspectionBlock' },
+  { type: 'slot', name: '__inspectionMode__', slotKey: 'inspectionMode', colSpan: 12 },
   {
     name: 'defaultPersonnelConfigs',
     type: 'select',
@@ -34,6 +34,7 @@ export const operationFormSchema: FieldConfig[] = [
     mode: 'multiple',
     fieldProps: { allowClear: true },
   },
+  { type: 'slot', name: '__inspectionDetail__', slotKey: 'inspectionDetail', colSpan: 24 },
   {
     name: 'defaultWorkshopIds',
     type: 'select',
@@ -67,7 +68,7 @@ export const operationFormSchema: FieldConfig[] = [
     labelKey: 'field.operation.reportingType',
     placeholderKey: 'field.operation.reportingTypePlaceholder',
     required: true,
-    colSpan: 8,
+    colSpan: 12,
     rules: [{ required: true, messageKey: 'field.operation.reportingTypeRequired' }],
     extraKey: 'field.operation.reportingTypeExtra',
     extraAsTooltip: true,
@@ -80,7 +81,7 @@ export const operationFormSchema: FieldConfig[] = [
     name: 'overReportMode',
     type: 'select',
     labelKey: 'field.operation.overReportMode',
-    colSpan: 8,
+    colSpan: 12,
     options: [
       { labelKey: 'field.operation.overReportModeNone', value: 'none' },
       { labelKey: 'field.operation.overReportModeFixed', value: 'fixed' },
@@ -92,7 +93,7 @@ export const operationFormSchema: FieldConfig[] = [
     type: 'number',
     labelKey: 'field.operation.overReportValue',
     placeholderKey: 'field.operation.overReportValuePlaceholder',
-    colSpan: 8,
+    colSpan: 12,
     fieldProps: { min: 0, precision: 4, style: { width: '100%' } },
     extraKey: 'field.operation.overReportValueExtra',
     extraAsTooltip: true,

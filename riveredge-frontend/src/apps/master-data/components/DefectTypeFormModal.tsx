@@ -25,6 +25,7 @@ export interface DefectTypeFormModalProps {
   onClose: () => void;
   editUuid: string | null;
   onSuccess: (defectType: DefectType) => void;
+  zIndex?: number;
 }
 
 export const DefectTypeFormModal: React.FC<DefectTypeFormModalProps> = ({
@@ -32,6 +33,7 @@ export const DefectTypeFormModal: React.FC<DefectTypeFormModalProps> = ({
   onClose,
   editUuid,
   onSuccess,
+  zIndex,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -171,6 +173,7 @@ export const DefectTypeFormModal: React.FC<DefectTypeFormModalProps> = ({
       initialValues={{ isActive: true }}
       layout="vertical"
       grid
+      zIndex={zIndex}
     >
       <SchemaFormRenderer
         schema={defectTypeFormSchema}

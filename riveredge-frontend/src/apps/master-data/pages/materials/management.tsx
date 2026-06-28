@@ -104,8 +104,9 @@ import {
 } from '../../../../components/layout-templates/constants'
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail'
 import { MaterialForm } from '../../components/MaterialForm'
-import { normalizeStagesInput, stagesFromLegacy, materialStagesToApiPayload, InspectionStagesEditor } from '../../components/InspectionStagesEditor'
-import { QualityMasterDataHint } from '../../../kuaizhizao/pages/quality-management/components/QualityMasterDataHint'
+import { MaterialGroupFormModal } from '../../components/MaterialGroupFormModal'
+import { DEFAULT_MATERIAL_BASE_UNIT } from '../../constants/materialDefaults'
+import { normalizeStagesInput, stagesFromLegacy } from '../../components/InspectionStagesEditor'
 import { MaterialVariantSkusPanel } from '../../components/MaterialVariantSkusPanel'
 import { isVariantSkuMaterial, isVariantMasterMaterial, formatVariantAttributesLine } from '../../components/MaterialVariantCombinationsTable'
 import { variantAttributeApi } from '../../services/variant-attribute'
@@ -436,8 +437,6 @@ const MaterialsManagementPage: React.FC = () => {
   const [batchProcessRouteSubmitting, setBatchProcessRouteSubmitting] = useState(false)
   const [processRoutesForBulk, setProcessRoutesForBulk] = useState<ProcessRoute[]>([])
   const [processRoutesForBulkLoading, setProcessRoutesForBulkLoading] = useState(false)
-  const [processRoutesForGroup, setProcessRoutesForGroup] = useState<ProcessRoute[]>([])
-  const [processRoutesForGroupLoading, setProcessRoutesForGroupLoading] = useState(false)
   const [batchSourceTypeOpen, setBatchSourceTypeOpen] = useState(false)
   const [batchSourceTypeValue, setBatchSourceTypeValue] = useState<string | undefined>(undefined)
   const [batchSourceTypeSubmitting, setBatchSourceTypeSubmitting] = useState(false)
@@ -470,30 +469,12 @@ const MaterialsManagementPage: React.FC = () => {
   const [bulkRuleOptionsLoading, setBulkRuleOptionsLoading] = useState(false)
   const [batchSerialSubmitting, setBatchSerialSubmitting] = useState(false)
 
-  // 表单引用
-  const groupFormRef = useRef<ProFormInstance>()
-
   // Modal 和 Drawer 状态
   const [groupModalVisible, setGroupModalVisible] = useState(false)
   const [groupIsEdit, setGroupIsEdit] = useState(false)
   const [currentGroup, setCurrentGroup] = useState<MaterialGroup | null>(null)
   /** 新建分组时预填的父分组 ID（右键「新建子分组」） */
   const [groupParentIdPreset, setGroupParentIdPreset] = useState<number | undefined>(undefined)
-  const [groupFormLoading, setGroupFormLoading] = useState(false)
-  const [groupFormActiveTab, setGroupFormActiveTab] = useState('basic')
-
-  const {
-    customFields: groupCustomFields,
-    customFieldValues: groupCustomFieldValues,
-    loadFieldValues: loadGroupFieldValues,
-    extractFormValues: extractGroupFormValues,
-    saveCustomFieldValues: saveGroupCustomFieldValues,
-    resetFieldValues: resetGroupFieldValues,
-  } = useCustomFields({
-    tableName: 'master_data_material_groups',
-    loadWhenOpen: true,
-    open: groupModalVisible,
-  })
 
   const [materialModalVisible, setMaterialModalVisible] = useState(false)
   const [materialRestoreInitialValues, setMaterialRestoreInitialValues] = useState<Record<string, any> | null>(null)
@@ -1051,7 +1032,6 @@ const MaterialsManagementPage: React.FC = () => {
     setGroupParentIdPreset(undefined)
     setGroupIsEdit(false)
     setCurrentGroup(null)
-    setGroupFormActiveTab('basic')
     setGroupModalVisible(true)
   }, [])
 
@@ -1059,24 +1039,24 @@ const MaterialsManagementPage: React.FC = () => {
     setGroupParentIdPreset(parent.id)
     setGroupIsEdit(false)
     setCurrentGroup(null)
-    setGroupFormActiveTab('basic')
     setGroupModalVisible(true)
   }, [])
 
   const handleCloseGroupModal = useCallback(() => {
     setGroupModalVisible(false)
     setGroupParentIdPreset(undefined)
-    setGroupFormActiveTab('basic')
-    resetGroupFieldValues()
-  }, [resetGroupFieldValues])
+  }, [])
 
   const handleEditGroup = useCallback((group: MaterialGroup) => {
     setGroupParentIdPreset(undefined)
     setGroupIsEdit(true)
     setCurrentGroup(group)
-    setGroupFormActiveTab('basic')
     setGroupModalVisible(true)
   }, [])
+
+  const handleGroupFormSuccess = useCallback(() => {
+    loadMaterialGroups()
+  }, [loadMaterialGroups])
 
   const handleDeleteGroup = useCallback(
     async (group: MaterialGroup) => {
@@ -1090,66 +1070,6 @@ const MaterialsManagementPage: React.FC = () => {
     },
     [messageApi, loadMaterialGroups]
   )
-
-  const loadProcessRoutesForGroup = useCallback(() => {
-    setProcessRoutesForGroupLoading(true)
-    processRouteApi
-      .list({ limit: 1000, isActive: true })
-      .then((result) => {
-        const list = Array.isArray(result) ? result : result?.data ?? []
-        setProcessRoutesForGroup(list)
-      })
-      .catch(() => {
-        messageApi.error(t('app.master-data.materialForm.fetchProcessRoutesFailed'))
-        setProcessRoutesForGroup([])
-      })
-      .finally(() => setProcessRoutesForGroupLoading(false))
-  }, [messageApi, t])
-
-  useEffect(() => {
-    if (groupModalVisible) loadProcessRoutesForGroup()
-  }, [groupModalVisible, loadProcessRoutesForGroup])
-
-  useEffect(() => {
-    if (!groupModalVisible) return
-    if (groupIsEdit && currentGroup?.id) {
-      void loadGroupFieldValues(currentGroup.id).then((fieldFormValues) => {
-        groupFormRef.current?.setFieldsValue(fieldFormValues)
-      })
-    }
-  }, [groupModalVisible, groupIsEdit, currentGroup?.id, loadGroupFieldValues])
-
-  const handleGroupSubmit = async (values: any) => {
-    try {
-      setGroupFormLoading(true)
-      const { customData, standardValues } = extractGroupFormValues(values)
-      const payload = {
-        ...standardValues,
-        processRouteId: standardValues.processRouteId ?? null,
-        inspectionStages: materialStagesToApiPayload(
-          normalizeStagesInput(standardValues.inspectionStages),
-        ),
-      }
-
-      if (groupIsEdit && currentGroup) {
-        await materialGroupApi.update(currentGroup.uuid, payload as MaterialGroupUpdate)
-        const updated = await materialGroupApi.get(currentGroup.uuid)
-        await saveGroupCustomFieldValues(updated.id, customData)
-        messageApi.success(t('common.updateSuccess'))
-      } else {
-        const created = await materialGroupApi.create(payload as MaterialGroupCreate)
-        await saveGroupCustomFieldValues(created.id, customData)
-        messageApi.success(t('common.createSuccess'))
-      }
-
-      handleCloseGroupModal()
-      loadMaterialGroups()
-    } catch (error: any) {
-      messageApi.error(error.message || (groupIsEdit ? t('common.updateFailed') : t('common.createFailed')))
-    } finally {
-      setGroupFormLoading(false)
-    }
-  }
 
   /**
    * 物料相关操作
@@ -3511,170 +3431,15 @@ const MaterialsManagementPage: React.FC = () => {
       </Modal>
       )}
 
-      {/* 分组创建/编辑 Modal - 使用 FormModalTemplate 与其它单列 modal 行为一致 */}
-      <FormModalTemplate
-        title={
-          groupIsEdit
-            ? t('app.master-data.materials.editGroup')
-            : groupParentIdPreset != null
-              ? t('app.master-data.materials.createSubGroup')
-              : t('app.master-data.materials.createGroup')
-        }
+      <MaterialGroupFormModal
         open={groupModalVisible}
         onClose={handleCloseGroupModal}
-        onFinish={handleGroupSubmit}
+        onSuccess={handleGroupFormSuccess}
         isEdit={groupIsEdit}
-        loading={groupFormLoading}
-        formRef={groupFormRef as React.RefObject<ProFormInstance>}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        initialValues={
-          groupIsEdit && currentGroup
-            ? {
-                code: currentGroup.code,
-                alias: currentGroup.alias,
-                name: currentGroup.name,
-                parentId: currentGroup.parentId,
-                description: currentGroup.description,
-                isActive: currentGroup.isActive,
-                processRouteId:
-                  currentGroup.processRouteId ??
-                  (currentGroup as { process_route_id?: number }).process_route_id ??
-                  null,
-                inspectionStages: normalizeStagesInput(
-                  currentGroup.inspectionStages ??
-                    (currentGroup as { inspection_stages?: unknown }).inspection_stages,
-                ),
-              }
-            : {
-                isActive: true,
-                ...(groupParentIdPreset != null ? { parentId: groupParentIdPreset } : {}),
-              }
-        }
-      >
-        <Tabs
-          activeKey={groupFormActiveTab}
-          onChange={setGroupFormActiveTab}
-          destroyInactiveTabPane={false}
-          items={[
-            {
-              key: 'basic',
-              label: t('app.master-data.materialForm.basicInfo'),
-              children: (
-                <>
-                  <SafeProFormSelect
-                    name="parentId"
-                    label={t('app.master-data.materials.parentGroup')}
-                    placeholder={t('app.master-data.materials.parentGroupPlaceholder')}
-                    options={materialGroups
-                      .filter(g => !groupIsEdit || g.id !== currentGroup?.id)
-                      .map(g => ({
-                        label: formatMaterialGroupLabel(g),
-                        value: g.id,
-                      }))}
-                    fieldProps={{
-                      loading: materialGroupsLoading,
-                      showSearch: true,
-                      allowClear: true,
-                      filterOption: (input: string, option: any) =>
-                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                    }}
-                  />
-                  <ProFormText
-                    name="code"
-                    label={t('app.master-data.materials.groupCode')}
-                    placeholder={t('app.master-data.materials.groupCodePlaceholder')}
-                    extra={t('app.master-data.materials.groupCodeExtra')}
-                    rules={[
-                      { required: true, message: t('app.master-data.materials.groupCodeRequired') },
-                      { max: 50, message: t('app.master-data.materials.groupCodeMax') },
-                    ]}
-                    fieldProps={{
-                      style: { textTransform: 'uppercase' },
-                    }}
-                  />
-                  <ProFormText
-                    name="name"
-                    label={t('app.master-data.materials.groupName')}
-                    placeholder={t('app.master-data.materials.groupNamePlaceholder')}
-                    rules={[
-                      { required: true, message: t('app.master-data.materials.groupNameRequired') },
-                      { max: 200, message: t('app.master-data.materials.groupNameMax') },
-                    ]}
-                  />
-                  <ProFormText
-                    name="alias"
-                    label={t('app.master-data.materials.groupAlias')}
-                    placeholder={t('app.master-data.materials.groupAliasPlaceholder')}
-                    rules={[
-                      { max: 100, message: t('app.master-data.materials.groupAliasMax') },
-                    ]}
-                  />
-                  <CustomFieldsFormSection
-                    customFields={groupCustomFields}
-                    customFieldValues={groupCustomFieldValues}
-                    gridColumns={1}
-                  />
-                  <ProFormTextArea
-                    name="description"
-                    label={t('app.master-data.materials.description')}
-                    placeholder={t('app.master-data.materials.descriptionPlaceholder')}
-                    rows={3}
-                    fieldProps={{
-                      maxLength: 500,
-                    }}
-                  />
-                  <ProFormSwitch
-                    name="isActive"
-                    label={t('app.master-data.materials.enabledStatusLabel')}
-                    checkedChildren={t('app.master-data.materials.checkedChildren')}
-                    unCheckedChildren={t('app.master-data.materials.unCheckedChildren')}
-                  />
-                </>
-              ),
-            },
-            {
-              key: 'processQuality',
-              label: t('app.master-data.materials.groupTabProcessQuality'),
-              children: (
-                <>
-                  <SafeProFormSelect
-                    name="processRouteId"
-                    label={t('app.master-data.source.defaultProcessRoute')}
-                    placeholder={t('app.master-data.source.selectProcessRoute')}
-                    tooltip={t('app.master-data.source.defaultProcessRouteGroupHint')}
-                    options={processRoutesForGroup.map((r) => ({
-                      label: `${r.code} ${r.name}`.trim(),
-                      value: r.id,
-                    }))}
-                    fieldProps={{
-                      allowClear: true,
-                      showSearch: true,
-                      loading: processRoutesForGroupLoading,
-                      optionFilterProp: 'label',
-                    }}
-                  />
-                  <QualityMasterDataHint scope="material" />
-                  <ProFormItem
-                    name="inspectionStages"
-                    label={
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <span>{t('app.master-data.materialForm.inspectionStagesTitle')}</span>
-                        <Tooltip title={t('app.master-data.materials.groupInspectionStagesHint')}>
-                          <QuestionCircleOutlined
-                            style={{ color: 'rgba(0,0,0,.45)', fontSize: 14, cursor: 'help' }}
-                          />
-                        </Tooltip>
-                      </span>
-                    }
-                  >
-                    <InspectionStagesEditor scope="material" />
-                  </ProFormItem>
-                </>
-              ),
-            },
-          ]}
-        />
-      </FormModalTemplate>
+        group={currentGroup}
+        parentIdPreset={groupParentIdPreset}
+        materialGroups={materialGroups}
+      />
 
       {/* 物料创建/编辑 Modal - 使用新的多标签页表单组件 */}
       <MaterialForm
@@ -3688,6 +3453,7 @@ const MaterialsManagementPage: React.FC = () => {
         isEdit={materialIsEdit}
         material={currentMaterial || undefined}
         materialGroups={materialGroups}
+        onMaterialGroupsChange={loadMaterialGroups}
         loading={materialFormLoading}
         suspendedModalReturnPath="/apps/master-data/materials"
         initialValues={
@@ -3771,7 +3537,7 @@ const MaterialsManagementPage: React.FC = () => {
                 serialManaged: false,
                 variantManaged: false,
                 sourceType: undefined,
-                baseUnit: 'PC', // 默认值：件
+                baseUnit: DEFAULT_MATERIAL_BASE_UNIT,
                 inspectionMode: 'none',
                 inspectionStages: stagesFromLegacy('none'),
                 overReportMode: 'none',

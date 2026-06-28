@@ -10,6 +10,7 @@ import {
   parseImportBool,
   parseVariantAttributesImport,
 } from './parseVariantAttributesImport';
+import { DEFAULT_MATERIAL_BASE_UNIT } from '../constants/materialDefaults';
 import { resolveFactoryImportHeaderIndexMap } from '../../../utils/spreadsheetImportTemplate';
 
 export type MaterialImportRowKind = 'master' | 'sku';
@@ -179,7 +180,7 @@ export function materialToSkuCreatePayload(
   return {
     mainCode: pickMainCode(master),
     name: master.name,
-    baseUnit: master.baseUnit ?? (master as { base_unit?: string }).base_unit ?? 'PC',
+    baseUnit: master.baseUnit ?? (master as { base_unit?: string }).base_unit ?? DEFAULT_MATERIAL_BASE_UNIT,
     groupId: master.groupId ?? (master as { group_id?: number }).group_id,
     specification: master.specification,
     sourceType: master.sourceType ?? (master as { source_type?: string }).source_type,

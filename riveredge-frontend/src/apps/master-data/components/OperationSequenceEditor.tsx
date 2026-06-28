@@ -3,7 +3,7 @@
  * 支持拖拽排序、添加工序、替换工序、删除工序
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -32,6 +32,7 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities';
 import { operationApi } from '../services/process';
 import type { Operation } from '../types/process';
+import { OperationFormModal } from './OperationFormModal';
 import {
   MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET,
   MODAL_NESTED_ABOVE_PARENT_OFFSET,
@@ -112,6 +113,8 @@ type OperationPickPanelProps = {
   singleValue?: string;
   onSingleChange?: (uuid: string | undefined) => void;
   searchPlaceholder: string;
+  onQuickAdd?: () => void;
+  quickAddLabel?: string;
 };
 
 export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
@@ -123,6 +126,8 @@ export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
   singleValue,
   onSingleChange,
   searchPlaceholder,
+  onQuickAdd,
+  quickAddLabel,
 }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
@@ -164,8 +169,15 @@ export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
         placeholder={searchPlaceholder}
         value={keyword}
         onChange={(e) => setKeyword(e.target.value)}
-        style={{ marginBottom: 8 }}
+        style={{ marginBottom: onQuickAdd ? 4 : 8 }}
       />
+      {onQuickAdd ? (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <Button type="link" size="small" icon={<PlusOutlined />} onClick={onQuickAdd}>
+            {quickAddLabel ?? t('app.master-data.operationSequence.quickAddOperation')}
+          </Button>
+        </div>
+      ) : null}
       {mode === 'multiple' ? (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -317,6 +329,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [selectedOperationUuids, setSelectedOperationUuids] = useState<string[]>([]);
   const [replaceModalVisible, setReplaceModalVisible] = useState(false);
+  const [operationFormModalOpen, setOperationFormModalOpen] = useState(false);
   const [replacingOperationUuid, setReplacingOperationUuid] = useState<string | null>(null);
   const [replacementOperationUuid, setReplacementOperationUuid] = useState<string | undefined>(undefined);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -328,27 +341,46 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   );
 
   useEffect(() => {
-    const loadOperations = async () => {
-      try {
-        setLoading(true);
-        const result = await operationApi.list({ isActive: true, limit: 1000 });
-        setAllOperations(Array.isArray(result) ? result : result?.data ?? []);
-      } catch (error: any) {
-        message.error(error.message || t('app.master-data.operationSequence.loadListFailed'));
-      } finally {
-        setLoading(false);
+    onPickModalOpenChange?.(addModalVisible || replaceModalVisible || operationFormModalOpen);
+  }, [addModalVisible, replaceModalVisible, operationFormModalOpen, onPickModalOpenChange]);
+
+  const loadAllOperations = useCallback(async () => {
+    try {
+      setLoading(true);
+      const result = await operationApi.list({ isActive: true, limit: 1000 });
+      setAllOperations(Array.isArray(result) ? result : result?.data ?? []);
+    } catch (error: any) {
+      message.error(error.message || t('app.master-data.operationSequence.loadListFailed'));
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    void loadAllOperations();
+  }, [loadAllOperations]);
+
+  const handleOperationQuickCreateSuccess = useCallback(
+    (created: Operation) => {
+      setAllOperations((prev) => {
+        if (prev.some((op) => op.uuid === created.uuid)) return prev;
+        return [...prev, created];
+      });
+      if (addModalVisible && !operations.some((op) => op.uuid === created.uuid)) {
+        setSelectedOperationUuids((prev) => [...new Set([...prev, created.uuid])]);
       }
-    };
-    loadOperations();
-  }, []);
+      if (replaceModalVisible) {
+        setReplacementOperationUuid(created.uuid);
+      }
+    },
+    [addModalVisible, replaceModalVisible, operations],
+  );
+
+  const operationFormModalZIndex = pickModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
 
   useEffect(() => {
     setOperations(value);
   }, [value]);
-
-  useEffect(() => {
-    onPickModalOpenChange?.(addModalVisible || replaceModalVisible);
-  }, [addModalVisible, replaceModalVisible, onPickModalOpenChange]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -668,9 +700,10 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           multipleValue={selectedOperationUuids}
           onMultipleChange={setSelectedOperationUuids}
           searchPlaceholder={t('app.master-data.operationSequence.pickSearchPlaceholder')}
+          onQuickAdd={() => setOperationFormModalOpen(true)}
         />
         {availableOperations.length === 0 && !loading && (
-          <Typography.Text type="danger" style={{ fontSize: 12, display: 'block', marginTop: 12 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
             {t('app.master-data.operationSequence.createOperationFirst')}
           </Typography.Text>
         )}
@@ -719,13 +752,22 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           singleValue={replacementOperationUuid}
           onSingleChange={setReplacementOperationUuid}
           searchPlaceholder={t('app.master-data.operationSequence.pickSearchPlaceholder')}
+          onQuickAdd={() => setOperationFormModalOpen(true)}
         />
         {getAvailableForReplace(replacingOperationUuid).length === 0 && !loading && (
-          <Typography.Text type="danger" style={{ fontSize: 12, display: 'block', marginTop: 12 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
             {t('app.master-data.operationSequence.createOperationFirst')}
           </Typography.Text>
         )}
       </Modal>
+
+      <OperationFormModal
+        open={operationFormModalOpen}
+        onClose={() => setOperationFormModalOpen(false)}
+        editUuid={null}
+        onSuccess={handleOperationQuickCreateSuccess}
+        zIndex={operationFormModalZIndex}
+      />
     </>
   );
 

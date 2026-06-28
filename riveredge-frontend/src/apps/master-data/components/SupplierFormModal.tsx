@@ -36,6 +36,7 @@ export interface SupplierFormModalProps {
   editUuid: string | null;
   /** 保存成功回调 */
   onSuccess: (supplier: Supplier) => void;
+  zIndex?: number;
 }
 
 export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
@@ -43,6 +44,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
   onClose,
   editUuid,
   onSuccess,
+  zIndex,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -248,6 +250,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
         initialValues={{ isActive: true }}
         layout="vertical"
         grid
+        zIndex={zIndex}
       >
         <Col span={24}>
           <Tabs

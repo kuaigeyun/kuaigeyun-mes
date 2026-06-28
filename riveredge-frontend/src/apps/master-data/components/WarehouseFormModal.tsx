@@ -27,6 +27,7 @@ export interface WarehouseFormModalProps {
   onClose: () => void;
   editUuid: string | null;
   onSuccess: (warehouse: Warehouse) => void;
+  zIndex?: number;
 }
 
 export const WarehouseFormModal: React.FC<WarehouseFormModalProps> = ({
@@ -34,6 +35,7 @@ export const WarehouseFormModal: React.FC<WarehouseFormModalProps> = ({
   onClose,
   editUuid,
   onSuccess,
+  zIndex,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -196,6 +198,7 @@ export const WarehouseFormModal: React.FC<WarehouseFormModalProps> = ({
       initialValues={{ isActive: true, warehouseType: 'normal' }}
       layout="vertical"
       grid
+      zIndex={zIndex}
     >
       <SchemaFormRenderer
         schema={warehouseFormSchemaBasic}

@@ -25,6 +25,7 @@ export interface PlantFormModalProps {
   onClose: () => void;
   editUuid: string | null;
   onSuccess: (plant: Plant) => void;
+  zIndex?: number;
 }
 
 export const PlantFormModal: React.FC<PlantFormModalProps> = ({
@@ -32,6 +33,7 @@ export const PlantFormModal: React.FC<PlantFormModalProps> = ({
   onClose,
   editUuid,
   onSuccess,
+  zIndex,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -173,6 +175,7 @@ export const PlantFormModal: React.FC<PlantFormModalProps> = ({
       initialValues={{ isActive: true }}
       layout="vertical"
       grid
+      zIndex={zIndex}
     >
       <SchemaFormRenderer
         schema={plantFormSchema}

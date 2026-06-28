@@ -5,11 +5,11 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { ProFormInstance, ProFormSelect, ProFormDependency } from '@ant-design/pro-components';
-import { App, Button, Space } from 'antd';
+import { ProFormInstance, ProFormSelect, ProFormDependency, ProFormField } from '@ant-design/pro-components';
+import { App } from 'antd';
+import { UniDropdown } from '../../../components/uni-dropdown';
 import { FormModalTemplate } from '../../../components/layout-templates';
-import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
+import { MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
 import { operationApi, defectTypeApi } from '../services/process';
 import {
   workshopApi,
@@ -27,9 +27,21 @@ import { testGenerateCode, generateCode } from '../../../services/codeRule';
 import { getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import type { Operation, OperationCreate, OperationUpdate, DefectTypeMinimal, DefectType } from '../types/process';
+import type { Workshop, WorkCenter, Workstation } from '../types/factory';
 import { SchemaFormRenderer } from '../../../components/schema-form';
 import { operationFormSchema } from '../schemas/operation';
 import { DefectTypeFormModal } from './DefectTypeFormModal';
+import { WorkshopFormModal } from './WorkshopFormModal';
+import { WorkCenterFormModal } from './WorkCenterFormModal';
+import { WorkstationFormModal } from './WorkstationFormModal';
+import {
+  InspectionPlanFormModal,
+  type InspectionPlanRecord,
+} from '../../kuaizhizao/components/InspectionPlanFormModal';
+import {
+  EquipmentFormModal,
+  type EquipmentRecord,
+} from '../../kuaizhizao/components/EquipmentFormModal';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
 
@@ -59,6 +71,8 @@ export interface OperationFormModalProps {
   onClose: () => void;
   editUuid: string | null;
   onSuccess: (operation: Operation) => void;
+  /** 嵌套在其它 Modal 内时抬高层级 */
+  zIndex?: number;
 }
 
 export const OperationFormModal: React.FC<OperationFormModalProps> = ({
@@ -66,9 +80,9 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
   onClose,
   editUuid,
   onSuccess,
+  zIndex,
 }) => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<ProFormInstance>();
   const [formLoading, setFormLoading] = useState(false);
@@ -81,6 +95,11 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
   const [inspectionPlanOptions, setInspectionPlanOptions] = useState<{ label: string; value: number }[]>([]);
   const [currentOperationId, setCurrentOperationId] = useState<number | null>(null);
   const [defectQuickAddOpen, setDefectQuickAddOpen] = useState(false);
+  const [inspectionPlanQuickAddOpen, setInspectionPlanQuickAddOpen] = useState(false);
+  const [workshopQuickAddOpen, setWorkshopQuickAddOpen] = useState(false);
+  const [workCenterQuickAddOpen, setWorkCenterQuickAddOpen] = useState(false);
+  const [workstationQuickAddOpen, setWorkstationQuickAddOpen] = useState(false);
+  const [equipmentQuickAddOpen, setEquipmentQuickAddOpen] = useState(false);
 
   const {
     customFields,
@@ -461,6 +480,11 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
 
   const handleClose = () => {
     setDefectQuickAddOpen(false);
+    setInspectionPlanQuickAddOpen(false);
+    setWorkshopQuickAddOpen(false);
+    setWorkCenterQuickAddOpen(false);
+    setWorkstationQuickAddOpen(false);
+    setEquipmentQuickAddOpen(false);
     onClose();
     formRef.current?.resetFields();
     setPreviewCode(null);
@@ -469,17 +493,56 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
   };
 
   const optionsMap: Record<string, Array<{ value: any; label: string }>> = {
-    defectTypeUuids: defectTypeOptions,
     defaultPersonnelConfigs: personnelOptions,
     defaultWorkshopIds: workshopOptions,
     defaultResourceConfigs: resourceOptions,
     defaultEquipmentIds: equipmentOptions,
-    defaultInspectionPlanId: inspectionPlanOptions,
   };
 
-  const handleGotoInspectionPlans = () => {
-    const opId = currentOperationId;
-    navigate(`/apps/kuaizhizao/quality-management/inspection-plans${opId ? `?operationId=${opId}` : ''}`);
+  const nestedModalZIndex = zIndex != null ? zIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET : undefined;
+
+  const dropdownEnhanceMap = useMemo(
+    () => ({
+      defaultWorkshopIds: {
+        quickCreate: {
+          label: t('field.operation.quickAddWorkshop'),
+          onClick: () => setWorkshopQuickAddOpen(true),
+        },
+      },
+      defaultResourceConfigs: {
+        quickCreates: [
+          {
+            label: t('field.operation.quickAddWorkCenter'),
+            onClick: () => setWorkCenterQuickAddOpen(true),
+          },
+          {
+            label: t('field.operation.quickAddWorkstation'),
+            onClick: () => setWorkstationQuickAddOpen(true),
+          },
+        ],
+      },
+      defaultEquipmentIds: {
+        quickCreate: {
+          label: t('field.operation.quickAddEquipment'),
+          onClick: () => setEquipmentQuickAddOpen(true),
+        },
+      },
+    }),
+    [t]
+  );
+
+  /** 嵌套新建质检方案成功后刷新下拉选项并选中新建项 */
+  const handleInspectionPlanQuickCreated = async (created: InspectionPlanRecord) => {
+    const id = created?.id != null ? Number(created.id) : NaN;
+    const label = `${created.plan_code ?? ''} ${created.plan_name ?? ''}`.trim();
+    await loadFormOptions(
+      currentOperationId ?? undefined,
+      undefined,
+      Number.isFinite(id) && id > 0 ? { id, label } : undefined
+    );
+    if (Number.isFinite(id) && id > 0) {
+      formRef.current?.setFieldsValue({ defaultInspectionPlanId: id });
+    }
   };
 
   /** 嵌套新建不良品类型成功后刷新下拉选项并勾选新项目 */
@@ -491,6 +554,44 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
     if (newUuid) {
       const next = [...new Set([...selected.map((u) => String(u).trim()).filter(Boolean), newUuid])];
       formRef.current?.setFieldsValue({ defectTypeUuids: next });
+    }
+  };
+
+  const handleWorkshopQuickCreated = async (created: Workshop) => {
+    await loadFormOptions(currentOperationId ?? undefined);
+    const id = created?.id;
+    if (id != null) {
+      const selected = (formRef.current?.getFieldValue('defaultWorkshopIds') as number[] | undefined) ?? [];
+      formRef.current?.setFieldsValue({ defaultWorkshopIds: [...new Set([...selected, id])] });
+    }
+  };
+
+  const handleWorkCenterQuickCreated = async (created: WorkCenter) => {
+    await loadFormOptions(currentOperationId ?? undefined);
+    const id = created?.id;
+    if (id != null) {
+      const selected = (formRef.current?.getFieldValue('defaultResourceConfigs') as string[] | undefined) ?? [];
+      const val = `WC_${id}`;
+      formRef.current?.setFieldsValue({ defaultResourceConfigs: [...new Set([...selected, val])] });
+    }
+  };
+
+  const handleWorkstationQuickCreated = async (created: Workstation) => {
+    await loadFormOptions(currentOperationId ?? undefined);
+    const id = created?.id;
+    if (id != null) {
+      const selected = (formRef.current?.getFieldValue('defaultResourceConfigs') as string[] | undefined) ?? [];
+      const val = `S_${id}`;
+      formRef.current?.setFieldsValue({ defaultResourceConfigs: [...new Set([...selected, val])] });
+    }
+  };
+
+  const handleEquipmentQuickCreated = async (created: EquipmentRecord) => {
+    await loadFormOptions(currentOperationId ?? undefined);
+    const id = created?.id;
+    if (id != null) {
+      const selected = (formRef.current?.getFieldValue('defaultEquipmentIds') as number[] | undefined) ?? [];
+      formRef.current?.setFieldsValue({ defaultEquipmentIds: [...new Set([...selected, id])] });
     }
   };
 
@@ -516,6 +617,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
       initialValues={isEdit ? editFormInitialValues : formInitialValues}
       layout="vertical"
       grid
+      zIndex={zIndex}
     >
       <SchemaFormRenderer
         schema={operationFormSchema}
@@ -523,68 +625,75 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           customFields: (
             <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} gridColumns={2} />
           ),
-          inspectionBlock: (
+          inspectionMode: (
             <>
               <QualityMasterDataHint scope="operation" />
               <ProFormSelect
                 name="inspectionMode"
                 label={t('field.operation.inspectionMode')}
                 placeholder={t('field.operation.inspectionModePlaceholder')}
-                colProps={{ span: 12 }}
                 options={[
                   { label: t('field.operation.inspectionModeNone'), value: 'none' },
                   { label: t('field.operation.inspectionModeSimple'), value: 'simple' },
                   { label: t('field.operation.inspectionModePlan'), value: 'plan' },
                 ]}
               />
-              <ProFormDependency name={['inspectionMode']}>
-                {({ inspectionMode }) => {
-                  const mode = (inspectionMode ?? 'simple') as string;
-                  return (
-                    <>
-                      {mode === 'plan' && (
-                        <ProFormSelect
-                          name="defaultInspectionPlanId"
-                          label={
-                            <Space size="small">
-                              <span>{t('field.operation.defaultInspectionPlan')}</span>
-                              <Button type="link" size="small" onClick={handleGotoInspectionPlans}>
-                                {t('field.operation.gotoInspectionPlans')}
-                              </Button>
-                            </Space>
-                          }
-                          placeholder={t('field.operation.defaultInspectionPlanPlaceholder')}
-                          colProps={{ span: 24 }}
-                          options={inspectionPlanOptions}
-                          fieldProps={{ allowClear: true }}
-                          formItemProps={{ preserve: true }}
-                        />
-                      )}
-                      {mode === 'simple' && (
-                        <ProFormSelect
-                          name="defectTypeUuids"
-                          label={
-                            <Space size="small">
-                              <span>{t('field.operation.defectTypeUuids')}</span>
-                              <Button type="link" size="small" onClick={() => setDefectQuickAddOpen(true)}>
-                                {t('field.operation.quickAddDefectType')}
-                              </Button>
-                            </Space>
-                          }
-                          placeholder={t('field.operation.defectTypeUuidsPlaceholder')}
-                          colProps={{ span: 24 }}
-                          mode="multiple"
-                          options={defectTypeOptions}
-                          fieldProps={{ allowClear: true }}
-                          extra={t('field.operation.defectTypeUuidsSimpleHint')}
-                          formItemProps={{ preserve: true }}
-                        />
-                      )}
-                    </>
-                  );
-                }}
-              </ProFormDependency>
             </>
+          ),
+          inspectionDetail: (
+            <ProFormDependency name={['inspectionMode']}>
+              {({ inspectionMode }) => {
+                const mode = (inspectionMode ?? 'simple') as string;
+                return (
+                  <>
+                    {mode === 'plan' && (
+                      <ProFormField
+                        name="defaultInspectionPlanId"
+                        label={t('field.operation.defaultInspectionPlan')}
+                        colProps={{ span: 24 }}
+                        formItemProps={{ preserve: true }}
+                        renderFormItem={(p: any) => (
+                          <UniDropdown
+                            {...p.fieldProps}
+                            placeholder={t('field.operation.defaultInspectionPlanPlaceholder')}
+                            options={inspectionPlanOptions}
+                            allowClear
+                            style={{ width: '100%' }}
+                            quickCreate={{
+                              label: t('field.operation.quickAddInspectionPlan'),
+                              onClick: () => setInspectionPlanQuickAddOpen(true),
+                            }}
+                          />
+                        )}
+                      />
+                    )}
+                    {mode === 'simple' && (
+                      <ProFormField
+                        name="defectTypeUuids"
+                        label={t('field.operation.defectTypeUuids')}
+                        colProps={{ span: 24 }}
+                        extra={t('field.operation.defectTypeUuidsSimpleHint')}
+                        formItemProps={{ preserve: true }}
+                        renderFormItem={(p: any) => (
+                          <UniDropdown
+                            {...p.fieldProps}
+                            mode="multiple"
+                            placeholder={t('field.operation.defectTypeUuidsPlaceholder')}
+                            options={defectTypeOptions}
+                            allowClear
+                            style={{ width: '100%' }}
+                            quickCreate={{
+                              label: t('field.operation.quickAddDefectType'),
+                              onClick: () => setDefectQuickAddOpen(true),
+                            }}
+                          />
+                        )}
+                      />
+                    )}
+                  </>
+                );
+              }}
+            </ProFormDependency>
           ),
         }}
         codeField="code"
@@ -593,15 +702,69 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
         isEdit={isEdit}
         allowEditCodeWhenEdit={true}
         optionsMap={optionsMap}
+        dropdownEnhanceMap={dropdownEnhanceMap}
       />
     </FormModalTemplate>
 
+    {defectQuickAddOpen ? (
     <DefectTypeFormModal
-      open={defectQuickAddOpen}
+      open
       onClose={() => setDefectQuickAddOpen(false)}
       editUuid={null}
       onSuccess={handleDefectTypeQuickCreated}
+      zIndex={nestedModalZIndex}
     />
+    ) : null}
+
+    {inspectionPlanQuickAddOpen ? (
+    <InspectionPlanFormModal
+      open
+      onClose={() => setInspectionPlanQuickAddOpen(false)}
+      editId={null}
+      operationId={currentOperationId}
+      onSuccess={handleInspectionPlanQuickCreated}
+      zIndex={nestedModalZIndex}
+    />
+    ) : null}
+
+    {workshopQuickAddOpen ? (
+    <WorkshopFormModal
+      open
+      onClose={() => setWorkshopQuickAddOpen(false)}
+      editUuid={null}
+      onSuccess={handleWorkshopQuickCreated}
+      zIndex={nestedModalZIndex}
+    />
+    ) : null}
+
+    {workCenterQuickAddOpen ? (
+    <WorkCenterFormModal
+      open
+      onClose={() => setWorkCenterQuickAddOpen(false)}
+      editUuid={null}
+      onSuccess={handleWorkCenterQuickCreated}
+      zIndex={nestedModalZIndex}
+    />
+    ) : null}
+
+    {workstationQuickAddOpen ? (
+    <WorkstationFormModal
+      open
+      onClose={() => setWorkstationQuickAddOpen(false)}
+      editUuid={null}
+      onSuccess={handleWorkstationQuickCreated}
+      zIndex={nestedModalZIndex}
+    />
+    ) : null}
+
+    {equipmentQuickAddOpen ? (
+    <EquipmentFormModal
+      open
+      onClose={() => setEquipmentQuickAddOpen(false)}
+      onSuccess={handleEquipmentQuickCreated}
+      zIndex={nestedModalZIndex}
+    />
+    ) : null}
     </>
   );
 };

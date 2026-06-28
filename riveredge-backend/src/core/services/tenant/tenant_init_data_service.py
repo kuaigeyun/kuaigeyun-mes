@@ -361,14 +361,30 @@ class TenantInitDataService:
         return [cls.BOOTSTRAP_APPLICATION_STEP, *cls.INIT_ITEMS_REQUIRED]
 
     @classmethod
+    async def set_tenant_data_initializing(cls, tenant_id: int, initializing: bool) -> None:
+        """标记组织后台数据初始化进行中，避免与首次登录引导并发重复扫描应用。"""
+        from infra.models.tenant import Tenant
+
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            return
+        settings = dict(tenant.settings or {})
+        if initializing:
+            settings["tenant_data_initializing"] = True
+        else:
+            settings.pop("tenant_data_initializing", None)
+        await Tenant.filter(id=tenant_id).update(settings=settings)
+
+    @classmethod
     async def get_bootstrap_status(cls, tenant_id: int) -> Dict[str, Any]:
         from infra.models.tenant import Tenant
 
         tenant = await Tenant.get_or_none(id=tenant_id)
         settings = (tenant.settings or {}) if tenant else {}
         completed = bool(settings.get("bootstrap_completed") or settings.get("init_completed"))
+        initializing = bool(settings.get("tenant_data_initializing"))
         return {
-            "pending": not completed,
+            "pending": not completed and not initializing,
             "bootstrap_completed": completed,
             "steps": cls.get_bootstrap_steps(),
         }
