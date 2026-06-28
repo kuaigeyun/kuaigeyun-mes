@@ -196,28 +196,36 @@ class DemandReplanImpactService:
             ).values_list("id", flat=True)
             computation_ids.update(int(i) for i in extra_computation_ids)
 
-            plan_rows = await ProductionPlan.filter(
-                tenant_id=tenant_id,
-                demand_id__in=list(demand_ids),
-                deleted_at__isnull=True,
-            ).values_list("id", "plan_code")
-            for pid, pcode in plan_rows:
-                plan_ids.add(int(pid))
-                records.append(
-                    {
-                        "impact_type": "plan",
-                        "impact_id": int(pid),
-                        "impact_code": pcode,
-                        "impact_scope": "transitive",
-                        "impact_reason": "上游变更将影响计划可执行性，建议重算",
-                        "impact_payload": {"demand_ids": list(demand_ids)},
-                        "risk_level": "medium" if risk_level != "high" else "high",
-                        "needs_approval": needs_approval,
-                        "frozen_horizon_hit": frozen_hit,
-                    }
-                )
-
         if computation_ids:
+            plan_source_types = ("DemandComputation", "demand_computation", "Demand")
+            for cid in computation_ids:
+                plans = await ProductionPlan.filter(
+                    tenant_id=tenant_id,
+                    source_id=cid,
+                    deleted_at__isnull=True,
+                ).all()
+                for p in plans:
+                    src_type = (getattr(p, "source_type", None) or "").strip()
+                    if src_type not in plan_source_types:
+                        continue
+                    pid = int(p.id)
+                    if pid in plan_ids:
+                        continue
+                    plan_ids.add(pid)
+                    records.append(
+                        {
+                            "impact_type": "plan",
+                            "impact_id": pid,
+                            "impact_code": p.plan_code,
+                            "impact_scope": "transitive",
+                            "impact_reason": "上游变更将影响计划可执行性，建议重算",
+                            "impact_payload": {"demand_ids": list(demand_ids), "computation_id": cid},
+                            "risk_level": "medium" if risk_level != "high" else "high",
+                            "needs_approval": needs_approval,
+                            "frozen_horizon_hit": frozen_hit,
+                        }
+                    )
+
             items = await DemandComputationItem.filter(
                 tenant_id=tenant_id,
                 computation_id__in=list(computation_ids),

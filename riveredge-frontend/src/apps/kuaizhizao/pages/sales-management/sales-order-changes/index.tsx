@@ -77,6 +77,16 @@ type PullSalesOrderCandidate = {
 const isPullSalesOrderSelectable = (record: PullSalesOrderCandidate): boolean =>
   isSourceOrderEligibleForChange(record.status, record.review_status);
 
+const isDraftChangeStatus = (status?: string): boolean => {
+  const normalized = String(status ?? '').trim();
+  return normalized === 'DRAFT' || normalized === '草稿';
+};
+
+const isAppliedChangeStatus = (status?: string): boolean => {
+  const normalized = String(status ?? '').trim();
+  return normalized === 'APPLIED' || normalized === '已生效';
+};
+
 const SalesOrderChangesPage: React.FC = () => {
   const { t } = useTranslation();
   const { message, modal } = App.useApp();
@@ -160,9 +170,11 @@ const SalesOrderChangesPage: React.FC = () => {
         notes: item.notes,
       })),
     };
+    let changeId: number;
+    let updateRes: SalesOrderChange;
     if (editingId) {
-      await updateSalesOrderChange(editingId, payload);
-      message.success(t('common.updateSuccess'));
+      updateRes = await updateSalesOrderChange(editingId, payload);
+      changeId = editingId;
     } else {
       if (!creatingSourceOrderId) {
         message.error(t('app.kuaizhizao.salesOrderChange.selectSalesOrder'));
@@ -172,8 +184,29 @@ const SalesOrderChangesPage: React.FC = () => {
         creatingSourceOrderId,
         values.change_reason || t('app.kuaizhizao.salesOrderChange.defaultReason'),
       );
-      await updateSalesOrderChange(created.id!, payload);
-      message.success(t('app.kuaizhizao.salesOrderChange.created', { code: created.change_code }));
+      updateRes = await updateSalesOrderChange(created.id!, payload);
+      changeId = created.id!;
+    }
+
+    if (isDraftChangeStatus(updateRes.status)) {
+      try {
+        const submitRes = await submitSalesOrderChange(changeId);
+        if (isAppliedChangeStatus(submitRes.status)) {
+          message.success(t('app.kuaizhizao.salesOrderChange.savedAndApplied'));
+        } else {
+          message.success(t('app.kuaizhizao.salesOrderChange.submitSuccess'));
+        }
+      } catch (submitError: any) {
+        message.error(
+          t('app.kuaizhizao.salesOrder.saveSuccessSubmitFailed', {
+            message: submitError?.message ?? t('app.kuaizhizao.salesOrder.unknownError'),
+          }),
+        );
+      }
+    } else if (editingId) {
+      message.success(t('common.updateSuccess'));
+    } else {
+      message.success(t('app.kuaizhizao.salesOrderChange.created', { code: updateRes.change_code }));
     }
     setEditOpen(false);
     setPendingEditFormValues(null);
@@ -670,10 +703,10 @@ const SalesOrderChangesPage: React.FC = () => {
         form={editForm}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       >
-        <ProFormTextArea name="change_reason" label={t('app.kuaizhizao.salesOrderChange.colChangeReason')} rules={[{ required: true }]} />
-        <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesOrderChange.notes')} />
-        <DocumentAttachmentsField category="sales_order_change_attachments" />
         <OrderChangeItemsTable items={editItems ?? []} editable onChange={setEditItems} />
+        <ProFormTextArea name="change_reason" label={t('app.kuaizhizao.salesOrderChange.colChangeReason')} rules={[{ required: true }]} />
+        <DocumentAttachmentsField category="sales_order_change_attachments" />
+        <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesOrderChange.notes')} />
       </FormModalTemplate>
 
       <DetailDrawerTemplate

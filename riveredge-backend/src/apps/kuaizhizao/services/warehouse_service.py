@@ -6092,11 +6092,12 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 from apps.kuaizhizao.services.inventory_service import InventoryService
                 # 重新加载明细
                 reload_items = await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
+                header = await SalesReturn.get(tenant_id=tenant_id, id=return_id)
                 for item in reload_items:
                     qty = item.return_quantity or Decimal(0)
                     if qty <= 0:
                         continue
-                    wh_id = item.warehouse_id if item.warehouse_id else return_obj.warehouse_id
+                    wh_id = header.warehouse_id
                     await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,

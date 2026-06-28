@@ -127,6 +127,35 @@ class DemandReplanningOrchestratorService:
         else:
             target_ids = [int(i) for i in (scope.get("computation_ids") or [])]
 
+        if not target_ids:
+            err_msg = "未找到可重算的需求计算，请确认上游单据已下推需求计算"
+            await DemandReplanTask.filter(tenant_id=tenant_id, id=task_id).update(
+                status="failed",
+                finished_at=datetime.now(),
+                result_summary={
+                    "target_count": 0,
+                    "success_count": 0,
+                    "failed_count": 0,
+                    "success_computation_ids": [],
+                    "failed_items": [],
+                },
+                error_message=err_msg,
+            )
+            event = await DemandChangeEvent.get_or_none(tenant_id=tenant_id, id=task.event_id)
+            if event:
+                await DemandChangeEvent.filter(tenant_id=tenant_id, id=event.id).update(event_status="failed")
+            return {
+                "task_id": task_id,
+                "status": "failed",
+                "error_message": err_msg,
+                "result_summary": {
+                    "target_count": 0,
+                    "success_count": 0,
+                    "failed_count": 0,
+                    "failed_items": [],
+                },
+            }
+
         success_ids: List[int] = []
         failed: List[Dict[str, Any]] = []
         for computation_id in target_ids:
@@ -154,7 +183,11 @@ class DemandReplanningOrchestratorService:
             status=status,
             finished_at=datetime.now(),
             result_summary=result_summary,
-            error_message=(failed[0]["error"][:500] if failed and not success_ids else None),
+            error_message=(
+                failed[0]["error"][:500]
+                if failed and not success_ids
+                else (f"部分失败: {failed[0]['error'][:200]}" if failed else None)
+            ),
         )
 
         event = await DemandChangeEvent.get_or_none(tenant_id=tenant_id, id=task.event_id)
@@ -163,4 +196,13 @@ class DemandReplanningOrchestratorService:
                 event_status="closed" if status == "completed" else "failed"
             )
 
-        return {"task_id": task_id, "status": status, "result_summary": result_summary}
+        return {
+            "task_id": task_id,
+            "status": status,
+            "error_message": (
+                failed[0]["error"][:500]
+                if failed and not success_ids
+                else (f"部分失败: {failed[0]['error'][:200]}" if failed else None)
+            ),
+            "result_summary": result_summary,
+        }

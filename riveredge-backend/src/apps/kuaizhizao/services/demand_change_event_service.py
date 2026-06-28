@@ -17,6 +17,7 @@ from apps.kuaizhizao.services.demand_replan_impact_service import DemandReplanIm
 from apps.kuaizhizao.services.demand_replanning_orchestrator_service import (
     DemandReplanningOrchestratorService,
 )
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 
 
 class DemandChangeEventService:
@@ -82,9 +83,10 @@ class DemandChangeEventService:
         }
 
     async def list_pending_events(self, tenant_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+        """待处理变更事件（含分析完成、执行失败待重试，不含已关闭）。"""
         rows = await DemandChangeEvent.filter(
             tenant_id=tenant_id,
-            event_status__in=["pending", "analyzed"],
+            event_status__in=["pending", "analyzed", "failed"],
         ).order_by("-created_at").limit(limit)
         return [
             {
@@ -99,6 +101,49 @@ class DemandChangeEventService:
             }
             for r in rows
         ]
+
+    async def ensure_replan_task_for_event(
+        self,
+        tenant_id: int,
+        event_id: int,
+        operator_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """补全影响分析（若仍为 pending）并为事件生成可执行的重算任务。"""
+        event = await DemandChangeEvent.get_or_none(tenant_id=tenant_id, id=event_id)
+        if not event:
+            raise NotFoundError(f"变更事件不存在: {event_id}")
+        if event.event_status == "closed":
+            raise BusinessLogicError("事件已关闭，无法生成重算任务")
+        if event.event_status == "failed":
+            await DemandChangeEvent.filter(tenant_id=tenant_id, id=event_id).update(event_status="analyzed")
+            event = await DemandChangeEvent.get(tenant_id=tenant_id, id=event_id)
+        if event.event_status == "pending":
+            await self._impact_service.analyze_event(tenant_id=tenant_id, event=event)
+            event = await DemandChangeEvent.get(tenant_id=tenant_id, id=event_id)
+
+        existing = await DemandReplanTask.filter(
+            tenant_id=tenant_id,
+            event_id=event_id,
+            status__in=["pending", "failed"],
+        ).order_by("-created_at").first()
+        if existing:
+            return {
+                "created": False,
+                "event_id": event_id,
+                "task_id": existing.id,
+                "task_code": existing.task_code,
+                "mode": existing.mode,
+                "approval_status": existing.approval_status,
+                "status": existing.status,
+                "impact_metrics": existing.impact_metrics,
+            }
+
+        task = await self._orchestrator.create_task_from_event(
+            tenant_id=tenant_id,
+            event_id=event_id,
+            operator_id=operator_id,
+        )
+        return {"created": True, "event_id": event_id, **task}
 
     async def get_event_impact(self, tenant_id: int, event_id: int) -> Dict[str, Any]:
         event = await DemandChangeEvent.get_or_none(tenant_id=tenant_id, id=event_id)
@@ -143,6 +188,7 @@ class DemandChangeEventService:
                     "approval_status": t.approval_status,
                     "impact_metrics": t.impact_metrics,
                     "result_summary": t.result_summary,
+                    "error_message": t.error_message,
                 }
                 for t in tasks
             ],
@@ -151,7 +197,7 @@ class DemandChangeEventService:
     async def get_dashboard(self, tenant_id: int) -> Dict[str, Any]:
         pending_events = await DemandChangeEvent.filter(
             tenant_id=tenant_id,
-            event_status__in=["pending", "analyzed"],
+            event_status__in=["pending", "analyzed", "failed"],
         ).count()
         running_tasks = await DemandReplanTask.filter(tenant_id=tenant_id, status="running").count()
         failed_tasks = await DemandReplanTask.filter(tenant_id=tenant_id, status="failed").count()
@@ -188,6 +234,7 @@ class DemandChangeEventService:
                 "approval_status": r.approval_status,
                 "impact_metrics": r.impact_metrics,
                 "result_summary": r.result_summary,
+                "error_message": r.error_message,
                 "created_at": to_api_isoformat(r.created_at) if r.created_at else None,
                 "started_at": to_api_isoformat(r.started_at) if r.started_at else None,
                 "finished_at": to_api_isoformat(r.finished_at) if r.finished_at else None,

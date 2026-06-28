@@ -320,6 +320,26 @@ async def get_change_impact(
     return await change_event_service.get_event_impact(tenant_id=tenant_id, event_id=event_id)
 
 
+@router.post("/change-events/{event_id}/replan-task", summary="Ensure replan task for change event")
+async def ensure_replan_task_for_event(
+    event_id: int = Path(..., description="事件ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """补全影响分析并为变更事件生成重算任务（若已有待执行任务则返回现有任务）。"""
+    try:
+        return await change_event_service.ensure_replan_task_for_event(
+            tenant_id=tenant_id,
+            event_id=event_id,
+            operator_id=current_user.id,
+        )
+    except (NotFoundError, BusinessLogicError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("生成重算任务失败 event_id=%s", event_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 @router.post("/replan-tasks/{task_id}/execute", summary="Execute replan task")
 async def execute_replan_task(
     task_id: int = Path(..., description="重算任务ID"),

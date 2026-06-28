@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useMemo, useLayoutEffect, useRef, useCallback } from 'react';
 import { Input, Dropdown } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -45,10 +45,18 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
     const [pinyinMatch, setPinyinMatch] = useState<((text: string, pattern: string) => any) | null>(null);
     const triggerRef = useRef<HTMLDivElement | null>(null);
     const [triggerWidth, setTriggerWidth] = useState(DEFAULT_INPUT_WIDTH);
+    const pinyinWarmupRef = useRef(false);
 
-    // 动态加载 pinyin-pro，避免首屏同步引入
-    useEffect(() => {
-        import('pinyin-pro').then(m => { setPinyinMatch(() => m.match); }).catch(() => {});
+    const warmupPinyin = useCallback(() => {
+        if (pinyinWarmupRef.current) return;
+        pinyinWarmupRef.current = true;
+        import('../../utils/pinyin').then(({ ensurePinyinMatchLoaded }) => {
+            ensurePinyinMatchLoaded()
+                .then((fn) => {
+                    if (fn) setPinyinMatch(() => fn);
+                })
+                .catch(() => {});
+        });
     }, []);
 
     // 让下拉菜单宽度始终与输入框等宽
@@ -250,7 +258,10 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
                     style={inputStyle}
                     value={searchValue}
                     onChange={handleChange}
-                    onFocus={() => setOpen(true)}
+                    onFocus={() => {
+                        warmupPinyin();
+                        setOpen(true);
+                    }}
                 />
             </div>
         </Dropdown>

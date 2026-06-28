@@ -680,6 +680,7 @@ export interface DemandReplanTaskItem {
   approval_status: 'not_required' | 'pending' | 'approved' | 'rejected';
   impact_metrics?: Record<string, any>;
   result_summary?: Record<string, any>;
+  error_message?: string | null;
   created_at?: string;
   started_at?: string;
   finished_at?: string;
@@ -720,6 +721,7 @@ export interface ExecuteReplanTaskRequest {
 export interface ExecuteReplanTaskResponse {
   task_id: number;
   status: string;
+  error_message?: string | null;
   result_summary?: Record<string, any>;
 }
 
@@ -743,6 +745,25 @@ export async function getDemandChangeImpact(eventId: number): Promise<DemandChan
   return apiRequest<DemandChangeImpactDetail>(`/apps/kuaizhizao/demand-computations/change-events/${eventId}/impact`, {
     method: 'GET',
   });
+}
+
+export interface EnsureReplanTaskResponse {
+  created: boolean;
+  event_id: number;
+  task_id: number;
+  task_code: string;
+  mode?: string;
+  approval_status?: string;
+  status?: string;
+  impact_metrics?: Record<string, unknown>;
+}
+
+/** 为变更事件补全分析并生成重算任务 */
+export async function ensureReplanTaskForEvent(eventId: number): Promise<EnsureReplanTaskResponse> {
+  return apiRequest<EnsureReplanTaskResponse>(
+    `/apps/kuaizhizao/demand-computations/change-events/${eventId}/replan-task`,
+    { method: 'POST' },
+  );
 }
 
 /** 重算任务列表 */

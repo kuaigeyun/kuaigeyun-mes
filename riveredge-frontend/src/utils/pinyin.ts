@@ -72,6 +72,23 @@ async function initPinyinLib(): Promise<any> {
   return await pinyinLibInitPromise;
 }
 
+type PinyinMatchFn = (text: string, pattern: string) => unknown;
+
+let pinyinMatchFn: PinyinMatchFn | null = null;
+
+/**
+ * 懒加载 pinyin-pro 的 match（全拼/首字母），全局单例，供 UniDropdown 等复用。
+ */
+export async function ensurePinyinMatchLoaded(): Promise<PinyinMatchFn | null> {
+  if (pinyinMatchFn) return pinyinMatchFn;
+  const lib = await initPinyinLib();
+  if (!lib || lib === false || typeof lib.match !== 'function') {
+    return null;
+  }
+  pinyinMatchFn = lib.match as PinyinMatchFn;
+  return pinyinMatchFn;
+}
+
 /**
  * 预加载拼音库（在应用启动时调用）
  */

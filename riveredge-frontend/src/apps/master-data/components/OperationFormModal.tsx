@@ -145,8 +145,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
     fallbackInspectionPlan?: { id: number; label?: string }
   ) => {
     try {
-      const [defectsRes, usersRes, teamsRes, workshopsRes, workCentersRes, stationsRes, equipmentRes, plansRes] = await Promise.all([
-        // 不传 isActive：与列表/详情展示一致；再通过 boundDefectTypes 补齐未出现在列表中的绑定项
+      const [defectsRes, usersRes, teamsRes, workshopsRes] = await Promise.all([
         defectTypeApi.list({ limit: 500 }),
         searchUserDisplay({ page: 1, page_size: 100, is_active: true }).catch(() => ({
           items: [],
@@ -156,10 +155,6 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
         })),
         workGroupApi.list({ is_active: true, limit: 500 }),
         workshopApi.list({ is_active: true, limit: 500 }),
-        workCenterApi.list({ is_active: true, limit: 500 }),
-        workstationApi.list({ is_active: true, limit: 500 }),
-        equipmentApi.list({ is_active: true, limit: 500 }),
-        inspectionPlanApi.list({ limit: 200, plan_type: 'process', operation_id: operationId, is_active: true }),
       ]);
       const defects = Array.isArray(defectsRes) ? defectsRes : (defectsRes?.data ?? []);
       const defectOpts = buildDefectTypeOptions(defects, boundDefectTypes);
@@ -181,6 +176,24 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           value: `T_${team.id}`,
         });
       });
+
+      flushSync(() => {
+        setDefectTypeOptions(defectOpts);
+        setWorkshopOptions(workshopOpts);
+        setPersonnelOptions(pOpts);
+      });
+
+      // 让首屏先绘制基础选项，再拉取资源/设备/质检方案，减轻打开弹窗时的主线程长任务
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+
+      const [workCentersRes, stationsRes, equipmentRes, plansRes] = await Promise.all([
+        workCenterApi.list({ is_active: true, limit: 500 }),
+        workstationApi.list({ is_active: true, limit: 500 }),
+        equipmentApi.list({ is_active: true, limit: 500 }),
+        inspectionPlanApi.list({ limit: 200, plan_type: 'process', operation_id: operationId, is_active: true }),
+      ]);
 
       const rOpts: { label: string; value: string }[] = [];
       factoryListItems(workCentersRes as any).forEach((wc: any) => {
@@ -218,11 +231,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
         ];
       }
 
-      // 必须同步刷入 state：否则 await 返回后立刻 setFieldsValue 时 Select 仍持有空的 options，会丢弃已绑定值
       flushSync(() => {
-        setDefectTypeOptions(defectOpts);
-        setWorkshopOptions(workshopOpts);
-        setPersonnelOptions(pOpts);
         setResourceOptions(rOpts);
         setEquipmentOptions(equipOpts);
         setInspectionPlanOptions(planOpts);

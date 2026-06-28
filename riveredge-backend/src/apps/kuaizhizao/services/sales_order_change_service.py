@@ -38,6 +38,7 @@ from apps.kuaizhizao.services.order_change.helpers import (
 )
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.services.business_config_service import BusinessConfigService
+from loguru import logger
 
 
 class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
@@ -404,6 +405,17 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             doc.notes = data.notes
             doc.updated_by = updated_by
             await doc.save()
+        if normalize_status(doc.status) == DocumentStatus.PENDING_REVIEW.value:
+            audit_required = await self.business_config_service.check_audit_required(
+                tenant_id, "sales_order_change"
+            )
+            if not audit_required:
+                return await self.approve(
+                    tenant_id,
+                    change_id,
+                    ApproveChangeRequest(approved=True, review_remarks="自动审核"),
+                    updated_by,
+                )
         return await self._to_detail(doc)
 
     async def list_change_orders(
@@ -693,8 +705,8 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         try:
             from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
             await DocumentRelationService().apply_upstream_change_impact(tenant_id, "sales_order", order.id)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("销售变更生效-上游计划影响标记失败 change_id=%s: %s", change_id, e)
         try:
             from apps.kuaizhizao.services.demand_change_event_service import DemandChangeEventService
             await DemandChangeEventService().create_event(
@@ -712,8 +724,13 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
                 correlation_id=f"sales_order_change:{doc.id}",
                 auto_create_task=True,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "销售变更生效-创建需求变更事件失败 change_id=%s order_id=%s: %s",
+                change_id,
+                order.id,
+                e,
+            )
 
         try:
             from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate

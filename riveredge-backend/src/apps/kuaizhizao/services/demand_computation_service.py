@@ -107,6 +107,20 @@ class _PreviewResultCarrier(Exception):
         self.preview_data = preview_data
 
 
+def _safe_float(v: Any, default: float = 0.0) -> float:
+    """将业务参数/主数据中的数量转为 float，忽略 None、空串及字符串 'None'/'null'。"""
+    if v is None:
+        return default
+    if isinstance(v, str):
+        s = v.strip()
+        if not s or s.lower() in ("none", "null", "nan"):
+            return default
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return default
+
+
 async def _get_material_safety_reorder(
     material: Any,
     computation_params: Dict[str, Any],
@@ -122,15 +136,15 @@ async def _get_material_safety_reorder(
         inv = material.defaults.get("inventory") or material.defaults
         if isinstance(inv, dict):
             if inv.get("safety_stock") is not None or inv.get("safety_stock_level") is not None:
-                safety = float(inv.get("safety_stock") or inv.get("safety_stock_level") or 0)
+                safety = _safe_float(inv.get("safety_stock") or inv.get("safety_stock_level"))
             if inv.get("reorder_point") is not None:
-                reorder = float(inv.get("reorder_point", 0))
+                reorder = _safe_float(inv.get("reorder_point"))
 
     if computation_params:
         if "safety_stock" in computation_params:
-            safety = float(computation_params.get("safety_stock", safety))
+            safety = _safe_float(computation_params.get("safety_stock"), safety)
         if "reorder_point" in computation_params:
-            reorder = float(computation_params.get("reorder_point", reorder))
+            reorder = _safe_float(computation_params.get("reorder_point"), reorder)
 
     return safety, reorder
 
@@ -224,6 +238,8 @@ def _netting_params_for_mrp_supply(computation_params: Dict[str, Any]) -> Dict[s
 def _decimal_opt(v: Any) -> Optional[Decimal]:
     if v is None or v == "":
         return None
+    if isinstance(v, str) and v.strip().lower() in ("none", "null", "nan"):
+        return None
     try:
         d = Decimal(str(v))
         return d if d > 0 else None
@@ -305,12 +321,14 @@ def _compute_supply_and_net(
 
     # available = 在库 - 预留；include_reserved 为 true 时用 available（考虑预留），否则用 on_hand（在库）
     if include_reserved:
-        available = float(inventory_info.get("available_quantity", 0))
+        available = _safe_float(inventory_info.get("available_quantity"))
     else:
-        available = float(inventory_info.get("on_hand", inventory_info.get("available_quantity", 0)))
-    in_transit = float(inventory_info.get("in_transit_quantity", 0))
-    on_hand = float(inventory_info.get("on_hand", 0))
-    avail_col = float(inventory_info.get("available_quantity", 0))
+        available = _safe_float(
+            inventory_info.get("on_hand", inventory_info.get("available_quantity"))
+        )
+    in_transit = _safe_float(inventory_info.get("in_transit_quantity"))
+    on_hand = _safe_float(inventory_info.get("on_hand"))
+    avail_col = _safe_float(inventory_info.get("available_quantity"))
 
     supply = available
     if include_in_transit:
@@ -1153,8 +1171,8 @@ class DemandComputationService:
                 continue
             if not a or not b:
                 continue
-            b_wo = float(b.get("suggested_work_order_quantity") or 0)
-            b_po = float(b.get("suggested_purchase_order_quantity") or 0)
+            b_wo = _safe_float(b.get("suggested_work_order_quantity"))
+            b_po = _safe_float(b.get("suggested_purchase_order_quantity"))
             a_wo = float(a.suggested_work_order_quantity or 0)
             a_po = float(a.suggested_purchase_order_quantity or 0)
             if abs(b_wo - a_wo) > 1e-6 or abs(b_po - a_po) > 1e-6:
@@ -1604,9 +1622,9 @@ class DemandComputationService:
                 gross_requirement=req_info["required_quantity"],
                 computation_params=netting_params_for_supply,
             )
-            available_inventory = float(inventory_info.get("available_quantity", 0))
-            in_transit_qty = float(inventory_info.get("in_transit_quantity", 0))
-            reserved_qty = float(inventory_info.get("reserved_quantity", 0))
+            available_inventory = _safe_float(inventory_info.get("available_quantity"))
+            in_transit_qty = _safe_float(inventory_info.get("in_transit_quantity"))
+            reserved_qty = _safe_float(inventory_info.get("reserved_quantity"))
             gross_requirement = req_info["required_quantity"]
             mrp_basis = _mrp_suggestion_basis(computation_params)
             planning_qty = _mrp_planning_suggestion_quantity(
@@ -1722,7 +1740,7 @@ class DemandComputationService:
                 detail_results={
                     "in_transit_quantity": in_transit_qty,
                     "reserved_quantity": reserved_qty,
-                    "on_hand": float(inventory_info.get("on_hand", 0)),
+                    "on_hand": _safe_float(inventory_info.get("on_hand")),
                     "inventory_breakdown": inventory_info.get("breakdown") or {},
                     "supply_calculation": supply_for_detail,
                 },
