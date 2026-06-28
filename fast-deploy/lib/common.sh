@@ -74,10 +74,14 @@ fix_systemd_runtime_permissions() {
         fi
     done
     load_deploy_env
-    local pw_dir
+    local pw_dir caddy_data caddy_config
     pw_dir="$(resolve_playwright_browsers_path)"
     mkdir -p "$pw_dir"
     sudo chown -R "${service_user}:${service_group}" "$pw_dir" 2>/dev/null || true
+    caddy_data="${CADDY_DATA_DIR:-$PROJECT_ROOT/.caddy-data}"
+    caddy_config="${CADDY_CONFIG_DIR:-$PROJECT_ROOT/.caddy-config}"
+    mkdir -p "$caddy_data" "$caddy_config"
+    sudo chown -R "${service_user}:${service_group}" "$caddy_data" "$caddy_config" 2>/dev/null || true
     log_ok "运行时目录权限已就绪"
     return 0
 }
@@ -113,6 +117,9 @@ load_deploy_env() {
     fi
     PLAYWRIGHT_POSTINSTALL_ENABLE="${PLAYWRIGHT_POSTINSTALL_ENABLE:-1}"
     PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$PROJECT_ROOT/.playwright-browsers}"
+    CADDY_DATA_DIR="${CADDY_DATA_DIR:-$PROJECT_ROOT/.caddy-data}"
+    CADDY_CONFIG_DIR="${CADDY_CONFIG_DIR:-$PROJECT_ROOT/.caddy-config}"
+    CADDY_START_TIMEOUT="${CADDY_START_TIMEOUT:-45}"
 }
 
 is_windows_gitbash() {
@@ -737,6 +744,74 @@ caddy_listen_port_label() {
     fi
 }
 
+caddy_export_env() {
+    load_deploy_env
+    export XDG_DATA_HOME="${CADDY_DATA_DIR:-$PROJECT_ROOT/.caddy-data}"
+    export XDG_CONFIG_HOME="${CADDY_CONFIG_DIR:-$PROJECT_ROOT/.caddy-config}"
+    mkdir -p "$XDG_DATA_HOME" "$XDG_CONFIG_HOME"
+}
+
+ensure_caddy_data_migrated() {
+    caddy_export_env
+    local dest="$XDG_DATA_HOME/caddy"
+    if [ -d "$dest" ] && [ -n "$(ls -A "$dest" 2>/dev/null)" ]; then
+        return 0
+    fi
+    local legacy
+    for legacy in \
+        "${HOME}/.local/share/caddy" \
+        "/root/.local/share/caddy"; do
+        [ -d "$legacy" ] || continue
+        [ -n "$(ls -A "$legacy" 2>/dev/null)" ] || continue
+        log_info "迁移 Caddy TLS 数据: ${legacy} -> ${dest}"
+        mkdir -p "$(dirname "$dest")"
+        if cp -a "$legacy" "$dest" 2>/dev/null || cp -a "$legacy/." "$dest/" 2>/dev/null; then
+            [ -n "$(ls -A "$dest" 2>/dev/null)" ] && log_ok "Caddy TLS 数据已迁移至 ${XDG_DATA_HOME}"
+            return 0
+        fi
+        log_warn "Caddy TLS 数据迁移未成功，将重新申请证书（需 80 端口公网可达）"
+    done
+}
+
+wait_for_caddy_listening() {
+    load_deploy_env
+    local timeout="${CADDY_START_TIMEOUT:-45}"
+    local retries=0
+    while [ "$retries" -lt "$timeout" ]; do
+        if caddy_check_listening; then
+            return 0
+        fi
+        if [ -f "$LOGS_DIR/caddy.pid" ]; then
+            local pid
+            pid="$(tr -d '[:space:]' < "$LOGS_DIR/caddy.pid" 2>/dev/null || true)"
+            if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+                return 1
+            fi
+        fi
+        sleep 1
+        retries=$((retries + 1))
+    done
+    return 1
+}
+
+caddy_diagnose_start_failure() {
+    local caddy_bin=$1 caddy_config=$2
+    log_error "Caddy 启动诊断："
+    if [ -f "$LOGS_DIR/caddy.log" ]; then
+        tail -30 "$LOGS_DIR/caddy.log" >&2
+    fi
+    if [ -n "$caddy_bin" ] && [ -f "$caddy_config" ]; then
+        caddy_export_env
+        log_error "Caddyfile 校验:"
+        "$caddy_bin" validate --config "$caddy_config" 2>&1 | tail -15 >&2 || true
+    fi
+    if caddy_https_enabled; then
+        log_error "HTTPS 需 caddy 绑定 80/443：sudo setcap 'cap_net_bind_service=+ep' $(command -v caddy 2>/dev/null || echo caddy)"
+        log_error "并确认 80/443 公网可达、系统 caddy.service 已 stop+disable"
+        log_error "HTTPS 需 apex 与 www 均解析到本机（例如 kuaigeyun.com 与 www.kuaigeyun.com）"
+    fi
+}
+
 wait_for_backend_health() {
     local retries=0
     while [ $retries -lt "$BACKEND_START_TIMEOUT" ]; do
@@ -1314,6 +1389,81 @@ normalize_domain_input() {
     printf '%s' "$raw"
 }
 
+caddy_domain_apex() {
+    local d
+    d="$(normalize_domain_input "${1:-}")"
+    case "$d" in
+        www.*) printf '%s' "${d#www.}" ;;
+        *) printf '%s' "$d" ;;
+    esac
+}
+
+caddy_domain_www() {
+    local apex
+    apex="$(caddy_domain_apex "${1:-}")"
+    printf 'www.%s' "$apex"
+}
+
+caddy_site_addr_for_domain() {
+    local domain="${1:-}"
+    load_deploy_env
+    domain="$(normalize_domain_input "$domain")"
+    if [ -z "$domain" ]; then
+        echo ":${PROXY_PORT}"
+        return 0
+    fi
+    if [ "$CADDY_ENABLE_LETSENCRYPT" = "true" ]; then
+        local apex www_host
+        apex="$(caddy_domain_apex "$domain")"
+        www_host="$(caddy_domain_www "$domain")"
+        echo "${apex}, ${www_host}"
+    else
+        echo "http://${domain}:${PROXY_PORT}"
+    fi
+}
+
+prod_cors_origins() {
+    local server_ip="${1:-}"
+    load_deploy_env
+    [ -n "$server_ip" ] || server_ip="$(read_deploy_env_value SERVER_IP || true)"
+    [ -n "$server_ip" ] || server_ip="$(detect_server_ip)"
+    local base_url cors apex www_host
+    if [ -n "$CADDY_DOMAIN" ]; then
+        if [ "$CADDY_ENABLE_LETSENCRYPT" = "true" ]; then
+            apex="$(caddy_domain_apex "$CADDY_DOMAIN")"
+            www_host="$(caddy_domain_www "$CADDY_DOMAIN")"
+            base_url="https://${apex}"
+            cors="${base_url},https://${www_host},http://${apex}:${PROXY_PORT},http://${www_host}:${PROXY_PORT},http://${server_ip}:${PROXY_PORT},http://127.0.0.1:${PROXY_PORT},http://localhost:${PROXY_PORT}"
+        else
+            base_url="http://${CADDY_DOMAIN}:${PROXY_PORT}"
+            cors="${base_url},http://${server_ip}:${PROXY_PORT},http://127.0.0.1:${PROXY_PORT},http://localhost:${PROXY_PORT}"
+        fi
+    else
+        base_url="http://${server_ip}:${PROXY_PORT}"
+        cors="${base_url},http://127.0.0.1:${PROXY_PORT},http://localhost:${PROXY_PORT}"
+    fi
+    printf '%s\n%s' "$base_url" "$cors"
+}
+
+sync_prod_app_urls() {
+    load_deploy_env
+    [ "$DEPLOY_MODE" = "prod" ] || return 0
+    [ -f "$ENV_FILE" ] || return 0
+    local server_ip base_url cors cur_base cur_cors
+    server_ip="$(read_deploy_env_value SERVER_IP || true)"
+    [ -n "$server_ip" ] || server_ip="$(detect_server_ip)"
+    mapfile -t _prod_cors < <(prod_cors_origins "$server_ip")
+    base_url="${_prod_cors[0]:-}"
+    cors="${_prod_cors[1]:-}"
+    cur_base="$(read_env_value BASE_URL || true)"
+    cur_cors="$(read_env_value CORS_ORIGINS || true)"
+    if [ "$cur_base" != "$base_url" ] || [ "$cur_cors" != "$cors" ]; then
+        set_env_value BASE_URL "$base_url"
+        set_env_value CORS_ORIGINS "$cors"
+        log_info "已同步 BASE_URL / CORS_ORIGINS（含 www 域名）"
+    fi
+}
+
 is_ipv4_address() {
     [[ "${1:-}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
 }
@@ -1325,7 +1475,7 @@ resolve_prod_web_url() {
     [ -n "$server_ip" ] || server_ip="$(detect_server_ip)"
     if [ -n "$CADDY_DOMAIN" ]; then
         if [ "$CADDY_ENABLE_LETSENCRYPT" = "true" ]; then
-            echo "https://${CADDY_DOMAIN}"
+            echo "https://$(caddy_domain_apex "$CADDY_DOMAIN")"
             return 0
         fi
         echo "http://${CADDY_DOMAIN}:${PROXY_PORT}"
@@ -1361,6 +1511,7 @@ collect_prod_domain_https_config() {
             fi
             domain="$(normalize_domain_input "$domain")"
             [ -n "$domain" ] || { log_error "域名不能为空"; return 1; }
+            domain="$(caddy_domain_apex "$domain")"
 
             if is_ipv4_address "$domain"; then
                 log_warn "Let's Encrypt 不支持 IP 证书，域名已保存但仅使用 HTTP"
@@ -1382,7 +1533,7 @@ collect_prod_domain_https_config() {
             set_deploy_env_value CADDY_ENABLE_LETSENCRYPT "$enable_le"
             load_deploy_env
             if [ "$enable_le" = "true" ]; then
-                log_ok "已配置: https://${domain}（需 DNS 指向本机且公网 80 端口可达）"
+                log_ok "已配置: https://${domain} 与 https://$(caddy_domain_www "$domain")（${domain} 与 www 均需 DNS 指向本机且公网 80 可达）"
             else
                 log_ok "已配置: http://${domain}:${PROXY_PORT}"
             fi
@@ -1418,20 +1569,12 @@ apply_app_config() {
     if [ "$DEPLOY_MODE" = "prod" ]; then
         set_env_value ENVIRONMENT production
         set_env_value DEBUG false
-        if [ -n "$CADDY_DOMAIN" ]; then
-            if [ "$CADDY_ENABLE_LETSENCRYPT" = "true" ]; then
-                base_url="https://${CADDY_DOMAIN}"
-            else
-                base_url="http://${CADDY_DOMAIN}:${PROXY_PORT}"
-            fi
-        else
-            base_url="http://${server_ip}:${PROXY_PORT}"
-        fi
+        base_url=""
+        cors=""
+        mapfile -t _prod_cors < <(prod_cors_origins "$server_ip")
+        base_url="${_prod_cors[0]:-}"
+        cors="${_prod_cors[1]:-}"
         set_env_value BASE_URL "$base_url"
-        cors="${base_url},http://${server_ip}:${PROXY_PORT},http://127.0.0.1:${PROXY_PORT},http://localhost:${PROXY_PORT}"
-        if [ -n "$CADDY_DOMAIN" ]; then
-            cors="${base_url},https://${CADDY_DOMAIN},http://${CADDY_DOMAIN}:${PROXY_PORT},http://${server_ip}:${PROXY_PORT},http://127.0.0.1:${PROXY_PORT},http://localhost:${PROXY_PORT}"
-        fi
         set_env_value CORS_ORIGINS "$cors"
     else
         set_env_value HOST "0.0.0.0"
@@ -1935,6 +2078,7 @@ cmd_ensure_frontend_dist() {
 
 gen_caddyfile() {
     load_deploy_env
+    sync_prod_app_urls
     mkdir -p "$CADDY_DIR"
     [ -f "$CADDY_TEMPLATE" ] || { log_error "缺少模板 $CADDY_TEMPLATE"; exit 1; }
 
@@ -1944,11 +2088,7 @@ gen_caddyfile() {
     [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少 $FRONTEND_DIR/dist/index.html，请先 build"; exit 1; }
 
     if [ -n "$CADDY_DOMAIN" ]; then
-        if [ "$CADDY_ENABLE_LETSENCRYPT" = "true" ]; then
-            addr="$CADDY_DOMAIN"
-        else
-            addr="http://${CADDY_DOMAIN}:${PROXY_PORT}"
-        fi
+        addr="$(caddy_site_addr_for_domain "$CADDY_DOMAIN")"
     else
         addr=":${PROXY_PORT}"
     fi
@@ -2180,6 +2320,8 @@ start_caddy_prod() {
     ensure_linux_caddy_ready
     gen_caddyfile
     load_deploy_env
+    caddy_export_env
+    ensure_caddy_data_migrated
     local caddy_bin caddy_config listen_label
     caddy_bin="$(resolve_caddy)"
     caddy_config="$(caddy_native_path "$CADDYFILE")"
@@ -2192,24 +2334,26 @@ start_caddy_prod() {
     stop_service caddy
     kill_all_caddy_processes
     caddy_prepare_listen_ports
+    if ! "$caddy_bin" validate --config "$caddy_config" >/dev/null 2>&1; then
+        log_error "Caddyfile 校验失败"
+        "$caddy_bin" validate --config "$caddy_config" 2>&1 | tail -20 >&2
+        return 1
+    fi
     if caddy_https_enabled; then
-        log_info "启动 Caddy (HTTPS :443 + HTTP :80, 域名 ${CADDY_DOMAIN})..."
+        log_info "启动 Caddy (HTTPS :443 + HTTP :80, 域名 ${CADDY_DOMAIN}, 数据 ${XDG_DATA_HOME})..."
     else
         log_info "启动 Caddy (:${PROXY_PORT})..."
     fi
-    nohup "$caddy_bin" run --config "$caddy_config" >> "$LOGS_DIR/caddy.log" 2>&1 &
+    nohup env XDG_DATA_HOME="$XDG_DATA_HOME" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" \
+        "$caddy_bin" run --config "$caddy_config" >> "$LOGS_DIR/caddy.log" 2>&1 &
     echo $! > "$LOGS_DIR/caddy.pid"
-    sleep 2
-    kill -0 "$(cat "$LOGS_DIR/caddy.pid")" 2>/dev/null || {
-        log_error "Caddy 启动失败，查看 $LOGS_DIR/caddy.log"
-        tail -20 "$LOGS_DIR/caddy.log" >&2
-        rm -f "$LOGS_DIR/caddy.pid"
-        kill_all_caddy_processes
-        return 1
-    }
-    if ! caddy_check_listening; then
-        log_error "Caddy 未监听端口 ${listen_label}，查看 $LOGS_DIR/caddy.log"
-        tail -20 "$LOGS_DIR/caddy.log" >&2
+    if ! wait_for_caddy_listening; then
+        if [ -f "$LOGS_DIR/caddy.pid" ] && kill -0 "$(cat "$LOGS_DIR/caddy.pid")" 2>/dev/null; then
+            log_error "Caddy 进程在运行但未监听端口 ${listen_label}（等待 ${CADDY_START_TIMEOUT}s 超时）"
+        else
+            log_error "Caddy 启动失败"
+        fi
+        caddy_diagnose_start_failure "$caddy_bin" "$caddy_config"
         rm -f "$LOGS_DIR/caddy.pid"
         kill_all_caddy_processes
         return 1
@@ -2243,7 +2387,9 @@ verify_caddy_serving() {
     load_deploy_env
     local code
     if caddy_https_enabled; then
-        code="$(curl -s -o /dev/null -w '%{http_code}' -H "Host: ${CADDY_DOMAIN}" "http://127.0.0.1/" 2>/dev/null || echo "000")"
+        local apex
+        apex="$(caddy_domain_apex "$CADDY_DOMAIN")"
+        code="$(curl -s -o /dev/null -w '%{http_code}' -H "Host: ${apex}" "http://127.0.0.1/" 2>/dev/null || echo "000")"
         case "$code" in
             200|301|302|308)
                 return 0
@@ -2479,6 +2625,9 @@ render_systemd_unit() {
     [ -n "$service_home" ] || { log_error "用户不存在: $service_user"; return 1; }
     service_group="$(id -gn "$service_user")"
     pw_path="$(resolve_playwright_browsers_path)"
+    load_deploy_env
+    local caddy_data="${CADDY_DATA_DIR:-$PROJECT_ROOT/.caddy-data}"
+    local caddy_config_dir="${CADDY_CONFIG_DIR:-$PROJECT_ROOT/.caddy-config}"
     sed \
         -e "s|{{SERVICE_USER}}|${service_user}|g" \
         -e "s|{{SERVICE_GROUP}}|${service_group}|g" \
@@ -2488,6 +2637,8 @@ render_systemd_unit() {
         -e "s|{{UV_BIN}}|${uv_bin}|g" \
         -e "s|{{CADDY_BIN}}|${caddy_bin}|g" \
         -e "s|{{PLAYWRIGHT_BROWSERS_PATH}}|${pw_path}|g" \
+        -e "s|{{CADDY_DATA_DIR}}|${caddy_data}|g" \
+        -e "s|{{CADDY_CONFIG_DIR}}|${caddy_config_dir}|g" \
         "$SYSTEMD_UNIT_TEMPLATE"
 }
 

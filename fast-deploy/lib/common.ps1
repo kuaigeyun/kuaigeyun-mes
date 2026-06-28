@@ -75,6 +75,13 @@ function Load-DeployEnv {
     if (-not $script:PLAYWRIGHT_BROWSERS_PATH) {
         $script:PLAYWRIGHT_BROWSERS_PATH = Join-Path $script:ProjectRoot '.playwright-browsers'
     }
+    if (-not $script:CADDY_DATA_DIR) {
+        $script:CADDY_DATA_DIR = Join-Path $script:ProjectRoot '.caddy-data'
+    }
+    if (-not $script:CADDY_CONFIG_DIR) {
+        $script:CADDY_CONFIG_DIR = Join-Path $script:ProjectRoot '.caddy-config'
+    }
+    if (-not $script:CADDY_START_TIMEOUT) { $script:CADDY_START_TIMEOUT = 45 }
 }
 
 function Apply-CN-Mirrors {
@@ -478,6 +485,51 @@ function Test-Ipv4Address([string]$Value) {
     return $Value -match '^(\d{1,3}\.){3}\d{1,3}$'
 }
 
+function Get-CaddyDomainApex([string]$Domain) {
+    $d = Normalize-DomainInput $Domain
+    if ($d -match '^www\.(.+)$') { return $Matches[1] }
+    return $d
+}
+
+function Get-CaddyDomainWww([string]$Domain) {
+    return "www.$(Get-CaddyDomainApex $Domain)"
+}
+
+function Get-CaddySiteAddrForDomain([string]$Domain) {
+    Load-DeployEnv
+    $d = Normalize-DomainInput $Domain
+    if (-not $d) { return ":$($script:PROXY_PORT)" }
+    if ($script:CADDY_ENABLE_LETSENCRYPT -eq 'true') {
+        $apex = Get-CaddyDomainApex $d
+        $www = Get-CaddyDomainWww $d
+        return "$apex, $www"
+    }
+    return "http://${d}:$($script:PROXY_PORT)"
+}
+
+function Get-ProdCorsOrigins([string]$ServerIp) {
+    Load-DeployEnv
+    if ([string]::IsNullOrWhiteSpace($ServerIp)) {
+        $ServerIp = Read-DeployEnvValue 'SERVER_IP'
+        if ([string]::IsNullOrWhiteSpace($ServerIp)) { $ServerIp = Detect-ServerIp }
+    }
+    if ($script:CADDY_DOMAIN) {
+        if ($script:CADDY_ENABLE_LETSENCRYPT -eq 'true') {
+            $apex = Get-CaddyDomainApex $script:CADDY_DOMAIN
+            $www = Get-CaddyDomainWww $script:CADDY_DOMAIN
+            $baseUrl = "https://$apex"
+            $cors = "$baseUrl,https://$www,http://${apex}:$($script:PROXY_PORT),http://${www}:$($script:PROXY_PORT),http://${ServerIp}:$($script:PROXY_PORT),http://127.0.0.1:$($script:PROXY_PORT),http://localhost:$($script:PROXY_PORT)"
+            return @{ BaseUrl = $baseUrl; Cors = $cors }
+        }
+        $baseUrl = "http://$($script:CADDY_DOMAIN):$($script:PROXY_PORT)"
+        $cors = "$baseUrl,http://${ServerIp}:$($script:PROXY_PORT),http://127.0.0.1:$($script:PROXY_PORT),http://localhost:$($script:PROXY_PORT)"
+        return @{ BaseUrl = $baseUrl; Cors = $cors }
+    }
+    $baseUrl = "http://${ServerIp}:$($script:PROXY_PORT)"
+    $cors = "$baseUrl,http://127.0.0.1:$($script:PROXY_PORT),http://localhost:$($script:PROXY_PORT)"
+    return @{ BaseUrl = $baseUrl; Cors = $cors }
+}
+
 function Resolve-ProdWebUrl([string]$ServerIp) {
     Load-DeployEnv
     if ([string]::IsNullOrWhiteSpace($ServerIp)) {
@@ -485,7 +537,9 @@ function Resolve-ProdWebUrl([string]$ServerIp) {
         if ([string]::IsNullOrWhiteSpace($ServerIp)) { $ServerIp = Detect-ServerIp }
     }
     if ($script:CADDY_DOMAIN) {
-        if ($script:CADDY_ENABLE_LETSENCRYPT -eq 'true') { return "https://$($script:CADDY_DOMAIN)" }
+        if ($script:CADDY_ENABLE_LETSENCRYPT -eq 'true') {
+            return "https://$(Get-CaddyDomainApex $script:CADDY_DOMAIN)"
+        }
         return "http://$($script:CADDY_DOMAIN):$($script:PROXY_PORT)"
     }
     return "http://${ServerIp}:$($script:PROXY_PORT)"
@@ -522,6 +576,7 @@ function Collect-ProdDomainHttpsConfig {
             }
             $domain = Normalize-DomainInput $inputDomain
             if ([string]::IsNullOrWhiteSpace($domain)) { throw '域名不能为空' }
+            $domain = Get-CaddyDomainApex $domain
 
             if (Test-Ipv4Address $domain) {
                 Write-LogWarn "Let's Encrypt 不支持 IP 证书，域名已保存但仅使用 HTTP"
@@ -539,7 +594,8 @@ function Collect-ProdDomainHttpsConfig {
             Set-DeployEnvValue 'CADDY_ENABLE_LETSENCRYPT' $enableLe
             Load-DeployEnv
             if ($enableLe -eq 'true') {
-                Write-LogOk "已配置: https://${domain}（需 DNS 指向本机且公网 80 端口可达）"
+                $www = Get-CaddyDomainWww $domain
+                Write-LogOk "已配置: https://${domain} 与 https://${www}（${domain} 与 www 均需 DNS 指向本机且公网 80 可达）"
             } else {
                 Write-LogOk "已配置: http://${domain}:$($script:PROXY_PORT)"
             }
@@ -743,21 +799,9 @@ function Invoke-Configure {
     if ($script:DeployMode -eq 'prod') {
         Set-EnvValue 'ENVIRONMENT' 'production'
         Set-EnvValue 'DEBUG' 'false'
-        if ($script:CADDY_DOMAIN) {
-            if ($script:CADDY_ENABLE_LETSENCRYPT -eq 'true') {
-                $baseUrl = "https://$($script:CADDY_DOMAIN)"
-            } else {
-                $baseUrl = "http://$($script:CADDY_DOMAIN):$($script:PROXY_PORT)"
-            }
-        } else {
-            $baseUrl = "http://${serverIp}:$($script:PROXY_PORT)"
-        }
-        Set-EnvValue 'BASE_URL' $baseUrl
-        $cors = "$baseUrl,http://${serverIp}:$($script:PROXY_PORT),http://127.0.0.1:$($script:PROXY_PORT),http://localhost:$($script:PROXY_PORT)"
-        if ($script:CADDY_DOMAIN) {
-            $cors = "$baseUrl,https://$($script:CADDY_DOMAIN),http://$($script:CADDY_DOMAIN):$($script:PROXY_PORT),http://${serverIp}:$($script:PROXY_PORT),http://127.0.0.1:$($script:PROXY_PORT),http://localhost:$($script:PROXY_PORT)"
-        }
-        Set-EnvValue 'CORS_ORIGINS' $cors
+        $prodCors = Get-ProdCorsOrigins $serverIp
+        Set-EnvValue 'BASE_URL' $prodCors.BaseUrl
+        Set-EnvValue 'CORS_ORIGINS' $prodCors.Cors
     } else {
         Set-EnvValue 'HOST' '0.0.0.0'
         Set-EnvValue 'CORS_ORIGINS' "http://${serverIp}:$($script:FRONTEND_PORT),http://127.0.0.1:$($script:FRONTEND_PORT),http://localhost:$($script:FRONTEND_PORT)"
@@ -1035,8 +1079,25 @@ function Ensure-FrontendDist {
     throw '缺少 dist/index.html。请在本地 fast-deploy/build.web.sh 构建并推送，或设置 ALLOW_SERVER_BUILD=1'
 }
 
+function Sync-ProdAppUrls {
+    Load-DeployEnv
+    if ($script:DeployMode -ne 'prod') { return }
+    if (-not (Test-Path $script:EnvFile)) { return }
+    $serverIp = Read-DeployEnvValue 'SERVER_IP'
+    if ([string]::IsNullOrWhiteSpace($serverIp)) { $serverIp = Detect-ServerIp }
+    $prodCors = Get-ProdCorsOrigins $serverIp
+    $curBase = Read-EnvValue 'BASE_URL'
+    $curCors = Read-EnvValue 'CORS_ORIGINS'
+    if ($curBase -ne $prodCors.BaseUrl -or $curCors -ne $prodCors.Cors) {
+        Set-EnvValue 'BASE_URL' $prodCors.BaseUrl
+        Set-EnvValue 'CORS_ORIGINS' $prodCors.Cors
+        Write-LogInfo '已同步 BASE_URL / CORS_ORIGINS（含 www 域名）'
+    }
+}
+
 function New-Caddyfile {
     Load-DeployEnv
+    Sync-ProdAppUrls
     if (-not (Test-Path $script:CaddyDir)) { New-Item -ItemType Directory -Path $script:CaddyDir -Force | Out-Null }
     if (-not (Test-Path $script:CaddyTemplate)) { throw "缺少模板 $script:CaddyTemplate" }
 
@@ -1044,8 +1105,7 @@ function New-Caddyfile {
     $frontendRoot = (Join-Path $script:FrontendDir 'dist') -replace '\\','/'
 
     if ($script:CADDY_DOMAIN) {
-        if ($script:CADDY_ENABLE_LETSENCRYPT -eq 'true') { $addr = $script:CADDY_DOMAIN }
-        else { $addr = "http://$($script:CADDY_DOMAIN):$($script:PROXY_PORT)" }
+        $addr = Get-CaddySiteAddrForDomain $script:CADDY_DOMAIN
     } else { $addr = ":$($script:PROXY_PORT)" }
 
     $clientReleaseRoot = if ($script:CLIENT_RELEASE_ROOT) {
@@ -1229,9 +1289,44 @@ function Test-CaddyHttpsEnabled {
     return ($script:CADDY_DOMAIN -and $script:CADDY_ENABLE_LETSENCRYPT -eq 'true')
 }
 
+function Set-CaddyEnv {
+    Load-DeployEnv
+    $data = if ($env:CADDY_DATA_DIR) { $env:CADDY_DATA_DIR }
+        elseif ($script:CADDY_DATA_DIR) { $script:CADDY_DATA_DIR }
+        else { Join-Path $script:ProjectRoot '.caddy-data' }
+    $config = if ($env:CADDY_CONFIG_DIR) { $env:CADDY_CONFIG_DIR }
+        elseif ($script:CADDY_CONFIG_DIR) { $script:CADDY_CONFIG_DIR }
+        else { Join-Path $script:ProjectRoot '.caddy-config' }
+    $env:XDG_DATA_HOME = $data
+    $env:XDG_CONFIG_HOME = $config
+    foreach ($d in @($data, $config)) {
+        if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
+    }
+}
+
+function Wait-ForCaddyListening {
+    Load-DeployEnv
+    $timeout = if ($script:CADDY_START_TIMEOUT) { [int]$script:CADDY_START_TIMEOUT } else { 45 }
+    for ($i = 0; $i -lt $timeout; $i++) {
+        if (Test-CaddyHttpsEnabled) {
+            if (Test-PortInUse 443) { return $true }
+        } elseif (Test-PortInUse $script:PROXY_PORT) {
+            return $true
+        }
+        $pidf = Join-Path $script:LogsDir 'caddy.pid'
+        if (Test-Path $pidf) {
+            $pid = [int](Get-Content $pidf -Raw).Trim()
+            if (-not (Get-Process -Id $pid -ErrorAction SilentlyContinue)) { return $false }
+        }
+        Start-Sleep -Seconds 1
+    }
+    return $false
+}
+
 function Start-CaddyProd {
     New-Caddyfile
     Load-DeployEnv
+    Set-CaddyEnv
     $caddy = Resolve-Caddy
     if (-not $caddy) { throw '未安装 Caddy，请运行 install' }
     $pidf = Join-Path $script:LogsDir 'caddy.pid'
@@ -1239,17 +1334,25 @@ function Start-CaddyProd {
         $pid = [int](Get-Content $pidf -Raw).Trim()
         if (Get-Process -Id $pid -ErrorAction SilentlyContinue) { Write-LogInfo 'Caddy 已在运行'; return }
     }
+    & $caddy validate --config $script:Caddyfile 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        & $caddy validate --config $script:Caddyfile
+        throw 'Caddyfile 校验失败'
+    }
     if (Test-CaddyHttpsEnabled) {
-        Write-LogInfo "启动 Caddy (HTTPS :443 + HTTP :80, 域名 $($script:CADDY_DOMAIN))..."
+        Write-LogInfo "启动 Caddy (HTTPS :443 + HTTP :80, 域名 $($script:CADDY_DOMAIN), 数据 $($env:XDG_DATA_HOME))..."
     } else {
         Write-LogInfo "启动 Caddy (:$($script:PROXY_PORT))..."
     }
-    Start-ProcessBackground 'caddy' $caddy @('run',"--config",$script:Caddyfile) @{ WORKDIR = $script:ProjectRoot }
-    Start-Sleep -Seconds 2
-    if (Test-CaddyHttpsEnabled) {
-        if (-not (Test-PortInUse 443)) { throw 'Caddy 未监听端口 443，查看 .logs/caddy.log' }
-    } elseif (-not (Test-PortInUse $script:PROXY_PORT)) {
-        throw "Caddy 未监听端口 $($script:PROXY_PORT)，查看 .logs/caddy.log"
+    Start-ProcessBackground 'caddy' $caddy @('run',"--config",$script:Caddyfile) @{
+        WORKDIR = $script:ProjectRoot
+        XDG_DATA_HOME = $env:XDG_DATA_HOME
+        XDG_CONFIG_HOME = $env:XDG_CONFIG_HOME
+    }
+    if (-not (Wait-ForCaddyListening)) {
+        $logFile = Join-Path $script:LogsDir 'caddy.log'
+        if (Test-Path $logFile) { Get-Content $logFile -Tail 30 | ForEach-Object { Write-LogError $_ } }
+        throw "Caddy 未监听端口（等待 $($script:CADDY_START_TIMEOUT)s 超时），查看 $logFile"
     }
     Write-LogOk 'Caddy 已启动'
 }
@@ -1599,6 +1702,8 @@ function Install-RiverEdgeBootTask {
         "CADDY_BIN=$caddy"
         "SERVICE_USER=$env:USERNAME"
         "PLAYWRIGHT_BROWSERS_PATH=$(Resolve-PlaywrightBrowsersPath)"
+        "CADDY_DATA_DIR=$(Join-Path $script:ProjectRoot '.caddy-data')"
+        "CADDY_CONFIG_DIR=$(Join-Path $script:ProjectRoot '.caddy-config')"
     )
     Set-Content -Path $script:BootEnvFile -Value $bootEnv -Encoding UTF8
 
