@@ -10,6 +10,7 @@ import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import WeatherWidget from '../../../components/weather/WeatherWidget';
 import type { WeatherData } from '../../../services/weather';
+import { DASHBOARD_SECTION_CARD_CLASS } from './dashboardCardSurface';
 
 const { Text } = Typography;
 
@@ -52,8 +53,6 @@ export interface DashboardCalendarWeatherClockProps {
   currentTime: Dayjs;
   isDark: boolean;
   cardRadius: number | string;
-  cardBorder: string;
-  cardShadow: string;
   lunarDateStr: string;
   t: TFunction;
   onWeatherChange?: (data: WeatherData | null) => void;
@@ -63,8 +62,6 @@ export function DashboardCalendarWeatherClock({
   currentTime,
   isDark,
   cardRadius,
-  cardBorder,
-  cardShadow,
   lunarDateStr,
   t,
   onWeatherChange,
@@ -80,11 +77,10 @@ export function DashboardCalendarWeatherClock({
   const timeText = currentTime.format('HH:mm:ss');
   const weekdayText = currentTime.format('dddd');
 
-  const cardBg = isDark ? token.colorBgContainer : '#ffffff';
-
   return (
     <Card
-      className="dashboard-cwc-card"
+      variant="borderless"
+      className={`dashboard-cwc-card ${DASHBOARD_SECTION_CARD_CLASS}`}
       style={{
         flexShrink: 0,
         width: '100%',
@@ -92,9 +88,6 @@ export function DashboardCalendarWeatherClock({
         minHeight: DASHBOARD_CALENDAR_WIDGET_HEIGHT,
         maxHeight: DASHBOARD_CALENDAR_WIDGET_HEIGHT,
         borderRadius: cardRadius,
-        background: cardBg,
-        border: cardBorder,
-        boxShadow: cardShadow,
         overflow: 'hidden',
       }}
       styles={{

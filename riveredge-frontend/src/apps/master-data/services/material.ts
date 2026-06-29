@@ -65,6 +65,7 @@ import type {
   StandardPartsPresetCatalog,
   LoadStandardPartsPresetResponse,
 } from '../types/material';
+import type { MaterialHealthCheckResult } from '../types/materialHealth';
 
 /** 列表/详情接口可能返回 snake_case 或 camelCase，统一便于表格绑定 */
 function normalizeMaterialRow(item: Material): Material {
@@ -357,6 +358,14 @@ export const materialApi = {
       body.reset_sequence = true;
     }
     return api.post('/apps/master-data/materials/rewrite-main-codes', body);
+  },
+
+  /** 物料健康助手：完备度与重复编码检查 */
+  healthCheck: async (params?: { groupId?: number; mastersOnly?: boolean }): Promise<MaterialHealthCheckResult> => {
+    return api.post('/apps/master-data/materials/health-check', {
+      groupId: params?.groupId,
+      mastersOnly: params?.mastersOnly ?? true,
+    });
   },
 
   /**

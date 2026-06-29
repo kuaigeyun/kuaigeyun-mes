@@ -4,6 +4,7 @@
 
 import React from 'react';
 import { Card } from 'antd';
+import { DASHBOARD_SECTION_CARD_CLASS } from './dashboardCardSurface';
 
 export interface DashboardSectionCardProps {
   title: React.ReactNode;
@@ -13,7 +14,6 @@ export interface DashboardSectionCardProps {
   /** 整块高度（含外置标题行）；不传则随内容高度 */
   height?: number | string;
   cardRadius?: number | string;
-  cardShadow?: string;
   className?: string;
   cardClassName?: string;
   styles?: {
@@ -28,7 +28,6 @@ export function DashboardSectionCard({
   loading,
   height,
   cardRadius,
-  cardShadow,
   className,
   cardClassName,
   styles,
@@ -61,10 +60,9 @@ export function DashboardSectionCard({
       <Card
         loading={loading}
         variant="borderless"
-        className={['dashboard-section__card', cardClassName].filter(Boolean).join(' ')}
+        className={[DASHBOARD_SECTION_CARD_CLASS, cardClassName].filter(Boolean).join(' ')}
         style={{
           borderRadius: cardRadius,
-          boxShadow: cardShadow,
         }}
         styles={{
           body: styles?.body,

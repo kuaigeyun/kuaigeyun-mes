@@ -13,9 +13,6 @@ export function UniDashboardSidebar() {
     currentTime,
     lunarDateStr,
     cardRadius,
-    cardShadow,
-    cardBorder,
-    calendarCardShadow,
     quickEntryItems,
     quickEntryLoading,
     quickEntryMenuTreeData,
@@ -32,8 +29,6 @@ export function UniDashboardSidebar() {
         currentTime={currentTime}
         isDark={isDark}
         cardRadius={cardRadius}
-        cardBorder={cardBorder}
-        cardShadow={calendarCardShadow}
         lunarDateStr={lunarDateStr}
         t={t}
       />
@@ -59,7 +54,6 @@ export function UniDashboardSidebar() {
         <DashboardUsageTipsCarousel
           t={t}
           cardRadius={cardRadius}
-          cardShadow={cardShadow}
           gitCommit={gitCommit}
           buildTimeDisplay={buildTimeDisplay}
           onCopyCommit={copyPlatformCommit}

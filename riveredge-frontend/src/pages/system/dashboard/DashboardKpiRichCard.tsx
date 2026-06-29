@@ -71,7 +71,8 @@ export function resolveDashboardKpiMainColor(
 type KpiRichSide = { label: string; value: React.ReactNode };
 
 export type DashboardKpiRichCardProps = {
-  gradient: string;
+  /** 独立 Card 模式背景；嵌入 KPI 面板时由 CSS 控制 */
+  gradient?: string;
   title: string;
   mainValue: React.ReactNode;
   mainSuffix?: string;
@@ -257,7 +258,6 @@ export default function DashboardKpiRichCard({
         style={{
           height: '100%',
           width: '100%',
-          background: gradient,
           cursor: onClick ? 'pointer' : 'default',
           boxSizing: 'border-box',
         }}
@@ -272,11 +272,10 @@ export default function DashboardKpiRichCard({
       variant="borderless"
       hoverable
       onClick={onClick}
+      className="dashboard-section__card"
       style={{
         borderRadius: token.borderRadiusLG,
-        border: 'none',
-        boxShadow: token.boxShadowTertiary,
-        background: gradient,
+        background: gradient ?? token.colorBgContainer,
         width: '100%',
         height: '100%',
       }}

@@ -1,0 +1,76 @@
+/**
+ * uni-ai-button — 统一 AI 入口按钮（多彩渐变 + Lottie 图标）
+ */
+
+.uni-ai-btn.ant-btn {
+  border: 1px solid color-mix(in srgb, #8b5cf6 22%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, #6366f1 11%, #fff) 0%,
+    color-mix(in srgb, #a855f7 10%, #fff) 48%,
+    color-mix(in srgb, #ec4899 8%, #fff) 100%
+  );
+  color: #6d28d9;
+  font-weight: 500;
+  box-shadow: 0 1px 2px color-mix(in srgb, #6366f1 8%, transparent);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease;
+
+  &:not(:disabled):hover {
+    color: #5b21b6 !important;
+    border-color: color-mix(in srgb, #8b5cf6 38%, transparent) !important;
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, #6366f1 16%, #fff) 0%,
+      color-mix(in srgb, #a855f7 14%, #fff) 48%,
+      color-mix(in srgb, #ec4899 12%, #fff) 100%
+    ) !important;
+    box-shadow: 0 2px 8px color-mix(in srgb, #8b5cf6 14%, transparent);
+  }
+
+  &:not(:disabled):active {
+    color: #4c1d95 !important;
+    box-shadow: 0 1px 3px color-mix(in srgb, #6366f1 10%, transparent);
+  }
+
+  .uni-ai-btn__icon,
+  .uni-ai-lottie-icon {
+    display: inline-flex;
+    line-height: 0;
+    vertical-align: -0.2em;
+    flex-shrink: 0;
+  }
+}
+
+.uni-ai-lottie-icon {
+  display: inline-flex;
+  line-height: 0;
+  flex-shrink: 0;
+}
+
+[data-theme='dark'] .uni-ai-btn.ant-btn {
+  border-color: color-mix(in srgb, #a855f7 32%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, #6366f1 24%, var(--ant-color-bg-container, #141414)) 0%,
+    color-mix(in srgb, #a855f7 20%, var(--ant-color-bg-container, #141414)) 48%,
+    color-mix(in srgb, #ec4899 16%, var(--ant-color-bg-container, #141414)) 100%
+  );
+  color: #c4b5fd;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+
+  &:not(:disabled):hover {
+    color: #ddd6fe !important;
+    border-color: color-mix(in srgb, #a855f7 48%, transparent) !important;
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, #6366f1 30%, var(--ant-color-bg-container, #141414)) 0%,
+      color-mix(in srgb, #a855f7 26%, var(--ant-color-bg-container, #141414)) 48%,
+      color-mix(in srgb, #ec4899 22%, var(--ant-color-bg-container, #141414)) 100%
+    ) !important;
+    box-shadow: 0 2px 10px color-mix(in srgb, #8b5cf6 22%, transparent);
+  }
+}

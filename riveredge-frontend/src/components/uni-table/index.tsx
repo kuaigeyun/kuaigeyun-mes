@@ -822,7 +822,7 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   exportButtonText?: string
   /**
-   * 右侧工具栏：插入在导出按钮之前的附加按钮（如自定义上传）
+   * 右侧工具栏：插入在导入/导出图标组之前的附加按钮（如自定义上传）
    */
   rightToolBarActionsBeforeExport?: ReactNode[]
   /**
@@ -2314,6 +2314,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const buildRightActions = (iconOnly = false) => {
     const rightButtons: ReactNode[] = []
 
+    const beforeExportActions = withToolbarItemKeys(
+      rightToolBarActionsBeforeExport,
+      'right-before-export',
+    )
+    if (beforeExportActions.length > 0) {
+      rightButtons.push(...beforeExportActions)
+    }
+
     if (gatedShowImportButton && onImport) {
       rightButtons.push(
         <UniImportToolbarButton
@@ -2326,11 +2334,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     if (gatedShowExportButton && onExport) {
-      const beforeExportActions = withToolbarItemKeys(
-        rightToolBarActionsBeforeExport,
-        'right-before-export',
-      )
-      rightButtons.push(...beforeExportActions)
       rightButtons.push(
         <UniExportMenuButton<T>
           key="export"

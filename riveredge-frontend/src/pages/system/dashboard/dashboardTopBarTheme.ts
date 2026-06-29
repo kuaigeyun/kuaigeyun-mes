@@ -6,18 +6,6 @@ export function dashboardTopBarUserCardBackground(primary: string, isDark: boole
   return primary;
 }
 
-/** 统一顶栏卡片外边框 */
-export function getDashboardTopBarCardBorder(isDark: boolean) {
-  return isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(0, 0, 0, 0.08)';
-}
-
-/** 统一顶栏卡片阴影 */
-export function getDashboardTopBarCardShadow(isDark: boolean) {
-  return isDark
-    ? '0 4px 24px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.2)'
-    : '0 2px 12px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)';
-}
-
 /** 获取顶栏卡片背景渐变 */
 export function getDashboardTopBarTheme(isDark: boolean) {
   return {
@@ -35,8 +23,6 @@ export function getDashboardTopBarTheme(isDark: boolean) {
     clockCardBackground: isDark
       ? 'linear-gradient(180deg, #1c1c1c 0%, #111111 100%)'
       : 'linear-gradient(180deg, #fafaf9 0%, #f4f4f5 100%)',
-    clockCardBorder: getDashboardTopBarCardBorder(isDark),
-    clockCardShadow: getDashboardTopBarCardShadow(isDark),
 
     /** 文本与状态颜色 */
     textColor: isDark ? 'rgba(255, 255, 255, 0.85)' : '#18181b',
@@ -44,14 +30,9 @@ export function getDashboardTopBarTheme(isDark: boolean) {
     textMutedColor: isDark ? 'rgba(255, 255, 255, 0.35)' : 'rgba(24, 24, 27, 0.35)',
     itemHoverBg: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(24, 24, 27, 0.04)',
     itemActiveBg: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(24, 24, 27, 0.08)',
-    itemBorder: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(24, 24, 27, 0.08)',
   } as const;
 }
 
-/** 遗留兼容项（建议后续替换为函数调用） */
-export const dashboardTopBarCardBorder = '1px solid rgba(0, 0, 0, 0.08)';
-export const dashboardTopBarCardShadow = '0 2px 12px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)';
-export const dashboardTopBarUserCardOuterBorder = dashboardTopBarCardBorder;
 export const dashboardTopBarTheme = getDashboardTopBarTheme(false);
 
 

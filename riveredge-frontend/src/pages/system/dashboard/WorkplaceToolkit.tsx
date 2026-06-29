@@ -80,7 +80,7 @@ const TrayToolButton: React.FC<{
         borderRadius: 12,
         cursor: 'pointer',
         background: hover ? barTheme.itemHoverBg : 'transparent',
-        border: hover ? barTheme.itemBorder : '1px solid transparent',
+        border: hover ? 'var(--dashboard-card-border)' : '1px solid transparent',
         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         transform: hover ? 'translateY(-1px)' : 'translateY(0)',
       }}

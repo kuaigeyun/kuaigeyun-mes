@@ -11,17 +11,19 @@ from typing import Optional, Dict, Any, List
 from datetime import date, datetime, timedelta
 import zoneinfo
 import uuid
-from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
+from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_permission_codes
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
 from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+from apps.kuaizhizao.services.sales_order_ocr_service import SalesOrderOcrService
 from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
 from apps.kuaizhizao.schemas.document_relation import ChangeImpactResponse
 from apps.kuaizhizao.schemas.sales_order import (
@@ -36,6 +38,7 @@ from apps.kuaizhizao.schemas.sales_order import (
     SalesOrderTrackingResponse,
 )
 from apps.kuaizhizao.schemas.quote import QuoteBreakdownResponse
+from apps.kuaizhizao.schemas.sales_order_ocr import SalesOrderOcrParseTextRequest, SalesOrderOcrResult
 
 # 初始化服务实例
 sales_order_service = SalesOrderService()
@@ -172,6 +175,67 @@ async def pull_sales_order_from_sales_contract(
             http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             "从销售合同上拉生成销售订单失败",
             "/sales-orders/pull-from-sales-contract",
+            tenant_id,
+        )
+
+
+@router.post(
+    "/ocr-parse-text",
+    response_model=SalesOrderOcrResult,
+    response_model_by_alias=True,
+    summary="Parse sales order from natural language text (KU-AI)",
+    dependencies=[Depends(require_permission_codes("kuaiai:entry:read"))],
+)
+async def parse_sales_order_from_text(
+    body: SalesOrderOcrParseTextRequest,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """根据自然语言描述或对话补充，结构化销售订单字段。"""
+    try:
+        return await SalesOrderOcrService.extract_from_text(
+            tenant_id=tenant_id,
+            text=body.text,
+            context=body.context,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/ocr-parse-text", tenant_id)
+    except Exception as e:
+        logger.exception("sales order OCR parse text failed tenant_id={}", tenant_id)
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"对话录单解析失败: {str(e)}",
+            "/sales-orders/ocr-parse-text",
+            tenant_id,
+        )
+
+
+@router.post(
+    "/ocr-extract",
+    response_model=SalesOrderOcrResult,
+    response_model_by_alias=True,
+    summary="OCR extract sales order from image (KU-AI)",
+    dependencies=[Depends(require_permission_codes("kuaiai:entry:read"))],
+)
+async def extract_sales_order_from_image(
+    file: UploadFile = File(..., description="销售订单/合同/单据图片"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """上传单据图片，通过 KU-AI 视觉模型识别并结构化销售订单字段。"""
+    try:
+        image_bytes = await file.read()
+        return await SalesOrderOcrService.extract_from_image(
+            tenant_id=tenant_id,
+            image_bytes=image_bytes,
+            content_type=file.content_type,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/ocr-extract", tenant_id)
+    except Exception as e:
+        logger.exception("sales order OCR extract failed tenant_id={}", tenant_id)
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"OCR 识别失败: {str(e)}",
+            "/sales-orders/ocr-extract",
             tenant_id,
         )
 

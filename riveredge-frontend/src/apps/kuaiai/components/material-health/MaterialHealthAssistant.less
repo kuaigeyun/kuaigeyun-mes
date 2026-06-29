@@ -1,0 +1,51 @@
+.material-health-drawer-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1;
+  min-height: 24px;
+  vertical-align: middle;
+}
+
+.material-health-issue-list {
+  .ant-list-item {
+    align-items: flex-start;
+    padding-inline: 0;
+  }
+
+  .material-health-material-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    min-width: 0;
+  }
+
+  .material-health-material-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .material-health-issue-code-link {
+    padding: 0;
+    height: auto;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .material-health-material-issues {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .material-health-material-issue {
+    padding-left: 8px;
+    border-left: 2px solid var(--ant-color-border-secondary, rgba(5, 5, 5, 0.06));
+  }
+}

@@ -59,6 +59,8 @@ import { isLoginVisualLayerEnabled, validateLoginVisualLayers } from '../../../u
 import {
   DEEPSEEK_DEFAULT_BASE_URL,
   DEEPSEEK_DEFAULT_MODEL,
+  DEEPSEEK_OCR_EXAMPLE_BASE_URL,
+  DEEPSEEK_OCR_EXAMPLE_MODEL,
   DEEPSEEK_V4_MODEL_OPTIONS,
   INTEGRATION_API_KEY_MASK,
 } from '../../../utils/integrationSettings';
@@ -133,6 +135,9 @@ function getInitialValuesFromConfigStore(
     'integrations.deepseek.rag_use_embedding': configs.integrations?.deepseek?.rag_use_embedding !== false,
     'integrations.deepseek.rag_top_k': configs.integrations?.deepseek?.rag_top_k ?? 5,
     'integrations.deepseek.custom_system_prompt': configs.integrations?.deepseek?.custom_system_prompt ?? '',
+    'integrations.deepseek.ocr_base_url': configs.integrations?.deepseek?.ocr_base_url ?? '',
+    'integrations.deepseek.ocr_model': configs.integrations?.deepseek?.ocr_model ?? '',
+    'integrations.deepseek.ocr_api_key': '',
   };
 }
 
@@ -210,6 +215,9 @@ const SITE_SETTINGS_INTEGRATIONS_TAB_FIELDS = [
   'integrations.deepseek.rag_use_embedding',
   'integrations.deepseek.rag_top_k',
   'integrations.deepseek.custom_system_prompt',
+  'integrations.deepseek.ocr_base_url',
+  'integrations.deepseek.ocr_model',
+  'integrations.deepseek.ocr_api_key',
 ] as const;
 
 const SiteSettingsPage: React.FC = () => {
@@ -272,6 +280,7 @@ const SiteSettingsPage: React.FC = () => {
   const [branchOrgForm] = Form.useForm();
   const [useNewBranchAdmin, setUseNewBranchAdmin] = useState(false);
   const [deepseekApiKeyConfigured, setDeepseekApiKeyConfigured] = useState(false);
+  const [deepseekOcrApiKeyConfigured, setDeepseekOcrApiKeyConfigured] = useState(false);
   const tenantDomainValue = Form.useWatch('tenant_domain', form);
   const loginLogoValue = Form.useWatch('login_logo', form);
   const loginDecorationValue = Form.useWatch('login_decoration_image', form);
@@ -771,8 +780,16 @@ const SiteSettingsPage: React.FC = () => {
         'integrations.deepseek.rag_top_k': setting.settings?.integrations?.deepseek?.rag_top_k ?? 5,
         'integrations.deepseek.custom_system_prompt':
           setting.settings?.integrations?.deepseek?.custom_system_prompt ?? '',
+        'integrations.deepseek.ocr_base_url':
+          setting.settings?.integrations?.deepseek?.ocr_base_url ?? '',
+        'integrations.deepseek.ocr_model':
+          setting.settings?.integrations?.deepseek?.ocr_model ?? '',
+        'integrations.deepseek.ocr_api_key': '',
       };
       setDeepseekApiKeyConfigured(setting.settings?.integrations?.deepseek?.api_key_configured === true);
+      setDeepseekOcrApiKeyConfigured(
+        setting.settings?.integrations?.deepseek?.ocr_api_key_configured === true,
+      );
       setUseCustomLoginLogo(Boolean(String(newValues.login_logo || '').trim()));
 
       if (!hasCache) {
@@ -1126,6 +1143,7 @@ const SiteSettingsPage: React.FC = () => {
       } else if (saveTab === 'integrations') {
         const values = await form.validateFields([...SITE_SETTINGS_INTEGRATIONS_TAB_FIELDS]);
         const deepseekApiKey = String(values['integrations.deepseek.api_key'] ?? '').trim();
+        const deepseekOcrApiKey = String(values['integrations.deepseek.ocr_api_key'] ?? '').trim();
         const deepseekPayload: Record<string, any> = {
           enabled: values['integrations.deepseek.enabled'] === true,
           model:
@@ -1139,9 +1157,14 @@ const SiteSettingsPage: React.FC = () => {
           rag_use_embedding: values['integrations.deepseek.rag_use_embedding'] !== false,
           rag_top_k: Number(values['integrations.deepseek.rag_top_k']) || 5,
           custom_system_prompt: String(values['integrations.deepseek.custom_system_prompt'] ?? '').trim(),
+          ocr_base_url: String(values['integrations.deepseek.ocr_base_url'] ?? '').trim(),
+          ocr_model: String(values['integrations.deepseek.ocr_model'] ?? '').trim(),
         };
         if (deepseekApiKey && deepseekApiKey !== INTEGRATION_API_KEY_MASK) {
           deepseekPayload.api_key = deepseekApiKey;
+        }
+        if (deepseekOcrApiKey && deepseekOcrApiKey !== INTEGRATION_API_KEY_MASK) {
+          deepseekPayload.ocr_api_key = deepseekOcrApiKey;
         }
         settings.integrations = { deepseek: deepseekPayload };
         shouldRefreshConfigs = true;
@@ -1671,6 +1694,52 @@ const SiteSettingsPage: React.FC = () => {
                     deepseekApiKeyConfigured
                       ? t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholderConfigured')
                       : t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholder')
+                  }
+                  autoComplete="new-password"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Card>
+      </Col>
+      <Col span={24}>
+        <Card title={t('pages.system.siteSettings.integrationsDeepseekOcrTitle')} size="small">
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
+            {t('pages.system.siteSettings.integrationsDeepseekOcrHint')}
+          </Typography.Paragraph>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={8}>
+              <Form.Item
+                name="integrations.deepseek.ocr_base_url"
+                label={t('pages.system.siteSettings.integrationsDeepseekOcrBaseUrl')}
+              >
+                <Input placeholder={DEEPSEEK_OCR_EXAMPLE_BASE_URL} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item
+                name="integrations.deepseek.ocr_model"
+                label={t('pages.system.siteSettings.integrationsDeepseekOcrModel')}
+              >
+                <Input placeholder={DEEPSEEK_OCR_EXAMPLE_MODEL} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item
+                name="integrations.deepseek.ocr_api_key"
+                label={t('pages.system.siteSettings.integrationsDeepseekOcrApiKey')}
+                tooltip={t('pages.system.siteSettings.integrationsDeepseekOcrApiKeyTooltip')}
+                extra={
+                  deepseekOcrApiKeyConfigured
+                    ? t('pages.system.siteSettings.integrationsDeepseekApiKeyConfigured')
+                    : undefined
+                }
+              >
+                <Input.Password
+                  placeholder={
+                    deepseekOcrApiKeyConfigured
+                      ? t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholderConfigured')
+                      : t('pages.system.siteSettings.integrationsDeepseekOcrApiKeyPlaceholder')
                   }
                   autoComplete="new-password"
                 />

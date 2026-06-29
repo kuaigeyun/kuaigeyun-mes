@@ -10,3 +10,7 @@ export const DEEPSEEK_V4_MODEL_OPTIONS = [
   'deepseek-v4-flash',
   'deepseek-v4-pro',
 ] as const;
+
+/** OCR 视觉端点示例（DeepSeek 官方 API 不支持 image_url，需单独配置） */
+export const DEEPSEEK_OCR_EXAMPLE_BASE_URL = 'https://api.siliconflow.cn/v1';
+export const DEEPSEEK_OCR_EXAMPLE_MODEL = 'deepseek-ai/DeepSeek-OCR';

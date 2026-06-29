@@ -85,10 +85,6 @@ import DashboardKpiPanel, {
 } from './DashboardKpiPanel';
 import DashboardOperationCardsPanel from './DashboardOperationCardsPanel';
 import { DashboardUsageTipsCarousel } from './DashboardUsageTipsCarousel';
-import {
-  getDashboardTopBarCardBorder,
-  getDashboardTopBarCardShadow,
-} from './dashboardTopBarTheme';
 import { MobileWorkplace } from './MobileWorkplace';
 import { useTouchScreen } from '../../../hooks/useTouchScreen';
 import { useAutoGuide } from '../../../components/onboarding-guide/useAutoGuide';
@@ -210,9 +206,8 @@ export default function DashboardPage() {
   const screens = useBreakpoint();
   const touchScreen = useTouchScreen();
   const isDark = useThemeStore((s) => s.resolved.isDark);
-  /** 工作台卡片：圆角与阴影与 Ant Design 系统 token 一致，阴影用较轻的 tertiary */
+  /** 工作台卡片圆角（阴影见 global.less `.dashboard-section__card`） */
   const dashboardCardRadius = token.borderRadiusLG;
-  const dashboardCardShadow = token.boxShadowTertiary;
   /** 底部待办 / 最新操作两卡统一固定高度（整张 Card，含标题栏），列表在卡片内滚动 */
   const dashboardBottomThreeCardsFixedHeight = 500;
   /** 工作台：主 Row gutter、纵向 flex gap、相邻区块 margin 与 antd 默认 gutter 对齐，统一 16px */
@@ -612,7 +607,6 @@ export default function DashboardPage() {
               t={t}
               navigate={navigate}
               cardRadius={dashboardCardRadius}
-              cardShadow={dashboardCardShadow}
               layoutGutter={DASHBOARD_LAYOUT_GUTTER}
               fillHeight
             />
@@ -620,7 +614,6 @@ export default function DashboardPage() {
 
           <DashboardOperationCardsPanel
             cardRadius={dashboardCardRadius}
-            cardShadow={dashboardCardShadow}
             isDark={isDark}
             t={t}
             onNavigate={navigate}
@@ -697,7 +690,6 @@ export default function DashboardPage() {
           <DashboardSectionCard
             height={dashboardBottomThreeCardsFixedHeight}
             cardRadius={dashboardCardRadius}
-            cardShadow={dashboardCardShadow}
             className="dashboard-section--feed"
             loading={productionBroadcastLoading}
             title={t('pages.dashboard.latestOperations')}
@@ -773,7 +765,6 @@ export default function DashboardPage() {
           <DashboardSectionCard
             height={dashboardBottomThreeCardsFixedHeight}
             cardRadius={dashboardCardRadius}
-            cardShadow={dashboardCardShadow}
             className="dashboard-section--with-tabs"
             loading={todosLoading}
             title={
@@ -941,8 +932,6 @@ export default function DashboardPage() {
             currentTime={currentTime}
             isDark={isDark}
             cardRadius={dashboardCardRadius}
-            cardBorder={getDashboardTopBarCardBorder(isDark)}
-            cardShadow={getDashboardTopBarCardShadow(isDark)}
             lunarDateStr={lunarDateStr}
             t={t}
             onWeatherChange={setWeatherForDashboard}
@@ -977,7 +966,6 @@ export default function DashboardPage() {
             <DashboardUsageTipsCarousel
               t={t}
               cardRadius={dashboardCardRadius}
-              cardShadow={dashboardCardShadow}
               gitCommit={platformVersion?.git_commit}
               buildTimeDisplay={buildTimeDisplay}
               onCopyCommit={copyPlatformCommit}

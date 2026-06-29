@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Card } from 'antd';
 import { BulbOutlined, CopyOutlined } from '@ant-design/icons';
 import type { TFunction } from 'i18next';
+import { DASHBOARD_SECTION_CARD_CLASS } from './dashboardCardSurface';
 
 const TIP_COUNT = 12;
 const ROTATE_MS = 10000;
@@ -14,7 +15,6 @@ const FADE_MS = 320;
 export interface DashboardUsageTipsCarouselProps {
   t: TFunction;
   cardRadius?: number | string;
-  cardShadow?: string;
   gitCommit?: string;
   buildTimeDisplay?: string;
   onCopyCommit?: () => void;
@@ -23,7 +23,6 @@ export interface DashboardUsageTipsCarouselProps {
 export function DashboardUsageTipsCarousel({
   t,
   cardRadius,
-  cardShadow,
   gitCommit = '',
   buildTimeDisplay = '—',
   onCopyCommit,
@@ -58,10 +57,9 @@ export function DashboardUsageTipsCarousel({
   return (
     <Card
       variant="borderless"
-      className="dashboard-usage-tips-card"
+      className={`dashboard-usage-tips-card ${DASHBOARD_SECTION_CARD_CLASS}`}
       style={{
         borderRadius: cardRadius,
-        boxShadow: cardShadow,
         flexShrink: 0,
       }}
       styles={{ body: { padding: 0 } }}

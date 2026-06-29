@@ -7,6 +7,7 @@ import { Card, Segmented } from 'antd';
 import type { NavigateFunction } from 'react-router-dom';
 import type { TFunction } from 'i18next';
 import type { StatisticsResponse } from '../../../services/dashboard';
+import { DASHBOARD_SECTION_CARD_CLASS } from './dashboardCardSurface';
 import DashboardKpiRichCard, {
   formatDashboardMetric,
   formatDashboardRate,
@@ -47,7 +48,6 @@ export interface DashboardKpiPanelProps {
   t: TFunction;
   navigate: NavigateFunction;
   cardRadius: number;
-  cardShadow: string;
   kpiCellHeight?: number;
   layoutGutter: number;
   /** 撑满左侧顶区剩余高度（与右侧日历对齐） */
@@ -171,13 +171,11 @@ export default function DashboardKpiPanel({
   t,
   navigate,
   cardRadius,
-  cardShadow,
   kpiCellHeight = 132,
   layoutGutter,
   fillHeight = false,
 }: DashboardKpiPanelProps) {
   const kpiItems = useMemo(() => buildKpiItems(t), [t]);
-  const cellBg = isDark ? 'var(--ant-colorBgContainer)' : '#ffffff';
 
   const segmentedOptions = TIME_RANGE_OPTIONS.map((key) => ({
     label: t(TIME_RANGE_I18N[key]),
@@ -186,12 +184,16 @@ export default function DashboardKpiPanel({
 
   return (
     <Card
-      className={['dashboard-kpi-panel', fillHeight ? 'dashboard-kpi-panel--fill' : '']
+      variant="borderless"
+      className={[
+        'dashboard-kpi-panel',
+        DASHBOARD_SECTION_CARD_CLASS,
+        fillHeight ? 'dashboard-kpi-panel--fill' : '',
+      ]
         .filter(Boolean)
         .join(' ')}
       style={{
         borderRadius: cardRadius,
-        boxShadow: cardShadow,
         flexShrink: fillHeight ? undefined : 0,
         flex: fillHeight ? '1 1 0' : undefined,
         minHeight: fillHeight ? 0 : undefined,
@@ -227,7 +229,6 @@ export default function DashboardKpiPanel({
           <DashboardKpiRichCard
             key={item.path + item.titleKey}
             embedded
-            gradient={cellBg}
             title={t(item.titleKey)}
             mainValue={item.getMainValue(statistics)}
             mainSuffix={item.mainSuffixKey ? t(item.mainSuffixKey) : '%'}

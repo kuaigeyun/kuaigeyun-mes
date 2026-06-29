@@ -13,7 +13,6 @@ import { WipOperationCardView } from './WipOperationCardView';
 
 export interface DashboardOperationCardsPanelProps {
   cardRadius: number | string;
-  cardShadow: string;
   isDark?: boolean;
   t: TFunction;
   onNavigate: (path: string) => void;
@@ -21,7 +20,6 @@ export interface DashboardOperationCardsPanelProps {
 
 export function DashboardOperationCardsPanel({
   cardRadius,
-  cardShadow,
   isDark = false,
   t,
   onNavigate,
@@ -76,7 +74,6 @@ export function DashboardOperationCardsPanel({
         </Space>
       }
       cardRadius={cardRadius}
-      cardShadow={cardShadow}
       styles={{
         body: {
           padding: '12px 16px 14px',

@@ -112,6 +112,7 @@ import { isVariantSkuMaterial, isVariantMasterMaterial, formatVariantAttributesL
 import { variantAttributeApi } from '../../services/variant-attribute'
 import type { VariantAttributeDefinition } from '../../types/variant-attribute'
 import FabricationRawMaterialWizard from '../../components/FabricationRawMaterialWizard'
+import { MaterialHealthAssistantTrigger } from '../../../kuaiai/components/material-health/MaterialHealthAssistant'
 import {
   fabricationMaterialNeedsRawMaterialSetup,
   isFabricationFromValues,
@@ -770,6 +771,18 @@ const MaterialsManagementPage: React.FC = () => {
     },
     [messageApi, t]
   )
+
+  const handleOpenMaterialForEdit = useCallback(
+    (uuid: string) => {
+      void handleEditMaterial({ uuid } as Material)
+    },
+    [handleEditMaterial],
+  )
+
+  const healthCheckGroupId = useMemo(() => {
+    const id = selectedGroupIdRef.current ?? selectedGroupId
+    return id != null && id !== -1 ? id : null
+  }, [selectedGroupId])
 
   /**
    * 将后端树形数据转换为Ant Design Tree组件格式
@@ -2525,6 +2538,10 @@ const MaterialsManagementPage: React.FC = () => {
                           onClick: () => handleOpenBatchVariantModal(),
                         },
                       ]}
+                    />
+                    <MaterialHealthAssistantTrigger
+                      groupId={healthCheckGroupId}
+                      onOpenMaterial={handleOpenMaterialForEdit}
                     />
                   </Space>
                 }

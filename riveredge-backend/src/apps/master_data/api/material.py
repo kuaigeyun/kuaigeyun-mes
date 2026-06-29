@@ -11,6 +11,7 @@ from loguru import logger
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from core.api.deps.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_permission_codes
 from apps.master_data.api._master_data_route_access import require_master_data_module_access
 from infra.models.user import User
 from apps.master_data.services.material_service import MaterialService
@@ -22,6 +23,7 @@ from apps.master_data.services.material_source_service import (
     MaterialSourceChangeService,
     MaterialSourceSuggestionService,
 )
+from apps.master_data.services.material_health_service import MaterialHealthService
 from apps.master_data.schemas.material_schemas import (
     MaterialGroupCreate, MaterialGroupUpdate, MaterialGroupResponse,
     MaterialCreate, MaterialUpdate, MaterialResponse, MaterialListResponse,
@@ -47,6 +49,10 @@ from apps.master_data.schemas.material_schemas import (
     MaterialBatchCreate, MaterialBatchUpdate, MaterialBatchResponse, MaterialBatchListResponse,
     GenerateBatchNoRequest,
     MaterialSerialCreate, MaterialSerialUpdate, MaterialSerialResponse, MaterialSerialListResponse
+)
+from apps.master_data.schemas.material_health_schemas import (
+    MaterialHealthCheckRequest,
+    MaterialHealthCheckResponse,
 )
 from apps.master_data.services.bom_change_service import BOMChangeService
 from apps.master_data.schemas.bom_change_schemas import (
@@ -1747,6 +1753,36 @@ async def bulk_patch_material_defaults(
         return await MaterialService.bulk_patch_material_defaults(tenant_id, data)
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/health-check",
+    response_model=MaterialHealthCheckResponse,
+    response_model_by_alias=True,
+    summary="Material health check (completeness & duplicate codes)",
+    dependencies=[Depends(require_permission_codes("kuaiai:entry:read"))],
+)
+async def material_health_check(
+    data: MaterialHealthCheckRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    物料健康助手：检查基本信息完备度/合理性，以及疑似一物多码、多物一码、相似重复。
+    """
+    try:
+        return await MaterialHealthService.run_health_check(
+            tenant_id=tenant_id,
+            group_id=data.group_id,
+            masters_only=data.masters_only,
+        )
+    except Exception as e:
+        logger.exception("material health check failed")
+        raise _http_error(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"健康检查失败: {str(e)}",
+            tenant_id=tenant_id,
+        )
 
 
 @router.post(

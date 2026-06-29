@@ -19,10 +19,6 @@ import { useConfigStore } from '../../stores/configStore';
 import { getPlatformVersion } from '../../services/platformSettings';
 import { formatTimeInTimezone } from '../../utils/formatTimeInTimezone';
 import { formatLunarDate } from '../../utils/lunarDate';
-import {
-  getDashboardTopBarCardBorder,
-  getDashboardTopBarCardShadow,
-} from '../../pages/system/dashboard/dashboardTopBarTheme';
 
 const { useToken } = theme;
 
@@ -130,9 +126,6 @@ export function useUniDashboardSidebar() {
     currentTime,
     lunarDateStr,
     cardRadius: token.borderRadiusLG,
-    cardShadow: token.boxShadowTertiary,
-    cardBorder: getDashboardTopBarCardBorder(isDark),
-    calendarCardShadow: getDashboardTopBarCardShadow(isDark),
     quickEntryItems,
     quickEntryLoading,
     quickEntryMenuTreeData,

@@ -42,6 +42,8 @@ import { CustomerSelectDropdown } from '../../../../master-data/components/Custo
 import { MaterialInventoryIndicator } from '../../../components/MaterialInventoryIndicator';
 import { MaterialBomIndicator } from '../../../components/MaterialBomIndicator';
 import { SalesOrderIndicatorsProvider } from '../../../components/SalesOrderIndicatorsProvider';
+import { SalesOrderAiCreateTrigger } from './components/SalesOrderAiCreateDrawer';
+import { useKuaiaiEntryAvailable } from '../../../../kuaiai/hooks/useKuaiaiEntryAvailable';
 import {
   SalesOrderDetailProvider,
   SalesOrderDetailBasicPane,
@@ -422,6 +424,7 @@ const SalesOrderSalesmanField: React.FC<{ userList: User[]; loading: boolean }> 
 const SalesOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
+  const kuaiaiAvailable = useKuaiaiEntryAvailable();
   const salesCommonFormLabels = useMemo(() => getSalesCommonFormLabels(t), [t]);
   const defaultSalesOrderCurrency = useConfigStore((s) => {
     const c = s.configs.default_currency;
@@ -3750,13 +3753,25 @@ const SalesOrdersPage: React.FC = () => {
                   : t('app.kuaizhizao.menu.sales-management.sales-orders.edit')}
               </Typography.Title>
             </Space>
-            <DocumentFormPageHeaderActions
-              onCancel={leaveSalesOrderFormPage}
-              onSaveDraft={() => void handleSaveDraft()}
-              onPrimarySubmit={triggerSalesOrderFormSubmit}
-              isCreatePage={isCreatePage}
-              canSubmitAfterSave={canSubmitAfterSave}
-            />
+            <Space wrap align="center">
+              {isCreatePage && kuaiaiAvailable ? (
+                <SalesOrderAiCreateTrigger
+                  formRef={formRef}
+                  customers={customers}
+                  materials={materials}
+                  users={users}
+                  onCustomersChange={setCustomers}
+                  onMaterialsChange={setMaterials}
+                />
+              ) : null}
+              <DocumentFormPageHeaderActions
+                onCancel={leaveSalesOrderFormPage}
+                onSaveDraft={() => void handleSaveDraft()}
+                onPrimarySubmit={triggerSalesOrderFormSubmit}
+                isCreatePage={isCreatePage}
+                canSubmitAfterSave={canSubmitAfterSave}
+              />
+            </Space>
             </>
           }
         >

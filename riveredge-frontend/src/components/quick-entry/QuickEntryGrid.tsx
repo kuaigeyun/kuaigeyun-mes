@@ -197,7 +197,6 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
           className="dashboard-section__card"
           style={{
             borderRadius: token.borderRadiusLG,
-            boxShadow: token.boxShadowTertiary,
           }}
         >
         <div className="quick-entry-grid-wrap">

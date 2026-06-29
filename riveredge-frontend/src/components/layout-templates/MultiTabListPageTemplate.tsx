@@ -12,6 +12,8 @@ import React, { ReactNode } from 'react';
 import { Card } from 'antd';
 import ListPageTemplate, { StatCard } from './ListPageTemplate';
 
+const MULTI_TAB_PAGE_ROOT_CLASS = 'multi-tab-list-page-template';
+
 export interface TabItem {
     /** 标签唯一标识 */
     key: string;
@@ -88,18 +90,22 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
     return (
         <ListPageTemplate
             statCards={statCards}
-            className={className}
+            className={[MULTI_TAB_PAGE_ROOT_CLASS, className].filter(Boolean).join(' ')}
             style={style}
             prioritizeMainContentPaint={prioritizeMainContentPaint}
+            fillMain
             tableScrollLayout="multiTab"
         >
-            {header && <div style={{ marginBottom: 16 }}>{header}</div>}
+            {header ? <div style={{ marginBottom: 16, flexShrink: 0 }}>{header}</div> : null}
             <Card
+                className="multi-tab-list-page-card"
+                style={{ flex: 1, minHeight: 0 }}
                 tabList={tabs.map(tab => ({ key: tab.key, tab: tab.label }))}
                 activeTabKey={activeTabKey}
                 onTabChange={onTabChange}
                 tabBarExtraContent={tabBarExtraContent}
                 tabProps={{ size: 'middle' }}
+                classNames={{ body: 'scrollbar-like-modal multi-tab-list-page-card-body' }}
                 styles={{ body: preserveMounted ? { padding: 0 } : { padding } }}
             >
                 {bodyInner}

@@ -29,6 +29,26 @@ def is_deepseek_api_key_configured(deepseek: Dict[str, Any]) -> bool:
     return bool(isinstance(api_key, str) and api_key.strip() and not _is_masked_api_key(api_key))
 
 
+def is_deepseek_ocr_api_key_configured(deepseek: Dict[str, Any]) -> bool:
+    """判断 OCR 视觉端点 API Key 是否已配置（未单独配置时沿用 DeepSeek Key）。"""
+    ocr_api_key = deepseek.get("ocr_api_key")
+    if isinstance(ocr_api_key, str) and ocr_api_key.strip() and not _is_masked_api_key(ocr_api_key):
+        return True
+    return is_deepseek_api_key_configured(deepseek)
+
+
+def is_deepseek_ocr_endpoint_configured(deepseek: Dict[str, Any]) -> bool:
+    """OCR 视觉端点 base_url + model 是否已配置。"""
+    ocr_base = deepseek.get("ocr_base_url") or deepseek.get("vision_base_url")
+    ocr_model = deepseek.get("ocr_model") or deepseek.get("vision_model")
+    return bool(
+        isinstance(ocr_base, str)
+        and ocr_base.strip()
+        and isinstance(ocr_model, str)
+        and ocr_model.strip()
+    )
+
+
 def build_deepseek_public_status(settings: Dict[str, Any]) -> Dict[str, Any]:
     """构建 DeepSeek 集成对外状态（KU-AI 对话门控与站点设置展示共用）。"""
     deepseek = get_deepseek_integration(settings)
@@ -56,6 +76,9 @@ def mask_integrations_for_response(settings: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(deepseek, dict):
         deepseek["api_key_configured"] = is_deepseek_api_key_configured(deepseek)
         deepseek["api_key"] = ""
+        deepseek["ocr_api_key_configured"] = is_deepseek_ocr_api_key_configured(deepseek)
+        deepseek["ocr_api_key"] = ""
+        deepseek["ocr_configured"] = is_deepseek_ocr_endpoint_configured(deepseek)
 
     return result
 
@@ -86,6 +109,13 @@ def merge_integrations_update(
                 next_provider["api_key"] = current_provider["api_key"]
             else:
                 next_provider.pop("api_key", None)
+
+        incoming_ocr_api_key = incoming_provider.get("ocr_api_key")
+        if _is_blank(incoming_ocr_api_key) or _is_masked_api_key(incoming_ocr_api_key):
+            if current_provider.get("ocr_api_key"):
+                next_provider["ocr_api_key"] = current_provider["ocr_api_key"]
+            else:
+                next_provider.pop("ocr_api_key", None)
 
         merged[provider] = next_provider
 
