@@ -951,7 +951,7 @@ function Ensure-PlaywrightChromiumSync {
 }
 
 function Ensure-PlaywrightChromiumPostInstall {
-    # 开发环境后台补装，不阻塞 start 主流程
+    # 后台补装 Chromium，不阻塞 start / deploy 主流程（PDF 打印就绪前可能短暂不可用）
     if (-not (Test-PlaywrightPostInstallEnabled)) { return }
     Ensure-LogsDir
     $marker = Join-Path $script:LogsDir 'playwright-chromium.ready'
@@ -1375,10 +1375,10 @@ function Invoke-StartProd {
     Ensure-LogsDir
     Load-DeployEnv
     if (-not (Test-Path (Join-Path $script:FrontendDir 'dist\index.html'))) { throw '缺少前端 dist，请先运行 build' }
-    Ensure-PlaywrightChromiumSync
     Start-BackendProd
     Start-WorkerProd
     Start-CaddyProd
+    Ensure-PlaywrightChromiumPostInstall
     Write-LogOk 'RiverEdge 生产环境已就绪'
     $accessIp = if ($script:SERVER_IP) { $script:SERVER_IP } else { '127.0.0.1' }
     $webUrl = Resolve-ProdWebUrl $accessIp

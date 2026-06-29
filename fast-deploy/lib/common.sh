@@ -1968,7 +1968,7 @@ ensure_playwright_chromium_sync() {
 }
 
 ensure_playwright_chromium_postinstall() {
-    # 开发环境后台补装，不阻塞 start 主流程
+    # 后台补装 Chromium，不阻塞 start / deploy 主流程（PDF 打印就绪前可能短暂不可用）
     if ! playwright_postinstall_enabled; then
         return 0
     fi
@@ -2441,13 +2441,13 @@ cmd_start_prod() {
         fi
     fi
     record_deploy_release_metadata
-    ensure_playwright_chromium_sync || exit 1
     start_backend_prod
     start_worker_prod
     if ! start_caddy_prod; then
         rollback_partial_prod_start
         exit 1
     fi
+    ensure_playwright_chromium_postinstall
     log_ok "RiverEdge 生产环境已就绪"
     local access_ip="${SERVER_IP:-127.0.0.1}"
     local web_url
