@@ -103,7 +103,7 @@ class EquipmentUpkeepSheetCreate(BaseModel):
     department_uuid: str = Field(max_length=36, description="申请部门 UUID（须为末级部门）")
     equipment_id: int = Field(ge=1)
     service_type: ServiceTypeLiteral = Field(description="维修/保养")
-    description: Optional[str] = Field(default=None, description="维修原因/保养要求（可选）")
+    description: Optional[str] = Field(default=None, description="维修原因/保养要求（多项以英文逗号分隔，可选）")
     upkeep_param_set_id: Optional[int] = Field(None, ge=1, description="保养方案（保养单必填；未传时用设备台账默认）")
     header_attachment_file_uuids: Optional[List[str]] = None
     complete_notify_user_ids: List[int] = Field(default_factory=list)

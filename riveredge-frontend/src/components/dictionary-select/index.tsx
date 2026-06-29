@@ -19,8 +19,20 @@ import {
   createDictionaryItem,
 } from '../../services/dataDictionary';
 import { mapSystemDictionaryItemOptions } from '../../utils/systemDictionaryI18n';
+import {
+  formatMultiselectStoredValue,
+  parseMultiselectStoredValue,
+} from '../../utils/multiselectStoredValue';
 
 type DictionaryOption = { label: string; value: string };
+
+function resolveSelectedValues(value: unknown, multiple: boolean): string[] {
+  if (!multiple) {
+    if (value === undefined || value === null || value === '') return [];
+    return [String(value)];
+  }
+  return parseMultiselectStoredValue(value as string | string[] | null | undefined);
+}
 
 /** 由 Form.Item 注入 value/onChange；合并异步选项与当前值，避免未加载字典项时误显示占位符 */
 const DictionarySelectField = forwardRef<
@@ -28,18 +40,19 @@ const DictionarySelectField = forwardRef<
   Omit<React.ComponentProps<typeof UniDropdown>, 'options'> & {
     loadedOptions: DictionaryOption[];
     hookOnChange?: (v: any, opt: any) => void;
+    multiple?: boolean;
   }
->(({ loadedOptions, hookOnChange, onChange, value, ...rest }, ref) => {
+>(({ loadedOptions, hookOnChange, onChange, value, multiple = false, ...rest }, ref) => {
   const displayOptions = useMemo(() => {
-    if (value === undefined || value === null || value === '') {
+    const selected = resolveSelectedValues(value, multiple);
+    if (!selected.length) {
       return loadedOptions;
     }
-    const strVal = String(value);
-    if (loadedOptions.some((o) => String(o.value) === strVal)) {
-      return loadedOptions;
-    }
-    return [...loadedOptions, { value: strVal, label: strVal }];
-  }, [loadedOptions, value]);
+    const extra = selected
+      .filter((strVal) => !loadedOptions.some((o) => String(o.value) === strVal))
+      .map((strVal) => ({ value: strVal, label: strVal }));
+    return extra.length ? [...loadedOptions, ...extra] : loadedOptions;
+  }, [loadedOptions, value, multiple]);
 
   const handleChange = useCallback(
     (v: any, opt: any) => {
@@ -115,6 +128,8 @@ export interface DictionarySelectProps {
    * 无 system:data-dictionary read/display 时，通过 manifest module_references 隐式加载字典项。
    */
   hostResource?: string;
+  /** 多选模式：存库为英文逗号分隔字符串，表单内为字符串数组 */
+  mode?: 'multiple';
 }
 
 /**
@@ -144,7 +159,9 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   simpleQuickCreate = false,
   quickCreatePopoverZIndex,
   hostResource,
+  mode,
 }) => {
+  const multiple = mode === 'multiple';
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const isReadonlyMode = useProFormReadonlyMode(readonly);
@@ -246,13 +263,20 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       const newValue = newItem.value;
 
       const pathSource = setFieldValueNamePath !== undefined ? setFieldValueNamePath : name;
+      let emittedValue: string | string[] = newValue;
       if (pathSource != null && formRef?.current?.setFieldValue) {
         const path = (Array.isArray(pathSource) ? pathSource : [pathSource]) as (string | number)[];
-        formRef.current.setFieldValue(path, newValue);
+        if (multiple) {
+          const current = formRef.current.getFieldValue(path);
+          const arr = parseMultiselectStoredValue(current);
+          emittedValue = arr.includes(newValue) ? arr : [...arr, newValue];
+          formRef.current.setFieldValue(path, emittedValue);
+        } else {
+          formRef.current.setFieldValue(path, newValue);
+        }
       }
-      
-      // 触发 onChange 供外部同步
-      onChange?.(newValue, { value: newValue, label: newItem.label });
+
+      onChange?.(emittedValue, { value: newValue, label: newItem.label });
 
       return newValue;
     } catch (error: any) {
@@ -266,15 +290,41 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   const mergedRules = useMemo(() => {
     const baseRules = rules || [];
     if (required) {
+      if (multiple) {
+        return [
+          {
+            validator: (_: unknown, v: unknown) => {
+              const arr = parseMultiselectStoredValue(v as string | string[] | null | undefined);
+              if (!arr.length) {
+                return Promise.reject(new Error(`请选择${label}`));
+              }
+              return Promise.resolve();
+            },
+          },
+          ...baseRules,
+        ];
+      }
       return [{ required: true, message: `请选择${label}` }, ...baseRules];
     }
     return baseRules;
-  }, [required, label, rules]);
+  }, [required, label, rules, multiple]);
+
+  const multiselectValueProps = multiple
+    ? {
+        convert: (v: unknown) =>
+          parseMultiselectStoredValue(v as string | string[] | null | undefined),
+        transform: (v: unknown) => {
+          if (Array.isArray(v)) return formatMultiselectStoredValue(v.map(String));
+          return v ?? '';
+        },
+      }
+    : {};
 
   if (isReadonlyMode && noStyle) {
-    const strVal = value != null && value !== '' ? String(value) : '';
-    const displayLabel = options.find((o) => o.value === strVal)?.label ?? strVal;
-    return <span>{displayLabel || '-'}</span>;
+    const selected = resolveSelectedValues(value, multiple);
+    if (!selected.length) return <span>-</span>;
+    const labels = selected.map((strVal) => options.find((o) => o.value === strVal)?.label ?? strVal);
+    return <span>{multiple ? labels.join('、') : labels[0]}</span>;
   }
 
   if (isReadonlyMode) {
@@ -288,6 +338,12 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
         className="dictionary-select-form-item"
         readonly
         options={options}
+        {...multiselectValueProps}
+        fieldProps={
+          multiple
+            ? { mode: 'multiple', maxTagCount: 'responsive', optionFilterProp: 'label' }
+            : undefined
+        }
       />
     );
   }
@@ -295,13 +351,17 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   const baseFieldProps = {
     style: { width: '100%', ...style } as React.CSSProperties,
     className,
-    placeholder: placeholder || `请选择${label}`,
+    placeholder: placeholder || (multiple ? `请选择${label}（可多选）` : `请选择${label}`),
     showSearch: true as const,
     allowClear: true,
     loading: loading || externalLoading,
     disabled,
     loadedOptions: options,
+    multiple,
     size,
+    ...(multiple
+      ? { mode: 'multiple' as const, maxTagCount: 'responsive' as const, optionFilterProp: 'label' as const }
+      : {}),
     quickCreate: {
       label: simpleQuickCreate ? '快速新建' : '创建新项',
       onClick: (anchor: HTMLElement | null | undefined) => {
@@ -439,6 +499,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       rules={mergedRules}
       initialValue={initialValue}
       className="dictionary-select-form-item"
+      {...multiselectValueProps}
     >
       {dropdown}
     </ProForm.Item>

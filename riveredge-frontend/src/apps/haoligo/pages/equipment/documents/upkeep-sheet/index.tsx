@@ -752,6 +752,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
                           dictionaryCode={dictCode}
                           hostResource={HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_SHEET}
                           name="description"
+                          mode="multiple"
                           label={reasonLabel}
                           placeholder={t('app.haoligo.equipment.upkeep.descPh', { label: reasonLabel })}
                           rules={[

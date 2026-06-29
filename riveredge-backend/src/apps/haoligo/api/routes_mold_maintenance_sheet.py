@@ -178,7 +178,7 @@ async def assert_maintenance_line_molds_are_standby(
 class MoldMaintLineIn(BaseModel):
     mold_code: str = Field(max_length=64)
     mold_name: Optional[str] = Field(None, max_length=200)
-    repair_reason: str = Field(max_length=64)
+    repair_reason: str = Field(max_length=500, description="维修/保养原因（多项以英文逗号分隔）")
     repair_cost: Optional[Decimal] = None
     attachment_file_uuids: Optional[List[str]] = None
 

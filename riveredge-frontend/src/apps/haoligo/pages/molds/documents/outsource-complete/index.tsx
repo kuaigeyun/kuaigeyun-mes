@@ -1313,6 +1313,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
                           dictionaryCode="HAOLIGO_MOLD_REPAIR_REASON"
                           hostResource={completeResource}
                           name="repair_reason"
+                          mode="multiple"
                           setFieldValueNamePath={['line_items', meta.name, 'repair_reason']}
                           label="维修原因"
                           placeholder="维修原因"

@@ -114,7 +114,7 @@ class MoldUpkeepRecordLineOut(BaseModel):
 class MoldCompleteLineIn(BaseModel):
     mold_code: str = Field(max_length=64)
     mold_name: Optional[str] = Field(None, max_length=200)
-    repair_reason: Optional[str] = Field(None, max_length=200)
+    repair_reason: Optional[str] = Field(None, max_length=500)
     clear_total_production: Optional[bool] = Field(
         None,
         description="保养完修：是否重置该模具总产量；维修单恒为 false；未传时由接口按业务默认处理。",

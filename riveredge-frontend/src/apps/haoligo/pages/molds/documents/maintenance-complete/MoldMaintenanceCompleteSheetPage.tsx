@@ -1424,6 +1424,7 @@ export function MoldMaintenanceCompleteSheetPage({
                         }
                         hostResource={completeResource}
                         name="repair_reason"
+                        mode="multiple"
                         setFieldValueNamePath={['line_items', meta.name, 'repair_reason']}
                         label={serviceType === '保养' ? '保养原因' : '维修原因'}
                         placeholder={serviceType === '保养' ? '保养原因' : '维修原因'}

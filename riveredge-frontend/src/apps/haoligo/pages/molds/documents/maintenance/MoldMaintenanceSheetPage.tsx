@@ -979,6 +979,7 @@ export function MoldMaintenanceSheetPage({
                               dictionaryCode={dictCode}
                               hostResource={sheetResource}
                               name="repair_reason"
+                              mode="multiple"
                               setFieldValueNamePath={['line_items', meta.name, 'repair_reason']}
                               label={reasonLabel}
                               placeholder={`请选择${reasonLabel}`}
