@@ -225,8 +225,8 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
         "kuaizhizao:equipment-status:update",
     ),
     "mold_usage_attachments": (
-        "kuaizhizao:mold-usage:create",
-        "kuaizhizao:mold-usage:update",
+        "kuaizhizao:mold-borrow:create",
+        "kuaizhizao:mold-borrow:update",
     ),
     "mold_calibration_attachments": (
         "kuaizhizao:mold-calibration:create",

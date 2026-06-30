@@ -46,6 +46,29 @@ export const equipmentApi = {
     return apiRequest(`/apps/kuaizhizao/equipment/${equipmentUuid}/calibrations`, { method: 'POST', data });
   },
 
+  // 获取设备校验记录列表
+  listCalibrations: async (params?: { equipment_uuid?: string; skip?: number; limit?: number }) => {
+    return apiRequest('/apps/kuaizhizao/equipment/calibrations', { method: 'GET', params });
+  },
+
+  // 创建设备校验记录（独立检定页）
+  createCalibrationRecord: async (data: {
+    equipment_uuid: string;
+    calibration_date: string;
+    result: string;
+    certificate_no?: string;
+    expiry_date?: string;
+    remark?: string;
+    attachments?: Array<{ uid?: string; name?: string; url?: string }>;
+  }) => {
+    return apiRequest('/apps/kuaizhizao/equipment/calibrations', { method: 'POST', data });
+  },
+
+  // 获取设备检定到期提醒
+  listCalibrationReminders: async (params?: { skip?: number; limit?: number; due_type?: string }) => {
+    return apiRequest('/apps/kuaizhizao/equipment/calibration-reminders', { method: 'GET', params });
+  },
+
   // 生成设备二维码
   generateQRCode: async (equipmentUuid: string, equipmentCode: string, equipmentName: string): Promise<any> => {
     const { qrcodeApi } = await import('../../../services/qrcode');
@@ -88,6 +111,23 @@ export const maintenancePlanApi = {
   execute: async (data: any) => {
     return apiRequest('/apps/kuaizhizao/maintenance-plans/executions', { method: 'POST', data });
   },
+
+  // 保养执行记录列表
+  listExecutions: async (params?: Record<string, unknown>) => {
+    return apiRequest('/apps/kuaizhizao/maintenance-plans/executions', { method: 'GET', params });
+  },
+
+  getExecution: async (uuid: string) => {
+    return apiRequest(`/apps/kuaizhizao/maintenance-plans/executions/${uuid}`, { method: 'GET' });
+  },
+
+  updateExecution: async (uuid: string, data: unknown) => {
+    return apiRequest(`/apps/kuaizhizao/maintenance-plans/executions/${uuid}`, { method: 'PUT', data });
+  },
+
+  deleteExecution: async (uuid: string) => {
+    return apiRequest(`/apps/kuaizhizao/maintenance-plans/executions/${uuid}`, { method: 'DELETE' });
+  },
 };
 
 // 设备故障相关接口
@@ -121,6 +161,22 @@ export const equipmentFaultApi = {
   createRepair: async (data: any) => {
     return apiRequest('/apps/kuaizhizao/equipment-faults/repairs', { method: 'POST', data });
   },
+
+  listRepairs: async (params?: Record<string, unknown>) => {
+    return apiRequest('/apps/kuaizhizao/equipment-faults/repairs', { method: 'GET', params });
+  },
+
+  getRepair: async (uuid: string) => {
+    return apiRequest(`/apps/kuaizhizao/equipment-faults/repairs/${uuid}`, { method: 'GET' });
+  },
+
+  updateRepair: async (uuid: string, data: unknown) => {
+    return apiRequest(`/apps/kuaizhizao/equipment-faults/repairs/${uuid}`, { method: 'PUT', data });
+  },
+
+  deleteRepair: async (uuid: string) => {
+    return apiRequest(`/apps/kuaizhizao/equipment-faults/repairs/${uuid}`, { method: 'DELETE' });
+  },
 };
 
 // 模具相关接口
@@ -150,16 +206,6 @@ export const moldApi = {
     return apiRequest(`/apps/kuaizhizao/molds/${uuid}`, { method: 'GET' });
   },
 
-  // 创建模具使用记录
-  createUsage: async (data: any) => {
-    return apiRequest('/apps/kuaizhizao/molds/usages', { method: 'POST', data });
-  },
-
-  // 获取模具使用记录列表
-  listUsages: async (params?: any) => {
-    return apiRequest('/apps/kuaizhizao/molds/usages', { method: 'GET', params });
-  },
-
   // 获取模具校验记录列表（mold_uuid 可选，不传则全量）
   listCalibrations: async (params?: { mold_uuid?: string; keyword?: string; skip?: number; limit?: number }) => {
     return apiRequest('/apps/kuaizhizao/molds/calibrations', { method: 'GET', params });
@@ -176,7 +222,7 @@ export const moldApi = {
   },
 };
 
-// 工装相关接口
+// 工装相关接口（台账 CRUD；运营单据见 services/toolOps.ts）
 export const toolApi = {
   list: async (params?: any) => {
     return apiRequest('/apps/kuaizhizao/tools', { method: 'GET', params });
@@ -193,42 +239,11 @@ export const toolApi = {
   delete: async (uuid: string) => {
     return apiRequest(`/apps/kuaizhizao/tools/${uuid}`, { method: 'DELETE' });
   },
-  listUsages: async (toolUuid: string, params?: { skip?: number; limit?: number }) => {
-    return apiRequest(`/apps/kuaizhizao/tools/${toolUuid}/usages`, { method: 'GET', params });
+  listMaintenanceReminders: async (params?: { skip?: number; limit?: number; reminder_type?: string }) => {
+    return apiRequest('/apps/kuaizhizao/tool-maintenance-reminders', { method: 'GET', params });
   },
-  listMaintenances: async (toolUuid: string, params?: { skip?: number; limit?: number }) => {
-    return apiRequest(`/apps/kuaizhizao/tools/${toolUuid}/maintenances`, { method: 'GET', params });
-  },
-  listCalibrations: async (toolUuid: string, params?: { skip?: number; limit?: number }) => {
-    return apiRequest(`/apps/kuaizhizao/tools/${toolUuid}/calibrations`, { method: 'GET', params });
-  },
-  // 全量列表（运营页面用）
-  listAllUsages: async (params?: { tool_uuid?: string; keyword?: string; status?: string; skip?: number; limit?: number }) => {
-    return apiRequest('/apps/kuaizhizao/tools/usages', { method: 'GET', params });
-  },
-  listAllMaintenances: async (params?: { tool_uuid?: string; keyword?: string; skip?: number; limit?: number }) => {
-    return apiRequest('/apps/kuaizhizao/tools/maintenances', { method: 'GET', params });
-  },
-  listAllCalibrations: async (params?: { tool_uuid?: string; keyword?: string; skip?: number; limit?: number }) => {
-    return apiRequest('/apps/kuaizhizao/tools/calibrations', { method: 'GET', params });
-  },
-  listMaintenanceReminders: async (params?: { keyword?: string; skip?: number; limit?: number; due_type?: string }) => {
-    return apiRequest('/apps/kuaizhizao/tools/maintenance-reminders', { method: 'GET', params });
-  },
-  checkout: async (data: any) => {
-    return apiRequest('/apps/kuaizhizao/tools/checkout', { method: 'POST', data });
-  },
-  checkin: async (usageUuid: string, remark?: string) => {
-    return apiRequest(`/apps/kuaizhizao/tools/checkin/${usageUuid}`, {
-      method: 'POST',
-      params: remark ? { remark } : undefined,
-    });
-  },
-  recordMaintenance: async (data: any) => {
-    return apiRequest('/apps/kuaizhizao/tools/maintenances', { method: 'POST', data });
-  },
-  recordCalibration: async (data: any) => {
-    return apiRequest('/apps/kuaizhizao/tools/calibrations', { method: 'POST', data });
+  listCalibrationReminders: async (params?: { skip?: number; limit?: number; due_type?: string }) => {
+    return apiRequest('/apps/kuaizhizao/tool-calibration-reminders', { method: 'GET', params });
   },
 };
 
@@ -308,19 +323,44 @@ export const equipmentInspectionApi = {
 
 // 备品备件相关接口
 export const sparePartApi = {
-  // 获取备件列表
-  list: async () => {
-    return apiRequest('/apps/kuaizhizao/spare-parts', { method: 'GET' });
+  list: async (params?: Record<string, unknown>) => {
+    return apiRequest('/apps/kuaizhizao/spare-parts', { method: 'GET', params });
   },
 
-  // 获取低库存预警
+  get: async (id: number) => {
+    return apiRequest(`/apps/kuaizhizao/spare-parts/${id}`, { method: 'GET' });
+  },
+
+  create: async (data: unknown) => {
+    return apiRequest('/apps/kuaizhizao/spare-parts', { method: 'POST', data });
+  },
+
+  update: async (id: number, data: unknown) => {
+    return apiRequest(`/apps/kuaizhizao/spare-parts/${id}`, { method: 'PUT', data });
+  },
+
+  delete: async (id: number) => {
+    return apiRequest(`/apps/kuaizhizao/spare-parts/${id}`, { method: 'DELETE' });
+  },
+
   getAlerts: async () => {
     return apiRequest('/apps/kuaizhizao/spare-parts/alerts', { method: 'GET' });
   },
 
-  // 获取库存列表
   listInventory: async () => {
     return apiRequest('/apps/kuaizhizao/spare-parts/inventory', { method: 'GET' });
+  },
+
+  stockAdjust: async (data: {
+    spare_part_id: number;
+    quantity: number;
+    operation_type: string;
+    warehouse_location: string;
+    rel_type?: string;
+    rel_id?: number;
+    remark?: string;
+  }) => {
+    return apiRequest('/apps/kuaizhizao/spare-parts/stock-adjust', { method: 'POST', data });
   },
 };
 

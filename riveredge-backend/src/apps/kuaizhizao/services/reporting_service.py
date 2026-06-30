@@ -1367,17 +1367,17 @@ class ReportingService(AppBaseService[ReportingRecord]):
         operator_name: Optional[str] = None,
     ) -> None:
         """
-        报工生效时自动创建模具使用记录并累计使用次数。
+        报工生效时自动创建模具归还单并累计使用次数。
 
-        当工序分配了模具且合格数量>0时，根据模具腔数换算使用次数，创建 MoldUsage 并累加 mold.total_usage_count。
+        当工序分配了模具且合格数量>0时，根据模具腔数换算使用次数，创建 MoldReturn 并累加 mold.total_usage_count。
         使用 reporting_record_id 实现幂等，避免重复累计。
         """
         if not work_order_operation.assigned_mold_id or qualified_quantity <= 0:
             return
         try:
             from apps.kuaizhizao.models.mold import Mold
-            from apps.kuaizhizao.services.mold_service import MoldUsageService
-            from apps.kuaizhizao.schemas.mold import MoldUsageCreate
+            from apps.kuaizhizao.services.mold_ops_service import MoldOpsService
+            from apps.kuaizhizao.schemas.mold_ops import MoldReturnCreate
 
             mold = await Mold.filter(
                 id=work_order_operation.assigned_mold_id,
@@ -1393,18 +1393,17 @@ class ReportingService(AppBaseService[ReportingRecord]):
             else:
                 usage_count = max(1, int(qualified_quantity))
 
-            data = MoldUsageCreate(
-                mold_uuid=mold.uuid,
+            data = MoldReturnCreate(
+                mold_id=mold.id,
                 source_type="work_order",
                 source_id=work_order.id,
                 source_no=work_order.code,
                 reporting_record_id=reporting_record_id,
-                usage_date=datetime.now(),
+                return_date=datetime.now(),
                 usage_count=usage_count,
                 operator_name=operator_name,
-                status="已归还",
             )
-            await MoldUsageService.create_mold_usage(
+            await MoldOpsService().return_service.create(
                 tenant_id=tenant_id,
                 data=data,
             )

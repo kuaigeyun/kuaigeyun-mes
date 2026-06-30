@@ -33,6 +33,8 @@ class EquipmentFaultBase(BaseModel):
     repair_required: bool = Field(default=True, description="是否需要维修")
     remark: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    source_type: Optional[str] = Field(None, max_length=50, description="来源类型（spot_check/route_patrol 等）")
+    source_uuid: Optional[str] = Field(None, max_length=36, description="来源单据 UUID")
     
     @field_validator("fault_type")
     @classmethod
@@ -84,6 +86,8 @@ class EquipmentFaultUpdate(BaseModel):
     repair_required: Optional[bool] = Field(None, description="是否需要维修")
     remark: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    source_type: Optional[str] = Field(None, max_length=50, description="来源类型")
+    source_uuid: Optional[str] = Field(None, max_length=36, description="来源单据 UUID")
 
 
 class EquipmentFaultResponse(EquipmentFaultBase):

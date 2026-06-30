@@ -1,7 +1,7 @@
 """
 模具管理 API 路由
 
-提供模具和模具使用记录的 CRUD 操作。
+提供模具 CRUD 与校验/保养提醒等操作；领用/归还见 mold_ops API。
 
 Author: Luigi Lu
 Date: 2026-01-05
@@ -12,23 +12,20 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, status, Query
 from loguru import logger
 
-from apps.kuaizhizao.models.mold import Mold, MoldUsage
+from apps.kuaizhizao.models.mold import Mold
 from apps.kuaizhizao.schemas.mold import (
     MoldCreate,
     MoldUpdate,
     MoldResponse,
     MoldListResponse,
-    MoldUsageCreate,
-    MoldUsageUpdate,
-    MoldUsageResponse,
-    MoldUsageListResponse,
     MoldCalibrationCreate,
     MoldCalibrationResponse,
     MoldCalibrationListResponse,
     MoldMaintenanceReminderResponse,
     MoldMaintenanceReminderListResponse,
 )
-from apps.kuaizhizao.services.mold_service import MoldService, MoldUsageService, MoldCalibrationService, MoldMaintenanceReminderService
+from apps.kuaizhizao.services.mold_service import MoldService, MoldCalibrationService, MoldMaintenanceReminderService
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
@@ -65,7 +62,12 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
 
 # ========== 模具相关端点 ==========
 
-@router.post("", response_model=MoldResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=MoldResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-molds:create"))],
+)
 async def create_mold(
     data: MoldCreate,
     current_user: User = Depends(soil_get_current_user),
@@ -90,7 +92,11 @@ async def create_mold(
         )
 
 
-@router.get("", response_model=MoldListResponse)
+@router.get(
+    "",
+    response_model=MoldListResponse,
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-molds:read"))],
+)
 async def list_molds(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -129,7 +135,11 @@ async def list_molds(
 # ========== 模具校验记录相关端点 ==========
 
 
-@router.get("/calibrations", response_model=MoldCalibrationListResponse)
+@router.get(
+    "/calibrations",
+    response_model=MoldCalibrationListResponse,
+    dependencies=[Depends(require_permission_codes("kuaizhizao:mold-calibration:read"))],
+)
 async def list_mold_calibrations(
     mold_uuid: Optional[str] = Query(None, description="模具UUID（可选，不传则返回全量）"),
     skip: int = Query(0, ge=0, description="跳过数量"),
@@ -184,7 +194,11 @@ async def list_mold_calibrations(
     )
 
 
-@router.get("/maintenance-reminders", response_model=MoldMaintenanceReminderListResponse)
+@router.get(
+    "/maintenance-reminders",
+    response_model=MoldMaintenanceReminderListResponse,
+    dependencies=[Depends(require_permission_codes("kuaizhizao:mold-maintenance-reminder:read"))],
+)
 async def list_mold_maintenance_reminders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -209,7 +223,12 @@ async def list_mold_maintenance_reminders(
     )
 
 
-@router.post("/calibrations", response_model=MoldCalibrationResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/calibrations",
+    response_model=MoldCalibrationResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission_codes("kuaizhizao:mold-calibration:create"))],
+)
 async def create_mold_calibration(
     data: MoldCalibrationCreate,
     current_user: User = Depends(soil_get_current_user),
@@ -236,137 +255,11 @@ async def create_mold_calibration(
         )
 
 
-# ========== 模具使用记录相关端点 ==========
-
-@router.post("/usages", response_model=MoldUsageResponse, status_code=status.HTTP_201_CREATED)
-async def create_mold_usage(
-    data: MoldUsageCreate,
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    创建模具使用记录
-    
-    创建新模具使用记录并保存到数据库。
-    """
-    try:
-        usage = await MoldUsageService.create_mold_usage(
-            tenant_id=tenant_id,
-            data=data,
-            created_by=current_user.id
-        )
-        return MoldUsageResponse.model_validate(usage)
-    except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
-
-
-@router.get("/usages", response_model=MoldUsageListResponse)
-async def list_mold_usages(
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    mold_uuid: Optional[str] = Query(None, description="模具UUID（可选）"),
-    source_type: Optional[str] = Query(None, description="来源类型（可选）"),
-    status: Optional[str] = Query(None, description="使用状态（可选）"),
-    search: Optional[str] = Query(None, description="搜索关键词（可选）"),
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    获取模具使用记录列表
-    
-    获取当前组织的模具使用记录列表，支持筛选和搜索。
-    """
-    usages, total = await MoldUsageService.list_mold_usages(
-        tenant_id=tenant_id,
-        skip=skip,
-        limit=limit,
-        mold_uuid=mold_uuid,
-        source_type=source_type,
-        status=status,
-        search=search
-    )
-    
-    items = [MoldUsageResponse.model_validate(usage) for usage in usages]
-    
-    return MoldUsageListResponse(
-        items=items,
-        total=total,
-        skip=skip,
-        limit=limit
-    )
-
-
-@router.get("/usages/{uuid}", response_model=MoldUsageResponse)
-async def get_mold_usage(
-    uuid: str,
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    获取模具使用记录详情
-    
-    根据UUID获取模具使用记录详情。
-    """
-    try:
-        usage = await MoldUsageService.get_mold_usage_by_uuid(tenant_id, uuid)
-        return MoldUsageResponse.model_validate(usage)
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-
-
-@router.put("/usages/{uuid}", response_model=MoldUsageResponse)
-async def update_mold_usage(
-    uuid: str,
-    data: MoldUsageUpdate,
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    更新模具使用记录
-    
-    更新模具使用记录信息。
-    """
-    try:
-        usage = await MoldUsageService.update_mold_usage(
-            tenant_id=tenant_id,
-            uuid=uuid,
-            data=data
-        )
-        return MoldUsageResponse.model_validate(usage)
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-
-
-@router.delete("/usages/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_mold_usage(
-    uuid: str,
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    删除模具使用记录
-    
-    软删除模具使用记录（标记为已删除，不实际删除数据）。
-    """
-    try:
-        await MoldUsageService.delete_mold_usage(tenant_id, uuid)
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-
-
-@router.get("/{uuid}", response_model=MoldResponse)
+@router.get(
+    "/{uuid}",
+    response_model=MoldResponse,
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-molds:read"))],
+)
 async def get_mold(
     uuid: str,
     current_user: User = Depends(soil_get_current_user),
@@ -387,7 +280,11 @@ async def get_mold(
         )
 
 
-@router.put("/{uuid}", response_model=MoldResponse)
+@router.put(
+    "/{uuid}",
+    response_model=MoldResponse,
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-molds:update"))],
+)
 async def update_mold(
     uuid: str,
     data: MoldUpdate,
@@ -418,7 +315,11 @@ async def update_mold(
         )
 
 
-@router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{uuid}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-molds:delete"))],
+)
 async def delete_mold(
     uuid: str,
     current_user: User = Depends(soil_get_current_user),

@@ -33,6 +33,8 @@ class EquipmentBase(BaseModel):
     installation_date: Optional[date] = Field(None, description="安装日期")
     warranty_period: Optional[int] = Field(None, ge=0, description="保修期（月）")
     technical_parameters: Optional[Dict[str, Any]] = Field(None, description="技术参数（JSON格式）")
+    workshop_id: Optional[int] = Field(None, description="关联车间ID（可选）")
+    workshop_name: Optional[str] = Field(None, max_length=200, description="关联车间名称")
     workstation_id: Optional[int] = Field(None, description="关联工位ID（可选）")
     workstation_code: Optional[str] = Field(None, max_length=50, description="工位编码")
     workstation_name: Optional[str] = Field(None, max_length=200, description="工位名称")
@@ -93,6 +95,8 @@ class EquipmentUpdate(BaseModel):
     installation_date: Optional[date] = Field(None, description="安装日期")
     warranty_period: Optional[int] = Field(None, ge=0, description="保修期（月）")
     technical_parameters: Optional[Dict[str, Any]] = Field(None, description="技术参数（JSON格式）")
+    workshop_id: Optional[int] = Field(None, description="关联车间ID（可选）")
+    workshop_name: Optional[str] = Field(None, max_length=200, description="关联车间名称")
     workstation_id: Optional[int] = Field(None, description="关联工位ID（可选）")
     workstation_code: Optional[str] = Field(None, max_length=50, description="工位编码")
     workstation_name: Optional[str] = Field(None, max_length=200, description="工位名称")
@@ -167,6 +171,18 @@ class EquipmentCalibrationCreate(BaseModel):
     remark: Optional[str] = Field(None, description="备注")
 
 
+class EquipmentCalibrationCreateWithEquipment(BaseModel):
+    """设备校验记录创建 Schema（含设备 UUID，用于独立检定页）"""
+    equipment_uuid: str = Field(..., description="设备UUID")
+    calibration_date: date = Field(..., description="校验日期")
+    result: str = Field(..., max_length=50, description="校验结果（合格、不合格、限制使用）")
+    certificate_no: Optional[str] = Field(None, max_length=100, description="证书编号")
+    expiry_date: Optional[date] = Field(None, description="有效期至")
+    attachment_uuid: Optional[str] = Field(None, max_length=36, description="报告附件ID")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    remark: Optional[str] = Field(None, description="备注")
+
+
 class EquipmentCalibrationResponse(BaseModel):
     """设备校验记录响应 Schema"""
     model_config = ConfigDict(from_attributes=True)
@@ -174,6 +190,8 @@ class EquipmentCalibrationResponse(BaseModel):
     id: int
     equipment_id: int
     equipment_uuid: str
+    equipment_code: Optional[str] = Field(None, description="设备编码")
+    equipment_name: Optional[str] = Field(None, description="设备名称")
     calibration_date: date
     result: str
     certificate_no: Optional[str] = None
@@ -182,4 +200,34 @@ class EquipmentCalibrationResponse(BaseModel):
     attachments: Optional[List[dict]] = None
     remark: Optional[str] = None
     created_at: datetime
+
+
+class EquipmentCalibrationListResponse(BaseModel):
+    """设备校验记录列表响应 Schema"""
+    model_config = ConfigDict(from_attributes=True)
+    items: list[EquipmentCalibrationResponse] = Field(..., description="校验记录列表")
+    total: int = Field(..., description="总数量")
+    skip: int = Field(..., description="跳过数量")
+    limit: int = Field(..., description="限制数量")
+
+
+class EquipmentCalibrationReminderResponse(BaseModel):
+    """设备检定到期提醒响应 Schema"""
+    equipment_uuid: str = Field(..., description="设备UUID")
+    equipment_code: str = Field(..., description="设备编码")
+    equipment_name: str = Field(..., description="设备名称")
+    reminder_type: str = Field(..., description="提醒类型 calibration")
+    due_type: str = Field(..., description="due_soon/overdue")
+    due_date: date = Field(..., description="到期日期")
+    days_until_due: int = Field(..., description="距到期天数")
+    calibration_period: Optional[int] = Field(None, description="校验周期（天）")
+    last_calibration_date: Optional[date] = Field(None, description="上次校验日期")
+
+
+class EquipmentCalibrationReminderListResponse(BaseModel):
+    """设备检定到期提醒列表响应 Schema"""
+    items: list[EquipmentCalibrationReminderResponse] = Field(..., description="提醒列表")
+    total: int = Field(..., description="总数量")
+    skip: int = Field(..., description="跳过数量")
+    limit: int = Field(..., description="限制数量")
 

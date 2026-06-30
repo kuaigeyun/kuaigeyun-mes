@@ -115,6 +115,8 @@ interface EquipmentFault {
   fault_description?: string;
   status?: string;
   repair_required?: boolean;
+  source_type?: string;
+  source_uuid?: string;
   attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
   updated_at?: string;
@@ -390,6 +392,21 @@ const EquipmentFaultsPage: React.FC = () => {
           {record.repair_required ? t(`${P}.yes`) : t(`${P}.no`)}
         </Tag>
       ),
+    },
+    {
+      title: t(`${P}.col.sourceType`),
+      dataIndex: 'source_type',
+      render: (_, r) => r.source_type ?? '-',
+    },
+    {
+      title: t(`${P}.col.sourceUuid`),
+      dataIndex: 'source_uuid',
+      render: (_, r) =>
+        r.source_uuid ? (
+          <Typography.Text copyable={{ text: String(r.source_uuid) }}>{r.source_uuid}</Typography.Text>
+        ) : (
+          '-'
+        ),
     },
     {
       title: t(`${P}.col.createdAt`),

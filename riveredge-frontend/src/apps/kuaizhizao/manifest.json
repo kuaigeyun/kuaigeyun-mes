@@ -744,194 +744,561 @@
             "permission": "kuaizhizao:equipment:read"
           },
           {
-            "title": "app.kuaizhizao.menu.equipment-management.asset-ledger",
+            "title": "app.kuaizhizao.menu.equipment-management.equipment-module",
+            "sort_order": 1,
             "children": [
               {
-                "title": "app.kuaizhizao.menu.equipment-management.equipment",
-                "path": "/apps/kuaizhizao/equipment-management/equipment",
-                "permission": "kuaizhizao:equipment-management-equipment:read",
+                "title": "app.kuaizhizao.menu.equipment-management.basic-data",
                 "sort_order": 1,
-                "meta": {
-                  "module": "equipment"
-                }
+                "children": [
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.equipment",
+                    "path": "/apps/kuaizhizao/equipment-management/equipment",
+                    "permission": "kuaizhizao:equipment-management-equipment:read",
+                    "sort_order": 1,
+                    "meta": {
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.inspection-items",
+                    "path": "/apps/kuaizhizao/equipment-management/inspection-items",
+                    "permission": "kuaizhizao:equipment-inspection-item:read",
+                    "sort_order": 2,
+                    "meta": { "module": "equipment" }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.inspection-schemes",
+                    "path": "/apps/kuaizhizao/equipment-management/inspection-schemes",
+                    "permission": "kuaizhizao:equipment-inspection-scheme:read",
+                    "sort_order": 3,
+                    "meta": { "module": "equipment" }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.patrol-routes",
+                    "path": "/apps/kuaizhizao/equipment-management/patrol-routes",
+                    "permission": "kuaizhizao:equipment-patrol-route:read",
+                    "sort_order": 4,
+                    "meta": { "module": "equipment" }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.maintenance-items",
+                    "path": "/apps/kuaizhizao/equipment-management/maintenance-items",
+                    "permission": "kuaizhizao:equipment-maintenance-item:read",
+                    "sort_order": 5,
+                    "meta": { "module": "equipment" }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.maintenance-schemes",
+                    "path": "/apps/kuaizhizao/equipment-management/maintenance-schemes",
+                    "permission": "kuaizhizao:equipment-maintenance-scheme:read",
+                    "sort_order": 6,
+                    "meta": { "module": "equipment" }
+                  }
+                ]
               },
               {
-                "title": "app.kuaizhizao.menu.equipment-management.molds",
-                "path": "/apps/kuaizhizao/equipment-management/molds",
-                "permission": "kuaizhizao:equipment-management-molds:read",
+                "title": "app.kuaizhizao.menu.equipment-management.equipment-ops",
                 "sort_order": 2,
-                "meta": {
-                  "module": "equipment"
-                }
+                "children": [
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.spot-checks",
+                    "path": "/apps/kuaizhizao/equipment-management/spot-checks",
+                    "permission": "kuaizhizao:equipment-spot-check:read",
+                    "sort_order": 1,
+                    "meta": { "node": "equipment_spot_check", "module": "equipment" }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.route-patrols",
+                    "path": "/apps/kuaizhizao/equipment-management/route-patrols",
+                    "permission": "kuaizhizao:equipment-route-patrol:read",
+                    "sort_order": 2,
+                    "meta": { "node": "equipment_route_patrol", "module": "equipment" }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.equipment-faults",
+                    "path": "/apps/kuaizhizao/equipment-management/equipment-faults",
+                    "permission": "kuaizhizao:equipment-fault:read",
+                    "sort_order": 3,
+                    "meta": {
+                      "node": "equipment_fault",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.equipment-repairs",
+                    "path": "/apps/kuaizhizao/equipment-management/equipment-repairs",
+                    "permission": "kuaizhizao:equipment-fault:read",
+                    "sort_order": 4,
+                    "meta": { "node": "equipment_repair", "module": "equipment" }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.maintenance-plans",
+                    "path": "/apps/kuaizhizao/equipment-management/maintenance-plans",
+                    "permission": "kuaizhizao:maintenance-plan:read",
+                    "sort_order": 5,
+                    "meta": {
+                      "node": "maintenance_plan",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.maintenance-plan-calendar",
+                    "path": "/apps/kuaizhizao/equipment-management/maintenance-plan-calendar",
+                    "permission": "kuaizhizao:maintenance-plan:read",
+                    "sort_order": 6,
+                    "meta": {
+                      "node": "maintenance_plan_calendar",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.maintenance-executions",
+                    "path": "/apps/kuaizhizao/equipment-management/maintenance-executions",
+                    "permission": "kuaizhizao:maintenance-plan:read",
+                    "sort_order": 7,
+                    "meta": { "node": "maintenance_execution", "module": "equipment" }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.spare-parts",
+                    "path": "/apps/kuaizhizao/equipment-management/spare-parts",
+                    "permission": "kuaizhizao:spare-part:read",
+                    "sort_order": 8,
+                    "meta": { "module": "equipment" }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.spare-part-requisitions",
+                    "path": "/apps/kuaizhizao/equipment-management/spare-part-requisitions",
+                    "permission": "kuaizhizao:spare-part-requisition:read",
+                    "sort_order": 9,
+                    "meta": { "node": "spare_part_requisition", "module": "equipment" }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.equipment-transfers",
+                    "path": "/apps/kuaizhizao/equipment-management/equipment-transfers",
+                    "permission": "kuaizhizao:equipment-transfer:read",
+                    "sort_order": 10,
+                    "meta": { "node": "equipment_transfer", "module": "equipment" }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.equipment-scrap",
+                    "path": "/apps/kuaizhizao/equipment-management/equipment-scrap",
+                    "permission": "kuaizhizao:equipment-scrap:read",
+                    "sort_order": 11,
+                    "meta": { "node": "equipment_scrap", "module": "equipment" }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.equipment-calibrations",
+                    "path": "/apps/kuaizhizao/equipment-management/equipment-calibrations",
+                    "permission": "kuaizhizao:equipment-calibration:read",
+                    "sort_order": 12,
+                    "meta": { "node": "equipment_calibration", "module": "equipment" }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.maintenance-reminders",
+                    "path": "/apps/kuaizhizao/equipment-management/maintenance-reminders",
+                    "permission": "kuaizhizao:maintenance-reminder:read",
+                    "sort_order": 13,
+                    "meta": {
+                      "node": "maintenance_reminder",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.equipment-status",
+                    "path": "/apps/kuaizhizao/equipment-management/equipment-status",
+                    "permission": "kuaizhizao:equipment-status:read",
+                    "sort_order": 14,
+                    "meta": {
+                      "node": "equipment_status",
+                      "module": "equipment"
+                    }
+                  }
+                ]
               },
               {
-                "title": "app.kuaizhizao.menu.tooling-management.ledger",
-                "path": "/apps/kuaizhizao/equipment-management/tool-ledger",
-                "permission": "kuaizhizao:equipment-management-tool-ledger:read",
+                "title": "app.kuaizhizao.menu.equipment-management.reports",
                 "sort_order": 3,
-                "meta": {
-                  "module": "equipment"
-                }
+                "children": [
+                  {
+                    "title": "app.kuaizhizao.menu.reports.equipment-maintenance-detail",
+                    "path": "/apps/kuaizhizao/equipment-management/reports/equipment-maintenance-detail",
+                    "sort_order": 1,
+                    "permission": "kuaizhizao:equipment-management-reports-equipment-maintenance-detail:read"
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.reports.equipment-maintenance-plan",
+                    "path": "/apps/kuaizhizao/equipment-management/reports/equipment-maintenance-plan",
+                    "sort_order": 2,
+                    "permission": "kuaizhizao:equipment-management-reports-equipment-maintenance-plan:read"
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.reports.equipment-fault-analysis",
+                    "path": "/apps/kuaizhizao/equipment-management/reports/equipment-fault-analysis",
+                    "sort_order": 3,
+                    "permission": "kuaizhizao:equipment-management-reports-equipment-fault-analysis:read"
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.reports.equipment-status-log",
+                    "path": "/apps/kuaizhizao/equipment-management/reports/equipment-status-log",
+                    "sort_order": 4,
+                    "permission": "kuaizhizao:equipment-management-reports-equipment-status-log:read"
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.reports.equipment-spot-check-summary",
+                    "path": "/apps/kuaizhizao/equipment-management/reports/equipment-spot-check-summary",
+                    "sort_order": 5,
+                    "permission": "kuaizhizao:equipment-management-reports-equipment-spot-check-summary:read"
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.reports.equipment-route-patrol-summary",
+                    "path": "/apps/kuaizhizao/equipment-management/reports/equipment-route-patrol-summary",
+                    "sort_order": 6,
+                    "permission": "kuaizhizao:equipment-management-reports-equipment-route-patrol-summary:read"
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.reports.equipment-mttr-mtbf",
+                    "path": "/apps/kuaizhizao/equipment-management/reports/equipment-mttr-mtbf",
+                    "sort_order": 7,
+                    "permission": "kuaizhizao:equipment-management-reports-equipment-mttr-mtbf:read"
+                  }
+                ]
               }
-            ],
-            "sort_order": 1
+            ]
           },
           {
-            "title": "app.kuaizhizao.menu.equipment-management.equipment-ops",
+            "title": "app.kuaizhizao.menu.equipment-management.mold-module",
             "sort_order": 2,
             "children": [
               {
-                "title": "app.kuaizhizao.menu.equipment-management.equipment-faults",
-                "path": "/apps/kuaizhizao/equipment-management/equipment-faults",
-                "permission": "kuaizhizao:equipment-fault:read",
+                "title": "app.kuaizhizao.menu.equipment-management.basic-data",
                 "sort_order": 1,
-                "meta": {
-                  "node": "equipment_fault",
-                  "module": "equipment"
-                }
+                "children": [
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.molds",
+                    "path": "/apps/kuaizhizao/equipment-management/molds",
+                    "permission": "kuaizhizao:equipment-management-molds:read",
+                    "sort_order": 1,
+                    "meta": {
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.mold-maintenance-items",
+                    "path": "/apps/kuaizhizao/equipment-management/mold-maintenance-items",
+                    "permission": "kuaizhizao:mold-maintenance-item:read",
+                    "sort_order": 2,
+                    "meta": {
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.mold-maintenance-schemes",
+                    "path": "/apps/kuaizhizao/equipment-management/mold-maintenance-schemes",
+                    "permission": "kuaizhizao:mold-maintenance-scheme:read",
+                    "sort_order": 3,
+                    "meta": {
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.mold-repair-items",
+                    "path": "/apps/kuaizhizao/equipment-management/mold-repair-items",
+                    "permission": "kuaizhizao:mold-repair-item:read",
+                    "sort_order": 4,
+                    "meta": {
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.mold-repair-schemes",
+                    "path": "/apps/kuaizhizao/equipment-management/mold-repair-schemes",
+                    "permission": "kuaizhizao:mold-repair-scheme:read",
+                    "sort_order": 5,
+                    "meta": {
+                      "module": "equipment"
+                    }
+                  }
+                ]
               },
               {
-                "title": "app.kuaizhizao.menu.equipment-management.maintenance-plans",
-                "path": "/apps/kuaizhizao/equipment-management/maintenance-plans",
-                "permission": "kuaizhizao:maintenance-plan:read",
+                "title": "app.kuaizhizao.menu.equipment-management.mold-ops",
                 "sort_order": 2,
-                "meta": {
-                  "node": "maintenance_plan",
-                  "module": "equipment"
-                }
+                "children": [
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.mold-trials",
+                    "path": "/apps/kuaizhizao/equipment-management/mold-trials",
+                    "permission": "kuaizhizao:mold-trial:read",
+                    "sort_order": 1,
+                    "meta": {
+                      "node": "mold_trial",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.mold-borrows",
+                    "path": "/apps/kuaizhizao/equipment-management/mold-borrows",
+                    "permission": "kuaizhizao:mold-borrow:read",
+                    "sort_order": 2,
+                    "meta": {
+                      "node": "mold_borrow",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.mold-returns",
+                    "path": "/apps/kuaizhizao/equipment-management/mold-returns",
+                    "permission": "kuaizhizao:mold-return:read",
+                    "sort_order": 3,
+                    "meta": {
+                      "node": "mold_return",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.mold-maintenances",
+                    "path": "/apps/kuaizhizao/equipment-management/mold-maintenances",
+                    "permission": "kuaizhizao:mold-maintenance:read",
+                    "sort_order": 4,
+                    "meta": {
+                      "node": "mold_maintenance",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.mold-repairs",
+                    "path": "/apps/kuaizhizao/equipment-management/mold-repairs",
+                    "permission": "kuaizhizao:mold-repair:read",
+                    "sort_order": 5,
+                    "meta": {
+                      "node": "mold_repair",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.mold-calibrations",
+                    "path": "/apps/kuaizhizao/equipment-management/mold-calibrations",
+                    "permission": "kuaizhizao:mold-calibration:read",
+                    "sort_order": 6,
+                    "meta": {
+                      "node": "mold_calibration",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.mold-maintenance-reminders",
+                    "path": "/apps/kuaizhizao/equipment-management/mold-maintenance-reminders",
+                    "permission": "kuaizhizao:mold-maintenance-reminder:read",
+                    "sort_order": 7,
+                    "meta": {
+                      "node": "mold_maintenance_reminder",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.mold-scrap-applications",
+                    "path": "/apps/kuaizhizao/equipment-management/mold-scrap-applications",
+                    "permission": "kuaizhizao:mold-scrap:read",
+                    "sort_order": 8,
+                    "meta": {
+                      "node": "mold_scrap",
+                      "module": "equipment"
+                    }
+                  }
+                ]
               },
               {
-                "title": "app.kuaizhizao.menu.equipment-management.maintenance-reminders",
-                "path": "/apps/kuaizhizao/equipment-management/maintenance-reminders",
-                "permission": "kuaizhizao:maintenance-reminder:read",
+                "title": "app.kuaizhizao.menu.equipment-management.mold-reports",
                 "sort_order": 3,
-                "meta": {
-                  "node": "maintenance_reminder",
-                  "module": "equipment"
-                }
-              },
-              {
-                "title": "app.kuaizhizao.menu.equipment-management.equipment-status",
-                "path": "/apps/kuaizhizao/equipment-management/equipment-status",
-                "permission": "kuaizhizao:equipment-status:read",
-                "sort_order": 4,
-                "meta": {
-                  "node": "equipment_status",
-                  "module": "equipment"
-                }
+                "children": [
+                  {
+                    "title": "app.kuaizhizao.menu.reports.mold-trial-records",
+                    "path": "/apps/kuaizhizao/equipment-management/reports/mold-trial-records",
+                    "permission": "kuaizhizao:mold-report-trial-records:read",
+                    "sort_order": 1
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.reports.mold-maintenance-alerts",
+                    "path": "/apps/kuaizhizao/equipment-management/reports/mold-maintenance-alerts",
+                    "permission": "kuaizhizao:mold-report-maintenance-alerts:read",
+                    "sort_order": 2
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.reports.mold-borrow-return-log",
+                    "path": "/apps/kuaizhizao/equipment-management/reports/mold-borrow-return-log",
+                    "permission": "kuaizhizao:mold-report-borrow-return-log:read",
+                    "sort_order": 3
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.reports.mold-repair-analysis",
+                    "path": "/apps/kuaizhizao/equipment-management/reports/mold-repair-analysis",
+                    "permission": "kuaizhizao:mold-report-repair-analysis:read",
+                    "sort_order": 4
+                  }
+                ]
               }
             ]
           },
           {
-            "title": "app.kuaizhizao.menu.equipment-management.mold-ops",
+            "title": "app.kuaizhizao.menu.equipment-management.tool-module",
             "sort_order": 3,
             "children": [
               {
-                "title": "app.kuaizhizao.menu.equipment-management.mold-usages",
-                "path": "/apps/kuaizhizao/equipment-management/mold-usages",
-                "permission": "kuaizhizao:mold-usage:read",
+                "title": "app.kuaizhizao.menu.equipment-management.basic-data",
                 "sort_order": 1,
-                "meta": {
-                  "node": "mold_usage",
-                  "module": "equipment"
-                }
+                "children": [
+                  {
+                    "title": "app.kuaizhizao.menu.tooling-management.ledger",
+                    "path": "/apps/kuaizhizao/equipment-management/tool-ledger",
+                    "permission": "kuaizhizao:equipment-management-tool-ledger:read",
+                    "sort_order": 1,
+                    "meta": {
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.tool-maintenance-items",
+                    "path": "/apps/kuaizhizao/equipment-management/tool-maintenance-items",
+                    "permission": "kuaizhizao:tool-maintenance-item:read",
+                    "sort_order": 2,
+                    "meta": {
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.tool-maintenance-schemes",
+                    "path": "/apps/kuaizhizao/equipment-management/tool-maintenance-schemes",
+                    "permission": "kuaizhizao:tool-maintenance-scheme:read",
+                    "sort_order": 3,
+                    "meta": {
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.tool-repair-items",
+                    "path": "/apps/kuaizhizao/equipment-management/tool-repair-items",
+                    "permission": "kuaizhizao:tool-repair-item:read",
+                    "sort_order": 4,
+                    "meta": {
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.tool-repair-schemes",
+                    "path": "/apps/kuaizhizao/equipment-management/tool-repair-schemes",
+                    "permission": "kuaizhizao:tool-repair-scheme:read",
+                    "sort_order": 5,
+                    "meta": {
+                      "module": "equipment"
+                    }
+                  }
+                ]
               },
               {
-                "title": "app.kuaizhizao.menu.equipment-management.mold-calibrations",
-                "path": "/apps/kuaizhizao/equipment-management/mold-calibrations",
-                "permission": "kuaizhizao:mold-calibration:read",
+                "title": "app.kuaizhizao.menu.equipment-management.tool-ops",
                 "sort_order": 2,
-                "meta": {
-                  "node": "mold_calibration",
-                  "module": "equipment"
-                }
+                "children": [
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.tool-borrows",
+                    "path": "/apps/kuaizhizao/equipment-management/tool-borrows",
+                    "permission": "kuaizhizao:tool-borrow:read",
+                    "sort_order": 1,
+                    "meta": {
+                      "node": "tool_borrow",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.tool-returns",
+                    "path": "/apps/kuaizhizao/equipment-management/tool-returns",
+                    "permission": "kuaizhizao:tool-return:read",
+                    "sort_order": 2,
+                    "meta": {
+                      "node": "tool_return",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.tool-maintenances",
+                    "path": "/apps/kuaizhizao/equipment-management/tool-maintenances",
+                    "permission": "kuaizhizao:tool-maintenance:read",
+                    "sort_order": 3,
+                    "meta": {
+                      "node": "tool_maintenance",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.tool-repairs",
+                    "path": "/apps/kuaizhizao/equipment-management/tool-repairs",
+                    "permission": "kuaizhizao:tool-repair:read",
+                    "sort_order": 4,
+                    "meta": {
+                      "node": "tool_repair",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.tool-calibrations",
+                    "path": "/apps/kuaizhizao/equipment-management/tool-calibrations",
+                    "permission": "kuaizhizao:tool-calibration:read",
+                    "sort_order": 5,
+                    "meta": {
+                      "node": "tool_calibration",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.tool-maintenance-reminders",
+                    "path": "/apps/kuaizhizao/equipment-management/tool-maintenance-reminders",
+                    "permission": "kuaizhizao:tool-maintenance-reminder:read",
+                    "sort_order": 6,
+                    "meta": {
+                      "node": "tool_maintenance_reminder",
+                      "module": "equipment"
+                    }
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.equipment-management.tool-scrap-applications",
+                    "path": "/apps/kuaizhizao/equipment-management/tool-scrap-applications",
+                    "permission": "kuaizhizao:tool-scrap:read",
+                    "sort_order": 7,
+                    "meta": {
+                      "node": "tool_scrap",
+                      "module": "equipment"
+                    }
+                  }
+                ]
               },
               {
-                "title": "app.kuaizhizao.menu.equipment-management.mold-maintenance-reminders",
-                "path": "/apps/kuaizhizao/equipment-management/mold-maintenance-reminders",
-                "permission": "kuaizhizao:mold-maintenance-reminder:read",
+                "title": "app.kuaizhizao.menu.equipment-management.tool-reports",
                 "sort_order": 3,
-                "meta": {
-                  "node": "mold_maintenance_reminder",
-                  "module": "equipment"
-                }
-              }
-            ]
-          },
-          {
-            "title": "app.kuaizhizao.menu.equipment-management.tool-ops",
-            "sort_order": 4,
-            "children": [
-              {
-                "title": "app.kuaizhizao.menu.equipment-management.tool-usages",
-                "path": "/apps/kuaizhizao/equipment-management/tool-usages",
-                "permission": "kuaizhizao:tool-usage:read",
-                "sort_order": 1,
-                "meta": {
-                  "node": "tool_usage",
-                  "module": "equipment"
-                }
-              },
-              {
-                "title": "app.kuaizhizao.menu.equipment-management.tool-maintenances",
-                "path": "/apps/kuaizhizao/equipment-management/tool-maintenances",
-                "permission": "kuaizhizao:tool-maintenance:read",
-                "sort_order": 2,
-                "meta": {
-                  "node": "tool_maintenance",
-                  "module": "equipment"
-                }
-              },
-              {
-                "title": "app.kuaizhizao.menu.equipment-management.tool-calibrations",
-                "path": "/apps/kuaizhizao/equipment-management/tool-calibrations",
-                "permission": "kuaizhizao:tool-calibration:read",
-                "sort_order": 3,
-                "meta": {
-                  "node": "tool_calibration",
-                  "module": "equipment"
-                }
-              },
-              {
-                "title": "app.kuaizhizao.menu.equipment-management.tool-maintenance-reminders",
-                "path": "/apps/kuaizhizao/equipment-management/tool-maintenance-reminders",
-                "permission": "kuaizhizao:tool-maintenance-reminder:read",
-                "sort_order": 4,
-                "meta": {
-                  "node": "tool_maintenance_reminder",
-                  "module": "equipment"
-                }
-              }
-            ]
-          },
-          {
-            "title": "app.kuaizhizao.menu.equipment-management.reports",
-            "icon": "fileText",
-            "sort_order": 5,
-            "children": [
-              {
-                "title": "app.kuaizhizao.menu.reports.equipment-maintenance-detail",
-                "path": "/apps/kuaizhizao/equipment-management/reports/equipment-maintenance-detail",
-                "sort_order": 1,
-                "permission": "kuaizhizao:equipment-management-reports-equipment-maintenance-detail:read"
-              },
-              {
-                "title": "app.kuaizhizao.menu.reports.equipment-maintenance-plan",
-                "path": "/apps/kuaizhizao/equipment-management/reports/equipment-maintenance-plan",
-                "sort_order": 2,
-                "permission": "kuaizhizao:equipment-management-reports-equipment-maintenance-plan:read"
-              },
-              {
-                "title": "app.kuaizhizao.menu.reports.equipment-fault-analysis",
-                "path": "/apps/kuaizhizao/equipment-management/reports/equipment-fault-analysis",
-                "sort_order": 3,
-                "permission": "kuaizhizao:equipment-management-reports-equipment-fault-analysis:read"
-              },
-              {
-                "title": "app.kuaizhizao.menu.reports.equipment-status-log",
-                "path": "/apps/kuaizhizao/equipment-management/reports/equipment-status-log",
-                "sort_order": 4,
-                "permission": "kuaizhizao:equipment-management-reports-equipment-status-log:read"
+                "children": [
+                  {
+                    "title": "app.kuaizhizao.menu.reports.tool-maintenance-alerts",
+                    "path": "/apps/kuaizhizao/equipment-management/reports/tool-maintenance-alerts",
+                    "permission": "kuaizhizao:tool-report-maintenance-alerts:read",
+                    "sort_order": 1
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.reports.tool-calibration-alerts",
+                    "path": "/apps/kuaizhizao/equipment-management/reports/tool-calibration-alerts",
+                    "permission": "kuaizhizao:tool-report-calibration-alerts:read",
+                    "sort_order": 2
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.reports.tool-borrow-return-log",
+                    "path": "/apps/kuaizhizao/equipment-management/reports/tool-borrow-return-log",
+                    "permission": "kuaizhizao:tool-report-borrow-return-log:read",
+                    "sort_order": 3
+                  },
+                  {
+                    "title": "app.kuaizhizao.menu.reports.tool-repair-analysis",
+                    "path": "/apps/kuaizhizao/equipment-management/reports/tool-repair-analysis",
+                    "permission": "kuaizhizao:tool-report-repair-analysis:read",
+                    "sort_order": 4
+                  }
+                ]
               }
             ]
           }
@@ -1352,6 +1719,120 @@
     "kuaizhizao:equipment-fault:audit",
     "kuaizhizao:equipment-fault:reject",
     "kuaizhizao:equipment-fault:print",
+    "kuaizhizao:equipment-inspection-item:read",
+    "kuaizhizao:equipment-inspection-item:create",
+    "kuaizhizao:equipment-inspection-item:delete",
+    "kuaizhizao:equipment-inspection-item:update",
+    "kuaizhizao:equipment-inspection-item:import",
+    "kuaizhizao:equipment-inspection-item:export",
+    "kuaizhizao:equipment-inspection-scheme:read",
+    "kuaizhizao:equipment-inspection-scheme:create",
+    "kuaizhizao:equipment-inspection-scheme:delete",
+    "kuaizhizao:equipment-inspection-scheme:update",
+    "kuaizhizao:equipment-inspection-scheme:import",
+    "kuaizhizao:equipment-inspection-scheme:export",
+    "kuaizhizao:equipment-patrol-route:read",
+    "kuaizhizao:equipment-patrol-route:create",
+    "kuaizhizao:equipment-patrol-route:delete",
+    "kuaizhizao:equipment-patrol-route:update",
+    "kuaizhizao:equipment-patrol-route:import",
+    "kuaizhizao:equipment-patrol-route:export",
+    "kuaizhizao:equipment-maintenance-item:read",
+    "kuaizhizao:equipment-maintenance-item:create",
+    "kuaizhizao:equipment-maintenance-item:delete",
+    "kuaizhizao:equipment-maintenance-item:update",
+    "kuaizhizao:equipment-maintenance-item:import",
+    "kuaizhizao:equipment-maintenance-item:export",
+    "kuaizhizao:equipment-maintenance-scheme:read",
+    "kuaizhizao:equipment-maintenance-scheme:create",
+    "kuaizhizao:equipment-maintenance-scheme:delete",
+    "kuaizhizao:equipment-maintenance-scheme:update",
+    "kuaizhizao:equipment-maintenance-scheme:import",
+    "kuaizhizao:equipment-maintenance-scheme:export",
+    "kuaizhizao:equipment-calibration:approve",
+    "kuaizhizao:equipment-calibration:audit",
+    "kuaizhizao:equipment-calibration:create",
+    "kuaizhizao:equipment-calibration:delete",
+    "kuaizhizao:equipment-calibration:export",
+    "kuaizhizao:equipment-calibration:import",
+    "kuaizhizao:equipment-calibration:print",
+    "kuaizhizao:equipment-calibration:read",
+    "kuaizhizao:equipment-calibration:reject",
+    "kuaizhizao:equipment-calibration:revoke",
+    "kuaizhizao:equipment-calibration:submit",
+    "kuaizhizao:equipment-calibration:update",
+    "kuaizhizao:equipment-spot-check:read",
+    "kuaizhizao:equipment-spot-check:create",
+    "kuaizhizao:equipment-spot-check:delete",
+    "kuaizhizao:equipment-spot-check:update",
+    "kuaizhizao:equipment-spot-check:import",
+    "kuaizhizao:equipment-spot-check:export",
+    "kuaizhizao:equipment-spot-check:submit",
+    "kuaizhizao:equipment-spot-check:revoke",
+    "kuaizhizao:equipment-spot-check:approve",
+    "kuaizhizao:equipment-spot-check:audit",
+    "kuaizhizao:equipment-spot-check:reject",
+    "kuaizhizao:equipment-spot-check:print",
+    "kuaizhizao:equipment-route-patrol:read",
+    "kuaizhizao:equipment-route-patrol:create",
+    "kuaizhizao:equipment-route-patrol:delete",
+    "kuaizhizao:equipment-route-patrol:update",
+    "kuaizhizao:equipment-route-patrol:import",
+    "kuaizhizao:equipment-route-patrol:export",
+    "kuaizhizao:equipment-route-patrol:submit",
+    "kuaizhizao:equipment-route-patrol:revoke",
+    "kuaizhizao:equipment-route-patrol:approve",
+    "kuaizhizao:equipment-route-patrol:audit",
+    "kuaizhizao:equipment-route-patrol:reject",
+    "kuaizhizao:equipment-route-patrol:print",
+    "kuaizhizao:equipment-scrap:read",
+    "kuaizhizao:equipment-scrap:create",
+    "kuaizhizao:equipment-scrap:delete",
+    "kuaizhizao:equipment-scrap:update",
+    "kuaizhizao:equipment-scrap:import",
+    "kuaizhizao:equipment-scrap:export",
+    "kuaizhizao:equipment-scrap:submit",
+    "kuaizhizao:equipment-scrap:revoke",
+    "kuaizhizao:equipment-scrap:approve",
+    "kuaizhizao:equipment-scrap:audit",
+    "kuaizhizao:equipment-scrap:reject",
+    "kuaizhizao:equipment-scrap:print",
+    "kuaizhizao:equipment-transfer:read",
+    "kuaizhizao:equipment-transfer:create",
+    "kuaizhizao:equipment-transfer:delete",
+    "kuaizhizao:equipment-transfer:update",
+    "kuaizhizao:equipment-transfer:import",
+    "kuaizhizao:equipment-transfer:export",
+    "kuaizhizao:equipment-transfer:submit",
+    "kuaizhizao:equipment-transfer:revoke",
+    "kuaizhizao:equipment-transfer:approve",
+    "kuaizhizao:equipment-transfer:audit",
+    "kuaizhizao:equipment-transfer:reject",
+    "kuaizhizao:equipment-transfer:print",
+    "kuaizhizao:spare-part:read",
+    "kuaizhizao:spare-part:create",
+    "kuaizhizao:spare-part:delete",
+    "kuaizhizao:spare-part:update",
+    "kuaizhizao:spare-part:import",
+    "kuaizhizao:spare-part:export",
+    "kuaizhizao:spare-part:submit",
+    "kuaizhizao:spare-part:revoke",
+    "kuaizhizao:spare-part:approve",
+    "kuaizhizao:spare-part:audit",
+    "kuaizhizao:spare-part:reject",
+    "kuaizhizao:spare-part:print",
+    "kuaizhizao:spare-part-requisition:read",
+    "kuaizhizao:spare-part-requisition:create",
+    "kuaizhizao:spare-part-requisition:delete",
+    "kuaizhizao:spare-part-requisition:update",
+    "kuaizhizao:spare-part-requisition:import",
+    "kuaizhizao:spare-part-requisition:export",
+    "kuaizhizao:spare-part-requisition:submit",
+    "kuaizhizao:spare-part-requisition:revoke",
+    "kuaizhizao:spare-part-requisition:approve",
+    "kuaizhizao:spare-part-requisition:audit",
+    "kuaizhizao:spare-part-requisition:reject",
+    "kuaizhizao:spare-part-requisition:print",
     "kuaizhizao:equipment-management-equipment:read",
     "kuaizhizao:equipment-management-equipment:create",
     "kuaizhizao:equipment-management-equipment:delete",
@@ -1384,11 +1865,18 @@
     "kuaizhizao:equipment-management-reports-equipment-maintenance-plan:read",
     "kuaizhizao:equipment-management-reports-equipment-maintenance-plan:export",
     "kuaizhizao:equipment-management-reports-equipment-maintenance-plan:print",
-    "kuaizhizao:equipment-management-reports-equipment-oee-analysis:export",
-    "kuaizhizao:equipment-management-reports-equipment-oee-analysis:print",
     "kuaizhizao:equipment-management-reports-equipment-status-log:read",
     "kuaizhizao:equipment-management-reports-equipment-status-log:export",
     "kuaizhizao:equipment-management-reports-equipment-status-log:print",
+    "kuaizhizao:equipment-management-reports-equipment-spot-check-summary:read",
+    "kuaizhizao:equipment-management-reports-equipment-spot-check-summary:export",
+    "kuaizhizao:equipment-management-reports-equipment-spot-check-summary:print",
+    "kuaizhizao:equipment-management-reports-equipment-route-patrol-summary:read",
+    "kuaizhizao:equipment-management-reports-equipment-route-patrol-summary:export",
+    "kuaizhizao:equipment-management-reports-equipment-route-patrol-summary:print",
+    "kuaizhizao:equipment-management-reports-equipment-mttr-mtbf:read",
+    "kuaizhizao:equipment-management-reports-equipment-mttr-mtbf:export",
+    "kuaizhizao:equipment-management-reports-equipment-mttr-mtbf:print",
     "kuaizhizao:equipment-management-tool-ledger:read",
     "kuaizhizao:equipment-management-tool-ledger:create",
     "kuaizhizao:equipment-management-tool-ledger:delete",
@@ -1553,18 +2041,171 @@
     "kuaizhizao:mold-maintenance-reminder:audit",
     "kuaizhizao:mold-maintenance-reminder:reject",
     "kuaizhizao:mold-maintenance-reminder:print",
-    "kuaizhizao:mold-usage:read",
-    "kuaizhizao:mold-usage:create",
-    "kuaizhizao:mold-usage:delete",
-    "kuaizhizao:mold-usage:update",
-    "kuaizhizao:mold-usage:import",
-    "kuaizhizao:mold-usage:export",
-    "kuaizhizao:mold-usage:submit",
-    "kuaizhizao:mold-usage:revoke",
-    "kuaizhizao:mold-usage:approve",
-    "kuaizhizao:mold-usage:audit",
-    "kuaizhizao:mold-usage:reject",
-    "kuaizhizao:mold-usage:print",
+    "kuaizhizao:mold-maintenance-item:read",
+    "kuaizhizao:mold-maintenance-item:create",
+    "kuaizhizao:mold-maintenance-item:delete",
+    "kuaizhizao:mold-maintenance-item:update",
+    "kuaizhizao:mold-maintenance-item:import",
+    "kuaizhizao:mold-maintenance-item:export",
+    "kuaizhizao:mold-maintenance-scheme:read",
+    "kuaizhizao:mold-maintenance-scheme:create",
+    "kuaizhizao:mold-maintenance-scheme:delete",
+    "kuaizhizao:mold-maintenance-scheme:update",
+    "kuaizhizao:mold-maintenance-scheme:import",
+    "kuaizhizao:mold-maintenance-scheme:export",
+    "kuaizhizao:mold-repair-item:read",
+    "kuaizhizao:mold-repair-item:create",
+    "kuaizhizao:mold-repair-item:delete",
+    "kuaizhizao:mold-repair-item:update",
+    "kuaizhizao:mold-repair-item:import",
+    "kuaizhizao:mold-repair-item:export",
+    "kuaizhizao:mold-repair-scheme:read",
+    "kuaizhizao:mold-repair-scheme:create",
+    "kuaizhizao:mold-repair-scheme:delete",
+    "kuaizhizao:mold-repair-scheme:update",
+    "kuaizhizao:mold-repair-scheme:import",
+    "kuaizhizao:mold-repair-scheme:export",
+    "kuaizhizao:mold-trial:read",
+    "kuaizhizao:mold-trial:create",
+    "kuaizhizao:mold-trial:delete",
+    "kuaizhizao:mold-trial:update",
+    "kuaizhizao:mold-trial:import",
+    "kuaizhizao:mold-trial:export",
+    "kuaizhizao:mold-borrow:read",
+    "kuaizhizao:mold-borrow:create",
+    "kuaizhizao:mold-borrow:delete",
+    "kuaizhizao:mold-borrow:update",
+    "kuaizhizao:mold-borrow:import",
+    "kuaizhizao:mold-borrow:export",
+    "kuaizhizao:mold-return:read",
+    "kuaizhizao:mold-return:create",
+    "kuaizhizao:mold-return:delete",
+    "kuaizhizao:mold-return:update",
+    "kuaizhizao:mold-return:import",
+    "kuaizhizao:mold-return:export",
+    "kuaizhizao:mold-maintenance:read",
+    "kuaizhizao:mold-maintenance:create",
+    "kuaizhizao:mold-maintenance:delete",
+    "kuaizhizao:mold-maintenance:update",
+    "kuaizhizao:mold-maintenance:import",
+    "kuaizhizao:mold-maintenance:export",
+    "kuaizhizao:mold-maintenance:submit",
+    "kuaizhizao:mold-maintenance:revoke",
+    "kuaizhizao:mold-maintenance:approve",
+    "kuaizhizao:mold-maintenance:audit",
+    "kuaizhizao:mold-maintenance:reject",
+    "kuaizhizao:mold-maintenance:print",
+    "kuaizhizao:mold-maintenance:complete",
+    "kuaizhizao:mold-repair:read",
+    "kuaizhizao:mold-repair:create",
+    "kuaizhizao:mold-repair:delete",
+    "kuaizhizao:mold-repair:update",
+    "kuaizhizao:mold-repair:import",
+    "kuaizhizao:mold-repair:export",
+    "kuaizhizao:mold-repair:submit",
+    "kuaizhizao:mold-repair:revoke",
+    "kuaizhizao:mold-repair:approve",
+    "kuaizhizao:mold-repair:audit",
+    "kuaizhizao:mold-repair:reject",
+    "kuaizhizao:mold-repair:print",
+    "kuaizhizao:mold-repair:complete",
+    "kuaizhizao:mold-scrap:read",
+    "kuaizhizao:mold-scrap:create",
+    "kuaizhizao:mold-scrap:delete",
+    "kuaizhizao:mold-scrap:update",
+    "kuaizhizao:mold-scrap:import",
+    "kuaizhizao:mold-scrap:export",
+    "kuaizhizao:mold-scrap:submit",
+    "kuaizhizao:mold-scrap:revoke",
+    "kuaizhizao:mold-scrap:approve",
+    "kuaizhizao:mold-scrap:audit",
+    "kuaizhizao:mold-scrap:reject",
+    "kuaizhizao:mold-scrap:print",
+    "kuaizhizao:mold-report-trial-records:read",
+    "kuaizhizao:mold-report-trial-records:export",
+    "kuaizhizao:mold-report-trial-records:print",
+    "kuaizhizao:mold-report-maintenance-alerts:read",
+    "kuaizhizao:mold-report-maintenance-alerts:export",
+    "kuaizhizao:mold-report-maintenance-alerts:print",
+    "kuaizhizao:mold-report-borrow-return-log:read",
+    "kuaizhizao:mold-report-borrow-return-log:export",
+    "kuaizhizao:mold-report-borrow-return-log:print",
+    "kuaizhizao:mold-report-repair-analysis:read",
+    "kuaizhizao:mold-report-repair-analysis:export",
+    "kuaizhizao:mold-report-repair-analysis:print",
+    "kuaizhizao:tool-maintenance-item:read",
+    "kuaizhizao:tool-maintenance-item:create",
+    "kuaizhizao:tool-maintenance-item:delete",
+    "kuaizhizao:tool-maintenance-item:update",
+    "kuaizhizao:tool-maintenance-item:import",
+    "kuaizhizao:tool-maintenance-item:export",
+    "kuaizhizao:tool-maintenance-scheme:read",
+    "kuaizhizao:tool-maintenance-scheme:create",
+    "kuaizhizao:tool-maintenance-scheme:delete",
+    "kuaizhizao:tool-maintenance-scheme:update",
+    "kuaizhizao:tool-maintenance-scheme:import",
+    "kuaizhizao:tool-maintenance-scheme:export",
+    "kuaizhizao:tool-repair-item:read",
+    "kuaizhizao:tool-repair-item:create",
+    "kuaizhizao:tool-repair-item:delete",
+    "kuaizhizao:tool-repair-item:update",
+    "kuaizhizao:tool-repair-item:import",
+    "kuaizhizao:tool-repair-item:export",
+    "kuaizhizao:tool-repair-scheme:read",
+    "kuaizhizao:tool-repair-scheme:create",
+    "kuaizhizao:tool-repair-scheme:delete",
+    "kuaizhizao:tool-repair-scheme:update",
+    "kuaizhizao:tool-repair-scheme:import",
+    "kuaizhizao:tool-repair-scheme:export",
+    "kuaizhizao:tool-borrow:read",
+    "kuaizhizao:tool-borrow:create",
+    "kuaizhizao:tool-borrow:delete",
+    "kuaizhizao:tool-borrow:update",
+    "kuaizhizao:tool-borrow:import",
+    "kuaizhizao:tool-borrow:export",
+    "kuaizhizao:tool-return:read",
+    "kuaizhizao:tool-return:create",
+    "kuaizhizao:tool-return:delete",
+    "kuaizhizao:tool-return:update",
+    "kuaizhizao:tool-return:import",
+    "kuaizhizao:tool-return:export",
+    "kuaizhizao:tool-repair:read",
+    "kuaizhizao:tool-repair:create",
+    "kuaizhizao:tool-repair:delete",
+    "kuaizhizao:tool-repair:update",
+    "kuaizhizao:tool-repair:import",
+    "kuaizhizao:tool-repair:export",
+    "kuaizhizao:tool-repair:submit",
+    "kuaizhizao:tool-repair:revoke",
+    "kuaizhizao:tool-repair:approve",
+    "kuaizhizao:tool-repair:audit",
+    "kuaizhizao:tool-repair:reject",
+    "kuaizhizao:tool-repair:print",
+    "kuaizhizao:tool-repair:complete",
+    "kuaizhizao:tool-scrap:read",
+    "kuaizhizao:tool-scrap:create",
+    "kuaizhizao:tool-scrap:delete",
+    "kuaizhizao:tool-scrap:update",
+    "kuaizhizao:tool-scrap:import",
+    "kuaizhizao:tool-scrap:export",
+    "kuaizhizao:tool-scrap:submit",
+    "kuaizhizao:tool-scrap:revoke",
+    "kuaizhizao:tool-scrap:approve",
+    "kuaizhizao:tool-scrap:audit",
+    "kuaizhizao:tool-scrap:reject",
+    "kuaizhizao:tool-scrap:print",
+    "kuaizhizao:tool-report-maintenance-alerts:read",
+    "kuaizhizao:tool-report-maintenance-alerts:export",
+    "kuaizhizao:tool-report-maintenance-alerts:print",
+    "kuaizhizao:tool-report-calibration-alerts:read",
+    "kuaizhizao:tool-report-calibration-alerts:export",
+    "kuaizhizao:tool-report-calibration-alerts:print",
+    "kuaizhizao:tool-report-borrow-return-log:read",
+    "kuaizhizao:tool-report-borrow-return-log:export",
+    "kuaizhizao:tool-report-borrow-return-log:print",
+    "kuaizhizao:tool-report-repair-analysis:read",
+    "kuaizhizao:tool-report-repair-analysis:export",
+    "kuaizhizao:tool-report-repair-analysis:print",
     "kuaizhizao:mold:read",
     "kuaizhizao:mrp:compute",
     "kuaizhizao:other-inbound:read",
@@ -2255,6 +2896,7 @@
     "kuaizhizao:tool-maintenance:audit",
     "kuaizhizao:tool-maintenance:reject",
     "kuaizhizao:tool-maintenance:print",
+    "kuaizhizao:tool-maintenance:complete",
     "kuaizhizao:tool-usage:read",
     "kuaizhizao:tool-usage:create",
     "kuaizhizao:tool-usage:delete",

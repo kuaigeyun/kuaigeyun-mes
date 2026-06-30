@@ -38,6 +38,8 @@ class Equipment(BaseModel):
         installation_date: 安装日期
         warranty_period: 保修期（月）
         technical_parameters: 技术参数（JSON格式）
+        workshop_id: 关联车间ID（可选）
+        workshop_name: 关联车间名称
         workstation_id: 关联工位ID（可选，关联到工位）
         workstation_code: 工位编码
         workstation_name: 工位名称
@@ -61,6 +63,7 @@ class Equipment(BaseModel):
             ("uuid",),
             ("type",),
             ("category",),
+            ("workshop_id",),
             ("workstation_id",),
             ("work_center_id",),
             ("status",),
@@ -91,6 +94,10 @@ class Equipment(BaseModel):
     # 技术参数（JSON格式）
     technical_parameters = fields.JSONField(null=True, description="技术参数（JSON格式）")
     
+    # 关联车间（可选）
+    workshop_id = fields.IntField(null=True, description="关联车间ID（可选）")
+    workshop_name = fields.CharField(max_length=200, null=True, description="关联车间名称")
+
     # 关联工位（可选）
     workstation_id = fields.IntField(null=True, description="关联工位ID（可选，关联到工位）")
     workstation_code = fields.CharField(max_length=50, null=True, description="工位编码")

@@ -3,11 +3,11 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * 工装台账页面
  *
  * 提供工装的 CRUD 功能，包括列表展示、创建、编辑等操作。
- * 详情抽屉包含领用记录、维保记录、校验记录 Tab。
+ * 详情抽屉包含方案绑定、保养/校验记录（只读）、运营单据链接。
  */
 
 import React, { useRef, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { DescriptionsProps } from 'antd';
 import {
@@ -22,27 +22,26 @@ import {
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { App, Button, Tag, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Modal, Row, Col, Typography, Empty, Spin, theme as AntdTheme, Upload } from 'antd';
-import { PlusOutlined, EditOutlined, EyeOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons';
-import { uploadMultipleFiles } from '../../../../../services/file';
+import { App, Button, Tag, Table, Descriptions, Select, Modal, Row, Col, Typography, Empty, Spin, Space, Tabs, theme as AntdTheme } from 'antd';
+import { PlusOutlined, EditOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { getToolAssetLifecycle } from '../../../utils/equipmentLifecycle';
-import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
-import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { toolApi } from '../../../services/equipment';
+import { maintenanceSchemesApi, repairSchemesApi, schemeBindingsApi, maintenancesApi, calibrationsApi } from '../../../services/toolOps';
 import { batchImport } from '../../../../../utils/batchOperations';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
-import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
+import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
@@ -102,24 +101,14 @@ interface Tool {
   updated_at?: string;
 }
 
-interface ToolUsage {
-  uuid?: string;
-  usage_no?: string;
-  operator_name?: string;
-  source_type?: string;
-  source_no?: string;
-  checkout_date?: string;
-  checkin_date?: string;
-  status?: string;
-}
 
 interface ToolMaintenance {
   uuid?: string;
-  maintenance_type?: string;
+  document_no?: string;
   maintenance_date?: string;
-  executor?: string;
-  content?: string;
-  result?: string;
+  planned_date?: string;
+  applicant_name?: string;
+  status?: string;
 }
 
 interface ToolCalibration {
@@ -129,10 +118,12 @@ interface ToolCalibration {
   certificate_no?: string;
   result?: string;
   expiry_date?: string;
+  status?: string;
 }
 
 const ToolLedgerPage: React.FC = () => {
   const navigate = useNavigate();
+  const perms = useResourcePermissions('kuaizhizao:equipment-management-tool-ledger');
   const { t, i18n } = useTranslation();
 
   const toolLedgerImportTemplate = useMemo(
@@ -176,35 +167,21 @@ const ToolLedgerPage: React.FC = () => {
     toolTrackingRefreshKey,
   );
 
-  const [usages, setUsages] = useState<ToolUsage[]>([]);
   const [maintenances, setMaintenances] = useState<ToolMaintenance[]>([]);
   const [calibrations, setCalibrations] = useState<ToolCalibration[]>([]);
-  const [usagesLoading, setUsagesLoading] = useState(false);
   const [maintLoading, setMaintLoading] = useState(false);
   const [calibLoading, setCalibLoading] = useState(false);
 
-  const [usageModalVisible, setUsageModalVisible] = useState(false);
-  const [maintModalVisible, setMaintModalVisible] = useState(false);
-  const [calibModalVisible, setCalibModalVisible] = useState(false);
-  const [usageForm] = Form.useForm();
-  const [maintForm] = Form.useForm();
-  const [calibForm] = Form.useForm();
+  const [maintenanceSchemeOptions, setMaintenanceSchemeOptions] = useState<{ label: string; value: number }[]>([]);
+  const [repairSchemeOptions, setRepairSchemeOptions] = useState<{ label: string; value: number }[]>([]);
+  const [boundMaintenanceSchemeIds, setBoundMaintenanceSchemeIds] = useState<number[]>([]);
+  const [boundRepairSchemeIds, setBoundRepairSchemeIds] = useState<number[]>([]);
+  const [schemeBindingsSaving, setSchemeBindingsSaving] = useState(false);
 
-  const loadUsages = async (toolUuid: string) => {
-    setUsagesLoading(true);
-    try {
-      const res = await toolApi.listUsages(toolUuid, { limit: 100 });
-      setUsages(res.items || []);
-    } catch {
-      setUsages([]);
-    } finally {
-      setUsagesLoading(false);
-    }
-  };
-  const loadMaintenances = async (toolUuid: string) => {
+  const loadMaintenances = async (toolId: number) => {
     setMaintLoading(true);
     try {
-      const res = await toolApi.listMaintenances(toolUuid, { limit: 100 });
+      const res = await maintenancesApi.list({ tool_id: toolId, limit: 100 });
       setMaintenances(res.items || []);
     } catch {
       setMaintenances([]);
@@ -212,10 +189,47 @@ const ToolLedgerPage: React.FC = () => {
       setMaintLoading(false);
     }
   };
-  const loadCalibrations = async (toolUuid: string) => {
+
+  const loadSchemeOptions = async () => {
+    const [maintRes, repairRes] = await Promise.all([
+      maintenanceSchemesApi.list({ limit: 1000, is_active: true }),
+      repairSchemesApi.list({ limit: 1000, is_active: true }),
+    ]);
+    setMaintenanceSchemeOptions(
+      (maintRes.items ?? []).map((s: { id: number; code: string; name: string }) => ({
+        label: `${s.code} - ${s.name}`,
+        value: s.id,
+      })),
+    );
+    setRepairSchemeOptions(
+      (repairRes.items ?? []).map((s: { id: number; code: string; name: string }) => ({
+        label: `${s.code} - ${s.name}`,
+        value: s.id,
+      })),
+    );
+  };
+
+  const loadSchemeBindings = async (toolId: number) => {
+    const [maintBindings, repairBindings] = await Promise.all([
+      schemeBindingsApi.list({ tool_id: toolId, scheme_type: 'maintenance' }),
+      schemeBindingsApi.list({ tool_id: toolId, scheme_type: 'repair' }),
+    ]);
+    setBoundMaintenanceSchemeIds(
+      (Array.isArray(maintBindings) ? maintBindings : maintBindings.items ?? []).map(
+        (b: { scheme_id: number }) => b.scheme_id,
+      ),
+    );
+    setBoundRepairSchemeIds(
+      (Array.isArray(repairBindings) ? repairBindings : repairBindings.items ?? []).map(
+        (b: { scheme_id: number }) => b.scheme_id,
+      ),
+    );
+  };
+
+  const loadCalibrations = async (toolId: number) => {
     setCalibLoading(true);
     try {
-      const res = await toolApi.listCalibrations(toolUuid, { limit: 100 });
+      const res = await calibrationsApi.list({ tool_id: toolId, limit: 100 });
       setCalibrations(res.items || []);
     } catch {
       setCalibrations([]);
@@ -278,119 +292,19 @@ const ToolLedgerPage: React.FC = () => {
       const detail = await toolApi.get(record.uuid);
       setToolDetail(detail);
       setDrawerVisible(true);
-      loadUsages(record.uuid);
-      loadMaintenances(record.uuid);
-      loadCalibrations(record.uuid);
+      if (detail.id != null) {
+        loadMaintenances(detail.id);
+        loadCalibrations(detail.id);
+        void loadSchemeOptions();
+        void loadSchemeBindings(detail.id);
+      }
       setToolTrackingRefreshKey((k) => k + 1);
     } catch (error) {
       messageApi.error(t('app.kuaizhizao.toolLedger.getDetailFailed'));
     }
   };
 
-  const handleCheckout = () => {
-    if (!toolDetail?.uuid) return;
-    usageForm.resetFields();
-    usageForm.setFieldsValue({ tool_uuid: toolDetail.uuid });
-    setUsageModalVisible(true);
-  };
-  const handleSubmitCheckout = async () => {
-    try {
-      const values = await usageForm.validateFields();
-      await toolApi.checkout({
-        ...values,
-        attachments: normalizeDocumentAttachments(values.attachments),
-      });
-      messageApi.success(t('app.kuaizhizao.toolLedger.checkoutSuccess'));
-      setUsageModalVisible(false);
-      if (toolDetail?.uuid) {
-        loadUsages(toolDetail.uuid);
-        const detail = await toolApi.get(toolDetail.uuid);
-        setToolDetail(detail);
-        setToolTrackingRefreshKey((k) => k + 1);
-      }
-    } catch (e: any) {
-      if (e?.errorFields) return;
-      messageApi.error(e?.message || t('app.kuaizhizao.toolLedger.checkoutFailed'));
-    }
-  };
 
-  const handleCheckin = async (usageUuid: string) => {
-    try {
-      await toolApi.checkin(usageUuid);
-      messageApi.success(t('app.kuaizhizao.toolLedger.checkinSuccess'));
-      if (toolDetail?.uuid) {
-        loadUsages(toolDetail.uuid);
-        const detail = await toolApi.get(toolDetail.uuid);
-        setToolDetail(detail);
-        setToolTrackingRefreshKey((k) => k + 1);
-      }
-    } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.toolLedger.checkinFailed'));
-    }
-  };
-
-  const handleRecordMaintenance = () => {
-    if (!toolDetail?.uuid) return;
-    maintForm.resetFields();
-    maintForm.setFieldsValue({ tool_uuid: toolDetail.uuid, maintenance_date: dayjs() });
-    setMaintModalVisible(true);
-  };
-  const handleSubmitMaintenance = async () => {
-    try {
-      const values = await maintForm.validateFields();
-      const data = {
-        ...values,
-        maintenance_date: values.maintenance_date?.format?.('YYYY-MM-DD') || values.maintenance_date,
-        cost: values.cost ?? 0,
-        attachments: normalizeDocumentAttachments(values.attachments),
-      };
-      await toolApi.recordMaintenance(data);
-      messageApi.success(t('app.kuaizhizao.toolLedger.maintenanceSaved'));
-      setMaintModalVisible(false);
-      if (toolDetail?.uuid) {
-        loadMaintenances(toolDetail.uuid);
-        setToolTrackingRefreshKey((k) => k + 1);
-      }
-    } catch (e: any) {
-      if (e?.errorFields) return;
-      messageApi.error(e?.message || t('common.saveFailed'));
-    }
-  };
-
-  const handleRecordCalibration = () => {
-    if (!toolDetail?.uuid) return;
-    calibForm.resetFields();
-    calibForm.setFieldsValue({ tool_uuid: toolDetail.uuid, calibration_date: dayjs() });
-    setCalibModalVisible(true);
-  };
-  const handleSubmitCalibration = async () => {
-    try {
-      const values = await calibForm.validateFields();
-      const data = {
-        ...values,
-        calibration_date: values.calibration_date?.format?.('YYYY-MM-DD') || values.calibration_date,
-        expiry_date: values.expiry_date?.format?.('YYYY-MM-DD') || values.expiry_date,
-        attachments: normalizeDocumentAttachments(values.attachments),
-      };
-      await toolApi.recordCalibration(data);
-      messageApi.success(t('app.kuaizhizao.toolLedger.calibrationSaved'));
-      setCalibModalVisible(false);
-      if (toolDetail?.uuid) {
-        loadCalibrations(toolDetail.uuid);
-        const detail = await toolApi.get(toolDetail.uuid);
-        setToolDetail(detail);
-        setToolTrackingRefreshKey((k) => k + 1);
-      }
-    } catch (e: any) {
-      if (e?.errorFields) return;
-      messageApi.error(e?.message || t('common.saveFailed'));
-    }
-  };
-
-  useSubmitShortcut(
-    usageModalVisible ? handleSubmitCheckout : maintModalVisible ? handleSubmitMaintenance : calibModalVisible ? handleSubmitCalibration : undefined,
-    usageModalVisible || maintModalVisible || calibModalVisible,
-  );
 
   const handleSubmit = async (values: any) => {
     try {
@@ -416,7 +330,6 @@ const ToolLedgerPage: React.FC = () => {
           setToolDetail(fresh);
           loadCalibrations(editedUuid);
           loadMaintenances(editedUuid);
-          loadUsages(editedUuid);
           setToolTrackingRefreshKey((k) => k + 1);
         } catch {
           /* ignore */
@@ -496,27 +409,6 @@ const ToolLedgerPage: React.FC = () => {
       render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: t('app.kuaizhizao.toolLedger.colLifecycle'),
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getToolAssetLifecycle(record as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      },
-    },
-    {
       title: t('common.actions'),
       valueType: 'option',
       width: 150,
@@ -553,91 +445,22 @@ const ToolLedgerPage: React.FC = () => {
   [t],
   );
 
-  const toolSourceTypeOptions = useMemo(
-    () => [
-      { label: t('app.kuaizhizao.toolLedger.sourceWorkOrder'), value: 'work_order' },
-      { label: t('app.kuaizhizao.toolLedger.sourceProductionOrder'), value: 'production_order' },
-      { label: t('app.kuaizhizao.toolLedger.sourceOther'), value: 'other' },
-    ],
-    [t],
-  );
-
-  const toolMaintenanceTypeOptions = useMemo(
-    () => [
-      { label: t('app.kuaizhizao.toolLedger.maintenanceTypeDaily'), value: '日常保养' },
-      { label: t('app.kuaizhizao.toolLedger.maintenanceTypePeriodic'), value: '定期保养' },
-      { label: t('app.kuaizhizao.toolLedger.maintenanceTypeRepair'), value: '故障维修' },
-    ],
-    [t],
-  );
-
-  const toolMaintenanceResultOptions = useMemo(
-    () => [
-      { label: t('app.kuaizhizao.toolLedger.maintenanceResultDone'), value: '完成' },
-      { label: t('app.kuaizhizao.toolLedger.maintenanceResultPending'), value: '未完成' },
-    ],
-    [t],
-  );
-
-  const toolCalibrationResultOptions = useMemo(
-    () => [
-      { label: t('app.kuaizhizao.toolLedger.resultPass'), value: '合格' },
-      { label: t('app.kuaizhizao.toolLedger.resultFail'), value: '不合格' },
-      { label: t('app.kuaizhizao.toolLedger.resultApproved'), value: '准用' },
-    ],
-    [t],
-  );
-
-  const usageTableColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.toolLedger.colUsageNo'), dataIndex: 'usage_no', width: 140 },
-      { title: t('app.kuaizhizao.toolLedger.colSourceType'), dataIndex: 'source_type', width: 100 },
-      { title: t('app.kuaizhizao.toolLedger.colSourceNo'), dataIndex: 'source_no', width: 120 },
-      { title: t('app.kuaizhizao.toolLedger.colOperator'), dataIndex: 'operator_name', width: 90 },
-      {
-        title: t('app.kuaizhizao.toolLedger.colCheckoutDate'),
-        dataIndex: 'checkout_date',
-        width: 160,
-        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm') : '-'),
-      },
-      {
-        title: t('app.kuaizhizao.toolLedger.colCheckinDate'),
-        dataIndex: 'checkin_date',
-        width: 160,
-        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm') : '-'),
-      },
-      {
-        title: t('common.status'),
-        dataIndex: 'status',
-        width: 80,
-        render: (s: string) => <Tag>{s || '-'}</Tag>,
-      },
-      {
-        title: t('common.actions'),
-        width: 80,
-        render: (_: unknown, record: ToolUsage) =>
-          record.status === '使用中' ? (
-            <Button type="link" size="small" onClick={() => handleCheckin(record.uuid!)}>
-              {t('app.kuaizhizao.toolLedger.checkin')}
-            </Button>
-          ) : null,
-      },
-    ],
-    [t],
-  );
-
   const maintenanceTableColumns = useMemo(
     () => [
-      { title: t('app.kuaizhizao.toolLedger.colMaintenanceType'), dataIndex: 'maintenance_type', width: 100 },
+      { title: t('app.kuaizhizao.toolOps.maintenance.col.documentNo'), dataIndex: 'document_no', width: 140 },
       {
-        title: t('app.kuaizhizao.toolLedger.colMaintenanceDate'),
+        title: t('app.kuaizhizao.toolOps.maintenance.col.maintenanceDate'),
         dataIndex: 'maintenance_date',
         width: 110,
         render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
       },
-      { title: t('app.kuaizhizao.toolLedger.colExecutor'), dataIndex: 'executor', width: 90 },
-      { title: t('app.kuaizhizao.toolLedger.colContent'), dataIndex: 'content', ellipsis: true },
-      { title: t('app.kuaizhizao.toolLedger.colResult'), dataIndex: 'result', width: 80 },
+      {
+        title: t('app.kuaizhizao.toolOps.maintenance.col.status'),
+        dataIndex: 'status',
+        width: 90,
+        render: (v: string) => (v ? <Tag>{v}</Tag> : '-'),
+      },
+      { title: t('app.kuaizhizao.toolOps.maintenance.col.executor'), dataIndex: 'applicant_name', width: 90 },
     ],
     [t],
   );
@@ -695,8 +518,8 @@ const ToolLedgerPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          enableRowSelection={true}
-          showDeleteButton={true}
+          enableRowSelection={perms.canDelete}
+          showDeleteButton={perms.canDelete}
           onDelete={async (keys) => {
             Modal.confirm({
               title: t('app.kuaizhizao.toolLedger.confirmBatchDeleteTitle'),
@@ -710,8 +533,7 @@ const ToolLedgerPage: React.FC = () => {
                   if (toolDetail?.uuid && keys.map(String).includes(String(toolDetail.uuid))) {
                     setDrawerVisible(false);
                     setToolDetail(null);
-                    setUsages([]);
-                    setMaintenances([]);
+                              setMaintenances([]);
                     setCalibrations([]);
                   }
                   actionRef.current?.reload();
@@ -721,7 +543,7 @@ const ToolLedgerPage: React.FC = () => {
               },
             });
           }}
-          showCreateButton
+          showCreateButton={perms.canCreate}
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
           showImportButton
@@ -917,7 +739,6 @@ const ToolLedgerPage: React.FC = () => {
         onClose={() => {
           setDrawerVisible(false);
           setToolDetail(null);
-          setUsages([]);
           setMaintenances([]);
           setCalibrations([]);
         }}
@@ -965,8 +786,7 @@ const ToolLedgerPage: React.FC = () => {
                     closeDrawer={() => {
                       setDrawerVisible(false);
                       setToolDetail(null);
-                      setUsages([]);
-                      setMaintenances([]);
+                                  setMaintenances([]);
                       setCalibrations([]);
                     }}
                   />
@@ -975,193 +795,159 @@ const ToolLedgerPage: React.FC = () => {
                   ) : null}
                 </div>
               </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
-                <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-                  <div style={{ marginBottom: 16 }}>
-                    <Typography.Text strong>{t('app.kuaizhizao.toolLedger.sectionUsages')}</Typography.Text>
-                    <div style={{ marginTop: 8, marginBottom: 8 }}>
-                      <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleCheckout}>
-                        {t('app.kuaizhizao.toolLedger.createCheckout')}
-                      </Button>
-                    </div>
-                    <Table<ToolUsage>
-                      size="small"
-                      loading={usagesLoading}
-                      dataSource={usages}
-                      rowKey="uuid"
-                      pagination={false}
-                      tableLayout="fixed"
-                      style={{ minWidth: 1100 }}
-                      columns={usageTableColumns}
-                    />
-                  </div>
-                  <div style={{ marginBottom: 16 }}>
-                    <Typography.Text strong>{t('app.kuaizhizao.toolLedger.sectionMaintenances')}</Typography.Text>
-                    <div style={{ marginTop: 8, marginBottom: 8 }}>
-                      <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleRecordMaintenance}>
-                        {t('app.kuaizhizao.toolLedger.createMaintenance')}
-                      </Button>
-                    </div>
-                    <Table<ToolMaintenance>
-                      size="small"
-                      loading={maintLoading}
-                      dataSource={maintenances}
-                      rowKey="uuid"
-                      pagination={false}
-                      tableLayout="fixed"
-                      style={{ minWidth: 900 }}
-                      columns={maintenanceTableColumns}
-                    />
-                  </div>
-                  <div>
-                    <Typography.Text strong>{t('app.kuaizhizao.toolLedger.sectionCalibrations')}</Typography.Text>
-                    <div style={{ marginTop: 8, marginBottom: 8 }}>
-                      <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleRecordCalibration}>
-                        {t('app.kuaizhizao.toolLedger.createCalibration')}
-                      </Button>
-                    </div>
-                    <Table<ToolCalibration>
-                      size="small"
-                      loading={calibLoading}
-                      dataSource={calibrations}
-                      rowKey="uuid"
-                      pagination={false}
-                      tableLayout="fixed"
-                      style={{ minWidth: 900 }}
-                      columns={calibrationTableColumns}
-                    />
-                  </div>
+              <DetailDrawerSection title={t('app.kuaizhizao.toolOps.schemeBindings.title')}>
+                <div style={{ marginBottom: 12 }}>
+                  <Typography.Text type="secondary">{t('app.kuaizhizao.toolOps.schemeBindings.maintenance')}</Typography.Text>
+                  <Select
+                    mode="multiple"
+                    style={{ width: '100%', marginTop: 4 }}
+                    placeholder={t('app.kuaizhizao.toolOps.schemeBindings.selectMaintenanceSchemes')}
+                    options={maintenanceSchemeOptions}
+                    value={boundMaintenanceSchemeIds}
+                    onChange={setBoundMaintenanceSchemeIds}
+                  />
                 </div>
+                <div style={{ marginBottom: 12 }}>
+                  <Typography.Text type="secondary">{t('app.kuaizhizao.toolOps.schemeBindings.repair')}</Typography.Text>
+                  <Select
+                    mode="multiple"
+                    style={{ width: '100%', marginTop: 4 }}
+                    placeholder={t('app.kuaizhizao.toolOps.schemeBindings.selectRepairSchemes')}
+                    options={repairSchemeOptions}
+                    value={boundRepairSchemeIds}
+                    onChange={setBoundRepairSchemeIds}
+                  />
+                </div>
+                {perms.canUpdate && (
+                  <Button
+                    type="primary"
+                    loading={schemeBindingsSaving}
+                    disabled={toolDetail.id == null}
+                    onClick={async () => {
+                      if (toolDetail.id == null) return;
+                      setSchemeBindingsSaving(true);
+                      try {
+                        await schemeBindingsApi.bulkReplace({
+                          tool_id: toolDetail.id,
+                          scheme_type: 'maintenance',
+                          scheme_ids: boundMaintenanceSchemeIds,
+                        });
+                        await schemeBindingsApi.bulkReplace({
+                          tool_id: toolDetail.id,
+                          scheme_type: 'repair',
+                          scheme_ids: boundRepairSchemeIds,
+                        });
+                        messageApi.success(t('app.kuaizhizao.toolOps.schemeBindings.saveSuccess'));
+                      } catch (error: unknown) {
+                        const err = error as { message?: string };
+                        messageApi.error(err?.message || t('common.operationFailed'));
+                      } finally {
+                        setSchemeBindingsSaving(false);
+                      }
+                    }}
+                  >
+                    {t('common.save')}
+                  </Button>
+                )}
               </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
-                {toolTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {toolTracking.error && !toolTracking.loading && (
-                  <Typography.Text type="danger">{toolTracking.error}</Typography.Text>
-                )}
-                {toolTracking.data && !toolTracking.loading && (
-                  <DocumentTrackingTimelineBody data={toolTracking.data} />
-                )}
-                {!toolTracking.loading && !toolTracking.data && !toolTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.toolLedger.noTimeline')} />
-                )}
-              </DetailDrawerSection>
+              <Tabs
+                items={[
+                  {
+                    key: 'maintenances',
+                    label: t('app.kuaizhizao.toolLedger.sectionMaintenances'),
+                    children: (
+                      <>
+                        <div style={{ marginBottom: 12 }}>
+                          <Link to="/apps/kuaizhizao/equipment-management/tool-maintenances">
+                            <Button type="primary" size="small" icon={<PlusOutlined />}>
+                              {t('app.kuaizhizao.toolMaintenanceReminder.createMaintenance')}
+                            </Button>
+                          </Link>
+                        </div>
+                        <Table<ToolMaintenance>
+                          size="small"
+                          loading={maintLoading}
+                          dataSource={maintenances}
+                          rowKey="uuid"
+                          pagination={false}
+                          columns={maintenanceTableColumns}
+                        />
+                      </>
+                    ),
+                  },
+                  {
+                    key: 'calibrations',
+                    label: t('app.kuaizhizao.toolLedger.sectionCalibrations'),
+                    children: (
+                      <>
+                        <div style={{ marginBottom: 12 }}>
+                          <Link to="/apps/kuaizhizao/equipment-management/tool-calibrations">
+                            <Button type="primary" size="small" icon={<PlusOutlined />}>
+                              {t('app.kuaizhizao.toolMaintenanceReminder.createCalibration')}
+                            </Button>
+                          </Link>
+                        </div>
+                        <Table<ToolCalibration>
+                          size="small"
+                          loading={calibLoading}
+                          dataSource={calibrations}
+                          rowKey="uuid"
+                          pagination={false}
+                          columns={calibrationTableColumns}
+                        />
+                      </>
+                    ),
+                  },
+                  {
+                    key: 'ops',
+                    label: t('app.kuaizhizao.toolOps.opsLinks.title'),
+                    children: (
+                      <Space wrap>
+                        <Link to="/apps/kuaizhizao/equipment-management/tool-borrows">
+                          <Button size="small">{t('app.kuaizhizao.menu.equipment-management.tool-borrows')}</Button>
+                        </Link>
+                        <Link to="/apps/kuaizhizao/equipment-management/tool-maintenances">
+                          <Button size="small">{t('app.kuaizhizao.menu.equipment-management.tool-maintenances')}</Button>
+                        </Link>
+                        <Link to="/apps/kuaizhizao/equipment-management/tool-repairs">
+                          <Button size="small">{t('app.kuaizhizao.menu.equipment-management.tool-repairs')}</Button>
+                        </Link>
+                        <Link to="/apps/kuaizhizao/equipment-management/tool-scrap-applications">
+                          <Button size="small">{t('app.kuaizhizao.menu.equipment-management.tool-scrap-applications')}</Button>
+                        </Link>
+                      </Space>
+                    ),
+                  },
+                  {
+                    key: 'tracking_timeline',
+                    label: t('app.uniDetail.sectionTimeline'),
+                    children: (
+                      <>
+                        {toolTracking.loading && (
+                          <div style={{ textAlign: 'center', padding: 24 }}>
+                            <Spin />
+                          </div>
+                        )}
+                        {toolTracking.error && !toolTracking.loading && (
+                          <Typography.Text type="danger">{toolTracking.error}</Typography.Text>
+                        )}
+                        {toolTracking.data && !toolTracking.loading && (
+                          <DocumentTrackingTimelineBody data={toolTracking.data} />
+                        )}
+                        {!toolTracking.loading && !toolTracking.data && !toolTracking.error && (
+                          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.toolLedger.noTimeline')} />
+                        )}
+                      </>
+                    ),
+                  },
+                ]}
+              />
             </>
           ) : null
         }
       />
 
-      <Modal title={t('app.kuaizhizao.toolLedger.createCheckout')} open={usageModalVisible} onOk={handleSubmitCheckout} okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT} onCancel={() => setUsageModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
-        <Form form={usageForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Form.Item name="tool_uuid" hidden><Input /></Form.Item>
-          <Form.Item name="operator_name" label={t('app.kuaizhizao.toolLedger.checkoutOperator')}><Input placeholder={t('app.kuaizhizao.toolLedger.phCheckoutOperator')} /></Form.Item>
-          <Form.Item name="department_name" label={t('app.kuaizhizao.toolLedger.checkoutDepartment')}><Input placeholder={t('app.kuaizhizao.toolLedger.phCheckoutDepartment')} /></Form.Item>
-          <Form.Item name="source_type" label={t('app.kuaizhizao.toolLedger.colSourceType')}>
-            <Select placeholder={t('app.kuaizhizao.toolLedger.phSelect')} allowClear options={toolSourceTypeOptions} />
-          </Form.Item>
-          <Form.Item name="source_no" label={t('app.kuaizhizao.toolLedger.colSourceNo')}><Input placeholder={t('app.kuaizhizao.toolLedger.phSourceNo')} /></Form.Item>
-          <Form.Item
-            name="attachments"
-            label={t('app.kuaizhizao.toolLedger.attachments')}
-            valuePropName="fileList"
-            getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
-          >
-            <Upload
-              multiple
-              customRequest={async (options) => {
-                const res = await uploadMultipleFiles([options.file as File], {
-                  category: 'tool_usage_attachments',
-                });
-                options.onSuccess?.(res[0], options.file as any);
-              }}
-            >
-              <Button icon={<UploadOutlined />}>{t('app.kuaizhizao.toolLedger.upload')}</Button>
-            </Upload>
-          </Form.Item>
-          <Form.Item name="remark" label={t('app.kuaizhizao.toolLedger.remark')}><Input.TextArea rows={2} placeholder={t('app.kuaizhizao.toolLedger.phRemark')} /></Form.Item>
-        </Form>
-      </Modal>
 
-      <Modal title={t('app.kuaizhizao.toolLedger.createMaintenance')} open={maintModalVisible} onOk={handleSubmitMaintenance} okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT} onCancel={() => setMaintModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
-        <Form form={maintForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Form.Item name="tool_uuid" hidden><Input /></Form.Item>
-          <Form.Item name="maintenance_type" label={t('app.kuaizhizao.toolLedger.colMaintenanceType')} rules={[{ required: true }]}>
-            <Select options={toolMaintenanceTypeOptions} />
-          </Form.Item>
-          <Form.Item name="maintenance_date" label={t('app.kuaizhizao.toolLedger.colMaintenanceDate')} rules={[{ required: true }]}>
-            <DatePicker style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="executor" label={t('app.kuaizhizao.toolLedger.colExecutor')}><Input placeholder={t('app.kuaizhizao.toolLedger.phExecutor')} /></Form.Item>
-          <Form.Item name="content" label={t('app.kuaizhizao.toolLedger.colContent')}><Input.TextArea rows={2} placeholder={t('app.kuaizhizao.toolLedger.phMaintenanceContent')} /></Form.Item>
-          <Form.Item name="result" label={t('app.kuaizhizao.toolLedger.colResult')}>
-            <Select options={toolMaintenanceResultOptions} />
-          </Form.Item>
-          <Form.Item name="cost" label={t('app.kuaizhizao.toolLedger.cost')} initialValue={0}><InputNumber min={0} step={0.01} style={{ width: '100%' }} /></Form.Item>
-          <Form.Item
-            name="attachments"
-            label={t('app.kuaizhizao.toolLedger.attachments')}
-            valuePropName="fileList"
-            getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
-          >
-            <Upload
-              multiple
-              customRequest={async (options) => {
-                const res = await uploadMultipleFiles([options.file as File], {
-                  category: 'tool_maintenance_attachments',
-                });
-                options.onSuccess?.(res[0], options.file as any);
-              }}
-            >
-              <Button icon={<UploadOutlined />}>{t('app.kuaizhizao.toolLedger.upload')}</Button>
-            </Upload>
-          </Form.Item>
-          <Form.Item name="remark" label={t('app.kuaizhizao.toolLedger.remark')}><Input.TextArea rows={2} placeholder={t('app.kuaizhizao.toolLedger.phRemark')} /></Form.Item>
-        </Form>
-      </Modal>
-
-      <Modal title={t('app.kuaizhizao.toolLedger.createCalibration')} open={calibModalVisible} onOk={handleSubmitCalibration} okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT} onCancel={() => setCalibModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
-        <Form form={calibForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Form.Item name="tool_uuid" hidden><Input /></Form.Item>
-          <Form.Item name="calibration_date" label={t('app.kuaizhizao.toolLedger.colCalibrationDate')} rules={[{ required: true }]}>
-            <DatePicker style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="calibration_org" label={t('app.kuaizhizao.toolLedger.colCalibrationOrg')}><Input placeholder={t('app.kuaizhizao.toolLedger.phCalibrationOrg')} /></Form.Item>
-          <Form.Item name="certificate_no" label={t('app.kuaizhizao.toolLedger.colCertificateNo')}><Input placeholder={t('app.kuaizhizao.toolLedger.phCertificateNo')} /></Form.Item>
-          <Form.Item name="result" label={t('app.kuaizhizao.toolLedger.colResult')} rules={[{ required: true }]}>
-            <Select options={toolCalibrationResultOptions} />
-          </Form.Item>
-          <Form.Item name="expiry_date" label={t('app.kuaizhizao.toolLedger.colExpiryDate')}>
-            <FutureDatePicker
-              getForm={() => calibForm}
-              baseFieldName="calibration_date"
-              t={t}
-              style={{ width: '100%' }}
-            />
-          </Form.Item>
-          <Form.Item
-            name="attachments"
-            label={t('app.kuaizhizao.toolLedger.attachments')}
-            valuePropName="fileList"
-            getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
-          >
-            <Upload
-              multiple
-              customRequest={async (options) => {
-                const res = await uploadMultipleFiles([options.file as File], {
-                  category: 'tool_calibration_attachments',
-                });
-                options.onSuccess?.(res[0], options.file as any);
-              }}
-            >
-              <Button icon={<UploadOutlined />}>{t('app.kuaizhizao.toolLedger.upload')}</Button>
-            </Upload>
-          </Form.Item>
-          <Form.Item name="remark" label={t('app.kuaizhizao.toolLedger.remark')}><Input.TextArea rows={2} placeholder={t('app.kuaizhizao.toolLedger.phRemark')} /></Form.Item>
-        </Form>
-      </Modal>
     </>
   );
 };

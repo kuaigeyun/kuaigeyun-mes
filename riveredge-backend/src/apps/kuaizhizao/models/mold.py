@@ -85,9 +85,15 @@ class Mold(BaseModel):
     technical_parameters = fields.JSONField(null=True, description="技术参数（JSON格式）")
     
     # 状态信息
-    status = fields.CharField(max_length=50, default="正常", description="模具状态（正常、维修中、停用、校验中、报废）")
+    status = fields.CharField(max_length=50, default="待启用", description="模具状态")
     total_usage_count = fields.IntField(default=0, description="累计使用次数")
     is_active = fields.BooleanField(default=True, description="是否启用")
+
+    storage_location = fields.CharField(max_length=200, null=True, description="存放位置")
+    maintenance_scheme_id = fields.IntField(null=True, description="默认保养方案ID")
+    repair_scheme_id = fields.IntField(null=True, description="默认维修方案ID")
+    last_maintenance_date = fields.DateField(null=True, description="上次保养日期")
+    allow_repeated_borrow = fields.BooleanField(default=False, description="是否允许重复领用")
     
     # 腔数与寿命（用于产量换算与寿命预警）
     cavity_count = fields.IntField(null=True, description="腔数/模数，一次成型产出件数，用于产量→使用次数换算")

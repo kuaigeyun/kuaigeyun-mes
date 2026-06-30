@@ -10,6 +10,7 @@ import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker }
 import { App, Button, Tag, Typography } from 'antd';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getCalibrationResultLifecycle } from '../../../utils/equipmentLifecycle';
+import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -205,6 +206,7 @@ const MoldCalibrationsPage: React.FC = () => {
           label={t('app.kuaizhizao.moldCalibration.formCalibrationDate')}
           rules={[{ required: true, message: t('app.kuaizhizao.moldCalibration.formSelectCalibrationDateRequired') }]}
           colProps={{ span: 12 }}
+          fieldProps={EQUIPMENT_DATE_FIELD_PROPS}
         />
         <ProFormSelect
           name="result"
@@ -214,7 +216,12 @@ const MoldCalibrationsPage: React.FC = () => {
           colProps={{ span: 12 }}
         />
         <ProFormText name="certificate_no" label={t('app.kuaizhizao.moldCalibration.formCertificateNo')} colProps={{ span: 12 }} />
-        <ProFormDatePicker name="expiry_date" label={t('app.kuaizhizao.moldCalibration.formExpiryDate')} colProps={{ span: 12 }} />
+        <ProFormDatePicker
+          name="expiry_date"
+          label={t('app.kuaizhizao.moldCalibration.formExpiryDate')}
+          colProps={{ span: 12 }}
+          fieldProps={EQUIPMENT_DATE_FIELD_PROPS}
+        />
         <DocumentAttachmentsField category="mold_calibration_attachments" />
         <ProFormText name="remark" label={t('app.kuaizhizao.moldCalibration.formRemark')} colProps={{ span: 24 }} />
       </FormModalTemplate>

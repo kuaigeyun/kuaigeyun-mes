@@ -113,7 +113,9 @@ class ApplicationRegistryService:
                 logger.warning("⚠️ 数据库中没有已安装的应用，尝试从文件系统扫描应用")
                 raise Exception("数据库中没有应用，回退到文件系统扫描")
 
-            # 仅以 DB 已安装且启用的应用为准；未入库的应用请在应用中心安装/启用，避免启动时加载全部磁盘 router。
+            # 合并磁盘上已有 router 但 DB 未列出的应用（如 kuaizhizao 未写入 core_applications）
+            apps = cls._append_filesystem_apps_for_missing_codes(apps)
+            apps = cls._append_router_package_dirs_for_missing_codes(apps)
             return apps
 
         except Exception as e:
@@ -160,6 +162,8 @@ class ApplicationRegistryService:
                 apps = []
                 logger.warning("⚠️ 无法发现任何应用，系统可能无法正常工作")
 
+            apps = cls._append_filesystem_apps_for_missing_codes(apps)
+            apps = cls._append_router_package_dirs_for_missing_codes(apps)
             return apps
 
         finally:

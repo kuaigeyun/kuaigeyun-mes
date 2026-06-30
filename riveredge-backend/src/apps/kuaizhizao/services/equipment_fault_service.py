@@ -14,6 +14,7 @@ from tortoise.exceptions import IntegrityError
 
 from apps.kuaizhizao.models.equipment_fault import EquipmentFault, EquipmentRepair
 from apps.kuaizhizao.models.equipment import Equipment
+from apps.kuaizhizao.services.spare_part_service import SparePartService
 from apps.kuaizhizao.schemas.equipment_fault import (
     EquipmentFaultCreate,
     EquipmentFaultUpdate,
@@ -292,6 +293,15 @@ class EquipmentRepairService:
                 **data.model_dump(exclude_none=True, exclude={'equipment_uuid', 'equipment_fault_uuid'})
             )
             await repair.save()
+            if data.repair_parts:
+                await SparePartService().apply_parts_usage(
+                    tenant_id,
+                    data.repair_parts,
+                    rel_type="equipment_repair",
+                    rel_id=repair.id,
+                    operator_id=data.repairer_id or created_by,
+                    operator_name=data.repairer_name,
+                )
             return repair
         except IntegrityError:
             raise ValidationError(f"设备维修记录编号 {data.repair_no} 已存在")

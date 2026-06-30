@@ -44,7 +44,11 @@ class Tool(BaseModel):
     warranty_expiry = fields.DateField(null=True, description="保修到期日")
     
     # 生命周期控制
-    status = fields.CharField(max_length=50, default="正常", description="工装状态（正常、领用中、维修中、校验中、停用、报废）")
+    storage_location = fields.CharField(max_length=200, null=True, description="存放位置")
+    maintenance_scheme_id = fields.IntField(null=True, description="默认保养方案ID")
+    repair_scheme_id = fields.IntField(null=True, description="默认维修方案ID")
+    allow_repeated_borrow = fields.BooleanField(default=False, description="是否允许重复领用")
+    status = fields.CharField(max_length=50, default="待启用", description="工装状态")
     is_active = fields.BooleanField(default=True, description="是否启用")
     
     # 维保设置

@@ -316,10 +316,16 @@ class DynamicDatabaseConfigService:
                 # 设备管理模块
                 f"apps.{module_code}.models.equipment",  # 设备模型
                 f"apps.{module_code}.models.equipment_fault",  # 设备故障
+                f"apps.{module_code}.models.equipment_point_inspection",  # 设备点检（旧）
+                f"apps.{module_code}.models.equipment_ops",  # 设备运营扩展（点检/巡检/保养）
                 f"apps.{module_code}.models.equipment_status_monitor",  # 设备状态监控
                 f"apps.{module_code}.models.maintenance_plan",  # 维护计划
                 f"apps.{module_code}.models.maintenance_reminder",  # 维护提醒
                 f"apps.{module_code}.models.mold",  # 模具模型
+                f"apps.{module_code}.models.mold_ops",  # 模具运营扩展
+                f"apps.{module_code}.models.spare_part",  # 备品备件
+                f"apps.{module_code}.models.tool",  # 工装台账
+                f"apps.{module_code}.models.tool_ops",  # 工装运营扩展
                 # 成本管理模块
                 f"apps.{module_code}.models.cost_calculation",  # 成本计算
                 f"apps.{module_code}.models.cost_rule",  # 成本规则
@@ -514,10 +520,16 @@ class DynamicDatabaseConfigService:
                 # 设备管理模块
                 f"apps.{module_code}.models.equipment",  # 设备模型
                 f"apps.{module_code}.models.equipment_fault",  # 设备故障
+                f"apps.{module_code}.models.equipment_point_inspection",  # 设备点检（旧）
+                f"apps.{module_code}.models.equipment_ops",  # 设备运营扩展（点检/巡检/保养）
                 f"apps.{module_code}.models.equipment_status_monitor",  # 设备状态监控
                 f"apps.{module_code}.models.maintenance_plan",  # 维护计划
                 f"apps.{module_code}.models.maintenance_reminder",  # 维护提醒
                 f"apps.{module_code}.models.mold",  # 模具模型
+                f"apps.{module_code}.models.mold_ops",  # 模具运营扩展
+                f"apps.{module_code}.models.spare_part",  # 备品备件
+                f"apps.{module_code}.models.tool",  # 工装台账
+                f"apps.{module_code}.models.tool_ops",  # 工装运营扩展
                 # 成本管理模块
                 f"apps.{module_code}.models.cost_calculation",  # 成本计算
                 f"apps.{module_code}.models.cost_rule",  # 成本规则

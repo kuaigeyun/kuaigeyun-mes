@@ -8,9 +8,12 @@ Date: 2026-03-26
 """
 
 from typing import List, Optional, Dict, Any
-from decimal import Decimal
 from datetime import datetime
+
+from tortoise.expressions import Q
+
 from apps.kuaizhizao.models.spare_part import SparePart, SparePartInventory, SparePartStockRecord
+from apps.kuaizhizao.schemas.equipment_extra import SparePartCreate, SparePartUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -18,6 +21,72 @@ class SparePartService:
     """
     备品备件服务类
     """
+
+    async def list_spare_parts(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        search: Optional[str] = None,
+        is_active: Optional[bool] = None,
+    ) -> tuple[List[SparePart], int]:
+        qs = SparePart.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if is_active is not None:
+            qs = qs.filter(is_active=is_active)
+        if search and search.strip():
+            k = search.strip()
+            qs = qs.filter(Q(part_no__icontains=k) | Q(part_name__icontains=k))
+        total = await qs.count()
+        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        return rows, total
+
+    async def get_spare_part(self, tenant_id: int, spare_part_id: int) -> SparePart:
+        part = await SparePart.filter(
+            tenant_id=tenant_id,
+            id=spare_part_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not part:
+            raise NotFoundError(f"备件不存在: {spare_part_id}")
+        return part
+
+    async def create_spare_part(self, tenant_id: int, data: SparePartCreate) -> SparePart:
+        existing = await SparePart.filter(
+            tenant_id=tenant_id,
+            part_no=data.part_no,
+            deleted_at__isnull=True,
+        ).first()
+        if existing:
+            raise ValidationError(f"备件编号已存在: {data.part_no}")
+        return await SparePart.create(tenant_id=tenant_id, **data.model_dump())
+
+    async def update_spare_part(
+        self,
+        tenant_id: int,
+        spare_part_id: int,
+        data: SparePartUpdate,
+    ) -> SparePart:
+        part = await self.get_spare_part(tenant_id, spare_part_id)
+        update_data = data.model_dump(exclude_unset=True)
+        if "part_no" in update_data and update_data["part_no"] != part.part_no:
+            dup = await SparePart.filter(
+                tenant_id=tenant_id,
+                part_no=update_data["part_no"],
+                deleted_at__isnull=True,
+            ).first()
+            if dup:
+                raise ValidationError(f"备件编号已存在: {update_data['part_no']}")
+        for k, v in update_data.items():
+            setattr(part, k, v)
+        await part.save()
+        return part
+
+    async def delete_spare_part(self, tenant_id: int, spare_part_id: int) -> None:
+        part = await self.get_spare_part(tenant_id, spare_part_id)
+        part.deleted_at = datetime.now()
+        part.is_active = False
+        await part.save()
+
     async def adjust_stock(
         self,
         tenant_id: int,
@@ -59,7 +128,7 @@ class SparePartService:
         # 记录流水
         await SparePartStockRecord.create(
             tenant_id=tenant_id,
-            record_no=f"STK-{datetime.now().strftime('%Y%m%d%06d')}",
+            record_no=f"STK-{datetime.now().strftime('%Y%m%d%H%M%S')}",
             spare_part_id=spare_part_id,
             spare_part_uuid=spare_part.uuid,
             operation_type=operation_type,
@@ -74,16 +143,50 @@ class SparePartService:
 
         return inventory
 
+    async def apply_parts_usage(
+        self,
+        tenant_id: int,
+        parts_data: Any,
+        *,
+        rel_type: str,
+        rel_id: int,
+        operator_id: Optional[int] = None,
+        operator_name: Optional[str] = None,
+    ) -> None:
+        """从维修/保养 JSON 备件列表出库。"""
+        if not parts_data:
+            return
+        items = parts_data if isinstance(parts_data, list) else parts_data.get("items") if isinstance(parts_data, dict) else []
+        if not isinstance(items, list):
+            return
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            part_id = item.get("spare_part_id") or item.get("part_id")
+            qty = item.get("quantity") or item.get("qty")
+            location = item.get("warehouse_location") or item.get("location") or "默认库位"
+            if not part_id or not qty:
+                continue
+            await self.adjust_stock(
+                tenant_id=tenant_id,
+                spare_part_id=int(part_id),
+                quantity=-abs(int(qty)),
+                operation_type="出库",
+                warehouse_location=str(location),
+                rel_type=rel_type,
+                rel_id=rel_id,
+                operator_id=operator_id,
+                operator_name=operator_name,
+                remark=item.get("remark"),
+            )
+
     async def get_safety_stock_alerts(self, tenant_id: int) -> List[Dict[str, Any]]:
         """
         获取库存低于安全库存的备件列表
         """
-        # 这里需要做聚合查询
-        # 为了简化演示，使用内存过滤或原生 SQL
-        all_parts = await SparePart.filter(tenant_id=tenant_id, is_active=True).all()
+        all_parts = await SparePart.filter(tenant_id=tenant_id, is_active=True, deleted_at__isnull=True).all()
         alerts = []
         for part in all_parts:
-            # 简单累计该租户下所有库位的此备件库存
             total_stock = await SparePartInventory.filter(tenant_id=tenant_id, spare_part_id=part.id).all()
             total_qty = sum([inv.stock_quantity for inv in total_stock])
             if total_qty < part.safety_stock:

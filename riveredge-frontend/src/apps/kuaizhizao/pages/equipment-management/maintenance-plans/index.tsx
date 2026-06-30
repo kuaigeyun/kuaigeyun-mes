@@ -23,7 +23,8 @@ import {
   ProFormDigit,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Tag, Modal, Row, Col, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
+import { App, Button, Tag, Modal, Row, Col, Descriptions, Typography, Empty, Spin, theme as AntdTheme, Checkbox, Table, Select, InputNumber, Input } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -39,7 +40,8 @@ import {
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { getMaintenancePlanLifecycle } from '../../../utils/equipmentLifecycle';
-import { maintenancePlanApi, equipmentApi } from '../../../services/equipment';
+import { maintenancePlanApi, equipmentApi, sparePartApi } from '../../../services/equipment';
+import { maintenanceSchemesApi } from '../../../services/equipmentOps';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
@@ -149,6 +151,10 @@ const MaintenancePlansPage: React.FC = () => {
   const [executeModalVisible, setExecuteModalVisible] = useState(false);
   const [executePlan, setExecutePlan] = useState<MaintenancePlan | null>(null);
   const executeFormRef = useRef<any>(null);
+  const [schemeOptions, setSchemeOptions] = useState<{ label: string; value: number }[]>([]);
+  const [executedItems, setExecutedItems] = useState<Array<{ item_id?: number; item_name?: string; done?: boolean }>>([]);
+  const [sparePartLines, setSparePartLines] = useState<Array<{ spare_part_id?: number; quantity?: number; warehouse_location?: string }>>([]);
+  const [sparePartOptions, setSparePartOptions] = useState<{ label: string; value: number }[]>([]);
 
   /**
    * 处理新建维护计划
@@ -289,7 +295,26 @@ const MaintenancePlansPage: React.FC = () => {
       return;
     }
     setExecutePlan(record);
+    setExecutedItems([]);
+    setSparePartLines([]);
     setExecuteModalVisible(true);
+    void Promise.all([
+      maintenanceSchemesApi.list({ limit: 1000, is_active: true }),
+      sparePartApi.list({ limit: 500 }),
+    ]).then(([schemeRes, partRes]) => {
+      setSchemeOptions(
+        (schemeRes.items ?? []).map((s: { id: number; code: string; name: string }) => ({
+          label: `${s.code} - ${s.name}`,
+          value: s.id,
+        })),
+      );
+      setSparePartOptions(
+        (partRes.items ?? []).map((p: { id: number; part_no: string; part_name: string }) => ({
+          label: `${p.part_no} - ${p.part_name}`,
+          value: p.id,
+        })),
+      );
+    });
     setTimeout(() => {
       executeFormRef.current?.setFieldsValue({
         execution_date: dayjs(),
@@ -299,24 +324,49 @@ const MaintenancePlansPage: React.FC = () => {
     }, 100);
   };
 
+  const handleSchemeChange = async (schemeId?: number) => {
+    if (!schemeId) {
+      setExecutedItems([]);
+      return;
+    }
+    try {
+      const scheme = await maintenanceSchemesApi.get(schemeId);
+      setExecutedItems(
+        (scheme.lines ?? []).map((l: { item_id?: number; item_name?: string }) => ({
+          item_id: l.item_id,
+          item_name: l.item_name,
+          done: false,
+        })),
+      );
+    } catch {
+      setExecutedItems([]);
+    }
+  };
+
   /**
    * 提交执行维护保养
    */
   const handleExecuteSubmit = async (values: any) => {
     if (!executePlan?.uuid || !executePlan?.equipment_uuid) return;
     try {
+      const validParts = sparePartLines.filter((l) => l.spare_part_id && l.quantity);
       await maintenancePlanApi.execute({
         equipment_uuid: executePlan.equipment_uuid,
         maintenance_plan_uuid: executePlan.uuid,
+        maintenance_scheme_id: values.maintenance_scheme_id,
+        executed_items: executedItems.filter((i) => i.done),
         execution_date: values.execution_date?.format?.('YYYY-MM-DD HH:mm:ss') ?? new Date().toISOString().slice(0, 19).replace('T', ' '),
         execution_content: values.execution_content,
         execution_result: values.execution_result ?? '正常',
         status: '已确认',
         attachments: normalizeDocumentAttachments(values.attachments),
+        spare_parts_used: validParts.length ? { items: validParts } : undefined,
       });
       messageApi.success(t(`${P}.executeSubmitted`));
       setExecuteModalVisible(false);
       setExecutePlan(null);
+      setExecutedItems([]);
+      setSparePartLines([]);
       executeFormRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
@@ -741,6 +791,8 @@ const MaintenancePlansPage: React.FC = () => {
         onClose={() => {
           setExecuteModalVisible(false);
           setExecutePlan(null);
+          setExecutedItems([]);
+          setSparePartLines([]);
           executeFormRef.current?.resetFields();
         }}
         onFinish={handleExecuteSubmit}
@@ -749,6 +801,43 @@ const MaintenancePlansPage: React.FC = () => {
         formRef={executeFormRef}
         grid={false}
       >
+        <Row gutter={16}>
+          <Col span={24}>
+            <ProFormSelect
+              name="maintenance_scheme_id"
+              label={t(`${P}.form.maintenanceScheme`)}
+              placeholder={t(`${P}.form.selectMaintenanceScheme`)}
+              options={schemeOptions}
+              showSearch
+              allowClear
+              fieldProps={{
+                onChange: (val: number) => void handleSchemeChange(val),
+              }}
+            />
+          </Col>
+        </Row>
+        {executedItems.length > 0 && (
+          <Row gutter={16}>
+            <Col span={24}>
+              <Typography.Text strong>{t(`${P}.form.executedItems`)}</Typography.Text>
+              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {executedItems.map((item, index) => (
+                  <Checkbox
+                    key={item.item_id ?? index}
+                    checked={item.done}
+                    onChange={(e) => {
+                      const next = [...executedItems];
+                      next[index] = { ...next[index], done: e.target.checked };
+                      setExecutedItems(next);
+                    }}
+                  >
+                    {item.item_name ?? `#${item.item_id}`}
+                  </Checkbox>
+                ))}
+              </div>
+            </Col>
+          </Row>
+        )}
         <Row gutter={16}>
           <Col span={12}>
             <ProFormDatePicker
@@ -776,6 +865,72 @@ const MaintenancePlansPage: React.FC = () => {
         <Row gutter={16}>
           <Col span={24}>
             <DocumentAttachmentsField category="maintenance_execution_attachments" />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={24}>
+            <Typography.Text strong>{t(`${P}.form.sparePartsUsed`)}</Typography.Text>
+            <Table
+              size="small"
+              pagination={false}
+              style={{ marginTop: 8 }}
+              dataSource={sparePartLines.map((l, i) => ({ ...l, key: i }))}
+              columns={[
+                {
+                  title: t(`${P}.form.sparePart`),
+                  render: (_, __, index) => (
+                    <Select
+                      value={sparePartLines[index]?.spare_part_id}
+                      options={sparePartOptions}
+                      showSearch
+                      optionFilterProp="label"
+                      style={{ width: '100%' }}
+                      onChange={(val: number) => {
+                        const next = [...sparePartLines];
+                        next[index] = { ...next[index], spare_part_id: val };
+                        setSparePartLines(next);
+                      }}
+                    />
+                  ),
+                },
+                {
+                  title: t(`${P}.form.sparePartQty`),
+                  width: 100,
+                  render: (_, __, index) => (
+                    <InputNumber
+                      min={1}
+                      value={sparePartLines[index]?.quantity}
+                      onChange={(val) => {
+                        const next = [...sparePartLines];
+                        next[index] = { ...next[index], quantity: Number(val) || 1 };
+                        setSparePartLines(next);
+                      }}
+                    />
+                  ),
+                },
+                {
+                  title: t(`${P}.form.sparePartLocation`),
+                  render: (_, __, index) => (
+                    <Input
+                      value={sparePartLines[index]?.warehouse_location}
+                      onChange={(e) => {
+                        const next = [...sparePartLines];
+                        next[index] = { ...next[index], warehouse_location: e.target.value };
+                        setSparePartLines(next);
+                      }}
+                    />
+                  ),
+                },
+              ]}
+            />
+            <Button
+              type="dashed"
+              icon={<PlusOutlined />}
+              style={{ marginTop: 8 }}
+              onClick={() => setSparePartLines([...sparePartLines, { quantity: 1, warehouse_location: '默认库位' }])}
+            >
+              {t(`${P}.form.addSparePartLine`)}
+            </Button>
           </Col>
         </Row>
         <Row gutter={16}>

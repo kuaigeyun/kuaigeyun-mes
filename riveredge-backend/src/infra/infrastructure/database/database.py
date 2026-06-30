@@ -325,6 +325,7 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.equipment",  # 设备基础模型
                 "apps.kuaizhizao.models.equipment_fault",  # 设备故障模型
                 "apps.kuaizhizao.models.equipment_point_inspection",  # 设备点检模型
+                "apps.kuaizhizao.models.equipment_ops",  # 设备运营扩展模型
                 "apps.kuaizhizao.models.equipment_status_monitor",  # 设备状态监控模型
                 "apps.kuaizhizao.models.exception_process_record",  # 异常处理记录模型
                 "apps.kuaizhizao.models.inspection_plan",  # 质检方案模型
@@ -345,6 +346,8 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.material_return_item",  # 物料退回明细模型
                 "apps.kuaizhizao.models.material_shortage_exception",  # 缺料异常模型
                 "apps.kuaizhizao.models.mold",  # 模具模型
+                "apps.kuaizhizao.models.mold_ops",  # 模具运营扩展模型
+                "apps.kuaizhizao.models.tool_ops",  # 工装运营扩展模型
                 "apps.kuaizhizao.models.other_inbound",  # 其他入库模型
                 "apps.kuaizhizao.models.other_inbound_item",  # 其他入库明细模型
                 "apps.kuaizhizao.models.other_outbound",  # 其他出库模型

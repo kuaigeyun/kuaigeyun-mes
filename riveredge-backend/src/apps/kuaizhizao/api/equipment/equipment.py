@@ -20,7 +20,11 @@ from apps.kuaizhizao.schemas.equipment import (
     EquipmentResponse,
     EquipmentListResponse,
     EquipmentCalibrationCreate,
+    EquipmentCalibrationCreateWithEquipment,
     EquipmentCalibrationResponse,
+    EquipmentCalibrationListResponse,
+    EquipmentCalibrationReminderResponse,
+    EquipmentCalibrationReminderListResponse,
 )
 from apps.kuaizhizao.schemas.equipment_oee import (
     EquipmentOEResponse,
@@ -30,6 +34,7 @@ from apps.kuaizhizao.schemas.equipment_oee import (
 from apps.kuaizhizao.services.equipment_service import EquipmentService
 from apps.kuaizhizao.services.equipment_oee_service import EquipmentOEEService
 from core.api.deps.deps import get_current_tenant
+from core.api.deps.access import require_permission_codes
 from core.utils.timezone_utils import to_api_isoformat
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
@@ -126,6 +131,97 @@ async def list_equipment(
         total=total,
         skip=skip,
         limit=limit
+    )
+
+
+@router.get(
+    "/calibrations",
+    response_model=EquipmentCalibrationListResponse,
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-calibration:read"))],
+)
+async def list_equipment_calibrations(
+    equipment_uuid: Optional[str] = Query(None, description="设备UUID（可选，不传则返回全量）"),
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取设备校验记录列表（支持按设备筛选或全量）"""
+    items, total = await EquipmentService.list_all_calibrations(
+        tenant_id=tenant_id,
+        equipment_uuid=equipment_uuid,
+        skip=skip,
+        limit=limit,
+    )
+    equipment_ids = {c.equipment_id for c in items}
+    equipments = {e.id: e for e in await Equipment.filter(id__in=equipment_ids)}
+    resp_items = []
+    for c in items:
+        eq = equipments.get(c.equipment_id)
+        d = EquipmentCalibrationResponse.model_validate(c)
+        d.equipment_code = eq.code if eq else None
+        d.equipment_name = eq.name if eq else None
+        resp_items.append(d)
+    return EquipmentCalibrationListResponse(items=resp_items, total=total, skip=skip, limit=limit)
+
+
+@router.post(
+    "/calibrations",
+    response_model=EquipmentCalibrationResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-calibration:create"))],
+)
+async def create_equipment_calibration_record(
+    data: EquipmentCalibrationCreateWithEquipment,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """创建设备校验记录（独立检定页）"""
+    try:
+        create_data = EquipmentCalibrationCreate(
+            calibration_date=data.calibration_date,
+            result=data.result,
+            certificate_no=data.certificate_no,
+            expiry_date=data.expiry_date,
+            attachment_uuid=data.attachment_uuid,
+            attachments=data.attachments,
+            remark=data.remark,
+        )
+        calib = await EquipmentService.create_equipment_calibration(
+            tenant_id=tenant_id,
+            equipment_uuid=data.equipment_uuid,
+            data=create_data,
+        )
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, data.equipment_uuid)
+        resp = EquipmentCalibrationResponse.model_validate(calib)
+        resp.equipment_code = equipment.code
+        resp.equipment_name = equipment.name
+        return resp
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get(
+    "/calibration-reminders",
+    response_model=EquipmentCalibrationReminderListResponse,
+    dependencies=[Depends(require_permission_codes("kuaizhizao:maintenance-reminder:read"))],
+)
+async def list_equipment_calibration_reminders(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    due_type: Optional[str] = Query(None, description="due_soon/overdue"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """设备检定到期提醒"""
+    items, total = await EquipmentService.list_calibration_alerts(
+        tenant_id, skip, limit, due_type
+    )
+    return EquipmentCalibrationReminderListResponse(
+        items=[EquipmentCalibrationReminderResponse.model_validate(i) for i in items],
+        total=total,
+        skip=skip,
+        limit=limit,
     )
 
 
@@ -391,7 +487,11 @@ async def create_equipment_calibration(
             equipment_uuid=uuid,
             data=data
         )
-        return EquipmentCalibrationResponse.model_validate(calib)
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, uuid)
+        resp = EquipmentCalibrationResponse.model_validate(calib)
+        resp.equipment_code = equipment.code
+        resp.equipment_name = equipment.name
+        return resp
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

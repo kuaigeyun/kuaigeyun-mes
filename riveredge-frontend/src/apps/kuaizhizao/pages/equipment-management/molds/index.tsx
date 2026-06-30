@@ -9,13 +9,11 @@
  */
 
 import React, { useRef, useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { App, Button, Tag, Space, message, Modal, Tabs, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Row, Col, Typography, Spin, theme as AntdTheme, Empty, Upload } from 'antd';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { getMoldAssetLifecycle } from '../../../utils/equipmentLifecycle';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UploadOutlined } from '@ant-design/icons';
 import { uploadMultipleFiles } from '../../../../../services/file';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -24,6 +22,12 @@ import { UniTable } from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { moldApi } from '../../../services/equipment';
+import {
+  schemeBindingsApi,
+  maintenanceSchemesApi,
+  repairSchemesApi,
+  moldReportsApi,
+} from '../../../services/moldOps';
 import { batchImport } from '../../../../../utils/batchOperations';
 import {
   buildFactoryImportTemplate,
@@ -78,17 +82,14 @@ interface Mold {
   updated_at?: string;
 }
 
-interface MoldUsage {
-  uuid?: string;
-  usage_no?: string;
-  source_type?: string;
-  source_no?: string;
-  usage_date?: string;
-  usage_count?: number;
+interface MoldBorrowReturnLog {
+  log_type?: string;
+  document_no?: string;
+  event_date?: string;
+  usage_count?: number | null;
   operator_name?: string;
   status?: string;
-  return_date?: string;
-  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
+  related_document_no?: string | null;
 }
 
 interface MoldCalibration {
@@ -153,17 +154,21 @@ const MoldsPage: React.FC = () => {
     moldTrackingRefreshKey,
   );
 
-  // 使用记录相关状态
-  const [usages, setUsages] = useState<MoldUsage[]>([]);
-  const [usagesLoading, setUsagesLoading] = useState(false);
-  const [usageModalVisible, setUsageModalVisible] = useState(false);
-  const [usageForm] = Form.useForm();
+  // 领用/归还流水
+  const [borrowReturnLogs, setBorrowReturnLogs] = useState<MoldBorrowReturnLog[]>([]);
+  const [borrowReturnLogsLoading, setBorrowReturnLogsLoading] = useState(false);
 
   // 校验记录相关状态
   const [calibrations, setCalibrations] = useState<MoldCalibration[]>([]);
   const [calibLoading, setCalibLoading] = useState(false);
   const [calibModalVisible, setCalibModalVisible] = useState(false);
   const [calibForm] = Form.useForm();
+
+  const [boundMaintenanceSchemeIds, setBoundMaintenanceSchemeIds] = useState<number[]>([]);
+  const [boundRepairSchemeIds, setBoundRepairSchemeIds] = useState<number[]>([]);
+  const [maintenanceSchemeOptions, setMaintenanceSchemeOptions] = useState<{ label: string; value: number }[]>([]);
+  const [repairSchemeOptions, setRepairSchemeOptions] = useState<{ label: string; value: number }[]>([]);
+  const [schemeBindingsSaving, setSchemeBindingsSaving] = useState(false);
 
   const {
     customFields: moldFormCustomFields,
@@ -245,18 +250,50 @@ const MoldsPage: React.FC = () => {
   };
 
   /**
-   * 加载模具使用记录
+   * 加载模具领用/归还流水
    */
-  const loadUsages = async (moldUuid: string) => {
-    setUsagesLoading(true);
+  const loadBorrowReturnLogs = async (moldId: number) => {
+    setBorrowReturnLogsLoading(true);
     try {
-      const res = await moldApi.listUsages({ mold_uuid: moldUuid, limit: 100 });
-      setUsages(res.items || []);
+      const res = await moldReportsApi.borrowReturnLog({ mold_id: moldId, skip: 0, limit: 100 });
+      setBorrowReturnLogs(res.items || []);
     } catch {
-      setUsages([]);
+      setBorrowReturnLogs([]);
     } finally {
-      setUsagesLoading(false);
+      setBorrowReturnLogsLoading(false);
     }
+  };
+
+  const loadSchemeOptions = async () => {
+    const [maintRes, repairRes] = await Promise.all([
+      maintenanceSchemesApi.list({ limit: 1000, is_active: true }),
+      repairSchemesApi.list({ limit: 1000, is_active: true }),
+    ]);
+    setMaintenanceSchemeOptions(
+      (maintRes.items ?? []).map((s: { id: number; code: string; name: string }) => ({
+        label: `${s.code} - ${s.name}`,
+        value: s.id,
+      })),
+    );
+    setRepairSchemeOptions(
+      (repairRes.items ?? []).map((s: { id: number; code: string; name: string }) => ({
+        label: `${s.code} - ${s.name}`,
+        value: s.id,
+      })),
+    );
+  };
+
+  const loadSchemeBindings = async (moldId: number) => {
+    const [maintBindings, repairBindings] = await Promise.all([
+      schemeBindingsApi.list({ mold_id: moldId, scheme_type: 'maintenance' }),
+      schemeBindingsApi.list({ mold_id: moldId, scheme_type: 'repair' }),
+    ]);
+    setBoundMaintenanceSchemeIds(
+      (maintBindings.items ?? maintBindings.bindings ?? []).map((b: { scheme_id: number }) => b.scheme_id),
+    );
+    setBoundRepairSchemeIds(
+      (repairBindings.items ?? repairBindings.bindings ?? []).map((b: { scheme_id: number }) => b.scheme_id),
+    );
   };
 
   /**
@@ -286,30 +323,19 @@ const MoldsPage: React.FC = () => {
       const detail = await moldApi.get(record.uuid);
       setMoldDetail(detail);
       setDrawerVisible(true);
-      loadUsages(record.uuid);
+      if (detail.id != null) {
+        loadBorrowReturnLogs(detail.id);
+      }
       loadCalibrations(record.uuid);
       setMoldTrackingRefreshKey((k) => k + 1);
       if (detail.id != null) {
         await loadMoldFieldValuesForDetail(detail.id);
+        void loadSchemeOptions();
+        void loadSchemeBindings(detail.id);
       }
     } catch (error) {
       messageApi.error(t('app.kuaizhizao.mold.getDetailFailed'));
     }
-  };
-
-  /**
-   * 新建使用记录
-   */
-  const handleCreateUsage = () => {
-    if (!moldDetail?.uuid) return;
-    usageForm.resetFields();
-    usageForm.setFieldsValue({
-      mold_uuid: moldDetail.uuid,
-      usage_date: dayjs(),
-      usage_count: 1,
-      status: '使用中',
-    });
-    setUsageModalVisible(true);
   };
 
   /**
@@ -354,35 +380,6 @@ const MoldsPage: React.FC = () => {
     } catch (e: any) {
       if (e?.errorFields) return;
       messageApi.error(e?.message || t('common.saveFailed'));
-    }
-  };
-
-  /**
-   * 提交使用记录
-   */
-  const handleSubmitUsage = async () => {
-    try {
-      const values = await usageForm.validateFields();
-      const data = {
-        mold_uuid: moldDetail!.uuid,
-        source_type: values.source_type,
-        source_no: values.source_no,
-        usage_date: values.usage_date?.format?.('YYYY-MM-DD HH:mm:ss') || values.usage_date,
-        usage_count: values.usage_count ?? 1,
-        operator_name: values.operator_name,
-        status: values.status || '使用中',
-        attachments: normalizeDocumentAttachments(values.attachments),
-      };
-      await moldApi.createUsage(data);
-      messageApi.success(t('app.kuaizhizao.mold.usageCreated'));
-      setUsageModalVisible(false);
-      if (moldDetail?.uuid) {
-        loadUsages(moldDetail.uuid);
-        setMoldTrackingRefreshKey((k) => k + 1);
-      }
-    } catch (e: any) {
-      if (e?.errorFields) return;
-      messageApi.error(e?.message || t('app.kuaizhizao.mold.createFailed'));
     }
   };
 
@@ -450,7 +447,9 @@ const MoldsPage: React.FC = () => {
         try {
           const fresh = await moldApi.get(editedUuid);
           setMoldDetail(fresh);
-          loadUsages(editedUuid);
+          if (fresh.id != null) {
+            loadBorrowReturnLogs(fresh.id);
+          }
           loadCalibrations(editedUuid);
           setMoldTrackingRefreshKey((k) => k + 1);
         } catch {
@@ -684,27 +683,6 @@ const MoldsPage: React.FC = () => {
     },
     ...customFieldColumns,
     {
-      title: t('app.kuaizhizao.mold.colLifecycle'),
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getMoldAssetLifecycle(record as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      },
-    },
-    {
       title: t('common.actions'),
       width: 180,
       fixed: 'right',
@@ -754,24 +732,6 @@ const MoldsPage: React.FC = () => {
   ];
   }, [moldListCustomFields, generateMoldCustomFieldColumns, t]);
 
-  const moldSourceTypeOptions = useMemo(
-    () => [
-      { label: t('app.kuaizhizao.mold.sourceWorkOrder'), value: 'work_order' },
-      { label: t('app.kuaizhizao.mold.sourceProductionOrder'), value: 'production_order' },
-      { label: t('app.kuaizhizao.mold.sourceOther'), value: 'other' },
-    ],
-    [t],
-  );
-
-  const moldUsageStatusOptions = useMemo(
-    () => [
-      { label: t('app.kuaizhizao.mold.usageStatusInUse'), value: '使用中' },
-      { label: t('app.kuaizhizao.mold.usageStatusReturned'), value: '已归还' },
-      { label: t('app.kuaizhizao.mold.usageStatusScrapped'), value: '已报废' },
-    ],
-    [t],
-  );
-
   const moldCalibrationResultOptions = useMemo(
     () => [
       { label: t('app.kuaizhizao.mold.resultPass'), value: '合格' },
@@ -781,30 +741,42 @@ const MoldsPage: React.FC = () => {
     [t],
   );
 
-  const usageTableColumns = useMemo(
+  const borrowReturnLogColumns = useMemo(
     () => [
-      { title: t('app.kuaizhizao.mold.colUsageNo'), dataIndex: 'usage_no', width: 140 },
-      { title: t('app.kuaizhizao.mold.colSourceType'), dataIndex: 'source_type', width: 100 },
-      { title: t('app.kuaizhizao.mold.colSourceNo'), dataIndex: 'source_no', width: 120 },
+      { title: t('app.kuaizhizao.moldOps.report.borrowReturnLog.col.docNo'), dataIndex: 'document_no', width: 140 },
       {
-        title: t('app.kuaizhizao.mold.colUsageDate'),
-        dataIndex: 'usage_date',
-        width: 110,
-        render: (v: string) => v ? formatDateTime(v, 'YYYY-MM-DD') : '-',
+        title: t('app.kuaizhizao.moldOps.report.borrowReturnLog.col.docType'),
+        dataIndex: 'log_type',
+        width: 90,
+        render: (v: string) =>
+          v === 'borrow'
+            ? t('app.kuaizhizao.menu.equipment-management.mold-borrows')
+            : v === 'return'
+              ? t('app.kuaizhizao.menu.equipment-management.mold-returns')
+              : v || '-',
       },
-      { title: t('app.kuaizhizao.mold.colUsageCount'), dataIndex: 'usage_count', width: 80 },
-      { title: t('app.kuaizhizao.mold.colOperator'), dataIndex: 'operator_name', width: 90 },
+      {
+        title: t('app.kuaizhizao.moldOps.report.borrowReturnLog.col.docDate'),
+        dataIndex: 'event_date',
+        width: 110,
+        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.moldOps.report.borrowReturnLog.col.usageCount'),
+        dataIndex: 'usage_count',
+        width: 80,
+        render: (v: number | null) => (v == null ? '-' : v),
+      },
+      {
+        title: t('app.kuaizhizao.moldOps.report.borrowReturnLog.col.borrower'),
+        dataIndex: 'operator_name',
+        width: 90,
+      },
       {
         title: t('common.status'),
         dataIndex: 'status',
         width: 80,
         render: (s: string) => <Tag>{s || '-'}</Tag>,
-      },
-      {
-        title: t('app.kuaizhizao.mold.colReturnDate'),
-        dataIndex: 'return_date',
-        width: 110,
-        render: (v: string) => v ? formatDateTime(v, 'YYYY-MM-DD') : '-',
       },
     ],
     [t],
@@ -1163,6 +1135,59 @@ const MoldsPage: React.FC = () => {
                   />
                 ) : null}
               </DetailDrawerSection>
+              <DetailDrawerSection title={t('app.kuaizhizao.moldOps.schemeBindings.title')}>
+                <div style={{ marginBottom: 12 }}>
+                  <Typography.Text type="secondary">{t('app.kuaizhizao.moldOps.schemeBindings.maintenance')}</Typography.Text>
+                  <Select
+                    mode="multiple"
+                    style={{ width: '100%', marginTop: 4 }}
+                    placeholder={t('app.kuaizhizao.moldOps.schemeBindings.selectMaintenanceSchemes')}
+                    options={maintenanceSchemeOptions}
+                    value={boundMaintenanceSchemeIds}
+                    onChange={setBoundMaintenanceSchemeIds}
+                  />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <Typography.Text type="secondary">{t('app.kuaizhizao.moldOps.schemeBindings.repair')}</Typography.Text>
+                  <Select
+                    mode="multiple"
+                    style={{ width: '100%', marginTop: 4 }}
+                    placeholder={t('app.kuaizhizao.moldOps.schemeBindings.selectRepairSchemes')}
+                    options={repairSchemeOptions}
+                    value={boundRepairSchemeIds}
+                    onChange={setBoundRepairSchemeIds}
+                  />
+                </div>
+                <Button
+                  type="primary"
+                  loading={schemeBindingsSaving}
+                  disabled={moldDetail.id == null}
+                  onClick={async () => {
+                    if (moldDetail.id == null) return;
+                    setSchemeBindingsSaving(true);
+                    try {
+                      await schemeBindingsApi.bulkReplace({
+                        mold_id: moldDetail.id,
+                        scheme_type: 'maintenance',
+                        scheme_ids: boundMaintenanceSchemeIds,
+                      });
+                      await schemeBindingsApi.bulkReplace({
+                        mold_id: moldDetail.id,
+                        scheme_type: 'repair',
+                        scheme_ids: boundRepairSchemeIds,
+                      });
+                      messageApi.success(t('app.kuaizhizao.moldOps.schemeBindings.saveSuccess'));
+                    } catch (error: unknown) {
+                      const err = error as { message?: string };
+                      messageApi.error(err?.message || t('common.operationFailed'));
+                    } finally {
+                      setSchemeBindingsSaving(false);
+                    }
+                  }}
+                >
+                  {t('common.save')}
+                </Button>
+              </DetailDrawerSection>
             <Tabs
               defaultActiveKey="basic"
               items={[
@@ -1227,22 +1252,27 @@ const MoldsPage: React.FC = () => {
                   ),
                 },
                 {
-                  key: 'usages',
-                  label: t('app.kuaizhizao.mold.tabUsages'),
+                  key: 'borrow_return_log',
+                  label: t('app.kuaizhizao.menu.reports.mold-borrow-return-log'),
                   children: (
                     <>
                       <div style={{ marginBottom: 12 }}>
-                        <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleCreateUsage}>
-                          {t('app.kuaizhizao.mold.createUsage')}
-                        </Button>
+                        <Space wrap>
+                          <Link to="/apps/kuaizhizao/equipment-management/mold-borrows">
+                            <Button type="primary" size="small">{t('app.kuaizhizao.menu.equipment-management.mold-borrows')}</Button>
+                          </Link>
+                          <Link to="/apps/kuaizhizao/equipment-management/mold-returns">
+                            <Button size="small">{t('app.kuaizhizao.menu.equipment-management.mold-returns')}</Button>
+                          </Link>
+                        </Space>
                       </div>
-                      <Table<MoldUsage>
+                      <Table<MoldBorrowReturnLog>
                         size="small"
-                        loading={usagesLoading}
-                        dataSource={usages}
-                        rowKey="uuid"
+                        loading={borrowReturnLogsLoading}
+                        dataSource={borrowReturnLogs}
+                        rowKey={(row, index) => `${row.log_type}-${row.document_no}-${index}`}
                         pagination={false}
-                        columns={usageTableColumns}
+                        columns={borrowReturnLogColumns}
                       />
                     </>
                   ),
@@ -1266,6 +1296,26 @@ const MoldsPage: React.FC = () => {
                         columns={calibrationTableColumns}
                       />
                     </>
+                  ),
+                },
+                {
+                  key: 'ops',
+                  label: t('app.kuaizhizao.moldOps.opsLinks.title'),
+                  children: (
+                    <Space wrap>
+                      <Link to="/apps/kuaizhizao/equipment-management/mold-borrows">
+                        <Button size="small">{t('app.kuaizhizao.menu.equipment-management.mold-borrows')}</Button>
+                      </Link>
+                      <Link to="/apps/kuaizhizao/equipment-management/mold-trials">
+                        <Button size="small">{t('app.kuaizhizao.menu.equipment-management.mold-trials')}</Button>
+                      </Link>
+                      <Link to="/apps/kuaizhizao/equipment-management/mold-maintenances">
+                        <Button size="small">{t('app.kuaizhizao.menu.equipment-management.mold-maintenances')}</Button>
+                      </Link>
+                      <Link to="/apps/kuaizhizao/equipment-management/mold-repairs">
+                        <Button size="small">{t('app.kuaizhizao.menu.equipment-management.mold-repairs')}</Button>
+                      </Link>
+                    </Space>
                   ),
                 },
                 {
@@ -1347,57 +1397,6 @@ const MoldsPage: React.FC = () => {
           </Form.Item>
           <Form.Item name="remark" label={t('app.kuaizhizao.mold.colRemark')}>
             <Input.TextArea rows={2} placeholder={t('app.kuaizhizao.mold.phRemark')} />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <Modal
-        title={t('app.kuaizhizao.mold.createUsage')}
-        open={usageModalVisible}
-        onOk={handleSubmitUsage}
-        onCancel={() => setUsageModalVisible(false)}
-        destroyOnHidden
-        width={MODAL_CONFIG.SMALL_WIDTH}
-      >
-        <Form form={usageForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Form.Item name="mold_uuid" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="source_type" label={t('app.kuaizhizao.mold.colSourceType')}>
-            <Select placeholder={t('app.kuaizhizao.mold.phSelect')} allowClear options={moldSourceTypeOptions} />
-          </Form.Item>
-          <Form.Item name="source_no" label={t('app.kuaizhizao.mold.colSourceNo')}>
-            <Input placeholder={t('app.kuaizhizao.mold.phSourceNo')} />
-          </Form.Item>
-          <Form.Item name="usage_date" label={t('app.kuaizhizao.mold.colUsageDate')} rules={[{ required: true }]}>
-            <DatePicker showTime style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="usage_count" label={t('app.kuaizhizao.mold.colUsageCount')} initialValue={1} rules={[{ required: true }]}>
-            <InputNumber min={1} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="operator_name" label={t('app.kuaizhizao.mold.colOperator')}>
-            <Input placeholder={t('app.kuaizhizao.mold.phOperator')} />
-          </Form.Item>
-          <Form.Item name="status" label={t('common.status')}>
-            <Select options={moldUsageStatusOptions} />
-          </Form.Item>
-          <Form.Item
-            name="attachments"
-            label={t('app.kuaizhizao.mold.attachments')}
-            valuePropName="fileList"
-            getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
-          >
-            <Upload
-              multiple
-              customRequest={async (options) => {
-                const res = await uploadMultipleFiles([options.file as File], {
-                  category: 'mold_usage_attachments',
-                });
-                options.onSuccess?.(res[0], options.file as any);
-              }}
-            >
-              <Button icon={<UploadOutlined />}>{t('app.kuaizhizao.mold.upload')}</Button>
-            </Upload>
           </Form.Item>
         </Form>
       </Modal>

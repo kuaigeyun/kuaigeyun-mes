@@ -2696,7 +2696,295 @@ class ReportService:
                 it["to_status"] = it["status"]
                 it["status_changed_at"] = it["updated_at"].strftime("%Y-%m-%d %H:%M") if it["updated_at"] else None
             return {"data": items, "success": True}
+        elif report_type in ["equipment-spot-check-summary", "spot_check_summary"]:
+            return await self._build_equipment_spot_check_summary(tenant_id, date_start, date_end)
+        elif report_type in ["equipment-route-patrol-summary", "route_patrol_summary"]:
+            return await self._build_equipment_route_patrol_summary(tenant_id, date_start, date_end)
+        elif report_type in ["equipment-mttr-mtbf", "mttr_mtbf_summary"]:
+            return await self._build_equipment_mttr_mtbf_summary(tenant_id, date_start, date_end)
         return {"data": [], "success": True}
+
+    async def _build_equipment_mttr_mtbf_summary(
+        self,
+        tenant_id: int,
+        date_start: Optional[datetime] = None,
+        date_end: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
+        from collections import defaultdict
+
+        from apps.kuaizhizao.models.equipment_fault import EquipmentFault, EquipmentRepair
+
+        from apps.kuaizhizao.models.equipment import Equipment
+
+        fault_qs = EquipmentFault.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        repair_qs = EquipmentRepair.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="已完成")
+        start_d = self._as_date(date_start)
+        end_d = self._as_date(date_end)
+        if start_d:
+            fault_qs = fault_qs.filter(fault_date__gte=start_d)
+            repair_qs = repair_qs.filter(repair_date__gte=start_d)
+        if end_d:
+            fault_qs = fault_qs.filter(fault_date__lte=end_d)
+            repair_qs = repair_qs.filter(repair_date__lte=end_d)
+
+        faults = await fault_qs.order_by("equipment_id", "fault_date").values(
+            "equipment_id",
+            "equipment_name",
+            "fault_date",
+        )
+        repairs = await repair_qs.values(
+            "equipment_id",
+            "equipment_name",
+            "repair_duration",
+        )
+
+        repair_agg: Dict[int, Dict[str, Any]] = defaultdict(
+            lambda: {
+                "equipment_code": "",
+                "equipment_name": "",
+                "repair_count": 0,
+                "total_repair_hours": 0.0,
+            }
+        )
+        for r in repairs:
+            eid = int(r["equipment_id"])
+            bucket = repair_agg[eid]
+            bucket["equipment_name"] = r.get("equipment_name") or bucket["equipment_name"]
+            bucket["repair_count"] += 1
+            duration = float(r.get("repair_duration") or 0)
+            bucket["total_repair_hours"] += duration
+
+        fault_dates: Dict[int, List[datetime]] = defaultdict(list)
+        equip_meta: Dict[int, Dict[str, str]] = {}
+        for f in faults:
+            eid = int(f["equipment_id"])
+            equip_meta[eid] = {
+                "equipment_name": f.get("equipment_name") or "",
+            }
+            if f.get("fault_date"):
+                fault_dates[eid].append(f["fault_date"])
+
+        all_equipment_ids = set(repair_agg.keys()) | set(fault_dates.keys())
+        code_by_id: Dict[int, str] = {}
+        if all_equipment_ids:
+            for eq in await Equipment.filter(tenant_id=tenant_id, id__in=list(all_equipment_ids)).values("id", "code"):
+                code_by_id[int(eq["id"])] = str(eq.get("code") or "")
+
+        data: List[Dict[str, Any]] = []
+        for eid in sorted(all_equipment_ids):
+            meta = equip_meta.get(eid) or repair_agg.get(eid) or {}
+            repair_bucket = repair_agg.get(eid, {})
+            repair_count = repair_bucket.get("repair_count", 0)
+            total_hours = repair_bucket.get("total_repair_hours", 0.0)
+            mttr_hours = round(total_hours / repair_count, 2) if repair_count else None
+
+            dates = sorted(fault_dates.get(eid, []))
+            fault_count = len(dates)
+            mtbf_hours = None
+            if fault_count >= 2:
+                intervals = [
+                    (dates[i + 1] - dates[i]).total_seconds() / 3600
+                    for i in range(len(dates) - 1)
+                ]
+                mtbf_hours = round(sum(intervals) / len(intervals), 2)
+
+            data.append(
+                {
+                    "equipment_id": eid,
+                    "equipment_code": code_by_id.get(eid, ""),
+                    "equipment_name": meta.get("equipment_name") or repair_bucket.get("equipment_name", ""),
+                    "fault_count": fault_count,
+                    "repair_count": repair_count,
+                    "mttr_hours": mttr_hours,
+                    "mtbf_hours": mtbf_hours,
+                }
+            )
+
+        return {"data": data, "success": True}
+
+    async def _build_equipment_spot_check_summary(
+        self,
+        tenant_id: int,
+        date_start: Optional[datetime] = None,
+        date_end: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
+        from collections import defaultdict
+
+        from apps.kuaizhizao.models.equipment_ops import EquipmentSpotCheck, EquipmentSpotCheckLine
+
+        qs = EquipmentSpotCheck.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        start_d = self._as_date(date_start)
+        end_d = self._as_date(date_end)
+        if start_d:
+            qs = qs.filter(check_date__gte=start_d)
+        if end_d:
+            qs = qs.filter(check_date__lte=end_d)
+
+        records = await qs.values(
+            "id",
+            "equipment_id",
+            "equipment_code",
+            "equipment_name",
+            "status",
+            "has_abnormality",
+            "check_date",
+        )
+
+        total_count = len(records)
+        completed_count = sum(1 for r in records if r.get("status") == "已完成")
+        abnormality_count = sum(1 for r in records if r.get("has_abnormality"))
+        completion_rate = round(completed_count / total_count, 4) if total_count else 0.0
+
+        record_ids = [r["id"] for r in records]
+        fail_line_count = 0
+        if record_ids:
+            fail_line_count = await EquipmentSpotCheckLine.filter(
+                tenant_id=tenant_id,
+                spot_check_id__in=record_ids,
+                deleted_at__isnull=True,
+                is_pass=False,
+            ).count()
+
+        equip_agg: Dict[int, Dict[str, Any]] = defaultdict(
+            lambda: {
+                "equipment_code": "",
+                "equipment_name": "",
+                "total_count": 0,
+                "completed_count": 0,
+                "abnormality_count": 0,
+            }
+        )
+        for r in records:
+            eid = int(r["equipment_id"])
+            bucket = equip_agg[eid]
+            bucket["equipment_code"] = r.get("equipment_code") or ""
+            bucket["equipment_name"] = r.get("equipment_name") or ""
+            bucket["total_count"] += 1
+            if r.get("status") == "已完成":
+                bucket["completed_count"] += 1
+            if r.get("has_abnormality"):
+                bucket["abnormality_count"] += 1
+
+        data: List[Dict[str, Any]] = []
+        for eid, bucket in equip_agg.items():
+            tc = bucket["total_count"]
+            data.append(
+                {
+                    "equipment_id": eid,
+                    "equipment_code": bucket["equipment_code"],
+                    "equipment_name": bucket["equipment_name"],
+                    "total_count": tc,
+                    "completed_count": bucket["completed_count"],
+                    "abnormality_count": bucket["abnormality_count"],
+                    "completion_rate": round(bucket["completed_count"] / tc, 4) if tc else 0.0,
+                }
+            )
+        data.sort(key=lambda x: (-x["total_count"], x.get("equipment_code") or ""))
+
+        return {
+            "data": data,
+            "total": len(data),
+            "success": True,
+            "summary": {
+                "total_count": total_count,
+                "completed_count": completed_count,
+                "abnormality_count": abnormality_count,
+                "completion_rate": completion_rate,
+                "fail_line_count": fail_line_count,
+            },
+        }
+
+    async def _build_equipment_route_patrol_summary(
+        self,
+        tenant_id: int,
+        date_start: Optional[datetime] = None,
+        date_end: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
+        from collections import defaultdict
+
+        from apps.kuaizhizao.models.equipment_ops import EquipmentRoutePatrol, EquipmentRoutePatrolLine
+
+        qs = EquipmentRoutePatrol.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        start_d = self._as_date(date_start)
+        end_d = self._as_date(date_end)
+        if start_d:
+            qs = qs.filter(patrol_date__gte=start_d)
+        if end_d:
+            qs = qs.filter(patrol_date__lte=end_d)
+
+        records = await qs.values(
+            "id",
+            "route_id",
+            "route_code",
+            "route_name",
+            "status",
+            "has_abnormality",
+            "patrol_date",
+        )
+
+        total_count = len(records)
+        completed_count = sum(1 for r in records if r.get("status") == "已完成")
+        abnormality_count = sum(1 for r in records if r.get("has_abnormality"))
+        completion_rate = round(completed_count / total_count, 4) if total_count else 0.0
+
+        record_ids = [r["id"] for r in records]
+        fail_line_count = 0
+        if record_ids:
+            fail_line_count = await EquipmentRoutePatrolLine.filter(
+                tenant_id=tenant_id,
+                route_patrol_id__in=record_ids,
+                deleted_at__isnull=True,
+                is_pass=False,
+            ).count()
+
+        route_agg: Dict[int, Dict[str, Any]] = defaultdict(
+            lambda: {
+                "route_code": "",
+                "route_name": "",
+                "total_count": 0,
+                "completed_count": 0,
+                "abnormality_count": 0,
+            }
+        )
+        for r in records:
+            rid = int(r["route_id"])
+            bucket = route_agg[rid]
+            bucket["route_code"] = r.get("route_code") or ""
+            bucket["route_name"] = r.get("route_name") or ""
+            bucket["total_count"] += 1
+            if r.get("status") == "已完成":
+                bucket["completed_count"] += 1
+            if r.get("has_abnormality"):
+                bucket["abnormality_count"] += 1
+
+        data: List[Dict[str, Any]] = []
+        for rid, bucket in route_agg.items():
+            tc = bucket["total_count"]
+            data.append(
+                {
+                    "route_id": rid,
+                    "route_code": bucket["route_code"],
+                    "route_name": bucket["route_name"],
+                    "total_count": tc,
+                    "completed_count": bucket["completed_count"],
+                    "abnormality_count": bucket["abnormality_count"],
+                    "completion_rate": round(bucket["completed_count"] / tc, 4) if tc else 0.0,
+                }
+            )
+        data.sort(key=lambda x: (-x["total_count"], x.get("route_code") or ""))
+
+        return {
+            "data": data,
+            "total": len(data),
+            "success": True,
+            "summary": {
+                "total_count": total_count,
+                "completed_count": completed_count,
+                "abnormality_count": abnormality_count,
+                "completion_rate": completion_rate,
+                "fail_line_count": fail_line_count,
+            },
+        }
 
     async def get_warehouse_report(
         self,

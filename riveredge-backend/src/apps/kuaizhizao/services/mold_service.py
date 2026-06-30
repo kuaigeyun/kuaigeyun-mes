@@ -1,23 +1,23 @@
 """
 模具管理服务模块
 
-提供模具和模具使用记录的 CRUD 操作。
+提供模具 CRUD 与校验/保养提醒等操作；领用/归还见 mold_ops_service。
 
 Author: Luigi Lu
 Date: 2026-01-05
 """
 
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date
+import math
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
-from apps.kuaizhizao.models.mold import Mold, MoldUsage, MoldCalibration
+from apps.kuaizhizao.models.mold import Mold, MoldCalibration
+from apps.kuaizhizao.models.mold_ops import MoldMaintenanceScheme, MoldSchemeBinding
 from apps.kuaizhizao.schemas.mold import (
     MoldCreate,
     MoldUpdate,
-    MoldUsageCreate,
-    MoldUsageUpdate,
     MoldCalibrationCreate,
 )
 from core.services.business.code_generation_service import CodeGenerationService
@@ -217,230 +217,6 @@ class MoldService:
         await mold.save()
 
 
-class MoldUsageService:
-    """
-    模具使用记录服务类
-    
-    提供模具使用记录的 CRUD 操作。
-    """
-    
-    @staticmethod
-    async def create_mold_usage(
-        tenant_id: int,
-        data: MoldUsageCreate,
-        created_by: Optional[int] = None
-    ) -> MoldUsage:
-        """
-        创建模具使用记录
-        
-        Args:
-            tenant_id: 组织ID
-            data: 模具使用记录创建数据
-            created_by: 创建人ID（可选）
-            
-        Returns:
-            MoldUsage: 创建的模具使用记录对象
-            
-        Raises:
-            ValidationError: 当模具不存在或使用记录编号已存在时抛出
-        """
-        try:
-            # 验证模具是否存在
-            mold = await Mold.filter(
-                tenant_id=tenant_id,
-                uuid=data.mold_uuid,
-                deleted_at__isnull=True
-            ).first()
-            
-            if not mold:
-                raise ValidationError(f"模具不存在: {data.mold_uuid}")
-
-            # 幂等：若传入 reporting_record_id 且已存在相同记录，则跳过创建
-            reporting_record_id = getattr(data, "reporting_record_id", None)
-            if reporting_record_id is not None:
-                existing = await MoldUsage.filter(
-                    tenant_id=tenant_id,
-                    reporting_record_id=reporting_record_id,
-                    deleted_at__isnull=True,
-                ).first()
-                if existing:
-                    return existing
-            
-            # 如果没有提供使用记录编号，自动生成
-            if not data.usage_no:
-                try:
-                    data.usage_no = await CodeGenerationService.generate_code(
-                        tenant_id=tenant_id,
-                        rule_code="mold_usage_code",
-                        context=None
-                    )
-                except ValidationError:
-                    # 如果编码规则不存在，使用默认编码格式
-                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                    data.usage_no = f"MU{timestamp}"
-            
-            dump_data = data.model_dump(exclude_none=True, exclude={'mold_uuid'})
-            usage = MoldUsage(
-                tenant_id=tenant_id,
-                mold_id=mold.id,
-                mold_uuid=mold.uuid,
-                mold_name=mold.name,
-                mold_code=mold.code,
-                **dump_data,
-            )
-            await usage.save()
-            
-            # 更新模具的累计使用次数
-            mold.total_usage_count += data.usage_count
-            await mold.save()
-            
-            return usage
-        except IntegrityError:
-            raise ValidationError(f"模具使用记录编号 {data.usage_no} 已存在")
-    
-    @staticmethod
-    async def get_mold_usage_by_uuid(
-        tenant_id: int,
-        uuid: str
-    ) -> MoldUsage:
-        """
-        根据UUID获取模具使用记录
-        
-        Args:
-            tenant_id: 组织ID
-            uuid: 模具使用记录UUID
-            
-        Returns:
-            MoldUsage: 模具使用记录对象
-            
-        Raises:
-            NotFoundError: 当模具使用记录不存在时抛出
-        """
-        usage = await MoldUsage.filter(
-            tenant_id=tenant_id,
-            uuid=uuid,
-            deleted_at__isnull=True
-        ).first()
-        
-        if not usage:
-            raise NotFoundError("模具使用记录不存在")
-        
-        return usage
-    
-    @staticmethod
-    async def list_mold_usages(
-        tenant_id: int,
-        skip: int = 0,
-        limit: int = 100,
-        mold_uuid: Optional[str] = None,
-        source_type: Optional[str] = None,
-        status: Optional[str] = None,
-        search: Optional[str] = None
-    ) -> tuple[List[MoldUsage], int]:
-        """
-        获取模具使用记录列表
-        
-        Args:
-            tenant_id: 组织ID
-            skip: 跳过数量
-            limit: 限制数量
-            mold_uuid: 模具UUID（可选）
-            source_type: 来源类型（可选）
-            status: 使用状态（可选）
-            search: 搜索关键词（可选，搜索使用记录编号）
-            
-        Returns:
-            tuple[List[MoldUsage], int]: 模具使用记录列表和总数量
-        """
-        query = MoldUsage.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True
-        )
-        
-        # 筛选条件
-        if mold_uuid:
-            query = query.filter(mold_uuid=mold_uuid)
-        if source_type:
-            query = query.filter(source_type=source_type)
-        if status:
-            query = query.filter(status=status)
-        
-        # 搜索条件
-        if search:
-            query = query.filter(usage_no__icontains=search)
-        
-        # 获取总数量
-        total = await query.count()
-        
-        # 获取列表
-        usages = await query.offset(skip).limit(limit).order_by("-usage_date")
-        
-        return usages, total
-    
-    @staticmethod
-    async def update_mold_usage(
-        tenant_id: int,
-        uuid: str,
-        data: MoldUsageUpdate
-    ) -> MoldUsage:
-        """
-        更新模具使用记录
-        
-        Args:
-            tenant_id: 组织ID
-            uuid: 模具使用记录UUID
-            data: 模具使用记录更新数据
-            
-        Returns:
-            MoldUsage: 更新后的模具使用记录对象
-            
-        Raises:
-            NotFoundError: 当模具使用记录不存在时抛出
-        """
-        usage = await MoldUsageService.get_mold_usage_by_uuid(tenant_id, uuid)
-        
-        update_data = data.model_dump(exclude_unset=True, exclude_none=True)
-        
-        # 如果更新了使用次数，需要更新模具的累计使用次数
-        if 'usage_count' in update_data and update_data['usage_count'] != usage.usage_count:
-            mold = await Mold.get(id=usage.mold_id)
-            mold.total_usage_count = mold.total_usage_count - usage.usage_count + update_data['usage_count']
-            await mold.save()
-        
-        # 更新字段
-        for key, value in update_data.items():
-            setattr(usage, key, value)
-        
-        await usage.save()
-        return usage
-    
-    @staticmethod
-    async def delete_mold_usage(
-        tenant_id: int,
-        uuid: str
-    ) -> None:
-        """
-        删除模具使用记录（软删除）
-        
-        Args:
-            tenant_id: 组织ID
-            uuid: 模具使用记录UUID
-            
-        Raises:
-            NotFoundError: 当模具使用记录不存在时抛出
-        """
-        usage = await MoldUsageService.get_mold_usage_by_uuid(tenant_id, uuid)
-        
-        # 更新模具的累计使用次数
-        mold = await Mold.get(id=usage.mold_id)
-        mold.total_usage_count = max(0, mold.total_usage_count - usage.usage_count)
-        await mold.save()
-        
-        # 软删除
-        usage.deleted_at = datetime.now()
-        await usage.save()
-
-
 class MoldCalibrationService:
     """
     模具校验记录服务类
@@ -550,8 +326,29 @@ class MoldCalibrationService:
 
 class MoldMaintenanceReminderService:
     """
-    模具保养提醒服务（基于使用次数 maintenance_interval）
+    模具保养提醒服务（基于使用次数或方案按天触发）
     """
+
+    @staticmethod
+    async def _get_scheme_for_mold(tenant_id: int, mold: Mold) -> Optional[MoldMaintenanceScheme]:
+        scheme_id = mold.maintenance_scheme_id
+        if not scheme_id:
+            binding = await MoldSchemeBinding.filter(
+                tenant_id=tenant_id,
+                mold_id=mold.id,
+                scheme_type="maintenance",
+                deleted_at__isnull=True,
+            ).order_by("id").first()
+            if binding:
+                scheme_id = binding.scheme_id
+        if not scheme_id:
+            return None
+        return await MoldMaintenanceScheme.filter(
+            tenant_id=tenant_id,
+            id=scheme_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).first()
 
     @staticmethod
     async def list_reminders(
@@ -560,55 +357,86 @@ class MoldMaintenanceReminderService:
         limit: int = 100,
         reminder_type: Optional[str] = None,
     ) -> tuple[List[dict], int]:
-        """
-        获取模具保养提醒列表
-
-        基于 maintenance_interval 与 total_usage_count 计算：
-        - next_maintenance_at_count = ceil(total_usage_count / interval) * interval
-        - overdue: total_usage_count >= next_maintenance_at_count
-        - due_soon: (next_maintenance_at_count - total_usage_count) <= max(5, interval*0.1)
-
-        Args:
-            tenant_id: 组织ID
-            skip: 跳过数量
-            limit: 限制数量
-            reminder_type: 提醒类型（due_soon/overdue，可选）
-
-        Returns:
-            tuple[list[dict], int]: 提醒列表和总数量
-        """
-        import math
         molds = await Mold.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             is_active=True,
-            maintenance_interval__not_isnull=True,
-        ).filter(maintenance_interval__gt=0)
+        ).all()
         results = []
+        today = date.today()
+
         for mold in molds:
+            scheme = await MoldMaintenanceReminderService._get_scheme_for_mold(tenant_id, mold)
+            trigger_type = scheme.trigger_type if scheme else "usage_count"
             interval = mold.maintenance_interval
-            total = mold.total_usage_count or 0
-            next_at = math.ceil(total / interval) * interval if total > 0 else interval
-            usages_until = next_at - total
-            if usages_until <= 0:
-                rtype = "overdue"
-            elif usages_until <= max(5, int(interval * 0.1)):
-                rtype = "due_soon"
+            if scheme and scheme.trigger_interval_usage:
+                interval = scheme.trigger_interval_usage
+
+            if trigger_type == "days":
+                interval_days = scheme.trigger_interval_days if scheme else mold.maintenance_interval
+                if not interval_days or interval_days <= 0:
+                    continue
+                last_date = mold.last_maintenance_date
+                if not last_date:
+                    days_since = interval_days
+                    rtype = "overdue"
+                else:
+                    days_since = (today - last_date).days
+                    if days_since >= interval_days:
+                        rtype = "overdue"
+                    elif days_since >= max(1, int(interval_days * 0.9)):
+                        rtype = "due_soon"
+                    else:
+                        continue
+                if reminder_type and rtype != reminder_type:
+                    continue
+                results.append({
+                    "mold_uuid": mold.uuid,
+                    "mold_code": mold.code,
+                    "mold_name": mold.name,
+                    "trigger_type": "days",
+                    "total_usage_count": mold.total_usage_count or 0,
+                    "maintenance_interval": interval,
+                    "next_maintenance_at_count": None,
+                    "usages_until_due": None,
+                    "last_maintenance_date": last_date,
+                    "days_since_maintenance": days_since,
+                    "trigger_interval_days": interval_days,
+                    "reminder_type": rtype,
+                })
             else:
-                continue
-            if reminder_type and rtype != reminder_type:
-                continue
-            results.append({
-                "mold_uuid": mold.uuid,
-                "mold_code": mold.code,
-                "mold_name": mold.name,
-                "total_usage_count": total,
-                "maintenance_interval": interval,
-                "next_maintenance_at_count": next_at,
-                "usages_until_due": usages_until,  # 负数表示已过期
-                "reminder_type": rtype,
-            })
-        results.sort(key=lambda x: (0 if x["reminder_type"] == "overdue" else 1, x["usages_until_due"]))
+                if not interval or interval <= 0:
+                    continue
+                total = mold.total_usage_count or 0
+                next_at = math.ceil(total / interval) * interval if total > 0 else interval
+                usages_until = next_at - total
+                if usages_until <= 0:
+                    rtype = "overdue"
+                elif usages_until <= max(5, int(interval * 0.1)):
+                    rtype = "due_soon"
+                else:
+                    continue
+                if reminder_type and rtype != reminder_type:
+                    continue
+                results.append({
+                    "mold_uuid": mold.uuid,
+                    "mold_code": mold.code,
+                    "mold_name": mold.name,
+                    "trigger_type": "usage_count",
+                    "total_usage_count": total,
+                    "maintenance_interval": interval,
+                    "next_maintenance_at_count": next_at,
+                    "usages_until_due": usages_until,
+                    "last_maintenance_date": mold.last_maintenance_date,
+                    "days_since_maintenance": (
+                        (today - mold.last_maintenance_date).days
+                        if mold.last_maintenance_date else None
+                    ),
+                    "trigger_interval_days": scheme.trigger_interval_days if scheme else None,
+                    "reminder_type": rtype,
+                })
+
+        results.sort(key=lambda x: (0 if x["reminder_type"] == "overdue" else 1, x.get("usages_until_due") or 0))
         total_count = len(results)
         items = results[skip : skip + limit]
         return items, total_count

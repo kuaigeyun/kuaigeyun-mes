@@ -81,7 +81,7 @@ const EquipmentDashboard: React.FC = () => {
             : t('app.kuaizhizao.equipmentDashboard.kpi.faultSubtitleHealthy'),
         icon: <ToolOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
-        onClick: () => navigate('/apps/kuaizhizao/equipment-management/faults?status=维修中'),
+        onClick: () => navigate('/apps/kuaizhizao/equipment-management/equipment-faults?status=处理中'),
         sideMetrics: [
           {
             label: t('app.kuaizhizao.equipmentDashboard.kpi.totalEquipment'),
@@ -96,7 +96,7 @@ const EquipmentDashboard: React.FC = () => {
         subtitle: t('app.kuaizhizao.equipmentDashboard.kpi.calibrationSubtitle'),
         icon: <SafetyCertificateOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #faad14 0%, #ffbb33 100%)',
-        onClick: () => navigate('/apps/kuaizhizao/equipment-management/list'),
+        onClick: () => navigate('/apps/kuaizhizao/equipment-management/equipment'),
         sideMetrics: [
           {
             label: t('app.kuaizhizao.equipmentDashboard.kpi.overdueCalibration'),
@@ -132,19 +132,25 @@ const EquipmentDashboard: React.FC = () => {
         key: 'ledger',
         title: t('app.kuaizhizao.equipmentDashboard.shortcut.ledger'),
         icon: <BuildOutlined style={{ fontSize: 22, color: '#1890ff' }} />,
-        path: '/apps/kuaizhizao/equipment-management/list',
+        path: '/apps/kuaizhizao/equipment-management/equipment',
       },
       {
         key: 'maint',
         title: t('app.kuaizhizao.equipmentDashboard.shortcut.maintenance'),
         icon: <CalendarOutlined style={{ fontSize: 22, color: '#52c41a' }} />,
-        path: '/apps/kuaizhizao/equipment-management/maintenance',
+        path: '/apps/kuaizhizao/equipment-management/maintenance-plans',
       },
       {
         key: 'fault',
         title: t('app.kuaizhizao.equipmentDashboard.shortcut.fault'),
         icon: <AlertOutlined style={{ fontSize: 22, color: '#ff4d4f' }} />,
-        path: '/apps/kuaizhizao/equipment-management/faults',
+        path: '/apps/kuaizhizao/equipment-management/equipment-faults',
+      },
+      {
+        key: 'spotCheck',
+        title: t('app.kuaizhizao.menu.equipment-management.spot-checks'),
+        icon: <SafetyCertificateOutlined style={{ fontSize: 22, color: '#722ed1' }} />,
+        path: '/apps/kuaizhizao/equipment-management/spot-checks',
       },
       {
         key: 'spare',
@@ -176,7 +182,7 @@ const EquipmentDashboard: React.FC = () => {
         title: t('app.kuaizhizao.equipmentDashboard.colFaultNo'),
         dataIndex: 'fault_no',
         render: (text: string, record: { uuid?: string }) => (
-          <a onClick={() => navigate(`/apps/kuaizhizao/equipment-management/faults/${record.uuid}`)}>
+          <a onClick={() => navigate(`/apps/kuaizhizao/equipment-management/equipment-faults`)}>
             {text}
           </a>
         ),
@@ -239,7 +245,7 @@ const EquipmentDashboard: React.FC = () => {
             lg={8}
             loading={faultsLoading}
             extra={
-              <a onClick={() => navigate('/apps/kuaizhizao/equipment-management/faults')}>
+              <a onClick={() => navigate('/apps/kuaizhizao/equipment-management/equipment-faults')}>
                 {t('app.kuaizhizao.equipmentDashboard.all')}
               </a>
             }
@@ -262,7 +268,7 @@ const EquipmentDashboard: React.FC = () => {
             lg={8}
             loading={maintenanceLoading}
             extra={
-              <a onClick={() => navigate('/apps/kuaizhizao/equipment-management/maintenance')}>
+              <a onClick={() => navigate('/apps/kuaizhizao/equipment-management/maintenance-plans')}>
                 {t('app.kuaizhizao.equipmentDashboard.all')}
               </a>
             }

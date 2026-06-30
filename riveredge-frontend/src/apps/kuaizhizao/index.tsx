@@ -86,17 +86,46 @@ const MoldsPage = lazy(() => import('./pages/equipment-management/molds'));
 const ToolLedgerPage = lazy(() => import('./pages/equipment-management/tool-ledger'));
 const EquipmentStatusPage = lazy(() => import('./pages/equipment-management/equipment-status'));
 const MaintenanceRemindersPage = lazy(() => import('./pages/equipment-management/maintenance-reminders'));
-const MoldUsagesPage = lazy(() => import('./pages/equipment-management/mold-usages'));
 const MoldCalibrationsPage = lazy(() => import('./pages/equipment-management/mold-calibrations'));
 const MoldMaintenanceRemindersPage = lazy(() => import('./pages/equipment-management/mold-maintenance-reminders'));
-const ToolUsagesPage = lazy(() => import('./pages/equipment-management/tool-usages'));
+const MoldScrapApplicationsPage = lazy(() => import('./pages/equipment-management/mold-scrap-applications'));
+const MoldMaintenanceItemsPage = lazy(() => import('./pages/equipment-management/mold-maintenance-items'));
+const MoldMaintenanceSchemesPage = lazy(() => import('./pages/equipment-management/mold-maintenance-schemes'));
+const MoldRepairItemsPage = lazy(() => import('./pages/equipment-management/mold-repair-items'));
+const MoldRepairSchemesPage = lazy(() => import('./pages/equipment-management/mold-repair-schemes'));
+const MoldTrialsPage = lazy(() => import('./pages/equipment-management/mold-trials'));
+const MoldBorrowsPage = lazy(() => import('./pages/equipment-management/mold-borrows'));
+const MoldReturnsPage = lazy(() => import('./pages/equipment-management/mold-returns'));
+const MoldMaintenancesPage = lazy(() => import('./pages/equipment-management/mold-maintenances'));
+const MoldRepairsPage = lazy(() => import('./pages/equipment-management/mold-repairs'));
+const ToolMaintenanceItemsPage = lazy(() => import('./pages/equipment-management/tool-maintenance-items'));
+const ToolMaintenanceSchemesPage = lazy(() => import('./pages/equipment-management/tool-maintenance-schemes'));
+const ToolRepairItemsPage = lazy(() => import('./pages/equipment-management/tool-repair-items'));
+const ToolRepairSchemesPage = lazy(() => import('./pages/equipment-management/tool-repair-schemes'));
+const ToolBorrowsPage = lazy(() => import('./pages/equipment-management/tool-borrows'));
+const ToolReturnsPage = lazy(() => import('./pages/equipment-management/tool-returns'));
 const ToolMaintenancesPage = lazy(() => import('./pages/equipment-management/tool-maintenances'));
+const ToolRepairsPage = lazy(() => import('./pages/equipment-management/tool-repairs'));
+const ToolScrapApplicationsPage = lazy(() => import('./pages/equipment-management/tool-scrap-applications'));
 const ToolCalibrationsPage = lazy(() => import('./pages/equipment-management/tool-calibrations'));
 const ToolMaintenanceRemindersPage = lazy(() => import('./pages/equipment-management/tool-maintenance-reminders'));
 
-// 设备点检与备件
-const EquipmentInspectionPage = lazy(() => import('./pages/equipment-management/inspection'));
+// 设备运营与备件
+const InspectionItemsPage = lazy(() => import('./pages/equipment-management/inspection-items'));
+const InspectionSchemesPage = lazy(() => import('./pages/equipment-management/inspection-schemes'));
+const PatrolRoutesPage = lazy(() => import('./pages/equipment-management/patrol-routes'));
+const MaintenanceItemsPage = lazy(() => import('./pages/equipment-management/maintenance-items'));
+const MaintenanceSchemesPage = lazy(() => import('./pages/equipment-management/maintenance-schemes'));
+const SpotChecksPage = lazy(() => import('./pages/equipment-management/spot-checks'));
+const RoutePatrolsPage = lazy(() => import('./pages/equipment-management/route-patrols'));
+const EquipmentScrapPage = lazy(() => import('./pages/equipment-management/equipment-scrap'));
 const SparePartsPage = lazy(() => import('./pages/equipment-management/spare-parts'));
+const SparePartRequisitionsPage = lazy(() => import('./pages/equipment-management/spare-part-requisitions'));
+const EquipmentTransfersPage = lazy(() => import('./pages/equipment-management/equipment-transfers'));
+const MaintenancePlanCalendarPage = lazy(() => import('./pages/equipment-management/maintenance-plan-calendar'));
+const MaintenanceExecutionsPage = lazy(() => import('./pages/equipment-management/maintenance-executions'));
+const EquipmentRepairsPage = lazy(() => import('./pages/equipment-management/equipment-repairs'));
+const EquipmentCalibrationsPage = lazy(() => import('./pages/equipment-management/equipment-calibrations'));
 
 // 成本管理（分析中心已迁至快报表 kuaireport）
 const CostCalculationsPage = lazy(() => import('./pages/cost-management/cost-calculations'));
@@ -219,6 +248,17 @@ const EquipmentMaintenanceDetailPage = lazy(() => import('./pages/equipment-mana
 const EquipmentMaintenancePlanPage = lazy(() => import('./pages/equipment-management/reports/EquipmentMaintenancePlan'));
 const EquipmentFaultAnalysisPage = lazy(() => import('./pages/equipment-management/reports/EquipmentFaultAnalysis'));
 const EquipmentStatusLogPage = lazy(() => import('./pages/equipment-management/reports/EquipmentStatusLog'));
+const EquipmentSpotCheckSummaryPage = lazy(() => import('./pages/equipment-management/reports/EquipmentSpotCheckSummary'));
+const EquipmentRoutePatrolSummaryPage = lazy(() => import('./pages/equipment-management/reports/EquipmentRoutePatrolSummary'));
+const EquipmentMttrMtbfAnalysisPage = lazy(() => import('./pages/equipment-management/reports/EquipmentMttrMtbfAnalysis'));
+const MoldTrialRecordsReportPage = lazy(() => import('./pages/equipment-management/reports/mold-trial-records'));
+const MoldMaintenanceAlertsReportPage = lazy(() => import('./pages/equipment-management/reports/mold-maintenance-alerts'));
+const MoldBorrowReturnLogReportPage = lazy(() => import('./pages/equipment-management/reports/mold-borrow-return-log'));
+const MoldRepairAnalysisReportPage = lazy(() => import('./pages/equipment-management/reports/mold-repair-analysis'));
+const ToolMaintenanceAlertsReportPage = lazy(() => import('./pages/equipment-management/reports/tool-maintenance-alerts'));
+const ToolCalibrationAlertsReportPage = lazy(() => import('./pages/equipment-management/reports/tool-calibration-alerts'));
+const ToolBorrowReturnLogReportPage = lazy(() => import('./pages/equipment-management/reports/tool-borrow-return-log'));
+const ToolRepairAnalysisReportPage = lazy(() => import('./pages/equipment-management/reports/tool-repair-analysis'));
 
 // 仓储管理报表
 const InventorySummaryPage = lazy(() => import('./pages/warehouse-management/reports/InventorySummary'));
@@ -316,19 +356,50 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="equipment-management/equipment" element={withPageSuspense(EquipmentPage)} />
       <Route path="equipment-management/equipment-faults" element={withPageSuspense(EquipmentFaultsPage)} />
       <Route path="equipment-management/maintenance-plans" element={withPageSuspense(MaintenancePlansPage)} />
+      <Route path="equipment-management/maintenance-plan-calendar" element={withPageSuspense(MaintenancePlanCalendarPage)} />
+      <Route path="equipment-management/maintenance-executions" element={withPageSuspense(MaintenanceExecutionsPage)} />
+      <Route path="equipment-management/equipment-repairs" element={withPageSuspense(EquipmentRepairsPage)} />
+      <Route path="equipment-management/equipment-calibrations" element={withPageSuspense(EquipmentCalibrationsPage)} />
       <Route path="equipment-management/molds" element={withPageSuspense(MoldsPage)} />
       <Route path="equipment-management/tool-ledger" element={withPageSuspense(ToolLedgerPage)} />
       <Route path="equipment-management/equipment-status" element={withPageSuspense(EquipmentStatusPage)} />
       <Route path="equipment-management/maintenance-reminders" element={withPageSuspense(MaintenanceRemindersPage)} />
-      <Route path="equipment-management/mold-usages" element={withPageSuspense(MoldUsagesPage)} />
+      <Route path="equipment-management/mold-usages" element={<Navigate to="/apps/kuaizhizao/equipment-management/mold-borrows" replace />} />
       <Route path="equipment-management/mold-calibrations" element={withPageSuspense(MoldCalibrationsPage)} />
       <Route path="equipment-management/mold-maintenance-reminders" element={withPageSuspense(MoldMaintenanceRemindersPage)} />
-      <Route path="equipment-management/tool-usages" element={withPageSuspense(ToolUsagesPage)} />
+      <Route path="equipment-management/mold-scrap-applications" element={withPageSuspense(MoldScrapApplicationsPage)} />
+      <Route path="equipment-management/mold-maintenance-items" element={withPageSuspense(MoldMaintenanceItemsPage)} />
+      <Route path="equipment-management/mold-maintenance-schemes" element={withPageSuspense(MoldMaintenanceSchemesPage)} />
+      <Route path="equipment-management/mold-repair-items" element={withPageSuspense(MoldRepairItemsPage)} />
+      <Route path="equipment-management/mold-repair-schemes" element={withPageSuspense(MoldRepairSchemesPage)} />
+      <Route path="equipment-management/mold-trials" element={withPageSuspense(MoldTrialsPage)} />
+      <Route path="equipment-management/mold-borrows" element={withPageSuspense(MoldBorrowsPage)} />
+      <Route path="equipment-management/mold-returns" element={withPageSuspense(MoldReturnsPage)} />
+      <Route path="equipment-management/mold-maintenances" element={withPageSuspense(MoldMaintenancesPage)} />
+      <Route path="equipment-management/mold-repairs" element={withPageSuspense(MoldRepairsPage)} />
+      <Route path="equipment-management/tool-maintenance-items" element={withPageSuspense(ToolMaintenanceItemsPage)} />
+      <Route path="equipment-management/tool-maintenance-schemes" element={withPageSuspense(ToolMaintenanceSchemesPage)} />
+      <Route path="equipment-management/tool-repair-items" element={withPageSuspense(ToolRepairItemsPage)} />
+      <Route path="equipment-management/tool-repair-schemes" element={withPageSuspense(ToolRepairSchemesPage)} />
+      <Route path="equipment-management/tool-borrows" element={withPageSuspense(ToolBorrowsPage)} />
+      <Route path="equipment-management/tool-returns" element={withPageSuspense(ToolReturnsPage)} />
       <Route path="equipment-management/tool-maintenances" element={withPageSuspense(ToolMaintenancesPage)} />
+      <Route path="equipment-management/tool-repairs" element={withPageSuspense(ToolRepairsPage)} />
+      <Route path="equipment-management/tool-scrap-applications" element={withPageSuspense(ToolScrapApplicationsPage)} />
       <Route path="equipment-management/tool-calibrations" element={withPageSuspense(ToolCalibrationsPage)} />
       <Route path="equipment-management/tool-maintenance-reminders" element={withPageSuspense(ToolMaintenanceRemindersPage)} />
-      <Route path="equipment-management/inspection" element={withPageSuspense(EquipmentInspectionPage)} />
+      <Route path="equipment-management/inspection" element={<Navigate to="/apps/kuaizhizao/equipment-management/spot-checks" replace />} />
+      <Route path="equipment-management/inspection-items" element={withPageSuspense(InspectionItemsPage)} />
+      <Route path="equipment-management/inspection-schemes" element={withPageSuspense(InspectionSchemesPage)} />
+      <Route path="equipment-management/patrol-routes" element={withPageSuspense(PatrolRoutesPage)} />
+      <Route path="equipment-management/maintenance-items" element={withPageSuspense(MaintenanceItemsPage)} />
+      <Route path="equipment-management/maintenance-schemes" element={withPageSuspense(MaintenanceSchemesPage)} />
+      <Route path="equipment-management/spot-checks" element={withPageSuspense(SpotChecksPage)} />
+      <Route path="equipment-management/route-patrols" element={withPageSuspense(RoutePatrolsPage)} />
+      <Route path="equipment-management/equipment-scrap" element={withPageSuspense(EquipmentScrapPage)} />
       <Route path="equipment-management/spare-parts" element={withPageSuspense(SparePartsPage)} />
+      <Route path="equipment-management/spare-part-requisitions" element={withPageSuspense(SparePartRequisitionsPage)} />
+      <Route path="equipment-management/equipment-transfers" element={withPageSuspense(EquipmentTransfersPage)} />
 
       {/* 绩效管理路由 */}
       <Route path="performance/dashboard" element={withPageSuspense(PerformanceCenterDashboardPage)} />
@@ -454,6 +525,17 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="equipment-management/reports/equipment-maintenance-plan" element={withPageSuspense(EquipmentMaintenancePlanPage)} />
       <Route path="equipment-management/reports/equipment-fault-analysis" element={withPageSuspense(EquipmentFaultAnalysisPage)} />
       <Route path="equipment-management/reports/equipment-status-log" element={withPageSuspense(EquipmentStatusLogPage)} />
+      <Route path="equipment-management/reports/equipment-spot-check-summary" element={withPageSuspense(EquipmentSpotCheckSummaryPage)} />
+      <Route path="equipment-management/reports/equipment-route-patrol-summary" element={withPageSuspense(EquipmentRoutePatrolSummaryPage)} />
+      <Route path="equipment-management/reports/equipment-mttr-mtbf" element={withPageSuspense(EquipmentMttrMtbfAnalysisPage)} />
+      <Route path="equipment-management/reports/mold-trial-records" element={withPageSuspense(MoldTrialRecordsReportPage)} />
+      <Route path="equipment-management/reports/mold-maintenance-alerts" element={withPageSuspense(MoldMaintenanceAlertsReportPage)} />
+      <Route path="equipment-management/reports/mold-borrow-return-log" element={withPageSuspense(MoldBorrowReturnLogReportPage)} />
+      <Route path="equipment-management/reports/mold-repair-analysis" element={withPageSuspense(MoldRepairAnalysisReportPage)} />
+      <Route path="equipment-management/reports/tool-maintenance-alerts" element={withPageSuspense(ToolMaintenanceAlertsReportPage)} />
+      <Route path="equipment-management/reports/tool-calibration-alerts" element={withPageSuspense(ToolCalibrationAlertsReportPage)} />
+      <Route path="equipment-management/reports/tool-borrow-return-log" element={withPageSuspense(ToolBorrowReturnLogReportPage)} />
+      <Route path="equipment-management/reports/tool-repair-analysis" element={withPageSuspense(ToolRepairAnalysisReportPage)} />
 
       {/* 仓储管理报表 */}
       <Route path="warehouse-management/reports/inventory-summary" element={withPageSuspense(InventorySummaryPage)} />

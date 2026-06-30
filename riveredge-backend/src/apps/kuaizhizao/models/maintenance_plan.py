@@ -163,6 +163,7 @@ class MaintenanceExecution(BaseModel):
     # 关联维护计划
     maintenance_plan_id = fields.IntField(null=True, description="维护计划ID（关联维护计划）")
     maintenance_plan_uuid = fields.CharField(max_length=36, null=True, description="维护计划UUID")
+    maintenance_scheme_id = fields.IntField(null=True, description="保养方案ID（关联保养方案）")
     
     # 关联设备
     equipment_id = fields.IntField(description="设备ID（关联设备）")
@@ -177,6 +178,7 @@ class MaintenanceExecution(BaseModel):
     execution_result = fields.CharField(max_length=50, null=True, description="执行结果（正常、异常、待处理）")
     maintenance_cost = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="维护成本")
     spare_parts_used = fields.JSONField(null=True, description="使用备件（JSON格式）")
+    executed_items = fields.JSONField(null=True, description="已执行保养项（JSON格式）")
     
     # 验收信息
     status = fields.CharField(max_length=50, default="草稿", description="记录状态（草稿、已确认、已验收）")

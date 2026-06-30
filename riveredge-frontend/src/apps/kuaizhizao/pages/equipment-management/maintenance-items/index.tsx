@@ -1,0 +1,222 @@
+import React, { useRef, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  ActionType,
+  ProColumns,
+  ProFormDigit,
+  ProFormSwitch,
+  ProFormText,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
+import { App, Button, Modal, Row, Col, Tag } from 'antd';
+import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { rowActionKind } from '../../../../../components/uni-action';
+import { maintenanceItemsApi } from '../../../services/equipmentOps';
+import { formatDateTime } from '../../../../../utils/format';
+
+const P = 'app.kuaizhizao.equipmentOps.maintenanceItem';
+const RESOURCE = 'kuaizhizao:equipment-maintenance-item';
+
+interface MaintenanceItem {
+  id?: number;
+  code?: string;
+  name?: string;
+  requirement?: string;
+  standard_hours?: number;
+  is_active?: boolean;
+  updated_at?: string;
+}
+
+const MaintenanceItemsPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const perms = useResourcePermissions(RESOURCE);
+  const actionRef = useRef<ActionType>(null);
+  const formRef = useRef<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [current, setCurrent] = useState<MaintenanceItem | null>(null);
+
+  const handleCreate = () => {
+    setIsEdit(false);
+    setCurrent(null);
+    setModalVisible(true);
+    formRef.current?.resetFields();
+    formRef.current?.setFieldsValue({ is_active: true });
+  };
+  useNewShortcut(handleCreate);
+
+  const handleEdit = async (record: MaintenanceItem) => {
+    if (!record.id) return;
+    const detail = await maintenanceItemsApi.get(record.id);
+    setIsEdit(true);
+    setCurrent(detail);
+    setModalVisible(true);
+    formRef.current?.setFieldsValue(detail);
+  };
+
+  const handleDelete = async (keys: React.Key[]) => {
+    Modal.confirm({
+      title: t('common.batchDeleteTitle'),
+      content: t('common.batchDeleteContent', { count: keys.length }),
+      onOk: async () => {
+        for (const id of keys) {
+          await maintenanceItemsApi.delete(Number(id));
+        }
+        messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+        actionRef.current?.reload();
+      },
+    });
+  };
+
+  const handleSubmit = async (values: Record<string, unknown>) => {
+    if (isEdit && current?.id) {
+      await maintenanceItemsApi.update(current.id, values);
+      messageApi.success(t('common.updateSuccess'));
+    } else {
+      await maintenanceItemsApi.create(values);
+      messageApi.success(t('common.createSuccess'));
+    }
+    setModalVisible(false);
+    actionRef.current?.reload();
+  };
+
+  const columns: ProColumns<MaintenanceItem>[] = useMemo(
+    () => [
+      { title: t(`${P}.col.code`), dataIndex: 'code', width: 120, fixed: 'left' },
+      { title: t(`${P}.col.name`), dataIndex: 'name', width: 180, ellipsis: true },
+      { title: t(`${P}.col.standardHours`), dataIndex: 'standard_hours', width: 100 },
+      { title: t(`${P}.col.requirement`), dataIndex: 'requirement', ellipsis: true },
+      {
+        title: t(`${P}.col.isActive`),
+        dataIndex: 'is_active',
+        width: 80,
+        render: (_, r) => (
+          <Tag color={r.is_active ? 'success' : 'default'}>
+            {r.is_active ? t('common.enabled') : t('common.disabled')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at',
+        width: 168,
+        hideInSearch: true,
+        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
+      },
+      {
+        title: t('common.actions'),
+        key: 'action',
+        width: 140,
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_, record) => (
+          <>
+            {perms.canUpdate && (
+              <Button
+                {...rowActionKind('update')}
+                type="link"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleEdit(record);
+                }}
+              >
+                {t('common.edit')}
+              </Button>
+            )}
+            {perms.canDelete && (
+              <Button
+                {...rowActionKind('delete')}
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  Modal.confirm({
+                    title: t('common.deleteTitle'),
+                    onOk: () => record.id && handleDelete([record.id]),
+                  });
+                }}
+              >
+                {t('common.delete')}
+              </Button>
+            )}
+          </>
+        ),
+      },
+    ],
+    [t, perms],
+  );
+
+  return (
+    <>
+      <ListPageTemplate>
+        <UniTable<MaintenanceItem>
+          headerTitle={t(`${P}.title`)}
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-items"
+          actionRef={actionRef}
+          rowKey="id"
+          columns={columns}
+          request={async (params) => {
+            try {
+              const res = await maintenanceItemsApi.list({
+                skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+                limit: params.pageSize,
+                search: (params as { keyword?: string }).keyword,
+              });
+              return { data: res.items ?? [], success: true, total: res.total ?? 0 };
+            } catch {
+              messageApi.error(t(`${P}.listFailed`));
+              return { data: [], success: false, total: 0 };
+            }
+          }}
+          showCreateButton={perms.canCreate}
+          createButtonText={withSingleNewShortcutHint(t(`${P}.create`))}
+          onCreate={handleCreate}
+          showDeleteButton={perms.canDelete}
+          onDelete={handleDelete}
+          enableRowSelection={perms.canDelete}
+        />
+      </ListPageTemplate>
+
+      <FormModalTemplate
+        title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
+        open={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef}
+        grid={false}
+      >
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormText name="code" label={t(`${P}.col.code`)} rules={[{ required: true }]} />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="name" label={t(`${P}.col.name`)} rules={[{ required: true }]} />
+          </Col>
+          <Col span={12}>
+            <ProFormDigit name="standard_hours" label={t(`${P}.col.standardHours`)} min={0} />
+          </Col>
+          <Col span={24}>
+            <ProFormTextArea name="requirement" label={t(`${P}.col.requirement`)} fieldProps={{ rows: 3 }} />
+          </Col>
+          <Col span={24}>
+            <ProFormSwitch name="is_active" label={t(`${P}.col.isActive`)} />
+          </Col>
+        </Row>
+      </FormModalTemplate>
+    </>
+  );
+};
+
+export default MaintenanceItemsPage;

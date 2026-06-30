@@ -53,14 +53,15 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutline
 import { UniTable } from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { getEquipmentAssetLifecycle } from '../../../utils/equipmentLifecycle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { equipmentApi } from '../../../services/equipment';
-import { workshopApi } from '../../../../master-data/services/factory';
+import { inspectionSchemesApi, schemeBindingsApi } from '../../../services/equipmentOps';
+import { workshopApi, factoryListItems } from '../../../../master-data/services/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
 import {
   buildFactoryImportTemplate,
@@ -132,6 +133,8 @@ interface Equipment {
   installation_date?: string;
   warranty_period?: number;
   technical_parameters?: any;
+  workshop_id?: number;
+  workshop_name?: string;
   workstation_id?: number;
   workstation_code?: string;
   workstation_name?: string;
@@ -192,6 +195,9 @@ const EquipmentPage: React.FC = () => {
   const [equipmentDetail, setEquipmentDetail] = useState<Equipment | null>(null);
 
   const [eqTrackingRefreshKey, setEqTrackingRefreshKey] = useState(0);
+  const [boundSchemeIds, setBoundSchemeIds] = useState<number[]>([]);
+  const [schemeSelectOptions, setSchemeSelectOptions] = useState<{ label: string; value: number }[]>([]);
+  const [schemeBindingsSaving, setSchemeBindingsSaving] = useState(false);
 
   const equipmentTracking = useDocumentTracking(
     drawerVisible && equipmentDetail?.id ? 'equipment' : undefined,
@@ -272,6 +278,8 @@ const EquipmentPage: React.FC = () => {
         purchase_date: detail.purchase_date ? dayjs(detail.purchase_date) : null,
         installation_date: detail.installation_date ? dayjs(detail.installation_date) : null,
         warranty_period: detail.warranty_period,
+        workshop_id: detail.workshop_id,
+        workshop_name: detail.workshop_name,
         workstation_id: detail.workstation_id,
         work_center_id: detail.work_center_id,
         status: detail.status,
@@ -301,6 +309,20 @@ const EquipmentPage: React.FC = () => {
       setEqTrackingRefreshKey((k) => k + 1);
       if (detail.id != null) {
         await loadEquipmentFieldValuesForDetail(detail.id);
+        const [bindings, schemesRes] = await Promise.all([
+          schemeBindingsApi.list({ equipment_id: detail.id, scheme_type: 'spot_check' }),
+          inspectionSchemesApi.list({ limit: 1000, is_active: true }),
+        ]);
+        setBoundSchemeIds((bindings ?? []).map((b: { scheme_id: number }) => b.scheme_id));
+        setSchemeSelectOptions(
+          (schemesRes.items ?? []).map((s: { id: number; code: string; name: string }) => ({
+            label: `${s.code} - ${s.name}`,
+            value: s.id,
+          })),
+        );
+      } else {
+        setBoundSchemeIds([]);
+        setSchemeSelectOptions([]);
       }
     } catch (error) {
       messageApi.error(t('app.kuaizhizao.equipment.getDetailFailed'));
@@ -489,6 +511,10 @@ const EquipmentPage: React.FC = () => {
       dataIndex: 'warranty_period',
     },
     {
+      title: t('app.kuaizhizao.equipment.colWorkshop'),
+      dataIndex: 'workshop_name',
+    },
+    {
       title: t('app.kuaizhizao.equipment.colWorkstation'),
       dataIndex: 'workstation_name',
     },
@@ -652,6 +678,12 @@ const EquipmentPage: React.FC = () => {
       ),
     },
     {
+      title: t('app.kuaizhizao.equipment.colWorkshop'),
+      dataIndex: 'workshop_name',
+      width: 120,
+      ellipsis: true,
+    },
+    {
       title: t('app.kuaizhizao.equipment.colWorkCenter'),
       dataIndex: 'work_center_name',
       width: 150,
@@ -666,27 +698,6 @@ const EquipmentPage: React.FC = () => {
       render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     ...customFieldColumns,
-    {
-      title: t('app.kuaizhizao.equipment.colLifecycle'),
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getEquipmentAssetLifecycle(record as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      },
-    },
     {
       title: t('common.actions'),
       key: 'action',
@@ -1086,6 +1097,36 @@ const EquipmentPage: React.FC = () => {
           </Col>
           <Col span={12}>
             <ProFormSelect
+              name="workshop_id"
+              label={t('app.kuaizhizao.equipment.fieldWorkshop')}
+              placeholder={t('app.kuaizhizao.equipment.phWorkshop')}
+              request={async () => {
+                try {
+                  const workshops = factoryListItems(await workshopApi.list({ limit: 1000, is_active: true }));
+                  return workshops.map((ws: { id: number; name: string }) => ({
+                    label: ws.name,
+                    value: ws.id,
+                    workshop: ws,
+                  }));
+                } catch {
+                  return [];
+                }
+              }}
+              fieldProps={{
+                style: { width: '100%' },
+                allowClear: true,
+                onChange: (_value: number | undefined, option: { workshop?: { name?: string } } | { workshop?: { name?: string } }[]) => {
+                  const selected = Array.isArray(option) ? option[0] : option;
+                  formRef.current?.setFieldsValue({
+                    workshop_name: selected?.workshop?.name ?? null,
+                  });
+                },
+              }}
+            />
+            <ProFormText name="workshop_name" hidden />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
               name="workstation_id"
               label={t('app.kuaizhizao.equipment.fieldWorkstation')}
               placeholder={t('app.kuaizhizao.equipment.phWorkstation')}
@@ -1157,6 +1198,7 @@ const EquipmentPage: React.FC = () => {
         onClose={() => {
           setDrawerVisible(false);
           setEquipmentDetail(null);
+          setBoundSchemeIds([]);
           resetEquipmentDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
@@ -1216,6 +1258,41 @@ const EquipmentPage: React.FC = () => {
                       )}
                     />
                   ) : null}
+                </div>
+              </DetailDrawerSection>
+              <DetailDrawerSection title={t('app.kuaizhizao.equipmentOps.schemeBindings.title')}>
+                <Select
+                  mode="multiple"
+                  style={{ width: '100%' }}
+                  placeholder={t('app.kuaizhizao.equipmentOps.schemeBindings.selectSchemes')}
+                  options={schemeSelectOptions}
+                  value={boundSchemeIds}
+                  onChange={setBoundSchemeIds}
+                />
+                <div style={{ marginTop: 12 }}>
+                  <Button
+                    type="primary"
+                    loading={schemeBindingsSaving}
+                    disabled={equipmentDetail.id == null}
+                    onClick={async () => {
+                      if (equipmentDetail.id == null) return;
+                      setSchemeBindingsSaving(true);
+                      try {
+                        await schemeBindingsApi.bulkReplace({
+                          equipment_id: equipmentDetail.id,
+                          scheme_type: 'spot_check',
+                          scheme_ids: boundSchemeIds,
+                        });
+                        messageApi.success(t('app.kuaizhizao.equipmentOps.schemeBindings.saveSuccess'));
+                      } catch (error: any) {
+                        messageApi.error(error?.message || t('common.operationFailed'));
+                      } finally {
+                        setSchemeBindingsSaving(false);
+                      }
+                    }}
+                  >
+                    {t('common.save')}
+                  </Button>
                 </div>
               </DetailDrawerSection>
               <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>

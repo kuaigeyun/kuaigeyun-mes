@@ -82,6 +82,9 @@ export const REPORT_TYPE_ROUTES: Record<string, ReportTypeRoute> = {
   equip_maint_plan: { api: 'equipment', backendType: 'maint_plan', templateId: 'queryTable' },
   equip_maint_detail: { api: 'equipment', backendType: 'maint_detail', templateId: 'queryTable' },
   equip_status_log: { api: 'equipment', backendType: 'status_log', templateId: 'queryTable' },
+  spot_check_summary: { api: 'equipment', backendType: 'spot_check_summary', templateId: 'queryTable' },
+  route_patrol_summary: { api: 'equipment', backendType: 'route_patrol_summary', templateId: 'queryTable' },
+  mttr_mtbf_summary: { api: 'equipment', backendType: 'mttr_mtbf_summary', templateId: 'queryTable' },
 
   'employee-efficiency-ranking': { api: 'performance', backendType: 'employee-efficiency-ranking', templateId: 'queryTable' },
   'piece-rate-salary-summary': { api: 'performance', backendType: 'piece-rate-salary-summary', templateId: 'queryTable' },

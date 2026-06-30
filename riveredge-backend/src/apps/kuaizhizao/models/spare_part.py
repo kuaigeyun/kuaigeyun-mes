@@ -90,3 +90,52 @@ class SparePartStockRecord(BaseModel):
     
     remark = fields.TextField(null=True)
     created_at = fields.DatetimeField(auto_now_add=True)
+
+
+class SparePartRequisition(BaseModel):
+    """备件领用单"""
+
+    class Meta:
+        table = "apps_kuaizhizao_spare_part_requisitions"
+        table_description = "快格轻制造 - 备件领用单"
+        unique_together = [("tenant_id", "requisition_no")]
+        indexes = [("tenant_id",), ("status",)]
+
+    id = fields.IntField(pk=True)
+    requisition_no = fields.CharField(max_length=64, description="领用单号")
+    equipment_id = fields.IntField(null=True, description="关联设备ID")
+    equipment_uuid = fields.CharField(max_length=36, null=True)
+    equipment_code = fields.CharField(max_length=50, null=True)
+    equipment_name = fields.CharField(max_length=200, null=True)
+    purpose = fields.TextField(null=True, description="领用用途")
+    applicant_id = fields.IntField(null=True)
+    applicant_name = fields.CharField(max_length=100, null=True)
+    status = fields.CharField(max_length=32, default="草稿")
+    approver_id = fields.IntField(null=True)
+    approver_name = fields.CharField(max_length=100, null=True)
+    approved_at = fields.DatetimeField(null=True)
+    reject_reason = fields.TextField(null=True)
+    remark = fields.TextField(null=True)
+    deleted_at = fields.DatetimeField(null=True)
+
+
+class SparePartRequisitionLine(BaseModel):
+    """备件领用单行"""
+
+    class Meta:
+        table = "apps_kuaizhizao_spare_part_requisition_lines"
+        table_description = "快格轻制造 - 备件领用单行"
+        indexes = [("tenant_id",), ("requisition_id",)]
+
+    id = fields.IntField(pk=True)
+    requisition_id = fields.IntField()
+    line_no = fields.IntField(default=1)
+    spare_part_id = fields.IntField()
+    spare_part_uuid = fields.CharField(max_length=36, null=True)
+    part_no = fields.CharField(max_length=100, null=True)
+    part_name = fields.CharField(max_length=200, null=True)
+    quantity = fields.IntField(default=1)
+    warehouse_location = fields.CharField(max_length=100, null=True, default="默认库位")
+    unit = fields.CharField(max_length=20, null=True)
+    remark = fields.TextField(null=True)
+    deleted_at = fields.DatetimeField(null=True)

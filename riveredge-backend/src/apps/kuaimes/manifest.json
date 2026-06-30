@@ -536,16 +536,6 @@
             "sort_order": 3,
             "children": [
               {
-                "title": "app.kuaizhizao.menu.equipment-management.mold-usages",
-                "path": "/apps/kuaimes/equipment-management/mold-usages",
-                "permission": "kuaizhizao:mold-usage:read",
-                "sort_order": 1,
-                "meta": {
-                  "node": "mold_usage",
-                  "module": "equipment"
-                }
-              },
-              {
                 "title": "app.kuaizhizao.menu.equipment-management.mold-calibrations",
                 "path": "/apps/kuaimes/equipment-management/mold-calibrations",
                 "permission": "kuaizhizao:mold-calibration:read",

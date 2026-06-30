@@ -16,7 +16,12 @@ from apps.kuaizhizao.models.equipment_status_monitor import EquipmentStatusHisto
 from apps.kuaizhizao.models.equipment_fault import EquipmentFault, EquipmentRepair
 from apps.kuaizhizao.models.maintenance_plan import MaintenanceExecution
 from apps.kuaizhizao.models.equipment_point_inspection import EquipmentPointInspectionRecord
-from apps.kuaizhizao.schemas.equipment import EquipmentCreate, EquipmentUpdate, EquipmentCalibrationCreate
+from apps.kuaizhizao.schemas.equipment import (
+    EquipmentCreate,
+    EquipmentUpdate,
+    EquipmentCalibrationCreate,
+    EquipmentCalibrationCreateWithEquipment,
+)
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -152,6 +157,22 @@ class EquipmentService:
         await equipment.save()
 
     @staticmethod
+    async def _apply_calibration_to_equipment(
+        equipment: Equipment,
+        calibration_date,
+        expiry_date,
+    ) -> None:
+        """更新设备上次/下次校验日期"""
+        from datetime import timedelta
+
+        equipment.last_calibration_date = calibration_date
+        if expiry_date:
+            equipment.next_calibration_date = expiry_date
+        elif equipment.calibration_period:
+            equipment.next_calibration_date = calibration_date + timedelta(days=equipment.calibration_period)
+        await equipment.save()
+
+    @staticmethod
     async def create_equipment_calibration(
         tenant_id: int,
         equipment_uuid: str,
@@ -168,10 +189,75 @@ class EquipmentService:
             certificate_no=data.certificate_no,
             expiry_date=data.expiry_date,
             attachment_uuid=data.attachment_uuid,
+            attachments=data.attachments,
             remark=data.remark,
         )
         await calib.save()
+        await EquipmentService._apply_calibration_to_equipment(
+            equipment, data.calibration_date, data.expiry_date
+        )
         return calib
+
+    @staticmethod
+    async def list_all_calibrations(
+        tenant_id: int,
+        equipment_uuid: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> tuple[List[EquipmentCalibration], int]:
+        """获取全量设备校验记录列表（支持按设备筛选）"""
+        query = EquipmentCalibration.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if equipment_uuid:
+            equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, equipment_uuid)
+            query = query.filter(equipment_id=equipment.id)
+        total = await query.count()
+        items = await query.offset(skip).limit(limit).order_by("-calibration_date")
+        return list(items), total
+
+    @staticmethod
+    async def list_calibration_alerts(
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        due_type: Optional[str] = None,
+    ) -> tuple[List[dict], int]:
+        """设备检定到期提醒（7 天内到期或已逾期）"""
+        from datetime import date
+
+        today = date.today()
+        equipments = await Equipment.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+            needs_calibration=True,
+        )
+        results: List[dict] = []
+        for eq in equipments:
+            if not eq.next_calibration_date:
+                continue
+            delta = (eq.next_calibration_date - today).days
+            if delta > 7:
+                continue
+            rtype = "overdue" if delta < 0 else "due_soon"
+            if due_type and rtype != due_type:
+                continue
+            results.append({
+                "equipment_uuid": eq.uuid,
+                "equipment_code": eq.code,
+                "equipment_name": eq.name,
+                "reminder_type": "calibration",
+                "due_type": rtype,
+                "due_date": eq.next_calibration_date,
+                "days_until_due": delta,
+                "calibration_period": eq.calibration_period,
+                "last_calibration_date": eq.last_calibration_date,
+            })
+        results.sort(key=lambda x: (0 if x["due_type"] == "overdue" else 1, x["days_until_due"]))
+        total = len(results)
+        return results[skip : skip + limit], total
 
     @staticmethod
     async def get_equipment_lifecycle_log(

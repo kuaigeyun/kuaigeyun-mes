@@ -11,6 +11,8 @@ from datetime import datetime, date
 from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
+from apps.kuaizhizao.constants.tool_status import validate_tool_status
+
 
 # --- 工装基础 ---
 
@@ -19,29 +21,31 @@ class ToolBase(BaseModel):
     name: str = Field(..., max_length=200, description="工装名称")
     type: Optional[str] = Field(None, max_length=50, description="类型")
     spec: Optional[str] = Field(None, max_length=200, description="规格型号")
-    
+
     manufacturer: Optional[str] = Field(None, max_length=200, description="制造商")
     supplier: Optional[str] = Field(None, max_length=200, description="供应商")
     purchase_date: Optional[date] = Field(None, description="采购日期")
     warranty_expiry: Optional[date] = Field(None, description="保修到期日")
-    
-    status: str = Field(default="正常", description="状态（正常、领用中、维修中、校验中、停用、报废）")
+
+    storage_location: Optional[str] = Field(None, max_length=200, description="存放位置")
+    maintenance_scheme_id: Optional[int] = Field(None, description="默认保养方案ID")
+    repair_scheme_id: Optional[int] = Field(None, description="默认维修方案ID")
+    allow_repeated_borrow: bool = Field(default=False, description="是否允许重复领用")
+
+    status: str = Field(default="待启用", description="工装状态")
     is_active: bool = Field(default=True)
-    
+
     maintenance_period: Optional[int] = Field(None, description="保养周期（天）")
     needs_calibration: bool = Field(default=False)
     calibration_period: Optional[int] = Field(None, description="校验周期（天）")
-    
+
     description: Optional[str] = Field(None)
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
-        allowed = ["正常", "领用中", "维修中", "校验中", "停用", "报废"]
-        if v not in allowed:
-            raise ValueError(f"状态必须是 {allowed} 之一")
-        return v
+        return validate_tool_status(v)
 
 
 class ToolCreate(ToolBase):
@@ -53,6 +57,10 @@ class ToolUpdate(BaseModel):
     name: Optional[str] = None
     type: Optional[str] = None
     spec: Optional[str] = None
+    storage_location: Optional[str] = None
+    maintenance_scheme_id: Optional[int] = None
+    repair_scheme_id: Optional[int] = None
+    allow_repeated_borrow: Optional[bool] = None
     status: Optional[str] = None
     is_active: Optional[bool] = None
     maintenance_period: Optional[int] = None
@@ -61,10 +69,17 @@ class ToolUpdate(BaseModel):
     description: Optional[str] = None
     attachments: Optional[List[dict]] = None
 
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return validate_tool_status(v)
+
 
 class ToolResponse(ToolBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     uuid: str
     id: int
     tenant_id: int
@@ -77,7 +92,7 @@ class ToolResponse(ToolBase):
     updated_at: datetime
 
 
-# --- 领用记录 ---
+# --- 领用记录（遗留，运营单据见 tool_ops） ---
 
 class ToolUsageBase(BaseModel):
     tool_uuid: str
@@ -108,7 +123,7 @@ class ToolUsageResponse(ToolUsageBase):
     created_at: datetime
 
 
-# --- 维保记录 ---
+# --- 维保记录（遗留） ---
 
 class ToolMaintenanceBase(BaseModel):
     tool_uuid: str
@@ -135,7 +150,7 @@ class ToolMaintenanceResponse(ToolMaintenanceBase):
     created_at: datetime
 
 
-# --- 校验记录 ---
+# --- 校验记录（遗留） ---
 
 class ToolCalibrationBase(BaseModel):
     tool_uuid: str
@@ -191,18 +206,43 @@ class ToolCalibrationListResponse(BaseModel):
 
 
 class ToolMaintenanceReminderResponse(BaseModel):
-    """工装保养/校准提醒"""
+    """工装保养提醒（方案触发 + 使用次数/按天）"""
     tool_uuid: str
     tool_code: str
     tool_name: str
-    reminder_type: str = Field(..., description="maintenance/calibration")
-    due_type: str = Field(..., description="due_soon/overdue")
-    due_date: Optional[date] = None
-    days_until_due: int = Field(..., description="距到期天数，负数表示已过期")
+    trigger_type: str = Field(..., description="days/usage_count")
+    total_usage_count: Optional[int] = None
+    maintenance_interval: Optional[int] = None
+    next_maintenance_at_count: Optional[int] = None
+    usages_until_due: Optional[int] = None
+    last_maintenance_date: Optional[date] = None
+    days_since_maintenance: Optional[int] = None
+    trigger_interval_days: Optional[int] = None
+    reminder_type: str = Field(..., description="due_soon/overdue")
 
 
 class ToolMaintenanceReminderListResponse(BaseModel):
     items: List[ToolMaintenanceReminderResponse]
+    total: int
+    skip: int = 0
+    limit: int = 100
+
+
+class ToolCalibrationReminderResponse(BaseModel):
+    """工装校准到期提醒"""
+    tool_uuid: str
+    tool_code: str
+    tool_name: str
+    reminder_type: str = Field(default="calibration", description="calibration")
+    due_type: str = Field(..., description="due_soon/overdue")
+    due_date: date
+    days_until_due: int
+    calibration_period: Optional[int] = None
+    last_calibration_date: Optional[date] = None
+
+
+class ToolCalibrationReminderListResponse(BaseModel):
+    items: List[ToolCalibrationReminderResponse]
     total: int
     skip: int = 0
     limit: int = 100

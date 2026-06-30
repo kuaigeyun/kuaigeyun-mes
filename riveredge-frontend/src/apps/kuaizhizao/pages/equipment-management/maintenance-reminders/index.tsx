@@ -13,17 +13,17 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { DescriptionsProps } from 'antd';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Space, Badge, Tag, notification, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
+import { App, Button, Space, Tag, notification, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
 import { CheckOutlined, EyeOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { maintenanceReminderApi } from '../../../services/equipment';
+import { FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG, MultiTabListPageTemplate } from '../../../../../components/layout-templates';
+import { maintenanceReminderApi, equipmentApi } from '../../../services/equipment';
 import { ProFormTextArea } from '@ant-design/pro-components';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import { getMaintenanceReminderLifecycle } from '../../../utils/equipmentLifecycle';
+import { getMaintenanceReminderLifecycle, getDueReminderLifecycle } from '../../../utils/equipmentLifecycle';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
@@ -94,6 +94,8 @@ const MaintenanceRemindersPage: React.FC = () => {
   const reminderDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi, notification: notificationApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const calibrationActionRef = useRef<ActionType>(null);
+  const [activeTabKey, setActiveTabKey] = useState('maintenance');
   const [unreadCount, setUnreadCount] = useState(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [selectedRows, setSelectedRows] = useState<MaintenanceReminder[]>([]);
@@ -448,36 +450,94 @@ const MaintenanceRemindersPage: React.FC = () => {
     [t],
   );
 
+  interface EquipmentCalibrationReminder {
+    equipment_uuid?: string;
+    equipment_code?: string;
+    equipment_name?: string;
+    due_date?: string;
+    days_until_due?: number;
+    due_type?: string;
+  }
+
+  const calibrationColumns: ProColumns<EquipmentCalibrationReminder>[] = useMemo(
+    () => [
+      {
+        title: t(`${P}.calibration.colEquipmentCode`),
+        dataIndex: 'equipment_code',
+        width: 120,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }} ellipsis>
+            {r.equipment_code ?? '-'}
+          </Typography.Text>
+        ),
+      },
+      { title: t(`${P}.calibration.colEquipmentName`), dataIndex: 'equipment_name', width: 160, ellipsis: true },
+      {
+        title: t(`${P}.calibration.colDueDate`),
+        dataIndex: 'due_date',
+        width: 120,
+        hideInSearch: true,
+        render: (_, r) => (r.due_date ? formatDateTime(r.due_date, 'YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t(`${P}.calibration.colDaysUntilDue`),
+        dataIndex: 'days_until_due',
+        width: 100,
+        align: 'right',
+        hideInSearch: true,
+        render: (_, r) => {
+          const v = r.days_until_due ?? 0;
+          if (v < 0) return <Tag color="red">{t(`${P}.calibration.overdueDays`, { count: Math.abs(v) })}</Tag>;
+          return <span>{t(`${P}.calibration.daysRemaining`, { count: v })}</span>;
+        },
+      },
+      {
+        title: t(`${P}.calibration.colReminderStatus`),
+        dataIndex: 'due_type',
+        width: 100,
+        valueType: 'select',
+        valueEnum: {
+          due_soon: { text: t(`${P}.calibration.statusDueSoon`), status: 'Warning' },
+          overdue: { text: t(`${P}.calibration.statusOverdue`), status: 'Error' },
+        },
+      },
+      {
+        title: t(`${P}.col.lifecycle`),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        align: 'left',
+        hideInSearch: true,
+        render: (_, record) => {
+          const lifecycle = getDueReminderLifecycle(record as Record<string, unknown>);
+          return (
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          );
+        },
+      },
+    ],
+    [t],
+  );
+
   return (
-    <ListPageTemplate
-      toolbarExtra={
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: 12,
-          }}
-        >
-          <Space>
-            <span>{t(`${P}.title`)}</span>
-            {unreadCount > 0 && (
-              <Badge count={unreadCount} showZero>
-                <span style={{ fontSize: 16 }}>{t(`${P}.unreadBadge`)}</span>
-              </Badge>
-            )}
-          </Space>
-          <Space>
-            <Button icon={<ReloadOutlined />} onClick={handleCheckMaintenancePlans}>
-              {t(`${P}.manualCheck`)}
-            </Button>
-          </Space>
-        </div>
-      }
-    >
-      <UniTable<MaintenanceReminder>
-        headerTitle={t(`${P}.title`)}
+    <>
+      <MultiTabListPageTemplate
+        activeTabKey={activeTabKey}
+        onTabChange={setActiveTabKey}
+        preserveMounted
+        tabs={[
+          {
+            key: 'maintenance',
+            label: t(`${P}.tabMaintenance`),
+            children: (
+              <UniTable<MaintenanceReminder>
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-reminders"
         actionRef={actionRef}
         request={async (params) => {
@@ -521,6 +581,9 @@ const MaintenanceRemindersPage: React.FC = () => {
           },
         }}
         toolBarRender={() => [
+          <Button key="manual-check" icon={<ReloadOutlined />} onClick={handleCheckMaintenancePlans}>
+            {t(`${P}.manualCheck`)}
+          </Button>,
           <Button {...rowActionKind('update')}
             key="batch-read"
             disabled={selectedRows.length === 0}
@@ -530,6 +593,36 @@ const MaintenanceRemindersPage: React.FC = () => {
           </Button>,
         ]}
         scroll={{ x: 1600 }}
+              />
+            ),
+          },
+          {
+            key: 'calibration',
+            label: t(`${P}.tabCalibration`),
+            children: (
+              <UniTable<EquipmentCalibrationReminder>
+                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-reminders.calibration"
+                actionRef={calibrationActionRef}
+                rowKey={(record) =>
+                  [record.equipment_uuid, record.due_date, record.due_type].filter(Boolean).join(':') ||
+                  'calibration-reminder-unknown'
+                }
+                columns={calibrationColumns}
+                request={async (params) => {
+                  const res = await equipmentApi.listCalibrationReminders({
+                    skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+                    limit: params.pageSize || 20,
+                    due_type: params.due_type as string | undefined,
+                  });
+                  return { data: res.items || [], success: true, total: res.total || 0 };
+                }}
+                search={{ labelWidth: 'auto' }}
+                pagination={{ defaultPageSize: 20 }}
+                scroll={{ x: 1200 }}
+              />
+            ),
+          },
+        ]}
       />
 
       {/* 详情抽屉 */}
@@ -643,7 +736,7 @@ const MaintenanceRemindersPage: React.FC = () => {
           placeholder={t(`${P}.form.handleRemarkPlaceholder`)}
         />
       </FormModalTemplate>
-    </ListPageTemplate>
+    </>
   );
 };
 

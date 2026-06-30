@@ -35,6 +35,8 @@ class EquipmentFault(BaseModel):
         reporter_name: 报告人姓名
         status: 故障状态（待处理、处理中、已修复、已关闭）
         repair_required: 是否需要维修
+        source_type: 来源类型（spot_check/route_patrol 等）
+        source_uuid: 来源单据 UUID
         remark: 备注
         created_at: 创建时间（继承自BaseModel）
         updated_at: 更新时间（继承自BaseModel）
@@ -81,6 +83,8 @@ class EquipmentFault(BaseModel):
     # 状态
     status = fields.CharField(max_length=50, default="待处理", description="故障状态（待处理、处理中、已修复、已关闭）")
     repair_required = fields.BooleanField(default=True, description="是否需要维修")
+    source_type = fields.CharField(max_length=50, null=True, description="来源类型（spot_check/route_patrol 等）")
+    source_uuid = fields.CharField(max_length=36, null=True, description="来源单据 UUID")
     remark = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")
     

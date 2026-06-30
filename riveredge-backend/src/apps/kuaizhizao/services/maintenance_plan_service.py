@@ -14,6 +14,7 @@ from tortoise.exceptions import IntegrityError
 
 from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan, MaintenanceExecution
 from apps.kuaizhizao.models.equipment import Equipment
+from apps.kuaizhizao.services.spare_part_service import SparePartService
 from apps.kuaizhizao.schemas.maintenance_plan import (
     MaintenancePlanCreate,
     MaintenancePlanUpdate,
@@ -303,6 +304,15 @@ class MaintenanceExecutionService:
                 **data.model_dump(exclude_none=True, exclude={'equipment_uuid', 'maintenance_plan_uuid'})
             )
             await execution.save()
+            if data.spare_parts_used:
+                await SparePartService().apply_parts_usage(
+                    tenant_id,
+                    data.spare_parts_used,
+                    rel_type="maintenance_execution",
+                    rel_id=execution.id,
+                    operator_id=data.executor_id or created_by,
+                    operator_name=data.executor_name,
+                )
             return execution
         except IntegrityError:
             raise ValidationError(f"维护执行记录编号 {data.execution_no} 已存在")

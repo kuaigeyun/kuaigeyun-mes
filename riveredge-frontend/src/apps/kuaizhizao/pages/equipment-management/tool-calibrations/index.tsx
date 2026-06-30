@@ -10,15 +10,20 @@ import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker }
 import { App, Button, Tag, Typography } from 'antd';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getCalibrationResultLifecycle } from '../../../utils/equipmentLifecycle';
+import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { toolApi } from '../../../services/equipment';
+import { calibrationsApi } from '../../../services/toolOps';
 import dayjs from 'dayjs';
+
+const RESOURCE = 'kuaizhizao:tool-calibration';
 
 interface ToolCalibration {
   uuid?: string;
@@ -30,6 +35,7 @@ interface ToolCalibration {
   certificate_no?: string;
   expiry_date?: string;
   calibration_org?: string;
+  remark?: string;
   attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
 }
@@ -43,6 +49,7 @@ const CALIBRATION_RESULT_LABEL_KEYS: Record<string, string> = {
 const ToolCalibrationsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
@@ -51,7 +58,7 @@ const ToolCalibrationsPage: React.FC = () => {
 
   React.useEffect(() => {
     toolApi.list({ limit: 500 }).then((res: any) => {
-      setToolOptions((res.items || []).map((t: any) => ({ label: `${t.code} - ${t.name}`, value: t.uuid })));
+      setToolOptions((res.items || []).map((item: any) => ({ label: `${item.code} - ${item.name}`, value: item.uuid })));
     }).catch(() => {});
   }, []);
 
@@ -65,7 +72,7 @@ const ToolCalibrationsPage: React.FC = () => {
 
   const handleSubmit = async (values: any) => {
     try {
-      await toolApi.recordCalibration({
+      await calibrationsApi.create({
         tool_uuid: values.tool_uuid,
         calibration_date: values.calibration_date?.format?.('YYYY-MM-DD') || values.calibration_date,
         result: values.result,
@@ -150,6 +157,7 @@ const ToolCalibrationsPage: React.FC = () => {
           );
         },
       },
+      { title: t('app.kuaizhizao.toolCalibration.formRemark'), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
     ],
     [t],
   );
@@ -166,7 +174,7 @@ const ToolCalibrationsPage: React.FC = () => {
         rowKey="uuid"
         columns={columns}
         request={async (params) => {
-          const res = await toolApi.listAllCalibrations({
+          const res = await calibrationsApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
             tool_uuid: params.tool_uuid,
@@ -174,11 +182,15 @@ const ToolCalibrationsPage: React.FC = () => {
           });
           return { data: res.items || [], success: true, total: res.total || 0 };
         }}
-        toolBarRender={() => [
-          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-            {t('app.kuaizhizao.toolCalibration.createCalibration') + NEW_SHORTCUT_HINT}
-          </Button>,
-        ]}
+        toolBarRender={() =>
+          perms.canCreate
+            ? [
+                <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+                  {t('app.kuaizhizao.toolCalibration.createCalibration') + NEW_SHORTCUT_HINT}
+                </Button>,
+              ]
+            : []
+        }
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20 }}
         scroll={{ x: 1500 }}
@@ -206,6 +218,7 @@ const ToolCalibrationsPage: React.FC = () => {
           label={t('app.kuaizhizao.toolCalibration.formCalibrationDate')}
           rules={[{ required: true, message: t('app.kuaizhizao.toolCalibration.formSelectCalibrationDateRequired') }]}
           colProps={{ span: 12 }}
+          fieldProps={EQUIPMENT_DATE_FIELD_PROPS}
         />
         <ProFormSelect
           name="result"
@@ -215,7 +228,12 @@ const ToolCalibrationsPage: React.FC = () => {
           colProps={{ span: 12 }}
         />
         <ProFormText name="certificate_no" label={t('app.kuaizhizao.toolCalibration.formCertificateNo')} colProps={{ span: 12 }} />
-        <ProFormDatePicker name="expiry_date" label={t('app.kuaizhizao.toolCalibration.formExpiryDate')} colProps={{ span: 12 }} />
+        <ProFormDatePicker
+          name="expiry_date"
+          label={t('app.kuaizhizao.toolCalibration.formExpiryDate')}
+          colProps={{ span: 12 }}
+          fieldProps={EQUIPMENT_DATE_FIELD_PROPS}
+        />
         <ProFormText name="calibration_org" label={t('app.kuaizhizao.toolCalibration.formCalibrationOrg')} colProps={{ span: 12 }} />
         <DocumentAttachmentsField category="tool_calibration_attachments" />
         <ProFormText name="remark" label={t('app.kuaizhizao.toolCalibration.formRemark')} colProps={{ span: 24 }} />
