@@ -404,8 +404,6 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
           label={t('app.kuaizhizao.salesContract.terms.colGroupName')}
           rules={[{ required: true, message: t('common.required') }]}
         />
-        <ProFormTextArea name="description" label={t('app.kuaizhizao.salesContract.terms.colDescription')} />
-        <ProFormSwitch name="is_active" label={t('common.enabled')} />
         <div style={{ marginBottom: 8 }}>{t('app.kuaizhizao.salesContract.terms.selectItems')}</div>
         <Transfer
           dataSource={transferDataSource}
@@ -419,6 +417,8 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
           listStyle={{ width: 280, height: 280 }}
           showSearch
         />
+        <ProFormTextArea name="description" label={t('app.kuaizhizao.salesContract.terms.colDescription')} />
+        <ProFormSwitch name="is_active" label={t('common.enabled')} />
       </ModalForm>
     </>
   );

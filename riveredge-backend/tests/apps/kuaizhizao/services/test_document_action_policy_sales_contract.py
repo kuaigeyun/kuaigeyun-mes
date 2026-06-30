@@ -33,7 +33,9 @@ def test_draft_crud():
     assert caps.update.allowed
     assert caps.delete.allowed
     assert caps.submit.allowed
+    assert caps.print.allowed
     assert not caps.push_to_sales_order.allowed
+    assert not caps.push_to_work_order.allowed
 
 
 def test_pending_review_delete_allowed():
@@ -51,6 +53,7 @@ def test_effective_push_with_remaining():
         remaining_amount=Decimal("500"),
     )
     assert caps.push_to_sales_order.allowed
+    assert caps.push_to_work_order.allowed
     assert caps.create_change.allowed
 
 

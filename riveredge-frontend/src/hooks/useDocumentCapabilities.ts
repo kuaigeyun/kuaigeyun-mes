@@ -454,6 +454,7 @@ export function useSalesContractCapabilities(
       reject: capView(caps?.reject, perms.canAction?.('audit') ?? false, permDeniedTitle, t, SALES_CONTRACT_CAPABILITY_REASON_MESSAGES, 'app.kuaizhizao.salesContract.capability'),
       revokeApproval: capView(caps?.revoke_approval, perms.canAction?.('revoke') ?? false, permDeniedTitle, t, SALES_CONTRACT_CAPABILITY_REASON_MESSAGES, 'app.kuaizhizao.salesContract.capability'),
       pushToSalesOrder: capView(caps?.push_to_sales_order, perms.canCreate, permDeniedTitle, t, SALES_CONTRACT_CAPABILITY_REASON_MESSAGES, 'app.kuaizhizao.salesContract.capability'),
+      pushToWorkOrder: capView(caps?.push_to_work_order, perms.canCreate, permDeniedTitle, t, SALES_CONTRACT_CAPABILITY_REASON_MESSAGES, 'app.kuaizhizao.salesContract.capability'),
       print: capView(caps?.print, perms.canPrint, permDeniedTitle, t, SALES_CONTRACT_CAPABILITY_REASON_MESSAGES, 'app.kuaizhizao.salesContract.capability'),
       close: capView(caps?.close, perms.canUpdate, permDeniedTitle, t, SALES_CONTRACT_CAPABILITY_REASON_MESSAGES, 'app.kuaizhizao.salesContract.capability'),
       createChange: capView(caps?.create_change, perms.canCreate, permDeniedTitle, t, SALES_CONTRACT_CAPABILITY_REASON_MESSAGES, 'app.kuaizhizao.salesContract.capability'),
@@ -465,7 +466,7 @@ export function useSalesContractCapabilities(
 export function salesContractHasToolbarPushActions(record: import('../apps/kuaizhizao/services/sales-contract').SalesContract): boolean {
   const c = record.capabilities;
   if (!c) return true;
-  return c.push_to_sales_order?.allowed === true;
+  return c.push_to_sales_order?.allowed === true || c.push_to_work_order?.allowed === true;
 }
 
 export function salesContractBatchDeleteAllowed(

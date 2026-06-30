@@ -144,7 +144,8 @@ def derive_sales_contract_capabilities(
                 push_reason = None
     push_cap = _cap(push_allowed, push_reason)
 
-    print_allowed = st in ("已生效", "执行中", "已完成", "已关闭") and _is_approved(review_status)
+    # 支持未通过审核也可打印（用于预览），最终是否可见仍受 RBAC 的 print 权限控制。
+    print_allowed = True
     print_cap = _cap(
         print_allowed,
         "sales_contract.print.not_allowed" if not print_allowed else None,
@@ -171,6 +172,7 @@ def derive_sales_contract_capabilities(
         reject=reject_cap,
         revoke_approval=revoke_cap,
         push_to_sales_order=push_cap,
+        push_to_work_order=push_cap,
         print=print_cap,
         close=close_cap,
         create_change=create_change_cap,
@@ -204,6 +206,7 @@ def assert_sales_contract_capability(
         "reject": caps.reject,
         "revoke_approval": caps.revoke_approval,
         "push_to_sales_order": caps.push_to_sales_order,
+        "push_to_work_order": caps.push_to_work_order,
         "print": caps.print,
         "close": caps.close,
         "create_change": caps.create_change,

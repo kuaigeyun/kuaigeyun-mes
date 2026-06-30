@@ -1133,6 +1133,7 @@ class QuotationService:
             quotation,
             milestones=milestones,
             converted_sales_order_missing=conv_missing,
+            contract_downstream_missing=contract_missing,
             audit_required=audit_required,
         )
         result = resp.model_copy(
@@ -1290,6 +1291,7 @@ class QuotationService:
             lifecycle = get_quotation_lifecycle(
                 q,
                 converted_sales_order_missing=conv_missing,
+                contract_downstream_missing=contract_missing,
                 audit_required=audit_required,
             )
             data.append(

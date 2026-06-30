@@ -16,6 +16,7 @@ from apps.kuaizhizao.schemas.sales_contract import (
     SalesContractChangeCreate,
     SalesContractChangeResponse,
     SalesContractConvertToOrderRequest,
+    SalesContractPushToWorkOrderRequest,
     SalesContractCreate,
     SalesContractListResponse,
     SalesContractResponse,
@@ -299,6 +300,50 @@ async def convert_to_order(
             tenant_id=tenant_id, sales_order_id=int(sales_order.id), include_items=False
         )
         return {"sales_order": so_resp, "contract": contract}
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.get(
+    "/{contract_id}/push-to-work-order/preview",
+    summary="Direct push sales contract to work order preview",
+)
+async def preview_push_to_work_order(
+    contract_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.preview_push_sales_contract_to_work_order(tenant_id, contract_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post(
+    "/{contract_id}/push-to-work-order",
+    summary="Direct push sales contract to work order",
+)
+async def push_to_work_order(
+    contract_id: int,
+    body: SalesContractPushToWorkOrderRequest = Body(
+        default_factory=SalesContractPushToWorkOrderRequest
+    ),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.push_sales_contract_to_work_order(
+            tenant_id=tenant_id,
+            contract_id=contract_id,
+            created_by=current_user.id,
+            selected_item_ids=body.selected_item_ids,
+            release_lines=body.release_lines,
+            work_order_granularity=body.work_order_granularity,
+            push_mode=body.push_mode,
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BusinessLogicError as e:

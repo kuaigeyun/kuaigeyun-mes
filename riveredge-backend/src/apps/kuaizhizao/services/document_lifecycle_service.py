@@ -1690,6 +1690,7 @@ def get_quotation_lifecycle(
     milestones: Optional[List[Dict[str, Any]]] = None,
     *,
     converted_sales_order_missing: bool = False,
+    contract_downstream_missing: bool = False,
     audit_required: bool = True,
 ) -> Dict[str, Any]:
     """报价单生命周期：主轴四节点（模式 B）；审核相位不在 main_stages 中。"""
@@ -1706,6 +1707,7 @@ def get_quotation_lifecycle(
         quotation,
         audit_required=audit_required,
         conversion_downstream_missing=converted_sales_order_missing,
+        contract_downstream_missing=contract_downstream_missing,
     )
     cap_suggestions = quotation_capabilities_to_suggestions(
         caps,
@@ -1758,7 +1760,14 @@ def get_quotation_lifecycle(
             quotation, _ret("draft", "草稿", "normal")
         )
 
-    if status == "已转订单":
+    contract_id = getattr(quotation, "contract_id", None)
+    has_live_contract = (
+        contract_id is not None
+        and int(contract_id) > 0
+        and not contract_downstream_missing
+    )
+
+    if status == "已转订单" or has_live_contract:
         return _merge_quotation_version_meta(
             quotation, _ret("converted", "已转订单", "success", [])
         )

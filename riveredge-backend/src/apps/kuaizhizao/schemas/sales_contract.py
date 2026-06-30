@@ -196,6 +196,21 @@ class SalesContractConvertToOrderRequest(BaseModel):
     )
 
 
+class SalesContractPushToWorkOrderRequest(BaseModel):
+    selected_item_ids: Optional[List[int]] = Field(
+        None, description="选中合同明细（未传则按 release_lines 或全部可释放）"
+    )
+    release_lines: Optional[List[SalesContractReleaseLine]] = Field(
+        None, description="按行指定本次下推数量"
+    )
+    push_mode: Optional[str] = Field(
+        None, description="下推模式：draft/confirm（不传则使用租户默认）"
+    )
+    work_order_granularity: Optional[str] = Field(
+        None, description="工单粒度：grouped/per_unit（不传默认 grouped）"
+    )
+
+
 class SalesContractChangeCreate(BaseModel):
     change_type: str = "amendment"
     delta_amount: Decimal = Decimal("0")

@@ -101,6 +101,7 @@ import {
   PlusOutlined,
 
   ShoppingOutlined,
+  ToolOutlined,
 
   StopOutlined,
 
@@ -370,6 +371,7 @@ const SalesContractsPage: React.FC = () => {
   const { t } = useTranslation();
   const pullFromQuotationAction = resolveKuaizhizaoDocumentAction(t, 'sales_contract.pull_from_quotation');
   const pushToSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_sales_contract');
+  const pushToWorkOrderLabel = t('app.kuaizhizao.salesContract.pushToWorkOrder');
   const salesCommonLabels = useMemo(() => getSalesCommonFormLabels(t), [t]);
   const contractTypeLabels = useMemo(
     () => ({
@@ -480,6 +482,8 @@ const SalesContractsPage: React.FC = () => {
   const [releaseTarget, setReleaseTarget] = useState<SalesContract | null>(null);
 
   const [releaseRows, setReleaseRows] = useState<ReleaseRow[]>([]);
+
+  const [releaseMode, setReleaseMode] = useState<'sales_order' | 'work_order'>('sales_order');
 
   const [releaseSubmitting, setReleaseSubmitting] = useState(false);
 
@@ -2165,7 +2169,10 @@ const SalesContractsPage: React.FC = () => {
 
 
 
-  const openReleaseModal = async (record: SalesContract) => {
+  const openReleaseModal = async (
+    record: SalesContract,
+    mode: 'sales_order' | 'work_order' = 'sales_order',
+  ) => {
 
     try {
 
@@ -2215,6 +2222,8 @@ const SalesContractsPage: React.FC = () => {
 
       setReleaseRows(rows);
 
+      setReleaseMode(mode);
+
       setReleaseModalOpen(true);
 
     } catch (e: any) {
@@ -2248,14 +2257,20 @@ const SalesContractsPage: React.FC = () => {
     setReleaseSubmitting(true);
 
     try {
-
-      const res = await salesContractApi.convertToOrder(releaseTarget.id, { release_lines: lines });
-
-      const orderId = (res.sales_order as any)?.id;
-
-      const orderCode = (res.sales_order as any)?.order_code || '';
-
-      messageApi.success(t('app.kuaizhizao.salesContract.orderGenerated', { code: orderCode }));
+      if (releaseMode === 'work_order') {
+        const res = await salesContractApi.pushToWorkOrder(releaseTarget.id, {
+          release_lines: lines,
+        });
+        messageApi.success(res?.message || t('app.kuaizhizao.salesContract.workOrderGenerated'));
+      } else {
+        const res = await salesContractApi.convertToOrder(releaseTarget.id, { release_lines: lines });
+        const orderId = (res.sales_order as any)?.id;
+        const orderCode = (res.sales_order as any)?.order_code || '';
+        messageApi.success(t('app.kuaizhizao.salesContract.orderGenerated', { code: orderCode }));
+        navigate('/apps/kuaizhizao/sales-management/sales-orders', {
+          state: orderId ? { openSalesOrderId: orderId } : undefined,
+        });
+      }
 
       setReleaseModalOpen(false);
 
@@ -2263,19 +2278,19 @@ const SalesContractsPage: React.FC = () => {
 
       setReleaseRows([]);
 
+      setReleaseMode('sales_order');
+
       if (detail?.id === releaseTarget.id) await refreshDetail(releaseTarget.id);
 
       else reload();
 
-      navigate('/apps/kuaizhizao/sales-management/sales-orders', {
-
-        state: orderId ? { openSalesOrderId: orderId } : undefined,
-
-      });
-
     } catch (e: any) {
-
-      messageApi.error(e?.message || t('app.kuaizhizao.salesContract.pushOrderFailed'));
+      messageApi.error(
+        e?.message ||
+          (releaseMode === 'work_order'
+            ? t('app.kuaizhizao.salesContract.pushWorkOrderFailed')
+            : t('app.kuaizhizao.salesContract.pushOrderFailed')),
+      );
 
     } finally {
 
@@ -2308,8 +2323,24 @@ const SalesContractsPage: React.FC = () => {
       );
       return;
     }
-    await openReleaseModal(record);
+    await openReleaseModal(record, 'sales_order');
   }, [messageApi, openReleaseModal, selectedContractForPush]);
+
+  const handleToolbarPushToWorkOrder = useCallback(async () => {
+    const record = selectedContractForPush;
+    if (!record?.id) {
+      messageApi.warning(t('app.kuaizhizao.salesContract.selectContract'));
+      return;
+    }
+    if (!record.capabilities?.push_to_work_order?.allowed) {
+      messageApi.warning(
+        salesContractCapabilityReasonMessage(record.capabilities?.push_to_work_order?.reason, t) ||
+          t('app.kuaizhizao.salesContract.pushOrderStatusRequired'),
+      );
+      return;
+    }
+    await openReleaseModal(record, 'work_order');
+  }, [messageApi, openReleaseModal, selectedContractForPush, t]);
 
   const salesContractToolbarRenderItems = useMemo(
     () => [
@@ -2336,6 +2367,11 @@ const SalesContractsPage: React.FC = () => {
             label: pushToSalesOrderAction.label,
             onClick: () => void handleToolbarPushToOrder(),
           },
+          {
+            key: 'push-to-work-order',
+            label: pushToWorkOrderLabel,
+            onClick: () => void handleToolbarPushToWorkOrder(),
+          },
         ])}
       />,
     ],
@@ -2344,8 +2380,10 @@ const SalesContractsPage: React.FC = () => {
       handleCreate,
       handlePullFromQuotation,
       handleToolbarPushToOrder,
+      handleToolbarPushToWorkOrder,
       selectedRowKeys,
       pushToSalesOrderAction.label,
+      pushToWorkOrderLabel,
       t,
     ],
   );
@@ -3187,8 +3225,18 @@ const SalesContractsPage: React.FC = () => {
               />
 
               {!detailCapabilityGates.pushToSalesOrder.disabled && (
-                <Button type="primary" icon={<ShoppingOutlined />} onClick={() => openReleaseModal(detail)}>
+                <Button
+                  type="primary"
+                  icon={<ShoppingOutlined />}
+                  onClick={() => openReleaseModal(detail, 'sales_order')}
+                >
                   {pushToSalesOrderAction.label}
+                </Button>
+              )}
+
+              {!detailCapabilityGates.pushToWorkOrder.disabled && (
+                <Button icon={<ToolOutlined />} onClick={() => openReleaseModal(detail, 'work_order')}>
+                  {pushToWorkOrderLabel}
                 </Button>
               )}
 
@@ -3570,7 +3618,7 @@ const SalesContractsPage: React.FC = () => {
 
       <Modal
 
-        title={pushToSalesOrderAction.label}
+        title={releaseMode === 'work_order' ? pushToWorkOrderLabel : pushToSalesOrderAction.label}
 
         open={releaseModalOpen}
 
@@ -3590,6 +3638,8 @@ const SalesContractsPage: React.FC = () => {
 
           setReleaseRows([]);
 
+          setReleaseMode('sales_order');
+
         }}
 
         destroyOnHidden
@@ -3598,7 +3648,12 @@ const SalesContractsPage: React.FC = () => {
 
         <Typography.Paragraph type="secondary">
 
-          {t('app.kuaizhizao.salesContract.releaseHint', { code: releaseTarget?.contract_code })}
+          {t(
+            releaseMode === 'work_order'
+              ? 'app.kuaizhizao.salesContract.releaseWorkOrderHint'
+              : 'app.kuaizhizao.salesContract.releaseHint',
+            { code: releaseTarget?.contract_code },
+          )}
 
         </Typography.Paragraph>
 

@@ -166,6 +166,7 @@ export interface SalesContractCapabilities {
   reject?: ActionCapability;
   revoke_approval?: ActionCapability;
   push_to_sales_order?: ActionCapability;
+  push_to_work_order?: ActionCapability;
   print?: ActionCapability;
   close?: ActionCapability;
   create_change?: ActionCapability;
@@ -295,6 +296,13 @@ export interface ConvertToOrderPayload {
 
 }
 
+export interface PushToWorkOrderFromContractPayload {
+  selected_item_ids?: number[];
+  release_lines?: { item_id: number; release_quantity: number }[];
+  push_mode?: 'draft' | 'confirm';
+  work_order_granularity?: 'grouped' | 'per_unit';
+}
+
 export interface PullSalesContractFromQuotationResponse {
   success: boolean;
   message: string;
@@ -403,6 +411,31 @@ export const salesContractApi = {
       { method: 'POST', data: payload ?? {} },
 
     ),
+
+  previewPushToWorkOrder: (id: number) =>
+    apiRequest<{
+      target_type: 'work_order';
+      summary: string;
+      push_mode_default?: 'draft' | 'confirm' | string;
+      items: Array<{
+        item_id: number;
+        material_code: string;
+        material_name: string;
+        quantity: number;
+        pushed_quantity: number;
+        max_push_quantity: number;
+        delivery_date?: string | null;
+        blocking_issues?: string[];
+      }>;
+      tip?: string;
+    }>(`${BASE}/${id}/push-to-work-order/preview`, { method: 'GET' }),
+
+  pushToWorkOrder: (id: number, payload?: PushToWorkOrderFromContractPayload | null) =>
+    apiRequest<{
+      success: boolean;
+      message: string;
+      target_documents?: { type: string; id: number; code: string }[];
+    }>(`${BASE}/${id}/push-to-work-order`, { method: 'POST', data: payload ?? {} }),
 
 
 

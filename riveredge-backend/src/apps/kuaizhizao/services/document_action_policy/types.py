@@ -72,6 +72,7 @@ class SalesContractCapabilities(BaseModel):
     reject: ActionCapability
     revoke_approval: ActionCapability
     push_to_sales_order: ActionCapability
+    push_to_work_order: ActionCapability
     print: ActionCapability
     close: ActionCapability
     create_change: ActionCapability

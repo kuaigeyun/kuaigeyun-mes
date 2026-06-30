@@ -728,6 +728,14 @@ class SalesContractService(AppBaseService[SalesContract]):
 
         from core.services.approval.approval_instance_service import ApprovalInstanceService
 
+        # 重新提交前清理历史残留 pending 实例，确保按当前最新流程重新派发审批人。
+        await ApprovalInstanceService.cancel_approval(
+            tenant_id=tenant_id,
+            entity_type="sales_contract",
+            entity_id=contract.id,
+            operator_id=submitted_by,
+        )
+
         instance = await ApprovalInstanceService.start_approval_for_node(
             tenant_id=tenant_id,
             user_id=submitted_by,
@@ -814,6 +822,14 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract.review_remarks = None
         contract.updated_by = operator_id
         await contract.save()
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        await ApprovalInstanceService.cancel_approval(
+            tenant_id=tenant_id,
+            entity_type="sales_contract",
+            entity_id=contract_id,
+            operator_id=operator_id,
+        )
         return await self.get_contract_by_id(tenant_id, contract_id)
 
     async def revoke_contract_approval(
@@ -1125,15 +1141,29 @@ class SalesContractService(AppBaseService[SalesContract]):
 
         raw_push_mode = await self.business_config_service.get_push_default_mode(tenant_id)
         push_as_confirm = str(raw_push_mode or "").strip().lower() == "confirm"
+        prev_status = (quotation.status or "").strip() or "已发送"
+        from apps.common.base_service import AppBaseService
+
+        op_name = await AppBaseService().get_user_name(created_by)
 
         async with in_transaction():
             contract_resp = await self.create_contract(
                 tenant_id, create_data, created_by, auto_submit=push_as_confirm
             )
             await Quotation.filter(id=quotation_id).update(
+                status="已转订单",
                 contract_id=contract_resp.id,
                 contract_code=contract_resp.contract_code,
                 updated_by=created_by,
+            )
+            await quotation_svc._log_quotation_state_transition(
+                tenant_id,
+                quotation_id,
+                prev_status,
+                "已转订单",
+                created_by,
+                op_name,
+                "转销售合同",
             )
             await SalesOpportunity.filter(tenant_id=tenant_id, quotation_id=quotation_id).update(
                 contract_id=contract_resp.id,
@@ -1271,6 +1301,309 @@ class SalesContractService(AppBaseService[SalesContract]):
             created_by=created_by,
         )
         return sales_order, await self.get_contract_by_id(tenant_id, contract_id)
+
+    async def preview_push_sales_contract_to_work_order(
+        self, tenant_id: int, contract_id: int
+    ) -> Dict[str, Any]:
+        """销售合同直推工单预览：返回可选择的合同明细，不实际创建。"""
+        contract = await SalesContract.get_or_none(
+            tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True
+        )
+        if not contract:
+            raise NotFoundError("销售合同不存在")
+        all_items = await SalesContractItem.filter(
+            tenant_id=tenant_id, contract_id=contract_id
+        ).order_by("id")
+        ctx = self._contract_capability_context(contract, all_items)
+        assert_sales_contract_capability(
+            contract,
+            "push_to_work_order",
+            has_items=ctx["has_items"],
+            has_releasable_items=ctx["has_releasable_items"],
+            remaining_amount=ctx["remaining_amount"],
+        )
+        if not all_items:
+            raise BusinessLogicError("合同无明细，无法直推工单")
+
+        from apps.kuaizhizao.utils.material_source_helper import (
+            get_material_source_type,
+            validate_material_source_config,
+        )
+
+        preview_items: List[Dict[str, Any]] = []
+        has_blocking_issues = False
+        for it in all_items:
+            contract_qty = Decimal(str(it.contract_quantity or 0))
+            if contract_qty <= 0:
+                continue
+            remain_qty = self._line_remaining_qty(it)
+            source_type = await get_material_source_type(tenant_id, it.material_id)
+            _, source_errors = await validate_material_source_config(
+                tenant_id=tenant_id,
+                material_id=it.material_id,
+                source_type=source_type or "Make",
+            )
+            errors = [str(e) for e in (source_errors or []) if str(e).strip()]
+            if errors:
+                has_blocking_issues = True
+            preview_items.append(
+                {
+                    "item_id": int(it.id),
+                    "material_code": it.material_code,
+                    "material_name": it.material_name,
+                    "quantity": float(contract_qty),
+                    "pushed_quantity": float(Decimal(str(it.released_quantity or 0))),
+                    "max_push_quantity": float(remain_qty),
+                    "delivery_date": str(it.delivery_date) if it.delivery_date else None,
+                    "suggested_action": "生产",
+                    "source_type": source_type or "Make",
+                    "blocking_issues": errors,
+                }
+            )
+
+        if not preview_items:
+            raise BusinessLogicError("合同无可释放明细，无法直推工单")
+
+        push_mode_default = await self.business_config_service.get_push_default_mode(tenant_id)
+
+        return {
+            "target_type": "work_order",
+            "summary": f"将生成工单（含半成品）候选 {len(preview_items)} 条",
+            "push_mode_default": (push_mode_default or "draft"),
+            "items": preview_items,
+            "has_blocking_issues": has_blocking_issues,
+            "tip": "原材料由您自行计算采购",
+        }
+
+    async def push_sales_contract_to_work_order(
+        self,
+        tenant_id: int,
+        contract_id: int,
+        created_by: int,
+        selected_item_ids: Optional[List[int]] = None,
+        release_lines: Optional[List[SalesContractReleaseLine]] = None,
+        work_order_granularity: Optional[str] = None,
+        push_mode: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """销售合同直推工单（跳过先转销售订单）。"""
+        contract = await SalesContract.get_or_none(
+            tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True
+        )
+        if not contract:
+            raise NotFoundError("销售合同不存在")
+        all_items = await SalesContractItem.filter(
+            tenant_id=tenant_id, contract_id=contract_id
+        ).order_by("id")
+        ctx = self._contract_capability_context(contract, all_items)
+        assert_sales_contract_capability(
+            contract,
+            "push_to_work_order",
+            has_items=ctx["has_items"],
+            has_releasable_items=ctx["has_releasable_items"],
+            remaining_amount=ctx["remaining_amount"],
+        )
+        if not all_items:
+            raise BusinessLogicError("合同无明细，无法直推工单")
+
+        plan, item_qty_map, order_qty, order_amt = self._resolve_release_plan(
+            all_items,
+            selected_item_ids=selected_item_ids,
+            release_lines=release_lines,
+        )
+        await self._validate_release_capacity(contract, order_qty, order_amt, item_qty_map)
+
+        raw_push_mode = (push_mode or "").strip().lower()
+        if raw_push_mode not in ("draft", "confirm"):
+            raw_push_mode = await self.business_config_service.get_push_default_mode(tenant_id)
+        push_as_confirm = raw_push_mode == "confirm"
+        raw_granularity = (work_order_granularity or "").strip().lower()
+        if raw_granularity not in ("grouped", "per_unit"):
+            raw_granularity = "grouped"
+
+        from datetime import datetime
+        from apps.kuaizhizao.services.work_order_service import WorkOrderService
+        from apps.kuaizhizao.schemas.work_order import WorkOrderCreate
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.utils.bom_helper import get_bom_by_material_id
+        from apps.kuaizhizao.utils.material_source_helper import (
+            expand_bom_with_source_control,
+            SOURCE_TYPE_MAKE,
+            SOURCE_TYPE_OUTSOURCE,
+            SOURCE_TYPE_CONFIGURE,
+        )
+
+        wo_pool: Dict[int, Dict[str, Any]] = {}
+
+        def _add_to_pool(
+            material_id: int,
+            material_code: str,
+            material_name: str,
+            qty: float,
+            delivery_date,
+        ) -> None:
+            if qty <= 0:
+                return
+            key = int(material_id)
+            if key not in wo_pool:
+                wo_pool[key] = {
+                    "material_id": material_id,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "quantity": Decimal("0"),
+                    "earliest_delivery": delivery_date,
+                }
+            wo_pool[key]["quantity"] += Decimal(str(qty))
+            if delivery_date and (
+                wo_pool[key]["earliest_delivery"] is None
+                or delivery_date < wo_pool[key]["earliest_delivery"]
+            ):
+                wo_pool[key]["earliest_delivery"] = delivery_date
+
+        for it, qty_dec in plan:
+            qty = float(qty_dec)
+            delivery_date = it.delivery_date or contract.contract_date
+            bom = await get_bom_by_material_id(
+                tenant_id=tenant_id,
+                material_id=it.material_id,
+                only_approved=True,
+                use_default=True,
+            )
+            if bom and bom.bom_code:
+                _add_to_pool(
+                    it.material_id,
+                    it.material_code,
+                    it.material_name,
+                    qty,
+                    delivery_date,
+                )
+                variant_attrs = getattr(it, "variant_attributes", None)
+                requirements = await expand_bom_with_source_control(
+                    tenant_id=tenant_id,
+                    material_id=it.material_id,
+                    required_quantity=qty,
+                    only_approved=True,
+                    use_default_bom=True,
+                    variant_attributes=variant_attrs,
+                    configurable_selections=None,
+                    flatten_intermediate_subassemblies=True,
+                )
+                for req in requirements:
+                    st = req.get("source_type")
+                    if st in (SOURCE_TYPE_MAKE, SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE):
+                        _add_to_pool(
+                            req["material_id"],
+                            req["material_code"],
+                            req["material_name"],
+                            float(req["required_quantity"]),
+                            delivery_date,
+                        )
+            else:
+                _add_to_pool(
+                    it.material_id,
+                    it.material_code,
+                    it.material_name,
+                    qty,
+                    delivery_date,
+                )
+
+        work_order_service = WorkOrderService()
+        relation_service = DocumentRelationNewService()
+        work_orders: List[Any] = []
+
+        async def _create_one_work_order(info: Dict[str, Any], qty_dec: Decimal):
+            wo_data = WorkOrderCreate(
+                code_rule="WORK_ORDER_CODE",
+                product_id=info["material_id"],
+                product_code=info["material_code"],
+                product_name=info["material_name"],
+                quantity=qty_dec,
+                production_mode="MTO",
+                planned_start_date=(
+                    datetime.combine(info["earliest_delivery"], datetime.min.time())
+                    if info.get("earliest_delivery")
+                    else None
+                ),
+                planned_end_date=(
+                    datetime.combine(info["earliest_delivery"], datetime.min.time())
+                    if info.get("earliest_delivery")
+                    else None
+                ),
+                remarks=f"由销售合同 {contract.contract_code} 直推（含半成品）",
+            )
+            wo = await work_order_service.create_work_order(
+                tenant_id=tenant_id,
+                work_order_data=wo_data,
+                created_by=created_by,
+                allow_draft=not push_as_confirm,
+            )
+            if push_as_confirm:
+                wo = await work_order_service.release_work_order(
+                    tenant_id=tenant_id,
+                    work_order_id=wo.id,
+                    released_by=created_by,
+                    check_shortage=False,
+                )
+            wo_id = wo.id if hasattr(wo, "id") else wo.get("id")
+            wo_code = wo.code if hasattr(wo, "code") else wo.get("code")
+            wo_name = wo.name if hasattr(wo, "name") else wo.get("name")
+            relation_data = DocumentRelationCreate(
+                source_type="sales_contract",
+                source_id=contract_id,
+                source_code=contract.contract_code,
+                source_name=contract.contract_code,
+                target_type="work_order",
+                target_id=wo_id,
+                target_code=wo_code,
+                target_name=wo_name,
+                relation_type="source",
+                relation_mode="push",
+                relation_desc="销售合同直推工单（含半成品，采购件自行采购）",
+                business_mode="MTO",
+                demand_id=None,
+            )
+            await relation_service.create_relation(
+                tenant_id=tenant_id,
+                relation_data=relation_data,
+                created_by=created_by,
+            )
+            work_orders.append(wo)
+
+        for info in wo_pool.values():
+            total_qty_dec = Decimal(str(info["quantity"] or 0))
+            if total_qty_dec <= 0:
+                continue
+            if raw_granularity == "per_unit":
+                if total_qty_dec != total_qty_dec.to_integral_value():
+                    raise BusinessLogicError(
+                        f"物料 {info['material_code'] or info['material_name']} 下推数量为 {total_qty_dec}，"
+                        "“单台一个工单”仅支持整数数量"
+                    )
+                unit_count = int(total_qty_dec)
+                for _ in range(unit_count):
+                    await _create_one_work_order(info, Decimal("1"))
+            else:
+                await _create_one_work_order(info, total_qty_dec)
+
+        if not work_orders:
+            raise BusinessLogicError("所选明细的本次下推数量均为 0，无法生成工单")
+
+        await self._apply_release_to_contract(contract, order_qty, order_amt, item_qty_map)
+
+        return {
+            "success": True,
+            "message": f"直推成功，共生成 {len(work_orders)} 个工单（含半成品，采购件自行采购）",
+            "push_mode": raw_push_mode,
+            "work_order_granularity": raw_granularity,
+            "target_documents": [
+                {
+                    "type": "work_order",
+                    "id": w.id if hasattr(w, "id") else w.get("id"),
+                    "code": w.code if hasattr(w, "code") else w.get("code"),
+                }
+                for w in work_orders
+            ],
+        }
 
     async def get_execution_summaries(self, tenant_id: int) -> List[SalesContractExecutionSummary]:
         rows = await SalesContract.filter(

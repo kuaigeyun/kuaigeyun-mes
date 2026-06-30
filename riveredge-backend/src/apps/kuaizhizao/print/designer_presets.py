@@ -181,11 +181,14 @@ _TABLE_COLUMNS: dict[str, list[dict[str, str]]] = {
         ("备注", "notes"),
     ),
     "sales_contract": _col(
+        ("产品图片", "image_url"),
+        ("中文简称", "chinese_short_name"),
+        ("型号", "model_number"),
         ("物料编号", "material_code"),
         ("物料名称", "material_name"),
         ("规格", "material_spec"),
         ("单位", "material_unit"),
-        ("数量", "order_quantity"),
+        ("数量", "contract_quantity"),
         ("单价", "unit_price"),
         ("金额", "total_amount"),
         ("备注", "notes"),
@@ -597,6 +600,98 @@ def build_certificate_designer_schema() -> dict[str, Any]:
     }
 
 
+def build_sales_contract_general_schema() -> dict[str, Any]:
+    """销售合同通用模板（视觉组件版，甲方信息预留空白）。"""
+    return {
+        "version": "v1",
+        "preset_version": "sales_contract_general_v1",
+        "pageSize": "A4",
+        "orientation": "portrait",
+        "margins": {"top": 14, "right": 12, "bottom": 16, "left": 12},
+        "itemSpacing": 6,
+        "blocks": [
+            _header_block("销售合同"),
+            _text("甲方（卖方）与乙方（买方）经友好协商，依据相关法规签订本合同，共同遵守执行。", style={"fontSize": "10px"}),
+            _section_title("合同主体信息"),
+            {
+                "id": _id("party"),
+                "type": "columns",
+                "cols": [
+                    {
+                        "id": _id("left"),
+                        "width": "1",
+                        "blocks": [
+                            _text("甲方（卖方）", style={"fontWeight": "700", "fontSize": "11px"}),
+                            _text("公司名称：________________"),
+                            _text("地址：________________"),
+                            _text("联系人：________________"),
+                            _text("电话：________________"),
+                            _text("开户银行：________________"),
+                            _text("银行账号：________________"),
+                            _text("税号：________________"),
+                        ],
+                    },
+                    {
+                        "id": _id("right"),
+                        "width": "1",
+                        "blocks": [
+                            _text("乙方（买方）", style={"fontWeight": "700", "fontSize": "11px"}),
+                            _field("customer_name", "公司名称"),
+                            _field("customer_contact", "联系人"),
+                            _field("customer_phone", "电话"),
+                            _field("shipping_address", "地址"),
+                            _text("开户银行：________________"),
+                            _text("银行账号：________________"),
+                            _text("税号：________________"),
+                        ],
+                    },
+                ],
+            },
+            _section_title("合同摘要"),
+            _info_columns(
+                [
+                    ("合同编号", "contract_code"),
+                    ("合同类型", "contract_type"),
+                    ("合同日期", "contract_date"),
+                    ("有效期起", "valid_from"),
+                    ("有效期止", "valid_to"),
+                    ("销售员", "salesman_name"),
+                    ("币别", "currency_code"),
+                    ("付款条件", "payment_terms"),
+                    ("发货方式", "shipping_method"),
+                    ("报价单号", "quotation_code"),
+                ]
+            ),
+            _section_title("标的明细"),
+            _detail_table(
+                "items",
+                [
+                    {"key": "image_url", "label": "图片", "type": "image"},
+                    {"key": "chinese_short_name", "label": "产品名称"},
+                    {"key": "model_number", "label": "型号"},
+                    {"key": "material_unit", "label": "单位"},
+                    {"key": "contract_quantity", "label": "数量", "type": "number"},
+                    {"key": "unit_price", "label": "单价", "type": "number"},
+                    {"key": "total_amount", "label": "金额", "type": "number"},
+                    {"key": "delivery_date", "label": "交期"},
+                    {"key": "notes", "label": "备注"},
+                ],
+            ),
+            _text(
+                "总数量：{{ total_quantity | number }}    合同总额：{{ total_amount | money }}",
+                style={"textAlign": "right", "fontSize": "11px", "fontWeight": "600"},
+            ),
+            _section_title("合同条款"),
+            _field("contract_terms", "合同条款", show_label=False),
+            _section_title("补充说明"),
+            _field("notes", "备注", show_label=False),
+            _text("以上空白项（甲方信息、银行资料等）可按公司要求自行补齐。", style={"fontSize": "9px", "color": "#64748b"}),
+            _sign_row(("甲方（盖章）", "乙方（盖章）")),
+            _text("本合同由系统模板生成，签章后生效。", style={"fontSize": "9px", "color": "#94a3b8", "textAlign": "center"}),
+        ],
+    }
+
+
 def build_designer_schema(layout: DocumentLayout) -> dict[str, Any]:
     columns = layout.table_columns or _TABLE_COLUMNS.get(layout.document_type, [])
     qrcode_key = (
@@ -659,6 +754,8 @@ def compile_designer_schema(schema: dict[str, Any]) -> str:
 def build_designer_schema_for_document_type(document_type: str) -> dict[str, Any]:
     if document_type == "product_quality_certificate":
         return build_certificate_designer_schema()
+    if document_type == "sales_contract":
+        return build_sales_contract_general_schema()
     layout = DOCUMENT_LAYOUTS.get(document_type)
     if not layout:
         raise ValueError(f"未定义设计器布局: {document_type}")

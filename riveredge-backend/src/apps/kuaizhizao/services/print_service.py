@@ -316,7 +316,6 @@ async def _html_to_pdf_bytes_playwright_async(html_string: str) -> bytes:
                 print_background=True,
                 prefer_css_page_size=True,
                 display_header_footer=False,
-                margin={"top": "0", "right": "0", "bottom": "0", "left": "0"},
             )
         finally:
             await browser.close()
@@ -391,11 +390,8 @@ def _quotation_formal_print_allowed(quotation: Quotation, *, audit_required: boo
 
 
 def _sales_contract_formal_print_allowed(contract: SalesContract) -> bool:
-    """正式销售合同 PDF：已审核通过且处于已生效/执行中/已关闭。"""
-    st = (contract.status or "").strip()
-    if st in ("已生效", "执行中", "已关闭") and _is_approved(contract.review_status):
-        return True
-    return False
+    """销售合同 PDF：支持任意业务状态打印（用于预览）。"""
+    return True
 
 
 def _first_material_image_ref_for_print(images: Any) -> Tuple[str, str]:
@@ -523,6 +519,47 @@ async def _resolve_company_logo_for_print(tenant_id: int) -> str:
     except Exception as e:
         logger.warning("解析打印 Logo 失败 tenant_id={}: {}", tenant_id, e)
         return ""
+
+
+def _format_sales_contract_terms_for_print(contract_terms: Any) -> str:
+    """
+    将销售合同条款快照格式化为可打印文本，避免直接渲染出 Python/JSON 结构。
+    """
+    if contract_terms is None:
+        return ""
+
+    if isinstance(contract_terms, str):
+        return contract_terms.strip()
+
+    entries: list[Any]
+    if isinstance(contract_terms, list):
+        entries = contract_terms
+    elif isinstance(contract_terms, dict):
+        entries = [contract_terms]
+    else:
+        return str(contract_terms)
+
+    chunks: list[str] = []
+    for idx, entry in enumerate(entries, start=1):
+        if hasattr(entry, "model_dump"):
+            entry = entry.model_dump()
+        if not isinstance(entry, dict):
+            text = str(entry).strip()
+            if text:
+                chunks.append(text)
+            continue
+
+        term_name = str(entry.get("term_name") or "").strip()
+        content = str(entry.get("content") or entry.get("template_content") or "").strip()
+        if not content:
+            continue
+
+        if term_name:
+            chunks.append(f"{idx}. {term_name}\n{content}")
+        else:
+            chunks.append(content)
+
+    return "\n\n".join(chunks).strip()
 
 
 class DocumentPrintService:
@@ -1789,7 +1826,8 @@ class DocumentPrintService:
             "payment_terms": contract.payment_terms,
             "quotation_code": contract.quotation_code,
             "term_group_name": contract.term_group_name,
-            "contract_terms": contract.contract_terms,
+            "contract_terms": _format_sales_contract_terms_for_print(contract.contract_terms),
+            "contract_terms_raw": contract.contract_terms,
             "notes": contract.notes,
             "created_at": to_api_isoformat(contract.created_at) if contract.created_at else None,
             "items": items_data,

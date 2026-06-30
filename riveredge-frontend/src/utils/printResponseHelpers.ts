@@ -76,19 +76,6 @@ export function withPrintPreviewScreenPadding(
     box-shadow:0 1px 4px rgba(15,23,42,.08);
   }
 }
-@media print{
-  html{padding:0!important;background:#fff!important;}
-  body{
-    width:auto!important;
-    min-height:auto!important;
-    max-width:none!important;
-    margin:0!important;
-    padding:0!important;
-    border-radius:0!important;
-    box-shadow:none!important;
-    background:#fff!important;
-  }
-}
 </style>`;
   if (/<\/body>/i.test(html)) {
     return html.replace(/<\/body>/i, `${style}</body>`);
