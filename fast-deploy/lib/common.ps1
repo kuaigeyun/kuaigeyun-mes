@@ -82,6 +82,8 @@ function Load-DeployEnv {
         $script:CADDY_CONFIG_DIR = Join-Path $script:ProjectRoot '.caddy-config'
     }
     if (-not $script:CADDY_START_TIMEOUT) { $script:CADDY_START_TIMEOUT = 45 }
+    if (-not $script:GIT_BRANCH) { $script:GIT_BRANCH = 'develop' }
+    if (-not $script:GIT_REMOTE) { $script:GIT_REMOTE = 'origin' }
 }
 
 function Apply-CN-Mirrors {
@@ -1496,37 +1498,79 @@ function Invoke-Install {
     if (-not (Invoke-Check)) { throw '环境检测仍有未满足项' }
 }
 
+function Invoke-GitCleanUntrackedSafe {
+    $enabled = $script:GIT_CLEAN_ON_UPDATE
+    if (-not $enabled) {
+        if ($script:DeployMode -ne 'prod') { return }
+    } elseif ($enabled -ne '1') {
+        return
+    }
+    Write-LogInfo '清理未跟踪文件（保留 .env / uploads / .logs 等本地数据）...'
+    $patterns = @(
+        '-e', '.logs', '-e', '.logs/',
+        '-e', 'riveredge-backend/.env',
+        '-e', 'fast-deploy/config/deploy.env',
+        '-e', '.playwright-browsers', '-e', '.playwright-browsers/',
+        '-e', '.caddy-data', '-e', '.caddy-data/',
+        '-e', '.caddy-config', '-e', '.caddy-config/',
+        '-e', 'riveredge-backend/uploads', '-e', 'riveredge-backend/uploads/'
+    )
+    & git clean -fd @patterns 2>$null
+}
+
 function Sync-GitFromOrigin {
     Load-DeployEnv
-    $branch = if ($script:GIT_BRANCH) { $script:GIT_BRANCH } elseif ($env:GIT_BRANCH) { $env:GIT_BRANCH } else { 'develop' }
-    Write-LogInfo "同步远程代码 (origin/$branch，丢弃本地差异)..."
+    $branch = $script:GIT_BRANCH
+    $remote = $script:GIT_REMOTE
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw '未安装 git' }
+    if (-not (Test-Path (Join-Path $script:ProjectRoot '.git'))) { throw "当前目录不是 Git 仓库: $($script:ProjectRoot)" }
+
     Push-Location $script:ProjectRoot
     try {
-        git fetch origin
-        if ($LASTEXITCODE -ne 0) { throw 'git fetch 失败' }
-        git checkout $branch
-        if ($LASTEXITCODE -ne 0) { throw "git checkout $branch 失败" }
-        git reset --hard "origin/$branch"
-        if ($LASTEXITCODE -ne 0) { throw "git reset --hard origin/$branch 失败" }
+        $oldHead = (git rev-parse --short HEAD 2>$null).Trim()
+        $oldRef = (git rev-parse --abbrev-ref HEAD 2>$null).Trim()
+        if (-not $oldHead) { $oldHead = '?' }
+        if (-not $oldRef) { $oldRef = '?' }
+        Write-LogInfo "同步远程代码 ($remote/$branch，fetch + reset --hard，无需手动 git pull)..."
+        Write-LogInfo "当前: $oldRef @ $oldHead"
+
+        git fetch $remote --prune --tags
+        if ($LASTEXITCODE -ne 0) { throw "git fetch $remote 失败" }
+        git fetch $remote $branch
+        if ($LASTEXITCODE -ne 0) { throw "git fetch $remote $branch 失败" }
+        git rev-parse --verify "${remote}/${branch}" 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "远程分支 ${remote}/${branch} 不存在，请检查 GIT_BRANCH 或是否已 push" }
+        git checkout -B $branch "${remote}/${branch}"
+        if ($LASTEXITCODE -ne 0) { throw "git checkout -B $branch ${remote}/${branch} 失败" }
+        Invoke-GitCleanUntrackedSafe
+
+        $newHead = (git rev-parse --short HEAD 2>$null).Trim()
+        if (-not $newHead) { $newHead = '?' }
+        if ($oldHead -eq $newHead) {
+            Write-LogOk "代码已是最新 ($newHead)"
+        } else {
+            Write-LogOk "代码已更新: $oldHead → $newHead"
+        }
     } catch {
-        Write-LogError "同步远程代码失败 (origin/$branch): $_"
+        Write-LogError "同步远程代码失败 ($remote/$branch): $_"
+        Write-LogError "排查: git remote -v · 网络 · $remote 凭据 · deploy.env 中 GIT_BRANCH"
         throw
     } finally { Pop-Location }
-    Write-LogOk "代码已与 origin/$branch 对齐"
 }
 
 function Invoke-UpdateDev {
     Sync-GitFromOrigin
-    Invoke-Migrate
     Invoke-StopDev
+    Invoke-Migrate
     Record-DeployReleaseMetadata
     Invoke-StartDev
+    Write-LogOk '开发环境已更新'
 }
 
 function Invoke-UpdateProd {
     Sync-GitFromOrigin
-    Invoke-Migrate
     Invoke-StopProd
+    Invoke-Migrate
     Ensure-FrontendDist
     Record-DeployReleaseMetadata
     Invoke-StartProd

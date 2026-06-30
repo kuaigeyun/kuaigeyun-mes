@@ -124,6 +124,8 @@ load_deploy_env() {
     CADDY_DATA_DIR="${CADDY_DATA_DIR:-$PROJECT_ROOT/.caddy-data}"
     CADDY_CONFIG_DIR="${CADDY_CONFIG_DIR:-$PROJECT_ROOT/.caddy-config}"
     CADDY_START_TIMEOUT="${CADDY_START_TIMEOUT:-45}"
+    GIT_BRANCH="${GIT_BRANCH:-develop}"
+    GIT_REMOTE="${GIT_REMOTE:-origin}"
 }
 
 is_windows_gitbash() {
@@ -3425,35 +3427,116 @@ cmd_install() {
     cmd_check || exit 1
 }
 
-cmd_update_dev() {
-    sync_git_from_origin || exit 1
-    cmd_migrate
-    cmd_stop_dev
-    record_deploy_release_metadata
-    cmd_start_dev
+_git_clean_untracked_safe() {
+    local enabled="${GIT_CLEAN_ON_UPDATE:-}"
+    if [ -z "$enabled" ]; then
+        [ "$DEPLOY_MODE" = "prod" ] || return 0
+    elif [ "$enabled" != "1" ]; then
+        return 0
+    fi
+    log_info "清理未跟踪文件（保留 .env / uploads / .logs 等本地数据）..."
+    git clean -fd \
+        -e '.logs' \
+        -e '.logs/' \
+        -e 'riveredge-backend/.env' \
+        -e 'fast-deploy/config/deploy.env' \
+        -e '.playwright-browsers' \
+        -e '.playwright-browsers/' \
+        -e '.caddy-data' \
+        -e '.caddy-data/' \
+        -e '.caddy-config' \
+        -e '.caddy-config/' \
+        -e 'riveredge-backend/uploads' \
+        -e 'riveredge-backend/uploads/' \
+        || true
+}
+
+# 面板展示用：基于上次 fetch 的 origin/<branch> 比较（不额外 fetch）
+git_sync_status_hint() {
+    load_deploy_env
+    local branch="${GIT_BRANCH:-develop}" remote="${GIT_REMOTE:-origin}"
+    local behind ahead
+    if ! git -C "$PROJECT_ROOT" rev-parse --verify "${remote}/${branch}" >/dev/null 2>&1; then
+        echo " · 待 fetch"
+        return 0
+    fi
+    behind="$(git -C "$PROJECT_ROOT" rev-list --count "HEAD..${remote}/${branch}" 2>/dev/null || echo 0)"
+    ahead="$(git -C "$PROJECT_ROOT" rev-list --count "${remote}/${branch}..HEAD" 2>/dev/null || echo 0)"
+    if [ "${behind:-0}" != "0" ]; then
+        echo " · 滞后 ${behind}"
+    elif [ "${ahead:-0}" != "0" ]; then
+        echo " · 超前 ${ahead}"
+    fi
 }
 
 sync_git_from_origin() {
     load_deploy_env
-    local branch="${GIT_BRANCH:-develop}"
-    log_info "同步远程代码 (origin/$branch，丢弃本地差异)..."
-    (cd "$PROJECT_ROOT" && \
-        git fetch origin && \
-        git checkout "$branch" && \
-        git reset --hard "origin/$branch") || {
-        log_error "同步远程代码失败 (origin/$branch)"
+    local branch="${GIT_BRANCH:-develop}" remote="${GIT_REMOTE:-origin}"
+    local old_head old_ref new_head
+
+    if ! command -v git >/dev/null 2>&1 || [ ! -d "$PROJECT_ROOT/.git" ]; then
+        log_error "当前目录不是 Git 仓库: $PROJECT_ROOT"
+        return 1
+    fi
+    if ! git -C "$PROJECT_ROOT" remote get-url "$remote" >/dev/null 2>&1; then
+        log_error "未配置 Git 远程 ${remote}，请先 git remote add ${remote} <url>"
+        return 1
+    fi
+
+    old_head="$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || echo "?")"
+    old_ref="$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")"
+    log_info "同步远程代码 (${remote}/${branch}，fetch + reset --hard，无需手动 git pull)..."
+    log_info "当前: ${old_ref} @ ${old_head}"
+
+    (
+        cd "$PROJECT_ROOT"
+        git fetch "$remote" --prune --tags
+        git fetch "$remote" "$branch"
+        if ! git rev-parse --verify "${remote}/${branch}" >/dev/null 2>&1; then
+            log_error "远程分支 ${remote}/${branch} 不存在，请检查 GIT_BRANCH 或是否已 push"
+            exit 1
+        fi
+        # checkout 在 reset 之前会因本地改动失败；-B 直接对齐 origin/<branch>
+        git checkout -B "$branch" "${remote}/${branch}"
+        _git_clean_untracked_safe
+    ) || {
+        log_error "同步远程代码失败 (${remote}/${branch})"
+        log_error "排查: git remote -v · 网络 · ${remote} 凭据 · deploy.env 中 GIT_BRANCH"
         return 1
     }
-    log_ok "代码已与 origin/$branch 对齐"
+
+    new_head="$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || echo "?")"
+    if [ "$old_head" = "$new_head" ]; then
+        log_ok "代码已是最新 (${new_head})"
+    else
+        log_ok "代码已更新: ${old_head} → ${new_head}"
+    fi
+}
+
+run_update_dev() {
+    sync_git_from_origin || return 1
+    cmd_stop_dev || return 1
+    cmd_migrate || return 1
+    record_deploy_release_metadata || return 1
+    cmd_start_dev || return 1
+}
+
+run_update_prod() {
+    sync_git_from_origin || return 1
+    cmd_stop_prod || return 1
+    cmd_migrate || return 1
+    cmd_ensure_frontend_dist || return 1
+    record_deploy_release_metadata || return 1
+    cmd_start_prod || return 1
+}
+
+cmd_update_dev() {
+    run_update_dev || exit 1
+    log_ok "开发环境已更新"
 }
 
 cmd_update_prod() {
-    sync_git_from_origin || exit 1
-    cmd_migrate
-    cmd_stop_prod
-    cmd_ensure_frontend_dist
-    record_deploy_release_metadata
-    cmd_start_prod
+    run_update_prod || exit 1
     log_ok "生产环境已更新"
 }
 

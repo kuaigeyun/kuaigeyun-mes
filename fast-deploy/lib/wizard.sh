@@ -251,10 +251,11 @@ wizard_git_value() {
         echo "—"
         return
     fi
-    local branch head
+    local branch head hint
     branch="$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")"
     head="$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || echo "?")"
-    echo "${branch} @ ${head}"
+    hint="$(git_sync_status_hint 2>/dev/null || true)"
+    echo "${branch} @ ${head}${hint}"
 }
 
 wizard_service_running() {
@@ -349,7 +350,7 @@ wizard_show_home_panel() {
     wizard_panel_section "DEPLOY 部署"
     wizard_panel_menu_item "1" "全新安装" "检测环境与依赖，完成配置后启动"
     wizard_panel_menu_item "2" "修改配置" "修改数据库、超管账号与访问地址"
-    wizard_panel_menu_item "3" "更新系统" "拉取代码，迁移数据库并重启"
+    wizard_panel_menu_item "3" "更新系统" "fetch+reset 对齐远程，迁移并重启（无需手动 git pull）"
     wizard_panel_blank
     wizard_panel_section "OPS 运维"
     wizard_panel_menu_short "${WIZARD_CYAN}[4]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[5]${WIZARD_RESET} 启动  ${WIZARD_CYAN}[6]${WIZARD_RESET} 停止  ${WIZARD_CYAN}[7]${WIZARD_RESET} 重启"
@@ -547,7 +548,7 @@ wizard_ask_intent_hint() {
             wizard_say "将逐项展示当前配置，回车保持原值（密码可回车跳过）"
             ;;
         update)
-            wizard_say "将拉取代码、执行迁移并按当前模式重启服务"
+            wizard_say "将 fetch + reset --hard 对齐 origin/${GIT_BRANCH:-develop}，停止服务、迁移并重启"
             ;;
         *)
             wizard_say "阶段 2 填写数据库、超管账号、访问 IP/域名 后，其余步骤将自动执行"
@@ -1128,6 +1129,10 @@ wizard_show_deploy_failure() {
     wizard_say "完整日志: ${log}"
     wizard_show_log_tail "$log" 40 "安装日志末尾"
     case "$step" in
+        pull)
+            wizard_say "若 fetch 失败，请检查 git remote -v、网络与 Gitee 凭据"
+            wizard_say "分支可在 fast-deploy/config/deploy.env 设置 GIT_BRANCH"
+            ;;
         start_prod|start_dev)
             wizard_show_log_tail "$LOGS_DIR/backend.log" 30 "后端日志"
             wizard_show_log_tail "$LOGS_DIR/caddy.log" 20 "Caddy 日志"
@@ -1181,30 +1186,28 @@ wizard_deploy_app() {
     wizard_run_deploy_step start_prod "启动生产服务（后端 + Worker + Caddy）" "$log" cmd_start_prod || return 1
 }
 
-wizard_git_pull() {
-    sync_git_from_origin
-}
-
 wizard_update_app() {
     ensure_logs_dir
     load_deploy_env
     local log="$LOGS_DIR/wizard-update.log" branch="${GIT_BRANCH:-develop}"
     : >"$log"
 
-    wizard_say "更新分支: origin/${branch}"
+    wizard_say "更新分支: ${GIT_REMOTE:-origin}/${branch}"
+    wizard_say "流程: 同步代码 → 停止服务 → 迁移 → 启动（全自动，无需手动 git pull）"
     wizard_say "详细日志: ${log}"
     echo ""
 
-    wizard_run_deploy_step pull "同步远程代码（reset --hard）" "$log" wizard_git_pull || return 1
-    wizard_run_deploy_step migrate "执行数据库迁移" "$log" cmd_migrate || return 1
+    wizard_run_deploy_step pull "同步远程代码（fetch + reset --hard）" "$log" sync_git_from_origin || return 1
 
     if [ "$DEPLOY_MODE" = "prod" ]; then
         wizard_run_deploy_step stop "停止生产服务" "$log" cmd_stop_prod || return 1
+        wizard_run_deploy_step migrate "执行数据库迁移" "$log" cmd_migrate || return 1
         wizard_run_deploy_step ensure_dist "检查 Web dist（有则跳过构建）" "$log" cmd_ensure_frontend_dist || return 1
         wizard_run_deploy_step release_meta "记录发版信息" "$log" record_deploy_release_metadata || return 1
         wizard_run_deploy_step start "启动生产服务" "$log" cmd_start_prod || return 1
     else
         wizard_run_deploy_step stop "停止开发服务" "$log" cmd_stop_dev || return 1
+        wizard_run_deploy_step migrate "执行数据库迁移" "$log" cmd_migrate || return 1
         wizard_run_deploy_step release_meta "记录发版信息" "$log" record_deploy_release_metadata || return 1
         wizard_run_deploy_step start "启动开发环境" "$log" cmd_start_dev || return 1
     fi
@@ -1245,7 +1248,7 @@ wizard_show_summary() {
     wizard_panel_section "COMMANDS 常用命令"
     wizard_panel_line "${WIZARD_DIM}./fast-deploy/deploy.sh status${WIZARD_RESET}  查看状态"
     wizard_panel_line "${WIZARD_DIM}./fast-deploy/deploy.sh stop${WIZARD_RESET}    停止服务"
-    wizard_panel_line "${WIZARD_DIM}./fast-deploy/deploy.sh update${WIZARD_RESET}   拉代码更新"
+    wizard_panel_line "${WIZARD_DIM}./deploy update${WIZARD_RESET}   或 ./fast-deploy/deploy.sh update"
     wizard_panel_line "${WIZARD_DIM}./fast-deploy/deploy.sh check${WIZARD_RESET}    环境检测"
     wizard_panel_mid
     wizard_panel_section "SUPPORT 联系反馈"
