@@ -27,7 +27,11 @@ WINDOWS_BOOT_ENV_FILE="$FAST_DEPLOY_CONFIG_DIR/boot-service.env"
 # 由入口脚本设置：dev | prod
 DEPLOY_MODE="${DEPLOY_MODE:-dev}"
 USE_MIRROR="${USE_MIRROR:-1}"
-BACKEND_START_TIMEOUT="${BACKEND_START_TIMEOUT:-30}"
+if [ "$DEPLOY_MODE" = "prod" ]; then
+    BACKEND_START_TIMEOUT="${BACKEND_START_TIMEOUT:-90}"
+else
+    BACKEND_START_TIMEOUT="${BACKEND_START_TIMEOUT:-30}"
+fi
 
 log_info()  { echo -e "\033[0;34m[$(date +'%H:%M:%S')] INFO: $*\033[0m"; }
 log_warn()  { echo -e "\033[1;33m[$(date +'%H:%M:%S')] WARN: $*\033[0m"; }

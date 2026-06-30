@@ -328,18 +328,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Taskiq broker 启动失败，异步任务投递将不可用: {e}")
 
-    # OpenAPI schema 较大（约 MB 级）：启动时在后台线程预热，避免首个访问 /redoc 时在请求线程里卡数秒
-    try:
-        import time as _time
+    # OpenAPI schema 较大（约 MB 级）：后台预热，不得阻塞 lifespan yield（否则 /health 无法响应，部署脚本会超时）
+    async def _warmup_openapi() -> None:
+        try:
+            import time as _time
 
-        _t0 = _time.perf_counter()
-        await asyncio.to_thread(app.openapi)
-        logger.info(
-            "✅ OpenAPI schema 已预热（ReDoc 首次打开更快）：{:.2f}s",
-            _time.perf_counter() - _t0,
-        )
-    except Exception as e:
-        logger.warning("⚠️ OpenAPI 预热失败，首次 /openapi.json 仍将按需生成: {}", e)
+            _t0 = _time.perf_counter()
+            await asyncio.to_thread(app.openapi)
+            logger.info(
+                "✅ OpenAPI schema 已预热（ReDoc 首次打开更快）：{:.2f}s",
+                _time.perf_counter() - _t0,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning("⚠️ OpenAPI 预热失败，首次 /openapi.json 仍将按需生成: {}", e)
+
+    app.state._openapi_warmup_task = asyncio.create_task(_warmup_openapi())
+    logger.info("✅ OpenAPI schema 预热任务已启动（后台执行，不阻塞 /health）")
 
     # 验证路由注册情况
     from core.services.application.application_route_manager import get_route_manager
@@ -370,6 +376,14 @@ async def lifespan(app: FastAPI):
         timeout_task.cancel()
         try:
             await timeout_task
+        except (asyncio.CancelledError, Exception):
+            pass
+
+    openapi_task = getattr(app.state, "_openapi_warmup_task", None)
+    if openapi_task is not None:
+        openapi_task.cancel()
+        try:
+            await openapi_task
         except (asyncio.CancelledError, Exception):
             pass
 
