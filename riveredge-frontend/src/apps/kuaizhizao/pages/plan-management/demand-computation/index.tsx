@@ -119,6 +119,11 @@ import ComputationHistoryTab from './ComputationHistoryTab'
 import { MrpParametersCustomerGuideTrigger } from './MrpParametersCustomerGuide'
 import { formatDateBySiteSetting, formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format'
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select'
+import {
+  getMaterialSourceTypeLabel,
+  MATERIAL_SOURCE_TYPE_VALUES,
+  normalizeMaterialSourceType,
+} from '../../../../master-data/utils/materialSourceType'
 import { ThemedSegmented } from '../../../../../components/themed-segmented'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
@@ -220,15 +225,54 @@ function normalizeComputationStatusValue(status?: string): string {
   return String(status ?? '').trim().toLowerCase()
 }
 
-function getMaterialSourceLabel(t: TFunction, type?: string): string {
-  const map: Record<string, string> = {
-    Make: t('app.kuaizhizao.demandComputation.materialSourceMake'),
-    Buy: t('app.kuaizhizao.demandComputation.materialSourceBuy'),
-    Phantom: t('app.kuaizhizao.demandComputation.materialSourcePhantom'),
-    Outsource: t('app.kuaizhizao.demandComputation.materialSourceOutsource'),
-    Configure: t('app.kuaizhizao.demandComputation.materialSourceConfigure'),
+const MATERIAL_SOURCE_TAG_COLORS: Record<string, string> = {
+  Make: 'blue',
+  Buy: 'green',
+  Phantom: 'orange',
+  Outsource: 'purple',
+  Service: 'geekblue',
+}
+
+const PREVIEW_SOURCE_TAB_ALL = 'all'
+
+function buildPreviewSourceTabItems(
+  items: Array<{ material_source_type?: string }>,
+  t: TFunction,
+): Array<{ key: string; label: string }> {
+  const counts = new Map<string, number>()
+  for (const item of items) {
+    const type = normalizeMaterialSourceType(item.material_source_type) || 'Unknown'
+    counts.set(type, (counts.get(type) || 0) + 1)
   }
-  return map[type || ''] || type || '-'
+  const tabs: Array<{ key: string; label: string }> = [
+    {
+      key: PREVIEW_SOURCE_TAB_ALL,
+      label: t('app.kuaizhizao.demandComputation.previewTabAll', { count: items.length }),
+    },
+  ]
+  for (const type of MATERIAL_SOURCE_TYPE_VALUES) {
+    const count = counts.get(type)
+    if (count) {
+      tabs.push({
+        key: type,
+        label: t('app.kuaizhizao.demandComputation.previewTabSourceCount', {
+          label: getMaterialSourceTypeLabel(type, t),
+          count,
+        }),
+      })
+    }
+  }
+  for (const [type, count] of counts) {
+    if (type === 'Unknown' || (MATERIAL_SOURCE_TYPE_VALUES as readonly string[]).includes(type)) continue
+    tabs.push({
+      key: type,
+      label: t('app.kuaizhizao.demandComputation.previewTabSourceCount', {
+        label: getMaterialSourceTypeLabel(type, t),
+        count,
+      }),
+    })
+  }
+  return tabs
 }
 
 function getPushDocTypeLabel(t: TFunction, type?: string): string {
@@ -765,6 +809,20 @@ const DemandComputationPage: React.FC = () => {
   /** 预览表格分页（受控，否则固定 pageSize 会导致切换每页条数无效） */
   const [previewTablePage, setPreviewTablePage] = useState(1)
   const [previewTablePageSize, setPreviewTablePageSize] = useState(10)
+  const [previewSourceTab, setPreviewSourceTab] = useState<string>(PREVIEW_SOURCE_TAB_ALL)
+
+  const previewSourceTabItems = useMemo(
+    () => (previewData?.items?.length ? buildPreviewSourceTabItems(previewData.items, t) : []),
+    [previewData, t],
+  )
+
+  const filteredPreviewItems = useMemo(() => {
+    if (!previewData?.items?.length) return []
+    if (previewSourceTab === PREVIEW_SOURCE_TAB_ALL) return previewData.items
+    return previewData.items.filter(
+      (item) => normalizeMaterialSourceType(item.material_source_type) === previewSourceTab,
+    )
+  }, [previewData, previewSourceTab])
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false)
@@ -1336,6 +1394,7 @@ const DemandComputationPage: React.FC = () => {
       await prefetchMaterialsForUnitSelect(preview.items.map((i) => i.material_id))
       setPreviewTablePage(1)
       setPreviewTablePageSize(10)
+      setPreviewSourceTab(PREVIEW_SOURCE_TAB_ALL)
       setPreviewData(preview)
       // 先关参数弹窗再开预览，避免双 Modal 叠层时 z-index 竞态导致预览被挡在后面
       setExecuteModalVisible(false)
@@ -1361,6 +1420,7 @@ const DemandComputationPage: React.FC = () => {
       setPreviewData(null)
       setPreviewTablePage(1)
       setPreviewTablePageSize(10)
+      setPreviewSourceTab(PREVIEW_SOURCE_TAB_ALL)
       setExecuteModalVisible(false)
       const executedId = executeRecord.id
       setExecuteRecord(null)
@@ -2408,6 +2468,7 @@ const DemandComputationPage: React.FC = () => {
           setPreviewData(null)
           setPreviewTablePage(1)
           setPreviewTablePageSize(10)
+          setPreviewSourceTab(PREVIEW_SOURCE_TAB_ALL)
           setExecuteModalVisible(true)
         }}
         title={t('app.kuaizhizao.demandComputation.previewTitle')}
@@ -2428,10 +2489,21 @@ const DemandComputationPage: React.FC = () => {
             <p style={{ marginBottom: 12 }}>
               {t('app.kuaizhizao.demandComputation.previewItemCount', { count: previewData.item_count })}
             </p>
+            {previewSourceTabItems.length > 1 ? (
+              <Tabs
+                activeKey={previewSourceTab}
+                onChange={(key) => {
+                  setPreviewSourceTab(key)
+                  setPreviewTablePage(1)
+                }}
+                items={previewSourceTabItems.map((tab) => ({ key: tab.key, label: tab.label }))}
+                style={{ marginBottom: token.marginSM }}
+              />
+            ) : null}
             <Table
               size="small"
-              dataSource={previewData.items}
-              rowKey={(r, i) => `${r.material_code}-${i}`}
+              dataSource={filteredPreviewItems}
+              rowKey={(r, i) => `${r.material_code}-${previewSourceTab}-${i}`}
               pagination={{
                 current: previewTablePage,
                 pageSize: previewTablePageSize,
@@ -2526,7 +2598,7 @@ const DemandComputationPage: React.FC = () => {
                   title: t('app.kuaizhizao.demandComputation.colSource'),
                   dataIndex: 'material_source_type',
                   width: 80,
-                  render: (sourceType: string) => getMaterialSourceLabel(t, sourceType),
+                  render: (sourceType: string) => getMaterialSourceTypeLabel(sourceType, t),
                 },
               ]}
             />
@@ -2945,15 +3017,10 @@ const DemandComputationPage: React.FC = () => {
                               dataIndex: 'material_source_type',
                               width: 96,
                               render: (type: string) => {
-                                const typeMap: Record<string, { label: string; color: string }> = {
-                                  Make: { label: t('app.kuaizhizao.demandComputation.materialSourceMake'), color: 'blue' },
-                                  Buy: { label: t('app.kuaizhizao.demandComputation.materialSourceBuy'), color: 'green' },
-                                  Phantom: { label: t('app.kuaizhizao.demandComputation.materialSourcePhantom'), color: 'orange' },
-                                  Outsource: { label: t('app.kuaizhizao.demandComputation.materialSourceOutsource'), color: 'purple' },
-                                  Configure: { label: t('app.kuaizhizao.demandComputation.materialSourceConfigure'), color: 'cyan' },
-                                }
-                                const info = typeMap[type] || { label: type || t('app.kuaizhizao.demandComputation.materialSourceUnset'), color: 'default' }
-                                return <Tag color={info.color}>{info.label}</Tag>
+                                const normalized = normalizeMaterialSourceType(type)
+                                const label = getMaterialSourceTypeLabel(type, t)
+                                const color = MATERIAL_SOURCE_TAG_COLORS[normalized] || 'default'
+                                return <Tag color={color}>{label}</Tag>
                               },
                             },
                             {

@@ -386,6 +386,7 @@ export interface PushPreviewResponse {
   summary: string;
   items: {
     item_id?: number;
+    material_id?: number;
     material_code: string;
     material_name: string;
     quantity: number;
@@ -395,6 +396,7 @@ export interface PushPreviewResponse {
     suggested_action?: string;
     source_type?: string;
     blocking_issues?: string[];
+    has_bom?: boolean;
   }[];
   tip?: string;
   plan_name_preview?: string;
@@ -423,9 +425,18 @@ export interface PushToComputationResponse {
   note?: string;
 }
 
-export async function pushSalesOrderToComputation(salesOrderId: number): Promise<PushToComputationResponse> {
+export interface PushToComputationRequest {
+  selected_item_ids?: number[];
+  selected_quantities?: Record<number, number>;
+}
+
+export async function pushSalesOrderToComputation(
+  salesOrderId: number,
+  data?: PushToComputationRequest,
+): Promise<PushToComputationResponse> {
   return apiRequest<PushToComputationResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-computation`, {
     method: 'POST',
+    data,
   });
 }
 

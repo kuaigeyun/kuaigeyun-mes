@@ -64,7 +64,7 @@ async def validate_reporting_respects_node_operations(
         return
 
     if reporting_type == "status":
-        if reported_quantity == 1:
+        if reported_quantity > 0:
             for n in nodes:
                 if n.status != "completed":
                     raise BusinessLogicError(

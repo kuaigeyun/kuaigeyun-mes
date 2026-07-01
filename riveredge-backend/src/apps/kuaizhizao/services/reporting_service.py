@@ -525,6 +525,23 @@ class ReportingService(AppBaseService[ReportingRecord]):
             allow_jump = effective_allow_jump(work_order, work_order_operation)
             reported_quantity_dec = Decimal(str(reporting_data.reported_quantity))
 
+            if reporting_type == "status":
+                from apps.kuaizhizao.services.over_report_rules import status_reporting_complete_delta
+
+                if reported_quantity_dec > 0:
+                    delta = status_reporting_complete_delta(work_order, work_order_operation)
+                    if delta <= 0:
+                        raise BusinessLogicError("按状态报工：工序已达完成上限，无需重复报工")
+                    reporting_data.reported_quantity = delta
+                    reporting_data.qualified_quantity = delta
+                    reporting_data.unqualified_quantity = Decimal("0")
+                    reported_quantity_dec = delta
+                elif reported_quantity_dec < 0:
+                    raise ValidationError("按状态报工模式下，报工数量不能为负数")
+                else:
+                    reporting_data.qualified_quantity = Decimal("0")
+                    reporting_data.unqualified_quantity = Decimal("0")
+
             if not allow_jump:
                 # 不允许跳转：检查前序工序的报工数量
                 previous_operations = await WorkOrderOperation.filter(
@@ -539,7 +556,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     previous_operation = previous_operations[-1]
 
                     # 按状态报工且报「完成」：紧邻上道须已 completed
-                    if reporting_type == "status" and reported_quantity_dec == 1:
+                    if reporting_type == "status" and reported_quantity_dec > 0:
                         if previous_operation.status != "completed":
                             raise BusinessLogicError(
                                 f"工序跳转规则：请先完成前序工序「{previous_operation.operation_name}」后，再将当前工序报为完成"
@@ -594,15 +611,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                         f"当前已报 {current_completed}，本次报工后将为 {new_total}"
                     )
             
-            if reporting_type == "status":
-                # 按状态报工：不需要数量，只需要状态
-                # 对于按状态报工，reported_quantity应该为0或1（0表示未完成，1表示完成）
-                if reporting_data.reported_quantity not in [0, 1]:
-                    raise ValidationError("按状态报工模式下，报工数量只能是0（未完成）或1（完成）")
-                # 按状态报工不需要合格/不合格数量
-                if reporting_data.qualified_quantity != 0 or reporting_data.unqualified_quantity != 0:
-                    logger.warning("按状态报工模式下，合格数量和不合格数量将被忽略")
-            else:
+            if reporting_type != "status":
                 # 按数量报工：需要验证数量合理性
                 if reporting_data.reported_quantity <= 0:
                     raise ValidationError("报工数量必须大于0")
@@ -689,25 +698,19 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 work_order_operation.actual_start_date = work_order_operation.actual_start_date or datetime.now()
             
             # 更新工序完成数量
-            if reporting_type == "status" and reported_quantity_dec == 1:
-                from apps.kuaizhizao.services.over_report_rules import status_reporting_target_quantity
-
-                target_qty = status_reporting_target_quantity(work_order, work_order_operation)
-                work_order_operation.completed_quantity = target_qty
-                work_order_operation.qualified_quantity = target_qty
-                work_order_operation.unqualified_quantity = Decimal("0")
+            work_order_operation.completed_quantity = (
+                work_order_operation.completed_quantity or Decimal("0")
+            ) + reporting_data.reported_quantity
+            work_order_operation.qualified_quantity = (
+                work_order_operation.qualified_quantity or Decimal("0")
+            ) + reporting_data.qualified_quantity
+            work_order_operation.unqualified_quantity = (
+                work_order_operation.unqualified_quantity or Decimal("0")
+            ) + reporting_data.unqualified_quantity
+            if reporting_type == "status" and reported_quantity_dec > 0:
                 work_order_operation.status = "completed"
                 work_order_operation.actual_end_date = datetime.now()
             else:
-                work_order_operation.completed_quantity = (
-                    work_order_operation.completed_quantity or Decimal("0")
-                ) + reporting_data.reported_quantity
-                work_order_operation.qualified_quantity = (
-                    work_order_operation.qualified_quantity or Decimal("0")
-                ) + reporting_data.qualified_quantity
-                work_order_operation.unqualified_quantity = (
-                    work_order_operation.unqualified_quantity or Decimal("0")
-                ) + reporting_data.unqualified_quantity
                 _maybe_mark_operation_completed(work_order, work_order_operation)
             
             await work_order_operation.save()

@@ -62,6 +62,10 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 from infra.services.business_config_service import BusinessConfigService
 
 
+# 写入 ORM 时排除：明细单独处理；order_name/audit 为响应层虚拟字段（BaseSchema）
+_SALES_ORDER_PERSIST_EXCLUDE = frozenset({"items", "order_name", "audit"})
+
+
 class SalesOrderService:
     """
     销售订单管理服务
@@ -656,13 +660,13 @@ class SalesOrderService:
         mat_fallback = material_fallback or {}
 
         def _material_val(it: SalesOrderItem, attr: str, mat_key: str, max_len: int = 50) -> str:
-            """明细有值则用明细，否则从物料表补全"""
-            val = getattr(it, attr, None)
-            if val is not None and str(val).strip():
-                return str(val)[:max_len]
+            """明细有 material_id 时优先物料主数据，否则用明细快照。"""
             mf = mat_fallback.get(it.material_id) if it.material_id else None
             if mf and mat_key in mf and mf[mat_key]:
                 return str(mf[mat_key])[:max_len]
+            val = getattr(it, attr, None)
+            if val is not None and str(val).strip():
+                return str(val)[:max_len]
             if attr == "material_code" and it.material_id and it.material_id in fallback:
                 return str(fallback[it.material_id])[:max_len]
             return ""
@@ -726,6 +730,9 @@ class SalesOrderService:
         has_line_work_orders = any(
             int(getattr(it, "work_order_id", 0) or 0) > 0 for it in item_list
         )
+        has_returnable_qty = any(
+            Decimal(str(getattr(it, "delivered_quantity", 0) or 0)) > 0 for it in item_list
+        )
         pushed = bool(demand and getattr(demand, "pushed_to_computation", False))
         if getattr(order, "planning_pushed_to_computation", False):
             pushed = True
@@ -734,6 +741,7 @@ class SalesOrderService:
             "has_items": has_items,
             "has_line_work_orders": has_line_work_orders,
             "computation_pushed_blocks_withdraw": pushed,
+            "has_returnable_qty": has_returnable_qty,
         }
 
     async def _assert_sales_order_capability_for_order(
@@ -1171,7 +1179,7 @@ class SalesOrderService:
                 total_amount=getattr(sales_order_data, "total_amount", None),
                 total_fee_amount=getattr(sales_order_data, "total_fee_amount", None),
             )
-            order_dict = sales_order_data.model_dump(exclude={"items", "order_name"})
+            order_dict = sales_order_data.model_dump(exclude=_SALES_ORDER_PERSIST_EXCLUDE)
             order_dict["status"] = sales_order_data.status
             order_dict["review_status"] = sales_order_data.review_status
             order_dict["created_by"] = created_by
@@ -1191,6 +1199,10 @@ class SalesOrderService:
             total_qty = Decimal("0")
             subtotal = Decimal("0")
             item_rows: List[Dict[str, Any]] = []
+            material_map = await self._load_material_master_map(
+                tenant_id,
+                [item_data.material_id for item_data in sales_order_data.items],
+            )
             for item_data in sales_order_data.items:
                 req_qty = item_data.required_quantity
                 unit_pr = item_data.unit_price or Decimal("0")
@@ -1207,12 +1219,15 @@ class SalesOrderService:
                 item_amt = self._money(item_amt)
                 total_qty += req_qty
                 subtotal += item_amt
+                mat_code, mat_name, mat_spec, mat_unit = self._material_fields_from_master_or_payload(
+                    item_data, material_map
+                )
                 item_rows.append({
                     "material_id": item_data.material_id or 0,
-                    "material_code": (item_data.material_code or "")[:50],
-                    "material_name": (item_data.material_name or "")[:200],
-                    "material_spec": (item_data.material_spec or "")[:200] or None,
-                    "material_unit": (item_data.material_unit or "")[:20],
+                    "material_code": mat_code,
+                    "material_name": mat_name,
+                    "material_spec": mat_spec,
+                    "material_unit": mat_unit,
                     "order_quantity": req_qty,
                     "delivered_quantity": Decimal("0"),
                     "remaining_quantity": req_qty,
@@ -1335,28 +1350,22 @@ class SalesOrderService:
             items = await SalesOrderItem.filter(
                 tenant_id=tenant_id, sales_order_id=sales_order_id
             ).order_by("id").all()
-            # 当明细中物料信息为空时，从物料表补全（兼容历史数据）
-            need_fallback = [
-                it for it in items
-                if it.material_id
-                and (
-                    not (it.material_code and str(it.material_code).strip())
-                    or not (it.material_name and str(it.material_name).strip())
-                    or not (it.material_unit and str(it.material_unit).strip())
-                )
-            ]
-            if need_fallback:
+            # 有 material_id 时从物料主数据补全展示字段（明细快照与主数据不一致时以主数据为准）
+            if items:
                 from apps.master_data.models.material import Material
-                material_ids = list({it.material_id for it in need_fallback})
-                materials = await Material.filter(id__in=material_ids, deleted_at__isnull=True).all()
-                for m in materials:
-                    material_code_fallback[m.id] = (m.main_code or getattr(m, "code", None) or "")[:50]
-                    material_fallback[m.id] = {
-                        "code": (m.main_code or getattr(m, "code", None) or "")[:50],
-                        "name": (m.name or "")[:200],
-                        "spec": (getattr(m, "specification", None) or "")[:200],
-                        "unit": (m.base_unit or "")[:20],
-                    }
+                material_ids = list({int(it.material_id) for it in items if it.material_id})
+                if material_ids:
+                    materials = await Material.filter(
+                        id__in=material_ids, deleted_at__isnull=True
+                    ).all()
+                    for m in materials:
+                        material_code_fallback[m.id] = (m.main_code or getattr(m, "code", None) or "")[:50]
+                        material_fallback[m.id] = {
+                            "code": (m.main_code or getattr(m, "code", None) or "")[:50],
+                            "name": (m.name or "")[:200],
+                            "spec": (getattr(m, "specification", None) or "")[:200],
+                            "unit": (m.base_unit or "")[:20],
+                        }
 
         demand = await self._get_linked_demand(tenant_id, sales_order_id)
         
@@ -1789,7 +1798,9 @@ class SalesOrderService:
         if approval_edit_context:
             from core.config.audit_editable_fields import is_field_editable
             node_editable = approval_edit_context.get("editable_fields")
-            upd_preview = sales_order_data.model_dump(exclude_unset=True, exclude={"items"})
+            upd_preview = sales_order_data.model_dump(
+                exclude_unset=True, exclude=_SALES_ORDER_PERSIST_EXCLUDE
+            )
             for k in upd_preview:
                 if k in ("updated_by",):
                     continue
@@ -1805,7 +1816,9 @@ class SalesOrderService:
                 total_amount=getattr(sales_order_data, "total_amount", None),
                 total_fee_amount=getattr(sales_order_data, "total_fee_amount", None),
             )
-            upd = sales_order_data.model_dump(exclude_unset=True, exclude={"items"})
+            upd = sales_order_data.model_dump(
+                exclude_unset=True, exclude=_SALES_ORDER_PERSIST_EXCLUDE
+            )
             upd["updated_by"] = updated_by
             # status/review_status 由工作流控制，禁止通过 update 修改，确保二者始终同步
             upd.pop("status", None)
@@ -1820,6 +1833,10 @@ class SalesOrderService:
                 total_qty = Decimal("0")
                 subtotal = Decimal("0")
                 item_rows: List[Dict[str, Any]] = []
+                material_map = await self._load_material_master_map(
+                    tenant_id,
+                    [item_data.material_id for item_data in sales_order_data.items],
+                )
                 for item_data in sales_order_data.items:
                     req_qty = item_data.required_quantity
                     unit_pr = item_data.unit_price or Decimal("0")
@@ -1835,12 +1852,15 @@ class SalesOrderService:
                     item_amt = self._money(item_amt)
                     total_qty += req_qty
                     subtotal += item_amt
+                    mat_code, mat_name, mat_spec, mat_unit = self._material_fields_from_master_or_payload(
+                        item_data, material_map
+                    )
                     item_rows.append({
                         "material_id": item_data.material_id or 0,
-                        "material_code": (item_data.material_code or "")[:50],
-                        "material_name": (item_data.material_name or "")[:200],
-                        "material_spec": (item_data.material_spec or "")[:200] or None,
-                        "material_unit": (item_data.material_unit or "")[:20],
+                        "material_code": mat_code,
+                        "material_name": mat_name,
+                        "material_spec": mat_spec,
+                        "material_unit": mat_unit,
                         "order_quantity": req_qty,
                         "delivered_quantity": Decimal("0"),
                         "remaining_quantity": req_qty,
@@ -2305,6 +2325,8 @@ class SalesOrderService:
         tenant_id: int,
         sales_order_id: int,
         created_by: int,
+        selected_item_ids: Optional[List[int]] = None,
+        selected_quantities: Optional[Dict[int, float]] = None,
     ) -> Dict[str, Any]:
         """
         下推销售订单到需求计算。
@@ -2322,7 +2344,11 @@ class SalesOrderService:
         demand = await self._get_linked_demand(tenant_id, sales_order_id)
         if not demand:
             demand = await self._create_demand_from_sales_order(
-                tenant_id, sales_order_id, created_by
+                tenant_id,
+                sales_order_id,
+                created_by,
+                selected_item_ids=selected_item_ids,
+                selected_quantities=selected_quantities,
             )
         from apps.kuaizhizao.services.demand_service import DemandService
         return await DemandService().push_to_computation(
@@ -2354,19 +2380,51 @@ class SalesOrderService:
             return {"success": False, "message": str(exc)}
 
     @staticmethod
+    async def _load_material_master_map(
+        tenant_id: int,
+        material_ids: List[int],
+    ) -> Dict[int, Material]:
+        ids = sorted({int(i) for i in material_ids if i and int(i) > 0})
+        if not ids:
+            return {}
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            id__in=ids,
+            deleted_at__isnull=True,
+        ).all()
+        return {m.id: m for m in materials}
+
+    @staticmethod
+    def _material_fields_from_master_or_payload(
+        item_data: Any,
+        material_map: Dict[int, Material],
+    ) -> tuple[str, str, Optional[str], str]:
+        mid = int(getattr(item_data, "material_id", None) or 0)
+        if mid > 0 and mid in material_map:
+            m = material_map[mid]
+            return (
+                (m.main_code or getattr(m, "code", None) or "")[:50],
+                (m.name or "")[:200],
+                (getattr(m, "specification", None) or "")[:200] or None,
+                (m.base_unit or "")[:20],
+            )
+        return (
+            (getattr(item_data, "material_code", None) or "")[:50],
+            (getattr(item_data, "material_name", None) or "")[:200],
+            (getattr(item_data, "material_spec", None) or "")[:200] or None,
+            (getattr(item_data, "material_unit", None) or "")[:20],
+        )
+
+    @staticmethod
     async def _load_material_fallback_for_items(
         tenant_id: int,
         items: List[SalesOrderItem],
     ) -> Dict[int, Dict[str, str]]:
-        """明细行物料编码/名称为空时，从物料主数据补全（兼容历史数据）。"""
+        """从物料主数据加载编码/名称（下推预览等展示以主数据为准）。"""
         need_ids = {
             int(it.material_id)
             for it in items
-            if it.material_id
-            and (
-                not (getattr(it, "material_code", None) and str(it.material_code).strip())
-                or not (getattr(it, "material_name", None) and str(it.material_name).strip())
-            )
+            if getattr(it, "material_id", None) and int(it.material_id) > 0
         }
         if not need_ids:
             return {}
@@ -2388,16 +2446,17 @@ class SalesOrderService:
         item: SalesOrderItem,
         material_fallback: Dict[int, Dict[str, str]],
     ) -> tuple[str, str]:
+        mid = int(item.material_id) if getattr(item, "material_id", None) else 0
+        mf = material_fallback.get(mid) if mid > 0 else None
+        if mf:
+            code = (mf.get("code") or "").strip()[:50]
+            name = (mf.get("name") or "").strip()[:200]
+            if code or name:
+                return code, name
         code = getattr(item, "material_code", None)
         name = getattr(item, "material_name", None)
         material_code = str(code).strip()[:50] if code and str(code).strip() else ""
         material_name = str(name).strip()[:200] if name and str(name).strip() else ""
-        mf = material_fallback.get(int(item.material_id)) if item.material_id else None
-        if mf:
-            if not material_code:
-                material_code = mf.get("code") or ""
-            if not material_name:
-                material_name = mf.get("name") or ""
         return material_code, material_name
 
     async def preview_push_sales_order_to_computation(
@@ -2421,17 +2480,35 @@ class SalesOrderService:
         demand_exists = demand is not None
         material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
 
+        material_ids = [
+            int(it.material_id)
+            for it in items
+            if getattr(it, "material_id", None) and int(it.material_id) > 0
+        ]
+        from apps.master_data.services.material_service import MaterialService
+
+        bom_map = await MaterialService.batch_check_has_bom(
+            tenant_id=tenant_id,
+            material_ids=material_ids,
+            only_active=True,
+        )
+
         preview_items = []
         for it in items:
             qty = float(it.order_quantity or 0)
             if qty <= 0:
                 continue
             material_code, material_name = self._resolve_item_material_display(it, material_fallback)
+            material_id = int(it.material_id) if getattr(it, "material_id", None) else None
             preview_items.append({
+                "item_id": int(it.id),
+                "material_id": material_id,
                 "material_code": material_code,
                 "material_name": material_name,
                 "quantity": float(qty),
+                "max_push_quantity": float(qty),
                 "delivery_date": str(it.delivery_date) if it.delivery_date else None,
+                "has_bom": bom_map.get(material_id, False) if material_id else False,
             })
 
         return {
@@ -2443,7 +2520,12 @@ class SalesOrderService:
         }
 
     async def _create_demand_from_sales_order(
-        self, tenant_id: int, sales_order_id: int, created_by: int
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+        selected_item_ids: Optional[List[int]] = None,
+        selected_quantities: Optional[Dict[int, float]] = None,
     ) -> Demand:
         """从 SalesOrder 生成 Demand（source_type=sales_order, source_id=订单ID）"""
         order = await SalesOrder.get(id=sales_order_id)
@@ -2453,27 +2535,59 @@ class SalesOrderService:
         if not items:
             raise BusinessLogicError("销售订单无明细，无法下推需求计算")
 
+        if selected_item_ids is not None:
+            selected = {int(v) for v in selected_item_ids if v is not None}
+            items = [it for it in items if int(getattr(it, "id", 0)) in selected]
+            if not items:
+                raise BusinessLogicError("所选明细为空，无法下推需求计算")
+
+        qty_override: Dict[int, Decimal] = {}
+        if selected_quantities:
+            for k, v in selected_quantities.items():
+                try:
+                    qty_override[int(k)] = Decimal(str(v or 0))
+                except Exception:
+                    continue
+
         total_qty = Decimal("0")
         total_amt = Decimal("0")
         demand_items = []
+        material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
         for it in items:
-            total_qty += it.order_quantity
-            total_amt += it.total_amount
+            item_id = int(getattr(it, "id", 0) or 0)
+            order_qty = Decimal(str(it.order_quantity or 0))
+            qty = qty_override.get(item_id, order_qty)
+            qty = max(Decimal("0"), Decimal(str(qty)))
+            if qty <= 0:
+                continue
+            if qty > order_qty:
+                raise BusinessLogicError(
+                    f"物料 {it.material_code or it.material_name or item_id} 下推数量 {qty} "
+                    f"不能超过订单数量 {order_qty}"
+                )
+            unit_price = Decimal(str(it.unit_price or 0))
+            item_amount = (qty * unit_price).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            total_qty += qty
+            total_amt += item_amount
+            material_code, material_name = self._resolve_item_material_display(it, material_fallback)
             demand_items.append({
                 "material_id": it.material_id,
-                "material_code": it.material_code,
-                "material_name": it.material_name,
+                "material_code": material_code,
+                "material_name": material_name,
                 "material_spec": it.material_spec,
                 "material_unit": it.material_unit,
-                "required_quantity": it.order_quantity,
+                "required_quantity": qty,
                 "delivery_date": it.delivery_date,
                 "unit_price": it.unit_price,
-                "item_amount": it.total_amount,
-                "remaining_quantity": it.order_quantity,
+                "item_amount": item_amount,
+                "remaining_quantity": qty,
                 "delivery_status": it.delivery_status or "待交货",
                 "variant_attributes": getattr(it, "variant_attributes", None),
                 "configurable_selections": getattr(it, "configurable_selections", None),
             })
+
+        if not demand_items:
+            raise BusinessLogicError("所选明细有效数量为空，无法下推需求计算")
 
         demand = await Demand.create(
             tenant_id=tenant_id,

@@ -75,7 +75,7 @@ import { hasModulePermission } from '../../../../../utils/permissionContract';
 import { useGlobalStore } from '../../../../../stores';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import type { User } from '../../../../../services/user';
-import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting';
+import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity } from '../../../utils/workOrderReporting';
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload';
 import ReportingInboundWarehouseField from '../../../components/ReportingInboundWarehouseField';
 import {
@@ -700,8 +700,10 @@ const ReportingPage: React.FC = () => {
         work_hours: values.work_hours || 0,
       };
       if (operation.reporting_type === 'status') {
-        reportingData.reported_quantity = values.completed_status === 'completed' ? 1 : 0;
-        reportingData.qualified_quantity = values.completed_status === 'completed' ? 1 : 0;
+        const planQty = parseFloat(workOrder.quantity?.toString() || '0') || 0;
+        const completeQty = getStatusReportingCompleteQuantity(operation, planQty);
+        reportingData.reported_quantity = values.completed_status === 'completed' ? completeQty : 0;
+        reportingData.qualified_quantity = values.completed_status === 'completed' ? completeQty : 0;
         reportingData.unqualified_quantity = 0;
       } else {
         const rq = Number(values.reported_quantity) || 0;

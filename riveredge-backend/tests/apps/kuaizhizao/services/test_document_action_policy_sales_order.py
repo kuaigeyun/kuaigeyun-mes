@@ -106,6 +106,23 @@ def test_create_change_order_when_locked():
     assert not caps.update.allowed
 
 
+def test_push_sales_return_requires_delivered_qty():
+    caps = derive_sales_order_capabilities(
+        _o(status="已审核", review_status="审核通过"),
+        has_items=True,
+        has_returnable_qty=False,
+    )
+    assert not caps.push_sales_return.allowed
+    assert caps.push_sales_return.reason == "sales_order.push_return.no_delivered"
+
+    caps_ok = derive_sales_order_capabilities(
+        _o(status="已审核", review_status="审核通过"),
+        has_items=True,
+        has_returnable_qty=True,
+    )
+    assert caps_ok.push_sales_return.allowed
+
+
 def test_assert_raises_on_delete_audited():
     with pytest.raises(BusinessLogicError):
         assert_sales_order_capability(_o(status="已审核", review_status="审核通过"), "delete")

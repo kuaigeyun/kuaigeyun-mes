@@ -233,6 +233,8 @@ export const SALES_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'sales_order.push_shipment.not_allowed': '当前状态不可下推发货通知单',
   'sales_order.push_delivery.not_allowed': '当前状态不可下推销售出库',
   'sales_order.push_invoice.not_allowed': '当前状态不可下推销售发票',
+  'sales_order.push_return.not_allowed': '当前状态不可下推销售退货单',
+  'sales_order.push_return.no_delivered': '销售订单暂无可退货数量（已交货数量为 0）',
   'sales_order.create_change.not_allowed': '当前状态不可新建销售变更单',
 };
 

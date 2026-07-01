@@ -259,6 +259,7 @@ def enrich_sales_order_capabilities_on_response(
     has_items: bool = True,
     has_line_work_orders: bool = False,
     computation_pushed_blocks_withdraw: bool = False,
+    has_returnable_qty: bool = False,
 ) -> T:
     caps = derive_sales_order_capabilities(
         order_model,
@@ -266,6 +267,7 @@ def enrich_sales_order_capabilities_on_response(
         has_items=has_items,
         has_line_work_orders=has_line_work_orders,
         computation_pushed_blocks_withdraw=computation_pushed_blocks_withdraw,
+        has_returnable_qty=has_returnable_qty,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -280,11 +282,13 @@ def enrich_sales_order_list_capabilities(
     has_items_by_id: Optional[dict[int, bool]] = None,
     has_line_work_orders_by_id: Optional[dict[int, bool]] = None,
     computation_blocks_withdraw_by_id: Optional[dict[int, bool]] = None,
+    has_returnable_qty_by_id: Optional[dict[int, bool]] = None,
 ) -> List[T]:
     pushed_map = pushed_to_computation_by_id or {}
     items_map = has_items_by_id or {}
     wo_map = has_line_work_orders_by_id or {}
     blocks_map = computation_blocks_withdraw_by_id or {}
+    returnable_map = has_returnable_qty_by_id or {}
     out: List[T] = []
     for order_model, resp in zip(orders, responses):
         oid = int(getattr(order_model, "id", 0) or 0)
@@ -294,6 +298,7 @@ def enrich_sales_order_list_capabilities(
             has_items=items_map.get(oid, True),
             has_line_work_orders=wo_map.get(oid, False),
             computation_pushed_blocks_withdraw=blocks_map.get(oid, False),
+            has_returnable_qty=returnable_map.get(oid, False),
         )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))
@@ -309,6 +314,7 @@ def get_sales_order_capabilities_from_record(
     has_items: bool = True,
     has_line_work_orders: bool = False,
     computation_pushed_blocks_withdraw: bool = False,
+    has_returnable_qty: bool = False,
 ) -> SalesOrderCapabilities:
     return derive_sales_order_capabilities(
         order,
@@ -316,6 +322,7 @@ def get_sales_order_capabilities_from_record(
         has_items=has_items,
         has_line_work_orders=has_line_work_orders,
         computation_pushed_blocks_withdraw=computation_pushed_blocks_withdraw,
+        has_returnable_qty=has_returnable_qty,
     )
 
 

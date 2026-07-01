@@ -82,6 +82,11 @@ export function getRemainingReportableQuantity(operation: any, workOrderQuantity
   return getReportableQuantityBreakdown(operation, workOrderQuantity).effectiveRemaining;
 }
 
+/** 按状态报工标记「完成」时，本次应报工数量（与后端 status_reporting_complete_delta 一致） */
+export function getStatusReportingCompleteQuantity(operation: any, workOrderQuantity: number): number {
+  return getRemainingReportableQuantity(operation, workOrderQuantity);
+}
+
 /** 单道工序料损：不合格 + 报废（与 completed−qualified 取较大，避免漏计） */
 export function getOperationMaterialLoss(operation: any): number {
   const uq = Number(operation?.unqualified_quantity ?? operation?.unqualifiedQuantity ?? 0) || 0;

@@ -89,7 +89,7 @@ import {
 } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
-import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton, UniBatchButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
@@ -192,7 +192,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { isManualAuditEnabled } from '../../../../../utils/auditMode';
-import { rowActionKind, rowActionAddFollowUpFromDocument } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
@@ -1384,7 +1384,7 @@ const SalesOrdersPage: React.FC = () => {
     fetchPreview()
       .then((res) => {
         setPushPreviewData(res);
-        if (res?.target_type === 'work_order' || res?.target_type === 'shipment_notice') {
+        if (res?.target_type === 'work_order' || res?.target_type === 'shipment_notice' || res?.target_type === 'demand_computation') {
           if (res?.target_type === 'work_order') {
             void ensureWorkCentersLoaded();
           }
@@ -1495,6 +1495,34 @@ const SalesOrdersPage: React.FC = () => {
           selected_item_ids: selectedIds,
           selected_quantities: selectedQuantities,
         });
+      } else if (pushPreviewData.target_type === 'demand_computation') {
+        const rows = (pushPreviewData.items || []).filter((row: any) => Number(row?.item_id) > 0);
+        const rowById = new Map<number, any>();
+        rows.forEach((row: any) => rowById.set(Number(row.item_id), row));
+        const selectedIds = workOrderSelectedItemIds.filter((id) => rowById.has(id));
+        if (!selectedIds.length) {
+          messageApi.warning(t('app.kuaizhizao.salesOrder.selectAtLeastOneLine'));
+          return;
+        }
+        const selectedQuantities: Record<number, number> = {};
+        for (const id of selectedIds) {
+          const row = rowById.get(id);
+          const qty = Number(workOrderPushQuantities[id] ?? 0);
+          const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+          if (!Number.isFinite(qty) || qty <= 0) {
+            messageApi.warning(t('app.kuaizhizao.salesOrder.pushQtyInvalid', { code: row?.material_code || id }));
+            return;
+          }
+          if (Number.isFinite(maxQty) && maxQty > 0 && qty > maxQty) {
+            messageApi.warning(t('app.kuaizhizao.salesOrder.pushQtyExceedsRemaining', { code: row?.material_code || id }));
+            return;
+          }
+          selectedQuantities[id] = qty;
+        }
+        await pushPreviewAction.doPush({
+          selected_item_ids: selectedIds,
+          selected_quantities: selectedQuantities,
+        });
       } else {
         await pushPreviewAction.doPush();
       }
@@ -1528,7 +1556,7 @@ const SalesOrdersPage: React.FC = () => {
     }
     showPushPreviewModal(
       () => previewPushSalesOrderToComputation(id),
-      () => pushSalesOrderToComputation(id),
+      (payload?: any) => pushSalesOrderToComputation(id, payload),
       () => refreshDrawerOrder(id),
       id,
     );
@@ -2461,8 +2489,11 @@ const SalesOrdersPage: React.FC = () => {
     const canPushShipment = !shipmentDisabledReason;
     const canPushDelivery = !deliveryDisabledReason;
     const canPushInvoice = !invoiceDisabledReason;
-    const canPushSalesReturn =
-      salesOrderPerms.canUpdate && record.capabilities?.push_sales_return?.allowed === true;
+    const salesReturnDisabledReason = resolvePushReason(
+      record.capabilities?.push_sales_return,
+      { disabled: !salesOrderPerms.canUpdate, title: permDeniedTitle },
+    );
+    const canPushSalesReturn = !salesReturnDisabledReason;
     const withdrawComputationDisabledReason = !salesOrderPerms.canUpdate
       ? permDeniedTitle
       : !record.capabilities?.withdraw_computation?.allowed
@@ -2519,8 +2550,11 @@ const SalesOrdersPage: React.FC = () => {
       },
       {
         key: 'sales-return',
-        label: pushToSalesReturnAction.label,
-        disabled: !canPushSalesReturn,
+        label: renderPushItemLabelWithReason(
+          pushToSalesReturnAction.label,
+          salesReturnDisabledReason,
+        ),
+        className: getPushMenuItemClassName(salesReturnDisabledReason),
         onClick: () => canPushSalesReturn && handlePushToSalesReturn(record.id!),
       },
       {
@@ -2777,9 +2811,6 @@ const SalesOrdersPage: React.FC = () => {
                 : t('app.kuaizhizao.salesOrder.submitConfirmAuto'),
             }}
           />
-        );
-        parts.push(
-          <Button {...rowActionAddFollowUpFromDocument()} key="follow-up" onClick={() => openFollowUpFromSalesOrder(record)} />,
         );
         return parts;
       },
@@ -4051,6 +4082,20 @@ const SalesOrdersPage: React.FC = () => {
               icon={<StopOutlined />}
               size="middle"
             />,
+            <UniBatchButton
+              key="sales-order-add-follow-up"
+              selectedRowKeys={selectedRowKeys}
+              disabled={selectedRowKeys.length !== 1}
+              icon={<CommentOutlined />}
+              onAction={() => {
+                if (selectedOrderForToolbar) {
+                  openFollowUpFromSalesOrder(selectedOrderForToolbar);
+                }
+              }}
+              size="middle"
+            >
+              {t('components.uniAction.addFollowUpFromDocument')}
+            </UniBatchButton>,
             <UniCapabilityBatchButton
               key="sales-order-batch-print"
               selectedRowKeys={selectedRowKeys}
@@ -4782,6 +4827,93 @@ const SalesOrdersPage: React.FC = () => {
                     },
                   },
                   { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', key: 'delivery_date', width: 110 },
+                ]}
+                rowKey={(r: any, i) => `${r.item_id || r.material_code}-${i}`}
+                pagination={false}
+                style={{ marginBottom: 8 }}
+              />
+            ) : pushPreviewData.target_type === 'demand_computation' && pushPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pushPreviewData.items}
+                columns={[
+                  {
+                    title: t('common.select'),
+                    dataIndex: 'item_id',
+                    key: 'select',
+                    width: 64,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id);
+                      if (!Number.isFinite(itemId) || itemId <= 0) return null;
+                      const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+                      const disabled = !Number.isFinite(maxQty) || maxQty <= 0;
+                      return (
+                        <Switch
+                          size="small"
+                          disabled={disabled}
+                          checked={workOrderSelectedItemIds.includes(itemId)}
+                          onChange={(checked) => {
+                            setWorkOrderSelectedItemIds((prev) =>
+                              checked ? Array.from(new Set([...prev, itemId])) : prev.filter((id) => id !== itemId),
+                            );
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 120, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 140, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 80, align: 'right' as const },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.materialPickerHasBom'),
+                    dataIndex: 'has_bom',
+                    key: 'has_bom',
+                    width: 88,
+                    align: 'center' as const,
+                    render: (hasBom: boolean) => {
+                      const text = hasBom
+                        ? t('app.kuaizhizao.salesOrder.materialPickerHasBomYes')
+                        : t('app.kuaizhizao.salesOrder.materialPickerHasBomNo');
+                      const color = hasBom
+                        ? 'var(--ant-color-success)'
+                        : 'var(--ant-color-text-tertiary)';
+                      return (
+                        <Tooltip
+                          title={
+                            hasBom
+                              ? t('app.kuaizhizao.salesOrder.materialPickerHasBomConfigured')
+                              : t('app.kuaizhizao.salesOrder.materialPickerHasBomNone')
+                          }
+                        >
+                          <span style={{ color, fontSize: 12 }}>{text}</span>
+                        </Tooltip>
+                      );
+                    },
+                  },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.colPushQty'),
+                    dataIndex: 'push_quantity',
+                    key: 'push_quantity',
+                    width: 120,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id);
+                      const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+                      return (
+                        <InputNumber
+                          min={0}
+                          max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
+                          precision={2}
+                          style={{ width: '100%' }}
+                          value={workOrderPushQuantities[itemId]}
+                          onChange={(val) => {
+                            const next = Number(val ?? 0);
+                            setWorkOrderPushQuantities((prev) => ({ ...prev, [itemId]: next }));
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', key: 'delivery_date', width: 100 },
                 ]}
                 rowKey={(r: any, i) => `${r.item_id || r.material_code}-${i}`}
                 pagination={false}

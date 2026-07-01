@@ -225,7 +225,7 @@ const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-m
 import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD, isWorkOrderPlannedEndOverdue } from '../../../utils/workOrderLifecycle'
 import { commitListPageSearchParams } from '../../../../../utils/listLifecycleStage'
 import { UniLifecycle } from '../../../../../components/uni-lifecycle'
-import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting'
+import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity } from '../../../utils/workOrderReporting'
 import ReportableQuantityPanel from '../../../components/ReportableQuantityPanel'
 import ReportingInboundWarehouseField from '../../../components/ReportingInboundWarehouseField'
 import {
@@ -2806,8 +2806,10 @@ const WorkOrdersPage: React.FC = () => {
         work_hours: values.work_hours ?? 0,
       }
       if (quickReportingOperation.reporting_type === 'status') {
-        reportingData.reported_quantity = values.completed_status === 'completed' ? 1 : 0
-        reportingData.qualified_quantity = values.completed_status === 'completed' ? 1 : 0
+        const planQty = Number(quickReportingWorkOrder.quantity) || 0
+        const completeQty = getStatusReportingCompleteQuantity(quickReportingOperation, planQty)
+        reportingData.reported_quantity = values.completed_status === 'completed' ? completeQty : 0
+        reportingData.qualified_quantity = values.completed_status === 'completed' ? completeQty : 0
         reportingData.unqualified_quantity = 0
       } else {
         const qq = Number(values.qualified_quantity) || 0

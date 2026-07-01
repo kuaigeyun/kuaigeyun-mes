@@ -126,3 +126,10 @@ def status_reporting_target_quantity(work_order: Any, work_order_operation: Any)
     plan_qty = to_decimal(getattr(work_order, "quantity", None))
     om, ov = tuple_from_model(work_order_operation)
     return max_completed_quantity_for_plan(plan_qty, om, ov)
+
+
+def status_reporting_complete_delta(work_order: Any, work_order_operation: Any) -> Decimal:
+    """按状态报工标记完成时，本次应报工数量（距累计上限的剩余量）。"""
+    target = status_reporting_target_quantity(work_order, work_order_operation)
+    current = to_decimal(getattr(work_order_operation, "completed_quantity", None))
+    return max(Decimal("0"), target - current)

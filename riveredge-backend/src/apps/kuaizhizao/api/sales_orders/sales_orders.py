@@ -856,6 +856,10 @@ async def preview_push_sales_order_to_computation(
 @router.post("/{sales_order_id}/push-to-computation", response_model=Dict[str, Any], summary="Push sales order to demand computation")
 async def push_sales_order_to_computation(
     sales_order_id: int = Path(..., description="销售订单ID"),
+    payload: Optional[Dict[str, Any]] = Body(
+        None,
+        description="可选：selected_item_ids=[1,2]，selected_quantities={\"1\": 100}",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -864,11 +868,27 @@ async def push_sales_order_to_computation(
     
     将已审核的销售订单下推到物料需求运算，生成需求计算任务。
     """
+    selected_item_ids = None
+    selected_quantities = None
+    if isinstance(payload, dict):
+        raw_ids = payload.get("selected_item_ids")
+        if isinstance(raw_ids, list):
+            selected_item_ids = raw_ids
+        raw_qty = payload.get("selected_quantities")
+        if isinstance(raw_qty, dict):
+            selected_quantities = {}
+            for k, v in raw_qty.items():
+                try:
+                    selected_quantities[int(k)] = float(v)
+                except (TypeError, ValueError):
+                    continue
     try:
         result = await sales_order_service.push_sales_order_to_computation(
             tenant_id=tenant_id,
             sales_order_id=sales_order_id,
-            created_by=current_user.id
+            created_by=current_user.id,
+            selected_item_ids=selected_item_ids,
+            selected_quantities=selected_quantities,
         )
         return result
     except NotFoundError as e:

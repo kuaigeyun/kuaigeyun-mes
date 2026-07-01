@@ -13,20 +13,25 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Button, Space, Form, Select, InputNumber, Input, Switch, Tag, Modal, theme, Row, Col, List, Descriptions, Spin, App, Alert } from 'antd';
 import { EditOutlined, LeftOutlined, SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, DragOutlined, CloseCircleOutlined, SettingOutlined, ClusterOutlined, ReloadOutlined, CopyOutlined, DiffOutlined } from '@ant-design/icons';
-import { MindMap, RCNode } from '@ant-design/graphs';
+import { MindMap, RCNode, getNodeSide } from '@ant-design/graphs';
 
 const { TextNode: G6TextNode } = RCNode;
 
 const DEFAULT_EXPAND_LEVEL = 5;
 
-/** 同级节点垂直间距，加大以缓解二级节点（如定子下硅钢片/漆包线、转子与外壳之间）拥挤 */
-const NODE_V_GAP = 16;
-/** 层级间水平间距 */
-const NODE_H_GAP = 60;
-/** 四级及更深层级：加大垂直间距，避免兄弟节点重叠（depth 0=根 1=二级 2=三级 3=四级） */
-const NODE_V_GAP_DEEP = 28;
-/** 四级及更深层级：加大水平间距，避免与父级/兄弟分支重叠 */
-const NODE_H_GAP_DEEP = 88;
+/**
+ * mindmap 相邻层可视间距 ≈ 2 × 父节点 hgap。
+ * depth 0 根→一级；depth 1 一级→二级。
+ */
+/** 根→一级水平间距（depth=0）；一级→二级 hgap=12 */
+const BOM_LAYOUT_H_GAP_ROOT = 14;
+const BOM_LAYOUT_H_GAP_BY_DEPTH = [BOM_LAYOUT_H_GAP_ROOT, 12, 36, 48] as const;
+
+function bomLayoutHGapForDepth(depth: number): number {
+  const idx = Math.min(Math.max(depth, 0), BOM_LAYOUT_H_GAP_BY_DEPTH.length - 1);
+  return BOM_LAYOUT_H_GAP_BY_DEPTH[idx];
+}
+
 /** 节点高度：与渲染一致，用于 size/ports 使连线始终从侧面垂直中心连接 */
 const NODE_HEIGHT_SINGLE = 32;
 const NODE_HEIGHT_DOUBLE = 48;
@@ -113,6 +118,154 @@ const SOURCE_TYPE_NODE_COLORS: Record<string, { bg: string; border: string }> = 
     border: '#14b8a6',
   },
 };
+
+function formatBomNodeQuantity(qty: unknown): string {
+  const n = Number(qty ?? 1);
+  if (!Number.isFinite(n) || n <= 0) return '1';
+  if (Number.isInteger(n)) return String(n);
+  return String(parseFloat(n.toFixed(4)));
+}
+
+function resolveBomNodeDisplayLabel(data: Record<string, unknown> | undefined | null): string {
+  if (!data) return '';
+  const d = data as { value?: unknown; data?: { displayValue?: unknown; value?: unknown; label?: unknown }; label?: unknown; id?: unknown };
+  return String(
+    d.value ??
+      d.data?.displayValue ??
+      d.data?.value ??
+      d.label ??
+      d.data?.label ??
+      d.id ??
+      '',
+  );
+}
+
+function measureTextWidth(text: string, fontSize = 13): number {
+  const scale = fontSize / 13;
+  const charWidth = (char: string) => (/[^\x00-\xff]/.test(char) ? 13 : 7) * scale;
+  return [...text].reduce<number>((sum, char) => sum + charWidth(char), 0);
+}
+
+function resolveBomLayoutDepth(data: Record<string, unknown>): number {
+  const depth = (data as { depth?: unknown }).depth ?? (data as { data?: { depth?: unknown } }).data?.depth;
+  if (depth != null && depth !== '') return Number(depth);
+  if ((data as { id?: string }).id === 'root' || (data as { data?: { id?: string } }).data?.id === 'root') {
+    return 0;
+  }
+  return 1;
+}
+
+function isBomRootNode(data: Record<string, unknown>): boolean {
+  return resolveBomLayoutDepth(data) === 0;
+}
+
+/** 库 DEFAULT_OPTIONS.layout.getHGap 固定 64；根→一级常不随自定义 getHGap 变化 */
+const BOM_LAYOUT_H_GAP_LIBRARY_DEFAULT = 64;
+
+/** 布局 graphlib 节点为 { id, data }；根节点 hgap 单独控制根→一级间距 */
+function bomLayoutHGapFromGraphData(data: Record<string, unknown>): number {
+  const id = (data as { id?: string }).id ?? (data as { data?: { id?: string } }).data?.id;
+  if (id === 'root') return BOM_LAYOUT_H_GAP_ROOT;
+  return bomLayoutHGapForDepth(resolveBomLayoutDepth(data));
+}
+
+/** 仅 hierarchy layout.getWidth：根节点扣除库默认 hgap 与目标之差（node.size 仍用实测宽度） */
+function bomHierarchyWidthFromGraphData(data: Record<string, unknown>): number {
+  const w = measureBomNodeWidthFromGraphData(data);
+  if (!isBomRootNode(data)) return w;
+  const trim = 2 * (BOM_LAYOUT_H_GAP_LIBRARY_DEFAULT - BOM_LAYOUT_H_GAP_ROOT);
+  return Math.max(w - trim, 80);
+}
+
+/** 与 @ant-design/graphs MindMap 默认 LR 一致：右侧子节点 dx=0，根 dx=-width/2 */
+function bomNodeDxFromGraphData(graph: Parameters<typeof getNodeSide>[0], data: Record<string, unknown>): number {
+  const side = getNodeSide(graph, data as Parameters<typeof getNodeSide>[1]);
+  const width = bomLayoutWidthFromGraphData(data);
+  return side === 'left' ? -width : side === 'center' ? -width / 2 : 0;
+}
+
+function bomLayoutWidthFromGraphData(data: Record<string, unknown>): number {
+  return measureBomNodeWidthFromGraphData(data);
+}
+
+/** preLayout 须显式 true：merge DEFAULT_OPTIONS 后否则为 false，getHGap 不生效 */
+const BOM_MINDMAP_LAYOUT = {
+  type: 'mindmap' as const,
+  direction: 'LR' as const,
+  preLayout: true as const,
+  getWidth: (data: Record<string, unknown>) => bomHierarchyWidthFromGraphData(data),
+  getHeight: (data: Record<string, unknown>) => measureBomNodeHeightFromGraphData(data),
+  getHGap: (data: Record<string, unknown>) => bomLayoutHGapFromGraphData(data),
+  getVGap: () => 18,
+};
+
+/** 根节点不显示右侧折叠图标；其余折叠按钮放底部 */
+const BOM_MINDMAP_TRANSFORMS = (prev: Array<Record<string, unknown> | string>) =>
+  prev.map((t) => {
+    if (typeof t === 'string' || t?.key !== 'collapse-expand-react-node') return t;
+    return {
+      ...t,
+      enable: (data: { id?: string }) => data.id !== 'root',
+      iconPlacement: () => 'bottom',
+    };
+  });
+
+/** 与画布节点 DOM 结构一致，估算节点内容宽度（不含 G6 最小宽度兜底） */
+function measureBomNodeWidthFromGraphData(data: Record<string, unknown>): number {
+  const isRoot = isBomRootNode(data);
+  const displayLabel = resolveBomNodeDisplayLabel(data);
+  const isGroupLabel = /等\d+种/.test(displayLabel);
+  const baseLabel = isGroupLabel
+    ? displayLabel
+    : displayLabel.replace(/\s*×\s*[\d.]+$/, '').trim();
+  const nodeData = (data as { data?: Record<string, unknown> }).data;
+  const material = nodeData?.material as Record<string, unknown> | undefined;
+  const processRouteName = String(
+    material?.processRouteName ?? material?.process_route_name ?? '',
+  ).trim();
+  const fontSize = isRoot ? 16 : 13;
+
+  const mainLineWidth = measureTextWidth(baseLabel, fontSize);
+  const subLineWidth = processRouteName
+    ? measureTextWidth(processRouteName, 11) + 16
+    : 0;
+  const contentWidth = Math.max(mainLineWidth, subLineWidth);
+
+  const horizontalPadding = 14 + 12;
+  const dragHandleWidth = isRoot ? 0 : 22;
+  const quantityBadgeWidth = shouldShowBomNodeQuantityBadge(data, isRoot)
+    ? 6 + measureTextWidth(`×${formatBomNodeQuantity(nodeData?.quantity)}`, 11) + 12
+    : 0;
+  const versionText = isRoot
+    ? String(nodeData?.version ?? '').trim()
+    : String(nodeData?.bomVersion ?? '').trim();
+  const versionBadgeWidth = versionText
+    ? 6 + measureTextWidth(`V${versionText}`, 11) + 12
+    : 0;
+  const stackIconWidth =
+    !isRoot && (nodeData?.isConfigurable || nodeData?.isAlternative) ? 6 + 28 : 0;
+
+  return Math.ceil(
+    horizontalPadding + dragHandleWidth + contentWidth + quantityBadgeWidth + versionBadgeWidth + stackIconWidth,
+  );
+}
+
+function measureBomNodeHeightFromGraphData(data: Record<string, unknown>): number {
+  const nodeData = (data as { data?: Record<string, unknown> }).data;
+  const material = nodeData?.material as Record<string, unknown> | undefined;
+  const processRouteName = String(
+    material?.processRouteName ?? material?.process_route_name ?? '',
+  ).trim();
+  return processRouteName ? NODE_HEIGHT_DOUBLE : NODE_HEIGHT_SINGLE;
+}
+
+function shouldShowBomNodeQuantityBadge(data: Record<string, unknown>, isRoot: boolean): boolean {
+  if (isRoot) return false;
+  const label = resolveBomNodeDisplayLabel(data);
+  if (/等\d+种/.test(label)) return false;
+  const qty = Number((data.data as { quantity?: unknown } | undefined)?.quantity ?? 1);
+  return Number.isFinite(qty) && qty > 0;
+}
 
 const KBD_STYLE: React.CSSProperties = {
   fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
@@ -2020,7 +2173,7 @@ const BOMDesignerPage: React.FC = () => {
   const mindMapDataSafe = useMemo(() => {
     if (!mindMapData) return null;
     const root = mindMapData as MindMapNode;
-    const strip = (n: MindMapNode): any => {
+    const strip = (n: MindMapNode, depth = 0): any => {
       const base = typeof n.value === 'string' ? n.value : String(n.id);
       const value = n.id === 'root'
         ? base
@@ -2047,28 +2200,32 @@ const BOMDesignerPage: React.FC = () => {
         }
         if (alternativeCount === 0) alternativeCount = 1;
       }
+      const nodeInner: Record<string, unknown> = {
+        ...n,
+        id: n.id,
+        depth,
+        displayValue: value,
+        isSelected: n.id === selectedNodeId,
+        sourceType,
+        isConfigurable: n.isConfigurable,
+        isAlternative: n.isAlternative,
+        configurableCount,
+        alternativeCount,
+        version: (n as any).version,
+        bomVersion: (n as any).bomVersion,
+      };
       const out: any = {
         id: n.id,
         value,
-        data: {
-          ...n,
-          isSelected: n.id === selectedNodeId,
-          sourceType,
-          isConfigurable: n.isConfigurable,
-          isAlternative: n.isAlternative,
-          configurableCount,
-          alternativeCount,
-          version: (n as any).version,
-          bomVersion: (n as any).bomVersion,
-        },
+        data: nodeInner,
       };
       if (n.children?.length) {
-        out.children = collapseGroupSiblings(n.children);
+        out.children = collapseGroupSiblings(n.children, depth + 1);
       }
       return out;
     };
     /** 同一配置位/替代料组（同 groupId）的连续兄弟节点合并为一个显示节点，用「等N种」表示 */
-    const collapseGroupSiblings = (children: MindMapNode[]): any[] => {
+    const collapseGroupSiblings = (children: MindMapNode[], depth: number): any[] => {
       const result: any[] = [];
       let i = 0;
       while (i < children.length) {
@@ -2080,7 +2237,7 @@ const BOMDesignerPage: React.FC = () => {
           }
           i++;
           const first = group[0];
-          let stripped = strip(first);
+          let stripped = strip(first, depth);
           if (group.length > 1) {
             const baseLabel = (typeof first.value === 'string' ? first.value : String(first.id)).replace(/\s*×\s*[\d.]+$/, '').trim();
             stripped = {
@@ -2097,7 +2254,7 @@ const BOMDesignerPage: React.FC = () => {
           }
           i++;
           const first = group[0];
-          let stripped = strip(first);
+          let stripped = strip(first, depth);
           const altCount = group.length;
           if (group.length > 1) {
             const baseLabel = (typeof first.value === 'string' ? first.value : String(first.id)).replace(/\s*×\s*[\d.]+$/, '').trim();
@@ -2112,13 +2269,13 @@ const BOMDesignerPage: React.FC = () => {
           }
           result.push(stripped);
         } else {
-          result.push(strip(c));
+          result.push(strip(c, depth));
           i++;
         }
       }
       return result;
     };
-    return strip(root);
+    return strip(root, 0);
   }, [mindMapData, selectedNodeId]);
 
   const mindMapConfig = useMemo(() => {
@@ -2126,40 +2283,11 @@ const BOMDesignerPage: React.FC = () => {
     return {
       data: mindMapDataSafe,
       direction: 'right' as const,
-      // type: 'boxed', // 移除 fixed 类型以允许更好的自定义
       defaultExpandLevel: DEFAULT_EXPAND_LEVEL,
       animate: false,
       animation: false,
-      layout: {
-        type: 'mindmap',
-        direction: 'H' as const,
-        getSide: () => 'right',
-        getVGap: (data: any) => ((data?.depth ?? data?.data?.depth ?? 0) >= 3 ? NODE_V_GAP_DEEP : NODE_V_GAP),
-        getWidth: (data: any) => {
-          const label = (data?.data?.value ?? data?.data?.label ?? data?.value ?? data?.label ?? data?.id ?? data?.data?.id ?? '').toString();
-          const charWidth = (char: string) => (/[^\x00-\xff]/.test(char) ? 14 : 7.5);
-          const textWidth = [...label].reduce<number>((sum, char) => sum + charWidth(char), 0);
-          return Math.max(textWidth + 50, 140);
-        },
-        getHGap: (data: any) => {
-          const depth = data?.depth ?? data?.data?.depth ?? 0;
-          const base = depth >= 3 ? NODE_H_GAP_DEEP : NODE_H_GAP;
-          const label = (data?.data?.value ?? data?.data?.label ?? data?.value ?? data?.label ?? data?.id ?? data?.data?.id ?? '').toString();
-          const charWidth = (char: string) => (/[^\x00-\xff]/.test(char) ? 14 : 7.5);
-          const textWidth = [...label].reduce<number>((sum, char) => sum + charWidth(char), 0);
-          const nodeWidth = Math.max(textWidth + 50, 140);
-          const minWidth = 140;
-          const extraByWidth = nodeWidth > minWidth ? Math.min((nodeWidth - minWidth) * 0.2, 36) : 0;
-          return base + extraByWidth;
-        },
-        getHeight: (data: any) => {
-          const material = data.data?.material;
-          const processRouteName = material?.processRouteName ?? (material as any)?.process_route_name;
-          return processRouteName ? NODE_HEIGHT_DOUBLE : NODE_HEIGHT_SINGLE;
-        },
-        animate: false,
-        animation: false,
-      },
+      // preLayout:true 覆盖 DEFAULT merge 的 false；根 getHGap=14，一级 getHGap=12
+      layout: BOM_MINDMAP_LAYOUT,
       behaviors: ['drag-canvas', 'zoom-canvas'],
       autoFit: true,
       theme: 'light' as const,
@@ -2171,25 +2299,31 @@ const BOMDesignerPage: React.FC = () => {
           lineWidth: 1.2,
         }
       },
+      // 根节点不显示右侧折叠图标（占根→一级连线区）；其余放底部，不占一级→二级右侧
+      transforms: BOM_MINDMAP_TRANSFORMS,
       node: {
         style: {
           // 节点尺寸与渲染一致，使连线锚点始终在右侧垂直中心（不随高度变化偏移）
           size: (data: any) => {
-            const label = (data?.data?.value ?? data?.value ?? data?.data?.label ?? data?.label ?? data?.id ?? '').toString();
-            const material = data.data?.material;
-            const processRouteName = material?.processRouteName ?? (material as any)?.process_route_name;
-            const charWidth = (char: string) => (/[^\x00-\xff]/.test(char) ? 14 : 7.5);
-            const textWidth = [...label].reduce<number>((sum, char) => sum + charWidth(char), 0);
-            const width = Math.max(textWidth + 50, 140);
-            const height = processRouteName ? NODE_HEIGHT_DOUBLE : NODE_HEIGHT_SINGLE;
+            const width = bomLayoutWidthFromGraphData(data);
+            const height = measureBomNodeHeightFromGraphData(data);
             return [width, height];
+          },
+          dx: function (this: Parameters<typeof getNodeSide>[0], data: Record<string, unknown>) {
+            return bomNodeDxFromGraphData(this, data);
           },
           // 使用相对坐标 [x, y] 指定侧面垂直中心：左侧 [0, 0.5]、右侧 [1, 0.5]，确保连线始终从中心点连接
           ports: [{ placement: [0, 0.5] as [number, number] }, { placement: [1, 0.5] as [number, number] }],
           component: (data: any) => {
             const depth = data.depth ?? 0;
-            const label = (data?.data?.value ?? data?.value ?? data?.data?.label ?? data?.label ?? data?.id ?? '').toString();
+            const displayLabel = resolveBomNodeDisplayLabel(data);
             const isRoot = data.id === 'root' || depth === 0;
+            const isGroupLabel = /等\d+种/.test(displayLabel);
+            const baseLabel = isGroupLabel
+              ? displayLabel
+              : displayLabel.replace(/\s*×\s*[\d.]+$/, '').trim();
+            const showQtyBadge = shouldShowBomNodeQuantityBadge(data, isRoot);
+            const quantityText = formatBomNodeQuantity(data.data?.quantity);
             // 通过数据注入和外部状态双重判断选中
             const isSelected = data.data?.isSelected || data.id === selectedNodeId;
             // 物料来源对应节点颜色（子节点）
@@ -2212,10 +2346,7 @@ const BOMDesignerPage: React.FC = () => {
             // 暂时假设 props 会更新
              
             
-            // 自适应宽度计算
-            const charWidth = (char: string) => (/[^\x00-\xff]/.test(char) ? 14 : 7.5);
-            const textWidth = Array.from(String(label)).reduce((sum: number, char: string) => sum + charWidth(char), 0);
-            const nodeWidth = Math.max(textWidth + 50, 140); // 增加固定 padding
+            const nodeWidth = measureBomNodeWidthFromGraphData(data);
             const nodeHeight = processRouteName ? NODE_HEIGHT_DOUBLE : NODE_HEIGHT_SINGLE;
             const showStackIcon = !isRoot && (isConfigurable || isAlternative);
 
@@ -2273,15 +2404,16 @@ const BOMDesignerPage: React.FC = () => {
                    }
                 }}
                 style={{
-                   display: 'flex',
+                   display: 'inline-flex',
                    alignItems: 'center',
+                   width: nodeWidth,
+                   maxWidth: nodeWidth,
                    height: nodeHeight,
                    boxSizing: 'border-box',
                    background: isRoot ? token.colorPrimary : token.colorBgContainer,
                    border: `1px solid ${isSelected ? (sourceColors?.border ?? token.colorPrimary) : (isRoot ? token.colorPrimary : token.colorBorderSecondary)}`,
                    borderRadius: token.borderRadiusLG,
                    padding: '6px 12px 6px 14px',
-                   minWidth: 'fit-content',
                    boxShadow: isSelected ? `0 0 0 2px ${isSelected && isRoot ? token.colorPrimaryBg : (sourceColors?.border ?? token.colorPrimaryBorder)}44, ${token.boxShadowSecondary}` : token.boxShadowTertiary,
                    position: 'relative',
                    overflow: 'hidden',
@@ -2312,7 +2444,7 @@ const BOMDesignerPage: React.FC = () => {
                     fontWeight: isRoot ? 600 : 500,
                     whiteSpace: 'nowrap',
                   }}>
-                    {label}
+                    {baseLabel}
                   </span>
                   {processRouteName && (
                     <span style={{
@@ -2327,6 +2459,27 @@ const BOMDesignerPage: React.FC = () => {
                     </span>
                   )}
                 </div>
+                {showQtyBadge && (
+                  <span
+                    title={t('app.master-data.bom.quantity')}
+                    style={{
+                      marginLeft: 6,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      paddingLeft: 6,
+                      paddingRight: 6,
+                      height: 20,
+                      borderRadius: 10,
+                      background: isRoot ? 'rgba(255,255,255,0.2)' : token.colorFillSecondary,
+                      color: isRoot ? '#fff' : token.colorText,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    ×{quantityText}
+                  </span>
+                )}
                 {((isRoot && data.data?.version) || (!isRoot && data.data?.bomVersion)) && (
                   <span
                     title={t('app.master-data.bom.versionLabel')}
@@ -2350,8 +2503,8 @@ const BOMDesignerPage: React.FC = () => {
                 )}
                 {showStackIcon && (() => {
                   let count = (data.data?.configurableCount ?? data.data?.alternativeCount ?? 0) as number;
-                  if (count === 0 && typeof label === 'string') {
-                    const match = label.match(/等(\d+)种/);
+                  if (count === 0 && typeof displayLabel === 'string') {
+                    const match = displayLabel.match(/等(\d+)种/);
                     if (match) count = parseInt(match[1], 10);
                   }
                   return (
@@ -2807,7 +2960,7 @@ const BOMDesignerPage: React.FC = () => {
           </div>
 
           {mindMapConfig ? (
-            <MindMap key={`bom-mindmap-${mindMapDataSafe?.id || 'empty'}`} {...(mindMapConfig as any)} />
+            <MindMap {...(mindMapConfig as any)} />
           ) : (
             <div style={{
               width: '100%',

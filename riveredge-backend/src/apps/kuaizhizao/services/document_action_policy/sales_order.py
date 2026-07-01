@@ -135,6 +135,7 @@ def derive_sales_order_capabilities(
     has_items: bool = True,
     has_line_work_orders: bool = False,
     computation_pushed_blocks_withdraw: bool = False,
+    has_returnable_qty: bool = False,
 ) -> SalesOrderCapabilities:
     status = getattr(order, "status", None)
     review_status = getattr(order, "review_status", None)
@@ -283,11 +284,20 @@ def derive_sales_order_capabilities(
     push_delivery_cap = _push_with_items_cap("sales_order.push_delivery.not_allowed")
     push_invoice_cap = _push_with_items_cap("sales_order.push_invoice.not_allowed")
 
-    # push_sales_return — 与前端一致：已审核可执行即可
-    push_return_allowed = push_ok
+    # push_sales_return — 须已审核且有已交货数量
+    push_return_allowed = False
+    push_return_reason = push_reason or "sales_order.push_return.not_allowed"
+    if push_ok:
+        if not has_items:
+            push_return_reason = "sales_order.push.no_items"
+        elif not has_returnable_qty:
+            push_return_reason = "sales_order.push_return.no_delivered"
+        else:
+            push_return_allowed = True
+            push_return_reason = None
     push_return_cap = _cap(
         push_return_allowed,
-        push_reason if not push_return_allowed else None,
+        push_return_reason if not push_return_allowed else None,
     )
 
     # create_change_order — 不可直接改单且已审核可执行
@@ -329,6 +339,7 @@ def assert_sales_order_capability(
     has_items: bool = True,
     has_line_work_orders: bool = False,
     computation_pushed_blocks_withdraw: bool = False,
+    has_returnable_qty: bool = False,
 ) -> None:
     caps = derive_sales_order_capabilities(
         order,
@@ -336,6 +347,7 @@ def assert_sales_order_capability(
         has_items=has_items,
         has_line_work_orders=has_line_work_orders,
         computation_pushed_blocks_withdraw=computation_pushed_blocks_withdraw,
+        has_returnable_qty=has_returnable_qty,
     )
     cap_map = {
         "update": caps.update,

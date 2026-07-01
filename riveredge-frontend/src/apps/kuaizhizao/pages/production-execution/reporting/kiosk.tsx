@@ -18,7 +18,7 @@ import { QRCodeScanner } from '../../../../../components/qrcode';
 import { qrcodeApi } from '../../../../../services/qrcode';
 import { useTouchScreen } from '../../../../../hooks/useTouchScreen';
 import dayjs from 'dayjs';
-import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting';
+import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity } from '../../../utils/workOrderReporting';
 
 const { TextArea } = Input;
 
@@ -275,6 +275,17 @@ const ReportingKioskPage: React.FC = () => {
           qualifiedQty = rq;
           unqualifiedQty = 0;
         }
+      } else if (currentOperation.reporting_type === 'status') {
+        const isCompleted = (values.completed_status || 'completed') === 'completed';
+        const completeQty = isCompleted
+          ? getStatusReportingCompleteQuantity(
+              currentOperation,
+              Number(currentWorkOrder.quantity) || 0,
+            )
+          : 0;
+        reportedQty = completeQty;
+        qualifiedQty = completeQty;
+        unqualifiedQty = 0;
       }
 
       const reportingData = {
