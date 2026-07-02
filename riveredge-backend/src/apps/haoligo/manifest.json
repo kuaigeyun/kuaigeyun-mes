@@ -651,7 +651,7 @@
                 "icon_group": "equipUpkeep"
               },
               {
-                "key": "upkeep-complete",
+                "key": "equip-upkeep-complete",
                 "label": "设备维保完成单",
                 "icon": "check-decagram-outline",
                 "route": "/equip/upkeep-complete",

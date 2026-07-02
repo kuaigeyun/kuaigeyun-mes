@@ -1076,6 +1076,7 @@ export interface EquipmentCapacityByEquipmentRow {
   equipment_id: number;
   equipment_asset_code?: string;
   equipment_name?: string;
+  period_label?: string | null;
   record_count: number;
   planned_qty_total?: string | number | null;
   completed_qty_total: string | number;
@@ -1085,6 +1086,15 @@ export interface EquipmentCapacityByEquipmentRow {
 export interface EquipmentCapacityByWorkshopRow {
   workshop_id?: number | null;
   workshop_name?: string;
+  period_label?: string | null;
+  record_count: number;
+  planned_qty_total?: string | number | null;
+  completed_qty_total: string | number;
+  achievement_rate_pct?: number | null;
+}
+
+export interface EquipmentCapacityByPeriodRow {
+  period_label: string;
   record_count: number;
   planned_qty_total?: string | number | null;
   completed_qty_total: string | number;
@@ -1093,10 +1103,11 @@ export interface EquipmentCapacityByWorkshopRow {
 
 export interface EquipmentCapacityReportResult {
   summary: EquipmentCapacitySummary;
-  group_by: 'detail' | 'equipment' | 'workshop' | string;
+  group_by: 'detail' | 'equipment' | 'workshop' | 'month' | 'quarter' | 'year' | string;
   items: EquipmentOutputRecordRow[];
   equipment_items: EquipmentCapacityByEquipmentRow[];
   workshop_items: EquipmentCapacityByWorkshopRow[];
+  period_items: EquipmentCapacityByPeriodRow[];
   total: number;
   skip: number;
   limit: number;
@@ -1120,7 +1131,7 @@ export function getEquipmentCapacityReport(params?: {
   completed_from?: string;
   completed_to?: string;
   keyword?: string;
-  group_by?: 'detail' | 'equipment' | 'workshop';
+  group_by?: string;
 }): Promise<EquipmentCapacityReportResult> {
   return apiRequest(`${PREFIX}/equipment/reports/capacity`, { params });
 }
@@ -2426,13 +2437,22 @@ export function getNextMoldTrialTimes(params?: {
   trial_times: number;
   can_create: boolean;
   blocking_sheet_no?: string | null;
+  blocking_sheet_id?: number | null;
+  blocking_trial_user_name?: string | null;
+  blocking_created_at?: string | null;
 }> {
   return apiRequest(`${PREFIX}/molds/trial-sheets/next-trial-times`, { params });
 }
 
 /** 仍有未完结试模流程的模具（待启用选用列表过滤） */
 export function getMoldTrialIncompleteMolds(): Promise<{
-  items: { mold_code: string; blocking_sheet_no?: string | null; blocking_sheet_id: number }[];
+  items: {
+    mold_code: string;
+    blocking_sheet_no?: string | null;
+    blocking_sheet_id: number;
+    blocking_trial_user_name?: string | null;
+    blocking_created_at?: string | null;
+  }[];
 }> {
   return apiRequest(`${PREFIX}/molds/trial-sheets/incomplete-molds`);
 }

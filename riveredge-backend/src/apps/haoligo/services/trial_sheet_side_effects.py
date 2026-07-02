@@ -805,6 +805,60 @@ async def find_incomplete_mold_trial_sheet(
     return None
 
 
+def serialize_mold_trial_blocking_sheet(row: HaoligoMoldTrialSheet) -> dict:
+    """阻塞新建试模单的未完结试模单摘要（供 API 与提示文案）。"""
+    return {
+        "blocking_sheet_no": (row.sheet_no or "").strip() or None,
+        "blocking_sheet_id": int(row.id),
+        "blocking_trial_user_name": (row.trial_user_name or "").strip() or None,
+        "blocking_created_at": row.created_at,
+    }
+
+
+def format_mold_trial_blocking_sheet_clause(row: HaoligoMoldTrialSheet) -> str:
+    """试模单 SMxxx（开单人：张三，开单时间：2026-06-29 10:13）"""
+    sheet_label = (row.sheet_no or "").strip() or f"#{row.id}"
+    who = (row.trial_user_name or "").strip()
+    when = row.created_at.strftime("%Y-%m-%d %H:%M") if row.created_at else ""
+    meta_parts = [p for p in (f"开单人：{who}" if who else None, f"开单时间：{when}" if when else None) if p]
+    if meta_parts:
+        return f"试模单 {sheet_label}（{'，'.join(meta_parts)}）"
+    return f"试模单 {sheet_label}"
+
+
+def format_mold_trial_blocking_flow_message(
+    *,
+    mold_code: str | None,
+    purchase_order_no: str | None,
+    blocking: HaoligoMoldTrialSheet,
+    suffix: str = "请先完成试模/试产及发出收回等环节。",
+) -> str:
+    clause = format_mold_trial_blocking_sheet_clause(blocking)
+    mc = (mold_code or "").strip() or (blocking.mold_code or "").strip()
+    if mc:
+        return f"该模具/订单仍有未完结的试模流程（{clause}），{suffix}"
+    po = (purchase_order_no or "").strip() or (blocking.purchase_order_no or "").strip()
+    if po:
+        return f"采购订单「{po}」仍有未完结的试模流程（{clause}），请先完成当前试模流程后再新建。"
+    return f"该模具/订单仍有未完结的试模流程（{clause}），{suffix}"
+
+
+async def get_mold_trial_blocking_info(
+    tenant_id: int,
+    *,
+    mold_code: str | None,
+    purchase_order_no: str | None,
+) -> Optional[dict]:
+    blocking = await find_incomplete_mold_trial_sheet(
+        tenant_id,
+        mold_code=mold_code,
+        purchase_order_no=purchase_order_no,
+    )
+    if not blocking:
+        return None
+    return serialize_mold_trial_blocking_sheet(blocking)
+
+
 async def assert_mold_trial_process_can_start_new_sheet(
     tenant_id: int,
     *,
@@ -818,19 +872,12 @@ async def assert_mold_trial_process_can_start_new_sheet(
     )
     if not blocking:
         return
-    sheet_label = (blocking.sheet_no or "").strip() or f"#{blocking.id}"
-    mc = (mold_code or "").strip() or (blocking.mold_code or "").strip()
-    if mc:
-        detail = (
-            f"模具代号「{mc}」仍有未完结的试模流程（试模单 {sheet_label}），"
-            "请先完成试模/试产及发出收回等环节后再新建"
-        )
-    else:
-        po = (purchase_order_no or "").strip() or (blocking.purchase_order_no or "").strip()
-        detail = (
-            f"采购订单「{po}」仍有未完结的试模流程（试模单 {sheet_label}），"
-            "请先完成当前试模流程后再新建"
-        )
+    detail = format_mold_trial_blocking_flow_message(
+        mold_code=mold_code,
+        purchase_order_no=purchase_order_no,
+        blocking=blocking,
+        suffix="请先完成试模/试产及发出收回等环节后再新建",
+    )
     raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
 
 
@@ -846,13 +893,7 @@ async def list_incomplete_trial_mold_blocks(tenant_id: int) -> List[dict]:
         if not mc or mc in seen:
             continue
         seen.add(mc)
-        items.append(
-            {
-                "mold_code": mc,
-                "blocking_sheet_no": (row.sheet_no or "").strip() or None,
-                "blocking_sheet_id": int(row.id),
-            }
-        )
+        items.append(serialize_mold_trial_blocking_sheet(row) | {"mold_code": mc})
     return items
 
 
@@ -862,15 +903,14 @@ async def mold_trial_create_availability(
     mold_code: str | None,
     purchase_order_no: str | None,
 ) -> tuple[bool, Optional[str]]:
-    blocking = await find_incomplete_mold_trial_sheet(
+    info = await get_mold_trial_blocking_info(
         tenant_id,
         mold_code=mold_code,
         purchase_order_no=purchase_order_no,
     )
-    if not blocking:
+    if not info:
         return True, None
-    label = (blocking.sheet_no or "").strip() or None
-    return False, label
+    return False, info.get("blocking_sheet_no")
 
 
 async def set_mold_ledger_status_ready(tenant_id: int, mold_code: Optional[str]) -> None:

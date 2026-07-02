@@ -28,6 +28,7 @@ from apps.haoligo.api.routes_mold_maintenance_sheet import _resolve_applicant_on
 from apps.haoligo.services.spot_check_side_effects import normalize_report_user_ids, validate_report_notify_users
 from apps.haoligo.constants.mold_trial_failure_handling import (
     TRIAL_FAILURE_HANDLING_ADJUSTMENT_DONE,
+    TRIAL_FAILURE_HANDLING_ALL_VALUES,
     TRIAL_FAILURE_HANDLING_DISPATCHED,
     TRIAL_FAILURE_HANDLING_IN_PROGRESS,
     TRIAL_FAILURE_HANDLING_RECALLED,
@@ -45,6 +46,7 @@ from apps.haoligo.services.trial_sheet_side_effects import (
     mark_trial_adjustment_complete,
     list_incomplete_trial_mold_blocks,
     mold_trial_create_availability,
+    get_mold_trial_blocking_info,
     pending_trial_failure_exception_q,
     recall_trial_failure_sheet,
     apply_trial_failure_after_save,
@@ -232,12 +234,26 @@ class MoldTrialNextTimesOut(BaseModel):
         None,
         description="若不可新建，阻塞中的试模单单号",
     )
+    blocking_sheet_id: Optional[int] = Field(
+        None,
+        description="若不可新建，阻塞中的试模单 ID",
+    )
+    blocking_trial_user_name: Optional[str] = Field(
+        None,
+        description="若不可新建，阻塞试模单的试模人员（开单人）",
+    )
+    blocking_created_at: Optional[datetime] = Field(
+        None,
+        description="若不可新建，阻塞试模单创建时间",
+    )
 
 
 class MoldTrialIncompleteMoldItem(BaseModel):
     mold_code: str
     blocking_sheet_no: Optional[str] = None
     blocking_sheet_id: int
+    blocking_trial_user_name: Optional[str] = None
+    blocking_created_at: Optional[datetime] = None
 
 
 class MoldTrialIncompleteMoldsOut(BaseModel):
@@ -448,6 +464,10 @@ async def list_trial_sheets(
         None,
         description="为 true 时仅返回试模/试产不合格且尚未确认收回的待处理单",
     ),
+    failure_handling: Optional[str] = Query(
+        None,
+        description="按不合格处理方式筛选，如：调整完成、立即送修、已收回",
+    ),
     keyword: Optional[str] = Query(None, description="采购订单号/模具代号/名称关键字"),
     created_from: Optional[datetime] = Query(None, description="创建时间起（含）"),
     created_to: Optional[datetime] = Query(None, description="创建时间止（含）"),
@@ -462,6 +482,14 @@ async def list_trial_sheets(
         qs = qs.filter(trial_result=trial_result.strip())
     if failure_pending:
         qs = qs.filter(pending_trial_failure_exception_q())
+    fh_filter = (failure_handling or "").strip()
+    if fh_filter:
+        if fh_filter not in TRIAL_FAILURE_HANDLING_ALL_VALUES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"无效的处理方式筛选：{fh_filter}",
+            )
+        qs = qs.filter(failure_handling=fh_filter)
     qs = await apply_direct_mold_field_keyword_filter(
         qs, tenant_id, keyword, trial_sheet_header_keyword_q
     )
@@ -700,14 +728,7 @@ async def list_incomplete_trial_molds(
 ):
     raw = await list_incomplete_trial_mold_blocks(tenant_id)
     return MoldTrialIncompleteMoldsOut(
-        items=[
-            MoldTrialIncompleteMoldItem(
-                mold_code=str(x["mold_code"]),
-                blocking_sheet_no=x.get("blocking_sheet_no"),
-                blocking_sheet_id=int(x["blocking_sheet_id"]),
-            )
-            for x in raw
-        ],
+        items=[MoldTrialIncompleteMoldItem(**x) for x in raw],
     )
 
 
@@ -723,15 +744,18 @@ async def preview_next_trial_times(
         mold_code=mold_code,
         purchase_order_no=purchase_order_no,
     )
-    can_create, blocking_sheet_no = await mold_trial_create_availability(
+    blocking_info = await get_mold_trial_blocking_info(
         tenant_id,
         mold_code=mold_code,
         purchase_order_no=purchase_order_no,
     )
     return MoldTrialNextTimesOut(
         trial_times=n,
-        can_create=can_create,
-        blocking_sheet_no=blocking_sheet_no,
+        can_create=blocking_info is None,
+        blocking_sheet_no=blocking_info.get("blocking_sheet_no") if blocking_info else None,
+        blocking_sheet_id=blocking_info.get("blocking_sheet_id") if blocking_info else None,
+        blocking_trial_user_name=blocking_info.get("blocking_trial_user_name") if blocking_info else None,
+        blocking_created_at=blocking_info.get("blocking_created_at") if blocking_info else None,
     )
 
 

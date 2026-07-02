@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, List, Literal, Optional
@@ -292,6 +293,7 @@ class CapacityByEquipmentRow(BaseModel):
     equipment_id: int
     equipment_asset_code: str = ""
     equipment_name: str = ""
+    period_label: Optional[str] = Field(None, description="周期标签（与 period 维度组合汇总时）")
     record_count: int
     planned_qty_total: Optional[Decimal] = None
     completed_qty_total: Decimal
@@ -301,6 +303,15 @@ class CapacityByEquipmentRow(BaseModel):
 class CapacityByWorkshopRow(BaseModel):
     workshop_id: Optional[int] = None
     workshop_name: str = ""
+    period_label: Optional[str] = Field(None, description="周期标签（与 period 维度组合汇总时）")
+    record_count: int
+    planned_qty_total: Optional[Decimal] = None
+    completed_qty_total: Decimal
+    achievement_rate_pct: Optional[float] = None
+
+
+class CapacityByPeriodRow(BaseModel):
+    period_label: str = Field(description="周期标签（YYYY-MM / YYYY-Qn / YYYY）")
     record_count: int
     planned_qty_total: Optional[Decimal] = None
     completed_qty_total: Decimal
@@ -313,9 +324,198 @@ class CapacityReportOut(BaseModel):
     items: List[OutputRecordOut] = Field(default_factory=list)
     equipment_items: List[CapacityByEquipmentRow] = Field(default_factory=list)
     workshop_items: List[CapacityByWorkshopRow] = Field(default_factory=list)
+    period_items: List[CapacityByPeriodRow] = Field(default_factory=list)
     total: int = 0
     skip: int = 0
     limit: int = 20
+
+
+def _capacity_period_label(recorded_at: datetime, mode: str) -> str:
+    if mode == "month":
+        return recorded_at.strftime("%Y-%m")
+    if mode == "quarter":
+        quarter = (recorded_at.month - 1) // 3 + 1
+        return f"{recorded_at.year}-Q{quarter}"
+    if mode == "year":
+        return str(recorded_at.year)
+    raise ValueError(f"unsupported period mode: {mode}")
+
+
+async def _aggregate_capacity_by_period(qs, mode: str, skip: int, limit: int) -> tuple[List[CapacityByPeriodRow], int]:
+    rows = await qs.values("recorded_at", "planned_qty", "completed_qty")
+    buckets: dict[str, dict[str, object]] = defaultdict(
+        lambda: {"count": 0, "planned": Decimal("0"), "completed": Decimal("0")}
+    )
+    for row in rows:
+        recorded_at = row.get("recorded_at")
+        if recorded_at is None:
+            continue
+        key = _capacity_period_label(recorded_at, mode)
+        bucket = buckets[key]
+        bucket["count"] = int(bucket["count"]) + 1
+        planned = row.get("planned_qty")
+        completed = row.get("completed_qty")
+        if planned is not None:
+            bucket["planned"] = Decimal(str(bucket["planned"])) + Decimal(str(planned))
+        if completed is not None:
+            bucket["completed"] = Decimal(str(bucket["completed"])) + Decimal(str(completed))
+    sorted_keys = sorted(buckets.keys(), reverse=True)
+    total = len(sorted_keys)
+    page_keys = sorted_keys[skip : skip + limit]
+    period_items: List[CapacityByPeriodRow] = []
+    for key in page_keys:
+        bucket = buckets[key]
+        planned_raw = bucket["planned"]
+        completed_raw = bucket["completed"]
+        planned = planned_raw if isinstance(planned_raw, Decimal) and planned_raw > 0 else None
+        completed = completed_raw if isinstance(completed_raw, Decimal) else Decimal("0")
+        period_items.append(
+            CapacityByPeriodRow(
+                period_label=key,
+                record_count=int(bucket["count"]),
+                planned_qty_total=normalize_equipment_output_qty(planned),
+                completed_qty_total=normalize_equipment_output_qty(completed, required=True),
+                achievement_rate_pct=_achievement_rate_pct(planned, completed),
+            )
+        )
+    return period_items, total
+
+
+def _bucket_add(bucket: dict[str, object], planned, completed) -> None:
+    bucket["count"] = int(bucket["count"]) + 1
+    if planned is not None:
+        bucket["planned"] = Decimal(str(bucket["planned"])) + Decimal(str(planned))
+    if completed is not None:
+        bucket["completed"] = Decimal(str(bucket["completed"])) + Decimal(str(completed))
+
+
+def _bucket_totals(bucket: dict[str, object]) -> tuple[Optional[Decimal], Decimal]:
+    planned_raw = bucket["planned"]
+    completed_raw = bucket["completed"]
+    planned = planned_raw if isinstance(planned_raw, Decimal) and planned_raw > 0 else None
+    completed = completed_raw if isinstance(completed_raw, Decimal) else Decimal("0")
+    return planned, completed
+
+
+async def _aggregate_capacity_by_equipment_period(
+    qs,
+    tenant_id: int,
+    period_mode: str,
+    skip: int,
+    limit: int,
+) -> tuple[List[CapacityByEquipmentRow], int]:
+    rows = await qs.values("recorded_at", "planned_qty", "completed_qty", "equipment_id")
+    buckets: dict[tuple[str, int], dict[str, object]] = defaultdict(
+        lambda: {"count": 0, "planned": Decimal("0"), "completed": Decimal("0")}
+    )
+    for row in rows:
+        recorded_at = row.get("recorded_at")
+        equipment_id = row.get("equipment_id")
+        if recorded_at is None or equipment_id is None:
+            continue
+        key = (_capacity_period_label(recorded_at, period_mode), int(equipment_id))
+        _bucket_add(buckets[key], row.get("planned_qty"), row.get("completed_qty"))
+    sorted_keys = sorted(
+        buckets.keys(),
+        key=lambda item: (item[0], -int(buckets[item]["completed"] if isinstance(buckets[item]["completed"], Decimal) else Decimal("0"))),
+        reverse=True,
+    )
+    total = len(sorted_keys)
+    page_keys = sorted_keys[skip : skip + limit]
+    eq_ids = list({eid for _, eid in page_keys})
+    eq_map: dict[int, HaoligoEquipment] = {}
+    if eq_ids:
+        eqs = await tenant_alive(HaoligoEquipment, tenant_id).filter(id__in=eq_ids)
+        eq_map = {e.id: e for e in eqs}
+    equipment_items: List[CapacityByEquipmentRow] = []
+    for period_label, eid in page_keys:
+        bucket = buckets[(period_label, eid)]
+        planned, completed = _bucket_totals(bucket)
+        eq = eq_map.get(eid)
+        equipment_items.append(
+            CapacityByEquipmentRow(
+                equipment_id=eid,
+                equipment_asset_code=eq.asset_code if eq else "",
+                equipment_name=eq.name if eq else "",
+                period_label=period_label,
+                record_count=int(bucket["count"]),
+                planned_qty_total=normalize_equipment_output_qty(planned),
+                completed_qty_total=normalize_equipment_output_qty(completed, required=True),
+                achievement_rate_pct=_achievement_rate_pct(planned, completed),
+            )
+        )
+    return equipment_items, total
+
+
+async def _aggregate_capacity_by_workshop_period(
+    qs,
+    tenant_id: int,
+    period_mode: str,
+    skip: int,
+    limit: int,
+) -> tuple[List[CapacityByWorkshopRow], int]:
+    rows = await qs.values(
+        "recorded_at",
+        "planned_qty",
+        "completed_qty",
+        "equipment__workshop_id",
+    )
+    buckets: dict[tuple[str, Optional[int]], dict[str, object]] = defaultdict(
+        lambda: {"count": 0, "planned": Decimal("0"), "completed": Decimal("0")}
+    )
+    for row in rows:
+        recorded_at = row.get("recorded_at")
+        if recorded_at is None:
+            continue
+        wid = row.get("equipment__workshop_id")
+        workshop_id = int(wid) if wid is not None else None
+        key = (_capacity_period_label(recorded_at, period_mode), workshop_id)
+        _bucket_add(buckets[key], row.get("planned_qty"), row.get("completed_qty"))
+    sorted_keys = sorted(
+        buckets.keys(),
+        key=lambda item: (
+            item[0],
+            -int(buckets[item]["completed"] if isinstance(buckets[item]["completed"], Decimal) else Decimal("0")),
+        ),
+        reverse=True,
+    )
+    total = len(sorted_keys)
+    page_keys = sorted_keys[skip : skip + limit]
+    ws_ids = [wid for _, wid in page_keys if wid is not None]
+    ws_map: dict[int, HaoligoWorkshop] = {}
+    if ws_ids:
+        wss = await tenant_alive(HaoligoWorkshop, tenant_id).filter(id__in=ws_ids)
+        ws_map = {w.id: w for w in wss}
+    workshop_items: List[CapacityByWorkshopRow] = []
+    for period_label, wid in page_keys:
+        bucket = buckets[(period_label, wid)]
+        planned, completed = _bucket_totals(bucket)
+        ws = ws_map.get(int(wid)) if wid is not None else None
+        workshop_items.append(
+            CapacityByWorkshopRow(
+                workshop_id=wid,
+                workshop_name=ws.name if ws else "",
+                period_label=period_label,
+                record_count=int(bucket["count"]),
+                planned_qty_total=normalize_equipment_output_qty(planned),
+                completed_qty_total=normalize_equipment_output_qty(completed, required=True),
+                achievement_rate_pct=_achievement_rate_pct(planned, completed),
+            )
+        )
+    return workshop_items, total
+
+
+def _parse_capacity_group_by(mode: str) -> tuple[str, Optional[str]]:
+    normalized = (mode or "detail").strip().lower()
+    if normalized in ("detail", "equipment", "workshop"):
+        return normalized, None
+    if normalized in ("month", "quarter", "year"):
+        return "period", normalized
+    if "_" in normalized:
+        dimension, period = normalized.split("_", 1)
+        if dimension in ("equipment", "workshop") and period in ("month", "quarter", "year"):
+            return dimension, period
+    return "detail", None
 
 
 @router.get(
@@ -344,7 +544,13 @@ async def capacity_report(
     completed_from: Optional[str] = None,
     completed_to: Optional[str] = None,
     keyword: Optional[str] = None,
-    group_by: str = Query("detail", description="detail=产出明细；equipment=按设备汇总；workshop=按车间汇总"),
+    group_by: str = Query(
+        "detail",
+        description=(
+            "detail=产出明细；equipment=按设备；workshop=按车间；"
+            "month/quarter/year=按产出时间周期；equipment_month 等=设备/车间+周期组合"
+        ),
+    ),
 ):
     qs = tenant_alive(HaoligoEquipmentOutputRecord, tenant_id)
     qs = _apply_output_record_filters(
@@ -366,8 +572,28 @@ async def capacity_report(
         keyword=keyword,
     )
     summary = await _summary_for_qs(qs)
-    mode = (group_by or "detail").strip().lower()
-    if mode == "equipment":
+    dimension, period = _parse_capacity_group_by(group_by)
+    if dimension == "equipment" and period:
+        equipment_items, total = await _aggregate_capacity_by_equipment_period(qs, tenant_id, period, skip, limit)
+        return CapacityReportOut(
+            summary=summary,
+            group_by=f"equipment_{period}",
+            equipment_items=equipment_items,
+            total=total,
+            skip=skip,
+            limit=limit,
+        )
+    if dimension == "workshop" and period:
+        workshop_items, total = await _aggregate_capacity_by_workshop_period(qs, tenant_id, period, skip, limit)
+        return CapacityReportOut(
+            summary=summary,
+            group_by=f"workshop_{period}",
+            workshop_items=workshop_items,
+            total=total,
+            skip=skip,
+            limit=limit,
+        )
+    if dimension == "equipment":
         agg_rows = (
             await qs.annotate(
                 record_count=Count("id"),
@@ -411,7 +637,7 @@ async def capacity_report(
             limit=limit,
         )
 
-    if mode == "workshop":
+    if dimension == "workshop":
         agg_rows = (
             await qs.annotate(
                 record_count=Count("id"),
@@ -453,6 +679,17 @@ async def capacity_report(
             summary=summary,
             group_by="workshop",
             workshop_items=workshop_items,
+            total=total,
+            skip=skip,
+            limit=limit,
+        )
+
+    if dimension == "period" and period:
+        period_items, total = await _aggregate_capacity_by_period(qs, period, skip, limit)
+        return CapacityReportOut(
+            summary=summary,
+            group_by=period,
+            period_items=period_items,
             total=total,
             skip=skip,
             limit=limit,

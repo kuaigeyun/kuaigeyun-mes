@@ -4,8 +4,9 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Card, Col, Flex, Row, Segmented, Statistic, Typography } from 'antd';
+import { App, Card, Col, Flex, Row, Statistic, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { ThemedSegmented } from '../../../../../../components/themed-segmented';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, LIST_PAGE_TABLE_SCROLL } from '../../../../../../components/layout-templates';
 import { formatDateTime } from '../../../../../../utils/format';
@@ -15,6 +16,7 @@ import {
   listEquipments,
   listWorkshops,
   type EquipmentCapacityByEquipmentRow,
+  type EquipmentCapacityByPeriodRow,
   type EquipmentCapacityByWorkshopRow,
   type EquipmentCapacityReportResult,
   type EquipmentCapacitySummary,
@@ -22,18 +24,21 @@ import {
 } from '../../../../services/haoligo';
 import {
   defaultEquipmentReportRecordedRange,
+  isCapacityPeriodOnlyGroupBy,
   parseEquipmentCapacitySearchParams,
+  resolveCapacityGroupBy,
+  type CapacityDimensionMode,
+  type CapacityPeriodMode,
 } from '../../../../utils/equipmentReportDateRange';
 import { formatEquipmentOutputQty } from '../../../../utils/equipmentOutputQty';
-
-type ViewMode = 'detail' | 'equipment' | 'workshop';
 
 type SelectOption = { label: string; value: number };
 
 type CapacityExportRow =
   | EquipmentOutputRecordRow
   | EquipmentCapacityByEquipmentRow
-  | EquipmentCapacityByWorkshopRow;
+  | EquipmentCapacityByWorkshopRow
+  | EquipmentCapacityByPeriodRow;
 
 const EXPORT_PAGE_SIZE = 200;
 
@@ -67,7 +72,8 @@ const EquipmentCapacityReportPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const searchParamsRef = useRef<Record<string, unknown>>({});
-  const [viewMode, setViewMode] = useState<ViewMode>('detail');
+  const [dimensionMode, setDimensionMode] = useState<CapacityDimensionMode>('detail');
+  const [periodMode, setPeriodMode] = useState<CapacityPeriodMode>('none');
   const [summary, setSummary] = useState<EquipmentCapacitySummary | null>(null);
   const [equipmentOptions, setEquipmentOptions] = useState<SelectOption[]>([]);
   const [workshopOptions, setWorkshopOptions] = useState<SelectOption[]>([]);
@@ -80,6 +86,30 @@ const EquipmentCapacityReportPage: React.FC = () => {
       recorded_at_range: defaultRange,
     }),
     [defaultRange],
+  );
+
+  const groupBy = useMemo(
+    () => resolveCapacityGroupBy(dimensionMode, periodMode),
+    [dimensionMode, periodMode],
+  );
+
+  const dimensionModeOptions = useMemo(
+    () => [
+      { label: t('app.haoligo.equipment.reports.capacity.viewDetail'), value: 'detail' as const },
+      { label: t('app.haoligo.equipment.reports.capacity.viewEquipment'), value: 'equipment' as const },
+      { label: t('app.haoligo.equipment.reports.capacity.viewWorkshop'), value: 'workshop' as const },
+    ],
+    [t],
+  );
+
+  const periodModeOptions = useMemo(
+    () => [
+      { label: t('app.haoligo.equipment.reports.capacity.periodNone'), value: 'none' as const },
+      { label: t('app.haoligo.equipment.reports.capacity.viewMonth'), value: 'month' as const },
+      { label: t('app.haoligo.equipment.reports.capacity.viewQuarter'), value: 'quarter' as const },
+      { label: t('app.haoligo.equipment.reports.capacity.viewYear'), value: 'year' as const },
+    ],
+    [t],
   );
 
   useEffect(() => {
@@ -361,22 +391,100 @@ const EquipmentCapacityReportPage: React.FC = () => {
     [searchColumns, t],
   );
 
+  const periodColumn = useMemo<ProColumns<EquipmentCapacityByPeriodRow>>(
+    () => ({
+      title: t('app.haoligo.equipment.reports.capacity.colPeriod'),
+      dataIndex: 'period_label',
+      width: 120,
+      hideInSearch: true,
+      render: (_, r) => (r.period_label?.trim() ? r.period_label : '—'),
+    }),
+    [t],
+  );
+
+  const periodColumns = useMemo<ProColumns<EquipmentCapacityByPeriodRow>[]>(
+    () => [
+      ...searchColumns,
+      periodColumn,
+      {
+        title: t('app.haoligo.equipment.reports.capacity.colRecordCount'),
+        dataIndex: 'record_count',
+        width: 88,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.haoligo.equipment.reports.capacity.colPlannedTotal'),
+        dataIndex: 'planned_qty_total',
+        width: 110,
+        hideInSearch: true,
+        render: (_, r) => formatEquipmentOutputQty(r.planned_qty_total),
+      },
+      {
+        title: t('app.haoligo.equipment.reports.capacity.colCompletedTotal'),
+        dataIndex: 'completed_qty_total',
+        width: 110,
+        hideInSearch: true,
+        render: (_, r) => formatEquipmentOutputQty(r.completed_qty_total),
+      },
+      {
+        title: t('app.haoligo.equipment.reports.capacity.colAchievement'),
+        dataIndex: 'achievement_rate_pct',
+        width: 100,
+        hideInSearch: true,
+        render: (_, r) => formatRate(r.achievement_rate_pct),
+      },
+    ],
+    [periodColumn, searchColumns, t],
+  );
+
   const tableMeta = useMemo(() => {
-    if (viewMode === 'equipment') {
+    const showPeriodCol = periodMode !== 'none';
+    if (dimensionMode === 'equipment') {
+      const columns = showPeriodCol
+        ? ([
+            ...searchColumns,
+            periodColumn as ProColumns<CapacityExportRow>,
+            ...equipmentColumns.filter((col) => !col.hideInTable && col.dataIndex !== 'period_label'),
+          ] as ProColumns<CapacityExportRow>[])
+        : (equipmentColumns as ProColumns<CapacityExportRow>[]);
       return {
-        columns: equipmentColumns as ProColumns<CapacityExportRow>[],
-        rowKey: (r: CapacityExportRow) => String((r as EquipmentCapacityByEquipmentRow).equipment_id),
-        persistenceSuffix: ':equipment',
+        columns,
+        rowKey: (r: CapacityExportRow) => {
+          const row = r as EquipmentCapacityByEquipmentRow;
+          return showPeriodCol
+            ? `${row.period_label ?? ''}-${row.equipment_id}`
+            : String(row.equipment_id);
+        },
+        persistenceSuffix: showPeriodCol ? `:equipment-${periodMode}` : ':equipment',
         pickRows: (res: EquipmentCapacityReportResult) => res.equipment_items,
       };
     }
-    if (viewMode === 'workshop') {
+    if (dimensionMode === 'workshop') {
+      const columns = showPeriodCol
+        ? ([
+            ...searchColumns,
+            periodColumn as ProColumns<CapacityExportRow>,
+            ...workshopColumns.filter((col) => !col.hideInTable && col.dataIndex !== 'period_label'),
+          ] as ProColumns<CapacityExportRow>[])
+        : (workshopColumns as ProColumns<CapacityExportRow>[]);
       return {
-        columns: workshopColumns as ProColumns<CapacityExportRow>[],
-        rowKey: (r: CapacityExportRow) =>
-          String((r as EquipmentCapacityByWorkshopRow).workshop_id ?? 'none'),
-        persistenceSuffix: ':workshop',
+        columns,
+        rowKey: (r: CapacityExportRow) => {
+          const row = r as EquipmentCapacityByWorkshopRow;
+          return showPeriodCol
+            ? `${row.period_label ?? ''}-${row.workshop_id ?? 'none'}`
+            : String(row.workshop_id ?? 'none');
+        },
+        persistenceSuffix: showPeriodCol ? `:workshop-${periodMode}` : ':workshop',
         pickRows: (res: EquipmentCapacityReportResult) => res.workshop_items,
+      };
+    }
+    if (periodMode !== 'none') {
+      return {
+        columns: periodColumns as ProColumns<CapacityExportRow>[],
+        rowKey: (r: CapacityExportRow) => String((r as EquipmentCapacityByPeriodRow).period_label),
+        persistenceSuffix: `:${periodMode}`,
+        pickRows: (res: EquipmentCapacityReportResult) => res.period_items ?? [],
       };
     }
     return {
@@ -385,25 +493,42 @@ const EquipmentCapacityReportPage: React.FC = () => {
       persistenceSuffix: '',
       pickRows: (res: EquipmentCapacityReportResult) => res.items,
     };
-  }, [detailColumns, equipmentColumns, viewMode, workshopColumns]);
+  }, [
+    detailColumns,
+    dimensionMode,
+    equipmentColumns,
+    periodColumn,
+    periodColumns,
+    periodMode,
+    searchColumns,
+    workshopColumns,
+  ]);
 
   const loadReport = async (
     searchFormValues: Record<string, unknown> | undefined,
     skip: number,
     limit: number,
-    groupBy: ViewMode,
+    resolvedGroupBy: string,
   ) => {
     const filters = parseEquipmentCapacitySearchParams(searchFormValues);
     return getEquipmentCapacityReport({
       skip,
       limit,
-      group_by: groupBy,
+      group_by: resolvedGroupBy,
       ...filters,
     });
   };
 
+  const pickRowsForGroupBy = useCallback((res: EquipmentCapacityReportResult, resolvedGroupBy: string) => {
+    if (resolvedGroupBy === 'detail') return res.items;
+    if (resolvedGroupBy === 'equipment' || resolvedGroupBy.startsWith('equipment_')) return res.equipment_items;
+    if (resolvedGroupBy === 'workshop' || resolvedGroupBy.startsWith('workshop_')) return res.workshop_items;
+    if (isCapacityPeriodOnlyGroupBy(resolvedGroupBy)) return res.period_items ?? [];
+    return res.items;
+  }, []);
+
   const fetchAllRows = useCallback(
-    async (groupBy: ViewMode, searchFormValues?: Record<string, unknown>) => {
+    async (resolvedGroupBy: string, searchFormValues?: Record<string, unknown>) => {
       const filters = parseEquipmentCapacitySearchParams(searchFormValues);
       let skip = 0;
       let total = 0;
@@ -412,24 +537,29 @@ const EquipmentCapacityReportPage: React.FC = () => {
         const res = await getEquipmentCapacityReport({
           skip,
           limit: EXPORT_PAGE_SIZE,
-          group_by: groupBy,
+          group_by: resolvedGroupBy,
           ...filters,
         });
         total = res.total;
-        if (groupBy === 'detail') all.push(...res.items);
-        else if (groupBy === 'equipment') all.push(...res.equipment_items);
-        else all.push(...res.workshop_items);
+        all.push(...(pickRowsForGroupBy(res, resolvedGroupBy) as CapacityExportRow[]));
         skip += EXPORT_PAGE_SIZE;
       } while (skip < total);
       return all;
     },
-    [],
+    [pickRowsForGroupBy],
   );
 
   const rowsToCsv = useCallback(
-    (rows: CapacityExportRow[], mode: ViewMode): { headers: string[]; body: string[][] } => {
-      if (mode === 'equipment') {
+    (
+      rows: CapacityExportRow[],
+      dimension: CapacityDimensionMode,
+      period: CapacityPeriodMode,
+      resolvedGroupBy: string,
+    ): { headers: string[]; body: string[][] } => {
+      const showPeriodCol = period !== 'none';
+      if (dimension === 'equipment') {
         const headers = [
+          ...(showPeriodCol ? [t('app.haoligo.equipment.reports.capacity.colPeriod')] : []),
           t('app.haoligo.equipment.documents.colEquipment'),
           t('app.haoligo.equipment.reports.capacity.colRecordCount'),
           t('app.haoligo.equipment.reports.capacity.colPlannedTotal'),
@@ -437,6 +567,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
           t('app.haoligo.equipment.reports.capacity.colAchievement'),
         ];
         const body = (rows as EquipmentCapacityByEquipmentRow[]).map((r) => [
+          ...(showPeriodCol ? [r.period_label || ''] : []),
           equipmentLabel(r.equipment_asset_code, r.equipment_name, r.equipment_id),
           String(r.record_count ?? ''),
           formatEquipmentOutputQty(r.planned_qty_total),
@@ -445,8 +576,9 @@ const EquipmentCapacityReportPage: React.FC = () => {
         ]);
         return { headers, body };
       }
-      if (mode === 'workshop') {
+      if (dimension === 'workshop') {
         const headers = [
+          ...(showPeriodCol ? [t('app.haoligo.equipment.reports.capacity.colPeriod')] : []),
           t('app.haoligo.equipment.reports.capacity.colWorkshop'),
           t('app.haoligo.equipment.reports.capacity.colRecordCount'),
           t('app.haoligo.equipment.reports.capacity.colPlannedTotal'),
@@ -454,7 +586,25 @@ const EquipmentCapacityReportPage: React.FC = () => {
           t('app.haoligo.equipment.reports.capacity.colAchievement'),
         ];
         const body = (rows as EquipmentCapacityByWorkshopRow[]).map((r) => [
+          ...(showPeriodCol ? [r.period_label || ''] : []),
           r.workshop_name?.trim() ? r.workshop_name : '—',
+          String(r.record_count ?? ''),
+          formatEquipmentOutputQty(r.planned_qty_total),
+          formatEquipmentOutputQty(r.completed_qty_total),
+          formatRate(r.achievement_rate_pct),
+        ]);
+        return { headers, body };
+      }
+      if (isCapacityPeriodOnlyGroupBy(resolvedGroupBy)) {
+        const headers = [
+          t('app.haoligo.equipment.reports.capacity.colPeriod'),
+          t('app.haoligo.equipment.reports.capacity.colRecordCount'),
+          t('app.haoligo.equipment.reports.capacity.colPlannedTotal'),
+          t('app.haoligo.equipment.reports.capacity.colCompletedTotal'),
+          t('app.haoligo.equipment.reports.capacity.colAchievement'),
+        ];
+        const body = (rows as EquipmentCapacityByPeriodRow[]).map((r) => [
+          r.period_label || '',
           String(r.record_count ?? ''),
           formatEquipmentOutputQty(r.planned_qty_total),
           formatEquipmentOutputQty(r.completed_qty_total),
@@ -506,7 +656,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
         if (type === 'all') {
           const hide = messageApi.loading(t('components.uniReport.exporting', '正在导出…'), 0);
           try {
-            rows = await fetchAllRows(viewMode, searchParamsRef.current);
+            rows = await fetchAllRows(groupBy, searchParamsRef.current);
           } finally {
             hide();
           }
@@ -520,7 +670,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
           messageApi.warning(t('components.uniReport.exportEmpty', '没有可导出的数据'));
           return;
         }
-        const { headers, body } = rowsToCsv(rows, viewMode);
+        const { headers, body } = rowsToCsv(rows, dimensionMode, periodMode, groupBy);
         const dateStr = new Date().toISOString().slice(0, 10);
         downloadFile(buildCsv(headers, body), `${title}-${dateStr}.csv`, 'text/csv;charset=utf-8');
         messageApi.success(t('common.exportCountSuccess', { count: rows.length }));
@@ -528,7 +678,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
         messageApi.error((e as Error).message || t('common.exportFailed', '导出失败'));
       }
     },
-    [fetchAllRows, messageApi, rowsToCsv, t, tableMeta, title, viewMode],
+    [dimensionMode, fetchAllRows, groupBy, messageApi, periodMode, rowsToCsv, t, tableMeta, title],
   );
 
   const summaryCards = (
@@ -588,22 +738,28 @@ const EquipmentCapacityReportPage: React.FC = () => {
               {t('app.haoligo.equipment.reports.capacity.lead')}
             </Typography.Text>
           </div>
-          <Segmented<ViewMode>
-            value={viewMode}
-            onChange={(v) => {
-              setViewMode(v as ViewMode);
-              actionRef.current?.reload();
-            }}
-            options={[
-              { label: t('app.haoligo.equipment.reports.capacity.viewDetail'), value: 'detail' },
-              { label: t('app.haoligo.equipment.reports.capacity.viewEquipment'), value: 'equipment' },
-              { label: t('app.haoligo.equipment.reports.capacity.viewWorkshop'), value: 'workshop' },
-            ]}
-          />
+          <Flex gap={8} wrap="wrap" justify="flex-end">
+            <ThemedSegmented
+              value={dimensionMode}
+              onChange={(v) => {
+                setDimensionMode(v as CapacityDimensionMode);
+                actionRef.current?.reload();
+              }}
+              options={dimensionModeOptions}
+            />
+            <ThemedSegmented
+              value={periodMode}
+              onChange={(v) => {
+                setPeriodMode(v as CapacityPeriodMode);
+                actionRef.current?.reload();
+              }}
+              options={periodModeOptions}
+            />
+          </Flex>
         </Flex>
         <div style={{ flexShrink: 0 }}>{summaryCards}</div>
         <UniTable<CapacityExportRow>
-          key={`capacity-${viewMode}`}
+          key={`capacity-${groupBy}`}
           columnPersistenceId={`apps.haoligo.pages.equipment.reports.capacity${tableMeta.persistenceSuffix}`}
           headerTitle={title}
           actionRef={actionRef}
@@ -619,8 +775,9 @@ const EquipmentCapacityReportPage: React.FC = () => {
             const current = params.current ?? 1;
             const pageSize = params.pageSize ?? 20;
             const skip = (current - 1) * pageSize;
+            const searchValues = searchFormValues as Record<string, unknown> | undefined;
             try {
-              const res = await loadReport(searchFormValues as Record<string, unknown>, skip, pageSize, viewMode);
+              const res = await loadReport(searchValues, skip, pageSize, groupBy);
               setSummary(res.summary);
               return { data: tableMeta.pickRows(res), total: res.total, success: true };
             } catch (e) {

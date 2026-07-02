@@ -25,6 +25,23 @@ export function parseEquipmentReportRecordedRange(search: Record<string, unknown
   return {};
 }
 
+export type CapacityDimensionMode = 'detail' | 'equipment' | 'workshop';
+export type CapacityPeriodMode = 'none' | 'month' | 'quarter' | 'year';
+
+/** 维度 + 周期 → API group_by（两组筛选独立组合） */
+export function resolveCapacityGroupBy(
+  dimension: CapacityDimensionMode,
+  period: CapacityPeriodMode,
+): string {
+  if (period === 'none') return dimension;
+  if (dimension === 'detail') return period;
+  return `${dimension}_${period}`;
+}
+
+export function isCapacityPeriodOnlyGroupBy(groupBy: string): boolean {
+  return groupBy === 'month' || groupBy === 'quarter' || groupBy === 'year';
+}
+
 /** 默认查询本月 1 日至今 */
 export function defaultEquipmentReportRecordedRange(): [Dayjs, Dayjs] {
   return [dayjs().startOf('month'), dayjs().endOf('day')];

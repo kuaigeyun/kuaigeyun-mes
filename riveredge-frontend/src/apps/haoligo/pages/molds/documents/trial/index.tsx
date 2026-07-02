@@ -113,6 +113,11 @@ import { userIsExternalPartner } from '../../../../../../utils/externalPartner';
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
 import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
 import { executeDatasetQuery, getDatasetList } from '../../../../../../services/dataset';
+import {
+  formatMoldTrialBlockingFlowMessage,
+  formatMoldTrialBlockingSheetClause,
+  type MoldTrialBlockingInfo,
+} from '../../../../utils/moldTrialBlockingMessage';
 
 const HAOLIGO_TRIAL_RESOURCE = 'haoligo:molds-documents-trial';
 
@@ -657,7 +662,7 @@ const MoldTrialTimesPreview: React.FC<{ active: boolean; initialKey?: string }> 
   const purchaseOrderNoWatched = Form.useWatch('purchase_order_no', form);
   const [trialTimes, setTrialTimes] = useState<number | null>(null);
   const [canCreate, setCanCreate] = useState(true);
-  const [blockingSheetNo, setBlockingSheetNo] = useState<string | null>(null);
+  const [blockingInfo, setBlockingInfo] = useState<MoldTrialBlockingInfo | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [seedMc, seedPo] = (initialKey ?? '').split('|');
@@ -666,7 +671,7 @@ const MoldTrialTimesPreview: React.FC<{ active: boolean; initialKey?: string }> 
     if (!active) {
       setTrialTimes(null);
       setCanCreate(true);
-      setBlockingSheetNo(null);
+      setBlockingInfo(null);
       setLoading(false);
       return;
     }
@@ -677,7 +682,7 @@ const MoldTrialTimesPreview: React.FC<{ active: boolean; initialKey?: string }> 
     if (!mc && !po) {
       setTrialTimes(null);
       setCanCreate(true);
-      setBlockingSheetNo(null);
+      setBlockingInfo(null);
       setLoading(false);
       return;
     }
@@ -691,14 +696,23 @@ const MoldTrialTimesPreview: React.FC<{ active: boolean; initialKey?: string }> 
         if (!cancelled) {
           setTrialTimes(res.trial_times);
           setCanCreate(res.can_create !== false);
-          setBlockingSheetNo(res.blocking_sheet_no?.trim() || null);
+          setBlockingInfo(
+            res.can_create === false
+              ? {
+                  blocking_sheet_no: res.blocking_sheet_no,
+                  blocking_sheet_id: res.blocking_sheet_id,
+                  blocking_trial_user_name: res.blocking_trial_user_name,
+                  blocking_created_at: res.blocking_created_at,
+                }
+              : null,
+          );
         }
       })
       .catch(() => {
         if (!cancelled) {
           setTrialTimes(null);
           setCanCreate(true);
-          setBlockingSheetNo(null);
+          setBlockingInfo(null);
         }
       })
       .finally(() => {
@@ -748,11 +762,7 @@ const MoldTrialTimesPreview: React.FC<{ active: boolean; initialKey?: string }> 
             type="error"
             showIcon
             message="当前不可新建试模单"
-            description={
-              blockingSheetNo
-                ? `该模具/订单仍有未完结的试模流程（试模单 ${blockingSheetNo}），请先完成试模/试产及发出收回等环节。`
-                : '该模具/订单仍有未完结的试模流程，请先完成当前试模流程后再新建。'
-            }
+            description={formatMoldTrialBlockingFlowMessage(blockingInfo)}
           />
         </Col>
       ) : null}
@@ -893,7 +903,7 @@ const MoldTrialSheetsPage: React.FC = () => {
   const [moldKw, setMoldKw] = useState('');
   const [moldRows, setMoldRows] = useState<MoldRow[]>([]);
   /** 仍有未完结试模流程的模具代号 → 阻塞试模单单号 */
-  const [trialBlockedByMoldCode, setTrialBlockedByMoldCode] = useState<Map<string, string>>(new Map());
+  const [trialBlockedByMoldCode, setTrialBlockedByMoldCode] = useState<Map<string, MoldTrialBlockingInfo>>(new Map());
   /** 从待启用模具创建时跳过采购订单号必填 */
   const [skipPurchaseOrder, setSkipPurchaseOrder] = useState(false);
   const canReadMoldLedger = useMemo(
@@ -1062,10 +1072,17 @@ const MoldTrialSheetsPage: React.FC = () => {
   const loadTrialBlockedMoldCodes = useCallback(async () => {
     try {
       const res = await getMoldTrialIncompleteMolds();
-      const m = new Map<string, string>();
+      const m = new Map<string, MoldTrialBlockingInfo>();
       for (const it of res.items ?? []) {
         const mc = String(it.mold_code ?? '').trim();
-        if (mc) m.set(mc, String(it.blocking_sheet_no ?? '').trim());
+        if (mc) {
+          m.set(mc, {
+            blocking_sheet_no: it.blocking_sheet_no,
+            blocking_sheet_id: it.blocking_sheet_id,
+            blocking_trial_user_name: it.blocking_trial_user_name,
+            blocking_created_at: it.blocking_created_at,
+          });
+        }
       }
       setTrialBlockedByMoldCode(m);
     } catch {
@@ -1089,10 +1106,10 @@ const MoldTrialSheetsPage: React.FC = () => {
     }
   }, [messageApi, loadTrialBlockedMoldCodes]);
 
-  const trialBlockedMessage = useCallback((moldCode: string, sheetNo?: string) => {
-    const sn = (sheetNo || '').trim();
-    return sn
-      ? `模具「${moldCode}」仍有未完结的试模流程（试模单 ${sn}），不可新建`
+  const trialBlockedMessage = useCallback((moldCode: string, info?: MoldTrialBlockingInfo | null) => {
+    const clause = info ? formatMoldTrialBlockingSheetClause(info) : null;
+    return clause
+      ? `模具「${moldCode}」仍有未完结的试模流程（${clause}），不可新建`
       : `模具「${moldCode}」仍有未完结的试模流程，不可新建`;
   }, []);
 
@@ -1416,15 +1433,22 @@ const MoldTrialSheetsPage: React.FC = () => {
   const handleUsePendingMold = useCallback(
     async (row: MoldRow) => {
       const mc = row.mold_code.trim();
-      const blockedSn = trialBlockedByMoldCode.get(mc);
-      if (blockedSn !== undefined) {
-        messageApi.error(trialBlockedMessage(mc, blockedSn));
+      const blockedInfo = trialBlockedByMoldCode.get(mc);
+      if (blockedInfo !== undefined) {
+        messageApi.error(trialBlockedMessage(mc, blockedInfo));
         return;
       }
       try {
         const preview = await getNextMoldTrialTimes({ mold_code: mc });
         if (!preview.can_create) {
-          messageApi.error(trialBlockedMessage(mc, preview.blocking_sheet_no ?? undefined));
+          messageApi.error(
+            trialBlockedMessage(mc, {
+              blocking_sheet_no: preview.blocking_sheet_no,
+              blocking_sheet_id: preview.blocking_sheet_id,
+              blocking_trial_user_name: preview.blocking_trial_user_name,
+              blocking_created_at: preview.blocking_created_at,
+            }),
+          );
           return;
         }
       } catch (e) {
@@ -1949,11 +1973,16 @@ const MoldTrialSheetsPage: React.FC = () => {
           purchase_order_no: po || undefined,
         });
         if (!preview.can_create) {
-          const sn = preview.blocking_sheet_no?.trim();
           messageApi.error(
-            sn
-              ? `该模具/订单仍有未完结的试模流程（试模单 ${sn}），不可新建`
-              : '该模具/订单仍有未完结的试模流程，不可新建',
+            formatMoldTrialBlockingFlowMessage(
+              {
+                blocking_sheet_no: preview.blocking_sheet_no,
+                blocking_sheet_id: preview.blocking_sheet_id,
+                blocking_trial_user_name: preview.blocking_trial_user_name,
+                blocking_created_at: preview.blocking_created_at,
+              },
+              { short: true },
+            ),
           );
           throw new Error('validation');
         }
@@ -3528,10 +3557,10 @@ const MoldTrialSheetsPage: React.FC = () => {
                 width: 120,
                 render: (_, r) => {
                   const blocked = isMoldBlockedForNewTrial(r.mold_code);
-                  const sn = trialBlockedByMoldCode.get(r.mold_code.trim());
+                  const blockedInfo = trialBlockedByMoldCode.get(r.mold_code.trim());
                   if (blocked) {
                     return (
-                      <Tooltip title={trialBlockedMessage(r.mold_code, sn)}>
+                      <Tooltip title={trialBlockedMessage(r.mold_code, blockedInfo)}>
                         <Typography.Text type="secondary">不可选用</Typography.Text>
                       </Tooltip>
                     );
