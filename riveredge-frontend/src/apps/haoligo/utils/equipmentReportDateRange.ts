@@ -103,3 +103,20 @@ export function parseEquipmentCapacitySearchParams(search: Record<string, unknow
     keyword: optionalTrimmedString(search, 'keyword'),
   };
 }
+
+/** 无产出时间区间时回落默认「本月 1 日至今」 */
+export function resolveEquipmentCapacitySearchParams(
+  search: Record<string, unknown> | undefined,
+  defaultRange: [Dayjs, Dayjs],
+) {
+  const parsed = parseEquipmentCapacitySearchParams(search);
+  if (parsed.recorded_from && parsed.recorded_to) {
+    return parsed;
+  }
+  const fallback = parseEquipmentReportRecordedRange({ recorded_at_range: defaultRange });
+  return {
+    ...parsed,
+    recorded_from: fallback.recorded_from,
+    recorded_to: fallback.recorded_to,
+  };
+}

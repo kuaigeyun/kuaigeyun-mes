@@ -22,11 +22,12 @@ import {
   type EquipmentCapacitySummary,
   type EquipmentOutputRecordRow,
 } from '../../../../services/haoligo';
+import { commitListPageSearchParams } from '../../../../../../utils/listLifecycleStage';
 import {
   defaultEquipmentReportRecordedRange,
   isCapacityPeriodOnlyGroupBy,
-  parseEquipmentCapacitySearchParams,
   resolveCapacityGroupBy,
+  resolveEquipmentCapacitySearchParams,
   type CapacityDimensionMode,
   type CapacityPeriodMode,
 } from '../../../../utils/equipmentReportDateRange';
@@ -71,7 +72,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const searchParamsRef = useRef<Record<string, unknown>>({});
+  const searchParamsRef = useRef<Record<string, unknown> | undefined>(undefined);
   const [dimensionMode, setDimensionMode] = useState<CapacityDimensionMode>('detail');
   const [periodMode, setPeriodMode] = useState<CapacityPeriodMode>('none');
   const [summary, setSummary] = useState<EquipmentCapacitySummary | null>(null);
@@ -87,6 +88,10 @@ const EquipmentCapacityReportPage: React.FC = () => {
     }),
     [defaultRange],
   );
+
+  useEffect(() => {
+    commitListPageSearchParams(searchParamsRef, searchDefaults);
+  }, [searchDefaults]);
 
   const groupBy = useMemo(
     () => resolveCapacityGroupBy(dimensionMode, periodMode),
@@ -510,7 +515,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
     limit: number,
     resolvedGroupBy: string,
   ) => {
-    const filters = parseEquipmentCapacitySearchParams(searchFormValues);
+    const filters = resolveEquipmentCapacitySearchParams(searchFormValues, defaultRange);
     return getEquipmentCapacityReport({
       skip,
       limit,
@@ -529,7 +534,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
 
   const fetchAllRows = useCallback(
     async (resolvedGroupBy: string, searchFormValues?: Record<string, unknown>) => {
-      const filters = parseEquipmentCapacitySearchParams(searchFormValues);
+      const filters = resolveEquipmentCapacitySearchParams(searchFormValues, defaultRange);
       let skip = 0;
       let total = 0;
       const all: CapacityExportRow[] = [];
@@ -546,7 +551,7 @@ const EquipmentCapacityReportPage: React.FC = () => {
       } while (skip < total);
       return all;
     },
-    [pickRowsForGroupBy],
+    [defaultRange, pickRowsForGroupBy],
   );
 
   const rowsToCsv = useCallback(
