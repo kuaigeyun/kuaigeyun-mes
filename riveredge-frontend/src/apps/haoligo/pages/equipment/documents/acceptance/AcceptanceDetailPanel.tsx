@@ -443,6 +443,22 @@ const AcceptanceDetailPanel: React.FC<AcceptanceDetailPanelProps> = ({
       messageApi.success(t('app.haoligo.equipment.documents.acceptance.ledgerSuccess'));
     });
 
+  const renderCommissioningReference = (round: EquipmentAcceptanceRoundRow) => (
+    <Descriptions column={1} size="small" bordered style={{ marginBottom: 12 }}>
+      <Descriptions.Item label={t('app.haoligo.equipment.documents.acceptance.colCommissioningContent')}>
+        {round.commissioning_content?.trim() || '—'}
+      </Descriptions.Item>
+      <Descriptions.Item label={t('app.haoligo.equipment.documents.acceptance.colCommissioningResult')}>
+        {round.commissioning_result?.trim() || '—'}
+      </Descriptions.Item>
+      {(round.commissioning_attachment_file_uuids?.length ?? 0) > 0 ? (
+        <Descriptions.Item label={t('app.haoligo.equipment.documents.acceptance.colCommissioningAttachments')}>
+          <MoldAttachmentImagePreview uuids={round.commissioning_attachment_file_uuids} />
+        </Descriptions.Item>
+      ) : null}
+    </Descriptions>
+  );
+
   const renderHistoryRound = (round: EquipmentAcceptanceRoundRow) => (
     <Card
       key={round.id}
@@ -601,6 +617,7 @@ const AcceptanceDetailPanel: React.FC<AcceptanceDetailPanelProps> = ({
           title={t('app.haoligo.equipment.documents.acceptance.sectionTrial', { round: currentRound.round_no })}
           style={{ marginBottom: 16 }}
         >
+          {renderCommissioningReference(currentRound)}
           {status === 'pending_trial' && canExecute ? (
             <Button
               type="primary"

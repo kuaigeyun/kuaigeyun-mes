@@ -892,19 +892,12 @@ const OutputRecordDocumentsPage: React.FC = () => {
           </Row>
           <Row gutter={16}>
             <Col xs={24} md={12}>
-              <ProFormSelect
+              <ProFormText
                 name="operator_name"
                 label={t('app.haoligo.equipment.documents.formOperator')}
-                showSearch
-                allowClear
-                debounceTime={300}
-                request={async ({ keyWords }) =>
-                  loadUserNameOptions(keyWords, formRef.current?.getFieldValue('operator_name') as string | undefined)
-                }
                 fieldProps={{
                   style: { width: '100%' },
                   placeholder: t('app.haoligo.equipment.documents.formOperatorPh'),
-                  filterOption: false,
                 }}
               />
             </Col>

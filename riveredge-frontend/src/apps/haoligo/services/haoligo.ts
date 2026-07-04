@@ -1661,11 +1661,17 @@ export interface QualityLongTermActionPayload {
   long_term_action_image_uuids: string[];
 }
 
-export interface QualityHandleMeasuresPayload extends QualityTemporaryActionPayload, QualityLongTermActionPayload {
+export interface QualityHandleMeasuresPayload {
   responsible_user_ids: number[];
   overdue_notify_user_ids: number[];
   temporary_overdue_notify_user_ids?: number[];
   long_term_overdue_notify_user_ids?: number[];
+  temporary_action?: string;
+  temporary_due_at?: string;
+  temporary_action_image_uuids?: string[];
+  long_term_action?: string;
+  long_term_due_at?: string;
+  long_term_action_image_uuids?: string[];
 }
 
 export interface QualityCloseConfirmPayload {

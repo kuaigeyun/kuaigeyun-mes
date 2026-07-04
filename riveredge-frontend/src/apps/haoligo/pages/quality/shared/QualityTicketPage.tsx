@@ -59,7 +59,7 @@ function resolveWorkflowStep<T extends { status?: string | null; temporary_submi
   if (action === 'submit') return 'register';
   if (action !== 'complete') return null;
   if (combinedHandleMeasures) {
-    if (!row.long_term_submitted_at) return 'measures';
+    if (!row.temporary_submitted_at || !row.long_term_submitted_at) return 'measures';
     return 'close';
   }
   if (!row.temporary_submitted_at) return 'temporary';
@@ -109,6 +109,68 @@ const HANDLE_UPDATABLE_KEYS = [
 function parseNotifyUserIds(values: unknown): number[] {
   if (!Array.isArray(values)) return [];
   return values.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0);
+}
+
+function validateQualityHandleMeasuresInput(values: {
+  responsible_user_ids?: unknown;
+  temporary_action?: unknown;
+  temporary_due_at?: unknown;
+  long_term_action?: unknown;
+  long_term_due_at?: unknown;
+}): string | null {
+  const responsibleUserIds = parseNotifyUserIds(values.responsible_user_ids);
+  if (!responsibleUserIds.length) return '请选择责任人';
+  const temporaryAction = String(values.temporary_action ?? '').trim();
+  const longTermAction = String(values.long_term_action ?? '').trim();
+  const temporaryDueAt = values.temporary_due_at;
+  const longTermDueAt = values.long_term_due_at;
+  const temporaryComplete = Boolean(temporaryAction) && Boolean(temporaryDueAt);
+  const longTermComplete = Boolean(longTermAction) && Boolean(longTermDueAt);
+  if (temporaryAction && !temporaryDueAt) return '请填写临时措施预计完成时间';
+  if (longTermAction && !longTermDueAt) return '请填写长期措施预计完成时间';
+  if (temporaryDueAt && !temporaryAction) return '请填写临时措施';
+  if (longTermDueAt && !longTermAction) return '请填写长期措施';
+  if (!temporaryComplete && !longTermComplete) {
+    return '请至少填写临时措施或长期措施（含预计完成时间）';
+  }
+  return null;
+}
+
+function buildQualityHandleMeasuresPayloadFromValues(
+  values: Record<string, unknown>,
+  temporaryActionImageUuids: string[],
+  longTermActionImageUuids: string[],
+  combinedHandleMeasures: boolean,
+): Record<string, unknown> {
+  const responsibleUserIds = parseNotifyUserIds(values.responsible_user_ids);
+  const temporaryAction = String(values.temporary_action ?? '').trim();
+  const longTermAction = String(values.long_term_action ?? '').trim();
+  const temporaryDueAt = values.temporary_due_at;
+  const longTermDueAt = values.long_term_due_at;
+  const payload: Record<string, unknown> = {
+    responsible_user_ids: responsibleUserIds,
+  };
+  if (combinedHandleMeasures) {
+    payload.temporary_overdue_notify_user_ids = parseNotifyUserIds(values.temporary_overdue_notify_user_ids);
+    payload.long_term_overdue_notify_user_ids = parseNotifyUserIds(values.long_term_overdue_notify_user_ids);
+    payload.overdue_notify_user_ids = parseNotifyUserIds([
+      ...parseNotifyUserIds(values.temporary_overdue_notify_user_ids),
+      ...parseNotifyUserIds(values.long_term_overdue_notify_user_ids),
+    ]);
+  } else {
+    payload.overdue_notify_user_ids = parseNotifyUserIds(values.overdue_notify_user_ids);
+  }
+  if (temporaryAction && temporaryDueAt) {
+    payload.temporary_action = temporaryAction;
+    payload.temporary_due_at = temporaryDueAt;
+    payload.temporary_action_image_uuids = temporaryActionImageUuids;
+  }
+  if (longTermAction && longTermDueAt) {
+    payload.long_term_action = longTermAction;
+    payload.long_term_due_at = longTermDueAt;
+    payload.long_term_action_image_uuids = longTermActionImageUuids;
+  }
+  return payload;
 }
 
 function pickHandleUpdatePayload(payload: Record<string, unknown>): Record<string, unknown> {
@@ -206,14 +268,16 @@ type QualityTicketPageProps<T extends BaseRow> = {
   submitHandleMeasuresFn?: (id: number, body: {
     responsible_user_ids: number[];
     overdue_notify_user_ids: number[];
-    temporary_action: string;
-    temporary_due_at: string;
-    temporary_action_image_uuids: string[];
-    long_term_action: string;
-    long_term_due_at: string;
-    long_term_action_image_uuids: string[];
+    temporary_overdue_notify_user_ids?: number[];
+    long_term_overdue_notify_user_ids?: number[];
+    temporary_action?: string;
+    temporary_due_at?: string;
+    temporary_action_image_uuids?: string[];
+    long_term_action?: string;
+    long_term_due_at?: string;
+    long_term_action_image_uuids?: string[];
   }) => Promise<T>;
-  /** 品质问题处理：临时措施与长期措施一次提交 */
+  /** 品质问题处理：临时措施与长期措施可独立提交，至少填写一项 */
   combinedHandleMeasures?: boolean;
   confirmCloseFn?: (id: number, body: { close_note?: string; recovered_at?: string }) => Promise<T>;
   deleteFn: (id: number) => Promise<void>;
@@ -757,61 +821,36 @@ export function QualityTicketPage<T extends BaseRow>({
     setFormLoading(true);
     try {
       if (workflowStep === 'measures' && submitHandleMeasuresFn) {
-        const responsibleUserIds = parseNotifyUserIds(values.responsible_user_ids);
-        if (!responsibleUserIds.length) {
-          messageApi.warning('请选择责任人');
-          return;
-        }
-        const temporaryAction = String(values.temporary_action ?? '').trim();
-        if (!temporaryAction) {
-          messageApi.warning('请填写临时措施');
-          return;
-        }
-        if (!values.temporary_due_at) {
-          messageApi.warning('请填写临时措施预计完成时间');
-          return;
-        }
-        const longTermAction = String(values.long_term_action ?? '').trim();
-        if (!longTermAction) {
-          messageApi.warning('请填写长期措施');
-          return;
-        }
-        if (!values.long_term_due_at) {
-          messageApi.warning('请填写长期措施预计完成时间');
-          return;
-        }
-        const payload = normalizePayload({
-          responsible_user_ids: responsibleUserIds,
-          overdue_notify_user_ids: combinedHandleMeasures
-            ? parseNotifyUserIds([
-                ...parseNotifyUserIds(values.temporary_overdue_notify_user_ids),
-                ...parseNotifyUserIds(values.long_term_overdue_notify_user_ids),
-              ])
-            : parseNotifyUserIds(values.overdue_notify_user_ids),
-          ...(combinedHandleMeasures
-            ? {
-                temporary_overdue_notify_user_ids: parseNotifyUserIds(values.temporary_overdue_notify_user_ids),
-                long_term_overdue_notify_user_ids: parseNotifyUserIds(values.long_term_overdue_notify_user_ids),
-              }
-            : {}),
-          temporary_action: temporaryAction,
+        const validationError = validateQualityHandleMeasuresInput({
+          responsible_user_ids: values.responsible_user_ids,
+          temporary_action: values.temporary_action,
           temporary_due_at: values.temporary_due_at,
-          temporary_action_image_uuids: temporaryActionImageUuids,
-          long_term_action: longTermAction,
+          long_term_action: values.long_term_action,
           long_term_due_at: values.long_term_due_at,
-          long_term_action_image_uuids: longTermActionImageUuids,
         });
+        if (validationError) {
+          messageApi.warning(validationError);
+          return;
+        }
+        const payload = normalizePayload(
+          buildQualityHandleMeasuresPayloadFromValues(
+            values,
+            temporaryActionImageUuids,
+            longTermActionImageUuids,
+            combinedHandleMeasures,
+          ),
+        );
         await submitHandleMeasuresFn(editingId, payload as {
           responsible_user_ids: number[];
           overdue_notify_user_ids: number[];
           temporary_overdue_notify_user_ids?: number[];
           long_term_overdue_notify_user_ids?: number[];
-          temporary_action: string;
-          temporary_due_at: string;
-          temporary_action_image_uuids: string[];
-          long_term_action: string;
-          long_term_due_at: string;
-          long_term_action_image_uuids: string[];
+          temporary_action?: string;
+          temporary_due_at?: string;
+          temporary_action_image_uuids?: string[];
+          long_term_action?: string;
+          long_term_due_at?: string;
+          long_term_action_image_uuids?: string[];
         });
       } else if (workflowStep === 'temporary' && submitTemporaryActionFn) {
         const responsibleUserIds = parseNotifyUserIds(values.responsible_user_ids);

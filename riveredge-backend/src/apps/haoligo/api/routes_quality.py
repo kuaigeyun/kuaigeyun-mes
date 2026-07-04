@@ -8,7 +8,7 @@ from typing import Annotated, Any, Callable, List, Optional, TypeVar
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
@@ -302,18 +302,36 @@ class LongTermActionPayload(BaseModel):
 
 
 class HandleMeasuresPayload(BaseModel):
-    """品质问题处理：临时措施与长期措施一并提交。"""
+    """处理措施：临时与长期独立填写，至少提交其中一项。"""
 
     responsible_user_ids: List[int] = Field(min_length=1)
     overdue_notify_user_ids: List[int] = Field(default_factory=list)
     temporary_overdue_notify_user_ids: List[int] = Field(default_factory=list)
     long_term_overdue_notify_user_ids: List[int] = Field(default_factory=list)
-    temporary_action: str = Field(min_length=1)
-    temporary_due_at: datetime
+    temporary_action: Optional[str] = None
+    temporary_due_at: Optional[datetime] = None
     temporary_action_image_uuids: List[str] = Field(default_factory=list)
-    long_term_action: str = Field(min_length=1)
-    long_term_due_at: datetime
+    long_term_action: Optional[str] = None
+    long_term_due_at: Optional[datetime] = None
     long_term_action_image_uuids: List[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_at_least_one_measure(self) -> "HandleMeasuresPayload":
+        temp_text = (self.temporary_action or "").strip()
+        long_text = (self.long_term_action or "").strip()
+        temp_ok = bool(temp_text) and self.temporary_due_at is not None
+        long_ok = bool(long_text) and self.long_term_due_at is not None
+        if temp_text and self.temporary_due_at is None:
+            raise ValueError("请填写临时措施预计完成时间")
+        if long_text and self.long_term_due_at is None:
+            raise ValueError("请填写长期措施预计完成时间")
+        if self.temporary_due_at is not None and not temp_text:
+            raise ValueError("请填写临时措施")
+        if self.long_term_due_at is not None and not long_text:
+            raise ValueError("请填写长期措施")
+        if not temp_ok and not long_ok:
+            raise ValueError("请至少填写临时措施或长期措施（含预计完成时间）")
+        return self
 
 
 class CloseConfirmPayload(BaseModel):
@@ -451,6 +469,33 @@ def _merge_overdue_notify_user_ids(*groups: Optional[List[int]]) -> List[int]:
                 seen.add(uid)
                 merged.append(uid)
     return merged
+
+
+def _temporary_measure_provided(body: HandleMeasuresPayload) -> bool:
+    return bool((body.temporary_action or "").strip()) and body.temporary_due_at is not None
+
+
+def _long_term_measure_provided(body: HandleMeasuresPayload) -> bool:
+    return bool((body.long_term_action or "").strip()) and body.long_term_due_at is not None
+
+
+def _apply_handle_measures(row: Any, body: HandleMeasuresPayload, now: datetime) -> None:
+    if _temporary_measure_provided(body):
+        row.temporary_action = body.temporary_action.strip()
+        row.temporary_due_at = body.temporary_due_at
+        row.temporary_action_image_uuids = [
+            str(x).strip() for x in body.temporary_action_image_uuids if str(x).strip()
+        ]
+        row.temporary_submitted_at = row.temporary_submitted_at or now
+        row.immediate_action = row.temporary_action
+    if _long_term_measure_provided(body):
+        row.long_term_action = body.long_term_action.strip()
+        row.long_term_due_at = body.long_term_due_at
+        row.long_term_action_image_uuids = [
+            str(x).strip() for x in body.long_term_action_image_uuids if str(x).strip()
+        ]
+        row.long_term_submitted_at = now
+    row.due_at = row.long_term_due_at or row.temporary_due_at
 
 
 async def _prepare_split_overdue_notify_users(
@@ -1112,16 +1157,7 @@ async def submit_quality_issue_handle_measures(
     row.overdue_notify_user_ids = overdue_notify_user_ids
     row.temporary_overdue_notify_user_ids = temporary_overdue_notify_user_ids
     row.long_term_overdue_notify_user_ids = long_term_overdue_notify_user_ids
-    row.temporary_action = body.temporary_action.strip()
-    row.temporary_due_at = body.temporary_due_at
-    row.temporary_action_image_uuids = [str(x).strip() for x in body.temporary_action_image_uuids if str(x).strip()]
-    row.temporary_submitted_at = row.temporary_submitted_at or now
-    row.immediate_action = row.temporary_action
-    row.long_term_action = body.long_term_action.strip()
-    row.long_term_due_at = body.long_term_due_at
-    row.long_term_action_image_uuids = [str(x).strip() for x in body.long_term_action_image_uuids if str(x).strip()]
-    row.long_term_submitted_at = now
-    row.due_at = row.long_term_due_at or row.temporary_due_at
+    _apply_handle_measures(row, body, now)
     await row.save()
     return await _serialize_common(row, tenant_id, QualityIssueOut)
 
@@ -1448,16 +1484,7 @@ async def submit_customer_complaint_handle_measures(
     row.overdue_notify_user_ids = overdue_notify_user_ids
     row.temporary_overdue_notify_user_ids = temporary_overdue_notify_user_ids
     row.long_term_overdue_notify_user_ids = long_term_overdue_notify_user_ids
-    row.temporary_action = body.temporary_action.strip()
-    row.temporary_due_at = body.temporary_due_at
-    row.temporary_action_image_uuids = [str(x).strip() for x in body.temporary_action_image_uuids if str(x).strip()]
-    row.temporary_submitted_at = row.temporary_submitted_at or now
-    row.immediate_action = row.temporary_action
-    row.long_term_action = body.long_term_action.strip()
-    row.long_term_due_at = body.long_term_due_at
-    row.long_term_action_image_uuids = [str(x).strip() for x in body.long_term_action_image_uuids if str(x).strip()]
-    row.long_term_submitted_at = now
-    row.due_at = row.long_term_due_at or row.temporary_due_at
+    _apply_handle_measures(row, body, now)
     await row.save()
     return await _serialize_common(row, tenant_id, CustomerComplaintOut)
 
@@ -1783,16 +1810,7 @@ async def submit_line_stop_feedback_handle_measures(
     row.overdue_notify_user_ids = overdue_notify_user_ids
     row.temporary_overdue_notify_user_ids = temporary_overdue_notify_user_ids
     row.long_term_overdue_notify_user_ids = long_term_overdue_notify_user_ids
-    row.temporary_action = body.temporary_action.strip()
-    row.temporary_due_at = body.temporary_due_at
-    row.temporary_action_image_uuids = [str(x).strip() for x in body.temporary_action_image_uuids if str(x).strip()]
-    row.temporary_submitted_at = row.temporary_submitted_at or now
-    row.immediate_action = row.temporary_action
-    row.long_term_action = body.long_term_action.strip()
-    row.long_term_due_at = body.long_term_due_at
-    row.long_term_action_image_uuids = [str(x).strip() for x in body.long_term_action_image_uuids if str(x).strip()]
-    row.long_term_submitted_at = now
-    row.due_at = row.long_term_due_at or row.temporary_due_at
+    _apply_handle_measures(row, body, now)
     await row.save()
     return await _serialize_common(row, tenant_id, LineStopOut)
 
