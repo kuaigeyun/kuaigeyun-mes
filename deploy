@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# 项目根目录快捷入口 → fast-deploy/deploy.sh
-set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "$ROOT/fast-deploy/deploy.sh" "$@"
