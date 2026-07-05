@@ -5,7 +5,7 @@
  * 每个 Tab 内部按业务模块（销售、计划、采购、生产、质量、设备、仓储）组织。
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Switch, Select, theme, Modal } from 'antd';
@@ -138,8 +138,6 @@ const ConfigCenterPage: React.FC = () => {
   const [form] = Form.useForm();
   const qualityFormValues = Form.useWatch([], form);
   const [saving, setSaving] = useState(false);
-  const containerRef = useRef<any>(null);
-  const [containerHeight, setContainerHeight] = useState<number>(400);
 
   // 为 4 个主 Tab 分别记录选中的侧边栏模块 ID
   const [selectedParamCat, setSelectedParamCat] = useState<string>(PARAMETER_CATEGORIES[0].id);
@@ -221,18 +219,6 @@ const ConfigCenterPage: React.FC = () => {
       setSelectedAutoCat(moduleId);
     }
   }, [searchParams, activeMainTab, validTabs]);
-
-  useEffect(() => {
-    const updateHeight = () => {
-      if (!containerRef.current) return;
-      const top = containerRef.current.getBoundingClientRect().top;
-      const next = Math.max(400, Math.floor(window.innerHeight - top - 16));
-      setContainerHeight(next);
-    };
-    updateHeight();
-    window.addEventListener('resize', updateHeight);
-    return () => window.removeEventListener('resize', updateHeight);
-  }, [activeMainTab]);
 
   useEffect(() => {
     const initialValues = flattenBusinessParams(bizRes?.parameters || {});
@@ -400,20 +386,18 @@ const ConfigCenterPage: React.FC = () => {
   const renderNotificationTab = () => <NotificationRulesPanel showPageHeader={false} />;
 
   return (
-    <div className="config-center-page" ref={containerRef} style={{ height: containerHeight, minHeight: 400, borderRadius: 8, overflow: 'hidden' }}>
-      <MultiTabListPageTemplate
-        style={{ height: '100%' }}
-        activeTabKey={activeMainTab}
-        onTabChange={setActiveMainTab}
-        tabs={[
-          { key: 'parameters', label: <Space><SettingOutlined />{t('pages.system.configCenter.tabParameters')}</Space>, children: renderTabContent(mergedParameterCategories, selectedParamCat, setSelectedParamCat, <SettingOutlined />) },
-          { key: 'audit', label: <Space><AuditOutlined />{t('pages.system.configCenter.tabAudit')}</Space>, children: <AuditSettingsPanel selectedCatId={selectedAuditCat} onSelectCat={setSelectedAuditCat} /> },
-          { key: 'automation', label: <Space><ControlOutlined />{t('pages.system.configCenter.tabAutomation')}</Space>, children: renderTabContent(AUTOMATION_CATEGORIES, selectedAutoCat, setSelectedAutoCat, <ControlOutlined />) },
-          { key: 'notification', label: <Space><BellOutlined />{t('pages.system.configCenter.notification.title')}</Space>, children: renderNotificationTab() },
-        ]}
-        padding={24}
-      />
-    </div>
+    <MultiTabListPageTemplate
+      className="config-center-page"
+      activeTabKey={activeMainTab}
+      onTabChange={setActiveMainTab}
+      tabs={[
+        { key: 'parameters', label: <Space><SettingOutlined />{t('pages.system.configCenter.tabParameters')}</Space>, children: renderTabContent(mergedParameterCategories, selectedParamCat, setSelectedParamCat, <SettingOutlined />) },
+        { key: 'audit', label: <Space><AuditOutlined />{t('pages.system.configCenter.tabAudit')}</Space>, children: <AuditSettingsPanel selectedCatId={selectedAuditCat} onSelectCat={setSelectedAuditCat} /> },
+        { key: 'automation', label: <Space><ControlOutlined />{t('pages.system.configCenter.tabAutomation')}</Space>, children: renderTabContent(AUTOMATION_CATEGORIES, selectedAutoCat, setSelectedAutoCat, <ControlOutlined />) },
+        { key: 'notification', label: <Space><BellOutlined />{t('pages.system.configCenter.notification.title')}</Space>, children: renderNotificationTab() },
+      ]}
+      padding={24}
+    />
   );
 };
 

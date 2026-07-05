@@ -1,9 +1,9 @@
 /**
  * 多标签页列表页面布局模板
- * 
+ *
  * 结合了 ListPageTemplate 的统计卡片功能和 Ant Design Card 的标签页切换功能
  * 专门用于像“计划排程”这样需要在同一个页面内切换多个相关列表布局的场景
- * 
+ *
  * Author: Antigravity
  * Date: 2026-02-02
  */
@@ -11,8 +11,11 @@
 import React, { ReactNode } from 'react';
 import { Card } from 'antd';
 import ListPageTemplate, { StatCard } from './ListPageTemplate';
+import { MULTI_TAB_PAGE_CONTAINER } from './constants';
+import { useMultiTabPageContainerHeight } from './useMultiTabPageContainerHeight';
 
 const MULTI_TAB_PAGE_ROOT_CLASS = 'multi-tab-list-page-template';
+const MULTI_TAB_PAGE_CONTAINER_CLASS = 'multi-tab-list-page-container';
 
 export interface TabItem {
     /** 标签唯一标识 */
@@ -32,9 +35,9 @@ export interface MultiTabListPageTemplateProps {
     onTabChange: (key: string) => void;
     /** 标签页配置 */
     tabs: TabItem[];
-    /** 自定义样式类名 */
+    /** 自定义样式类名（作用于视口高度容器，如 config-center-page） */
     className?: string;
-    /** 自定义样式 */
+    /** 自定义样式（作用于 ListPageTemplate 内层） */
     style?: React.CSSProperties;
     /** 卡片主体内边距，默认为 16 */
     padding?: number | string;
@@ -67,6 +70,7 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
     preserveMounted = false,
     prioritizeMainContentPaint,
 }) => {
+    const { containerRef, containerHeight } = useMultiTabPageContainerHeight([activeTabKey, header]);
     const currentTab = tabs.find(tab => tab.key === activeTabKey);
 
     const bodyInner = preserveMounted ? (
@@ -88,29 +92,39 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
     );
 
     return (
-        <ListPageTemplate
-            statCards={statCards}
-            className={[MULTI_TAB_PAGE_ROOT_CLASS, className].filter(Boolean).join(' ')}
-            style={style}
-            prioritizeMainContentPaint={prioritizeMainContentPaint}
-            fillMain
-            tableScrollLayout="multiTab"
+        <div
+            ref={containerRef}
+            className={[MULTI_TAB_PAGE_CONTAINER_CLASS, className].filter(Boolean).join(' ')}
+            style={{
+                height: containerHeight,
+                minHeight: MULTI_TAB_PAGE_CONTAINER.MIN_HEIGHT_PX,
+                overflow: 'hidden',
+            }}
         >
-            {header ? <div style={{ marginBottom: 16, flexShrink: 0 }}>{header}</div> : null}
-            <Card
-                className="multi-tab-list-page-card"
-                style={{ flex: 1, minHeight: 0 }}
-                tabList={tabs.map(tab => ({ key: tab.key, tab: tab.label }))}
-                activeTabKey={activeTabKey}
-                onTabChange={onTabChange}
-                tabBarExtraContent={tabBarExtraContent}
-                tabProps={{ size: 'middle' }}
-                classNames={{ body: 'scrollbar-like-modal multi-tab-list-page-card-body' }}
-                styles={{ body: preserveMounted ? { padding: 0 } : { padding } }}
+            <ListPageTemplate
+                statCards={statCards}
+                className={MULTI_TAB_PAGE_ROOT_CLASS}
+                style={{ height: '100%', ...style }}
+                prioritizeMainContentPaint={prioritizeMainContentPaint}
+                fillMain
+                tableScrollLayout="multiTab"
             >
-                {bodyInner}
-            </Card>
-        </ListPageTemplate>
+                {header ? <div style={{ marginBottom: 16, flexShrink: 0 }}>{header}</div> : null}
+                <Card
+                    className="multi-tab-list-page-card"
+                    style={{ flex: 1, minHeight: 0 }}
+                    tabList={tabs.map(tab => ({ key: tab.key, tab: tab.label }))}
+                    activeTabKey={activeTabKey}
+                    onTabChange={onTabChange}
+                    tabBarExtraContent={tabBarExtraContent}
+                    tabProps={{ size: 'middle' }}
+                    classNames={{ body: 'scrollbar-like-modal multi-tab-list-page-card-body' }}
+                    styles={{ body: preserveMounted ? { padding: 0 } : { padding } }}
+                >
+                    {bodyInner}
+                </Card>
+            </ListPageTemplate>
+        </div>
     );
 };
 

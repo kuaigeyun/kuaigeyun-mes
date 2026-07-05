@@ -321,6 +321,13 @@ export const LIST_PAGE_TABLE_SCROLL = {
   DEFAULT_FALLBACK_OFFSET_PX: 448,
 } as const;
 
+/** MultiTabListPageTemplate 视口高度容器：与业务配置页同一套计算方式 */
+export const MULTI_TAB_PAGE_CONTAINER = {
+  MIN_HEIGHT_PX: 400,
+  /** 容器底与视口底留白 */
+  BOTTOM_GAP_PX: 16,
+} as const;
+
 export type ListPageTableScrollLayout = 'list' | 'multiTab' | 'report';
 
 export interface ListPageTableBodyScrollYOptions {
