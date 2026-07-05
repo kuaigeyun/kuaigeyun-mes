@@ -15,12 +15,8 @@ export const getReplenishmentSuggestionLifecycle = createLifecycleResolver({
     processed: 'processed',
     ignored: 'ignored',
   },
-  nextStepSuggestions: {
-    pending: ['处理'],
-    processed: [],
-    ignored: [],
-  },
   exceptionKeys: ['ignored'],
   exceptionStageKey: 'ignored',
+  nextStepSuggestionKeys: {},
   successKeys: ['processed'],
 });

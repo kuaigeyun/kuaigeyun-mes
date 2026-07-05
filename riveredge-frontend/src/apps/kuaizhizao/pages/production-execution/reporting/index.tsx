@@ -1835,7 +1835,7 @@ const ReportingPage: React.FC = () => {
               <DetailDrawerSection title={t('app.kuaizhizao.workReporting.sectionLifecycle')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
-                    const lifecycle = getReportingLifecycle(reportingDetail);
+                    const lifecycle = getReportingLifecycle(reportingDetail as Record<string, unknown>, t);
                     const mainStages = lifecycle.mainStages ?? [];
                     if (mainStages.length === 0) return null;
                     return (

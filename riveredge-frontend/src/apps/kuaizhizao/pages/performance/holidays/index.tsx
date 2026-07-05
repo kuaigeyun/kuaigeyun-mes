@@ -186,7 +186,7 @@ const HolidaysPage: React.FC = () => {
       align: 'left',
       hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>);
+        const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>, t);
         return (
           <UniLifecycle
             percent={lifecycle.percent}
@@ -294,7 +294,7 @@ const HolidaysPage: React.FC = () => {
               <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.lifecycle')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
-                    const lc = getPerformanceConfigActiveLifecycle(holidayDetail as unknown as Record<string, unknown>);
+                    const lc = getPerformanceConfigActiveLifecycle(holidayDetail as unknown as Record<string, unknown>, t);
                     const mainStages = lc.mainStages ?? [];
                     if (mainStages.length === 0) return null;
                     return (

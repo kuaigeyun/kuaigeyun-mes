@@ -578,7 +578,7 @@ const BatchingCenterPage: React.FC = () => {
       >
         <DetailDrawerSection title={t('app.kuaizhizao.warehouseCommon.lifecycleSection')}>
           {(() => {
-            const lifecycle = getBatchingOrderLifecycle(currentOrder as unknown as Record<string, unknown>);
+            const lifecycle = getBatchingOrderLifecycle(currentOrder as unknown as Record<string, unknown>, t);
             const mainStages = lifecycle.mainStages ?? [];
             if (mainStages.length === 0) return null;
             return (

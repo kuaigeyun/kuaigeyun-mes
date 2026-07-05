@@ -21,13 +21,8 @@ export const getAssemblyOrderLifecycle = createLifecycleResolver({
     已取消: 'cancelled',
     cancelled: 'cancelled',
   },
-  nextStepSuggestions: {
-    draft: ['执行组装'],
-    in_progress: ['完成'],
-    completed: [],
-    cancelled: [],
-  },
   exceptionKeys: ['cancelled'],
   exceptionStageKey: 'cancelled',
+  nextStepSuggestionKeys: {},
   successKeys: ['completed'],
 });

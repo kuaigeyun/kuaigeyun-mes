@@ -21,7 +21,8 @@ import {
   MODAL_CONFIG,
   WAREHOUSE_DETAIL_TABLE_STYLES,
 } from '../../../../../components/layout-templates';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import type { LifecycleResult } from '../../../../../components/uni-lifecycle/types';
+import type { LifecycleTranslateFn } from '../../../utils/lifecycleI18n';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
@@ -100,12 +101,7 @@ type PageConfig = {
   orderCodeLabel: string;
   itemDoneStatus: string;
   attachmentCategory: string;
-  getLifecycle: (record: Record<string, unknown>) => {
-    percent: number;
-    stageName: string;
-    status: 'normal' | 'warning' | 'exception' | 'success' | 'active';
-    subStages?: string[];
-  };
+  getLifecycle: (record: Record<string, unknown>, t: LifecycleTranslateFn) => LifecycleResult;
   enableTemplateApply?: boolean;
 };
 
@@ -484,7 +480,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       align: 'left',
       hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = config.getLifecycle(record as Record<string, unknown>);
+        const lifecycle = config.getLifecycle(record as Record<string, unknown>, t);
         return (
           <UniLifecycle
             percent={lifecycle.percent}

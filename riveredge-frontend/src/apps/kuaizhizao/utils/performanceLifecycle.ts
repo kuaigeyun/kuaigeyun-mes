@@ -17,11 +17,7 @@ export const getPerformanceSummaryLifecycle = createLifecycleResolver({
     confirmed: 'confirmed',
     draft: 'pending_calculation',
   },
-  nextStepSuggestions: {
-    pending_calculation: ['计算绩效'],
-    calculated: ['确认绩效'],
-    confirmed: [],
-  },
+  nextStepSuggestionKeys: {},
   successKeys: ['confirmed'],
 });
 
@@ -40,11 +36,8 @@ export const getPerformanceConfigActiveLifecycle = createLifecycleResolver({
     const v = row.is_active !== undefined ? row.is_active : row.isActive;
     return v !== false && v !== 'false' ? 'active' : 'inactive';
   },
-  nextStepSuggestions: {
-    active: [],
-    inactive: [],
-  },
   exceptionKeys: ['inactive'],
   exceptionStageKey: 'inactive',
+  nextStepSuggestionKeys: {},
   successKeys: ['active'],
 });

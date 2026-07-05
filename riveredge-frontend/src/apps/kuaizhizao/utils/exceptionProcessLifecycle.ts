@@ -23,12 +23,6 @@ export const getExceptionProcessLifecycle = createLifecycleResolver({
     已取消: 'cancelled',
     cancelled: 'cancelled',
   },
-  nextStepSuggestions: {
-    pending: ['分配'],
-    processing: ['流转', '解决'],
-    resolved: [],
-    cancelled: [],
-  },
   nextStepSuggestionKeys: {
     pending: [`${P}.lifecycleNext.assign`],
     processing: [`${P}.lifecycleNext.transition`, `${P}.lifecycleNext.resolve`],

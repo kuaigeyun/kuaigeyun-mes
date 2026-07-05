@@ -306,7 +306,7 @@ const MaterialReturnsPage: React.FC = () => {
         align: 'left',
         hideInSearch: true,
         render: (_, record) => {
-          const lifecycle = getMaterialReturnLifecycle(record as Record<string, unknown>);
+          const lifecycle = getMaterialReturnLifecycle(record as Record<string, unknown>, t);
           return (
             <UniLifecycle
               percent={lifecycle.percent}
@@ -381,7 +381,7 @@ const MaterialReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.warehouseMaterialReturn.col.status'),
         dataIndex: 'status',
         render: (_, record) => {
-          const lifecycle = getMaterialReturnLifecycle(record as unknown as Record<string, unknown>);
+          const lifecycle = getMaterialReturnLifecycle(record as unknown as Record<string, unknown>, t);
           return (
             <UniLifecycle
               percent={lifecycle.percent}

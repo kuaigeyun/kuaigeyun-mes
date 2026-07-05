@@ -6,6 +6,7 @@ export type KuaizhizaoDocumentActionKey =
   | 'purchase_order_change.pull_from_purchase_order'
   | 'purchase_order.pull_from_requisition'
   | 'purchase_order.pull_from_inquiry'
+  | 'purchase_order.pull_from_demand_computation'
   | 'purchase_inquiry.pull_from_requisition'
   | 'batching_order.pull_from_work_order'
   | 'shipment_notice.pull_from_sales_order'
@@ -33,6 +34,7 @@ export type KuaizhizaoDocumentActionKey =
   | 'work_order.pull_from_demand_computation'
   | 'work_order.pull_from_production_plan'
   | 'work_order.pull_from_sales_order'
+  | 'work_order.pull_from_sales_contract'
   | 'outbound.pull_from_work_order'
   | 'outbound.pull_from_sales_order'
   | 'sales_delivery.pull_from_shipment_notice'
@@ -121,6 +123,14 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('purchase_order.pull_from_inquiry', 'label'),
     sourceLabelKey: documentActionI18n('purchase_order.pull_from_inquiry', 'source'),
     targetLabelKey: documentActionI18n('purchase_order.pull_from_inquiry', 'target'),
+  },
+  'purchase_order.pull_from_demand_computation': {
+    key: 'purchase_order.pull_from_demand_computation',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('purchase_order.pull_from_demand_computation', 'label'),
+    sourceLabelKey: documentActionI18n('purchase_order.pull_from_demand_computation', 'source'),
+    targetLabelKey: documentActionI18n('purchase_order.pull_from_demand_computation', 'target'),
   },
   'purchase_inquiry.pull_from_requisition': {
     key: 'purchase_inquiry.pull_from_requisition',
@@ -337,6 +347,14 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('work_order.pull_from_sales_order', 'label'),
     sourceLabelKey: documentActionI18n('work_order.pull_from_sales_order', 'source'),
     targetLabelKey: documentActionI18n('work_order.pull_from_sales_order', 'target'),
+  },
+  'work_order.pull_from_sales_contract': {
+    key: 'work_order.pull_from_sales_contract',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('work_order.pull_from_sales_contract', 'label'),
+    sourceLabelKey: documentActionI18n('work_order.pull_from_sales_contract', 'source'),
+    targetLabelKey: documentActionI18n('work_order.pull_from_sales_contract', 'target'),
   },
   'outbound.pull_from_work_order': {
     key: 'outbound.pull_from_work_order',

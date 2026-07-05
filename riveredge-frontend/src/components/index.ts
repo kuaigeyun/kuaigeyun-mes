@@ -51,8 +51,13 @@ export type {
   CapabilityBatchLabels,
   UniCapabilityBatchButtonProps,
 } from './uni-batch';
-export { UniPushToolbarButton, buildUniPushMenuItems } from './uni-push';
-export type { UniPushToolbarButtonProps, UniPushMenuItem } from './uni-push';
+export {
+  UniPushToolbarButton,
+  buildUniPushMenuItem,
+  buildUniPushMenuItems,
+  isUniPushToolbarSelectionBlocked,
+} from './uni-push';
+export type { UniPushToolbarButtonProps, UniPushMenuItem, UniPushMenuItemInput } from './uni-push';
 export { UniAiButton, UniAiLottieIcon } from './uni-ai-button';
 export type { UniAiButtonProps, UniAiLottieIconProps } from './uni-ai-button';
 export { UniTable, default as UniTableDefault, generateImportConfigFromColumns } from './uni-table';

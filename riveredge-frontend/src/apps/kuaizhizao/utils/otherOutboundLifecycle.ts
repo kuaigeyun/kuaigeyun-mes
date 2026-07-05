@@ -15,12 +15,8 @@ export const getOtherOutboundLifecycle = createLifecycleResolver({
     已出库: 'delivered',
     已取消: 'cancelled',
   },
-  nextStepSuggestions: {
-    pending_outbound: ['确认出库'],
-    delivered: [],
-    cancelled: [],
-  },
   exceptionKeys: ['cancelled'],
   exceptionStageKey: 'cancelled',
+  nextStepSuggestionKeys: {},
   successKeys: ['delivered'],
 });

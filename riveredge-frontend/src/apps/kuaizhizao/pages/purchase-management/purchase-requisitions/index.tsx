@@ -7,7 +7,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker, Modal, Card, theme } from 'antd';
+import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker, Modal, Card, theme, Tooltip } from 'antd';
 import {
   EyeOutlined,
   CheckOutlined,
@@ -872,7 +872,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       };
 
       modalApi.confirm({
-        title: t('app.kuaizhizao.purchaseRequisition.pushPOTitle'),
+        title: pushToPurchaseOrderAction.label,
         icon: null,
         width: MODAL_CONFIG.EXTRA_LARGE_WIDTH,
         content: (
@@ -955,7 +955,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         return;
       }
       modalApi.confirm({
-        title: t('app.kuaizhizao.purchaseRequisition.pushInquiryTitle'),
+        title: pushToInquiryAction.label,
         content: t('app.kuaizhizao.purchaseRequisition.pushInquiryContent', { count: unconverted.length }),
         onOk: async () => {
           const doc = await createInquiryFromRequisition(record.id!, {
@@ -1039,30 +1039,52 @@ const PurchaseRequisitionsPage: React.FC = () => {
     })();
   }, [searchParams, location.pathname, navigate, messageApi, ensureSupplierList, t]);
 
-  const toolbarPushMenuItems = useMemo(
-    () =>
-      selectedRequisitionForToolbar && canUseToolbarPush
-        ? buildUniPushMenuItems([
-            {
-              key: 'push-purchase-order',
-              label: pushToPurchaseOrderAction.label,
-              icon: <SwapOutlined />,
-              onClick: () => {
-                void handleConvert(selectedRequisitionForToolbar);
-              },
-            },
-            {
-              key: 'push-inquiry',
-              label: pushToInquiryAction.label,
-              icon: <FileSearchOutlined />,
-              onClick: () => {
-                void handleCreateInquiry(selectedRequisitionForToolbar);
-              },
-            },
-          ])
-        : [],
-    [selectedRequisitionForToolbar, canUseToolbarPush, pushToPurchaseOrderAction.label, pushToInquiryAction.label],
-  );
+  const toolbarPushMenuItems = useMemo(() => {
+    const flowBlockedReason = selectedRequisitionForToolbar && !canUseToolbarPush
+      ? (() => {
+          const lifecycle = (selectedRequisitionForToolbar as PurchaseRequisition & { lifecycle?: Record<string, unknown> }).lifecycle;
+          const flowClass = String(lifecycle?.flow_class ?? lifecycle?.current_stage_key ?? '-').trim() || '-';
+          return t('app.kuaizhizao.purchaseRequisition.push.flowBlocked', {
+            flowClass,
+            defaultValue: `当前流转类为 ${flowClass}，不可下推`,
+          });
+        })()
+      : undefined;
+    return buildUniPushMenuItems([
+      {
+        key: 'push-purchase-order',
+        label: pushToPurchaseOrderAction.label,
+        icon: <SwapOutlined />,
+        disabled: !selectedRequisitionForToolbar || !canUseToolbarPush,
+        title: flowBlockedReason,
+        onClick: () => {
+          if (selectedRequisitionForToolbar && canUseToolbarPush) {
+            void handleConvert(selectedRequisitionForToolbar);
+          }
+        },
+      },
+      {
+        key: 'push-inquiry',
+        label: pushToInquiryAction.label,
+        icon: <FileSearchOutlined />,
+        disabled: !selectedRequisitionForToolbar || !canUseToolbarPush,
+        title: flowBlockedReason,
+        onClick: () => {
+          if (selectedRequisitionForToolbar && canUseToolbarPush) {
+            void handleCreateInquiry(selectedRequisitionForToolbar);
+          }
+        },
+      },
+    ]);
+  }, [
+    canUseToolbarPush,
+    handleConvert,
+    handleCreateInquiry,
+    pushToInquiryAction.label,
+    pushToPurchaseOrderAction.label,
+    selectedRequisitionForToolbar,
+    t,
+  ]);
 
   const handleDeleteOne = (record: PurchaseRequisition) => {
     if (record.status !== '草稿') return;
@@ -1651,7 +1673,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             <UniPushToolbarButton
               key={`purchase-requisition-push-${selectedRequisitionForToolbar?.id ?? 'none'}`}
               menuItems={toolbarPushMenuItems}
-              disabled={!selectedRequisitionForToolbar || !canUseToolbarPush}
+              disabled={selectedRowKeys.length !== 1 || !selectedRequisitionForToolbar}
               disabledReason={toolbarPushDisabledReason}
             />,
           ]}
@@ -1799,21 +1821,65 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 ) },
                 {
                   key: 'convert',
-                  visible: canPushPurchaseRequisition(currentReq),
-                  render: () => (
-                    <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(currentReq)}>
-                      {pushToPurchaseOrderAction.label}
-                    </Button>
-                  ),
+                  visible: !!currentReq,
+                  render: () => {
+                    const canPush = currentReq ? canPushPurchaseRequisition(currentReq) : false;
+                    const flowClass = String(
+                      (currentReq as PurchaseRequisition & { lifecycle?: Record<string, unknown> })?.lifecycle?.flow_class
+                      ?? (currentReq as PurchaseRequisition & { lifecycle?: Record<string, unknown> })?.lifecycle?.current_stage_key
+                      ?? '',
+                    ).trim();
+                    const blockedReason = canPush
+                      ? undefined
+                      : t('app.kuaizhizao.purchaseRequisition.push.flowBlocked', {
+                          flowClass: flowClass || t('app.kuaizhizao.purchaseRequisition.push.unknownFlow', { defaultValue: '未知' }),
+                          defaultValue: `当前流转类为 ${flowClass || '未知'}，不可下推`,
+                        });
+                    return (
+                      <Tooltip title={blockedReason}>
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<SwapOutlined />}
+                          disabled={!canPush}
+                          onClick={() => canPush && currentReq && handleConvert(currentReq)}
+                        >
+                          {pushToPurchaseOrderAction.label}
+                        </Button>
+                      </Tooltip>
+                    );
+                  },
                 },
                 {
                   key: 'create-inquiry',
-                  visible: canPushPurchaseRequisition(currentReq),
-                  render: () => (
-                    <Button type="link" size="small" icon={<FileSearchOutlined />} onClick={() => handleCreateInquiry(currentReq)}>
-                      {pushToInquiryAction.label}
-                    </Button>
-                  ),
+                  visible: !!currentReq,
+                  render: () => {
+                    const canPush = currentReq ? canPushPurchaseRequisition(currentReq) : false;
+                    const flowClass = String(
+                      (currentReq as PurchaseRequisition & { lifecycle?: Record<string, unknown> })?.lifecycle?.flow_class
+                      ?? (currentReq as PurchaseRequisition & { lifecycle?: Record<string, unknown> })?.lifecycle?.current_stage_key
+                      ?? '',
+                    ).trim();
+                    const blockedReason = canPush
+                      ? undefined
+                      : t('app.kuaizhizao.purchaseRequisition.push.flowBlocked', {
+                          flowClass: flowClass || t('app.kuaizhizao.purchaseRequisition.push.unknownFlow', { defaultValue: '未知' }),
+                          defaultValue: `当前流转类为 ${flowClass || '未知'}，不可下推`,
+                        });
+                    return (
+                      <Tooltip title={blockedReason}>
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<FileSearchOutlined />}
+                          disabled={!canPush}
+                          onClick={() => canPush && currentReq && handleCreateInquiry(currentReq)}
+                        >
+                          {pushToInquiryAction.label}
+                        </Button>
+                      </Tooltip>
+                    );
+                  },
                 },
                 {
                   key: 'fixStatus',

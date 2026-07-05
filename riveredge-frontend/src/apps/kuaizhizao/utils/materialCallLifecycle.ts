@@ -27,14 +27,8 @@ export const getMaterialCallLifecycle = createLifecycleResolver({
     if (s === 'picking') return 'processing';
     return s;
   },
-  nextStepSuggestions: {
-    pending: ['开始配料'],
-    processing: ['完成'],
-    partial: ['完成'],
-    completed: [],
-    cancelled: [],
-  },
   exceptionKeys: ['cancelled'],
   exceptionStageKey: 'cancelled',
+  nextStepSuggestionKeys: {},
   successKeys: ['completed'],
 });

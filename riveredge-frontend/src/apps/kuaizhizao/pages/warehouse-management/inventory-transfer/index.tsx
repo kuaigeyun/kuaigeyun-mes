@@ -497,7 +497,7 @@ const InventoryTransferPage: React.FC = () => {
       align: 'left',
       hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = getInventoryTransferLifecycle(record as Record<string, unknown>);
+        const lifecycle = getInventoryTransferLifecycle(record as Record<string, unknown>, t);
         return (
           <UniLifecycle
             percent={lifecycle.percent}

@@ -221,7 +221,7 @@ const SummariesPage: React.FC = () => {
         align: 'left',
         hideInSearch: true,
         render: (_, record) => {
-          const lifecycle = getPerformanceSummaryLifecycle(record as unknown as Record<string, unknown>);
+          const lifecycle = getPerformanceSummaryLifecycle(record as unknown as Record<string, unknown>, t);
           return (
             <UniLifecycle
               percent={lifecycle.percent}
@@ -351,7 +351,7 @@ const SummariesPage: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
                     const row = (detail.summary ?? detail) as unknown as Record<string, unknown>;
-                    const lc = getPerformanceSummaryLifecycle(row);
+                    const lc = getPerformanceSummaryLifecycle(row as unknown as Record<string, unknown>, t);
                     const mainStages = lc.mainStages ?? [];
                     if (mainStages.length === 0) return null;
                     return (

@@ -2,7 +2,7 @@
  * uni-push 列表工具栏「下推」主按钮规范：
  * - 紧跟「新建 / uni-pull」之后
  * - type="primary"、size="middle"、ArrowDownOutlined
- * - 无选中行或 disabled 时不可点
+ * - 选中态不合法时整钮禁用；选中单条后应展示全部下推项，不可操作项置灰（disabled + title）
  */
 
 import React, { useMemo } from 'react';

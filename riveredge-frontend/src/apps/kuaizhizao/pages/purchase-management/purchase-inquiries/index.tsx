@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormDatePicker, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Col, DatePicker, Descriptions, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Col, DatePicker, Descriptions, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FormOutlined, PlusOutlined, SwapOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -473,21 +473,44 @@ const PurchaseInquiriesPage: React.FC = () => {
 
   const canUseToolbarPush = selectedInquiryForToolbar ? isInquiryAwarded(selectedInquiryForToolbar) : false;
 
+  const toolbarPushDisabledReason = useMemo(() => {
+    if (selectedRowKeys.length === 0) {
+      return t('app.kuaizhizao.purchaseInquiry.push.selectOne', { defaultValue: '请先选择一条询价单' });
+    }
+    if (selectedRowKeys.length !== 1) {
+      return t('app.kuaizhizao.purchaseInquiry.push.singleOnly', {
+        count: selectedRowKeys.length,
+        defaultValue: '下推仅支持单条，请仅保留一条选中记录',
+      });
+    }
+    if (!selectedInquiryForToolbar) {
+      return t('app.kuaizhizao.purchaseInquiry.push.rowUnavailable', { defaultValue: '当前选中记录不可用，请刷新后重试' });
+    }
+    if (!canUseToolbarPush) {
+      return t('app.kuaizhizao.purchaseInquiry.push.notAwarded', { defaultValue: '仅已定标的询价单可下推采购订单' });
+    }
+    return undefined;
+  }, [canUseToolbarPush, selectedInquiryForToolbar, selectedRowKeys.length, t]);
+
   const toolbarPushMenuItems = useMemo(
     () =>
-      selectedInquiryForToolbar && canUseToolbarPush
-        ? buildUniPushMenuItems([
-            {
-              key: 'push-purchase-order',
-              label: pushToPurchaseOrderAction.label,
-              icon: <SwapOutlined />,
-              onClick: () => {
-                void handleConvertPO(selectedInquiryForToolbar);
-              },
-            },
-          ])
-        : [],
-    [selectedInquiryForToolbar, canUseToolbarPush, pushToPurchaseOrderAction.label],
+      buildUniPushMenuItems([
+        {
+          key: 'push-purchase-order',
+          label: pushToPurchaseOrderAction.label,
+          icon: <SwapOutlined />,
+          disabled: !selectedInquiryForToolbar || !canUseToolbarPush,
+          title: !canUseToolbarPush && selectedInquiryForToolbar
+            ? t('app.kuaizhizao.purchaseInquiry.push.notAwarded', { defaultValue: '仅已定标的询价单可下推采购订单' })
+            : undefined,
+          onClick: () => {
+            if (selectedInquiryForToolbar && canUseToolbarPush) {
+              void handleConvertPO(selectedInquiryForToolbar);
+            }
+          },
+        },
+      ]),
+    [selectedInquiryForToolbar, canUseToolbarPush, pushToPurchaseOrderAction.label, t],
   );
 
   useEffect(() => {
@@ -1056,7 +1079,8 @@ const PurchaseInquiriesPage: React.FC = () => {
           <UniPushToolbarButton
             key={`purchase-inquiry-push-${selectedInquiryForToolbar?.id ?? 'none'}`}
             menuItems={toolbarPushMenuItems}
-            disabled={!selectedInquiryForToolbar || !canUseToolbarPush}
+            disabled={selectedRowKeys.length !== 1 || !selectedInquiryForToolbar}
+            disabledReason={toolbarPushDisabledReason}
           />,
         ]}
       />
@@ -1235,9 +1259,25 @@ const PurchaseInquiriesPage: React.FC = () => {
               {(isInquiryPendingCompare(detail) || isInquiryQuoting(detail)) && (
                 <Button onClick={() => void openCompare(detail)}>{t('app.kuaizhizao.purchaseInquiry.compareAward')}</Button>
               )}
-              {isInquiryAwarded(detail) && (
-                <Button icon={<SwapOutlined />} onClick={() => void handleConvertPO(detail)}>{pushToPurchaseOrderAction.label}</Button>
-              )}
+              <Tooltip
+                title={
+                  !isInquiryAwarded(detail)
+                    ? t('app.kuaizhizao.purchaseInquiry.push.notAwarded', { defaultValue: '仅已定标的询价单可下推采购订单' })
+                    : undefined
+                }
+              >
+                <Button
+                  icon={<SwapOutlined />}
+                  disabled={!isInquiryAwarded(detail)}
+                  onClick={() => {
+                    if (isInquiryAwarded(detail)) {
+                      void handleConvertPO(detail);
+                    }
+                  }}
+                >
+                  {pushToPurchaseOrderAction.label}
+                </Button>
+              </Tooltip>
               <UniWorkflowActions {...rowActionKind('skip')}
                 record={detail}
                 entityName={t('app.kuaizhizao.purchaseInquiry.entityName')}

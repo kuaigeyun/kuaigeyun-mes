@@ -7,7 +7,10 @@ import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycl
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 import { deriveLifecycleRingPercent } from '../../../utils/lifecycleRingPercent';
-import { applyLifecycleI18n, type LifecycleTranslateFn } from './lifecycleI18n';
+import { applyLifecycleI18n, requireI18nText, type LifecycleTranslateFn } from './lifecycleI18n';
+import { LIFECYCLE_DOCUMENT_ACTION_LABEL_KEYS as DA } from '../constants/lifecycleDocumentActionLabelKeys';
+
+const SF = 'app.kuaizhizao.salesForecast';
 
 /** 后端主轴 key：含历史四段式（含 pushed）与订单对齐七段式 */
 const SALES_FORECAST_BACKEND_KEYS = new Set([
@@ -148,12 +151,7 @@ function buildForecastExecutionSubStages(record: Record<string, unknown>): SubSt
 }
 
 function adaptForAuditSwitch(result: LifecycleResult, auditRequired: boolean): LifecycleResult {
-  let next = [...(result.nextStepSuggestions ?? [])];
-  if (!auditRequired) {
-    next = next
-      .map((s) => s.replace(/提交审核/g, '提交').replace(/审核通过/g, '确认'))
-      .filter((s) => !s.includes('审核'));
-  }
+  void auditRequired;
   const mainStages = (result.mainStages ?? []).filter(
     (s) => s.key !== 'pending_review' && s.key !== 'audited',
   );
@@ -161,7 +159,7 @@ function adaptForAuditSwitch(result: LifecycleResult, auditRequired: boolean): L
   if (stageName === '待审核' || stageName === '已审核') {
     stageName = '草稿';
   }
-  return { ...result, stageName, mainStages, nextStepSuggestions: next };
+  return { ...result, stageName, mainStages, nextStepSuggestions: [] };
 }
 
 function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecycle {
@@ -243,7 +241,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
         label: s.label,
         status: s.status,
       })),
-      next_step_suggestions: ['下推需求计算'],
+      next_step_suggestions: ['从销售预测创建需求计算'],
     };
   }
   if (isAudited(status) && !isEffective(record)) {
@@ -256,7 +254,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
         label: s.label,
         status: s.status,
       })),
-      next_step_suggestions: ['下推需求计算'],
+      next_step_suggestions: ['从销售预测创建需求计算'],
     };
   }
   if (status === 'COMPLETED' || status === '已完成' || status === 'completed') {
@@ -284,7 +282,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
           label: s.label,
           status: s.status,
         })),
-        next_step_suggestions: ['下推需求计算', '前往需求计算执行 MRP'],
+        next_step_suggestions: ['从销售预测创建需求计算', '前往需求计算执行 MRP'],
       };
     }
     const stRaw = norm(record?.status as string);
@@ -335,7 +333,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
       label: s.label,
       status: s.status,
     })),
-    next_step_suggestions: ['下推需求计算'],
+    next_step_suggestions: ['从销售预测创建需求计算'],
   };
 }
 
@@ -369,13 +367,54 @@ const SALES_FORECAST_STAGE_I18N_BY_KEY: Record<string, string> = {
   forecast_review: 'app.kuaizhizao.salesForecast.lifecycleForecastReview',
 };
 
+const SALES_FORECAST_NEXT_STEP_KEYS: Record<string, string[]> = {
+  draft: [`${SF}.lifecycleNextSubmitReview`],
+  pending_review: [`${SF}.lifecycleNextApprove`, `${SF}.lifecycleNextReject`],
+  audited: [DA.demandComputationFromSalesForecast],
+  effective: [DA.demandComputationFromSalesForecast, `${SF}.lifecycleNextRunMrp`],
+  pushed: [`${SF}.lifecycleNextViewInComputation`, `${SF}.lifecycleNextUpdateForecast`],
+  executing: [`${SF}.lifecycleNextSupplyCollaboration`],
+};
+
+function resolveSalesForecastNextStepKeys(
+  result: LifecycleResult,
+  auditRequired: boolean,
+): string[] {
+  const activeKey = result.mainStages?.find((s) => s.status === 'active')?.key;
+  if (activeKey === 'pending_review') {
+    return auditRequired
+      ? [`${SF}.lifecycleNextApprove`, `${SF}.lifecycleNextReject`]
+      : [`${SF}.lifecycleNextConfirm`];
+  }
+  if (activeKey === 'draft' && result.status === 'exception') {
+    return [`${SF}.lifecycleNextResubmitAfterReject`];
+  }
+  if (activeKey && SALES_FORECAST_NEXT_STEP_KEYS[activeKey]?.length) {
+    return SALES_FORECAST_NEXT_STEP_KEYS[activeKey]!;
+  }
+  return [];
+}
+
+function finalizeSalesForecastLifecycle(
+  result: LifecycleResult,
+  auditRequired: boolean,
+  t: LifecycleTranslateFn,
+): LifecycleResult {
+  const localized = applyLifecycleI18n(result, t, SALES_FORECAST_STAGE_I18N_BY_KEY, {});
+  const nextStepKeys = resolveSalesForecastNextStepKeys(result, auditRequired);
+  return {
+    ...localized,
+    nextStepSuggestions: nextStepKeys.map((key) => requireI18nText(t, key)),
+  };
+}
+
 /**
  * 根据销售预测获取生命周期结果，供 UniLifecycleStepper 使用。
  */
 export function getSalesForecastLifecycle(
   record: SalesForecastLike | Record<string, unknown> | null | undefined,
   auditRequired = true,
-  t?: LifecycleTranslateFn,
+  t: LifecycleTranslateFn,
 ): LifecycleResult {
   if (!record) {
     return { percent: 0, stageName: '-', mainStages: [] };
@@ -394,6 +433,5 @@ export function getSalesForecastLifecycle(
       ),
     );
   }
-  if (!t) return result;
-  return applyLifecycleI18n(result, t, SALES_FORECAST_STAGE_I18N_BY_KEY);
+  return finalizeSalesForecastLifecycle(result, auditRequired, t);
 }

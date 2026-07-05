@@ -4,7 +4,8 @@
  */
 
 import { createLifecycleResolver } from './createLifecycleResolver';
-import type { LifecycleTranslateFn } from './lifecycleI18n';
+import { LIFECYCLE_DOCUMENT_ACTION_LABEL_KEYS as DA } from '../constants/lifecycleDocumentActionLabelKeys';
+import { requireI18nText, type LifecycleTranslateFn } from './lifecycleI18n';
 import {
   resolveListLifecycleStageFromSearch,
   toListLifecycleStageApiParams,
@@ -47,14 +48,8 @@ const baseResolver = createLifecycleResolver({
     EXPIRED: 'closed',
   },
   successKeys: ['finished'],
-  nextStepSuggestions: {
-    effective: ['下推销售订单', '登记变更'],
-    executing: ['查看回款', '关闭合同'],
-    finished: [],
-    closed: [],
-  },
   nextStepSuggestionKeys: {
-    effective: [`${P}.lifecycleNextReleaseOrder`, `${P}.lifecycleNextRegisterChange`],
+    effective: [DA.salesOrderFromSalesContract, `${P}.lifecycleNextRegisterChange`],
     executing: [`${P}.lifecycleNextViewPayment`, `${P}.lifecycleNextCloseContract`],
     finished: [],
     closed: [],
@@ -69,7 +64,7 @@ export function buildSalesContractLifecycleValueEnum(
   return Object.fromEntries(
     SALES_CONTRACT_LIFECYCLE_STAGE_LABELS.map((stage) => [
       stage,
-      { text: t(STAGE_I18N[stage] ?? stage) },
+      { text: requireI18nText(t, STAGE_I18N[stage]!) },
     ]),
   );
 }

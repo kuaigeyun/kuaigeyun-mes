@@ -117,7 +117,7 @@ const HourlyRatesPage: React.FC = () => {
         align: 'left',
         hideInSearch: true,
         render: (_, record) => {
-          const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>);
+          const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>, t);
           return (
             <UniLifecycle
               percent={lifecycle.percent}

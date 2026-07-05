@@ -15,10 +15,6 @@ export const getDeliveryNoticeLifecycle = createLifecycleResolver({
     已发送: 'sent',
     已签收: 'signed',
   },
-  nextStepSuggestions: {
-    pending_send: ['发送'],
-    sent: ['签收'],
-    signed: [],
-  },
+  nextStepSuggestionKeys: {},
   successKeys: ['signed'],
 });

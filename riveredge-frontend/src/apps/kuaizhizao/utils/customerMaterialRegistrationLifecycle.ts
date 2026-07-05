@@ -15,12 +15,8 @@ export const getCustomerMaterialRegistrationLifecycle = createLifecycleResolver(
     processed: 'processed',
     cancelled: 'cancelled',
   },
-  nextStepSuggestions: {
-    pending_inbound: ['确认入库'],
-    processed: [],
-    cancelled: [],
-  },
   exceptionKeys: ['cancelled'],
   exceptionStageKey: 'cancelled',
+  nextStepSuggestionKeys: {},
   successKeys: ['processed'],
 });

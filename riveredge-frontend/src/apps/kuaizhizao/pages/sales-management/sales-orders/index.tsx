@@ -153,7 +153,6 @@ import {
   useSalesOrderCapabilities,
   salesOrderBatchCloseAllowed,
   salesOrderCapabilityReasonMessage,
-  salesOrderHasToolbarPushActions,
 } from '../../../../../hooks/useDocumentCapabilities';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
@@ -1327,6 +1326,7 @@ const SalesOrdersPage: React.FC = () => {
     doPush: (payload?: any) => Promise<any>;
     onSuccess: () => void;
     orderId: number;
+    targetType: NonNullable<PushPreviewResponse['target_type']>;
   } | null>(null);
   const [pushPreviewConfirming, setPushPreviewConfirming] = useState(false);
   const [workOrderSelectedItemIds, setWorkOrderSelectedItemIds] = useState<number[]>([]);
@@ -1343,15 +1343,26 @@ const SalesOrdersPage: React.FC = () => {
   const [pushToReturnWarehouseName, setPushToReturnWarehouseName] = useState<string>('');
   const [pushToReturnLoading, setPushToReturnLoading] = useState(false);
 
+  const resolvePushPreviewModalTitle = (
+    targetType: NonNullable<PushPreviewResponse['target_type']>,
+  ): string => {
+    if (targetType === 'work_order') return pushToWorkOrderAction.label;
+    if (targetType === 'shipment_notice') return pushToShipmentNoticeAction.label;
+    if (targetType === 'demand_computation') return pushToDemandComputationAction.label;
+    throw new Error(`Unknown sales order push preview target_type: ${String(targetType)}`);
+  };
+
   /**
    * 打开下推预览：先拉取预览，再展示弹窗
    */
   const showPushPreviewModal = (
+    targetType: NonNullable<PushPreviewResponse['target_type']>,
     fetchPreview: () => Promise<PushPreviewResponse>,
     doPush: (payload?: any) => Promise<any>,
     onSuccess: () => void,
     orderId: number,
   ) => {
+    setPushPreviewAction({ doPush, onSuccess, orderId, targetType });
     setPushPreviewOpen(true);
     setPushPreviewLoading(true);
     setPushPreviewData(null);
@@ -1360,7 +1371,6 @@ const SalesOrdersPage: React.FC = () => {
     setWorkOrderSelectedWorkCenters({});
     setWorkOrderPushMode('draft');
     setWorkOrderGranularity('grouped');
-    setPushPreviewAction({ doPush, onSuccess, orderId });
     const ensureWorkCentersLoaded = async () => {
       if (workCenterOptions.length > 0) return;
       try {
@@ -1555,6 +1565,7 @@ const SalesOrdersPage: React.FC = () => {
       return;
     }
     showPushPreviewModal(
+      'demand_computation',
       () => previewPushSalesOrderToComputation(id),
       (payload?: any) => pushSalesOrderToComputation(id, payload),
       () => refreshDrawerOrder(id),
@@ -1569,6 +1580,7 @@ const SalesOrdersPage: React.FC = () => {
       return;
     }
     showPushPreviewModal(
+      'shipment_notice',
       () => previewPushSalesOrderToShipmentNotice(id),
       (payload?: any) => pushSalesOrderToShipmentNotice(id, payload),
       () => refreshDrawerOrder(id),
@@ -1687,6 +1699,7 @@ const SalesOrdersPage: React.FC = () => {
       return;
     }
     showPushPreviewModal(
+      'work_order',
       () => previewPushSalesOrderToWorkOrder(id),
       () => pushSalesOrderToWorkOrder(id),
       () => refreshDrawerOrder(id),
@@ -2430,23 +2443,6 @@ const SalesOrdersPage: React.FC = () => {
     [resolveSelectedOrders, selectedRowKeys],
   );
 
-  const renderPushItemLabelWithReason = useCallback(
-    (label: React.ReactNode, disabledReason?: string) =>
-      disabledReason ? (
-        <Tooltip title={disabledReason}>
-          <span>{label}</span>
-        </Tooltip>
-      ) : (
-        label
-      ),
-    [],
-  );
-
-  const getPushMenuItemClassName = useCallback(
-    (disabledReason?: string) => (disabledReason ? 'ant-dropdown-menu-item-disabled' : undefined),
-    [],
-  );
-
   const buildToolbarPushMenuItems = useCallback((record: SalesOrder) => {
     const resolvePushReason = (
       cap: { allowed?: boolean; reason?: string | null } | undefined,
@@ -2504,84 +2500,80 @@ const SalesOrdersPage: React.FC = () => {
     return buildUniPushMenuItems([
       {
         key: 'computation',
-        label: renderPushItemLabelWithReason(
-          pushToDemandComputationAction.label,
-          computationDisabledReason,
-        ),
-        className: getPushMenuItemClassName(computationDisabledReason),
+        label: pushToDemandComputationAction.label,
+        disabled: !!computationDisabledReason,
+        title: computationDisabledReason,
         onClick: () => canPushComputation && handlePushToComputation(record.id!, record),
       },
       {
         key: 'workorder',
-        label: renderPushItemLabelWithReason(
-          pushToWorkOrderAction.label,
-          workOrderDisabledReason,
-        ),
-        className: getPushMenuItemClassName(workOrderDisabledReason),
+        label: pushToWorkOrderAction.label,
+        disabled: !!workOrderDisabledReason,
+        title: workOrderDisabledReason,
         onClick: () => canPushWorkOrder && handlePushToWorkOrder(record.id!, record),
       },
       { type: 'divider' as const },
       {
         key: 'invoice',
-        label: renderPushItemLabelWithReason(
-          pushToSalesInvoiceAction.label,
-          invoiceDisabledReason,
-        ),
-        className: getPushMenuItemClassName(invoiceDisabledReason),
+        label: pushToSalesInvoiceAction.label,
+        disabled: !!invoiceDisabledReason,
+        title: invoiceDisabledReason,
         onClick: () => canPushInvoice && handlePushToInvoice(record.id!),
       },
       {
         key: 'shipment',
-        label: renderPushItemLabelWithReason(
-          pushToShipmentNoticeAction.label,
-          shipmentDisabledReason,
-        ),
-        className: getPushMenuItemClassName(shipmentDisabledReason),
+        label: pushToShipmentNoticeAction.label,
+        disabled: !!shipmentDisabledReason,
+        title: shipmentDisabledReason,
         onClick: () => canPushShipment && handlePushToShipmentNotice(record.id!),
       },
       {
         key: 'delivery',
-        label: renderPushItemLabelWithReason(
-          pushToSalesDeliveryAction.label,
-          deliveryDisabledReason,
-        ),
-        className: getPushMenuItemClassName(deliveryDisabledReason),
+        label: pushToSalesDeliveryAction.label,
+        disabled: !!deliveryDisabledReason,
+        title: deliveryDisabledReason,
         onClick: () => canPushDelivery && handlePushToDelivery(record.id!),
       },
       {
         key: 'sales-return',
-        label: renderPushItemLabelWithReason(
-          pushToSalesReturnAction.label,
-          salesReturnDisabledReason,
-        ),
-        className: getPushMenuItemClassName(salesReturnDisabledReason),
+        label: pushToSalesReturnAction.label,
+        disabled: !!salesReturnDisabledReason,
+        title: salesReturnDisabledReason,
         onClick: () => canPushSalesReturn && handlePushToSalesReturn(record.id!),
       },
       {
         key: 'sales-order-change',
         label: pushToSalesOrderChangeAction.label,
         disabled: !salesOrderPerms.canUpdate,
+        title: !salesOrderPerms.canUpdate ? permDeniedTitle : undefined,
         onClick: () => salesOrderPerms.canUpdate && handlePushToSalesOrderChange(record.id!),
       },
-      ...(record.pushed_to_computation || record.capabilities?.withdraw_computation?.allowed
-        ? [
-            { type: 'divider' as const },
-            {
-              key: 'withdraw',
-              label: t('app.kuaizhizao.salesOrder.withdrawComputation'),
-              disabled: !canWithdrawComputation,
-              onClick: () => canWithdrawComputation && handleWithdrawFromComputation(record.id!),
-            },
-          ]
-        : []),
+      { type: 'divider' as const },
+      {
+        key: 'withdraw',
+        label: t('app.kuaizhizao.salesOrder.withdrawComputation'),
+        disabled: !canWithdrawComputation,
+        title: withdrawComputationDisabledReason,
+        onClick: () => canWithdrawComputation && handleWithdrawFromComputation(record.id!),
+      },
     ]);
-  }, [getPushMenuItemClassName, handlePushToComputation, handlePushToDelivery, handlePushToInvoice, handlePushToSalesOrderChange, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, permDeniedTitle, pushToDemandComputationAction.label, pushToSalesDeliveryAction.label, pushToSalesInvoiceAction.label, pushToSalesOrderChangeAction.label, pushToSalesReturnAction.label, pushToShipmentNoticeAction.label, pushToWorkOrderAction.label, renderPushItemLabelWithReason, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, salesOrderPerms.canUpdate, t]);
+  }, [handlePushToComputation, handlePushToDelivery, handlePushToInvoice, handlePushToSalesOrderChange, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, permDeniedTitle, pushToDemandComputationAction.label, pushToSalesDeliveryAction.label, pushToSalesInvoiceAction.label, pushToSalesOrderChangeAction.label, pushToSalesReturnAction.label, pushToShipmentNoticeAction.label, pushToWorkOrderAction.label, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, salesOrderPerms.canUpdate, t]);
   const toolbarPushMenuItems = useMemo(
-    () => (selectedOrderForToolbar ? buildToolbarPushMenuItems(selectedOrderForToolbar) : []),
+    () => (selectedOrderForToolbar ? buildToolbarPushMenuItems(selectedOrderForToolbar) : buildUniPushMenuItems([])),
     [buildToolbarPushMenuItems, selectedOrderForToolbar]
   );
-  const canUseToolbarPush =
-    selectedOrderForToolbar != null && salesOrderHasToolbarPushActions(selectedOrderForToolbar);
+  const salesOrderToolbarPushDisabledReason = useMemo(() => {
+    if (selectedRowKeys.length === 0) {
+      return t('app.kuaizhizao.demandComputation.selectOneFirst');
+    }
+    if (selectedRowKeys.length !== 1) {
+      return t('app.kuaizhizao.demandComputation.pushSingleOnly');
+    }
+    if (!selectedOrderForToolbar) {
+      return t('app.kuaizhizao.demandComputation.selectedNotInList');
+    }
+    return undefined;
+  }, [selectedOrderForToolbar, selectedRowKeys.length, t]);
 
   const salesOrderHighlightOverdueToolbar = useMemo(
     () => (
@@ -2619,14 +2611,15 @@ const SalesOrdersPage: React.FC = () => {
       <UniPushToolbarButton
         key={`push-toolbar-${selectedRowKeys.join('-') || 'none'}`}
         menuItems={toolbarPushMenuItems}
-        disabled={selectedRowKeys.length !== 1 || !canUseToolbarPush}
+        disabled={selectedRowKeys.length !== 1 || !selectedOrderForToolbar}
+        disabledReason={salesOrderToolbarPushDisabledReason}
       />,
     ],
     [
-      canUseToolbarPush,
       handleCreate,
       handlePullFromSalesContract,
       handlePullFromQuotation,
+      salesOrderToolbarPushDisabledReason,
       selectedOrderForToolbar,
       selectedRowKeys,
       t,
@@ -3938,7 +3931,7 @@ const SalesOrdersPage: React.FC = () => {
               const map = new Map<string, number>();
               const flatRows: SalesOrderItemRow[] = [];
               for (const order of orders) {
-                const lifecycle = getSalesOrderLifecycle(order as SalesOrder, auditEnabled);
+                const lifecycle = getSalesOrderLifecycle(order as SalesOrder, auditEnabled, t);
                 const stageName = lifecycle.stageName ?? order.status ?? '草稿';
                 const items = order.items ?? [];
                 if (items.length === 0) {
@@ -4303,11 +4296,9 @@ const SalesOrdersPage: React.FC = () => {
                       : t('app.kuaizhizao.salesOrder.submitConfirmAuto'),
                   }}
                 />
-                {salesOrderHasToolbarPushActions(currentSalesOrder) && (
-                  <Dropdown {...rowActionKind('skip')} menu={{ items: buildToolbarPushMenuItems(currentSalesOrder) }}>
-                    <Button icon={<ArrowDownOutlined />}>{t('app.kuaizhizao.salesOrder.push')}</Button>
-                  </Dropdown>
-                )}
+                <Dropdown {...rowActionKind('skip')} menu={{ items: buildToolbarPushMenuItems(currentSalesOrder) }}>
+                  <Button icon={<ArrowDownOutlined />}>{t('app.kuaizhizao.salesOrder.push')}</Button>
+                </Dropdown>
                 {currentSalesOrder.id != null && !detailCapabilityGates.print.disabled && (
                   <Button
                     icon={<PrinterOutlined />}
@@ -4587,7 +4578,11 @@ const SalesOrdersPage: React.FC = () => {
 
       {/* 下推预览弹窗 */}
       <Modal
-        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
+        title={
+          pushPreviewAction
+            ? resolvePushPreviewModalTitle(pushPreviewAction.targetType)
+            : ''
+        }
         open={pushPreviewOpen}
         zIndex={elevatedModalZIndex}
         onCancel={() => {

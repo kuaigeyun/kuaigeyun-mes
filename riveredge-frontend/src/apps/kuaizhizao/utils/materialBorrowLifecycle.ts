@@ -15,12 +15,8 @@ export const getMaterialBorrowLifecycle = createLifecycleResolver({
     已借出: 'borrowed',
     已取消: 'cancelled',
   },
-  nextStepSuggestions: {
-    pending_borrow: ['确认借出'],
-    borrowed: ['归还'],
-    cancelled: [],
-  },
   exceptionKeys: ['cancelled'],
   exceptionStageKey: 'cancelled',
+  nextStepSuggestionKeys: {},
   successKeys: ['borrowed'],
 });

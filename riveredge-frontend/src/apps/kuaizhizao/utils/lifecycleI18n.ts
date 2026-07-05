@@ -1,28 +1,45 @@
 import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycle/types';
 import {
   getGlobalLifecycleStageLabelKeys,
-  translateLifecycleStageByKey,
+  resolveLifecycleStageI18nKey,
   type LifecycleTranslateFn,
 } from '../../../utils/globalLifecycleI18n';
 
 export type { LifecycleTranslateFn };
 
-/** 按 SubStage.key 翻译生命周期展示文案（覆盖后端/兜底中文 label） */
+/** 禁止兜底：翻译缺失或与 key 相同时直接抛错 */
+export function requireI18nText(t: LifecycleTranslateFn, key: string): string {
+  const text = t(key);
+  if (!text || text === key) {
+    throw new Error(`Missing i18n label for key: ${key}`);
+  }
+  return text;
+}
+
+function resolveStageLabelKey(
+  stage: SubStage,
+  mergedKeys: Record<string, string>,
+): string {
+  const moduleKey = mergedKeys[stage.key];
+  if (moduleKey) return moduleKey;
+  const globalKey = resolveLifecycleStageI18nKey(stage.key);
+  if (globalKey) return globalKey;
+  throw new Error(`Missing lifecycle stage i18n key for stage.key=${stage.key}`);
+}
+
+/** 按 SubStage.key 翻译生命周期展示文案（禁止回退后端/硬编码 label） */
 export function applyLifecycleI18n(
   result: LifecycleResult,
   t: LifecycleTranslateFn,
   stageLabelKeysByKey: Record<string, string> = {},
-  nextStepKeysByStageKey?: Record<string, string[]>,
+  nextStepKeysByStageKey: Record<string, string[]> = {},
 ): LifecycleResult {
   const mergedKeys = { ...getGlobalLifecycleStageLabelKeys(), ...stageLabelKeysByKey };
 
-  const translateStage = (stage: SubStage): SubStage => {
-    const i18nKey = mergedKeys[stage.key];
-    const label = i18nKey
-      ? t(i18nKey)
-      : translateLifecycleStageByKey(t, stage.key, stage.label);
-    return { ...stage, label: label || stage.label };
-  };
+  const translateStage = (stage: SubStage): SubStage => ({
+    ...stage,
+    label: requireI18nText(t, resolveStageLabelKey(stage, mergedKeys)),
+  });
 
   const mainStages = result.mainStages?.map(translateStage);
   const subStages = result.subStages?.map(translateStage);
@@ -41,16 +58,21 @@ export function applyLifecycleI18n(
 
   let stageName = result.stageName;
   if (terminalKey && mergedKeys[terminalKey]) {
-    stageName = t(mergedKeys[terminalKey]);
-  } else if (stageName) {
-    stageName = translateLifecycleStageByKey(t, terminalKey, stageName);
+    stageName = requireI18nText(t, mergedKeys[terminalKey]!);
+  } else if (terminalKey) {
+    const globalKey = resolveLifecycleStageI18nKey(terminalKey);
+    if (globalKey) {
+      stageName = requireI18nText(t, globalKey);
+    } else {
+      throw new Error(`Missing lifecycle stageName i18n key for terminalKey=${terminalKey}`);
+    }
   }
 
-  let nextStepSuggestions = result.nextStepSuggestions;
   const suggestionKey = activeKey ?? terminalKey;
-  if (suggestionKey && nextStepKeysByStageKey?.[suggestionKey]?.length) {
-    nextStepSuggestions = nextStepKeysByStageKey[suggestionKey].map((key) => t(key));
-  }
+  const nextStepSuggestions =
+    suggestionKey && nextStepKeysByStageKey[suggestionKey]?.length
+      ? nextStepKeysByStageKey[suggestionKey]!.map((key) => requireI18nText(t, key))
+      : [];
 
   return {
     ...result,

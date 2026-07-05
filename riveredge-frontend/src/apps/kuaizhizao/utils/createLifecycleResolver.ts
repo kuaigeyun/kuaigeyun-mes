@@ -19,10 +19,8 @@ export interface LifecycleResolverConfig {
   stageDefs: LifecycleStageDef[];
   /** status 值（中英文）映射到 stage key */
   statusToKey: Record<string, string>;
-  /** 各阶段的下一步操作建议（无 t 时的兜底文案） */
-  nextStepSuggestions: Record<string, string[]>;
-  /** 各阶段 next-step 的 i18n key（传入 t 时使用） */
-  nextStepSuggestionKeys?: Record<string, string[]>;
+  /** 各阶段 next-step 的 i18n key（唯一真源，禁止硬编码兜底文案） */
+  nextStepSuggestionKeys: Record<string, string[]>;
   /** 异常分支的 key（如 cancelled、rejected），这些 key 会显示为 exception 样式 */
   exceptionKeys?: string[];
   /** 异常时「当前阶段」对应的 key，若与 stageDefs 中某 key 一致则高亮该节点 */
@@ -42,28 +40,25 @@ function stageLabelKeysFromConfig(config: LifecycleResolverConfig): Record<strin
 }
 
 /**
- * 创建生命周期解析函数。仅使用后端下发的 lifecycle。
+ * 创建生命周期解析函数。仅使用后端下发的 lifecycle；展示文案必须经 t 翻译。
  */
 export function createLifecycleResolver(config: LifecycleResolverConfig) {
   const stageLabelKeys = stageLabelKeysFromConfig(config);
 
   return function getLifecycle(
     record: Record<string, unknown> | null | undefined,
-    t?: LifecycleTranslateFn,
+    t: LifecycleTranslateFn,
   ): LifecycleResult {
     if (!record) return { percent: 0, stageName: '-', mainStages: [] };
     const backend = (record as Record<string, unknown>).lifecycle as BackendLifecycle | undefined;
     const result: LifecycleResult = backend?.main_stages?.length
       ? parseBackendLifecycle(backend)
       : { percent: 0, stageName: '生命周期缺失', status: 'exception', mainStages: [] };
-    if (t) {
-      return applyLifecycleI18n(
-        result,
-        t,
-        { ...getGlobalLifecycleStageLabelKeys(), ...stageLabelKeys },
-        config.nextStepSuggestionKeys,
-      );
-    }
-    return result;
+    return applyLifecycleI18n(
+      result,
+      t,
+      { ...getGlobalLifecycleStageLabelKeys(), ...stageLabelKeys },
+      config.nextStepSuggestionKeys,
+    );
   };
 }

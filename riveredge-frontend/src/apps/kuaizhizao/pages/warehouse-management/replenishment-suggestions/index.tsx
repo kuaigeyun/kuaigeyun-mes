@@ -216,7 +216,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       align: 'left',
       hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = getReplenishmentSuggestionLifecycle(record as Record<string, unknown>);
+        const lifecycle = getReplenishmentSuggestionLifecycle(record as Record<string, unknown>, t);
         return (
           <UniLifecycle
             percent={lifecycle.percent}

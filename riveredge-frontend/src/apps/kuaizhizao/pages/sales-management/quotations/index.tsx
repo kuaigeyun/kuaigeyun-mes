@@ -1598,7 +1598,7 @@ const QuotationsPage: React.FC = () => {
 
   const handleConvertToContract = (record: Quotation) => {
     Modal.confirm({
-      title: t('app.kuaizhizao.quotation.pushToSalesContract'),
+      title: pushToSalesContractAction.label,
       content: t('app.kuaizhizao.quotation.pushToSalesContractConfirm', { code: record.quotation_code }),
       onOk: async () => {
         try {
@@ -3271,7 +3271,7 @@ const QuotationsPage: React.FC = () => {
             <UniPushToolbarButton
               key={`quotation-push-${quotationForToolbarPush?.id ?? 'none'}`}
               menuItems={toolbarPushMenuItems}
-              disabled={!quotationForToolbarPush}
+              disabled={selectedRowKeys.length !== 1 || !quotationForToolbarPush}
               disabledReason={quotationPushDisabledReason}
             />,
           ]}

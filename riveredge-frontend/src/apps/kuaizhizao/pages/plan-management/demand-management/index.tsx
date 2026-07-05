@@ -104,7 +104,7 @@ function formatDateTime(t: string | undefined): string {
 
 /** 详情「生命周期」区块标题：主标题 + 来源文案（无圆环、无单独来源子轨） */
 function buildDemandLifecycleSectionTitle(record: Demand, t: TFunction) {
-  const lifecycle = getDemandLifecycle(record);
+  const lifecycle = getDemandLifecycle(record as Record<string, unknown>, t);
   const originLabel = (lifecycle.subStages ?? []).find((s: any) => DEMAND_ORIGIN_SUB_KEYS.has(s.key))?.label;
   if (!originLabel) {
     return t('app.kuaizhizao.salesOrder.lifecycle');
@@ -533,36 +533,59 @@ const DemandManagementPage: React.FC = () => {
     return record.pushed_to_computation === true;
   }, []);
   const demandToolbarPushMenuItems = useMemo(
-    () =>
-      buildUniPushMenuItems([
+    () => {
+      const pushDisabledReason =
+        selectedDemandForPush && !demandCanPushToComputation(selectedDemandForPush)
+          ? selectedDemandForPush.pushed_to_computation
+            ? t('app.kuaizhizao.demandManagement.alreadyPushed')
+            : t('components.uniPush.disabled.unavailable')
+          : undefined;
+      const withdrawDisabledReason =
+        selectedDemandForPush && !demandCanWithdrawComputation(selectedDemandForPush)
+          ? t('app.kuaizhizao.demandManagement.notPushedYet')
+          : undefined;
+      return buildUniPushMenuItems([
         {
           key: 'push-to-computation',
           label: pushToComputationAction.label,
           disabled: !selectedDemandForPush || !demandCanPushToComputation(selectedDemandForPush),
+          title: pushDisabledReason,
           onClick: () => {
-            if (selectedDemandForPush?.id != null) {
+            if (selectedDemandForPush?.id != null && demandCanPushToComputation(selectedDemandForPush)) {
               void handlePushToComputation(selectedDemandForPush.id);
             }
           },
         },
-      ]),
+        { type: 'divider' as const },
+        {
+          key: 'withdraw-computation',
+          label: t('app.kuaizhizao.demandManagement.withdrawPush'),
+          disabled: !selectedDemandForPush || !demandCanWithdrawComputation(selectedDemandForPush),
+          title: withdrawDisabledReason,
+          onClick: () => {
+            if (selectedDemandForPush?.id != null && demandCanWithdrawComputation(selectedDemandForPush)) {
+              void handleWithdrawFromComputation(selectedDemandForPush.id);
+            }
+          },
+        },
+      ]);
+    },
     [
       demandCanPushToComputation,
+      demandCanWithdrawComputation,
       handlePushToComputation,
+      handleWithdrawFromComputation,
       pushToComputationAction.label,
       selectedDemandForPush,
+      t,
     ],
   );
   const demandToolbarPushDisabledReason = useMemo(() => {
     if (selectedRowKeys.length === 0) return t('app.kuaizhizao.demandComputation.selectOneFirst');
     if (selectedRowKeys.length > 1) return t('app.kuaizhizao.demandComputation.pushSingleOnly');
     if (!selectedDemandForPush) return t('app.kuaizhizao.demandComputation.selectedNotInList');
-    return t('components.uniPush.disabled.unavailable', { defaultValue: '当前状态不可下推' });
+    return undefined;
   }, [selectedDemandForPush, selectedRowKeys.length, t]);
-  const canUseDemandToolbarPush = Boolean(
-    selectedDemandForPush &&
-    demandCanPushToComputation(selectedDemandForPush),
-  );
   const createPlanButtonLabel = useMemo(
     () => withSingleNewShortcutHint(t('app.kuaizhizao.demandManagement.createPlan')),
     [t],
@@ -1041,7 +1064,7 @@ const DemandManagementPage: React.FC = () => {
             <UniPushToolbarButton
               key={`demand-toolbar-push-${selectedDemandForPush?.id ?? 'none'}`}
               menuItems={demandToolbarPushMenuItems}
-              disabled={selectedRowKeys.length !== 1 || !canUseDemandToolbarPush}
+              disabled={selectedRowKeys.length !== 1 || !selectedDemandForPush}
               disabledReason={demandToolbarPushDisabledReason}
             />,
           ]}
@@ -1427,24 +1450,47 @@ const DemandManagementPage: React.FC = () => {
                     {t('common.delete')}
                   </Button>
                 )}
-              {currentDemand.pushed_to_computation ? (
+              <Tooltip
+                title={
+                  !demandCanPushToComputation(currentDemand)
+                    ? currentDemand.pushed_to_computation
+                      ? t('app.kuaizhizao.demandManagement.alreadyPushed')
+                      : t('components.uniPush.disabled.unavailable')
+                    : undefined
+                }
+              >
+                <Button
+                  type="primary"
+                  icon={<ArrowDownOutlined />}
+                  disabled={!demandCanPushToComputation(currentDemand)}
+                  onClick={() => {
+                    if (demandCanPushToComputation(currentDemand)) {
+                      void handlePushToComputation(currentDemand.id!);
+                    }
+                  }}
+                >
+                  {pushToComputationAction.label}
+                </Button>
+              </Tooltip>
+              <Tooltip
+                title={
+                  !demandCanWithdrawComputation(currentDemand)
+                    ? t('app.kuaizhizao.demandManagement.notPushedYet')
+                    : undefined
+                }
+              >
                 <Button
                   icon={<RollbackOutlined />}
-                  onClick={() => handleWithdrawFromComputation(currentDemand.id!)}
+                  disabled={!demandCanWithdrawComputation(currentDemand)}
+                  onClick={() => {
+                    if (demandCanWithdrawComputation(currentDemand)) {
+                      void handleWithdrawFromComputation(currentDemand.id!);
+                    }
+                  }}
                 >
                   {t('app.kuaizhizao.demandManagement.withdrawPush')}
                 </Button>
-              ) : (
-                isDemandAuditedAndApproved(currentDemand) && (
-                  <Button
-                    type="primary"
-                    icon={<ArrowDownOutlined />}
-                    onClick={() => handlePushToComputation(currentDemand.id!)}
-                  >
-                    {pushToComputationAction.label}
-                  </Button>
-                )
-              )}
+              </Tooltip>
             </Space>
           )
         }
@@ -1532,7 +1578,7 @@ const DemandManagementPage: React.FC = () => {
                 <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.totalQuantity')} dataIndex="total_quantity" />
                 <ProDescriptions.Item label={t('common.status')}>
                   {(() => {
-                    const lifecycle = getDemandLifecycle(currentDemand);
+                    const lifecycle = getDemandLifecycle(currentDemand as Record<string, unknown>, t);
                     return (
                       <Tag {...getDocumentLifecycleStageTagProps(lifecycle.stageName)}>
                         {lifecycle.stageName}
@@ -1547,7 +1593,7 @@ const DemandManagementPage: React.FC = () => {
             <DetailDrawerSection title={buildDemandLifecycleSectionTitle(currentDemand, t)}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {(() => {
-                  const lifecycle = getDemandLifecycle(currentDemand);
+                  const lifecycle = getDemandLifecycle(currentDemand as Record<string, unknown>, t);
                   const mainStages = lifecycle.mainStages ?? [];
                   const hasStepper = mainStages.length > 0;
                   return (

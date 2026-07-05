@@ -131,7 +131,7 @@ const BackflushRecordsPage: React.FC = () => {
         align: 'left',
         hideInSearch: true,
         render: (_, record) => {
-          const lifecycle = getBackflushRecordLifecycle(record as unknown as Record<string, unknown>);
+          const lifecycle = getBackflushRecordLifecycle(record as unknown as Record<string, unknown>, t);
           return (
             <UniLifecycle
               percent={lifecycle.percent}

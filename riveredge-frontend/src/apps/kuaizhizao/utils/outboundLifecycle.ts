@@ -27,13 +27,8 @@ export const getOutboundLifecycle = createLifecycleResolver({
     已取消: 'cancelled',
     cancelled: 'cancelled',
   },
-  nextStepSuggestions: {
-    draft: ['确认'],
-    confirmed: ['完成'],
-    completed: [],
-    cancelled: [],
-  },
   exceptionKeys: ['cancelled'],
   exceptionStageKey: 'cancelled',
+  nextStepSuggestionKeys: {},
   successKeys: ['completed'],
 });

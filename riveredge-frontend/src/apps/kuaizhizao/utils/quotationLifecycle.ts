@@ -5,6 +5,7 @@
 import { createLifecycleResolver } from './createLifecycleResolver';
 import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { LifecycleTranslateFn } from './lifecycleI18n';
+import { requireI18nText } from './lifecycleI18n';
 
 const P = 'app.kuaizhizao.quotation';
 
@@ -34,6 +35,7 @@ const baseResolver = createLifecycleResolver({
     已转订单: 'converted',
     converted: 'converted',
   },
+  nextStepSuggestionKeys: {},
   exceptionKeys: ['generated'],
   successKeys: ['converted'],
 });
@@ -48,25 +50,22 @@ export interface QuotationLike {
 function applyQuotationLifecycleExtras(
   record: Record<string, unknown>,
   base: LifecycleResult,
-  t?: LifecycleTranslateFn,
+  t: LifecycleTranslateFn,
 ): LifecycleResult {
-  let result = base;
   if (record.conversion_downstream_missing === true) {
-    result = {
-      ...result,
-      status: 'warning',
-      stageName: t
-        ? t(`${P}.lifecycleDownstreamDeleted`)
-        : '下推单据已删除',
+    return {
+      ...base,
+      status: 'exception',
+      stageName: requireI18nText(t, `${P}.lifecycleDownstreamDeleted`),
     };
   }
-  return result;
+  return base;
 }
 
 export function getQuotationLifecycle(
   record: QuotationLike | Record<string, unknown> | null | undefined,
   _auditRequired = true,
-  t?: LifecycleTranslateFn,
+  t: LifecycleTranslateFn,
 ): LifecycleResult {
   if (!record) return { percent: 0, stageName: '-', mainStages: [] };
   const raw = record as Record<string, unknown>;

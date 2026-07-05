@@ -2,7 +2,7 @@ import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 import { createLifecycleResolver } from './createLifecycleResolver';
-import { applyLifecycleI18n, type LifecycleTranslateFn } from './lifecycleI18n';
+import { requireI18nText, type LifecycleTranslateFn } from './lifecycleI18n';
 import {
   resolveListLifecycleStageFromSearch,
   toListLifecycleStageApiParams,
@@ -46,11 +46,6 @@ const baseResolver = createLifecycleResolver({
   exceptionKeys: ['rejected'],
   exceptionStageKey: 'draft',
   successKeys: ['applied'],
-  nextStepSuggestions: {
-    draft: ['提交审核'],
-    applied: [],
-    rejected: ['修改后重新提交'],
-  },
   nextStepSuggestionKeys: {
     draft: [`${OC}.lifecycleNextSubmitReview`],
     applied: [],
@@ -58,16 +53,14 @@ const baseResolver = createLifecycleResolver({
   },
 });
 
-function buildAppliedLifecycleBackend(t?: LifecycleTranslateFn): BackendLifecycle {
-  const label = (key: string, fallback: string) =>
-    t && ORDER_CHANGE_STAGE_I18N_BY_KEY[key] ? t(ORDER_CHANGE_STAGE_I18N_BY_KEY[key]) : fallback;
+function buildAppliedLifecycleBackend(t: LifecycleTranslateFn): BackendLifecycle {
   return {
     current_stage_key: 'applied',
-    current_stage_name: label('applied', '已生效'),
+    current_stage_name: requireI18nText(t, ORDER_CHANGE_STAGE_I18N_BY_KEY.applied),
     status: 'success',
     main_stages: [
-      { key: 'draft', label: label('draft', '草稿'), status: 'done' },
-      { key: 'applied', label: label('applied', '已生效'), status: 'active' },
+      { key: 'draft', label: requireI18nText(t, ORDER_CHANGE_STAGE_I18N_BY_KEY.draft), status: 'done' },
+      { key: 'applied', label: requireI18nText(t, ORDER_CHANGE_STAGE_I18N_BY_KEY.applied), status: 'active' },
     ],
     next_step_suggestions: [],
   };
@@ -75,7 +68,7 @@ function buildAppliedLifecycleBackend(t?: LifecycleTranslateFn): BackendLifecycl
 
 export function getOrderChangeLifecycle(
   record: Record<string, unknown> | null | undefined,
-  t?: LifecycleTranslateFn,
+  t: LifecycleTranslateFn,
 ): LifecycleResult {
   if (!record) return { percent: 0, stageName: '-', mainStages: [] };
   if (record.applied_at) {
@@ -89,7 +82,7 @@ export function getOrderChangeLifecycle(
 }
 
 export function buildOrderChangeLifecycleValueEnum(
-  t?: LifecycleTranslateFn,
+  t: LifecycleTranslateFn,
 ): Record<
   string,
   { text: string; status?: 'Default' | 'Processing' | 'Error' | 'Success' | 'Warning' }
@@ -103,7 +96,7 @@ export function buildOrderChangeLifecycleValueEnum(
     ORDER_CHANGE_STAGE_LABELS.map((stage) => [
       stage,
       {
-        text: t ? t(ORDER_CHANGE_STAGE_I18N[stage] ?? stage) : stage,
+        text: requireI18nText(t, ORDER_CHANGE_STAGE_I18N[stage]!),
         status: statusByStage[stage] ?? 'Default',
       },
     ]),

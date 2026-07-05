@@ -207,7 +207,7 @@ const DeliveryNotesPage: React.FC = () => {
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
-        const lc = getDeliveryNoticeLifecycle(record as Record<string, unknown>);
+        const lc = getDeliveryNoticeLifecycle(record as Record<string, unknown>, t);
         return (
           <UniLifecycle
             percent={lc.percent}
@@ -1138,7 +1138,7 @@ const DeliveryNotesPage: React.FC = () => {
 
               <DetailDrawerSection title={t('app.kuaizhizao.warehouseOutbound.section.lifecycle')}>
                 {(() => {
-                  const lc = getDeliveryNoticeLifecycle(noticeDetail as Record<string, unknown>);
+                  const lc = getDeliveryNoticeLifecycle(noticeDetail as Record<string, unknown>, t);
                   const mainStages = lc.mainStages ?? [];
                   if (mainStages.length === 0) return null;
                   return (

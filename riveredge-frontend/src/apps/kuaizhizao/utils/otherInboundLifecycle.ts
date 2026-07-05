@@ -15,12 +15,8 @@ export const getOtherInboundLifecycle = createLifecycleResolver({
     已入库: 'received',
     已取消: 'cancelled',
   },
-  nextStepSuggestions: {
-    pending_inbound: ['确认入库'],
-    received: [],
-    cancelled: [],
-  },
   exceptionKeys: ['cancelled'],
   exceptionStageKey: 'cancelled',
+  nextStepSuggestionKeys: {},
   successKeys: ['received'],
 });

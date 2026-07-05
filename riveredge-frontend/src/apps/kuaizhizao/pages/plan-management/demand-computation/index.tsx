@@ -209,10 +209,20 @@ function normalizeComputationSourceNote(computation: DemandComputation | undefin
   if (!raw) return ''
 
   const demandNo = String(computation?.demand_code || '').trim()
-  const sourceNoFromRaw = raw.match(/^从需求\s+(.+?)\s+下推创建$/)?.[1]?.trim()
+  const sourceNoFromRaw =
+    raw.match(/^从需求\s+(.+?)\s+(?:下推)?创建$/)?.[1]?.trim()
+    ?? raw.match(/^从需求计划\s+(.+?)\s+(?:下推)?创建$/)?.[1]?.trim()
+    ?? raw.match(/^从销售订单\s+(.+?)\s+(?:下推)?创建$/)?.[1]?.trim()
+    ?? raw.match(/^从销售预测\s+(.+?)\s+(?:下推)?创建$/)?.[1]?.trim()
+
   const sourceNo = demandNo || sourceNoFromRaw || ''
 
-  if (/^从需求\s+.+\s+下推创建$/.test(raw) || /^从需求计划\s+.+\s+下推创建$/.test(raw)) {
+  if (
+    /^从需求\s+.+\s+(?:下推)?创建$/.test(raw)
+    || /^从需求计划\s+.+\s+(?:下推)?创建$/.test(raw)
+    || /^从销售订单\s+.+\s+(?:下推)?创建$/.test(raw)
+    || /^从销售预测\s+.+\s+(?:下推)?创建$/.test(raw)
+  ) {
     if (computation?.demand_type === 'sales_order') return t('app.kuaizhizao.demandComputation.sourceNoteFromSalesOrder', { code: sourceNo }).trim()
     if (computation?.demand_type === 'sales_forecast') return t('app.kuaizhizao.demandComputation.sourceNoteFromSalesForecast', { code: sourceNo }).trim()
     return t('app.kuaizhizao.demandComputation.sourceNoteFromDemandPlan', { code: sourceNo }).trim()
@@ -720,6 +730,8 @@ const DemandComputationPage: React.FC = () => {
   const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'demand_computation.pull_from_sales_order')
   const pullFromSalesForecastAction = resolveKuaizhizaoDocumentAction(t, 'demand_computation.pull_from_sales_forecast')
   const pushToWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_demand_computation')
+  const pushToPurchaseRequisitionAction = resolveKuaizhizaoDocumentAction(t, 'purchase_requisition.pull_from_demand_computation')
+  const pushToPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order.pull_from_demand_computation')
   const queryClient = useQueryClient()
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -904,8 +916,12 @@ const DemandComputationPage: React.FC = () => {
   }>({})
   const [pushPanelLoading, setPushPanelLoading] = useState(false)
   const [pushPanelSubmitting, setPushPanelSubmitting] = useState(false)
-  /** 协调看板深链：打开下推面板时预设采购路径 */
-  const pushPurchasePresetRef = useRef<'requisition' | 'purchase_order' | null>(null)
+  /** 协调看板深链 / 工具栏：打开下推面板时的路径预设 */
+  type PushPanelPreset = {
+    production?: 'work_order'
+    purchase?: 'requisition' | 'purchase_order'
+  }
+  const pushPanelPresetRef = useRef<PushPanelPreset | null>(null)
   const deepLinkHandledRef = useRef<string | null>(null)
 
   /** 下推面板：打开时加载 options，初始化 config */
@@ -916,17 +932,13 @@ const DemandComputationPage: React.FC = () => {
       try {
         const opts = await getPushOptions(pushPanelRecord.id!)
         setPushOptions(opts)
-        const presetPurchase = pushPurchasePresetRef.current
-        pushPurchasePresetRef.current = null
+        const preset = pushPanelPresetRef.current
+        pushPanelPresetRef.current = null
         setPushConfig({
-          production: presetPurchase
-            ? undefined
-            : opts.production_choices.length > 0
-              ? 'work_order'
-              : undefined,
-          purchase:
-            presetPurchase ??
-            (opts.purchase_choices.length > 0 ? opts.default_purchase : undefined),
+          production: preset?.production
+            ?? (preset?.purchase ? undefined : opts.production_choices.length > 0 ? 'work_order' : undefined),
+          purchase: preset?.purchase
+            ?? (preset?.production ? undefined : opts.purchase_choices.length > 0 ? opts.default_purchase : undefined),
         })
       } catch (e) {
         messageApi.error(t('app.kuaizhizao.demandComputation.loadPushConfigFailed'))
@@ -1492,8 +1504,9 @@ const DemandComputationPage: React.FC = () => {
     })
   }
 
-  /** 打开下推面板 */
-  const handleOpenPushPanel = useCallback((record: DemandComputation) => {
+  /** 打开下推面板（可选预设生产/采购路径） */
+  const handleOpenPushPanel = useCallback((record: DemandComputation, preset?: PushPanelPreset) => {
+    pushPanelPresetRef.current = preset ?? null
     setPushPanelRecord(record)
     setPushPreviewData(null)
   }, [])
@@ -1524,7 +1537,7 @@ const DemandComputationPage: React.FC = () => {
       try {
         const data = await getDemandComputation(computationId, true)
         if (action === 'pushPurchase') {
-          pushPurchasePresetRef.current = 'purchase_order'
+          pushPanelPresetRef.current = { purchase: 'purchase_order' }
           setPushPanelRecord(data)
           setPushPreviewData(null)
           return
@@ -1721,7 +1734,7 @@ const DemandComputationPage: React.FC = () => {
       },
       fieldProps: { allowClear: true },
       render: (_, record) => {
-        const lifecycle = getDemandComputationLifecycle(record)
+        const lifecycle = getDemandComputationLifecycle(record, t)
         return (
           <UniLifecycle
             percent={lifecycle.percent}
@@ -1789,29 +1802,100 @@ const DemandComputationPage: React.FC = () => {
 
   const canUseToolbarPush = selectedComputationForToolbar ? isComputationCompleted(selectedComputationForToolbar.computation_status) : false
 
+  const [toolbarPushOptions, setToolbarPushOptions] = useState<PushOptions | null>(null)
+
+  useEffect(() => {
+    const recordId = selectedComputationForToolbar?.id
+    if (!recordId || !canUseToolbarPush) {
+      setToolbarPushOptions(null)
+      return
+    }
+    let cancelled = false
+    void getPushOptions(recordId)
+      .then((opts) => {
+        if (!cancelled) setToolbarPushOptions(opts)
+      })
+      .catch(() => {
+        if (!cancelled) setToolbarPushOptions(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [canUseToolbarPush, selectedComputationForToolbar?.id])
+
+  const computationPushBlockedReason = useMemo(() => {
+    if (!selectedComputationForToolbar || canUseToolbarPush) return undefined
+    return t('app.kuaizhizao.demandComputation.pushOnlyCompleted', {
+      status: selectedComputationForToolbar.computation_status || t('app.kuaizhizao.demandComputation.statusUnknown'),
+    })
+  }, [canUseToolbarPush, selectedComputationForToolbar, t])
+
   const toolbarPushDisabledReason = useMemo(() => {
     if (selectedRowKeys.length === 0) return t('app.kuaizhizao.demandComputation.selectOneFirst')
     if (selectedRowKeys.length > 1) return t('app.kuaizhizao.demandComputation.pushSingleOnly')
     if (!selectedComputationForToolbar) return t('app.kuaizhizao.demandComputation.selectedNotInList')
-    if (!canUseToolbarPush) {
-      return t('app.kuaizhizao.demandComputation.pushOnlyCompleted', { status: selectedComputationForToolbar.computation_status || t('app.kuaizhizao.demandComputation.statusUnknown') })
-    }
     return undefined
-  }, [canUseToolbarPush, selectedComputationForToolbar, selectedRowKeys, t])
+  }, [selectedComputationForToolbar, selectedRowKeys.length, t])
 
-  const toolbarPushMenuItems = useMemo(
-    () =>
-      selectedComputationForToolbar && canUseToolbarPush
-        ? buildUniPushMenuItems([
-            {
-              key: 'push-documents',
-              label: pushToWorkOrderAction.label,
-              onClick: () => handleOpenPushPanel(selectedComputationForToolbar),
-            },
-          ])
-        : [],
-    [selectedComputationForToolbar, canUseToolbarPush, handleOpenPushPanel, pushToWorkOrderAction.label],
-  )
+  const toolbarPushMenuItems = useMemo(() => {
+    const openPush = (preset?: PushPanelPreset) => {
+      if (selectedComputationForToolbar && canUseToolbarPush) {
+        handleOpenPushPanel(selectedComputationForToolbar, preset)
+      }
+    }
+    const productionPathBlockedReason =
+      computationPushBlockedReason
+      ?? (toolbarPushOptions && !toolbarPushOptions.has_production_items && !toolbarPushOptions.has_outsource_items
+        ? t('app.kuaizhizao.demandComputation.pushNoProductionItems', { defaultValue: '计算结果无生产/委外需求' })
+        : undefined)
+    const purchasePathBlockedReason =
+      computationPushBlockedReason
+      ?? (toolbarPushOptions && !toolbarPushOptions.has_purchase_items
+        ? t('app.kuaizhizao.demandComputation.pushNoPurchaseItems', { defaultValue: '计算结果无采购需求' })
+        : undefined)
+
+    return buildUniPushMenuItems([
+      {
+        key: 'push-production-work-order',
+        label: pushToWorkOrderAction.label,
+        disabled: !!productionPathBlockedReason,
+        title: productionPathBlockedReason,
+        onClick: () => openPush({ production: 'work_order' }),
+      },
+      {
+        key: 'push-purchase-requisition',
+        label: pushToPurchaseRequisitionAction.label,
+        disabled: !!purchasePathBlockedReason,
+        title: purchasePathBlockedReason,
+        onClick: () => openPush({ purchase: 'requisition' }),
+      },
+      {
+        key: 'push-purchase-order',
+        label: pushToPurchaseOrderAction.label,
+        disabled: !!purchasePathBlockedReason,
+        title: purchasePathBlockedReason,
+        onClick: () => openPush({ purchase: 'purchase_order' }),
+      },
+      { type: 'divider' as const },
+      {
+        key: 'push-documents-panel',
+        label: t('app.kuaizhizao.demandComputation.pushDocuments'),
+        disabled: !!computationPushBlockedReason,
+        title: computationPushBlockedReason,
+        onClick: () => openPush(),
+      },
+    ])
+  }, [
+    canUseToolbarPush,
+    computationPushBlockedReason,
+    handleOpenPushPanel,
+    pushToPurchaseOrderAction.label,
+    pushToPurchaseRequisitionAction.label,
+    pushToWorkOrderAction.label,
+    selectedComputationForToolbar,
+    t,
+    toolbarPushOptions,
+  ])
 
   const statCards: StatCard[] = useMemo(
     () =>
@@ -1932,7 +2016,8 @@ const DemandComputationPage: React.FC = () => {
             <UniPushToolbarButton
               key={`computation-push-${selectedComputationForToolbar?.id ?? 'none'}`}
               menuItems={toolbarPushMenuItems}
-              disabled={!!toolbarPushDisabledReason}
+              disabled={selectedRowKeys.length !== 1 || !selectedComputationForToolbar}
+              disabledReason={toolbarPushDisabledReason}
             />
           )
           return [
@@ -2867,7 +2952,7 @@ const DemandComputationPage: React.FC = () => {
                     <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                         {(() => {
-                          const lifecycle = getDemandComputationLifecycle(currentComputation)
+                          const lifecycle = getDemandComputationLifecycle(currentComputation, t)
                           const mainStages = lifecycle.mainStages ?? []
                           return mainStages.length > 0 ? (
                             <UniLifecycleStepper

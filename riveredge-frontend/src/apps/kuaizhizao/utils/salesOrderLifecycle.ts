@@ -10,7 +10,8 @@ import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycl
 import type { SalesOrder } from '../services/sales-order';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
-import { applyLifecycleI18n, type LifecycleTranslateFn } from './lifecycleI18n';
+import { applyLifecycleI18n, requireI18nText, type LifecycleTranslateFn } from './lifecycleI18n';
+import { LIFECYCLE_DOCUMENT_ACTION_LABEL_KEYS as DA } from '../constants/lifecycleDocumentActionLabelKeys';
 import {
   resolveListLifecycleStageFromSearch,
   toListLifecycleStageApiParams,
@@ -147,15 +148,9 @@ function buildMainStages(stageName: string): SubStage[] {
 }
 
 function adaptForAuditSwitch(result: LifecycleResult, auditRequired: boolean): LifecycleResult {
+  void auditRequired;
   const stageRaw = normalizeStageName(result.stageName);
   if (!stageRaw) return result;
-
-  let next = [...(result.nextStepSuggestions ?? [])];
-  if (!auditRequired) {
-    next = next
-      .map((s) => s.replace(/提交审核/g, '提交').replace(/审核通过/g, '确认'))
-      .filter((s) => !s.includes('审核'));
-  }
 
   const mainStages = result.mainStages?.length
     ? result.mainStages.filter((s) => s.key !== 'pending_review' && s.key !== 'audited')
@@ -165,7 +160,7 @@ function adaptForAuditSwitch(result: LifecycleResult, auditRequired: boolean): L
     ...result,
     stageName: stageRaw,
     mainStages,
-    nextStepSuggestions: next,
+    nextStepSuggestions: [],
   };
 }
 
@@ -191,17 +186,14 @@ export function getSalesOrderLifecycleStageLabels(auditRequired = true): string[
   return [...MAIN_STAGE_KEYS.map((k) => MAIN_STAGE_LABELS[k]), ...SALES_ORDER_EXCEPTION_LIFECYCLE_STAGES];
 }
 
-type LifecycleTranslate = (key: string, defaultValue?: string) => string;
-
-/** 供 ProColumns.valueEnum 与 uni-query 生命周期 Tab 使用 */
 export function buildSalesOrderLifecycleValueEnum(
-  t: LifecycleTranslate,
+  t: LifecycleTranslateFn,
   auditRequired = true,
 ): Record<string, { text: string }> {
   return Object.fromEntries(
     getSalesOrderLifecycleStageLabels(auditRequired).map((stage) => [
       stage,
-      { text: t(SALES_ORDER_LIFECYCLE_STAGE_I18N[stage] ?? stage, stage) },
+      { text: requireI18nText(t, SALES_ORDER_LIFECYCLE_STAGE_I18N[stage]!) },
     ]),
   );
 }
@@ -259,44 +251,6 @@ function parseSalesOrderBackendLifecycle(record: SalesOrder, auditRequired = tru
   return adaptForAuditSwitch(enriched, auditRequired);
 }
 
-const SHIPPABLE_STAGE = '可发货';
-const SHIPPABLE_ELIGIBLE_STAGES = new Set(['执行中', '已生效', '发货出库', '已交货']);
-
-/** 库存满足欠交时，将「执行中」升维展示为「可发货」（阶段名 + 绿色圆环） */
-function applyShippableLifecycleHint(record: SalesOrder, result: LifecycleResult): LifecycleResult {
-  if (!record.has_shippable_products) return result;
-
-  const stage = normalizeStageName(result.stageName);
-  const activeExecuting = result.mainStages?.some((s) => s.status === 'active' && s.key === 'executing');
-  if (!SHIPPABLE_ELIGIBLE_STAGES.has(stage) && !activeExecuting) return result;
-
-  const qty = Number(record.shippable_quantity ?? 0);
-  const mainStages = result.mainStages?.map((s) =>
-    s.status === 'active' && s.key === 'executing' ? { ...s, label: SHIPPABLE_STAGE } : s,
-  );
-  const subStages = result.subStages?.map((s) =>
-    s.key === 'shipment_waiting' && s.status !== 'done'
-      ? { ...s, label: SHIPPABLE_STAGE, status: 'active' as SubStage['status'] }
-      : s,
-  );
-
-  const suggestions = [
-    '下推发货通知',
-    ...(result.nextStepSuggestions ?? []).filter((s) => !s.includes('可发货')),
-  ];
-
-  return {
-    ...result,
-    stageName: SHIPPABLE_STAGE,
-    status: 'success',
-    mainStages,
-    subStages,
-    subPercent: qty > 0 ? undefined : result.subPercent,
-    subLabel: qty > 0 ? `${Math.round(qty)}件待出` : result.subLabel,
-    nextStepSuggestions: suggestions,
-  };
-}
-
 const SALES_ORDER_STAGE_I18N_BY_KEY: Record<string, string> = {
   draft: 'app.kuaizhizao.salesOrder.lifecycleDraft',
   pending_review: 'app.kuaizhizao.salesOrder.lifecyclePendingReview',
@@ -308,16 +262,43 @@ const SALES_ORDER_STAGE_I18N_BY_KEY: Record<string, string> = {
   completed: 'app.kuaizhizao.salesOrder.lifecycleCompleted',
 };
 
+const SHIPPABLE_ELIGIBLE_STAGES = new Set(['执行中', '已生效', '发货出库', '已交货']);
+
+function isShippableLifecycleDisplay(record: SalesOrder, result: LifecycleResult): boolean {
+  if (!record.has_shippable_products) return false;
+  const stage = normalizeStageName(result.stageName);
+  const activeExecuting = result.mainStages?.some((s) => s.status === 'active' && s.key === 'executing');
+  return SHIPPABLE_ELIGIBLE_STAGES.has(stage) || activeExecuting === true;
+}
+
+function resolveSalesOrderNextStepKeys(result: LifecycleResult, shippable: boolean): string[] {
+  const activeKey = result.mainStages?.find((s) => s.status === 'active')?.key;
+  if (shippable || activeKey === 'executing') return [DA.shipmentNoticeFromSalesOrder];
+  return [];
+}
+
 export function getSalesOrderLifecycle(
   record: SalesOrder,
   auditRequired = true,
-  t?: LifecycleTranslateFn,
+  t: LifecycleTranslateFn,
 ): LifecycleResult {
-  let result = applyShippableLifecycleHint(record, parseSalesOrderBackendLifecycle(record, auditRequired));
-  if (t) {
-    result = applyLifecycleI18n(result, t, SALES_ORDER_STAGE_I18N_BY_KEY);
-  }
-  return result;
+  const base = parseSalesOrderBackendLifecycle(record, auditRequired);
+  const shippable = isShippableLifecycleDisplay(record, base);
+  const stageKeys = {
+    ...SALES_ORDER_STAGE_I18N_BY_KEY,
+    ...(shippable ? { executing: 'lifecycle.stage.ready_to_ship' } : {}),
+  };
+  const localized = applyLifecycleI18n(base, t, stageKeys, {});
+  const qty = Number(record.shippable_quantity ?? 0);
+  return {
+    ...localized,
+    status: shippable ? 'success' : localized.status,
+    subPercent: shippable && qty > 0 ? undefined : base.subPercent,
+    subLabel: shippable && qty > 0 ? `${Math.round(qty)}件待出` : base.subLabel,
+    nextStepSuggestions: resolveSalesOrderNextStepKeys(base, shippable).map((key) =>
+      requireI18nText(t, key),
+    ),
+  };
 }
 
 /** 批量撤回：撤销提交（生命周期「待审核」「已生效」） */
@@ -325,8 +306,7 @@ export function canWithdrawSalesOrderRecord(record: SalesOrder, auditRequired = 
   if (isSalesOrderClosed(record)) return false;
   const phase = String((record as { audit?: { phase?: string } }).audit?.phase ?? '').toLowerCase();
   if (auditRequired && phase === 'pending') return true;
-  const stage = (getSalesOrderLifecycle(record, auditRequired).stageName ?? '').trim();
-  if (stage === '已生效') return true;
+  if (isConfirmed(record.status)) return true;
   return canWithdrawSubmittedOrder(record.status);
 }
 
@@ -343,16 +323,16 @@ export function isSalesOrderClosed(record: Pick<SalesOrder, 'status'>): boolean 
   return isClosed(record.status);
 }
 
-/** 不视为「交货逾期」高亮的生命周期阶段（与列表展示语义一致） */
-const DELIVERY_OVERDUE_EXCLUDED_STAGES = new Set(['已完成', '已关闭', '已取消', '草稿', '已驳回', '账款发票', '账款发票处理']);
-
 /** 整单已交货闭环或处于不提示逾期的阶段 */
 export function isSalesOrderDeliveryHighlightExcluded(record: SalesOrder, auditRequired = true): boolean {
+  void auditRequired;
   const dp = record.delivery_progress;
   if (dp != null && Number(dp) >= 100) return true;
-  const lifecycle = getSalesOrderLifecycle(record, auditRequired);
-  const stage = (lifecycle.stageName ?? '').trim();
-  return DELIVERY_OVERDUE_EXCLUDED_STAGES.has(stage);
+  if (isClosed(record.status) || isCancelled(record.status)) return true;
+  if (isRejected(record.review_status)) return true;
+  if (isDraft(record.status)) return true;
+  const status = norm(record.status);
+  return status === '账款发票' || status === '账款发票处理' || status === 'INVOICING';
 }
 
 /**

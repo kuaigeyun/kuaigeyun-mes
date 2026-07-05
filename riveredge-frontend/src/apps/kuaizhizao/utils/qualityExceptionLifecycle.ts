@@ -21,13 +21,6 @@ export const getQualityExceptionLifecycle = createLifecycleResolver({
     closed: 'closed',
     cancelled: 'cancelled',
   },
-  nextStepSuggestions: {
-    pending: ['调查'],
-    investigating: ['纠正'],
-    correcting: ['关闭'],
-    closed: [],
-    cancelled: [],
-  },
   nextStepSuggestionKeys: {
     pending: [`${P}.lifecycleNext.investigate`],
     investigating: [`${P}.lifecycleNext.correct`],

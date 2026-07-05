@@ -17,13 +17,8 @@ export const getInventoryAlertLifecycle = createLifecycleResolver({
     resolved: 'resolved',
     ignored: 'ignored',
   },
-  nextStepSuggestions: {
-    pending: ['处理预警'],
-    processing: ['完成处理'],
-    resolved: [],
-    ignored: [],
-  },
   exceptionKeys: ['ignored'],
   exceptionStageKey: 'ignored',
+  nextStepSuggestionKeys: {},
   successKeys: ['resolved'],
 });

@@ -33,13 +33,8 @@ export const getBatchingOrderLifecycle = createLifecycleResolver({
     已取消: 'cancelled',
     cancelled: 'cancelled',
   },
-  nextStepSuggestions: {
-    draft: ['确认配料'],
-    picking: ['完成配料'],
-    completed: [],
-    cancelled: [],
-  },
   exceptionKeys: ['cancelled'],
   exceptionStageKey: 'cancelled',
+  nextStepSuggestionKeys: {},
   successKeys: ['completed'],
 });

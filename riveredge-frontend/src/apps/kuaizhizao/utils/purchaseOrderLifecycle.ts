@@ -8,6 +8,8 @@ import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycl
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 import { deriveLifecycleRingPercent } from '../../../utils/lifecycleRingPercent';
+import { applyLifecycleI18n, requireI18nText, type LifecycleTranslateFn } from './lifecycleI18n';
+import { LIFECYCLE_DOCUMENT_ACTION_LABEL_KEYS as DA } from '../constants/lifecycleDocumentActionLabelKeys';
 import { resolveListLifecycleStageFromSearch } from '../../../utils/listLifecycleStage';
 import { mapAuditLifecycleStageToApiParams } from './auditListFilter';
 
@@ -156,13 +158,6 @@ function adaptForAuditSwitch(result: LifecycleResult, auditRequired: boolean): L
     stageName = '草稿';
   }
 
-  let next = [...(base.nextStepSuggestions ?? [])];
-  if (!auditRequired) {
-    next = next
-      .map((s) => s.replace(/提交审核/g, '提交').replace(/审核通过/g, '确认'))
-      .filter((s) => !s.includes('审核'));
-  }
-
   const mainStages = (base.mainStages ?? []).filter(
     (s) => s.key !== 'pending_review' && s.key !== 'audited',
   );
@@ -172,11 +167,11 @@ function adaptForAuditSwitch(result: LifecycleResult, auditRequired: boolean): L
       ...base,
       stageName,
       mainStages: mainStages.length ? mainStages : buildMainStages(stageName),
-      nextStepSuggestions: next,
+      nextStepSuggestions: [],
     };
   }
 
-  return { ...base, stageName, mainStages, nextStepSuggestions: next };
+  return { ...base, stageName, mainStages, nextStepSuggestions: [] };
 }
 
 export const PURCHASE_ORDER_EXCEPTION_LIFECYCLE_STAGES = ['已驳回', '已取消'] as const;
@@ -185,8 +180,6 @@ export function getPurchaseOrderLifecycleStageLabels(auditRequired = true): stri
   void auditRequired;
   return [...MAIN_STAGE_KEYS.map((k) => MAIN_STAGE_LABELS[k]), ...PURCHASE_ORDER_EXCEPTION_LIFECYCLE_STAGES];
 }
-
-type LifecycleTranslate = (key: string, defaultValue?: string) => string;
 
 const PURCHASE_ORDER_LIFECYCLE_STAGE_I18N: Record<string, string> = {
   草稿: 'app.kuaizhizao.purchaseOrder.lifecycleDraft',
@@ -201,13 +194,13 @@ const PURCHASE_ORDER_LIFECYCLE_STAGE_I18N: Record<string, string> = {
 };
 
 export function buildPurchaseOrderLifecycleValueEnum(
-  t: LifecycleTranslate,
+  t: LifecycleTranslateFn,
   auditRequired = true,
 ): Record<string, { text: string }> {
   return Object.fromEntries(
     getPurchaseOrderLifecycleStageLabels(auditRequired).map((stage) => [
       stage,
-      { text: t(PURCHASE_ORDER_LIFECYCLE_STAGE_I18N[stage] ?? stage, stage) },
+      { text: requireI18nText(t, PURCHASE_ORDER_LIFECYCLE_STAGE_I18N[stage]!) },
     ]),
   );
 }
@@ -259,9 +252,69 @@ export interface PurchaseOrderLike {
   lifecycle?: unknown;
 }
 
+const PURCHASE_ORDER_STAGE_I18N_BY_KEY: Record<string, string> = {
+  draft: 'app.kuaizhizao.purchaseOrder.lifecycleDraft',
+  pending_review: 'app.kuaizhizao.purchaseOrder.lifecyclePendingReview',
+  audited: 'app.kuaizhizao.purchaseOrder.lifecycleAudited',
+  confirmed: 'app.kuaizhizao.purchaseOrder.lifecycleConfirmed',
+  executing: 'app.kuaizhizao.purchaseOrder.lifecycleExecuting',
+  invoicing: 'app.kuaizhizao.purchaseOrder.lifecycleInvoicing',
+  completed: 'app.kuaizhizao.purchaseOrder.lifecycleCompleted',
+};
+
+const PO = 'app.kuaizhizao.purchaseOrder';
+
+const PURCHASE_RECEIPT_ACTION_KEYS = [
+  DA.receiptNoticeFromPurchaseOrder,
+  DA.purchaseReceiptFromPurchaseOrder,
+] as const;
+
+function purchaseOrderNextStepKeys(auditRequired: boolean) {
+  return {
+    rejected: auditRequired ? [`${PO}.lifecycleNextResubmitAfterReject`] : [`${PO}.lifecycleNextResubmit`],
+    draft: auditRequired ? [`${PO}.lifecycleNextSubmitReview`] : [`${PO}.lifecycleNextSubmit`],
+    pendingReview: auditRequired
+      ? [`${PO}.lifecycleNextApprove`, `${PO}.lifecycleNextReject`]
+      : [`${PO}.lifecycleNextConfirmOrder`],
+    audited: [`${PO}.lifecycleNextConfirmOrder`],
+    receipt: [...PURCHASE_RECEIPT_ACTION_KEYS],
+    none: [] as string[],
+  };
+}
+
+function resolvePurchaseOrderNextStepKeys(
+  result: LifecycleResult,
+  auditRequired: boolean,
+): string[] {
+  const keys = purchaseOrderNextStepKeys(auditRequired);
+  const activeKey = result.mainStages?.find((s) => s.status === 'active')?.key;
+  if (activeKey === 'pending_review') return keys.pendingReview;
+  if (activeKey === 'audited') return keys.audited;
+  if (activeKey === 'confirmed' || activeKey === 'executing') return keys.receipt;
+  if (activeKey === 'draft') return keys.draft;
+  return keys.none;
+}
+
+function finalizePurchaseOrderLifecycle(
+  result: LifecycleResult,
+  auditRequired: boolean,
+  t: LifecycleTranslateFn,
+  explicitNextStepKeys?: string[],
+): LifecycleResult {
+  const adapted = adaptForAuditSwitch(result, auditRequired);
+  const localized = applyLifecycleI18n(adapted, t, PURCHASE_ORDER_STAGE_I18N_BY_KEY, {});
+  const nextStepKeys =
+    explicitNextStepKeys ?? resolvePurchaseOrderNextStepKeys(adapted, auditRequired);
+  return {
+    ...localized,
+    nextStepSuggestions: nextStepKeys.map((key) => requireI18nText(t, key)),
+  };
+}
+
 export function getPurchaseOrderLifecycle(
   record: PurchaseOrderLike | Record<string, unknown> | null | undefined,
   auditRequired = true,
+  t: LifecycleTranslateFn,
 ): LifecycleResult {
   if (!record) {
     return { percent: 0, stageName: '-', mainStages: [] };
@@ -271,9 +324,13 @@ export function getPurchaseOrderLifecycle(
     | BackendLifecycle
     | undefined;
   if (backend?.main_stages?.length && isPurchaseOrderLifecycle(backend)) {
-    const result = parseBackendLifecycle(backend);
-    const stageName = normalizeStageName(result.stageName);
-    return adaptForAuditSwitch({ ...result, stageName: stageName || result.stageName }, auditRequired);
+    const parsed = parseBackendLifecycle(backend);
+    const stageName = normalizeStageName(parsed.stageName);
+    return finalizePurchaseOrderLifecycle(
+      { ...parsed, stageName: stageName || parsed.stageName },
+      auditRequired,
+      t,
+    );
   }
 
   const status = norm(record?.status as string);
@@ -281,133 +338,130 @@ export function getPurchaseOrderLifecycle(
 
   if (isRejected(reviewStatus) || status === 'REJECTED' || status === '已驳回') {
     const mainStages = buildMainStages('已驳回');
-    return adaptForAuditSwitch(
+    return finalizePurchaseOrderLifecycle(
       {
         percent: ringPercentFromStages(mainStages),
         stageName: '已驳回',
         status: 'exception',
         mainStages,
-        nextStepSuggestions: auditRequired ? ['修改后重新提交审核'] : ['修改后重新提交'],
       },
       auditRequired,
+      t,
+      purchaseOrderNextStepKeys(auditRequired).rejected,
     );
   }
   if (isCancelled(status)) {
     const mainStages = buildMainStages('已取消');
-    return adaptForAuditSwitch(
+    return finalizePurchaseOrderLifecycle(
       {
         percent: ringPercentFromStages(mainStages),
         stageName: '已取消',
         status: 'exception',
         mainStages,
-        nextStepSuggestions: [],
       },
       auditRequired,
+      t,
+      purchaseOrderNextStepKeys(auditRequired).none,
     );
   }
   if (isDraft(status)) {
     const mainStages = buildMainStages('草稿');
-    return adaptForAuditSwitch(
+    return finalizePurchaseOrderLifecycle(
       {
         percent: ringPercentFromStages(mainStages),
         stageName: '草稿',
         mainStages,
-        nextStepSuggestions: auditRequired ? ['提交审核'] : ['提交确认'],
       },
       auditRequired,
+      t,
+      purchaseOrderNextStepKeys(auditRequired).draft,
     );
   }
   if (isPendingReview(status) && !isApproved(reviewStatus)) {
     const mainStages = buildMainStages('待审核');
-    return adaptForAuditSwitch(
+    return finalizePurchaseOrderLifecycle(
       {
         percent: ringPercentFromStages(mainStages),
         stageName: '待审核',
         mainStages,
-        nextStepSuggestions: auditRequired ? ['审核通过', '驳回'] : ['确认订单'],
       },
       auditRequired,
+      t,
+      purchaseOrderNextStepKeys(auditRequired).pendingReview,
     );
   }
   if (isAudited(status) && isApproved(reviewStatus) && !isConfirmed(status)) {
     const mainStages = buildMainStages('已审核');
-    return adaptForAuditSwitch(
+    return finalizePurchaseOrderLifecycle(
       {
         percent: ringPercentFromStages(mainStages),
         stageName: '已审核',
         mainStages,
-        nextStepSuggestions: ['确认订单'],
       },
       auditRequired,
+      t,
+      purchaseOrderNextStepKeys(auditRequired).audited,
     );
   }
   if (isCompleted(status)) {
     const mainStages = buildMainStages('已完成');
-    return adaptForAuditSwitch(
+    return finalizePurchaseOrderLifecycle(
       {
         percent: ringPercentFromStages(mainStages),
         stageName: '已完成',
         status: 'success',
         mainStages,
-        nextStepSuggestions: [],
       },
       auditRequired,
+      t,
+      purchaseOrderNextStepKeys(auditRequired).none,
     );
   }
   if (isInProgress(status)) {
     const mainStages = buildMainStages('执行中');
-    return adaptForAuditSwitch(
+    return finalizePurchaseOrderLifecycle(
       {
         percent: ringPercentFromStages(mainStages),
         stageName: '执行中',
         mainStages,
-        nextStepSuggestions: ['下推收货通知', '下推采购入库'],
       },
       auditRequired,
+      t,
+      purchaseOrderNextStepKeys(auditRequired).receipt,
     );
   }
   if (isApproved(reviewStatus) && (isConfirmed(status) || isAudited(status))) {
     const mainStages = buildMainStages('已确认');
-    return adaptForAuditSwitch(
+    return finalizePurchaseOrderLifecycle(
       {
         percent: ringPercentFromStages(mainStages),
         stageName: '已确认',
         mainStages,
-        nextStepSuggestions: ['下推收货通知', '下推采购入库'],
       },
       auditRequired,
+      t,
+      purchaseOrderNextStepKeys(auditRequired).receipt,
     );
   }
 
-  const fallback = buildMainStages('草稿');
-  return adaptForAuditSwitch(
+  const unknownStages = buildMainStages('草稿');
+  return finalizePurchaseOrderLifecycle(
     {
-      percent: ringPercentFromStages(fallback),
+      percent: ringPercentFromStages(unknownStages),
       stageName: status || '草稿',
-      mainStages: fallback,
-      nextStepSuggestions: auditRequired ? ['提交审核'] : ['提交确认'],
+      mainStages: unknownStages,
     },
     auditRequired,
+    t,
+    purchaseOrderNextStepKeys(auditRequired).draft,
   );
 }
 
-/** 不视为「交货逾期」高亮的生命周期阶段（与列表 KPI 语义一致） */
-const PURCHASE_DELIVERY_OVERDUE_EXCLUDED_STAGES = new Set([
-  '已完成',
-  '已取消',
-  '草稿',
-  '已驳回',
-  '账款发票',
-]);
-
-function isPurchaseOrderDeliveryHighlightExcluded(
-  record: PurchaseOrderLike,
-  auditRequired: boolean,
-): boolean {
+function isPurchaseOrderDeliveryHighlightExcluded(record: PurchaseOrderLike): boolean {
   if (isCompleted(record.status) || isCancelled(record.status)) return true;
-  const lifecycle = getPurchaseOrderLifecycle(record, auditRequired);
-  const stage = (lifecycle.stageName ?? '').trim();
-  return PURCHASE_DELIVERY_OVERDUE_EXCLUDED_STAGES.has(stage);
+  if (isRejected(record.review_status)) return true;
+  if (isDraft(record.status)) return true;
+  return false;
 }
 
 /**
@@ -417,6 +471,7 @@ export function isPurchaseOrderDeliveryOverdue(
   record: PurchaseOrderLike,
   auditRequired = true,
 ): boolean {
+  void auditRequired;
   const raw = record.delivery_date;
   if (raw == null || String(raw).trim() === '') return false;
   const d = dayjs(raw);
@@ -425,7 +480,7 @@ export function isPurchaseOrderDeliveryOverdue(
   const reviewStatus = norm(record.review_status as string);
   if (isRejected(reviewStatus)) return false;
 
-  if (isPurchaseOrderDeliveryHighlightExcluded(record, auditRequired)) return false;
+  if (isPurchaseOrderDeliveryHighlightExcluded(record)) return false;
 
   const status = norm(record.status as string);
   if (isDraft(status)) return false;

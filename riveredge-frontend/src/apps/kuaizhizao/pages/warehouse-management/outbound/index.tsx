@@ -764,7 +764,7 @@ const OutboundPage: React.FC = () => {
       align: 'left',
       hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = getOutboundLifecycle(record as Record<string, unknown>);
+        const lifecycle = getOutboundLifecycle(record as Record<string, unknown>, t);
         return (
           <UniLifecycle
             percent={lifecycle.percent}
@@ -1237,7 +1237,7 @@ const OutboundPage: React.FC = () => {
               <DetailDrawerSection title={t('app.kuaizhizao.warehouseOutbound.section.lifecycle')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
-                    const lifecycle = getOutboundLifecycle(currentOrder as Record<string, unknown>);
+                    const lifecycle = getOutboundLifecycle(currentOrder as Record<string, unknown>, t);
                     const mainStages = lifecycle.mainStages ?? [];
                     if (mainStages.length === 0) return null;
                     return (

@@ -39,6 +39,7 @@ import { getMaterialUnitDisplayMapShared, resolveMaterialUnitLabel } from '../..
 import { getStatusLabel } from '../../apps/kuaizhizao/constants/documentStatus';
 import { getDemandBusinessModeLabel } from '../../apps/kuaizhizao/utils/businessMode';
 import { getDemandTypeLabel } from '../../apps/kuaizhizao/utils/demandType';
+import type { TFunction } from 'i18next';
 import { getDemandComputationLifecycle } from '../../apps/kuaizhizao/utils/demandComputationLifecycle';
 
 const { useToken } = theme;
@@ -70,11 +71,14 @@ function briefDocStatus(raw: unknown): string {
   return label === '-' ? '—' : label;
 }
 
-function briefComputationStatus(c: {
-  computation_status?: string;
-  lifecycle?: unknown;
-}): string {
-  const lc = getDemandComputationLifecycle(c);
+function briefComputationStatus(
+  c: {
+    computation_status?: string;
+    lifecycle?: unknown;
+  },
+  t: TFunction,
+): string {
+  const lc = getDemandComputationLifecycle(c, t);
   const name = (lc.stageName ?? '').trim();
   if (name && name !== '-') return name;
   return briefDocStatus(c.computation_status);
@@ -103,7 +107,7 @@ function briefAmount(resource: string, fieldName: string, value: unknown): React
   return <AmountDisplay resource={resource} fieldName={fieldName} value={Number(value)} />;
 }
 
-async function loadBrief(documentType: string, documentId: number): Promise<BriefModel> {
+async function loadBrief(documentType: string, documentId: number, t: TFunction): Promise<BriefModel> {
   const unitMap = await getMaterialUnitDisplayMapShared();
   const unitCell = (code: unknown) => {
     const s = resolveMaterialUnitLabel(code, unitMap);
@@ -257,7 +261,7 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '计算单号', value: dash(c.computation_code) },
         { key: 'demand', label: '需求', value: dash(c.demand_code) },
-        { key: 'status', label: '状态', value: briefComputationStatus(c) },
+        { key: 'status', label: '状态', value: briefComputationStatus(c, t) },
         { key: 'mode', label: '业务模式', value: briefBusinessMode(c.business_mode) },
       ];
       const rows = (c.items ?? []).map((it, i) => ({
@@ -967,9 +971,9 @@ export const TraceLinkedDocumentBrief: React.FC<TraceLinkedDocumentBriefProps> =
     documentType && documentId != null && !Number.isNaN(Number(documentId))
   );
 
-  const { data, loading, error } = useRequest(() => loadBrief(documentType!, documentId!), {
+  const { data, loading, error } = useRequest(() => loadBrief(documentType!, documentId!, t), {
     ready,
-    refreshDeps: [documentType, documentId],
+    refreshDeps: [documentType, documentId, t],
   });
 
   const typeTitle = useMemo(() => {

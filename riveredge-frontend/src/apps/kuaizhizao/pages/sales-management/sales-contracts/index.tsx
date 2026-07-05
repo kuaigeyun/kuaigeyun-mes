@@ -80,6 +80,8 @@ import {
 
   Tag,
 
+  Tooltip,
+
   Typography,
 
 } from 'antd';
@@ -173,7 +175,6 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import {
   salesContractCapabilityReasonMessage,
-  salesContractHasToolbarPushActions,
   salesContractBatchDeleteAllowed,
   salesContractBatchPrintAllowed,
   quotationCapabilityAllowed,
@@ -371,7 +372,7 @@ const SalesContractsPage: React.FC = () => {
   const { t } = useTranslation();
   const pullFromQuotationAction = resolveKuaizhizaoDocumentAction(t, 'sales_contract.pull_from_quotation');
   const pushToSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_sales_contract');
-  const pushToWorkOrderLabel = t('app.kuaizhizao.salesContract.pushToWorkOrder');
+  const pushToWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_sales_contract');
   const salesCommonLabels = useMemo(() => getSalesCommonFormLabels(t), [t]);
   const contractTypeLabels = useMemo(
     () => ({
@@ -2307,8 +2308,46 @@ const SalesContractsPage: React.FC = () => {
     return tableRowsRef.current.find((row) => Number(row.id) === selectedId) ?? null;
   }, [selectedRowKeys]);
 
-  const canUseToolbarPush =
-    !!selectedContractForPush && salesContractHasToolbarPushActions(selectedContractForPush);
+  const resolveContractPushOrderReason = useCallback(
+    (record: typeof selectedContractForPush) => {
+      if (!record) return undefined;
+      if (!record.capabilities?.push_to_sales_order?.allowed) {
+        return (
+          salesContractCapabilityReasonMessage(record.capabilities?.push_to_sales_order?.reason, t) ||
+          t('app.kuaizhizao.salesContract.pushOrderStatusRequired')
+        );
+      }
+      return undefined;
+    },
+    [t],
+  );
+
+  const resolveContractPushWorkOrderReason = useCallback(
+    (record: typeof selectedContractForPush) => {
+      if (!record) return undefined;
+      if (!record.capabilities?.push_to_work_order?.allowed) {
+        return (
+          salesContractCapabilityReasonMessage(record.capabilities?.push_to_work_order?.reason, t) ||
+          t('app.kuaizhizao.salesContract.pushOrderStatusRequired')
+        );
+      }
+      return undefined;
+    },
+    [t],
+  );
+
+  const contractToolbarPushDisabledReason = useMemo(() => {
+    if (selectedRowKeys.length === 0) {
+      return t('app.kuaizhizao.salesContract.selectContract');
+    }
+    if (selectedRowKeys.length !== 1) {
+      return t('app.kuaizhizao.demandComputation.pushSingleOnly');
+    }
+    if (!selectedContractForPush) {
+      return t('app.kuaizhizao.demandComputation.selectedNotInList');
+    }
+    return undefined;
+  }, [selectedContractForPush, selectedRowKeys.length, t]);
 
   const handleToolbarPushToOrder = useCallback(async () => {
     const record = selectedContractForPush;
@@ -2360,30 +2399,38 @@ const SalesContractsPage: React.FC = () => {
       />,
       <UniPushToolbarButton
         key={`sales-contract-push-toolbar-${selectedRowKeys.join('-') || 'none'}`}
-        disabled={selectedRowKeys.length !== 1 || !canUseToolbarPush}
+        disabled={selectedRowKeys.length !== 1 || !selectedContractForPush}
+        disabledReason={contractToolbarPushDisabledReason}
         menuItems={buildUniPushMenuItems([
           {
             key: 'push-to-sales-order',
             label: pushToSalesOrderAction.label,
+            disabled: !!resolveContractPushOrderReason(selectedContractForPush),
+            title: resolveContractPushOrderReason(selectedContractForPush),
             onClick: () => void handleToolbarPushToOrder(),
           },
           {
             key: 'push-to-work-order',
-            label: pushToWorkOrderLabel,
+            label: pushToWorkOrderAction.label,
+            disabled: !!resolveContractPushWorkOrderReason(selectedContractForPush),
+            title: resolveContractPushWorkOrderReason(selectedContractForPush),
             onClick: () => void handleToolbarPushToWorkOrder(),
           },
         ])}
       />,
     ],
     [
-      canUseToolbarPush,
+      contractToolbarPushDisabledReason,
       handleCreate,
       handlePullFromQuotation,
       handleToolbarPushToOrder,
       handleToolbarPushToWorkOrder,
-      selectedRowKeys,
       pushToSalesOrderAction.label,
-      pushToWorkOrderLabel,
+      pushToWorkOrderAction.label,
+      resolveContractPushOrderReason,
+      resolveContractPushWorkOrderReason,
+      selectedContractForPush,
+      selectedRowKeys,
       t,
     ],
   );
@@ -3224,21 +3271,34 @@ const SalesContractsPage: React.FC = () => {
                 }}
               />
 
-              {!detailCapabilityGates.pushToSalesOrder.disabled && (
+              <Tooltip title={detailCapabilityGates.pushToSalesOrder.disabled ? detailCapabilityGates.pushToSalesOrder.title : undefined}>
                 <Button
                   type="primary"
                   icon={<ShoppingOutlined />}
-                  onClick={() => openReleaseModal(detail, 'sales_order')}
+                  disabled={detailCapabilityGates.pushToSalesOrder.disabled}
+                  onClick={() => {
+                    if (!detailCapabilityGates.pushToSalesOrder.disabled) {
+                      openReleaseModal(detail, 'sales_order');
+                    }
+                  }}
                 >
                   {pushToSalesOrderAction.label}
                 </Button>
-              )}
+              </Tooltip>
 
-              {!detailCapabilityGates.pushToWorkOrder.disabled && (
-                <Button icon={<ToolOutlined />} onClick={() => openReleaseModal(detail, 'work_order')}>
-                  {pushToWorkOrderLabel}
+              <Tooltip title={detailCapabilityGates.pushToWorkOrder.disabled ? detailCapabilityGates.pushToWorkOrder.title : undefined}>
+                <Button
+                  icon={<ToolOutlined />}
+                  disabled={detailCapabilityGates.pushToWorkOrder.disabled}
+                  onClick={() => {
+                    if (!detailCapabilityGates.pushToWorkOrder.disabled) {
+                      openReleaseModal(detail, 'work_order');
+                    }
+                  }}
+                >
+                  {pushToWorkOrderAction.label}
                 </Button>
-              )}
+              </Tooltip>
 
               {!detailCapabilityGates.createChange.disabled && (
                 <Button icon={<FormOutlined />} onClick={openChangeDrawer}>{t('app.kuaizhizao.salesContract.contractChange')}</Button>
@@ -3618,7 +3678,7 @@ const SalesContractsPage: React.FC = () => {
 
       <Modal
 
-        title={releaseMode === 'work_order' ? pushToWorkOrderLabel : pushToSalesOrderAction.label}
+        title={releaseMode === 'work_order' ? pushToWorkOrderAction.label : pushToSalesOrderAction.label}
 
         open={releaseModalOpen}
 

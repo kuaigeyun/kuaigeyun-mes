@@ -2398,7 +2398,7 @@ const WorkOrdersPage: React.FC = () => {
     onConfirm: async (keys, rows) => {
       const selectedId = Number(keys[0])
       if (!selectedId) {
-        messageApi.warning(`请选择${pullFromSalesOrderAction.sourceLabel}`)
+        messageApi.warning(t('app.kuaizhizao.demandComputation.selectSource', { source: pullFromSalesOrderAction.sourceLabel }))
         return
       }
       const selected = rows[0]
@@ -2411,8 +2411,15 @@ const WorkOrdersPage: React.FC = () => {
         const count = Number(res?.target_documents?.length ?? 0)
         messageApi.success(
           count > 0
-            ? `已从${pullFromSalesOrderAction.sourceLabel}创建 ${count} 张${pullFromSalesOrderAction.targetLabel}`
-            : `已从${pullFromSalesOrderAction.sourceLabel}创建${pullFromSalesOrderAction.targetLabel}`,
+            ? t('app.kuaizhizao.shipmentNotice.createFromSourceSuccessWithCount', {
+                source: pullFromSalesOrderAction.sourceLabel,
+                target: pullFromSalesOrderAction.targetLabel,
+                count,
+              })
+            : t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
+                source: pullFromSalesOrderAction.sourceLabel,
+                target: pullFromSalesOrderAction.targetLabel,
+              }),
         )
         actionRef.current?.reload()
         invalidateStatistics()
@@ -2420,7 +2427,13 @@ const WorkOrdersPage: React.FC = () => {
       } catch (e: any) {
         const detail = e?.response?.data?.detail
         const msg = typeof detail === 'string' ? detail : detail?.message
-        messageApi.error(msg || `从${pullFromSalesOrderAction.sourceLabel}创建${pullFromSalesOrderAction.targetLabel}失败`)
+        messageApi.error(
+          msg
+            || t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
+              source: pullFromSalesOrderAction.sourceLabel,
+              target: pullFromSalesOrderAction.targetLabel,
+            }),
+        )
       }
     },
   })
@@ -4504,10 +4517,10 @@ const WorkOrdersPage: React.FC = () => {
   }, [selectedRowKeys, workOrderListRowIndexVersion])
 
   const toolbarPushMenuItems = useMemo(() => {
-    if (!selectedWorkOrderForToolbarPush?.id) return []
-    const rawStatus = String(selectedWorkOrderForToolbarPush.status ?? '').trim()
-    const canPushOutbound = ['released', '已下达', 'in_progress', '执行中'].includes(rawStatus)
-    const canPushInbound = ['completed', '已完成'].includes(rawStatus)
+    if (!selectedWorkOrderForToolbarPush?.id) return [];
+    const rawStatus = String(selectedWorkOrderForToolbarPush.status ?? '').trim();
+    const canPushOutbound = ['released', '已下达', 'in_progress', '执行中'].includes(rawStatus);
+    const canPushInbound = ['completed', '已完成'].includes(rawStatus);
     return buildUniPushMenuItems([
       {
         key: 'push-production-picking-outbound',
@@ -4539,24 +4552,16 @@ const WorkOrdersPage: React.FC = () => {
   ])
 
   const canUseToolbarPush = useMemo(
-    () =>
-      toolbarPushMenuItems.some(
-        (item) =>
-          !!item &&
-          typeof item === 'object' &&
-          (item as { type?: string }).type !== 'divider' &&
-          (item as { disabled?: boolean }).disabled !== true,
-      ),
-    [toolbarPushMenuItems],
+    () => !!selectedWorkOrderForToolbarPush,
+    [selectedWorkOrderForToolbarPush],
   )
 
   const toolbarPushDisabledReason = useMemo(() => {
     if (selectedRowKeys.length === 0) return '请先选择一条工单'
     if (selectedRowKeys.length !== 1) return '下推仅支持单条工单，请仅保留一条选中记录'
     if (!selectedWorkOrderForToolbarPush) return '当前选中行不是可下推的工单记录'
-    if (!canUseToolbarPush) return '当前工单状态暂无可用下推操作'
     return undefined
-  }, [canUseToolbarPush, selectedRowKeys.length, selectedWorkOrderForToolbarPush])
+  }, [selectedRowKeys.length, selectedWorkOrderForToolbarPush])
 
   /**
    * 处理提交工序委外表单
@@ -6445,7 +6450,7 @@ const WorkOrdersPage: React.FC = () => {
             <UniPushToolbarButton
               key={`work-order-push-${selectedWorkOrderForToolbarPush?.id ?? 'none'}`}
               menuItems={toolbarPushMenuItems}
-              disabled={!selectedWorkOrderForToolbarPush || !canUseToolbarPush}
+              disabled={!canUseToolbarPush}
               disabledReason={toolbarPushDisabledReason}
             />,
           ]}

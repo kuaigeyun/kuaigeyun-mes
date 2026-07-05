@@ -14,9 +14,7 @@ export const getReportingLifecycle = createLifecycleResolver({
     已报工: 'recorded',
     recorded: 'recorded',
   },
-  nextStepSuggestions: {
-    recorded: [],
-  },
+  nextStepSuggestionKeys: {},
   successKeys: ['recorded'],
 });
 

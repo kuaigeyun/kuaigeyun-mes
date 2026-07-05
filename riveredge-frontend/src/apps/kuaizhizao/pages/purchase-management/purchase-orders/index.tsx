@@ -480,8 +480,8 @@ const PurchaseOrdersPage: React.FC = () => {
   );
 
   const purchaseOrderLifecycle = useMemo(
-    () => (orderDetail ? getPurchaseOrderLifecycle(orderDetail, purchaseOrderAuditEnabled) : null),
-    [orderDetail, purchaseOrderAuditEnabled],
+    () => (orderDetail ? getPurchaseOrderLifecycle(orderDetail, purchaseOrderAuditEnabled, t) : null),
+    [orderDetail, purchaseOrderAuditEnabled, t],
   );
 
   useEffect(() => {
@@ -816,7 +816,7 @@ const PurchaseOrdersPage: React.FC = () => {
       valueType: 'select',
       valueEnum: lifecycleValueEnum,
       render: (_: any, record: PurchaseOrder) => (
-        <ListUniLifecycleCell lifecycle={getPurchaseOrderLifecycle(record, purchaseOrderAuditEnabled)} />
+        <ListUniLifecycleCell lifecycle={getPurchaseOrderLifecycle(record, purchaseOrderAuditEnabled, t)} />
       ),
     },
     ...purchaseOrderCustomFieldColumns,
@@ -1223,15 +1223,18 @@ const PurchaseOrdersPage: React.FC = () => {
     return tableRowsRef.current.find((row) => row.id === id) ?? null;
   }, [selectedRowKeys]);
 
-  const buildToolbarPushMenuItems = useCallback(
-    (record: PurchaseOrder) => {
+  const buildToolbarPushMenuItems = useCallback((record: PurchaseOrder) => {
       const pushEnabled = isAuditedStatus(record.status);
+      const pushBlockedReason = pushEnabled
+        ? undefined
+        : t('app.kuaizhizao.purchaseOrder.pushRequiresAudited', { defaultValue: '仅已审核的采购订单可下推' });
       return buildUniPushMenuItems([
         {
           key: 'receipt-notice',
           label: pushToReceiptNoticeAction.label,
           icon: <FileTextOutlined />,
           disabled: !pushEnabled,
+          title: pushBlockedReason,
           onClick: () => {
             if (!pushEnabled) return;
             void handlePushToNotice(record);
@@ -1242,6 +1245,7 @@ const PurchaseOrdersPage: React.FC = () => {
           label: pushToReceiptAction.label,
           icon: <InboxOutlined />,
           disabled: !pushEnabled,
+          title: pushBlockedReason,
           onClick: () => {
             if (!pushEnabled) return;
             void handlePushToReceipt(record);
@@ -1252,6 +1256,7 @@ const PurchaseOrdersPage: React.FC = () => {
           label: pushToInvoiceAction.label,
           icon: <FileTextOutlined />,
           disabled: !pushEnabled,
+          title: pushBlockedReason,
           onClick: () => {
             if (!pushEnabled) return;
             void handlePushToInvoice(record);
@@ -1262,6 +1267,7 @@ const PurchaseOrdersPage: React.FC = () => {
           label: pushToPurchaseReturnAction.label,
           icon: <RollbackOutlined />,
           disabled: !pushEnabled,
+          title: pushBlockedReason,
           onClick: () => {
             if (!pushEnabled) return;
             void handlePushToReturn(record);
@@ -1278,18 +1284,27 @@ const PurchaseOrdersPage: React.FC = () => {
       pushToPurchaseReturnAction.label,
       pushToReceiptAction.label,
       pushToReceiptNoticeAction.label,
+      t,
     ],
   );
 
   const toolbarPushMenuItems = useMemo(
-    () => (selectedOrderForToolbar ? buildToolbarPushMenuItems(selectedOrderForToolbar) : []),
+    () => (selectedOrderForToolbar ? buildToolbarPushMenuItems(selectedOrderForToolbar) : buildUniPushMenuItems([])),
     [buildToolbarPushMenuItems, selectedOrderForToolbar],
   );
 
-  const canUseToolbarPush =
-    !!selectedOrderForToolbar &&
-    isAuditedStatus(selectedOrderForToolbar.status) &&
-    toolbarPushMenuItems.some((it) => (it as { type?: string; disabled?: boolean }).type !== 'divider' && !(it as { disabled?: boolean }).disabled);
+  const purchaseOrderToolbarPushDisabledReason = useMemo(() => {
+    if (selectedRowKeys.length === 0) {
+      return t('app.kuaizhizao.demandComputation.selectOneFirst');
+    }
+    if (selectedRowKeys.length !== 1) {
+      return t('app.kuaizhizao.demandComputation.pushSingleOnly');
+    }
+    if (!selectedOrderForToolbar) {
+      return t('app.kuaizhizao.demandComputation.selectedNotInList');
+    }
+    return undefined;
+  }, [selectedOrderForToolbar, selectedRowKeys.length, t]);
 
   // 处理删除
   const handleDelete = async (record: PurchaseOrder) => {
@@ -2762,7 +2777,8 @@ const PurchaseOrdersPage: React.FC = () => {
             <UniPushToolbarButton
               key={`purchase-order-push-${selectedOrderForToolbar?.id ?? 'none'}`}
               menuItems={toolbarPushMenuItems}
-              disabled={!selectedOrderForToolbar || !canUseToolbarPush}
+              disabled={selectedRowKeys.length !== 1 || !selectedOrderForToolbar}
+              disabledReason={purchaseOrderToolbarPushDisabledReason}
             />,
           ]}
           enableRowSelection

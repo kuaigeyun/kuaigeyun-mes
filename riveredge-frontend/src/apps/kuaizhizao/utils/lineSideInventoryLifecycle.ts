@@ -15,10 +15,6 @@ export const getLineSideInventoryLifecycle = createLifecycleResolver({
     reserved: 'reserved',
     consumed: 'consumed',
   },
-  nextStepSuggestions: {
-    available: [],
-    reserved: [],
-    consumed: [],
-  },
+  nextStepSuggestionKeys: {},
   successKeys: ['consumed'],
 });

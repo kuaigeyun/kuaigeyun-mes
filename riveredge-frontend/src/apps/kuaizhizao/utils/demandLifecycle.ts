@@ -14,7 +14,7 @@ export const getDemandLifecycle = createLifecycleResolver({
     已下推计算: 'pushed',
     pushed: 'pushed',
   },
-  nextStepSuggestions: {
+  nextStepSuggestionKeys: {
     pushed: [],
   },
   successKeys: ['pushed'],

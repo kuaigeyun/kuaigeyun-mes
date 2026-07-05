@@ -17,12 +17,7 @@ export const getBackflushRecordLifecycle = createLifecycleResolver({
     failed: 'failed',
     cancelled: 'cancelled',
   },
-  nextStepSuggestions: {
-    pending: ['执行倒冲'],
-    completed: [],
-    failed: ['重试'],
-    cancelled: [],
-  },
   exceptionKeys: ['failed', 'cancelled'],
+  nextStepSuggestionKeys: {},
   successKeys: ['completed'],
 });

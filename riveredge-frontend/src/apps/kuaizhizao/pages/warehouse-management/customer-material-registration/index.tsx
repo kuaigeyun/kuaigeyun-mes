@@ -672,7 +672,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = getCustomerMaterialRegistrationLifecycle(record as Record<string, unknown>);
+        const lifecycle = getCustomerMaterialRegistrationLifecycle(record as Record<string, unknown>, t);
         return (
           <UniLifecycle
             percent={lifecycle.percent}

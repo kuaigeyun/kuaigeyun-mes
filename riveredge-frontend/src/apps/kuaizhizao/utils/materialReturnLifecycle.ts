@@ -15,12 +15,8 @@ export const getMaterialReturnLifecycle = createLifecycleResolver({
     已归还: 'returned',
     已取消: 'cancelled',
   },
-  nextStepSuggestions: {
-    pending_material_return: ['确认归还'],
-    returned: [],
-    cancelled: [],
-  },
   exceptionKeys: ['cancelled'],
   exceptionStageKey: 'cancelled',
+  nextStepSuggestionKeys: {},
   successKeys: ['returned'],
 });

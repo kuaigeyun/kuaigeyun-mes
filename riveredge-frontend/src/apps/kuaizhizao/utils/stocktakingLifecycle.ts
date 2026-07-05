@@ -21,13 +21,8 @@ export const getStocktakingLifecycle = createLifecycleResolver({
     已取消: 'cancelled',
     cancelled: 'cancelled',
   },
-  nextStepSuggestions: {
-    draft: ['开始盘点'],
-    in_progress: ['完成盘点'],
-    completed: [],
-    cancelled: [],
-  },
   exceptionKeys: ['cancelled'],
   exceptionStageKey: 'cancelled',
+  nextStepSuggestionKeys: {},
   successKeys: ['completed'],
 });

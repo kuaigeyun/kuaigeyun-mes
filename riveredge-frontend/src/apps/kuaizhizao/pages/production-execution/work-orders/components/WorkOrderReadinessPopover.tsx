@@ -964,7 +964,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                   ellipsis: false,
                   onCell: () => CALL_TABLE_CELL_NOWRAP,
                   render: (_: unknown, r: Record<string, unknown>) =>
-                    getMaterialCallLifecycle(r).stageName ?? String(r.status ?? ''),
+                    getMaterialCallLifecycle(r, t).stageName ?? String(r.status ?? ''),
                 },
                 {
                   title: '操作',

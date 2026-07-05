@@ -869,7 +869,7 @@ export default function SalesForecastsPage() {
   };
 
   const formatForecastStatus = (status?: string, reviewStatus?: string) => {
-    const lifecycle = getSalesForecastLifecycle({ status, review_status: reviewStatus } as any, auditEnabled);
+    const lifecycle = getSalesForecastLifecycle({ status, review_status: reviewStatus } as any, auditEnabled, t);
     if (lifecycle?.stageName) return lifecycle.stageName;
     if (!status) return '-';
     const statusMap: Record<string, string> = {
@@ -1178,11 +1178,27 @@ export default function SalesForecastsPage() {
   );
 
   const toolbarPushDisabledReason = useMemo(() => {
-    if (!selectedForecastForToolbar) return '';
+    if (selectedRowKeys.length === 0) {
+      return t('app.kuaizhizao.salesForecast.selectOne');
+    }
+    if (selectedRowKeys.length !== 1) {
+      return t('app.kuaizhizao.demandComputation.pushSingleOnly');
+    }
+    if (!selectedForecastForToolbar) {
+      return t('app.kuaizhizao.demandComputation.selectedNotInList');
+    }
+    return undefined;
+  }, [selectedForecastForToolbar, selectedRowKeys.length, t]);
+
+  const toolbarPushItemDisabledReason = useMemo(() => {
+    if (!selectedForecastForToolbar) return undefined;
+    if (!salesNodesEnabled.demand_computation) {
+      return t('app.kuaizhizao.salesForecast.demandComputationDisabled');
+    }
     const cap = selectedForecastForToolbar.capabilities?.push_computation;
-    if (!cap || cap.allowed) return '';
+    if (!cap || cap.allowed) return undefined;
     return salesForecastCapabilityReasonMessage(cap.reason, t);
-  }, [selectedForecastForToolbar, t]);
+  }, [salesNodesEnabled.demand_computation, selectedForecastForToolbar, t]);
 
   const canUseToolbarPush =
     selectedRowKeys.length === 1 &&
@@ -1753,17 +1769,16 @@ export default function SalesForecastsPage() {
           toolBarActionsAfterCreate={[
             <UniPushToolbarButton
               key={`sales-forecast-push-toolbar-${selectedRowKeys.join('-') || 'none'}`}
-              disabled={!canUseToolbarPush}
-              disabledTip={toolbarPushDisabledReason || undefined}
+              disabled={selectedRowKeys.length !== 1 || !selectedForecastForToolbar}
+              disabledReason={toolbarPushDisabledReason}
               menuItems={buildUniPushMenuItems([
                 {
                   key: 'push-to-computation',
                   label: pushToComputationAction.label,
+                  disabled: !canUseToolbarPush,
+                  title: toolbarPushItemDisabledReason,
                   onClick: () => {
-                    if (!selectedForecastForToolbar?.id) {
-                      messageApi.warning(t('app.kuaizhizao.salesForecast.selectOne'));
-                      return;
-                    }
+                    if (!selectedForecastForToolbar?.id || !canUseToolbarPush) return;
                     void handlePushToComputation(selectedForecastForToolbar.id);
                   },
                 },
