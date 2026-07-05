@@ -58,7 +58,7 @@ const DefectTypesPage: React.FC = () => {
           {
             field: 'description',
             labelKey: 'field.defectType.description',
-            aliases: ['描述'],
+            aliases: ['备注', '描述'],
           },
         ],
         [

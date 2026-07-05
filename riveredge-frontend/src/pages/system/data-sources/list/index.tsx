@@ -161,7 +161,7 @@ const DataSourceListPage: React.FC = () => {
           {
             field: 'description',
             labelKey: 'pages.system.dataSources.columnDescription',
-            aliases: ['描述'],
+            aliases: ['备注', '描述'],
           },
           {
             field: 'is_active',

@@ -85,7 +85,7 @@ const ProcessRoutesPage: React.FC = () => {
         [
           { field: 'code', required: true, labelKey: 'field.route.code' },
           { field: 'name', required: true, labelKey: 'field.route.name' },
-          { field: 'description', labelKey: 'field.route.description', aliases: ['描述'] },
+          { field: 'description', labelKey: 'field.route.description', aliases: ['备注', '描述'] },
         ],
         [
           t('app.master-data.routes.importExample.code'),

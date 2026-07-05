@@ -175,7 +175,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
           {
             field: 'description',
             labelKey: 'pages.system.applicationConnections.importHeaderDescription',
-            aliases: ['描述'],
+            aliases: ['备注', '描述'],
           },
           {
             field: 'isActive',

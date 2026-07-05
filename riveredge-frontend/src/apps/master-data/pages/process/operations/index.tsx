@@ -107,7 +107,7 @@ const OperationsPage: React.FC = () => {
           {
             field: 'description',
             labelKey: 'field.operation.description',
-            aliases: ['描述'],
+            aliases: ['备注', '描述'],
           },
           {
             field: 'isActive',

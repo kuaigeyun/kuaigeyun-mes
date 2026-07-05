@@ -89,7 +89,7 @@ const DatasetListPage: React.FC = () => {
             labelKey: 'pages.system.datasets.importHeaderDataSourceUuid',
           },
           { field: 'queryType', required: true, labelKey: 'pages.system.datasets.importHeaderQueryType' },
-          { field: 'description', labelKey: 'pages.system.datasets.importHeaderDescription', aliases: ['描述'] },
+          { field: 'description', labelKey: 'pages.system.datasets.importHeaderDescription', aliases: ['备注', '描述'] },
           { field: 'isActive', labelKey: 'pages.system.datasets.importHeaderEnabled', aliases: ['启用状态'] },
           {
             field: 'queryConfigJson',

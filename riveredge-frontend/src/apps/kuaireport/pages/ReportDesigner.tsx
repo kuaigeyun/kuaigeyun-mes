@@ -25,8 +25,8 @@ const StepBasicInfo: React.FC<{ form: any }> = ({ form }) => (
                 </Form.Item>
             </Col>
         </Row>
-        <Form.Item name="description" label="描述">
-            <TextArea rows={3} placeholder="报表用途说明（可选）" />
+        <Form.Item name="description" label="备注">
+            <TextArea rows={3} placeholder="请输入备注（可选）" />
         </Form.Item>
         <Form.Item name="category" label="报表类型" initialValue="custom">
             <Radio.Group>

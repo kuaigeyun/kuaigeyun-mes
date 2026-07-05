@@ -332,7 +332,7 @@ const CostRulePage: React.FC = () => {
       ),
     },
     {
-      title: '描述',
+      title: '备注',
       dataIndex: 'description',
     },
     {
@@ -473,8 +473,8 @@ const CostRulePage: React.FC = () => {
         />
         <ProFormTextArea
           name="description"
-          label="描述"
-          placeholder="请输入描述"
+          label="备注"
+          placeholder="请输入备注"
           fieldProps={{
             rows: 3,
           }}
