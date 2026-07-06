@@ -19,7 +19,7 @@ import {
   ProFormSelect,
   ProFormText,
 } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, DatePicker, Dropdown, Row, Col, Typography, Spin, Empty, Descriptions } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, DatePicker, Dropdown, Row, Col, Typography, Spin, Empty, Descriptions, Alert } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, PrinterOutlined, MoreOutlined, ShoppingOutlined, DownOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -32,7 +32,7 @@ import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFI
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
-import { deliveryNoticeApi } from '../../../services/delivery-notice';
+import { deliveryNoticeApi, type DeliveryNoticePullCandidate, type DeliveryNoticePullPreview } from '../../../services/delivery-notice';
 import { getDeliveryNoticeLifecycle } from '../../../utils/deliveryNoticeLifecycle';
 import { useTranslation } from 'react-i18next';
 import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
@@ -53,6 +53,8 @@ import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
 import { resolveDeliveryNoticeQualityCertificates } from '../../../services/print';
 import { SafetyCertificateOutlined } from '@ant-design/icons';
 import { formatDateTime } from '../../../../../utils/format';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { salesDeliveryCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
@@ -84,20 +86,6 @@ interface DeliveryNoticeDetail extends DeliveryNotice {
   items?: { id?: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price?: number; total_amount?: number }[];
 }
 
-type PullSalesDeliveryCandidate = {
-  id: number;
-  delivery_code?: string;
-  sales_order_id?: number;
-  sales_order_code?: string;
-  customer_id?: number;
-  customer_name?: string;
-  status?: string;
-  delivery_date?: string;
-  updated_at?: string;
-  notice_id?: number;
-  converted?: boolean;
-};
-
 const STATUS_MAP: Record<string, { text: string; color: string }> = {
   待发送: { text: '待发送', color: 'default' },
   已发送: { text: '已发送', color: 'processing' },
@@ -124,10 +112,16 @@ const DeliveryNotesPage: React.FC = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
+  const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
+  const [pullPreviewConfirming, setPullPreviewConfirming] = useState(false);
+  const [pullPreviewData, setPullPreviewData] = useState<DeliveryNoticePullPreview | null>(null);
+  const [pullPreviewSalesDeliveryId, setPullPreviewSalesDeliveryId] = useState<number | null>(null);
   const { canPrint: canPrintQualityCertificate } = useResourcePermissions(
     'kuaizhizao:quality-management-finished-goods-inspection',
   );
   const formRef = useRef<any>(null);
+  const pullQueryCloseRef = useRef<(() => void) | null>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [customerList, setCustomerList] = useState<any[]>([]);
   const defaultDeliveryItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '', notice_quantity: 1, unit_price: 0 };
@@ -427,71 +421,107 @@ const DeliveryNotesPage: React.FC = () => {
     [t],
   );
 
-  const pullFromSalesDeliveryQuery = useUniPullQuery<PullSalesDeliveryCandidate>({
+  const resetPullPreviewModal = useCallback(() => {
+    setPullPreviewOpen(false);
+    setPullPreviewData(null);
+    setPullPreviewSalesDeliveryId(null);
+    setPullPreviewLoading(false);
+    setPullPreviewConfirming(false);
+  }, []);
+
+  const openCreateModalFromPullPreview = useCallback(
+    (preview: DeliveryNoticePullPreview) => {
+      const validItems = (preview.items || [])
+        .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
+        .map((row) => ({
+          material_id: row.material_id,
+          material_code: row.material_code || '',
+          material_name: row.material_name || '',
+          material_unit: row.material_unit || '',
+          notice_quantity: Number(row.max_push_quantity ?? 0),
+          unit_price: Number(row.unit_price ?? 0),
+        }));
+      if (!validItems.length) {
+        messageApi.warning(t('app.kuaizhizao.deliveryNote.pull.previewNoLines'));
+        return;
+      }
+      setEditingId(null);
+      setCreateModalVisible(true);
+      formRef.current?.resetFields();
+      formRef.current?.setFieldsValue({
+        sales_delivery_id: preview.sales_delivery_id,
+        sales_delivery_code: preview.sales_delivery_code,
+        sales_order_id: preview.sales_order_id ?? undefined,
+        sales_order_code: preview.sales_order_code ?? undefined,
+        customer_id: preview.customer_id,
+        customer_name: preview.customer_name,
+        customer_contact: preview.customer_contact ?? undefined,
+        customer_phone: preview.customer_phone ?? undefined,
+        planned_delivery_date: preview.planned_delivery_date ? dayjs(preview.planned_delivery_date) : undefined,
+        shipping_address: preview.shipping_address ?? undefined,
+        items: validItems,
+      });
+    },
+    [messageApi, t],
+  );
+
+  const showPullPreview = useCallback(
+    (salesDeliveryId: number) => {
+      pullQueryCloseRef.current?.();
+      setPullPreviewOpen(true);
+      setPullPreviewLoading(true);
+      setPullPreviewConfirming(false);
+      setPullPreviewData(null);
+      setPullPreviewSalesDeliveryId(salesDeliveryId);
+      deliveryNoticeApi
+        .previewFromSalesDelivery(salesDeliveryId)
+        .then((res) => setPullPreviewData(res))
+        .catch((error: unknown) => {
+          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.deliveryNote.pull.previewFailed')));
+          resetPullPreviewModal();
+        })
+        .finally(() => setPullPreviewLoading(false));
+    },
+    [messageApi, resetPullPreviewModal, t],
+  );
+
+  const handlePullPreviewConfirm = useCallback(() => {
+    if (!pullPreviewSalesDeliveryId || !pullPreviewData) return;
+    const pushableLines = (pullPreviewData.items || []).filter((row) => Number(row.max_push_quantity ?? 0) > 0);
+    if (!pushableLines.length) {
+      messageApi.warning(t('app.kuaizhizao.deliveryNote.pull.previewNoLines'));
+      return;
+    }
+    resetPullPreviewModal();
+    openCreateModalFromPullPreview(pullPreviewData);
+  }, [
+    messageApi,
+    openCreateModalFromPullPreview,
+    pullPreviewData,
+    pullPreviewSalesDeliveryId,
+    resetPullPreviewModal,
+    t,
+  ]);
+
+  const pullFromSalesDeliveryQuery = useUniPullQuery<DeliveryNoticePullCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
     loadData: async ({ keyword, page, pageSize }) => {
       try {
-        const kw = keyword.trim();
-        const [deliveryRes, noticeRes] = await Promise.all([
-          warehouseApi.salesDelivery.list({
-            skip: 0,
-            limit: 200,
-            keyword: kw || undefined,
-          }),
-          (async () => {
-            const chunkSize = 100;
-            const maxRows = 5000;
-            const rows: any[] = [];
-            let skip = 0;
-            while (rows.length < maxRows) {
-              const res = await deliveryNoticeApi.list({ skip, limit: chunkSize });
-              const chunk = Array.isArray(res) ? res : (res as any)?.data ?? (res as any)?.items ?? [];
-              if (!Array.isArray(chunk) || chunk.length === 0) break;
-              rows.push(...chunk);
-              if (chunk.length < chunkSize) break;
-              skip += chunkSize;
-            }
-            return rows.slice(0, maxRows);
-          })(),
-        ]);
-        const deliveries = Array.isArray(deliveryRes) ? deliveryRes : (deliveryRes as any)?.data ?? [];
-        const notices = Array.isArray(noticeRes) ? noticeRes : (noticeRes as any)?.data ?? (noticeRes as any)?.items ?? [];
-        const noticeByDeliveryId = new Map<number, any>();
-        notices.forEach((n: any) => {
-          if (n?.sales_delivery_id != null && !noticeByDeliveryId.has(Number(n.sales_delivery_id))) {
-            noticeByDeliveryId.set(Number(n.sales_delivery_id), n);
-          }
+        const res = await deliveryNoticeApi.listPullCandidates({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
         });
-        const filtered = (deliveries as any[]).filter((d: any) => {
-          if (!kw) return true;
-          const text = `${d.delivery_code || ''} ${d.sales_order_code || ''} ${d.customer_name || ''}`.toLowerCase();
-          return text.includes(kw.toLowerCase());
-        });
-        const candidates: PullSalesDeliveryCandidate[] = filtered.map((d: any) => {
-          const linked = noticeByDeliveryId.get(Number(d.id));
-          return {
-            id: Number(d.id),
-            delivery_code: d.delivery_code,
-            sales_order_id: d.sales_order_id,
-            sales_order_code: d.sales_order_code,
-            customer_id: d.customer_id,
-            customer_name: d.customer_name,
-            status: d.status,
-            delivery_date: d.delivery_date,
-            updated_at: d.updated_at,
-            notice_id: linked?.id,
-            converted: !!linked,
-          };
-        });
-        const start = (page - 1) * pageSize;
-        return { data: candidates.slice(start, start + pageSize), total: candidates.length };
+        const data = Array.isArray(res?.data) ? res.data : [];
+        const total = Number(res?.total ?? data.length);
+        return { data, total };
       } catch {
         messageApi.error(t('app.kuaizhizao.deliveryNote.msg.loadListFailed'));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => !!record.converted,
+    isRowDisabled: (record) => record.capabilities?.push_delivery_notice?.allowed === false,
     onConfirm: async (keys, rows) => {
       const selectedId = Number(keys[0]);
       if (!selectedId) {
@@ -499,65 +529,21 @@ const DeliveryNotesPage: React.FC = () => {
         return;
       }
       const selected = rows[0];
-      if (selected?.converted) {
+      if (selected?.capabilities?.push_delivery_notice?.allowed === false) {
         messageApi.warning(
-          t('app.kuaizhizao.deliveryNote.msg.alreadyCreated', {
-            source: pullFromSalesDeliveryAction.sourceLabel,
-            target: pullFromSalesDeliveryAction.targetLabel,
-          }),
-        );
-        return;
-      }
-      try {
-        const detail: any = await warehouseApi.salesDelivery.get(String(selectedId));
-        const itemRows = Array.isArray(detail?.items) ? detail.items : [];
-        const validItems = itemRows
-          .filter((it: any) => (Number(it.delivery_quantity ?? it.quantity ?? 0) || 0) > 0)
-          .map((it: any) => ({
-            material_id: it.material_id ?? it.materialId,
-            material_code: it.material_code ?? it.materialCode ?? '',
-            material_name: it.material_name ?? it.materialName ?? '',
-            material_unit: it.unit ?? it.material_unit ?? it.materialUnit ?? '',
-            notice_quantity: Number(it.delivery_quantity ?? it.quantity ?? 0) || 0,
-            unit_price: Number(it.unit_price ?? it.unitPrice ?? 0) || 0,
-          }));
-        if (!detail?.customer_id || validItems.length === 0) {
-          throw new Error(t('app.kuaizhizao.deliveryNote.msg.missingCustomerOrLines'));
-        }
-        await deliveryNoticeApi.create({
-          customer_id: detail.customer_id,
-          customer_name: detail.customer_name,
-          customer_contact: detail.customer_contact,
-          customer_phone: detail.customer_phone,
-          sales_delivery_id: detail.id ?? selectedId,
-          sales_delivery_code: detail.delivery_code ?? selected?.delivery_code,
-          sales_order_id: detail.sales_order_id ?? selected?.sales_order_id,
-          sales_order_code: detail.sales_order_code ?? selected?.sales_order_code,
-          planned_delivery_date: detail.delivery_date,
-          shipping_address: detail.shipping_address,
-          items: validItems,
-        });
-        messageApi.success(
-          t('app.kuaizhizao.deliveryNote.msg.pullCreateSuccess', {
-            source: pullFromSalesDeliveryAction.sourceLabel,
-            target: pullFromSalesDeliveryAction.targetLabel,
-          }),
-        );
-        invalidateMenuBadgeCounts();
-        actionRef.current?.reload();
-        pullFromSalesDeliveryQuery.closeModal();
-      } catch (e: any) {
-        messageApi.error(
-          e?.response?.data?.detail
-            || e?.message
-            || t('app.kuaizhizao.deliveryNote.msg.pullCreateFailed', {
+          salesDeliveryCapabilityReasonMessage(selected.capabilities?.push_delivery_notice?.reason, t)
+            || t('app.kuaizhizao.deliveryNote.msg.alreadyCreated', {
               source: pullFromSalesDeliveryAction.sourceLabel,
               target: pullFromSalesDeliveryAction.targetLabel,
             }),
         );
+        return;
       }
+      showPullPreview(selectedId);
     },
   });
+
+  pullQueryCloseRef.current = pullFromSalesDeliveryQuery.closeModal;
 
   const handleCreateSubmit = async (values: any) => {
     const validItems = (values.items ?? []).filter((it: any) => it.material_id && (Number(it.notice_quantity) || 0) > 0);
@@ -694,19 +680,22 @@ const DeliveryNotesPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseOutbound.pull.colOutboundDate'), dataIndex: 'delivery_date', width: 130, render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-') },
       { title: t('app.kuaizhizao.warehouseOutbound.col.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-') },
       {
-        title: t('app.kuaizhizao.warehouseOutbound.pull.convertStatus'),
-        key: 'convert_status',
-        width: 150,
+        title: t('app.kuaizhizao.deliveryNote.pull.gateStatus'),
+        key: 'gate_status',
+        width: 180,
         align: 'center' as const,
-        render: (_: unknown, r: PullSalesDeliveryCandidate) =>
-          r.converted ? (
-            <Tag color="gold">{t('app.kuaizhizao.warehouseOutbound.pull.alreadyCreatedDelivery', { label: pullFromSalesDeliveryAction.targetLabel })}</Tag>
+        render: (_: unknown, r: DeliveryNoticePullCandidate) =>
+          r.capabilities?.push_delivery_notice?.allowed === false ? (
+            <Tag color="gold">
+              {salesDeliveryCapabilityReasonMessage(r.capabilities?.push_delivery_notice?.reason, t)
+                || t('app.kuaizhizao.workOrder.tagCannotCreate')}
+            </Tag>
           ) : (
-            <Tag color="success">{t('app.kuaizhizao.warehouseOutbound.pull.canCreate')}</Tag>
+            <Tag color="success">{t('app.kuaizhizao.deliveryNote.pull.canCreate')}</Tag>
           ),
       },
     ],
-    [pullFromSalesDeliveryAction.targetLabel, t],
+    [t],
   );
 
   const renderForm = (onFinish: (values: any) => Promise<void>) => (
@@ -1071,7 +1060,7 @@ const DeliveryNotesPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <UniPullQueryModal<PullSalesDeliveryCandidate>
+      <UniPullQueryModal<DeliveryNoticePullCandidate>
         open={pullFromSalesDeliveryQuery.open}
         title={pullFromSalesDeliveryAction.label}
         onCancel={pullFromSalesDeliveryQuery.closeModal}
@@ -1095,9 +1084,82 @@ const DeliveryNotesPage: React.FC = () => {
         pageSize={pullFromSalesDeliveryQuery.pageSize}
         total={pullFromSalesDeliveryQuery.total}
         onPageChange={pullFromSalesDeliveryQuery.handlePageChange}
-        okText={t('app.kuaizhizao.deliveryNote.action.createFromPull')}
+        okText={t('app.kuaizhizao.warehouseOutbound.action.nextStep')}
+        cancelText={t('common.cancel')}
+        okButtonProps={{ disabled: pullFromSalesDeliveryQuery.selectedRowKeys.length === 0 }}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
+
+      <Modal
+        title={pullFromSalesDeliveryAction.label}
+        open={pullPreviewOpen}
+        destroyOnClose
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        onCancel={resetPullPreviewModal}
+        okText={t('app.kuaizhizao.deliveryNote.create')}
+        cancelText={t('common.cancel')}
+        confirmLoading={pullPreviewConfirming}
+        onOk={() => {
+          setPullPreviewConfirming(true);
+          try {
+            handlePullPreviewConfirm();
+          } finally {
+            setPullPreviewConfirming(false);
+          }
+        }}
+        okButtonProps={{
+          disabled:
+            pullPreviewLoading
+            || !pullPreviewData
+            || !(pullPreviewData.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0),
+        }}
+      >
+        {pullPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+          </div>
+        ) : pullPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>
+              {t('app.kuaizhizao.deliveryNote.pull.previewSummary', {
+                code: pullPreviewData.sales_delivery_code,
+                count: (pullPreviewData.items || []).filter((row) => Number(row.max_push_quantity ?? 0) > 0).length,
+                total: pullPreviewData.items?.length ?? 0,
+              })}
+            </p>
+            {pullPreviewData.message && !(pullPreviewData.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0) ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={salesDeliveryCapabilityReasonMessage(pullPreviewData.message, t) || pullPreviewData.message}
+              />
+            ) : null}
+            {(pullPreviewData.items || []).length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pullPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 960 }}
+                columns={[
+                  { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
+                  { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                  { title: t('app.kuaizhizao.warehouseOutbound.field.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.deliveryNote.pull.previewNoLines')} />
+            )}
+            <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+              {t('app.kuaizhizao.deliveryNote.pull.previewTip')}
+            </Typography.Paragraph>
+          </div>
+        ) : null}
+      </Modal>
 
       <DetailDrawerTemplate
         title={`${t('app.kuaizhizao.deliveryNote.detailTitle')}${noticeDetail?.notice_code ? ` - ${noticeDetail.notice_code}` : ''}`}

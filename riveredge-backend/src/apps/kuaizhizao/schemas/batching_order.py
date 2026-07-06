@@ -140,6 +140,52 @@ class PullFromWorkOrderRequest(BaseModel):
     allow_existing_draft: bool = Field(False, description="若已有草稿配料单则返回已有单")
 
 
+class BatchingPullActionCapability(BaseModel):
+    allowed: bool = Field(..., description="是否允许")
+    reason: Optional[str] = Field(None, description="拒绝原因码")
+
+
+class BatchingWorkOrderPullCapabilities(BaseModel):
+    push_batching_order: BatchingPullActionCapability = Field(..., description="是否可取单生成配料单")
+
+
+class BatchingPullCandidate(BaseModel):
+    id: int
+    code: str
+    name: Optional[str] = None
+    status: str
+    planned_quantity: Optional[float] = None
+    pullable: bool = Field(..., description="是否可取单")
+    capabilities: Optional[BatchingWorkOrderPullCapabilities] = None
+
+
+class BatchingPullCandidateListResponse(BaseModel):
+    data: List[BatchingPullCandidate] = Field(default_factory=list)
+    total: int = 0
+    success: bool = True
+
+
+class BatchingPullPreviewLine(BaseModel):
+    item_id: int = Field(..., description="物料ID")
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    material_unit: str = Field("个", description="单位")
+    quantity: float = Field(..., description="需求数量")
+    pushed_quantity: float = Field(0, description="已配料/已领数量")
+    max_push_quantity: float = Field(..., description="可配料数量（缺料）")
+
+
+class BatchingPullPreviewResponse(BaseModel):
+    work_order_id: int
+    work_order_code: str
+    items: List[BatchingPullPreviewLine] = Field(default_factory=list)
+    summary: Optional[str] = None
+    message: Optional[str] = None
+    has_blocking_issues: bool = False
+    blocking_reason: Optional[str] = None
+
+
 class BatchingOrderConfirmItemBatch(BaseModel):
     item_id: int = Field(..., description="配料明细ID")
     batch_no: Optional[str] = Field(None, description="批号（跳过配料时可空）")

@@ -7,7 +7,6 @@ import pytest
 from apps.kuaizhizao.services.document_lifecycle_service import (
     get_demand_lifecycle,
     get_incoming_inspection_lifecycle,
-    get_production_plan_lifecycle,
     get_purchase_order_lifecycle,
     get_reporting_record_lifecycle,
     get_sales_delivery_lifecycle,
@@ -32,7 +31,6 @@ def _assert_pre_effective(lc: dict) -> None:
         lambda: get_sales_order_lifecycle(SimpleNamespace(status="已审核", review_status="APPROVED")),
         lambda: get_demand_lifecycle(SimpleNamespace(status="草稿", review_status="PENDING", pushed_to_computation=False)),
         lambda: get_purchase_order_lifecycle(SimpleNamespace(status="待审核", review_status="PENDING")),
-        lambda: get_production_plan_lifecycle(SimpleNamespace(status="草稿", review_status="PENDING", execution_status="未执行")),
         lambda: get_sales_order_change_lifecycle("待审核", "PENDING"),
         lambda: get_incoming_inspection_lifecycle(SimpleNamespace(status="已检验", review_status="PENDING")),
         lambda: get_reporting_record_lifecycle(SimpleNamespace(status="pending")),

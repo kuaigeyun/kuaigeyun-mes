@@ -22,6 +22,15 @@ router = APIRouter(prefix="/purchase-order-change-orders", tags=["App · Kuaige 
 service = PurchaseOrderChangeService()
 
 
+@router.get("/from-order/{order_id}/preview")
+async def preview_from_order(
+    order_id: int = Path(...),
+    tenant_id: int = Depends(get_current_tenant),
+    _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
+):
+    return await service.preview_from_order(tenant_id, order_id)
+
+
 @router.post("/from-order/{order_id}", response_model=PurchaseOrderChangeWithItemsResponse)
 async def create_from_order(
     order_id: int = Path(...),

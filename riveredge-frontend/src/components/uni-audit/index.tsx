@@ -58,7 +58,6 @@ function inferAuditNodeKey(apiPrefix?: string): string {
   if (prefix.includes('/purchase/inquiries')) return 'purchase_inquiry';
   if (prefix.includes('/purchase/order-changes')) return 'purchase_order_change';
   if (prefix.includes('/sales/order-changes')) return 'sales_order_change';
-  if (prefix.includes('/plan/production-plans')) return 'production_plan';
   if (prefix.includes('/quality/oqc-inspection')) return 'oqc_inspection';
   if (prefix.includes('/quality/incoming-inspection')) return 'incoming_inspection';
   if (prefix.includes('/quality/process-inspection')) return 'process_inspection';
@@ -81,7 +80,6 @@ function inferResourcePrefix(apiPrefix?: string): string {
   if (prefix.includes('/apps/kuaizhizao/purchase/requisitions')) return 'kuaizhizao:purchase-request';
   if (prefix.includes('/apps/kuaizhizao/purchase/inquiries')) return 'kuaizhizao:purchase-inquiry';
   if (prefix.includes('/apps/kuaizhizao/purchase/order-changes')) return 'kuaizhizao:purchase-order-change';
-  if (prefix.includes('/apps/kuaizhizao/plan/production-plans')) return 'kuaizhizao:production-plan';
   if (prefix.includes('/apps/kuaizhizao/plan/demands')) return 'kuaizhizao:demand';
   if (prefix.includes('/apps/kuaizhizao/productions/reporting')) return 'kuaizhizao:reporting-record';
   if (prefix.includes('/apps/kuaizhizao/quality/oqc-inspection')) return 'kuaizhizao:oqc-inspection';
@@ -107,7 +105,6 @@ function inferResourceByNodeKey(nodeKey?: string): string {
     purchase_request: 'kuaizhizao:purchase-request',
     purchase_inquiry: 'kuaizhizao:purchase-inquiry',
     purchase_order_change: 'kuaizhizao:purchase-order-change',
-    production_plan: 'kuaizhizao:production-plan',
     demand: 'kuaizhizao:demand',
     reporting_record: 'kuaizhizao:reporting-record',
     quotation: 'kuaizhizao:quotation',

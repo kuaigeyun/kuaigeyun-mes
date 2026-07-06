@@ -8,12 +8,14 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance, ProFormGroup } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance, ProFormGroup } from '@ant-design/pro-components';
+import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography, Divider } from 'antd';
-import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Modal, Progress, List, Typography, Divider, Descriptions, Spin, Alert } from 'antd';
+import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, EditOutlined, DeleteOutlined, SyncOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getTenantList,
   getPackageList,
@@ -29,6 +31,7 @@ import {
   deactivateTenant,
   deleteTenantBySuperAdmin,
   getSharedUserQuota,
+  syncTenantLimitsFromPlan,
 } from '../../../../services/tenant';
 // 使用 apiRequest 统一处理 HTTP 请求
 
@@ -66,6 +69,8 @@ const SuperAdminTenantList: React.FC = () => {
   const [createParentTenantId, setCreateParentTenantId] = useState<number | null>(null);
   const [sharedQuota, setSharedQuota] = useState<SharedUserQuota | null>(null);
   const [sharedQuotaLoading, setSharedQuotaLoading] = useState(false);
+  const [syncLimitsLoading, setSyncLimitsLoading] = useState(false);
+  const [editingIsSubtenant, setEditingIsSubtenant] = useState(false);
 
   const packagePlanOptions = useMemo(
     () =>
@@ -103,6 +108,163 @@ const SuperAdminTenantList: React.FC = () => {
       planKey ||
       '-'
     );
+  };
+
+  const renderTenantSettings = (value: unknown) => {
+    if (!value || (typeof value === 'object' && Object.keys(value as object).length === 0)) {
+      return '-';
+    }
+    try {
+      const jsonStr = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+      return (
+        <pre
+          style={{
+            margin: 0,
+            whiteSpace: 'pre-wrap',
+            fontSize: '12px',
+            fontFamily: CODE_FONT_FAMILY,
+            backgroundColor: '#f5f5f5',
+            padding: '8px',
+            borderRadius: '4px',
+            maxHeight: '240px',
+            overflow: 'auto',
+          }}
+        >
+          {jsonStr}
+        </pre>
+      );
+    } catch {
+      return <span style={{ color: '#ff4d4f' }}>{t('pages.infra.tenant.configError')}</span>;
+    }
+  };
+
+  const tenantDetailDescColumns = useMemo<ProDescriptionsItemProps<Tenant>[]>(
+    () => [
+      { title: t('pages.infra.tenant.name'), dataIndex: 'name' },
+      { title: t('pages.infra.tenant.domain'), dataIndex: 'domain' },
+      {
+        title: '组织类型',
+        dataIndex: 'is_subtenant',
+        render: (_, record) => (
+          <Tag color={record.is_subtenant ? 'purple' : 'blue'}>
+            {record.is_subtenant ? '子组织' : '主组织'}
+          </Tag>
+        ),
+      },
+      {
+        title: '父组织ID',
+        dataIndex: 'parent_tenant_id',
+        render: (_, record) => record.parent_tenant_id ?? '-',
+      },
+      {
+        title: t('pages.infra.tenant.status'),
+        dataIndex: 'status',
+        render: (_, record) => {
+          const statusInfo = statusTagMap[record.status] ?? { color: 'default', textKey: '' };
+          return (
+            <Tag color={statusInfo.color}>
+              {statusInfo.textKey ? t(statusInfo.textKey) : (record.status ?? '-')}
+            </Tag>
+          );
+        },
+      },
+      {
+        title: t('pages.infra.tenant.plan'),
+        dataIndex: 'plan',
+        render: (_, record) => (
+          <Tag color={getPlanTagColor(String(record.plan))}>{getPlanName(String(record.plan))}</Tag>
+        ),
+      },
+      {
+        title: t('pages.infra.tenant.maxUsers'),
+        dataIndex: 'max_users',
+        render: (_, record) => record.max_users ?? '-',
+      },
+      { title: t('pages.infra.tenant.maxStorage'), dataIndex: 'max_storage' },
+      {
+        title: t('pages.infra.tenant.expiresAt'),
+        dataIndex: 'expires_at',
+        valueType: 'dateTime',
+      },
+      {
+        title: t('pages.infra.tenant.createdAt'),
+        dataIndex: 'created_at',
+        valueType: 'dateTime',
+      },
+      {
+        title: t('pages.infra.tenant.updatedAt'),
+        dataIndex: 'updated_at',
+        valueType: 'dateTime',
+      },
+      {
+        title: t('pages.infra.tenant.settings'),
+        dataIndex: 'settings',
+        render: (_, record) => renderTenantSettings(record.settings),
+      },
+    ],
+    [packagePlanValueEnum, t],
+  );
+
+  const sharedQuotaPanel = useMemo(() => {
+    if (sharedQuotaLoading) {
+      return (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
+          <Spin />
+        </div>
+      );
+    }
+    if (!sharedQuota) {
+      return null;
+    }
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {sharedQuota.over_quota ? (
+          <Alert type="warning" showIcon message={t('pages.infra.tenant.sharedQuotaOverQuotaHint')} />
+        ) : null}
+        <Typography.Text>
+          主组织：{sharedQuota.root_tenant_name}（ID: {sharedQuota.root_tenant_id}）
+        </Typography.Text>
+        <Typography.Text type={sharedQuota.over_quota ? 'danger' : undefined}>
+          配额：{sharedQuota.used_users}/{sharedQuota.max_users}
+          {sharedQuota.over_quota
+            ? `（超出 ${sharedQuota.used_users - sharedQuota.max_users}）`
+            : `，剩余 ${sharedQuota.remaining_users}`}
+        </Typography.Text>
+        <Divider style={{ margin: '4px 0 8px' }} />
+        {sharedQuota.tenants.map((item) => (
+          <Typography.Text key={item.tenant_id}>
+            {item.is_subtenant ? '子组织' : '主组织'} · {item.tenant_name}（ID: {item.tenant_id}）：{item.user_count}
+          </Typography.Text>
+        ))}
+      </div>
+    );
+  }, [sharedQuota, sharedQuotaLoading, t]);
+
+  const handleSyncLimitsFromPlan = async (tenantId: number) => {
+    setSyncLimitsLoading(true);
+    try {
+      const result = await syncTenantLimitsFromPlan(tenantId);
+      message.success(
+        result.over_quota
+          ? t('pages.infra.tenant.syncLimitsFromPlanOverQuotaSuccess')
+          : t('pages.infra.tenant.syncLimitsFromPlanSuccess'),
+      );
+      if (modalVisible && isEdit && currentTenantId === tenantId) {
+        formRef.current?.setFieldsValue({
+          max_users: result.max_users,
+          max_storage: result.max_storage,
+        });
+      }
+      if (drawerVisible && currentTenantId === tenantId) {
+        loadTenantDetail(tenantId);
+        loadSharedQuota(tenantId);
+      }
+      actionRef.current?.reload();
+    } catch (error: any) {
+      message.error(error.message || t('pages.infra.tenant.syncLimitsFromPlanFailed'));
+    } finally {
+      setSyncLimitsLoading(false);
+    }
   };
 
   const defaultPlan = useMemo<string>(() => packagePlanOptions[0]?.value || '', [packagePlanOptions]);
@@ -680,6 +842,7 @@ const SuperAdminTenantList: React.FC = () => {
         method: 'GET',
       });
       setSelectedPlan(data.plan);
+      setEditingIsSubtenant(Boolean(data.is_subtenant));
       setTimeout(() => {
         formRef.current?.setFieldsValue({
           name: data.name,
@@ -721,6 +884,7 @@ const SuperAdminTenantList: React.FC = () => {
     setCurrentTenantId(null);
     setCreateParentTenantId(null);
     setFormLoading(false);
+    setEditingIsSubtenant(false);
     formRef.current?.resetFields();
   };
 
@@ -777,6 +941,10 @@ const SuperAdminTenantList: React.FC = () => {
 
       handleCloseModal();
       actionRef.current?.reload();
+      if (drawerVisible && currentTenantId) {
+        loadTenantDetail(currentTenantId);
+        loadSharedQuota(currentTenantId);
+      }
     } catch (error: any) {
       message.error(error.message || t('pages.infra.tenant.operationFailed'));
     } finally {
@@ -894,10 +1062,7 @@ const SuperAdminTenantList: React.FC = () => {
       hideInSearch: true,
       sorter: true,
       responsive: ['lg'],
-      render: (_, record) => {
-        const packageMaxUsers = packageConfigs[String(record.plan).toLowerCase()]?.max_users;
-        return packageMaxUsers ?? record.max_users ?? '-';
-      },
+      render: (_, record) => record.max_users ?? '-',
     },
     {
       title: t('pages.infra.tenant.userCount'),
@@ -1158,141 +1323,37 @@ const SuperAdminTenantList: React.FC = () => {
       </ListPageTemplate>
     
     {/* 组织详情 Drawer */}
-    <DetailDrawerTemplate
+    <UniDetail
       title={t('pages.infra.tenant.detailTitle')}
       width={DRAWER_CONFIG.STANDARD_WIDTH}
       open={drawerVisible}
       onClose={handleCloseDetail}
       loading={detailLoading}
-      dataSource={(tenantDetail ?? {}) as Tenant}
-      columns={[
-            {
-              title: t('pages.infra.tenant.name'),
-              dataIndex: 'name',
-            },
-            {
-              title: t('pages.infra.tenant.domain'),
-              dataIndex: 'domain',
-            },
-            {
-              title: '组织类型',
-              dataIndex: 'is_subtenant',
-              render: (_, record) => (
-                <Tag color={record.is_subtenant ? 'purple' : 'blue'}>
-                  {record.is_subtenant ? '子组织' : '主组织'}
-                </Tag>
-              ),
-            },
-            {
-              title: '父组织ID',
-              dataIndex: 'parent_tenant_id',
-              render: (_, record) => (record.parent_tenant_id ?? '-'),
-            },
-            {
-              title: t('pages.infra.tenant.status'),
-              dataIndex: 'status',
-              render: (_, record) => {
-                const statusInfo = statusTagMap[record.status] ?? { color: 'default', textKey: '' };
-                return <Tag color={statusInfo.color}>{statusInfo.textKey ? t(statusInfo.textKey) : (record.status ?? '-')}</Tag>;
-              },
-            },
-            {
-              title: t('pages.infra.tenant.plan'),
-              dataIndex: 'plan',
-              render: (_, record) => {
-                return <Tag color={getPlanTagColor(String(record.plan))}>{getPlanName(String(record.plan))}</Tag>;
-              },
-            },
-            {
-              title: t('pages.infra.tenant.maxUsers'),
-              dataIndex: 'max_users',
-              render: (_, record) => {
-                const packageMaxUsers = packageConfigs[String(record.plan).toLowerCase()]?.max_users;
-                return packageMaxUsers ?? record.max_users ?? '-';
-              },
-            },
-            {
-              title: t('pages.infra.tenant.maxStorage'),
-              dataIndex: 'max_storage',
-            },
-            {
-              title: t('pages.infra.tenant.expiresAt'),
-              dataIndex: 'expires_at',
-              valueType: 'dateTime',
-            },
-            {
-              title: t('pages.infra.tenant.createdAt'),
-              dataIndex: 'created_at',
-              valueType: 'dateTime',
-            },
-            {
-              title: t('pages.infra.tenant.updatedAt'),
-              dataIndex: 'updated_at',
-              valueType: 'dateTime',
-            },
-            {
-              title: t('pages.infra.tenant.settings'),
-              dataIndex: 'settings',
-              span: 2,
-              render: (value) => {
-                if (!value || (typeof value === 'object' && Object.keys(value).length === 0)) {
-                  return '-';
-                }
-                try {
-                  const jsonStr = typeof value === 'string'
-                    ? value
-                    : JSON.stringify(value, null, 2);
-                  return (
-                    <pre style={{
-                      margin: 0,
-                      whiteSpace: 'pre-wrap',
-                      fontSize: '12px',
-                      fontFamily: CODE_FONT_FAMILY,
-                      backgroundColor: '#f5f5f5',
-                      padding: '8px',
-                      borderRadius: '4px',
-                      maxHeight: '200px',
-                      overflow: 'auto'
-                    }}>
-                      {jsonStr}
-                    </pre>
-                  );
-                } catch (error) {
-                  return <span style={{ color: '#ff4d4f' }}>{t('pages.infra.tenant.configError')}</span>;
-                }
-              },
-            },
-            {
-              title: '共享用户池看板',
-              dataIndex: 'shared_user_quota',
-              span: 2,
-              render: () => {
-                if (sharedQuotaLoading) return '加载中...';
-                if (!sharedQuota) return '-';
-                return (
-                  <div>
-                    <Typography.Text>
-                      主组织：{sharedQuota.root_tenant_name}（ID: {sharedQuota.root_tenant_id}）
-                    </Typography.Text>
-                    <br />
-                    <Typography.Text>
-                      配额：{sharedQuota.used_users}/{sharedQuota.max_users}，剩余 {sharedQuota.remaining_users}
-                    </Typography.Text>
-                    <Divider style={{ margin: '8px 0' }} />
-                    {sharedQuota.tenants.map((item) => (
-                      <div key={item.tenant_id}>
-                        <Typography.Text>
-                          {item.is_subtenant ? '子组织' : '主组织'} · {item.tenant_name}（ID: {item.tenant_id}）：{item.user_count}
-                        </Typography.Text>
-                      </div>
-                    ))}
-                  </div>
-                );
-              },
-            },
-          ]}
-        />
-    
+      extra={
+        tenantDetail && !tenantDetail.is_subtenant ? (
+          <Button
+            icon={<SyncOutlined />}
+            loading={syncLimitsLoading}
+            onClick={() => handleSyncLimitsFromPlan(tenantDetail.id)}
+          >
+            {t('pages.infra.tenant.syncLimitsFromPlan')}
+          </Button>
+        ) : null
+      }
+      basic={
+        tenantDetail ? (
+          <Descriptions
+            column={1}
+            size="small"
+            items={detailDrawerDescriptionItems(tenantDetailDescColumns, tenantDetail)}
+          />
+        ) : null
+      }
+      collaborationTitle="共享用户池看板"
+      collaboration={sharedQuotaPanel}
+      collaborationVisible={sharedQuotaLoading || sharedQuota != null}
+    />
+
     {/* 新建/编辑组织 Modal */}
     <FormModalTemplate
       title={isEdit ? t('pages.infra.tenant.editTitle') : (createParentTenantId ? '新增子组织' : t('pages.infra.tenant.createTitle'))}
@@ -1304,6 +1365,17 @@ const SuperAdminTenantList: React.FC = () => {
       width={MODAL_CONFIG.STANDARD_WIDTH}
       formRef={formRef}
       grid
+      extraFooter={
+        isEdit && currentTenantId && !editingIsSubtenant ? (
+          <Button
+            icon={<SyncOutlined />}
+            loading={syncLimitsLoading}
+            onClick={() => handleSyncLimitsFromPlan(currentTenantId)}
+          >
+            {t('pages.infra.tenant.syncLimitsFromPlan')}
+          </Button>
+        ) : undefined
+      }
       initialValues={{
         status: TenantStatus.ACTIVE,
         plan: defaultPlan || undefined,

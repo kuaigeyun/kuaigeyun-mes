@@ -28,6 +28,10 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
 from apps.kuaizhizao.services.document_action_policy.purchase_order_change import (
     assert_purchase_order_change_capability,
 )
+from apps.kuaizhizao.services.document_action_policy.purchase_order import (
+    assert_purchase_order_capability,
+    derive_purchase_order_capabilities,
+)
 from apps.kuaizhizao.services.order_change.helpers import (
     infer_change_category,
     is_source_order_locked_for_direct_edit,
@@ -144,6 +148,75 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             raise BusinessLogicError("仅已确认或执行中的采购订单可创建变更单")
         return order
 
+    async def _has_pending_change(self, tenant_id: int, order_id: int) -> bool:
+        pending = await PurchaseOrderChangeOrder.filter(
+            tenant_id=tenant_id,
+            source_order_id=order_id,
+            deleted_at__isnull=True,
+            status__in=[
+                DocumentStatus.DRAFT.value,
+                DocumentStatus.PENDING_REVIEW.value,
+                DocumentStatus.AUDITED.value,
+            ],
+        ).count()
+        return pending > 0
+
+    async def preview_from_order(self, tenant_id: int, order_id: int) -> Dict[str, Any]:
+        """从采购订单拉取创建变更单预览（不实际创建）。"""
+        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        if not order:
+            raise NotFoundError(f"采购订单不存在: {order_id}")
+
+        source_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order.id).order_by("id").all()
+        has_items = len(source_items) > 0
+        has_pending_change = await self._has_pending_change(tenant_id, order_id)
+        caps = derive_purchase_order_capabilities(
+            order,
+            has_items=has_items,
+            has_pending_change=has_pending_change,
+        )
+        create_cap = caps.create_change_order
+
+        preview_items: List[Dict[str, Any]] = []
+        for item in source_items:
+            if item.id is None:
+                continue
+            qty = float(item.ordered_quantity or 0)
+            received = float(item.received_quantity or 0)
+            preview_items.append(
+                {
+                    "item_id": int(item.id),
+                    "material_id": item.material_id,
+                    "material_code": item.material_code,
+                    "material_name": item.material_name,
+                    "material_spec": item.material_spec,
+                    "unit": item.unit,
+                    "quantity": qty,
+                    "pushed_quantity": received,
+                    "max_push_quantity": qty,
+                    "required_date": str(item.required_date) if item.required_date else None,
+                }
+            )
+
+        has_blocking = not create_cap.allowed or not preview_items
+        blocking_reason = create_cap.reason if not create_cap.allowed else (
+            "purchase_order.create_change.no_items" if not preview_items else None
+        )
+        return {
+            "target_type": "purchase_order_change",
+            "order_id": order.id,
+            "order_code": order.order_code,
+            "summary": (
+                f"将从采购单 {order.order_code} 生成变更单草稿，共 {len(preview_items)} 条明细"
+                if preview_items
+                else f"采购单 {order.order_code} 无可创建变更单的明细"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": has_blocking,
+            "blocking_reason": blocking_reason,
+            "tip": "确认后将创建草稿变更单，可在编辑页修改变更内容后提交。",
+        }
+
     async def _build_items_from_payload(
         self,
         tenant_id: int,
@@ -233,9 +306,16 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         self, tenant_id: int, order_id: int, created_by: int, change_reason: str = "订单变更"
     ) -> PurchaseOrderChangeWithItemsResponse:
         order = await self._validate_source_order(tenant_id, order_id)
+        source_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order.id).all()
+        has_pending_change = await self._has_pending_change(tenant_id, order_id)
+        assert_purchase_order_capability(
+            order,
+            "create_change_order",
+            has_items=len(source_items) > 0,
+            has_pending_change=has_pending_change,
+        )
         version = await self._next_version(tenant_id, order_id)
         code = await self._generate_code(tenant_id)
-        source_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order.id).all()
         before_qty = Decimal("0")
         before_amt = Decimal("0")
         rows: list[dict] = []

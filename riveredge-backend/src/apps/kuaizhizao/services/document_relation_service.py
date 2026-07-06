@@ -33,7 +33,6 @@ from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_return import PurchaseReturn
 from apps.kuaizhizao.models.demand_computation import DemandComputation
-from apps.kuaizhizao.models.production_plan import ProductionPlan
 from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaicaiwu.models.invoice import Invoice
@@ -2071,22 +2070,6 @@ class DocumentRelationService:
                     "status": getattr(comp, "computation_status", None),
                 })
 
-        # 生产计划（source_type 可能为 DemandComputation 或 demand_computation）
-        for cid in computation_ids:
-            plans = await ProductionPlan.filter(
-                tenant_id=tenant_id,
-                source_id=cid,
-                deleted_at__isnull=True,
-            ).all()
-            for p in plans:
-                if getattr(p, "source_type", "") in ("DemandComputation", "demand_computation", "Demand"):
-                    affected_plans.append({
-                        "id": p.id,
-                        "code": getattr(p, "plan_code", None),
-                        "name": getattr(p, "plan_name", None),
-                        "status": getattr(p, "plan_status", None) or getattr(p, "status", None),
-                    })
-
         # 工单（sales_order_id 或 source_id 为 computation_id）
         wos = await WorkOrder.filter(
             tenant_id=tenant_id,
@@ -2120,7 +2103,7 @@ class DocumentRelationService:
         recommended_actions = []
         if affected_computations:
             recommended_actions.append("重算需求计算")
-        if affected_plans or affected_work_orders:
+        if affected_work_orders:
             recommended_actions.append("重新排程")
 
         return {
@@ -2180,21 +2163,6 @@ class DocumentRelationService:
                 })
 
         for cid in computation_ids:
-            plans = await ProductionPlan.filter(
-                tenant_id=tenant_id,
-                source_id=cid,
-                deleted_at__isnull=True,
-            ).all()
-            for p in plans:
-                if getattr(p, "source_type", "") in ("DemandComputation", "demand_computation", "Demand"):
-                    affected_plans.append({
-                        "id": p.id,
-                        "code": getattr(p, "plan_code", None),
-                        "name": getattr(p, "plan_name", None),
-                        "status": getattr(p, "plan_status", None) or getattr(p, "status", None),
-                    })
-
-        for cid in computation_ids:
             wos = await WorkOrder.filter(
                 tenant_id=tenant_id,
                 source_id=cid,
@@ -2226,7 +2194,7 @@ class DocumentRelationService:
         recommended_actions = []
         if affected_computations:
             recommended_actions.append("重算需求计算")
-        if affected_plans or affected_work_orders:
+        if affected_work_orders:
             recommended_actions.append("重新排程")
 
         return {
@@ -2261,19 +2229,6 @@ class DocumentRelationService:
         marked = 0
         if not auto_mark_pending_recompute:
             return 0
-
-        for p in impact.get("affected_plans", []):
-            plan_id = p.get("id")
-            if not plan_id:
-                continue
-            plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True)
-            if not plan:
-                continue
-            status = getattr(plan, "plan_status", None) or ""
-            if status in ("draft", "submitted"):
-                await ProductionPlan.filter(tenant_id=tenant_id, id=plan_id).update(needs_recompute=True)
-                marked += 1
-            # locked/executing: 不自动标记
 
         return marked
 

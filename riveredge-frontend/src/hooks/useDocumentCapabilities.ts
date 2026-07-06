@@ -383,6 +383,30 @@ export function salesOrderChangeCapabilityReasonMessage(
   return SALES_ORDER_CHANGE_CAPABILITY_REASON_MESSAGES[code] ?? code;
 }
 
+export const PURCHASE_ORDER_CHANGE_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
+  'purchase_order_change.update.not_draft': '仅草稿或待审核状态可编辑变更单',
+  'purchase_order_change.delete.not_draft': '仅草稿状态可删除',
+  'purchase_order_change.submit.not_draft': '仅草稿可提交',
+  'purchase_order_change.submit.no_changes': '变更单无任何变更内容，无法提交',
+  'purchase_order_change.withdraw_submit.not_pending': '仅待审核状态可撤回',
+  'purchase_order_change.approve.not_pending': '仅待审核状态可审批',
+  'purchase_order_change.apply.not_audited': '变更单未审核通过，无法生效',
+  'purchase_order_change.reopen.not_supported': '采购变更单不支持重新编辑',
+};
+
+export function purchaseOrderChangeCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `app.kuaizhizao.purchaseOrderChange.capability.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return PURCHASE_ORDER_CHANGE_CAPABILITY_REASON_MESSAGES[code] ?? code;
+}
+
 export function useSalesOrderChangeCapabilities(
   record: import('../apps/kuaizhizao/services/sales-order-change').SalesOrderChange | null | undefined,
   perms: ResourcePermissionGates,
@@ -552,6 +576,7 @@ export const SHIPMENT_NOTICE_CAPABILITY_REASON_MESSAGES: Record<string, string> 
   'shipment_notice.notify.not_pending': '只有待发货状态的通知单才能通知仓库',
   'shipment_notice.notify.no_warehouse': '发货通知单缺少仓库，无法通知仓库',
   'shipment_notice.notify.no_items': '发货通知单无明细，无法通知仓库',
+  'shipment_notice.notify.overdelivery_or_inventory': '通知数量超过可通知欠发量或库存可用量',
   'shipment_notice.withdraw.not_notified': '只有已通知状态的发货通知单才能撤回',
   'shipment_notice.withdraw.delivery_processing': '关联的销售出库单已在处理中，无法撤回',
 };
@@ -630,41 +655,141 @@ export function useSalesReturnCapabilities(
   );
 }
 
-export const PRODUCTION_PLAN_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
-  'production_plan.update.executed': '已执行的生产计划不允许修改',
-  'production_plan.update.not_allowed': '当前状态不可修改生产计划',
-  'production_plan.delete.executed': '已执行的生产计划不允许删除',
-  'production_plan.submit.not_rejected': '只有已驳回状态的生产计划才能重新提交',
-  'production_plan.withdraw_submit.not_pending': '只有待审核状态的生产计划可撤回提交',
-  'production_plan.approve.not_pending': '只有待审核状态的生产计划可审核',
-  'production_plan.revoke_approval.not_allowed': '当前状态不可撤回审核',
-  'production_plan.execute.already_executed': '该生产计划已执行，请勿重复操作',
-  'production_plan.execute.requires_approved': '当前配置要求生产计划审核通过后才能执行，请先审核计划',
-  'production_plan.push_work_order.not_allowed': '当前状态不可下推工单',
-  'production_plan.push_work_order.executed': '已执行的生产计划不可下推工单',
-  'production_plan.push_work_order.no_items': '生产计划中无需要生产的明细，无法转工单',
-  'production_plan.push_work_order.requires_approved': '生产计划须审核通过后方可下推工单',
-};
-
-export function productionPlanBatchExecuteAllowed(
-  records: { capabilities?: { execute?: ActionCapability } }[],
-  canExecute: boolean,
-): boolean {
-  return batchSomeCapabilityAllowed(records, canExecute, (r) => r.capabilities?.execute);
-}
-
-export function productionPlanBatchPushWorkOrderAllowed(
-  records: { capabilities?: { push_work_order?: ActionCapability } }[],
-  canExecute: boolean,
-): boolean {
-  return batchSomeCapabilityAllowed(records, canExecute, (r) => r.capabilities?.push_work_order);
-}
-
 export const DEMAND_COMPUTATION_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'demand_computation.execute.not_allowed': '只能执行进行中或失败状态的计算',
   'demand_computation.recompute.not_allowed': '只能对已完成或失败的计算执行重新计算',
   'demand_computation.compare.not_completed': '只能对比已完成的需求计算',
+  'demand_computation.push_purchase_requisition.not_completed': '只能下推已完成的需求计算',
+  'demand_computation.push_purchase_requisition.already_pushed': '该需求计算已下推采购申请且仍存在，请勿重复下推',
+  'demand_computation.push_purchase_requisition.no_purchase_items': '需求计算中无采购件，无法下推采购申请',
 };
+
+export const PURCHASE_REQUISITION_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
+  'purchase_requisition.update.not_allowed': '当前状态不可编辑采购申请',
+  'purchase_requisition.delete.not_allowed': '当前状态不可删除采购申请',
+  'purchase_requisition.submit.not_draft': '只有草稿状态可提交',
+  'purchase_requisition.approve.not_pending': '只有待审核状态的采购申请可审核',
+  'purchase_requisition.revoke_approval.not_allowed': '只有已通过或转单状态的采购申请可撤回审核',
+  'purchase_requisition.push_purchase_order.not_allowed': '当前状态不可下推采购订单',
+  'purchase_requisition.push_purchase_order.no_lines': '没有可下推的采购申请明细',
+  'purchase_requisition.push_inquiry.not_allowed': '当前状态不可下推询价单',
+  'purchase_requisition.push_inquiry.no_lines': '没有可询价的采购申请明细',
+};
+
+export function purchaseRequisitionCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+  fallbackMap = PURCHASE_REQUISITION_CAPABILITY_REASON_MESSAGES,
+  i18nPrefix = 'app.kuaizhizao.purchaseRequisition.capability',
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `${i18nPrefix}.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return fallbackMap[code] ?? code;
+}
+
+export const PURCHASE_INQUIRY_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
+  'purchase_inquiry.update.not_draft': '只有草稿状态可编辑询价单',
+  'purchase_inquiry.delete.not_draft': '只有草稿状态可删除询价单',
+  'purchase_inquiry.submit.not_draft': '只有草稿状态可提交',
+  'purchase_inquiry.withdraw_submit.not_pending': '只有已提交待审核的询价单可撤回',
+  'purchase_inquiry.approve.not_pending': '只有待审核询价单可审批',
+  'purchase_inquiry.push_purchase_order.not_allowed': '只有已定标状态的询价单可下推采购订单',
+  'purchase_inquiry.push_purchase_order.no_lines': '没有可下推的已定标询价明细',
+};
+
+export function purchaseInquiryCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+  fallbackMap = PURCHASE_INQUIRY_CAPABILITY_REASON_MESSAGES,
+  i18nPrefix = 'app.kuaizhizao.purchaseInquiry.capability',
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `${i18nPrefix}.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return fallbackMap[code] ?? code;
+}
+
+export const PURCHASE_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
+  'purchase_order.update.not_allowed': '只能更新草稿或待审核的采购订单',
+  'purchase_order.delete.not_allowed': '只能删除草稿或待审核的采购订单',
+  'purchase_order.submit.not_draft': '只能提交草稿状态的订单',
+  'purchase_order.withdraw_submit.not_pending': '只有待审核状态的采购订单可撤回提交',
+  'purchase_order.approve.not_pending': '只有待审核状态的采购订单可审核',
+  'purchase_order.revoke_approval.not_allowed': '只能撤销审核已确认或已驳回的采购订单',
+  'purchase_order.revoke_approval.has_downstream': '该采购订单已有下游单据或收货记录，不能撤销审核',
+  'purchase_order.push_receipt.not_audited': '只有已审核或已确认的采购单才能下推收货/入库',
+  'purchase_order.push_receipt.no_items': '采购单没有明细，无法下推收货/入库',
+  'purchase_order.push_receipt.no_outstanding': '采购单已全部入库，无法下推收货/入库',
+  'purchase_order.push_invoice.not_audited': '只有已审核或已确认的采购单才能下推采购发票',
+  'purchase_order.push_invoice.no_items': '采购单没有明细，无法下推采购发票',
+  'purchase_order.push_invoice.already_exists': '该采购单已存在采购发票，不能重复下推',
+  'purchase_order.push_purchase_return.not_audited': '只有已审核或已确认的采购单才能下推采购退货',
+  'purchase_order.push_purchase_return.no_received': '采购单尚无已入库数量，无法下推采购退货',
+  'purchase_order.push_purchase_return.no_lines': '没有可退货的采购单明细',
+  'purchase_order.create_change.not_allowed': '当前状态不可新建采购变更单',
+  'purchase_order.create_change.not_audited': '只有已审核或已确认的采购单可创建变更单',
+  'purchase_order.create_change.no_items': '采购单没有明细，无法创建变更单',
+  'purchase_order.create_change.pending_exists': '该采购订单存在未完成的变更单，请先处理后再创建',
+};
+
+export function purchaseOrderCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+  fallbackMap = PURCHASE_ORDER_CAPABILITY_REASON_MESSAGES,
+  i18nPrefix = 'app.kuaizhizao.purchaseOrder.capability',
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `${i18nPrefix}.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return fallbackMap[code] ?? code;
+}
+
+export function demandComputationCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+  fallbackMap = DEMAND_COMPUTATION_CAPABILITY_REASON_MESSAGES,
+  i18nPrefix = 'app.kuaizhizao.demandComputation.capability',
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `${i18nPrefix}.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return fallbackMap[code] ?? code;
+}
+
+export const DEMAND_PUSH_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
+  'demand.push_computation.not_audited': '只能下推已审核或已确认的需求',
+  'demand.push_computation.not_approved': '只能下推审核通过的需求',
+  'demand.push_computation.already_pushed': '该需求已下推需求计算，不能重复下推',
+  'demand.push_computation.no_items': '需求无有效明细数量，无法下推需求计算',
+};
+
+export function demandPushCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+  fallbackMap = DEMAND_PUSH_CAPABILITY_REASON_MESSAGES,
+  i18nPrefix = 'app.kuaizhizao.demandManagement.capability',
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `${i18nPrefix}.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return fallbackMap[code] ?? code;
+}
 
 export function demandComputationBatchExecuteAllowed(
   records: { capabilities?: { execute?: ActionCapability } }[],
@@ -722,6 +847,33 @@ export function receiptNoticeBatchWithdrawAllowed(
   return batchSomeCapabilityAllowed(records, canRevoke, (r) => r.capabilities?.withdraw);
 }
 
+export const RECEIPT_NOTICE_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
+  'receipt_notice.update.not_pending': '只能更新待收货状态的通知单',
+  'receipt_notice.delete.not_pending': '只能删除待收货状态的通知单',
+  'receipt_notice.notify.not_pending': '只有待收货状态的通知单才能通知仓库',
+  'receipt_notice.notify.already_notified': '该收货通知单已关联采购入库单',
+  'receipt_notice.notify.no_items': '收货通知单无明细，无法通知仓库',
+  'receipt_notice.notify.no_warehouse': '收货通知单缺少仓库，无法通知仓库',
+  'receipt_notice.notify.overdelivery': '通知数量超过采购订单未入库数量',
+  'receipt_notice.withdraw.not_notified': '只有已通知状态的收货通知单才能撤回',
+  'receipt_notice.withdraw.receipt_processing': '关联的采购入库单已在处理中，无法撤回',
+};
+
+export function receiptNoticeCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+  fallbackMap = RECEIPT_NOTICE_CAPABILITY_REASON_MESSAGES,
+  i18nPrefix = 'app.kuaizhizao.receiptNotice.capability',
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `${i18nPrefix}.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return fallbackMap[code] ?? code;
+}
+
 export function purchaseReturnBatchConfirmAllowed(
   records: { capabilities?: { confirm?: ActionCapability } }[],
   canSubmit: boolean,
@@ -736,6 +888,42 @@ export function purchaseReturnBatchWithdrawAllowed(
   return batchSomeCapabilityAllowed(records, canRevoke, (r) => r.capabilities?.withdraw);
 }
 
+export const PURCHASE_RETURN_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
+  'purchase_return.update.not_pending': '只有待退货状态的采购退货单可编辑',
+  'purchase_return.delete.not_pending': '只有待退货状态的采购退货单才能删除',
+  'purchase_return.confirm.not_pending': '只有待退货状态的采购退货单才能确认退货',
+  'purchase_return.confirm.no_items': '采购退货单无明细，无法确认退货',
+  'purchase_return.confirm.already_returned': '采购退货单已确认退货',
+  'purchase_return.confirm.cancelled': '已取消的采购退货单不能确认退货',
+  'purchase_return.withdraw.not_returned': '只有已退货状态的采购退货单才能撤回',
+};
+
+export function purchaseReturnCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `app.kuaizhizao.purchaseReturn.capability.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return PURCHASE_RETURN_CAPABILITY_REASON_MESSAGES[code] ?? code;
+}
+
+export function qualityInspectionCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `app.kuaizhizao.quality.incomingInspection.capability.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES[code] ?? code;
+}
+
 export const WORK_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'work_order.not_applicable': '该行不是可操作的工单',
   'work_order.update.not_draft': '仅草稿状态工单可编辑',
@@ -748,6 +936,29 @@ export const WORK_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'work_order.unfreeze.not_frozen': '工单未冻结，不能解冻',
   'work_order.cancel.not_allowed': '当前状态不可取消工单',
   'work_order.set_priority.not_allowed': '当前状态不可调整优先级',
+  'work_order.push_production_picking.not_allowed': '当前状态不可下推生产领料',
+  'work_order.push_production_picking.frozen': '工单已冻结，不可下推生产领料',
+  'work_order.push_production_picking.pending_picking': '已存在待领料单，请先处理后再下推',
+  'work_order.push_finished_goods_receipt.not_allowed': '当前状态不可下推成品入库',
+  'work_order.push_finished_goods_receipt.frozen': '工单已冻结，不可下推成品入库',
+  'work_order.push_production_return.not_allowed': '当前状态不可下推生产退料',
+  'work_order.push_production_return.frozen': '工单已冻结，不可下推生产退料',
+  'work_order.push_production_return.no_returnable_lines': '工单无可退料明细',
+};
+
+export const SALES_DELIVERY_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
+  'sales_delivery.push_delivery_notice.not_allowed': '当前状态不可下推送货单',
+  'sales_delivery.push_delivery_notice.cancelled': '销售出库单已取消，不可下推送货单',
+  'sales_delivery.push_delivery_notice.no_customer': '销售出库单缺少客户，不可下推送货单',
+  'sales_delivery.push_delivery_notice.already_created': '已存在送货单，不可重复下推',
+  'sales_delivery.push_delivery_notice.no_lines': '销售出库单无可通知明细',
+};
+
+export const BATCHING_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
+  'batching_order.pull_from_work_order.not_allowed': '工单状态不可生成配料单',
+  'batching_order.pull_from_work_order.no_product': '工单未关联产品，无法配料',
+  'batching_order.pull_from_work_order.existing_draft': '工单已有进行中的配料单',
+  'batching_order.pull_from_work_order.no_shortage_lines': '工单无待配料缺料行',
 };
 
 export const REPORTING_RECORD_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
@@ -824,18 +1035,118 @@ export function packingBindingBatchPrintAllowed(
   return batchSomeCapabilityAllowed(records, canPrint, (r) => r.capabilities?.print);
 }
 
-export function inboundHubBatchConfirmAllowed(
-  records: { capabilities?: { confirm?: ActionCapability } }[],
-  canSubmit: boolean,
-): boolean {
-  return batchSomeCapabilityAllowed(records, canSubmit, (r) => r.capabilities?.confirm);
+export const INBOUND_HUB_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
+  'inbound_hub.confirm.not_pending': '当前状态不可确认入库',
+  'inbound_hub.confirm.use_single_preview': '委外退料/退货请使用单行确认预览',
+  'customer_material.confirm.not_pending': '只有待入库状态的代工来料单才能确认入库',
+};
+
+export function inboundHubCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+  fallbackMap = INBOUND_HUB_CAPABILITY_REASON_MESSAGES,
+  i18nPrefix = 'app.kuaizhizao.warehouseInbound.capability',
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `${i18nPrefix}.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return fallbackMap[code] ?? code;
 }
 
-export function outboundHubBatchConfirmAllowed(
-  records: { capabilities?: { confirm?: ActionCapability } }[],
-  canSubmit: boolean,
-): boolean {
-  return batchSomeCapabilityAllowed(records, canSubmit, (r) => r.capabilities?.confirm);
+export const OUTBOUND_HUB_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
+  'outbound_hub.confirm.not_pending': '当前状态不可确认出库',
+  'outbound_hub.confirm.outsource_issue': '委外发料不支持在此确认',
+  'outbound_hub.withdraw.not_posted': '当前状态不可撤回出库',
+  'outbound_hub.withdraw.outsource_issue': '委外发料不支持撤回',
+};
+
+export function outboundHubCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+  fallbackMap = OUTBOUND_HUB_CAPABILITY_REASON_MESSAGES,
+  i18nPrefix = 'app.kuaizhizao.warehouseOutbound.capability',
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `${i18nPrefix}.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return fallbackMap[code] ?? code;
+}
+
+export function workOrderCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+  fallbackMap = WORK_ORDER_CAPABILITY_REASON_MESSAGES,
+  i18nPrefix = 'app.kuaizhizao.workOrder.capability',
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `${i18nPrefix}.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return fallbackMap[code] ?? code;
+}
+
+export function salesDeliveryCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+  fallbackMap = SALES_DELIVERY_CAPABILITY_REASON_MESSAGES,
+  i18nPrefix = 'app.kuaizhizao.salesDelivery.capability',
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `${i18nPrefix}.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return fallbackMap[code] ?? code;
+}
+
+export function batchingOrderCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+  fallbackMap = BATCHING_ORDER_CAPABILITY_REASON_MESSAGES,
+  i18nPrefix = 'app.kuaizhizao.batchingOrder.capability',
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `${i18nPrefix}.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return fallbackMap[code] ?? code;
+}
+
+export const OUTSOURCE_WORK_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
+  'outsource_work_order.push_outsource_issue.not_allowed': '当前状态不可委外发料',
+  'outsource_work_order.push_outsource_issue.frozen': '委外工单已冻结，不可发料',
+  'outsource_work_order.push_outsource_receipt.not_allowed': '当前状态不可委外收货',
+  'outsource_work_order.push_outsource_receipt.frozen': '委外工单已冻结，不可收货',
+  'outsource_work_order.push_outsource_material_return.not_allowed': '当前状态不可委外退料',
+  'outsource_work_order.push_outsource_material_return.frozen': '委外工单已冻结，不可退料',
+  'outsource_work_order.push_outsource_product_return.not_allowed': '当前状态不可委外退货',
+  'outsource_work_order.push_outsource_product_return.frozen': '委外工单已冻结，不可退货',
+};
+
+export function outsourceWorkOrderCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+  fallbackMap = OUTSOURCE_WORK_ORDER_CAPABILITY_REASON_MESSAGES,
+  i18nPrefix = 'app.kuaizhizao.outsourceWorkOrder.capability',
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `${i18nPrefix}.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return fallbackMap[code] ?? code;
 }
 
 export function customerMaterialBatchConfirmAllowed(

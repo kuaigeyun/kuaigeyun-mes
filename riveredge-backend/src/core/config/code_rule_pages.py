@@ -61,7 +61,6 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-quality-process-inspection": "GCJY",   # 过程检验
     "kuaizhizao-quality-finished-goods-inspection": "CPJY",  # 成品检验
     "kuaizhizao-quality-inspection-plan": "ZJFA",  # 质检方案
-    "kuaizhizao-plan-production-plan": "SCJH",  # 生产计划
     "kuaizhizao-equipment-management-equipment": "EQ",    # 设备（仅此一处使用英文缩写，其余均为汉语拼音）
     "kuaizhizao-equipment-management-mold": "MJ",        # 模具（拼音 muju）
     "kuaizhizao-equipment-management-tool": "GZ",       # 工装（拼音 gongzhuang）
@@ -847,18 +846,6 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "allow_manual_edit": True,
     },
     # 快格轻制造 - 计划管理
-    {
-        "page_code": "kuaizhizao-plan-production-plan",
-        "page_name": "生产计划",
-        "page_path": "/apps/kuaizhizao/plan-management/production-plans",
-        "code_field": "plan_code",
-        "code_field_label": "生产计划编码",
-        "module": "快格轻制造",
-        "module_icon": "tool",
-        "auto_generate": True,
-        "rule_code": "PRODUCTION_PLAN_CODE",
-        "allow_manual_edit": True,
-    },
     # 快格轻制造 - 采购管理（补充）
     {
         "page_code": "kuaizhizao-purchase-return",

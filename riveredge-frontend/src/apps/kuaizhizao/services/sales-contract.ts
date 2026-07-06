@@ -303,6 +303,31 @@ export interface PushToWorkOrderFromContractPayload {
   work_order_granularity?: 'grouped' | 'per_unit';
 }
 
+export interface SalesContractPushPreviewItem {
+  item_id: number;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_unit?: string;
+  quantity: number;
+  pushed_quantity: number;
+  max_push_quantity: number;
+  delivery_date?: string | null;
+  blocking_issues?: string[];
+  suggested_action?: string;
+  source_type?: string;
+}
+
+export interface SalesContractPushPreviewResponse {
+  target_type: 'sales_order' | 'work_order';
+  summary: string;
+  items: SalesContractPushPreviewItem[];
+  has_blocking_issues?: boolean;
+  blocking_reason?: string | null;
+  push_mode_default?: 'draft' | 'confirm' | string;
+  tip?: string;
+}
+
 export interface PullSalesContractFromQuotationResponse {
   success: boolean;
   message: string;
@@ -412,23 +437,15 @@ export const salesContractApi = {
 
     ),
 
+  previewPushToSalesOrder: (id: number) =>
+    apiRequest<SalesContractPushPreviewResponse>(`${BASE}/${id}/push-to-sales-order/preview`, {
+      method: 'GET',
+    }),
+
   previewPushToWorkOrder: (id: number) =>
-    apiRequest<{
-      target_type: 'work_order';
-      summary: string;
-      push_mode_default?: 'draft' | 'confirm' | string;
-      items: Array<{
-        item_id: number;
-        material_code: string;
-        material_name: string;
-        quantity: number;
-        pushed_quantity: number;
-        max_push_quantity: number;
-        delivery_date?: string | null;
-        blocking_issues?: string[];
-      }>;
-      tip?: string;
-    }>(`${BASE}/${id}/push-to-work-order/preview`, { method: 'GET' }),
+    apiRequest<SalesContractPushPreviewResponse>(`${BASE}/${id}/push-to-work-order/preview`, {
+      method: 'GET',
+    }),
 
   pushToWorkOrder: (id: number, payload?: PushToWorkOrderFromContractPayload | null) =>
     apiRequest<{

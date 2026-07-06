@@ -11,6 +11,7 @@ from datetime import datetime, date
 from typing import Optional, List
 from pydantic import Field
 from core.schemas.base import BaseSchema
+from apps.kuaizhizao.services.document_action_policy.types import SalesDeliveryPullCapabilities
 
 
 # === 送货单 ===
@@ -106,3 +107,53 @@ class DeliveryNoticeItemResponse(DeliveryNoticeItemBase):
 class DeliveryNoticeWithItemsResponse(DeliveryNoticeResponse):
     """送货单详情响应（含明细）"""
     items: List[DeliveryNoticeItemResponse] = Field(default_factory=list, description="通知明细列表")
+
+
+class DeliveryNoticePullPreviewLine(BaseSchema):
+    """送货单上拉 — 预览明细行"""
+    item_id: int = Field(..., description="销售出库明细ID")
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., max_length=50, description="物料编码")
+    material_name: str = Field(..., max_length=200, description="物料名称")
+    material_unit: str = Field(default="个", max_length=20, description="物料单位")
+    quantity: float = Field(..., description="出库数量")
+    pushed_quantity: float = Field(0, description="已通知数量")
+    max_push_quantity: float = Field(..., description="可通知数量")
+    unit_price: float = Field(0, description="单价")
+
+
+class DeliveryNoticePullPreviewResponse(BaseSchema):
+    """送货单上拉 — 销售出库预览"""
+    sales_delivery_id: int = Field(..., description="销售出库单ID")
+    sales_delivery_code: str = Field(..., description="销售出库单编码")
+    customer_id: int = Field(..., description="客户ID")
+    customer_name: str = Field(..., description="客户名称")
+    customer_contact: Optional[str] = Field(None, description="客户联系人")
+    customer_phone: Optional[str] = Field(None, description="客户电话")
+    sales_order_id: Optional[int] = Field(None, description="销售订单ID")
+    sales_order_code: Optional[str] = Field(None, description="销售订单编码")
+    planned_delivery_date: Optional[date] = Field(None, description="预计送达日期")
+    shipping_address: Optional[str] = Field(None, description="收货地址")
+    items: List[DeliveryNoticePullPreviewLine] = Field(default_factory=list, description="可通知明细")
+    message: Optional[str] = Field(None, description="提示信息")
+
+
+class DeliveryNoticePullCandidate(BaseSchema):
+    """送货单上拉 — 销售出库候选项"""
+    id: int
+    delivery_code: str
+    sales_order_id: Optional[int] = None
+    sales_order_code: Optional[str] = None
+    customer_id: int
+    customer_name: str
+    status: str
+    delivery_date: Optional[date] = None
+    updated_at: Optional[datetime] = None
+    pullable: bool = Field(..., description="是否可取单（与 capabilities.push_delivery_notice 一致）")
+    capabilities: Optional[SalesDeliveryPullCapabilities] = None
+
+
+class DeliveryNoticePullCandidateListResponse(BaseSchema):
+    data: List[DeliveryNoticePullCandidate]
+    total: int
+    success: bool = True

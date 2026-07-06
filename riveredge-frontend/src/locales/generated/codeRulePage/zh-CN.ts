@@ -58,8 +58,6 @@ const codeRulePageZhCN = {
   'codeRulePage.kuaizhizao-equipment-management-mold.pageName': '模具管理',
   'codeRulePage.kuaizhizao-equipment-management-tool.codeFieldLabel': '工装编码',
   'codeRulePage.kuaizhizao-equipment-management-tool.pageName': '工装台账',
-  'codeRulePage.kuaizhizao-plan-production-plan.codeFieldLabel': '生产计划编码',
-  'codeRulePage.kuaizhizao-plan-production-plan.pageName': '生产计划',
   'codeRulePage.kuaizhizao-production-outsource-material-receipt.codeFieldLabel': '委外收货单编号',
   'codeRulePage.kuaizhizao-production-outsource-material-receipt.pageName': '委外收货',
   'codeRulePage.kuaizhizao-production-outsource-material-return.codeFieldLabel': '委外退料单编号',

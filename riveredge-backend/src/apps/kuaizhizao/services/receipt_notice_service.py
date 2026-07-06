@@ -7,10 +7,11 @@ Author: RiverEdge Team
 Date: 2026-02-22
 """
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 from datetime import datetime
 from decimal import Decimal
 from tortoise.transactions import in_transaction
+from tortoise.expressions import Q
 
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
@@ -239,8 +240,8 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         skip: int = 0,
         limit: int = 20,
         **filters
-    ) -> List[ReceiptNoticeListResponse]:
-        """获取收货通知单列表"""
+    ) -> Dict[str, Any]:
+        """获取收货通知单列表（含 capabilities 与分页 total）。"""
         query = ReceiptNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if filters.get("status"):
             query = query.filter(status=filters["status"])
@@ -248,19 +249,32 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             query = query.filter(purchase_order_id=filters["purchase_order_id"])
         if filters.get("supplier_id"):
             query = query.filter(supplier_id=filters["supplier_id"])
+        keyword = str(filters.get("keyword") or "").strip()
+        if keyword:
+            query = query.filter(
+                Q(notice_code__icontains=keyword)
+                | Q(purchase_order_code__icontains=keyword)
+                | Q(supplier_name__icontains=keyword)
+            )
 
+        total = await query.count()
         notices = await query.offset(skip).limit(limit).order_by("-created_at")
         notice_list = list(notices)
         notice_ids = [int(n.id) for n in notice_list if n.id is not None]
         items_map = await self._notice_has_items_map(tenant_id, notice_ids)
         withdraw_map = await self._receipt_withdrawable_by_notice_id(tenant_id, notice_list)
         responses = [ReceiptNoticeListResponse.model_validate(r) for r in notice_list]
-        return enrich_receipt_notice_list_capabilities(
+        enriched = enrich_receipt_notice_list_capabilities(
             notice_list,
             responses,
             has_items_by_id=items_map,
             receipt_withdrawable_by_id=withdraw_map,
         )
+        return {
+            "data": [item.model_dump() for item in enriched],
+            "total": total,
+            "success": True,
+        }
 
     async def update_receipt_notice(
         self,
@@ -292,6 +306,106 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
 
         await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(deleted_at=datetime.now())
         return True
+
+    async def preview_notify_warehouse(
+        self,
+        tenant_id: int,
+        notice_id: int,
+    ) -> Dict[str, Any]:
+        """通知仓库预览：返回通知明细及采购未入库数量门禁，不实际创建入库单。"""
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+        from apps.kuaizhizao.services.warehouse_service import sync_purchase_order_receipt_quantities
+        from apps.kuaizhizao.services.document_action_policy.receipt_notice import (
+            derive_receipt_notice_capabilities,
+        )
+
+        notice = await ReceiptNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not notice:
+            raise NotFoundError(f"收货通知单不存在: {notice_id}")
+
+        notice_items = await ReceiptNoticeItem.filter(
+            tenant_id=tenant_id, notice_id=notice_id
+        ).order_by("id").all()
+        if not notice_items:
+            raise BusinessLogicError("收货通知单无明细，无法通知仓库")
+
+        has_warehouse = getattr(notice, "warehouse_id", None) is not None
+        caps = derive_receipt_notice_capabilities(
+            notice,
+            has_items=True,
+            has_warehouse=has_warehouse,
+        )
+        push_allowed = caps.notify.allowed
+        blocking_reason = caps.notify.reason if not push_allowed else None
+
+        if notice.purchase_order_id:
+            await sync_purchase_order_receipt_quantities(tenant_id, int(notice.purchase_order_id))
+
+        po_items_by_id: Dict[int, PurchaseOrderItem] = {}
+        if notice.purchase_order_id:
+            po_items = await PurchaseOrderItem.filter(
+                tenant_id=tenant_id,
+                order_id=int(notice.purchase_order_id),
+            ).all()
+            po_items_by_id = {int(it.id): it for it in po_items}
+
+        preview_items: List[Dict[str, Any]] = []
+        line_blocking_issues: List[str] = []
+        for ni in notice_items:
+            notice_qty = float(ni.notice_quantity or 0)
+            if notice_qty <= 0:
+                continue
+            po_item = None
+            if ni.purchase_order_item_id:
+                po_item = po_items_by_id.get(int(ni.purchase_order_item_id))
+            ordered = float(po_item.ordered_quantity or 0) if po_item else notice_qty
+            received = float(po_item.received_quantity or 0) if po_item else 0.0
+            outstanding = float(po_item.outstanding_quantity or 0) if po_item else notice_qty
+            if po_item is not None and notice_qty > outstanding:
+                line_blocking_issues.append(
+                    f"物料 {ni.material_code or ni.material_name} 的通知数量 {notice_qty} "
+                    f"超过未入库数量 {outstanding}"
+                )
+            preview_items.append(
+                {
+                    "item_id": int(ni.id),
+                    "purchase_order_item_id": int(ni.purchase_order_item_id)
+                    if ni.purchase_order_item_id
+                    else None,
+                    "material_code": str(ni.material_code or ""),
+                    "material_name": str(ni.material_name or ""),
+                    "quantity": ordered,
+                    "pushed_quantity": received,
+                    "max_push_quantity": outstanding,
+                    "notice_quantity": notice_qty,
+                }
+            )
+
+        if line_blocking_issues:
+            push_allowed = False
+            blocking_reason = blocking_reason or "receipt_notice.notify.overdelivery"
+
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        return {
+            "target_type": "purchase_receipt",
+            "summary": (
+                f"请确认将通知仓库的收货明细（{pushable_count}/{len(preview_items)} 行可通知）"
+                if push_allowed
+                else "当前收货通知单不可通知仓库"
+            ),
+            "notice_code": notice.notice_code,
+            "warehouse_required": not has_warehouse,
+            "warehouse_id": int(notice.warehouse_id) if notice.warehouse_id else None,
+            "items": preview_items,
+            "has_blocking_issues": not push_allowed,
+            "blocking_reason": blocking_reason if not push_allowed else None,
+            "line_blocking_issues": line_blocking_issues,
+            "tip": "确认后将生成采购入库草稿，由仓库核对后确认入库。",
+        }
 
     async def notify_warehouse(
         self,

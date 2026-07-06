@@ -49,9 +49,9 @@ import {
 
   App,
 
-  Button,
+  Alert,
 
-  Checkbox,
+  Button,
 
   Col,
 
@@ -70,11 +70,15 @@ import {
   Modal,
   Card,
 
+  Radio,
+
   Row,
 
   Space,
 
   Spin,
+
+  Switch,
 
   Table,
 
@@ -218,6 +222,8 @@ import salesContractApi, {
 
   type SalesContractPaymentSummary,
 
+  type SalesContractPushPreviewResponse,
+
 } from '../../../services/sales-contract';
 import { listQuotations, type Quotation, type QuotationCapabilities } from '../../../services/quotation';
 
@@ -305,27 +311,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 
 
-type ReleaseRow = {
-
-  item_id: number;
-
-  selected: boolean;
-
-  release_quantity: number;
-
-  remaining_quantity: number;
-
-  material_code: string;
-
-  material_name: string;
-
-  contract_quantity: number;
-
-  released_quantity: number;
-
-  material_unit: string;
-
-};
+type ContractPushTarget = 'sales_order' | 'work_order';
 
 
 
@@ -478,15 +464,15 @@ const SalesContractsPage: React.FC = () => {
 
 
 
-  const [releaseModalOpen, setReleaseModalOpen] = useState(false);
-
-  const [releaseTarget, setReleaseTarget] = useState<SalesContract | null>(null);
-
-  const [releaseRows, setReleaseRows] = useState<ReleaseRow[]>([]);
-
-  const [releaseMode, setReleaseMode] = useState<'sales_order' | 'work_order'>('sales_order');
-
-  const [releaseSubmitting, setReleaseSubmitting] = useState(false);
+  const [pushPreviewOpen, setPushPreviewOpen] = useState(false);
+  const [pushPreviewLoading, setPushPreviewLoading] = useState(false);
+  const [pushPreviewConfirming, setPushPreviewConfirming] = useState(false);
+  const [pushPreviewData, setPushPreviewData] = useState<SalesContractPushPreviewResponse | null>(null);
+  const [pushPreviewTarget, setPushPreviewTarget] = useState<ContractPushTarget | null>(null);
+  const [pushPreviewRecord, setPushPreviewRecord] = useState<SalesContract | null>(null);
+  const [pushSelectedItemIds, setPushSelectedItemIds] = useState<number[]>([]);
+  const [pushQuantities, setPushQuantities] = useState<Record<number, number>>({});
+  const [workOrderPushMode, setWorkOrderPushMode] = useState<'draft' | 'confirm'>('draft');
 
 
 
@@ -2170,135 +2156,142 @@ const SalesContractsPage: React.FC = () => {
 
 
 
-  const openReleaseModal = async (
-    record: SalesContract,
-    mode: 'sales_order' | 'work_order' = 'sales_order',
-  ) => {
-
-    try {
-
-      const full = await salesContractApi.get(record.id!);
-
-      const rows: ReleaseRow[] = (full.items ?? [])
-
-        .filter((it) => it.id != null && remainingItemQty(it) > 0)
-
-        .map((it) => {
-
-          const remaining = remainingItemQty(it);
-
-          return {
-
-            item_id: it.id!,
-
-            selected: true,
-
-            release_quantity: remaining,
-
-            remaining_quantity: remaining,
-
-            material_code: it.material_code,
-
-            material_name: it.material_name,
-
-            contract_quantity: Number(it.contract_quantity ?? 0),
-
-            released_quantity: Number(it.released_quantity ?? 0),
-
-            material_unit: it.material_unit,
-
-          };
-
-        });
-
-      if (!rows.length) {
-
-        messageApi.warning(t('app.kuaizhizao.salesContract.noReleasableLines'));
-
-        return;
-
-      }
-
-      setReleaseTarget(full);
-
-      setReleaseRows(rows);
-
-      setReleaseMode(mode);
-
-      setReleaseModalOpen(true);
-
-    } catch (e: any) {
-
-      messageApi.error(e?.message || t('app.kuaizhizao.salesContract.loadItemsFailed'));
-
-    }
-
+  const resetPushPreviewModal = () => {
+    setPushPreviewOpen(false);
+    setPushPreviewData(null);
+    setPushPreviewRecord(null);
+    setPushPreviewTarget(null);
+    setPushSelectedItemIds([]);
+    setPushQuantities({});
+    setWorkOrderPushMode('draft');
   };
 
+  const showContractPushPreview = useCallback(
+    (record: SalesContract, target: ContractPushTarget) => {
+      if (!record.id) return;
+      setPushPreviewOpen(true);
+      setPushPreviewLoading(true);
+      setPushPreviewConfirming(false);
+      setPushPreviewData(null);
+      setPushPreviewTarget(target);
+      setPushPreviewRecord(record);
+      setPushSelectedItemIds([]);
+      setPushQuantities({});
+      const fetchPreview =
+        target === 'sales_order'
+          ? () => salesContractApi.previewPushToSalesOrder(record.id!)
+          : () => salesContractApi.previewPushToWorkOrder(record.id!);
+      void fetchPreview()
+        .then((res) => {
+          setPushPreviewData(res);
+          const defaultIds: number[] = [];
+          const qtyMap: Record<number, number> = {};
+          (res.items || []).forEach((row) => {
+            const itemId = Number(row.item_id);
+            const maxQty = Number(row.max_push_quantity ?? 0);
+            if (!Number.isFinite(itemId) || itemId <= 0 || maxQty <= 0) return;
+            defaultIds.push(itemId);
+            qtyMap[itemId] = maxQty;
+          });
+          setPushSelectedItemIds(defaultIds);
+          setPushQuantities(qtyMap);
+          if (target === 'work_order') {
+            setWorkOrderPushMode(res.push_mode_default === 'confirm' ? 'confirm' : 'draft');
+          }
+        })
+        .catch((error: any) => {
+          messageApi.error(
+            error?.message || error?.detail || t('app.kuaizhizao.salesContract.pushPreviewFailed'),
+          );
+          resetPushPreviewModal();
+        })
+        .finally(() => setPushPreviewLoading(false));
+    },
+    [messageApi, t],
+  );
 
-
-  const handleReleaseSubmit = async () => {
-
-    if (!releaseTarget?.id) return;
-
-    const lines = releaseRows
-
-      .filter((r) => r.selected && r.release_quantity > 0)
-
-      .map((r) => ({ item_id: r.item_id, release_quantity: r.release_quantity }));
-
-    if (!lines.length) {
-
-      messageApi.error(t('app.kuaizhizao.salesContract.selectReleaseLine'));
-
+  const handlePushPreviewConfirm = async () => {
+    if (!pushPreviewRecord?.id || !pushPreviewData || !pushPreviewTarget) return;
+    if (pushPreviewData.has_blocking_issues && pushPreviewData.blocking_reason) {
+      const reason =
+        salesContractCapabilityReasonMessage(pushPreviewData.blocking_reason as string, t) ||
+        t('app.kuaizhizao.salesContract.pushOrderStatusRequired');
+      messageApi.warning(reason);
       return;
-
     }
 
-    setReleaseSubmitting(true);
+    const rowById = new Map(
+      (pushPreviewData.items || []).map((row) => [Number(row.item_id), row]),
+    );
+    const selectedIds = pushSelectedItemIds.filter((id) => rowById.has(id));
+    if (!selectedIds.length) {
+      messageApi.warning(t('app.kuaizhizao.salesContract.pushPreviewSelectAtLeastOne'));
+      return;
+    }
 
+    const lines: { item_id: number; release_quantity: number }[] = [];
+    const blockingIssues: string[] = [];
+    for (const itemId of selectedIds) {
+      const row = rowById.get(itemId);
+      const qty = Number(pushQuantities[itemId] ?? 0);
+      const maxQty = Number(row?.max_push_quantity ?? 0);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        messageApi.warning(
+          t('app.kuaizhizao.salesOrder.pushQtyInvalid', { code: row?.material_code || itemId }),
+        );
+        return;
+      }
+      if (Number.isFinite(maxQty) && maxQty > 0 && qty > maxQty) {
+        messageApi.warning(
+          t('app.kuaizhizao.salesOrder.pushQtyExceedsRemaining', { code: row?.material_code || itemId }),
+        );
+        return;
+      }
+      if (Array.isArray(row?.blocking_issues) && row.blocking_issues.length > 0) {
+        blockingIssues.push(...row.blocking_issues.map((m) => String(m)));
+      }
+      lines.push({ item_id: itemId, release_quantity: qty });
+    }
+
+    if (
+      pushPreviewTarget === 'work_order' &&
+      workOrderPushMode === 'confirm' &&
+      blockingIssues.length > 0
+    ) {
+      messageApi.warning(t('app.kuaizhizao.salesOrder.masterDataMissingForConfirmPush'));
+      return;
+    }
+
+    setPushPreviewConfirming(true);
     try {
-      if (releaseMode === 'work_order') {
-        const res = await salesContractApi.pushToWorkOrder(releaseTarget.id, {
+      if (pushPreviewTarget === 'work_order') {
+        const res = await salesContractApi.pushToWorkOrder(pushPreviewRecord.id, {
           release_lines: lines,
+          push_mode: workOrderPushMode,
         });
         messageApi.success(res?.message || t('app.kuaizhizao.salesContract.workOrderGenerated'));
       } else {
-        const res = await salesContractApi.convertToOrder(releaseTarget.id, { release_lines: lines });
-        const orderId = (res.sales_order as any)?.id;
-        const orderCode = (res.sales_order as any)?.order_code || '';
+        const res = await salesContractApi.convertToOrder(pushPreviewRecord.id, { release_lines: lines });
+        const orderId = (res.sales_order as { id?: number })?.id;
+        const orderCode = (res.sales_order as { order_code?: string })?.order_code || '';
         messageApi.success(t('app.kuaizhizao.salesContract.orderGenerated', { code: orderCode }));
         navigate('/apps/kuaizhizao/sales-management/sales-orders', {
           state: orderId ? { openSalesOrderId: orderId } : undefined,
         });
       }
-
-      setReleaseModalOpen(false);
-
-      setReleaseTarget(null);
-
-      setReleaseRows([]);
-
-      setReleaseMode('sales_order');
-
-      if (detail?.id === releaseTarget.id) await refreshDetail(releaseTarget.id);
-
+      resetPushPreviewModal();
+      if (detail?.id === pushPreviewRecord.id) await refreshDetail(pushPreviewRecord.id);
       else reload();
-
     } catch (e: any) {
       messageApi.error(
         e?.message ||
-          (releaseMode === 'work_order'
+          (pushPreviewTarget === 'work_order'
             ? t('app.kuaizhizao.salesContract.pushWorkOrderFailed')
             : t('app.kuaizhizao.salesContract.pushOrderFailed')),
       );
-
     } finally {
-
-      setReleaseSubmitting(false);
-
+      setPushPreviewConfirming(false);
     }
-
   };
 
   const selectedContractForPush = useMemo(() => {
@@ -2362,8 +2355,8 @@ const SalesContractsPage: React.FC = () => {
       );
       return;
     }
-    await openReleaseModal(record, 'sales_order');
-  }, [messageApi, openReleaseModal, selectedContractForPush]);
+    await showContractPushPreview(record, 'sales_order');
+  }, [messageApi, selectedContractForPush, showContractPushPreview, t]);
 
   const handleToolbarPushToWorkOrder = useCallback(async () => {
     const record = selectedContractForPush;
@@ -2378,8 +2371,8 @@ const SalesContractsPage: React.FC = () => {
       );
       return;
     }
-    await openReleaseModal(record, 'work_order');
-  }, [messageApi, openReleaseModal, selectedContractForPush, t]);
+    showContractPushPreview(record, 'work_order');
+  }, [messageApi, selectedContractForPush, showContractPushPreview, t]);
 
   const salesContractToolbarRenderItems = useMemo(
     () => [
@@ -3278,7 +3271,7 @@ const SalesContractsPage: React.FC = () => {
                   disabled={detailCapabilityGates.pushToSalesOrder.disabled}
                   onClick={() => {
                     if (!detailCapabilityGates.pushToSalesOrder.disabled) {
-                      openReleaseModal(detail, 'sales_order');
+                      showContractPushPreview(detail, 'sales_order');
                     }
                   }}
                 >
@@ -3292,7 +3285,7 @@ const SalesContractsPage: React.FC = () => {
                   disabled={detailCapabilityGates.pushToWorkOrder.disabled}
                   onClick={() => {
                     if (!detailCapabilityGates.pushToWorkOrder.disabled) {
-                      openReleaseModal(detail, 'work_order');
+                      showContractPushPreview(detail, 'work_order');
                     }
                   }}
                 >
@@ -3677,140 +3670,197 @@ const SalesContractsPage: React.FC = () => {
 
 
       <Modal
-
-        title={releaseMode === 'work_order' ? pushToWorkOrderAction.label : pushToSalesOrderAction.label}
-
-        open={releaseModalOpen}
-
-        width={MODAL_CONFIG.LARGE_WIDTH}
-
-        okText={t('app.kuaizhizao.salesContract.confirmRelease')}
-
-        confirmLoading={releaseSubmitting}
-
-        onOk={handleReleaseSubmit}
-
-        onCancel={() => {
-
-          setReleaseModalOpen(false);
-
-          setReleaseTarget(null);
-
-          setReleaseRows([]);
-
-          setReleaseMode('sales_order');
-
+        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
+        open={pushPreviewOpen}
+        width={1100}
+        onCancel={resetPushPreviewModal}
+        okText={t('app.kuaizhizao.salesOrder.confirmPush')}
+        cancelText={t('common.cancel')}
+        confirmLoading={pushPreviewConfirming}
+        onOk={handlePushPreviewConfirm}
+        okButtonProps={{
+          disabled:
+            pushPreviewLoading ||
+            !pushPreviewData ||
+            (!!pushPreviewData?.has_blocking_issues && !!pushPreviewData?.blocking_reason),
         }}
-
         destroyOnHidden
-
       >
-
-        <Typography.Paragraph type="secondary">
-
-          {t(
-            releaseMode === 'work_order'
-              ? 'app.kuaizhizao.salesContract.releaseWorkOrderHint'
-              : 'app.kuaizhizao.salesContract.releaseHint',
-            { code: releaseTarget?.contract_code },
-          )}
-
-        </Typography.Paragraph>
-
-        <Table
-
-          size="small"
-
-          rowKey="item_id"
-
-          pagination={false}
-
-          dataSource={releaseRows}
-
-          columns={[
-
-            {
-
-              title: t('app.kuaizhizao.salesContract.select'),
-
-              width: 60,
-
-              render: (_, r, index) => (
-
-                <Checkbox
-
-                  checked={r.selected}
-
-                  onChange={(e) => {
-
-                    const next = [...releaseRows];
-
-                    next[index] = { ...next[index], selected: e.target.checked };
-
-                    setReleaseRows(next);
-
-                  }}
-
-                />
-
-              ),
-
-            },
-
-            { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
-
-            { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', ellipsis: true },
-
-            { title: t('app.kuaizhizao.salesContract.contractQuantity'), dataIndex: 'contract_quantity', width: 90, align: 'right' as const },
-
-            { title: t('app.kuaizhizao.salesContract.released'), dataIndex: 'released_quantity', width: 80, align: 'right' as const },
-
-            { title: t('app.kuaizhizao.salesContract.remaining'), dataIndex: 'remaining_quantity', width: 80, align: 'right' as const },
-
-            {
-
-              title: t('app.kuaizhizao.salesContract.thisRelease'),
-
-              width: 120,
-
-              render: (_, r, index) => (
-
-                <InputNumber
-
-                  min={0.0001}
-
-                  max={r.remaining_quantity}
-
-                  value={r.release_quantity}
-
-                  disabled={!r.selected}
-
+        {pushPreviewLoading ? (
+          <div
+            style={{
+              minHeight: 120,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 12,
+            }}
+          >
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>
+              {t('app.kuaizhizao.salesOrder.loadingPreview')}
+            </div>
+          </div>
+        ) : pushPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushPreviewData.summary}</p>
+            {pushPreviewData.has_blocking_issues && pushPreviewData.blocking_reason ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={
+                  salesContractCapabilityReasonMessage(pushPreviewData.blocking_reason, t) ||
+                  t('app.kuaizhizao.salesContract.pushOrderStatusRequired')
+                }
+              />
+            ) : null}
+            {pushPreviewTarget === 'work_order' ? (
+              <div style={{ marginBottom: 12 }}>
+                <Typography.Text type="secondary" style={{ marginRight: 12 }}>
+                  {t('app.kuaizhizao.salesOrder.pushModeLabel')}
+                </Typography.Text>
+                <Radio.Group
+                  value={workOrderPushMode}
+                  onChange={(e) => setWorkOrderPushMode(e.target.value)}
+                  optionType="button"
+                  buttonStyle="solid"
                   size="small"
-
-                  style={{ width: '100%' }}
-
-                  onChange={(v) => {
-
-                    const next = [...releaseRows];
-
-                    next[index] = { ...next[index], release_quantity: Number(v) || 0 };
-
-                    setReleaseRows(next);
-
-                  }}
-
+                  options={[
+                    { label: t('app.kuaizhizao.salesOrder.pushModeDraft'), value: 'draft' },
+                    { label: t('app.kuaizhizao.salesOrder.pushModeConfirm'), value: 'confirm' },
+                  ]}
                 />
-
-              ),
-
-            },
-
-            { title: t('app.kuaizhizao.salesOrder.unit'), dataIndex: 'material_unit', width: 60 },
-
-          ]}
-
-        />
-
+              </div>
+            ) : null}
+            {pushPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pushPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 1040 }}
+                columns={[
+                  {
+                    title: t('common.select'),
+                    width: 64,
+                    render: (_: unknown, row) => {
+                      const itemId = Number(row.item_id);
+                      const maxQty = Number(row.max_push_quantity ?? 0);
+                      const disabled =
+                        !Number.isFinite(maxQty) ||
+                        maxQty <= 0 ||
+                        (!!pushPreviewData.has_blocking_issues && !!pushPreviewData.blocking_reason);
+                      return (
+                        <Switch
+                          size="small"
+                          disabled={disabled}
+                          checked={pushSelectedItemIds.includes(itemId)}
+                          onChange={(checked) => {
+                            setPushSelectedItemIds((prev) =>
+                              checked
+                                ? Array.from(new Set([...prev, itemId]))
+                                : prev.filter((id) => id !== itemId),
+                            );
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.materialCode'),
+                    dataIndex: 'material_code',
+                    width: 120,
+                    ellipsis: true,
+                  },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.materialName'),
+                    dataIndex: 'material_name',
+                    width: 140,
+                    ellipsis: true,
+                  },
+                  {
+                    title: t('app.kuaizhizao.salesContract.contractQuantity'),
+                    dataIndex: 'quantity',
+                    width: 88,
+                    align: 'right',
+                  },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.colPushedQty'),
+                    dataIndex: 'pushed_quantity',
+                    width: 88,
+                    align: 'right',
+                  },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.colPushableQty'),
+                    dataIndex: 'max_push_quantity',
+                    width: 88,
+                    align: 'right',
+                  },
+                  {
+                    title: t('app.kuaizhizao.salesContract.thisRelease'),
+                    width: 120,
+                    render: (_: unknown, row) => {
+                      const itemId = Number(row.item_id);
+                      const maxQty = Number(row.max_push_quantity ?? 0);
+                      const selected = pushSelectedItemIds.includes(itemId);
+                      return (
+                        <InputNumber
+                          min={0.0001}
+                          max={maxQty > 0 ? maxQty : undefined}
+                          value={pushQuantities[itemId]}
+                          disabled={!selected || maxQty <= 0}
+                          size="small"
+                          style={{ width: '100%' }}
+                          onChange={(v) => {
+                            setPushQuantities((prev) => ({
+                              ...prev,
+                              [itemId]: Number(v) || 0,
+                            }));
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.unit'),
+                    dataIndex: 'material_unit',
+                    width: 60,
+                  },
+                  ...(pushPreviewTarget === 'work_order'
+                    ? [
+                        {
+                          title: t('app.kuaizhizao.salesContract.pushPreviewBlocking'),
+                          width: 200,
+                          ellipsis: true,
+                          render: (_: unknown, row: SalesContractPushPreviewResponse['items'][number]) =>
+                            row.blocking_issues?.length ? row.blocking_issues.join('；') : '-',
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+            ) : (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={t('app.kuaizhizao.salesContract.pushPreviewNoLines')}
+              />
+            )}
+            {pushPreviewData.tip ? (
+              <p
+                style={{
+                  marginTop: 12,
+                  marginBottom: 0,
+                  color: 'var(--ant-color-text-secondary)',
+                  fontSize: 12,
+                }}
+              >
+                {pushPreviewData.tip}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </Modal>
 
 

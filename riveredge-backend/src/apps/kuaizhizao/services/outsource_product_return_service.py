@@ -66,6 +66,12 @@ class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
         if not owo:
             raise NotFoundError(f"委外工单ID {outsource_work_order_id} 不存在")
 
+        from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
+            assert_outsource_work_order_capability,
+        )
+
+        assert_outsource_work_order_capability(owo, "push_outsource_product_return")
+
         receipts = await OutsourceMaterialReceipt.filter(
             tenant_id=tenant_id,
             outsource_work_order_id=outsource_work_order_id,
@@ -167,6 +173,12 @@ class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
             ).first()
             if not owo:
                 raise NotFoundError(f"委外工单ID {return_data.outsource_work_order_id} 不存在")
+
+            from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
+                assert_outsource_work_order_capability,
+            )
+
+            assert_outsource_work_order_capability(owo, "push_outsource_product_return")
 
             receipt = await self._resolve_receipt_for_return(tenant_id, return_data)
             await self._validate_return_quantity(tenant_id, return_data, receipt)

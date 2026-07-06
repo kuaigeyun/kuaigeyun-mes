@@ -94,6 +94,13 @@ class ShipmentNoticeListResponse(ShipmentNoticeResponse):
     pass
 
 
+class ShipmentNoticeListPaginatedResponse(BaseSchema):
+    """发货通知单分页列表响应"""
+    data: List[ShipmentNoticeListResponse]
+    total: int
+    success: bool = True
+
+
 # === 发货通知单明细 ===
 
 class ShipmentNoticeItemBase(BaseSchema):

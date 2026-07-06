@@ -402,6 +402,7 @@ export interface PushPreviewResponse {
   plan_name_preview?: string;
   demand_exists?: boolean;
   has_blocking_issues?: boolean;
+  blocking_reason?: string | null;
   push_mode_default?: 'draft' | 'confirm';
 }
 
@@ -481,9 +482,23 @@ export interface PushToDeliveryResponse {
   delivery_code?: string;
 }
 
-export async function pushSalesOrderToDelivery(salesOrderId: number): Promise<PushToDeliveryResponse> {
+export interface PushToDeliveryRequest {
+  delivery_quantities?: Record<number, number>;
+}
+
+export async function previewPushSalesOrderToDelivery(salesOrderId: number): Promise<PushPreviewResponse> {
+  return apiRequest<PushPreviewResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-delivery/preview`, {
+    method: 'GET',
+  });
+}
+
+export async function pushSalesOrderToDelivery(
+  salesOrderId: number,
+  data?: PushToDeliveryRequest,
+): Promise<PushToDeliveryResponse> {
   return apiRequest<PushToDeliveryResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-delivery`, {
     method: 'POST',
+    data: data?.delivery_quantities ?? {},
   });
 }
 
@@ -497,6 +512,12 @@ export interface PushToInvoiceResponse {
   invoice_code?: string;
 }
 
+export async function previewPushSalesOrderToInvoice(salesOrderId: number): Promise<PushPreviewResponse> {
+  return apiRequest<PushPreviewResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-invoice/preview`, {
+    method: 'GET',
+  });
+}
+
 export async function pushSalesOrderToInvoice(salesOrderId: number): Promise<PushToInvoiceResponse> {
   return apiRequest<PushToInvoiceResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-invoice`, {
     method: 'POST',
@@ -508,6 +529,12 @@ export interface PushToSalesReturnResponse {
   message?: string;
   return_id?: number;
   return_code?: string;
+}
+
+export async function previewPushSalesOrderToSalesReturn(salesOrderId: number): Promise<PushPreviewResponse> {
+  return apiRequest<PushPreviewResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-sales-return/preview`, {
+    method: 'GET',
+  });
 }
 
 export async function pushSalesOrderToSalesReturn(
@@ -577,31 +604,6 @@ export async function pullSalesOrderFromSalesContract(
  */
 export async function withdrawSalesOrder(id: number): Promise<SalesOrder> {
   return apiRequest<SalesOrder>(`/apps/kuaizhizao/sales-orders/${id}/withdraw`, {
-    method: 'POST',
-  });
-}
-
-/**
- * 直推生产计划预览
- */
-export async function previewPushSalesOrderToProductionPlan(salesOrderId: number): Promise<PushPreviewResponse> {
-  return apiRequest<PushPreviewResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-production-plan/preview`, {
-    method: 'GET',
-  });
-}
-
-/**
- * 直推销售订单到生产计划（跳过需求计算）
- * 订单明细直接转为生产计划明细，不要求BOM，原材料由用户自行计算采购
- */
-export interface PushToProductionPlanResponse {
-  success: boolean;
-  message: string;
-  target_document?: { type: string; id: number; code: string };
-}
-
-export async function pushSalesOrderToProductionPlan(salesOrderId: number): Promise<PushToProductionPlanResponse> {
-  return apiRequest<PushToProductionPlanResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-production-plan`, {
     method: 'POST',
   });
 }

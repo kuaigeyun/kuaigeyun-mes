@@ -595,6 +595,46 @@ class ConvertToOrderResponse(QuotationResponse):
     sales_order: Optional[SalesOrderResponse] = None
 
 
+@router.get(
+    "/{quotation_id}/push-to-sales-order/preview",
+    summary="Preview push quotation to sales order",
+)
+async def preview_push_quotation_to_sales_order(
+    quotation_id: int = Path(..., description="报价单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await quotation_service.preview_push_quotation_to_sales_order(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/{quotation_id}/push-to-sales-contract/preview",
+    summary="Preview push quotation to sales contract",
+)
+async def preview_push_quotation_to_sales_contract(
+    quotation_id: int = Path(..., description="报价单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await quotation_service.preview_push_quotation_to_sales_contract(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.post(
     "/{quotation_id}/convert-to-order",
     summary="Convert to sales order",

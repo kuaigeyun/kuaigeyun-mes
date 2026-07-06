@@ -371,39 +371,6 @@ async def _edit_purchase_inquiry(
     return result
 
 
-async def _edit_production_plan(
-    *,
-    tenant_id: int,
-    entity_id: int,
-    user_id: int,
-    payload: Dict[str, Any],
-    comment: Optional[str],
-) -> Any:
-    from apps.kuaizhizao.schemas.planning import ProductionPlanUpdate
-    from apps.kuaizhizao.services.planning_service import ProductionPlanningService
-    from core.services.approval.approval_edit_guard import ApprovalEditGuard
-
-    edit_ctx = await ApprovalEditGuard.assert_approver_can_edit(
-        tenant_id, "production_plan", entity_id, user_id
-    )
-    body = dict(payload or {})
-    body.pop("comment", None)
-    update_data = ProductionPlanUpdate.model_validate(body)
-    svc = ProductionPlanningService()
-    result = await svc.update_production_plan(
-        tenant_id,
-        entity_id,
-        update_data,
-        user_id,
-        approval_edit_context=edit_ctx,
-        approval_edit_comment=comment,
-    )
-    await ApprovalEditGuard.refresh_instance_context_if_needed(
-        tenant_id, "production_plan", entity_id, edit_ctx
-    )
-    return result
-
-
 _EDIT_DISPATCH = {
     "sales_order": _edit_sales_order,
     "purchase_order": _edit_purchase_order,
@@ -415,7 +382,6 @@ _EDIT_DISPATCH = {
     "sales_order_change": _edit_sales_order_change,
     "purchase_order_change": _edit_purchase_order_change,
     "purchase_inquiry": _edit_purchase_inquiry,
-    "production_plan": _edit_production_plan,
 }
 
 

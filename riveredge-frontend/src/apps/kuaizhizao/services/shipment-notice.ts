@@ -63,6 +63,46 @@ export interface ShipmentNoticeNotifyPayload {
   warehouse_name?: string;
 }
 
+export interface ShipmentNoticePushPreviewResponse {
+  target_type: string;
+  summary: string;
+  items: {
+    item_id?: number;
+    material_code: string;
+    material_name: string;
+    quantity: number;
+    pushed_quantity?: number;
+    max_push_quantity?: number;
+    delivery_date?: string;
+    suggested_action?: string;
+  }[];
+  tip?: string;
+  has_blocking_issues?: boolean;
+  blocking_reason?: string | null;
+}
+
+export interface ShipmentNoticeNotifyPreviewResponse {
+  target_type: string;
+  summary: string;
+  notice_code?: string;
+  warehouse_required?: boolean;
+  warehouse_id?: number | null;
+  items: {
+    item_id?: number;
+    sales_order_item_id?: number | null;
+    material_code: string;
+    material_name: string;
+    quantity: number;
+    pushed_quantity?: number;
+    max_push_quantity?: number;
+    notice_quantity?: number;
+  }[];
+  tip?: string;
+  has_blocking_issues?: boolean;
+  blocking_reason?: string | null;
+  line_blocking_issues?: string[];
+}
+
 export const shipmentNoticeApi = {
   list: async (params?: Record<string, any>) =>
     apiRequest('/apps/kuaizhizao/shipment-notices', { method: 'GET', params }),
@@ -73,6 +113,11 @@ export const shipmentNoticeApi = {
   get: async (id: string) => apiRequest(`/apps/kuaizhizao/shipment-notices/${id}`, { method: 'GET' }),
   notify: async (id: string, data?: ShipmentNoticeNotifyPayload) =>
     apiRequest(`/apps/kuaizhizao/shipment-notices/${id}/notify`, { method: 'POST', data: data ?? {} }),
+  previewNotify: async (id: string, params?: { warehouse_id?: number }) =>
+    apiRequest<ShipmentNoticeNotifyPreviewResponse>(`/apps/kuaizhizao/shipment-notices/${id}/notify/preview`, {
+      method: 'GET',
+      params,
+    }),
   withdraw: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/shipment-notices/${id}/withdraw`, { method: 'POST' }),
 };

@@ -1770,18 +1770,6 @@ async def get_menu_badge_counts(
         counts["process_inspection"] = 0
         counts["finished_goods_inspection"] = 0
     try:
-        # 生产计划：未执行
-        from apps.kuaizhizao.models.production_plan import ProductionPlan
-        _pp_cnt = await ProductionPlan.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            execution_status="未执行",
-        ).count()
-        counts["production_plan"] = {"overdue": 0, "pending": _pp_cnt, "in_progress": 0}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts production_plan: {e}")
-        counts["production_plan"] = 0
-    try:
         # 设备：维修中、校验中
         from apps.kuaizhizao.models.equipment import Equipment
         _eq_cnt = await Equipment.filter(

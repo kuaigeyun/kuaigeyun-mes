@@ -23,6 +23,8 @@ from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.outsource_work_order import OutsourceMaterialReceipt, OutsourceWorkOrder
 from apps.kuaizhizao.schemas.outsource_work_order import (
     OutsourceMaterialReceiptCreate,
+    OutsourceMaterialReceiptPreviewLine,
+    OutsourceMaterialReceiptPreviewResponse,
     OutsourceMaterialReceiptUpdate,
     OutsourceMaterialReceiptResponse,
 )
@@ -41,6 +43,53 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
         from infra.services.business_config_service import BusinessConfigService
 
         self.business_config_service = BusinessConfigService()
+
+    async def get_receipt_preview(
+        self,
+        tenant_id: int,
+        outsource_work_order_id: int,
+    ) -> OutsourceMaterialReceiptPreviewResponse:
+        """委外收货预览：委外数量 / 已收 / 待收。"""
+        owo = await OutsourceWorkOrder.filter(
+            tenant_id=tenant_id,
+            id=outsource_work_order_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not owo:
+            raise NotFoundError(f"委外工单ID {outsource_work_order_id} 不存在")
+
+        from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
+            assert_outsource_work_order_capability,
+        )
+
+        assert_outsource_work_order_capability(owo, "push_outsource_receipt")
+
+        ordered = Decimal(str(owo.quantity or 0))
+        received = Decimal(str(owo.received_quantity or 0))
+        pending = max(Decimal("0"), ordered - received)
+        message = None
+        lines: List[OutsourceMaterialReceiptPreviewLine] = []
+        if pending > 0:
+            lines.append(
+                OutsourceMaterialReceiptPreviewLine(
+                    product_id=int(owo.product_id or 0),
+                    product_code=str(owo.product_code or ""),
+                    product_name=str(owo.product_name or ""),
+                    unit=str(owo.unit or "件"),
+                    ordered_quantity=ordered,
+                    received_quantity=received,
+                    pending_quantity=pending,
+                )
+            )
+        else:
+            message = "委外数量已全部收货，无可入库明细"
+
+        return OutsourceMaterialReceiptPreviewResponse(
+            outsource_work_order_id=int(owo.id),
+            outsource_work_order_code=str(owo.code or ""),
+            lines=lines,
+            message=message,
+        )
 
     async def create_material_receipt(
         self,
@@ -72,6 +121,12 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
 
             if not outsource_work_order:
                 raise NotFoundError(f"委外工单ID {receipt_data.outsource_work_order_id} 不存在")
+
+            from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
+                assert_outsource_work_order_capability,
+            )
+
+            assert_outsource_work_order_capability(outsource_work_order, "push_outsource_receipt")
 
             # 验证收货数量不能超过委外数量
             if receipt_data.quantity > outsource_work_order.quantity:
@@ -384,6 +439,12 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
 
         if not receipt:
             raise NotFoundError(f"委外收货单ID {receipt_id} 不存在")
+
+        from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
+            assert_inbound_hub_capability,
+        )
+
+        assert_inbound_hub_capability(receipt, "confirm", receipt_type="outsource_receipt")
 
         if receipt.status == "completed":
             raise BusinessLogicError("委外收货单已完成，不能重复完成")

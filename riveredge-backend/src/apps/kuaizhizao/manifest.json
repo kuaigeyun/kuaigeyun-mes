@@ -1827,17 +1827,6 @@
             ],
             "data_scope_key": "kuaizhizao:sales-return"
         },
-        "production-plan": {
-            "permission_prefix": "kuaizhizao:plan-management-scheduling",
-            "display_fields": [
-                "id",
-                "uuid",
-                "code",
-                "name",
-                "label"
-            ],
-            "data_scope_key": "kuaizhizao:plan-management-scheduling"
-        },
         "plan-management-rolling-scheduling": {
             "permission_prefix": "kuaizhizao:plan-management-rolling-scheduling",
             "display_fields": [
@@ -2700,9 +2689,6 @@
         "kuaizhizao:plan-management-reports-production-delay-analysis:export",
         "kuaizhizao:plan-management-reports-production-delay-analysis:print",
         "kuaizhizao:plan-management-reports-production-delay-analysis:read",
-        "kuaizhizao:plan-management-reports-production-plan-comparison:export",
-        "kuaizhizao:plan-management-reports-production-plan-comparison:print",
-        "kuaizhizao:plan-management-reports-production-plan-comparison:read",
         "kuaizhizao:plan-management-reports-purchase-plan-comparison:export",
         "kuaizhizao:plan-management-reports-purchase-plan-comparison:print",
         "kuaizhizao:plan-management-reports-purchase-plan-comparison:read",
@@ -3592,14 +3578,6 @@
             "config_category": "planning"
         },
         {
-            "node_key": "production_plan",
-            "entity_type": "production_plan",
-            "resource": "kuaizhizao:production-plan",
-            "name": "生产计划审核",
-            "template": "simple",
-            "config_category": "planning"
-        },
-        {
             "node_key": "purchase_order",
             "entity_type": "purchase_order",
             "resource": "kuaizhizao:purchase-order",
@@ -3965,18 +3943,6 @@
             "allow_manual_edit": true
         },
         {
-            "page_code": "kuaizhizao-plan-production-plan",
-            "page_name": "生产计划",
-            "page_path": "/apps/kuaizhizao/plan-management/production-plans",
-            "code_field": "plan_code",
-            "code_field_label": "生产计划编码",
-            "module": "快制造",
-            "module_icon": "tool",
-            "auto_generate": true,
-            "rule_code": "PRODUCTION_PLAN_CODE",
-            "allow_manual_edit": true
-        },
-        {
             "page_code": "kuaizhizao-equipment-management-equipment",
             "page_name": "设备台账",
             "page_path": "/apps/kuaizhizao/equipment-management/equipment",
@@ -4173,15 +4139,6 @@
             "page_path": "/apps/kuaizhizao/quality-management/finished-goods-inspection",
             "table_name": "apps_kuaizhizao_finished_goods_inspections",
             "table_name_label": "成品检验表",
-            "module": "快制造",
-            "module_icon": "tool"
-        },
-        {
-            "page_code": "kuaizhizao-plan-production-plan",
-            "page_name": "生产计划",
-            "page_path": "/apps/kuaizhizao/plan-management/production-plans",
-            "table_name": "apps_kuaizhizao_production_plans",
-            "table_name_label": "生产计划表",
             "module": "快制造",
             "module_icon": "tool"
         },

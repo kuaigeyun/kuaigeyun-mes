@@ -12,8 +12,6 @@ const presetEntityjaJP = {
   'preset.approvalProcess.payable.name': '買掛金の承認',
   'preset.approvalProcess.process_inspection.desc': '工程内検査承認',
   'preset.approvalProcess.process_inspection.name': '工程内検査承認',
-  'preset.approvalProcess.production_plan.desc': '生産計画の承認',
-  'preset.approvalProcess.production_plan.name': '生産計画の承認',
   'preset.approvalProcess.purchase_inquiry.desc': '購入問い合わせ承認',
   'preset.approvalProcess.purchase_inquiry.name': '購入問い合わせ承認',
   'preset.approvalProcess.purchase_invoice.desc': '購入請求書の承認',

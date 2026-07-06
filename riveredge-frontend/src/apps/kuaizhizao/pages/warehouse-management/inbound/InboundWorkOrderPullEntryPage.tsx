@@ -151,8 +151,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
         setWarehouseOptions(mapWarehouseSelectOptions(whRes));
         setPreview(previewRaw);
         setWorkOrder(woRaw as Record<string, unknown>);
-        const firstLine = previewRaw.lines[0];
-        setReceiptQty(Number(firstLine.receipt_quantity ?? firstLine.source_pending_quantity ?? 0));
+        setReceiptQty(0);
         applyDraftOnce((draft) => {
           const qty = draftOptionalNumber(draft.receiptQty);
           if (qty != null) setReceiptQty(qty);
@@ -242,30 +241,32 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
           );
         }
       } else {
-        const result = await warehouseApi.finishedGoodsReceipt.batchReceipt({
-          work_order_ids: [woId],
+        const created = (await warehouseApi.finishedGoodsReceipt.create({
+          work_order_id: woId,
+          work_order_code: preview.work_order_code,
+          sales_order_id: workOrder?.sales_order_id != null ? Number(workOrder.sales_order_id) : undefined,
+          sales_order_code: workOrder?.sales_order_code ? String(workOrder.sales_order_code) : undefined,
           warehouse_id: warehouseId,
           warehouse_name: whOpt.name,
-          receipt_quantity: qty,
-        });
-        const list = Array.isArray(result)
-          ? result
-          : (result as { data?: unknown[]; items?: unknown[] })?.data
-            ?? (result as { items?: unknown[] })?.items
-            ?? [];
-        const created = (list[0] ?? {}) as { id?: number; receipt_code?: string };
-        createdId = created.id;
-        if (createdId != null) {
-          await warehouseApi.finishedGoodsReceipt.update(String(createdId), {
-            work_order_id: woId,
-            work_order_code: preview.work_order_code,
-            warehouse_id: warehouseId,
-            warehouse_name: whOpt.name,
-            status: '待入库',
-            total_quantity: qty,
-            ...headerPatch,
-          });
-        }
+          status: '待入库',
+          total_quantity: qty,
+          ...headerPatch,
+          items: [
+            {
+              material_id: line.material_id,
+              material_code: line.material_code,
+              material_name: line.material_name,
+              material_spec: line.material_spec,
+              material_unit: line.material_unit,
+              receipt_quantity: qty,
+              qualified_quantity: qty,
+              unqualified_quantity: 0,
+              quality_status: '合格',
+              status: '待入库',
+            },
+          ],
+        })) as { id?: number; receipt_code?: string };
+        createdId = created?.id;
         if (mode === 'draft') {
           messageApi.success(
             t('app.kuaizhizao.warehouseInbound.entry.workOrder.finishedDraftCreated', {

@@ -70,7 +70,6 @@ def sales_order_capabilities_to_suggestions(
         exec_map = {
             "bom_check": ["完成 BOM 检查"],
             "demand_compute": ["执行需求计算（MRP）"],
-            "production_plan": ["制定生产计划"],
             "work_order_released": ["下达工单"],
             "shipment_waiting": ["准备出库"],
             "delivered": ["销售交货"],
@@ -216,7 +215,8 @@ def purchase_inquiry_capabilities_to_suggestions(
         return suggestions
     if current_stage_key:
         return stage_defaults.get(current_stage_key, [])
-    return []
+    _append_if_allowed(suggestions, caps.push_purchase_order, "转采购订单")
+    return suggestions
 
 
 def purchase_requisition_capabilities_to_suggestions(
@@ -231,6 +231,8 @@ def purchase_requisition_capabilities_to_suggestions(
         pass
     if not suggestions and caps.revoke_approval.allowed:
         suggestions.append("下推采购订单")
+    _append_if_allowed(suggestions, caps.push_purchase_order, "下推采购订单")
+    _append_if_allowed(suggestions, caps.push_inquiry, "下推询价单")
     return suggestions
 
 

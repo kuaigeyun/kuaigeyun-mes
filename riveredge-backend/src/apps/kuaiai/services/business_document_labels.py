@@ -14,7 +14,6 @@ DOCUMENT_TYPE_LABELS: dict[str, str] = {
     "kuaizhizao:purchase-return": "采购退货单",
     "kuaizhizao:sales-delivery": "销售出库单",
     "kuaizhizao:sales-return": "销售退货单",
-    "kuaizhizao:production-plan": "生产计划",
     "kuaizhizao:plan-management-rolling-scheduling": "滚动计划",
     "kuaizhizao:production-picking": "生产领料单",
     "kuaizhizao:production-return": "生产退料单",

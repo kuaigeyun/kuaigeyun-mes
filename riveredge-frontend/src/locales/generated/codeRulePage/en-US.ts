@@ -58,8 +58,6 @@ const codeRulePageEnUS = {
   'codeRulePage.kuaizhizao-equipment-management-mold.pageName': 'Molds',
   'codeRulePage.kuaizhizao-equipment-management-tool.codeFieldLabel': 'Tool code',
   'codeRulePage.kuaizhizao-equipment-management-tool.pageName': 'Tools',
-  'codeRulePage.kuaizhizao-plan-production-plan.codeFieldLabel': 'Production plan code',
-  'codeRulePage.kuaizhizao-plan-production-plan.pageName': 'Production Plans',
   'codeRulePage.kuaizhizao-production-outsource-material-receipt.codeFieldLabel': 'Outsource receipt no.',
   'codeRulePage.kuaizhizao-production-outsource-material-receipt.pageName': 'Outsource Material Receipts',
   'codeRulePage.kuaizhizao-production-outsource-material-return.codeFieldLabel': 'Outsource material return no.',

@@ -23,12 +23,7 @@ import {
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { UniBatchButton } from '../../../../../components/uni-batch';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import {
-  replenishmentBatchIgnoreAllowed,
-  replenishmentBatchProcessAllowed,
-} from '../../../../../hooks/useDocumentCapabilities';
 import { warehouseApi } from '../../../services/production';
 import { getReplenishmentSuggestionLifecycle } from '../../../utils/replenishmentSuggestionLifecycle';
 import { formatDateTime } from '../../../../../utils/format';
@@ -75,18 +70,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const tableRowsRef = useRef<ReplenishmentSuggestion[]>([]);
-  const [listVersion, setListVersion] = useState(0);
   const replenishmentPerms = useResourcePermissions('kuaizhizao:warehouse-management-replenishment-suggestions');
-
-  const selectedSuggestionsForBatch = useMemo(
-    () =>
-      selectedRowKeys
-        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
-        .filter((row): row is ReplenishmentSuggestion => row != null),
-    [selectedRowKeys, listVersion],
-  );
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [suggestionDetail, setSuggestionDetail] = useState<ReplenishmentSuggestion | null>(null);
@@ -237,7 +221,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       render: (_, record) => (
         <Space>
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
-          {record.status === 'pending' && (
+          {record.capabilities?.process?.allowed && replenishmentPerms.canUpdate && (
             <Button {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleProcess(record)}>
               {t('app.kuaizhizao.warehouseCommon.handle')}
             </Button>
@@ -245,7 +229,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
         </Space>
       ),
     },
-  ], [t]);
+  ], [t, replenishmentPerms]);
 
   const handleDetail = async (record: ReplenishmentSuggestion) => {
     try {
@@ -297,30 +281,6 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
         }
       },
     });
-  };
-
-  const handleBatchProcess = async (status: 'processed' | 'ignored') => {
-    if (!selectedRowKeys.length) {
-      messageApi.warning(t('app.kuaizhizao.replenishmentSuggestions.msgSelectSuggestions'));
-      return;
-    }
-    let successCount = 0;
-    for (const key of selectedRowKeys) {
-      try {
-        await warehouseApi.replenishmentSuggestion.process(String(key), { status });
-        successCount += 1;
-      } catch {
-        // keep processing remaining items
-      }
-    }
-    if (successCount > 0) {
-      messageApi.success(t('app.kuaizhizao.warehouseCommon.batchHandleSuccess', { count: successCount }));
-      setSelectedRowKeys([]);
-      invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
-      return;
-    }
-    messageApi.error(t('app.kuaizhizao.warehouseCommon.batchHandleFailed'));
   };
 
   const detailColumns: ProDescriptionsItemProps<ReplenishmentSuggestion>[] = useMemo(() => [
@@ -444,8 +404,6 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
                 warehouse_id: params.warehouse_id,
               });
               const data = Array.isArray(response) ? response : response.data || [];
-              tableRowsRef.current = data;
-              setListVersion((v) => v + 1);
               return {
                 data,
                 success: true,
@@ -460,33 +418,6 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
               };
             }
           }}
-          enableRowSelection
-          selectedRowKeys={selectedRowKeys}
-          onRowSelectionChange={setSelectedRowKeys}
-          toolBarActionsAfterBatch={[
-            <UniBatchButton
-              key="batch-processed"
-              selectedRowKeys={selectedRowKeys}
-              disabled={
-                selectedSuggestionsForBatch.length > 0 &&
-                !replenishmentBatchProcessAllowed(selectedSuggestionsForBatch, replenishmentPerms.canUpdate)
-              }
-              onAction={() => void handleBatchProcess('processed')}
-            >
-              {t('app.kuaizhizao.warehouseCommon.batchMarkProcessed')}
-            </UniBatchButton>,
-            <UniBatchButton
-              key="batch-ignored"
-              selectedRowKeys={selectedRowKeys}
-              disabled={
-                selectedSuggestionsForBatch.length > 0 &&
-                !replenishmentBatchIgnoreAllowed(selectedSuggestionsForBatch, replenishmentPerms.canUpdate)
-              }
-              onAction={() => void handleBatchProcess('ignored')}
-            >
-              {t('app.kuaizhizao.warehouseCommon.batchMarkIgnored')}
-            </UniBatchButton>,
-          ]}
           toolBarRender={() => [
             <Button
               key="generate"

@@ -8,9 +8,9 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProForm, ProFormSelect, type ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Table, Tooltip, Typography, Spin, Empty, Upload, theme as AntdTheme } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, InboxOutlined, RollbackOutlined, PrinterOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, RollbackOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
@@ -18,19 +18,14 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
-  CustomFieldsFormSection,
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
-import { UniBatchButton } from '../../../../../components/uni-batch';
-import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { outboundHubBatchConfirmAllowed } from '../../../../../hooks/useDocumentCapabilities';
 import {
   DocumentTrackingTimelineBody,
   useDocumentTracking,
@@ -40,8 +35,6 @@ import { warehouseApi, workOrderApi, outsourceMaterialIssueApi } from '../../../
 import { LinkedOqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
 import { getOutboundLifecycle } from '../../../utils/outboundLifecycle';
 import dayjs from 'dayjs';
-import { listSalesOrders } from '../../../services/sales-order';
-import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
 import { uploadMultipleFiles } from '../../../../../services/file';
@@ -53,13 +46,16 @@ import OutboundQuickPullModals, { type OutboundQuickPullModalsRef } from './Outb
 import OutboundConfirmPreviewModal from './OutboundConfirmPreviewModal';
 import { formatDateTime } from '../../../../../utils/format';
 import { fetchOutboundHubList } from './outboundListAggregate';
-import { batchConfirmOutboundDocuments, withdrawOutboundDocument } from './outboundBatchConfirm';
+import { withdrawOutboundDocument, deleteOutboundDocument } from './outboundHubWithdraw';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import {
   type OutboundHubOrder,
   type OutboundIssueType,
   getOutboundIssueTypeLabel,
   isOutboundConfirmable,
   isOutboundWithdrawable,
+  outboundConfirmCapabilityReasonMessage,
+  outboundWithdrawCapabilityReasonMessage,
   mapOutsourceIssueToOutbound,
   outboundDocumentCode,
   outboundSourceDocNo,
@@ -81,23 +77,6 @@ interface OutboundOrderItem {
   quantity?: number;
   unit?: string;
   notes?: string;
-}
-
-interface WaveMergedItem {
-  warehouse_name?: string;
-  location_code?: string;
-  material_code?: string;
-  material_name?: string;
-  total_quantity?: number;
-  unit?: string;
-  source_pickings?: string[];
-}
-
-interface WavePickingResult {
-  wave_code: string;
-  source_picking_ids: number[];
-  total_items: number;
-  merged_items: WaveMergedItem[];
 }
 
 function outboundDocumentTrackingType(
@@ -162,59 +141,14 @@ const OutboundPage: React.FC = () => {
   const [savingSalesDeliveryAttachments, setSavingSalesDeliveryAttachments] = useState(false);
   const [outboundTrackingRefreshKey, setOutboundTrackingRefreshKey] = useState(0);
 
-  // 批量出库 Modal
-  const [batchModalVisible, setBatchModalVisible] = useState(false);
-  const batchFormRef = useRef<ProFormInstance>();
-  const [batchOutboundType, setBatchOutboundType] = useState<'production_picking' | 'sales_delivery'>('production_picking');
-
-  const {
-    customFields: productionPickingFormCustomFields,
-    customFieldValues: productionPickingFormCustomFieldValues,
-    extractFormValues: extractProductionPickingFormValues,
-    saveCustomFieldValues: saveProductionPickingCustomFieldValues,
-    resetFieldValues: resetProductionPickingFormFieldValues,
-  } = useCustomFields({
-    tableName: PRODUCTION_PICKING_CUSTOM_FIELD_TABLE,
-    loadWhenOpen: true,
-    open: batchModalVisible && batchOutboundType === 'production_picking',
-  });
-
-  const {
-    customFields: salesDeliveryFormCustomFields,
-    customFieldValues: salesDeliveryFormCustomFieldValues,
-    extractFormValues: extractSalesDeliveryFormValues,
-    saveCustomFieldValues: saveSalesDeliveryCustomFieldValues,
-    resetFieldValues: resetSalesDeliveryFormFieldValues,
-  } = useCustomFields({
-    tableName: SALES_DELIVERY_CUSTOM_FIELD_TABLE,
-    loadWhenOpen: true,
-    open: batchModalVisible && batchOutboundType === 'sales_delivery',
-  });
-
-  const [workOrderOptions, setWorkOrderOptions] = useState<{ label: string; value: number }[]>([]);
-  const [salesOrderOptions, setSalesOrderOptions] = useState<{ label: string; value: number }[]>([]);
-  const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
-  const [batchSubmitting, setBatchSubmitting] = useState(false);
   const [executionConfig, setExecutionConfig] = useState<any>(null);
-  const [selectedOutboundKeys, setSelectedOutboundKeys] = useState<React.Key[]>([]);
-  const listDataRef = useRef<OutboundOrder[]>([]);
-  const [outboundListVersion, setOutboundListVersion] = useState(0);
   const outboundPerms = useResourcePermissions('kuaizhizao:outbound');
-  const [waveModalVisible, setWaveModalVisible] = useState(false);
-  const [waveGenerating, setWaveGenerating] = useState(false);
-  const [waveResult, setWaveResult] = useState<WavePickingResult | null>(null);
 
   const [confirmPreviewOpen, setConfirmPreviewOpen] = useState(false);
   const [confirmPreviewRecord, setConfirmPreviewRecord] = useState<OutboundOrder | null>(null);
-  const [batchConfirmSubmitting, setBatchConfirmSubmitting] = useState(false);
 
   const outboundDocTrackingType = currentOrder ? outboundDocumentTrackingType(currentOrder) : undefined;
   const outboundTracking = useDocumentTracking(outboundDocTrackingType, currentOrder?.id, outboundTrackingRefreshKey);
-
-  const selectedOutboundForBatch = useMemo(() => {
-    const keySet = new Set(selectedOutboundKeys.map(String));
-    return listDataRef.current.filter((r) => keySet.has(`${r.outbound_type}::${r.id}`));
-  }, [selectedOutboundKeys, outboundListVersion]);
 
   useEffect(() => {
     const loadExecutionConfig = async () => {
@@ -244,161 +178,6 @@ const OutboundPage: React.FC = () => {
     navigate(location.pathname, { replace: true, state: null });
     openConfirmPreview({ id: dc.id, outbound_type: dc.outbound_type });
   }, [location.pathname, location.state, navigate, openConfirmPreview]);
-
-  /** 批量出库：加载工单、销售订单、仓库 */
-  useEffect(() => {
-    if (!batchModalVisible) return;
-    const load = async () => {
-      try {
-        const [woRes, soRes, whRes] = await Promise.all([
-          workOrderApi.list({ skip: 0, limit: 500 }),
-          listSalesOrders({ skip: 0, limit: 500 }),
-          masterWarehouseApi.list({ is_active: true }),
-        ]);
-        const woList = Array.isArray(woRes) ? woRes : (woRes as any)?.data ?? (woRes as any)?.items ?? [];
-        const eligibleWo = woList.filter(
-          (wo: any) => ['已下达', '进行中', 'released', 'in_progress'].includes(wo.status)
-        );
-        setWorkOrderOptions(
-          eligibleWo.map((wo: any) => ({
-            label: `${wo.code || wo.id} - ${wo.product_name || wo.name || '-'}`,
-            value: wo.id,
-          }))
-        );
-        const soData = (soRes as any)?.data ?? (soRes as any)?.items ?? soRes ?? [];
-        const soList = Array.isArray(soData) ? soData : [];
-        const eligibleSo = soList.filter(
-          (so: any) => ['已审核', '已确认', 'AUDITED', 'CONFIRMED'].includes(so.status)
-        );
-        setSalesOrderOptions(
-          eligibleSo.map((so: any) => ({
-            label: `${so.order_code || so.code || so.id} - ${so.customer_name || '-'}`,
-            value: so.id,
-          }))
-        );
-        const whList = Array.isArray(whRes) ? whRes : (whRes as any)?.data ?? (whRes as any)?.items ?? whRes ?? [];
-        setWarehouseOptions(
-          (Array.isArray(whList) ? whList : []).map((w: any) => ({
-            label: `${w.code || ''} ${w.name || ''}`.trim() || String(w.id),
-            value: w.id,
-            name: w.name || '',
-          }))
-        );
-      } catch {
-        setWorkOrderOptions([]);
-        setSalesOrderOptions([]);
-        setWarehouseOptions([]);
-      }
-    };
-    load();
-  }, [batchModalVisible]);
-
-  /** 关闭批量出库弹窗并重置表单 */
-  const resetBatchOutboundModal = () => {
-    setBatchModalVisible(false);
-    batchFormRef.current?.resetFields();
-    resetProductionPickingFormFieldValues();
-    resetSalesDeliveryFormFieldValues();
-  };
-
-  /** 批量出库提交 */
-  const handleBatchOutboundSubmit = async () => {
-    try {
-      const values = await batchFormRef.current?.validateFieldsReturnFormatValue?.();
-      if (!values) {
-        await batchFormRef.current?.validateFields();
-        return;
-      }
-      const type = (values.batch_outbound_type || batchOutboundType) as 'production_picking' | 'sales_delivery';
-      setBatchSubmitting(true);
-
-      const { customData } =
-        type === 'sales_delivery'
-          ? extractSalesDeliveryFormValues(values)
-          : extractProductionPickingFormValues(values);
-
-      const saveCustomFieldsToCreated = async (recordIds: number[]) => {
-        if (Object.keys(customData).length === 0) return;
-        const saveFn =
-          type === 'sales_delivery'
-            ? saveSalesDeliveryCustomFieldValues
-            : saveProductionPickingCustomFieldValues;
-        for (const recordId of recordIds) {
-          if (recordId > 0) {
-            await saveFn(recordId, customData);
-          }
-        }
-      };
-
-      if (type === 'sales_delivery') {
-        const orderIds = values.sales_order_ids as number[];
-        const warehouseId = values.warehouse_id as number;
-        const wh = warehouseOptions.find((w) => w.value === warehouseId);
-        if (!orderIds?.length) {
-          messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectSalesOrders'));
-          return;
-        }
-        if (!warehouseId) {
-          messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse'));
-          return;
-        }
-        let success = 0;
-        const createdIds: number[] = [];
-        for (const id of orderIds) {
-          try {
-            const created = await warehouseApi.salesDelivery.pullFromSalesOrder({
-              sales_order_id: id,
-              warehouse_id: warehouseId,
-              warehouse_name: wh?.name,
-            });
-            const recordId = Number((created as { id?: number })?.id ?? 0);
-            if (recordId > 0) createdIds.push(recordId);
-            success++;
-          } catch (e: any) {
-            messageApi.warning(
-              t('app.kuaizhizao.warehouseOutbound.msg.salesOrderPullFailed', {
-                id,
-                message: e?.message || e?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.msg.unknownError'),
-              }),
-            );
-          }
-        }
-        await saveCustomFieldsToCreated(createdIds);
-        messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.batchSalesSuccess', { count: success }));
-      } else {
-        const workOrderIds = values.work_order_ids as number[];
-        const warehouseId = values.warehouse_id as number;
-        const wh = warehouseOptions.find((w) => w.value === warehouseId);
-        if (!workOrderIds?.length) {
-          messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectWorkOrders'));
-          return;
-        }
-        if (!warehouseId) {
-          messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse'));
-          return;
-        }
-        const result = await warehouseApi.productionPicking.batchPick({
-          work_order_ids: workOrderIds,
-          warehouse_id: warehouseId,
-          warehouse_name: wh?.name,
-        });
-        const list = Array.isArray(result) ? result : (result as any)?.data ?? (result as any)?.items ?? [];
-        const createdIds = list
-          .map((row: { id?: number }) => Number(row?.id ?? 0))
-          .filter((id: number) => id > 0);
-        await saveCustomFieldsToCreated(createdIds);
-        messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.batchPickingSuccess', { count: list.length }));
-      }
-      resetBatchOutboundModal();
-      invalidateMenuBadgeCounts();
-
-      actionRef.current?.reload();
-    } catch (e: any) {
-      messageApi.error(e?.message || e?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.msg.batchOutboundFailed'));
-    } finally {
-      setBatchSubmitting(false);
-    }
-  };
 
   const handleCreate = () => {
     quickPullRef.current?.open('work_order');
@@ -516,40 +295,14 @@ const OutboundPage: React.FC = () => {
     setOutboundTrackingRefreshKey((k) => k + 1);
   };
 
-  const handleBatchConfirm = async (keys: React.Key[]) => {
-    if (!keys.length) {
-      messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectPendingDocs'));
-      return;
-    }
-    const records = listDataRef.current.filter((r) =>
-      keys.some((key) => String(key) === `${r.outbound_type}::${r.id}`),
-    );
-    if (!records.length) {
-      messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.noneConfirmable'));
-      return;
-    }
-    setBatchConfirmSubmitting(true);
-    try {
-      const result = await batchConfirmOutboundDocuments(records);
-      if (result.success > 0) {
-        messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.batchConfirmSuccess', { count: result.success }));
-        invalidateMenuBadgeCounts();
-        actionRef.current?.reload();
-      }
-      if (result.failed.length) {
-        messageApi.warning(
-          t('app.kuaizhizao.warehouseOutbound.msg.batchConfirmFailed', {
-            count: result.failed.length,
-            details: result.failed.slice(0, 3).map((f) => f.message).join('；'),
-          }),
-        );
-      }
-    } finally {
-      setBatchConfirmSubmitting(false);
-    }
-  };
-
   const handleWithdraw = (record: OutboundOrder) => {
+    if (!isOutboundWithdrawable(record)) {
+      messageApi.warning(
+        outboundWithdrawCapabilityReasonMessage(record, t) ||
+          t('app.kuaizhizao.warehouseOutbound.msg.withdrawFailed'),
+      );
+      return;
+    }
     Modal.confirm({
       title: t('app.kuaizhizao.warehouseOutbound.msg.withdrawTitle'),
       content: t('app.kuaizhizao.warehouseOutbound.msg.withdrawConfirm', { code: outboundDocumentCode(record) }),
@@ -577,38 +330,47 @@ const OutboundPage: React.FC = () => {
     openPrint({ documentType: docType, documentId: record.id });
   };
 
-  const handleConfirm = async (record: OutboundOrder) => {
-    if (record.outbound_type === 'outsource_issue') return;
-    openConfirmPreview(record);
+  const isOutboundDeletable = (record: OutboundOrder) =>
+    isOutboundConfirmable(record) &&
+    (record.outbound_type === 'production_picking' ||
+      record.outbound_type === 'sales_delivery' ||
+      record.outbound_type === 'other_outbound' ||
+      record.outbound_type === 'material_borrow');
+
+  const handleDelete = (record: OutboundOrder) => {
+    const code = outboundDocumentCode(record);
+    Modal.confirm({
+      title: t('app.kuaizhizao.warehouseOutbound.msg.deleteConfirmOne'),
+      content: t('app.kuaizhizao.warehouseOutbound.msg.withdrawConfirm', { code }),
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          await deleteOutboundDocument(record);
+          messageApi.success(t('common.deleteSuccess'));
+          invalidateMenuBadgeCounts();
+          actionRef.current?.reload();
+          if (currentOrder?.id === record.id && currentOrder?.outbound_type === record.outbound_type) {
+            setDetailDrawerVisible(false);
+            setCurrentOrder(null);
+          }
+        } catch (e: unknown) {
+          const err = e as { message?: string; response?: { data?: { detail?: string } } };
+          messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.msg.deleteFailed'));
+        }
+      },
+    });
   };
 
-  const selectedProductionPickingIds = useMemo(
-    () =>
-      selectedOutboundKeys
-        .map((key) => String(key).split('::'))
-        .filter(([type, id]) => type === 'production_picking' && Number(id) > 0)
-        .map(([, id]) => Number(id)),
-    [selectedOutboundKeys],
-  );
-
-  const handleGenerateWave = async () => {
-    if (!selectedProductionPickingIds.length) {
-      messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectPickingDocs'));
+  const handleConfirm = async (record: OutboundOrder) => {
+    if (record.outbound_type === 'outsource_issue') return;
+    if (!isOutboundConfirmable(record)) {
+      messageApi.warning(
+        outboundConfirmCapabilityReasonMessage(record, t) ||
+          t('app.kuaizhizao.warehouseOutbound.msg.noneConfirmable'),
+      );
       return;
     }
-    try {
-      setWaveGenerating(true);
-      const result = await warehouseApi.wavePicking.generate({
-        picking_ids: selectedProductionPickingIds,
-      });
-      setWaveResult(result as WavePickingResult);
-      setWaveModalVisible(true);
-      messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.waveGenerated'));
-    } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.warehouseOutbound.msg.waveGenerateFailed'));
-    } finally {
-      setWaveGenerating(false);
-    }
+    openConfirmPreview(record);
   };
 
   /**
@@ -625,29 +387,6 @@ const OutboundPage: React.FC = () => {
 
   const salesDeliveryCustomFieldColumns = generateSalesDeliveryCustomFieldColumns();
   const productionPickingCustomFieldColumns = generateProductionPickingCustomFieldColumns();
-
-  const waveColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.warehouseOutbound.col.warehouseName'), dataIndex: 'warehouse_name', width: 130 },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.locationCode'), dataIndex: 'location_code', width: 120, render: (v: string) => v || '-' },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 130 },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name' },
-      {
-        title: t('app.kuaizhizao.warehouseOutbound.col.demandQty'),
-        dataIndex: 'total_quantity',
-        width: 130,
-        align: 'right' as const,
-        render: (v: number, row: WaveMergedItem) => `${Number(v || 0)} ${row.unit || ''}`.trim(),
-      },
-      {
-        title: t('app.kuaizhizao.warehouseOutbound.col.sourcePickings'),
-        dataIndex: 'source_pickings',
-        width: 260,
-        render: (v: string[]) => (Array.isArray(v) ? v.join('、') : '-'),
-      },
-    ],
-    [t],
-  );
 
   const pickingDetailColumns = useMemo(
     () => [
@@ -816,6 +555,9 @@ const OutboundPage: React.FC = () => {
               {t('app.kuaizhizao.warehouseOutbound.action.withdraw')}
             </Button>
           )}
+          {isOutboundDeletable(record) && outboundPerms.canDelete && (
+            <Button {...rowActionKind('delete')} onClick={() => handleDelete(record)} />
+          )}
           {(() => {
             const printDocType = outboundTypeToPrintDocumentType(record.outbound_type);
             return printDocType && record.id ? (
@@ -832,7 +574,9 @@ const OutboundPage: React.FC = () => {
       handleDetail,
       handleConfirm,
       handleWithdraw,
+      handleDelete,
       handlePrint,
+      outboundPerms,
       salesDeliveryCustomFieldColumns,
       productionPickingCustomFieldColumns,
     ],
@@ -853,42 +597,12 @@ const OutboundPage: React.FC = () => {
               enrichProductionPickingRecordsWithCustomFields,
               enrichSalesDeliveryRecordsWithCustomFields,
             });
-            listDataRef.current = result.data;
-            setOutboundListVersion((v) => v + 1);
             return result;
           } catch {
             messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.loadListFailed'));
             return { data: [], success: false, total: 0 };
           }
         }}
-        enableRowSelection={true}
-        selectedRowKeys={selectedOutboundKeys}
-        onRowSelectionChange={setSelectedOutboundKeys}
-        rowSelectionGetCheckboxProps={(record) => ({ disabled: !isOutboundConfirmable(record) })}
-        showDeleteButton={true}
-        onDelete={async (keys) => {
-          try {
-            for (const key of keys) {
-              const [type, id] = String(key).split('::');
-              if (type === 'production_picking') {
-                await warehouseApi.productionPicking.delete(id);
-              } else if (type === 'sales_delivery') {
-                await warehouseApi.salesDelivery.delete(id);
-              } else if (type === 'other_outbound') {
-                await warehouseApi.otherOutbound.delete(id);
-              } else if (type === 'material_borrow') {
-                await warehouseApi.materialBorrow.delete(id);
-              }
-            }
-            messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.deleteSuccess', { count: keys.length }));
-            invalidateMenuBadgeCounts();
-            actionRef.current?.reload();
-          } catch (error: unknown) {
-            const err = error as { message?: string };
-            messageApi.error(err?.message || t('app.kuaizhizao.warehouseOutbound.msg.deleteFailed'));
-          }
-        }}
-        deleteConfirmTitle={(count) => t('app.kuaizhizao.warehouseOutbound.msg.deleteConfirm', { count })}
         toolBarRender={() => [
           <UniPullLoadButton
             key="pull"
@@ -918,140 +632,8 @@ const OutboundPage: React.FC = () => {
             ])}
           />,
         ]}
-        toolBarActionsAfterBatch={[
-          <UniBatchButton
-            key="batch-confirm"
-            selectedRowKeys={selectedOutboundKeys}
-            type="primary"
-            icon={<CheckCircleOutlined />}
-            requireConfirm
-            confirmTitle={(count) => t('app.kuaizhizao.warehouseOutbound.batchConfirm.title', { count })}
-            confirmDescription={t('app.kuaizhizao.warehouseOutbound.batchConfirm.description')}
-            disabled={
-              batchConfirmSubmitting ||
-              (selectedOutboundForBatch.length > 0 &&
-                !outboundHubBatchConfirmAllowed(
-                  selectedOutboundForBatch,
-                  outboundPerms.canAction?.('submit') ?? false,
-                ))
-            }
-            onAction={(keys) => void handleBatchConfirm(keys)}
-          >
-            {batchConfirmSubmitting
-              ? t('app.kuaizhizao.warehouseOutbound.action.confirming')
-              : t('app.kuaizhizao.warehouseOutbound.action.batchConfirm')}
-          </UniBatchButton>,
-        ]}
-        toolBarActionsAfterDelete={[
-          <Button
-            key="batch"
-            icon={<InboxOutlined />}
-            onClick={() => {
-              batchFormRef.current?.resetFields();
-              resetProductionPickingFormFieldValues();
-              resetSalesDeliveryFormFieldValues();
-              setBatchOutboundType('production_picking');
-              setBatchModalVisible(true);
-            }}
-          >
-            {t('app.kuaizhizao.warehouseOutbound.action.batchOutbound')}
-          </Button>,
-          <Button
-            key="wave-picking"
-            loading={waveGenerating}
-            disabled={!selectedProductionPickingIds.length}
-            onClick={handleGenerateWave}
-          >
-            {t('app.kuaizhizao.warehouseOutbound.action.generateWave')}
-          </Button>,
-        ]}
         scroll={{ x: 2000 }}
       />
-
-      <Modal
-        title={t('app.kuaizhizao.warehouseOutbound.batch.title')}
-        open={batchModalVisible}
-        onCancel={resetBatchOutboundModal}
-        onOk={handleBatchOutboundSubmit}
-        confirmLoading={batchSubmitting}
-        width={520}
-        okText={t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound')}
-      >
-        <p style={{ marginBottom: 16, color: '#666' }}>
-          {t('app.kuaizhizao.warehouseOutbound.batch.description')}
-        </p>
-        <ProForm
-          formRef={batchFormRef}
-          submitter={false}
-          layout="vertical"
-          initialValues={{ batch_outbound_type: 'production_picking' }}
-        >
-          <ProFormSelect
-            name="batch_outbound_type"
-            label={t('app.kuaizhizao.warehouseOutbound.col.outboundType')}
-            rules={[{ required: true }]}
-            options={[
-              { label: t('app.kuaizhizao.warehouseOutbound.batch.typeProductionPicking'), value: 'production_picking' },
-              { label: t('app.kuaizhizao.warehouseOutbound.batch.typeSalesDelivery'), value: 'sales_delivery' },
-            ]}
-            fieldProps={{
-              onChange: (v: string) => setBatchOutboundType(v as 'production_picking' | 'sales_delivery'),
-            }}
-          />
-          {batchOutboundType === 'production_picking' && (
-            <>
-              <ProFormSelect
-                name="work_order_ids"
-                label={t('app.kuaizhizao.warehouseOutbound.batch.selectWorkOrders')}
-                rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.batch.selectWorkOrdersRule') }]}
-                mode="multiple"
-                placeholder={t('app.kuaizhizao.warehouseOutbound.batch.selectWorkOrdersPlaceholder')}
-                options={workOrderOptions}
-                fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
-              />
-              <ProFormSelect
-                name="warehouse_id"
-                label={t('app.kuaizhizao.warehouseOutbound.col.warehouse')}
-                rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.batch.selectWarehouseRule') }]}
-                placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectWarehouse')}
-                options={warehouseOptions}
-                fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
-              />
-              <CustomFieldsFormSection
-                customFields={productionPickingFormCustomFields}
-                customFieldValues={productionPickingFormCustomFieldValues}
-                gridColumns={1}
-              />
-            </>
-          )}
-          {batchOutboundType === 'sales_delivery' && (
-            <>
-              <ProFormSelect
-                name="sales_order_ids"
-                label={t('app.kuaizhizao.warehouseOutbound.batch.selectSalesOrders')}
-                rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.batch.selectSalesOrdersRule') }]}
-                mode="multiple"
-                placeholder={t('app.kuaizhizao.warehouseOutbound.batch.selectSalesOrdersPlaceholder')}
-                options={salesOrderOptions}
-                fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
-              />
-              <ProFormSelect
-                name="warehouse_id"
-                label={t('app.kuaizhizao.warehouseOutbound.col.warehouse')}
-                rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.batch.selectWarehouseRule') }]}
-                placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectWarehouse')}
-                options={warehouseOptions}
-                fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
-              />
-              <CustomFieldsFormSection
-                customFields={salesDeliveryFormCustomFields}
-                customFieldValues={salesDeliveryFormCustomFieldValues}
-                gridColumns={1}
-              />
-            </>
-          )}
-        </ProForm>
-      </Modal>
 
       <OutboundQuickPullModals ref={quickPullRef} onSuccess={() => actionRef.current?.reload()} />
 
@@ -1062,28 +644,6 @@ const OutboundPage: React.FC = () => {
         onClose={closeConfirmPreview}
         onSuccess={() => void handleConfirmPreviewSuccess()}
       />
-
-      <Modal
-        title={`${t('app.kuaizhizao.warehouseOutbound.wave.title')}${waveResult?.wave_code ? ` - ${waveResult.wave_code}` : ''}`}
-        open={waveModalVisible}
-        footer={null}
-        width={980}
-        onCancel={() => setWaveModalVisible(false)}
-      >
-        <Typography.Paragraph type="secondary">
-          {t('app.kuaizhizao.warehouseOutbound.wave.summary', {
-            sourceCount: waveResult?.source_picking_ids?.length || 0,
-            itemCount: waveResult?.total_items || 0,
-          })}
-        </Typography.Paragraph>
-        <Table<WaveMergedItem>
-          size="small"
-          rowKey={(row, idx) => `${row.material_code || 'm'}-${row.location_code || 'l'}-${idx}`}
-          dataSource={waveResult?.merged_items || []}
-          pagination={false}
-          columns={waveColumns}
-        />
-      </Modal>
 
       <DetailDrawerTemplate
         title={`${t('app.kuaizhizao.warehouseOutbound.detail.title')} - ${currentOrder?.delivery_code || currentOrder?.picking_code || ''}`}

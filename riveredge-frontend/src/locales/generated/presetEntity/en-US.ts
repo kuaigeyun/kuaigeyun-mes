@@ -12,8 +12,6 @@ const presetEntityEnUS = {
   'preset.approvalProcess.payable.name': 'Accounts Payable Approval',
   'preset.approvalProcess.process_inspection.desc': 'In-process inspection approval',
   'preset.approvalProcess.process_inspection.name': 'In-Process Inspection Approval',
-  'preset.approvalProcess.production_plan.desc': 'Production plan approval',
-  'preset.approvalProcess.production_plan.name': 'Production Plan Approval',
   'preset.approvalProcess.purchase_inquiry.desc': 'Purchase inquiry approval',
   'preset.approvalProcess.purchase_inquiry.name': 'Purchase Inquiry Approval',
   'preset.approvalProcess.purchase_invoice.desc': 'Purchase invoice approval',

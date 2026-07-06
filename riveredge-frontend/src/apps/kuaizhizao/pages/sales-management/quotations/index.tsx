@@ -15,7 +15,7 @@ import { useInvalidateSalesOrderList } from '../../../../../hooks/useInvalidateS
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Card } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Card, Switch, Alert } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable, invalidateUniTableListCache } from '../../../../../components/uni-table';
@@ -72,6 +72,9 @@ import {
   updateQuotation,
   deleteQuotation,
   convertQuotationToOrder,
+  previewPushQuotationToSalesOrder,
+  previewPushQuotationToSalesContract,
+  type QuotationPushPreviewResponse,
   submitQuotation,
   withdrawQuotation,
   approveQuotation,
@@ -732,6 +735,15 @@ const QuotationsPage: React.FC = () => {
   const [linkedSalesOrderDrawerOpen, setLinkedSalesOrderDrawerOpen] = useState(false);
   const [linkedSalesOrder, setLinkedSalesOrder] = useState<SalesOrder | null>(null);
   const [linkedSalesOrderLoading, setLinkedSalesOrderLoading] = useState(false);
+
+  type QuotationPushTarget = 'sales_order' | 'sales_contract';
+  const [pushPreviewOpen, setPushPreviewOpen] = useState(false);
+  const [pushPreviewLoading, setPushPreviewLoading] = useState(false);
+  const [pushPreviewConfirming, setPushPreviewConfirming] = useState(false);
+  const [pushPreviewData, setPushPreviewData] = useState<QuotationPushPreviewResponse | null>(null);
+  const [pushPreviewTarget, setPushPreviewTarget] = useState<QuotationPushTarget | null>(null);
+  const [pushPreviewRecord, setPushPreviewRecord] = useState<Quotation | null>(null);
+  const [pushSelectedItemIds, setPushSelectedItemIds] = useState<number[]>([]);
   const leaveQuotationFormPage = useCallback(() => {
     navigate(QUOTATION_LIST_PATH);
   }, [navigate]);
@@ -1542,99 +1554,158 @@ const QuotationsPage: React.FC = () => {
     }
   };
 
-  const handleConvert = (record: Quotation) => {
-    Modal.confirm({
-      title: t('app.kuaizhizao.quotation.convertToSalesOrder'),
-      content: t('app.kuaizhizao.quotation.convertConfirm', { code: record.quotation_code }),
-      onOk: async () => {
-        try {
-          const res = await convertQuotationToOrder(record.id!);
-          const salesOrderId = res.sales_order?.id;
-          const orderCode = res.sales_order?.order_code || '';
-          messageApi.success({
-            content: (
-              <span>
-                {t('app.kuaizhizao.quotation.convertedToSalesOrder')}
-                {salesOrderId ? (
-                  <Button
-                    type="link"
-                    size="small"
-                    style={{ padding: 0, height: 'auto' }}
-                    onClick={async () => {
-                      setLinkedSalesOrderDrawerOpen(true);
-                      setLinkedSalesOrder(null);
-                      setLinkedSalesOrderLoading(true);
-                      try {
-                        const data = await getSalesOrder(salesOrderId, true, true);
-                        setLinkedSalesOrder(data);
-                      } catch (e: any) {
-                        messageApi.error(e?.message || e?.detail || t('app.kuaizhizao.quotation.loadSalesOrderFailed'));
-                        setLinkedSalesOrderDrawerOpen(false);
-                      } finally {
-                        setLinkedSalesOrderLoading(false);
-                      }
-                    }}
-                  >
-                    {orderCode}
-                  </Button>
-                ) : (
-                  orderCode
-                )}
-              </span>
-            ),
-            duration: 6,
-          });
-          invalidateMenuBadgeCounts();
-          invalidateSalesOrderList();
+  const showQuotationPushPreview = useCallback(
+    (record: Quotation, target: QuotationPushTarget) => {
+      setPushPreviewOpen(true);
+      setPushPreviewLoading(true);
+      setPushPreviewConfirming(false);
+      setPushPreviewData(null);
+      setPushPreviewTarget(target);
+      setPushPreviewRecord(record);
+      setPushSelectedItemIds([]);
+      const fetchPreview =
+        target === 'sales_order'
+          ? () => previewPushQuotationToSalesOrder(record.id!)
+          : () => previewPushQuotationToSalesContract(record.id!);
+      void fetchPreview()
+        .then((res) => {
+          setPushPreviewData(res);
+          const defaultIds = (res.items || [])
+            .filter((row) => Number(row.max_push_quantity) > 0)
+            .map((row) => Number(row.item_id));
+          setPushSelectedItemIds(defaultIds);
+        })
+        .catch((error: any) => {
+          messageApi.error(error?.message || error?.detail || t('app.kuaizhizao.quotation.pushPreviewFailed'));
+          setPushPreviewOpen(false);
+          setPushPreviewRecord(null);
+          setPushPreviewTarget(null);
+        })
+        .finally(() => setPushPreviewLoading(false));
+    },
+    [messageApi, t],
+  );
 
-          actionRef.current?.reload();
-          closeQuotationDetailDrawer();
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.quotation.convertFailed'));
+  const resetPushPreviewModal = () => {
+    setPushPreviewOpen(false);
+    setPushPreviewData(null);
+    setPushPreviewRecord(null);
+    setPushPreviewTarget(null);
+    setPushSelectedItemIds([]);
+  };
+
+  const handlePushPreviewConfirm = async () => {
+    if (!pushPreviewRecord?.id || !pushPreviewData || !pushPreviewTarget) return;
+    const selectedIds = pushSelectedItemIds.filter((id) => Number.isFinite(id) && id > 0);
+    if (pushPreviewData.has_blocking_issues) return;
+    if (selectedIds.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.quotation.pushPreviewSelectAtLeastOne'));
+      return;
+    }
+    const pushableIds = (pushPreviewData.items || [])
+      .filter((row) => Number(row.max_push_quantity) > 0)
+      .map((row) => Number(row.item_id));
+    if (
+      selectedIds.length !== pushableIds.length ||
+      !pushableIds.every((id) => selectedIds.includes(id))
+    ) {
+      messageApi.warning(t('app.kuaizhizao.quotation.pushPreviewRequiresAllLines'));
+      return;
+    }
+
+    setPushPreviewConfirming(true);
+    try {
+      if (pushPreviewTarget === 'sales_order') {
+        const res = await convertQuotationToOrder(pushPreviewRecord.id, { selected_item_ids: selectedIds });
+        const salesOrderId = res.sales_order?.id;
+        const orderCode = res.sales_order?.order_code || '';
+        messageApi.success({
+          content: (
+            <span>
+              {t('app.kuaizhizao.quotation.convertedToSalesOrder')}
+              {salesOrderId ? (
+                <Button
+                  type="link"
+                  size="small"
+                  style={{ padding: 0, height: 'auto' }}
+                  onClick={async () => {
+                    setLinkedSalesOrderDrawerOpen(true);
+                    setLinkedSalesOrder(null);
+                    setLinkedSalesOrderLoading(true);
+                    try {
+                      const data = await getSalesOrder(salesOrderId, true, true);
+                      setLinkedSalesOrder(data);
+                    } catch (e: any) {
+                      messageApi.error(e?.message || e?.detail || t('app.kuaizhizao.quotation.loadSalesOrderFailed'));
+                      setLinkedSalesOrderDrawerOpen(false);
+                    } finally {
+                      setLinkedSalesOrderLoading(false);
+                    }
+                  }}
+                >
+                  {orderCode}
+                </Button>
+              ) : (
+                orderCode
+              )}
+            </span>
+          ),
+          duration: 6,
+        });
+        invalidateMenuBadgeCounts();
+        invalidateSalesOrderList();
+        actionRef.current?.reload();
+        closeQuotationDetailDrawer();
+      } else {
+        const contract = await salesContractApi.convertFromQuotation(pushPreviewRecord.id);
+        const contractId = contract.id;
+        const contractCode = contract.contract_code || '';
+        messageApi.success({
+          content: (
+            <span>
+              {t('app.kuaizhizao.quotation.pushedToSalesContract')}
+              {contractId ? (
+                <Button
+                  type="link"
+                  size="small"
+                  style={{ padding: 0, height: 'auto' }}
+                  onClick={() => navigate(salesContractEditPath(contractId))}
+                >
+                  {contractCode}
+                </Button>
+              ) : (
+                contractCode
+              )}
+            </span>
+          ),
+          duration: 6,
+        });
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+        if (quotationDetail?.id === pushPreviewRecord.id) {
+          void loadQuotationDetail(pushPreviewRecord.id);
         }
-      },
-    });
+      }
+      resetPushPreviewModal();
+    } catch (error: any) {
+      messageApi.error(
+        error?.message ||
+          error?.detail ||
+          (pushPreviewTarget === 'sales_order'
+            ? t('app.kuaizhizao.quotation.convertFailed')
+            : t('app.kuaizhizao.quotation.pushToSalesContractFailed')),
+      );
+    } finally {
+      setPushPreviewConfirming(false);
+    }
+  };
+
+  const handleConvert = (record: Quotation) => {
+    showQuotationPushPreview(record, 'sales_order');
   };
 
   const handleConvertToContract = (record: Quotation) => {
-    Modal.confirm({
-      title: pushToSalesContractAction.label,
-      content: t('app.kuaizhizao.quotation.pushToSalesContractConfirm', { code: record.quotation_code }),
-      onOk: async () => {
-        try {
-          const contract = await salesContractApi.convertFromQuotation(record.id!);
-          const contractId = contract.id;
-          const contractCode = contract.contract_code || '';
-          messageApi.success({
-            content: (
-              <span>
-                {t('app.kuaizhizao.quotation.pushedToSalesContract')}
-                {contractId ? (
-                  <Button
-                    type="link"
-                    size="small"
-                    style={{ padding: 0, height: 'auto' }}
-                    onClick={() => navigate(salesContractEditPath(contractId))}
-                  >
-                    {contractCode}
-                  </Button>
-                ) : (
-                  contractCode
-                )}
-              </span>
-            ),
-            duration: 6,
-          });
-          invalidateMenuBadgeCounts();
-          actionRef.current?.reload();
-          if (quotationDetail?.id === record.id) {
-            void loadQuotationDetail(record.id!);
-          }
-        } catch (error: any) {
-          messageApi.error(error?.message || t('app.kuaizhizao.quotation.pushToSalesContractFailed'));
-        }
-      },
-    });
+    showQuotationPushPreview(record, 'sales_contract');
   };
 
   // 统一审核动作由 UniWorkflowActions 接管（提交/撤回提交/审核/驳回/撤销审核）
@@ -3493,6 +3564,29 @@ const QuotationsPage: React.FC = () => {
                   {t('app.kuaizhizao.quotation.saveAsRevision')}
                 </Button>
               )}
+              <Tooltip title={detailCapabilityGates.convertToOrder.disabled ? detailCapabilityGates.convertToOrder.title : undefined}>
+                <Button
+                  icon={<SwapOutlined />}
+                  disabled={detailCapabilityGates.convertToOrder.disabled}
+                  onClick={() =>
+                    !detailCapabilityGates.convertToOrder.disabled && showQuotationPushPreview(quotationDetail, 'sales_order')
+                  }
+                >
+                  {pushToSalesOrderAction.label}
+                </Button>
+              </Tooltip>
+              <Tooltip title={detailCapabilityGates.convertToContract.disabled ? detailCapabilityGates.convertToContract.title : undefined}>
+                <Button
+                  icon={<FileTextOutlined />}
+                  disabled={detailCapabilityGates.convertToContract.disabled}
+                  onClick={() =>
+                    !detailCapabilityGates.convertToContract.disabled &&
+                    showQuotationPushPreview(quotationDetail, 'sales_contract')
+                  }
+                >
+                  {pushToSalesContractAction.label}
+                </Button>
+              </Tooltip>
               <Tooltip
                 title={
                   detailCapabilityGates.printFormal.disabled
@@ -3719,6 +3813,92 @@ const QuotationsPage: React.FC = () => {
           ) : undefined
         }
       />
+
+      <Modal
+        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
+        open={pushPreviewOpen}
+        width={1100}
+        onCancel={resetPushPreviewModal}
+        okText={t('app.kuaizhizao.salesOrder.confirmPush')}
+        cancelText={t('common.cancel')}
+        confirmLoading={pushPreviewConfirming}
+        onOk={handlePushPreviewConfirm}
+        okButtonProps={{ disabled: pushPreviewLoading || !pushPreviewData || !!pushPreviewData?.has_blocking_issues }}
+      >
+        {pushPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+          </div>
+        ) : pushPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushPreviewData.summary}</p>
+            {pushPreviewData.has_blocking_issues ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={
+                  quotationCapabilityReasonMessage(pushPreviewData.blocking_reason as any, t) ||
+                  t('app.kuaizhizao.quotation.pushBlockedStatus', { status: quotationStatusNorm(pushPreviewRecord) || '-' })
+                }
+              />
+            ) : null}
+            {pushPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pushPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 960 }}
+                columns={[
+                  {
+                    title: t('common.select'),
+                    dataIndex: 'item_id',
+                    width: 64,
+                    render: (_: unknown, row) => {
+                      const itemId = Number(row.item_id);
+                      const maxQty = Number(row.max_push_quantity ?? 0);
+                      const disabled = !Number.isFinite(maxQty) || maxQty <= 0 || !!pushPreviewData.has_blocking_issues;
+                      const selectionLocked = true;
+                      return (
+                        <Switch
+                          size="small"
+                          disabled={disabled || selectionLocked}
+                          checked={pushSelectedItemIds.includes(itemId)}
+                          onChange={(checked) => {
+                            setPushSelectedItemIds((prev) =>
+                              checked ? Array.from(new Set([...prev, itemId])) : prev.filter((id) => id !== itemId),
+                            );
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  { title: t('app.kuaizhizao.quotation.colMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+                  { title: t('app.kuaizhizao.quotation.colMaterialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
+                  { title: t('app.kuaizhizao.quotation.colQuoteQuantity'), dataIndex: 'quantity', width: 88, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 88, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 88, align: 'right' },
+                  {
+                    title: t('app.kuaizhizao.quotation.colDeliveryDate'),
+                    dataIndex: 'delivery_date',
+                    width: 112,
+                    render: (v: string) => (v ? v.slice(0, 10) : '-'),
+                  },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.quotation.pushPreviewNoLines')} />
+            )}
+            {pushPreviewData.tip ? (
+              <p style={{ marginTop: 12, marginBottom: 0, color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>
+                {pushPreviewData.tip}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
 
       <DetailDrawerTemplate
         title={linkedSalesOrder?.order_code ? t('app.kuaizhizao.quotation.linkedSalesOrderDetailTitleWithCode', { code: linkedSalesOrder.order_code }) : t('app.kuaizhizao.quotation.linkedSalesOrderDetailTitle')}

@@ -595,6 +595,32 @@ async def delete_demand_item(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "删除需求明细失败", "/demands/{demand_id}/items/{item_id}", tenant_id)
 
 
+@router.get("/{demand_id}/push-to-computation/preview", response_model=Dict[str, Any], summary="Preview demand push to computation")
+async def preview_push_demand_to_computation(
+    demand_id: int = Path(..., description="需求ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """下推需求计算预览：返回明细数量、已下推、可下推，不实际创建。"""
+    try:
+        return await demand_service.preview_push_demand_to_computation(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/push-to-computation/preview", tenant_id)
+    except (ValidationError, BusinessLogicError) as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/demands/{demand_id}/push-to-computation/preview", tenant_id)
+    except Exception as e:
+        logger.error(f"下推需求预览失败: {e}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"下推需求预览失败: {str(e)}",
+            "/demands/{demand_id}/push-to-computation/preview",
+            tenant_id,
+        )
+
+
 @router.post("/{demand_id}/push-to-computation", response_model=Dict[str, Any], summary="Push demand to material planning")
 async def push_demand_to_computation(
     demand_id: int = Path(..., description="需求ID"),

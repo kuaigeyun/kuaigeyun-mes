@@ -46,6 +46,7 @@ import {
   Spin,
   Divider,
   theme,
+  Alert,
 } from 'antd'
 import {
   PlayCircleOutlined,
@@ -70,7 +71,7 @@ import {
 } from '../../../../../components/layout-templates'
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull'
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query'
-import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push'
+import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push'
 import {
   DocumentTrackingTimelineBody,
   useDocumentTracking,
@@ -105,13 +106,14 @@ import { getDemandComputationLifecycle } from '../../../utils/demandComputationL
 import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../../../utils/businessMode'
 import { getDemandTypeLabel, getDemandTypeTagProps } from '../../../utils/demandType'
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag'
-import { listDemands, getDemand, pushDemandToComputation, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
+import { listDemands, getDemand, pushDemandToComputation, previewPushDemandToComputation, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
 import {
   listSalesOrders as listSalesOrdersForPull,
   pushSalesOrderToComputation,
+  previewPushSalesOrderToComputation,
   type SalesOrder as PullSalesOrder,
 } from '../../../services/sales-order'
-import { listSalesForecasts, pushSalesForecastToComputation, type SalesForecast } from '../../../services/sales-forecast'
+import { listSalesForecasts, pushSalesForecastToComputation, previewPushSalesForecastToComputation, type SalesForecast } from '../../../services/sales-forecast'
 import { getBusinessConfig } from '../../../../../services/businessConfig'
 import { bomApi } from '../../../../master-data/services/material'
 import { warehouseApi } from '../../../../master-data/services/warehouse'
@@ -130,8 +132,8 @@ import type { TFunction } from 'i18next'
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry'
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions'
 import {
-  demandComputationBatchExecuteAllowed,
   demandComputationBatchRecomputeAllowed,
+  demandPushCapabilityReasonMessage,
   salesForecastCapabilityReasonMessage,
   salesOrderCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities'
@@ -916,6 +918,18 @@ const DemandComputationPage: React.FC = () => {
   }>({})
   const [pushPanelLoading, setPushPanelLoading] = useState(false)
   const [pushPanelSubmitting, setPushPanelSubmitting] = useState(false)
+  const [pushPreviewLoadError, setPushPreviewLoadError] = useState<string | null>(null)
+  const [pushMode, setPushMode] = useState<'draft' | 'confirm'>('draft')
+
+  type SourcePullPreviewKind = 'demand' | 'sales_order' | 'sales_forecast'
+  const [sourcePullPreviewOpen, setSourcePullPreviewOpen] = useState(false)
+  const [sourcePullPreviewLoading, setSourcePullPreviewLoading] = useState(false)
+  const [sourcePullPreviewConfirming, setSourcePullPreviewConfirming] = useState(false)
+  const [sourcePullPreviewKind, setSourcePullPreviewKind] = useState<SourcePullPreviewKind | null>(null)
+  const [sourcePullPreviewSourceId, setSourcePullPreviewSourceId] = useState<number | null>(null)
+  const [sourcePullPreviewData, setSourcePullPreviewData] = useState<any>(null)
+  const [sourcePullSelectedItemIds, setSourcePullSelectedItemIds] = useState<number[]>([])
+  const [sourcePullQuantities, setSourcePullQuantities] = useState<Record<number, number>>({})
   /** 协调看板深链 / 工具栏：打开下推面板时的路径预设 */
   type PushPanelPreset = {
     production?: 'work_order'
@@ -955,12 +969,190 @@ const DemandComputationPage: React.FC = () => {
     const params: any = {}
     if (pushConfig.production) params.production = pushConfig.production
     if (pushConfig.purchase) params.purchase = pushConfig.purchase
+    setPushPreviewLoadError(null)
     getPushPreview(pushPanelRecord.id!, Object.keys(params).length ? params : undefined)
-      .then(setPushPreviewData)
-      .catch(() => {})
-  }, [pushPanelRecord?.id, pushPanelLoading, pushConfig.production, pushConfig.purchase])
+      .then((data) => {
+        setPushPreviewData(data)
+        setPushPreviewLoadError(null)
+      })
+      .catch((e: any) => {
+        setPushPreviewData(null)
+        setPushPreviewLoadError(e?.response?.data?.detail || e?.message || t('app.kuaizhizao.demandComputation.pushPreviewFailed'))
+      })
+  }, [pushPanelRecord?.id, pushPanelLoading, pushConfig.production, pushConfig.purchase, t])
 
-  /** 新建计算：选中需求变化时，获取需求明细并提取物料列表（去重），并获取各物料 BOM 版本 */
+  const resetSourcePullPreviewModal = useCallback(() => {
+    setSourcePullPreviewOpen(false)
+    setSourcePullPreviewKind(null)
+    setSourcePullPreviewSourceId(null)
+    setSourcePullPreviewData(null)
+    setSourcePullSelectedItemIds([])
+    setSourcePullQuantities({})
+  }, [])
+
+  const showSourcePullPreview = useCallback(
+    async (kind: SourcePullPreviewKind, sourceId: number) => {
+      setSourcePullPreviewOpen(true)
+      setSourcePullPreviewLoading(true)
+      setSourcePullPreviewConfirming(false)
+      setSourcePullPreviewKind(kind)
+      setSourcePullPreviewSourceId(sourceId)
+      setSourcePullPreviewData(null)
+      setSourcePullSelectedItemIds([])
+      setSourcePullQuantities({})
+      try {
+        const res =
+          kind === 'demand'
+            ? await previewPushDemandToComputation(sourceId)
+            : kind === 'sales_order'
+              ? await previewPushSalesOrderToComputation(sourceId)
+              : await previewPushSalesForecastToComputation(sourceId)
+        setSourcePullPreviewData(res)
+        const lineSelectable = kind === 'sales_order'
+        const ids: number[] = []
+        const qtyMap: Record<number, number> = {}
+        ;(res.items || []).forEach((row: any) => {
+          const itemId = Number(row.item_id)
+          const maxQty = Number(row.max_push_quantity ?? 0)
+          if (!Number.isFinite(itemId) || itemId <= 0) return
+          if (lineSelectable) {
+            if (maxQty > 0) {
+              ids.push(itemId)
+              qtyMap[itemId] = maxQty
+            }
+          } else if (maxQty > 0) {
+            ids.push(itemId)
+            qtyMap[itemId] = maxQty
+          }
+        })
+        setSourcePullSelectedItemIds(ids)
+        setSourcePullQuantities(qtyMap)
+      } catch (error: any) {
+        messageApi.error(error?.message || error?.detail || t('app.kuaizhizao.demandComputation.sourcePullPreviewFailed'))
+        resetSourcePullPreviewModal()
+      } finally {
+        setSourcePullPreviewLoading(false)
+      }
+    },
+    [messageApi, resetSourcePullPreviewModal, t],
+  )
+
+  const handleSourcePullPreviewSuccess = useCallback(
+    (res: { computation_code?: string } | null | undefined, kind: SourcePullPreviewKind) => {
+      const action =
+        kind === 'demand'
+          ? pullFromDemandAction
+          : kind === 'sales_order'
+            ? pullFromSalesOrderAction
+            : pullFromSalesForecastAction
+      messageApi.success(
+        res?.computation_code
+          ? t('app.kuaizhizao.demandComputation.createdTarget', { target: action.targetLabel, code: res.computation_code })
+          : t('app.kuaizhizao.demandComputation.createdFromSource', { source: action.sourceLabel, target: action.targetLabel }),
+      )
+      invalidateStatistics()
+      actionRef.current?.reload()
+      resetSourcePullPreviewModal()
+    },
+    [
+      invalidateStatistics,
+      messageApi,
+      pullFromDemandAction,
+      pullFromSalesForecastAction,
+      pullFromSalesOrderAction,
+      resetSourcePullPreviewModal,
+      t,
+    ],
+  )
+
+  const handleSourcePullPreviewConfirm = useCallback(async () => {
+    if (!sourcePullPreviewKind || !sourcePullPreviewSourceId || !sourcePullPreviewData) return
+    if (sourcePullPreviewData.has_blocking_issues) return
+
+    const rows = (sourcePullPreviewData.items || []).filter((row: any) => Number(row.item_id) > 0)
+    const rowById = new Map(rows.map((row: any) => [Number(row.item_id), row]))
+    const selectionLocked = sourcePullPreviewKind !== 'sales_order'
+    const selectedIds = selectionLocked
+      ? rows.filter((row: any) => Number(row.max_push_quantity ?? 0) > 0).map((row: any) => Number(row.item_id))
+      : sourcePullSelectedItemIds.filter((id) => rowById.has(id))
+
+    if (!selectedIds.length) {
+      messageApi.warning(t('app.kuaizhizao.demandComputation.sourcePullPreviewSelectAtLeastOne'))
+      return
+    }
+
+    if (sourcePullPreviewKind === 'sales_order') {
+      const selectedQuantities: Record<number, number> = {}
+      for (const id of selectedIds) {
+        const row = rowById.get(id)
+        const qty = Number(sourcePullQuantities[id] ?? 0)
+        const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0)
+        if (!Number.isFinite(qty) || qty <= 0) {
+          messageApi.warning(t('app.kuaizhizao.salesOrder.pushQtyInvalid', { code: row?.material_code || id }))
+          return
+        }
+        if (Number.isFinite(maxQty) && maxQty > 0 && qty > maxQty) {
+          messageApi.warning(t('app.kuaizhizao.salesOrder.pushQtyExceedsRemaining', { code: row?.material_code || id }))
+          return
+        }
+        selectedQuantities[id] = qty
+      }
+      setSourcePullPreviewConfirming(true)
+      try {
+        const res = await pushSalesOrderToComputation(sourcePullPreviewSourceId, {
+          selected_item_ids: selectedIds,
+          selected_quantities: selectedQuantities,
+        })
+        handleSourcePullPreviewSuccess(res, 'sales_order')
+      } catch (error: any) {
+        messageApi.error(error?.response?.data?.detail || error?.message || t('app.kuaizhizao.demandComputation.createFromSourceFailed', { source: pullFromSalesOrderAction.sourceLabel, target: pullFromSalesOrderAction.targetLabel }))
+      } finally {
+        setSourcePullPreviewConfirming(false)
+      }
+      return
+    }
+
+    if (selectionLocked) {
+      const pushableIds = rows.filter((row: any) => Number(row.max_push_quantity ?? 0) > 0).map((row: any) => Number(row.item_id))
+      if (selectedIds.length !== pushableIds.length || !pushableIds.every((id) => selectedIds.includes(id))) {
+        messageApi.warning(t('app.kuaizhizao.demandComputation.sourcePullPreviewRequiresAllLines'))
+        return
+      }
+    }
+
+    setSourcePullPreviewConfirming(true)
+    try {
+      if (sourcePullPreviewKind === 'demand') {
+        const res = await pushDemandToComputation(sourcePullPreviewSourceId)
+        handleSourcePullPreviewSuccess(res, 'demand')
+      } else {
+        const res = await pushSalesForecastToComputation(sourcePullPreviewSourceId)
+        const code = res?.computation_code || res?.demand_computation?.computation_code
+        handleSourcePullPreviewSuccess(code ? { computation_code: code } : res, 'sales_forecast')
+      }
+    } catch (error: any) {
+      const action =
+        sourcePullPreviewKind === 'demand'
+          ? pullFromDemandAction
+          : pullFromSalesForecastAction
+      messageApi.error(error?.response?.data?.detail || error?.message || t('app.kuaizhizao.demandComputation.createFromSourceFailed', { source: action.sourceLabel, target: action.targetLabel }))
+    } finally {
+      setSourcePullPreviewConfirming(false)
+    }
+  }, [
+    handleSourcePullPreviewSuccess,
+    messageApi,
+    pullFromDemandAction,
+    pullFromSalesForecastAction,
+    pullFromSalesOrderAction,
+    sourcePullPreviewData,
+    sourcePullPreviewKind,
+    sourcePullPreviewSourceId,
+    sourcePullQuantities,
+    sourcePullSelectedItemIds,
+    t,
+  ])
+
   React.useEffect(() => {
     if (!selectedDemandIds?.length) {
       setCreateModalMaterials([])
@@ -1104,15 +1296,8 @@ const DemandComputationPage: React.FC = () => {
         messageApi.warning(t('app.kuaizhizao.demandComputation.alreadyPushed', { source: pullFromDemandAction.sourceLabel, target: pullFromDemandAction.targetLabel }))
         return
       }
-      try {
-        const res = await pushDemandToComputation(selectedId)
-        messageApi.success(res?.computation_code ? t('app.kuaizhizao.demandComputation.createdTarget', { target: pullFromDemandAction.targetLabel, code: res.computation_code }) : t('app.kuaizhizao.demandComputation.createdFromSource', { source: pullFromDemandAction.sourceLabel, target: pullFromDemandAction.targetLabel }))
-        invalidateStatistics()
-        actionRef.current?.reload()
-        pullFromDemandQuery.closeModal()
-      } catch (error: any) {
-        messageApi.error(error?.response?.data?.detail || t('app.kuaizhizao.demandComputation.createFromSourceFailed', { source: pullFromDemandAction.sourceLabel, target: pullFromDemandAction.targetLabel }))
-      }
+      pullFromDemandQuery.closeModal()
+      void showSourcePullPreview('demand', selectedId)
     },
   })
 
@@ -1165,22 +1350,8 @@ const DemandComputationPage: React.FC = () => {
         )
         return
       }
-      try {
-        const res = await pushSalesOrderToComputation(selectedId)
-        messageApi.success(
-          res?.computation_code
-            ? t('app.kuaizhizao.demandComputation.createdTarget', { target: pullFromSalesOrderAction.targetLabel, code: res.computation_code })
-            : t('app.kuaizhizao.demandComputation.createdFromSource', { source: pullFromSalesOrderAction.sourceLabel, target: pullFromSalesOrderAction.targetLabel }),
-        )
-        invalidateStatistics()
-        actionRef.current?.reload()
-        pullFromSalesOrderQuery.closeModal()
-      } catch (error: any) {
-        messageApi.error(
-          error?.response?.data?.detail
-          || t('app.kuaizhizao.demandComputation.createFromSourceFailed', { source: pullFromSalesOrderAction.sourceLabel, target: pullFromSalesOrderAction.targetLabel }),
-        )
-      }
+      pullFromSalesOrderQuery.closeModal()
+      void showSourcePullPreview('sales_order', selectedId)
     },
   })
 
@@ -1238,25 +1409,8 @@ const DemandComputationPage: React.FC = () => {
         )
         return
       }
-      try {
-        const res = await pushSalesForecastToComputation(selectedId)
-        messageApi.success(
-          res?.computation_code
-            ? t('app.kuaizhizao.demandComputation.createdTarget', { target: pullFromSalesForecastAction.targetLabel, code: res.computation_code })
-            : t('app.kuaizhizao.demandComputation.createdFromSource', { source: pullFromSalesForecastAction.sourceLabel, target: pullFromSalesForecastAction.targetLabel }),
-        )
-        invalidateStatistics()
-        actionRef.current?.reload()
-        pullFromSalesForecastQuery.closeModal()
-      } catch (error: any) {
-        messageApi.error(
-          error?.response?.data?.detail
-          || t('app.kuaizhizao.demandComputation.createFromSourceFailed', {
-            source: pullFromSalesForecastAction.sourceLabel,
-            target: pullFromSalesForecastAction.targetLabel,
-          }),
-        )
-      }
+      pullFromSalesForecastQuery.closeModal()
+      void showSourcePullPreview('sales_forecast', selectedId)
     },
   })
 
@@ -1509,6 +1663,8 @@ const DemandComputationPage: React.FC = () => {
     pushPanelPresetRef.current = preset ?? null
     setPushPanelRecord(record)
     setPushPreviewData(null)
+    setPushPreviewLoadError(null)
+    setPushMode('draft')
   }, [])
 
   /** 协调看板 / 管控塔深链：computationId、action=pushPurchase、drawerTab */
@@ -1540,6 +1696,8 @@ const DemandComputationPage: React.FC = () => {
           pushPanelPresetRef.current = { purchase: 'purchase_order' }
           setPushPanelRecord(data)
           setPushPreviewData(null)
+          setPushPreviewLoadError(null)
+          setPushMode('draft')
           return
         }
 
@@ -1584,6 +1742,7 @@ const DemandComputationPage: React.FC = () => {
           production: pushConfig.production,
           purchase: pushConfig.purchase,
           include_outsource: true,
+          push_mode: pushMode,
         })
         messageApi.success(t('app.kuaizhizao.demandComputation.pushSuccess'))
       } else {
@@ -1830,12 +1989,14 @@ const DemandComputationPage: React.FC = () => {
     })
   }, [canUseToolbarPush, selectedComputationForToolbar, t])
 
-  const toolbarPushDisabledReason = useMemo(() => {
-    if (selectedRowKeys.length === 0) return t('app.kuaizhizao.demandComputation.selectOneFirst')
-    if (selectedRowKeys.length > 1) return t('app.kuaizhizao.demandComputation.pushSingleOnly')
-    if (!selectedComputationForToolbar) return t('app.kuaizhizao.demandComputation.selectedNotInList')
-    return undefined
-  }, [selectedComputationForToolbar, selectedRowKeys.length, t])
+  const toolbarPushDisabledReason = useMemo(
+    () =>
+      buildUniPushToolbarDisabledReason(t, {
+        selectedCount: selectedRowKeys.length,
+        hasSelectedRecord: !!selectedComputationForToolbar,
+      }),
+    [selectedComputationForToolbar, selectedRowKeys.length, t],
+  )
 
   const toolbarPushMenuItems = useMemo(() => {
     const openPush = (preset?: PushPanelPreset) => {
@@ -2064,22 +2225,6 @@ const DemandComputationPage: React.FC = () => {
         toolBarActionsAfterDelete={[]}
         toolBarActionsAfterBatch={[
           <UniCapabilityBatchButton
-            key="demand-computation-batch-execute"
-            selectedRowKeys={selectedRowKeys}
-            selectedRecords={selectedComputationsForBatch}
-            capabilityKey="execute"
-            permAllowed={computationPerms.canAction?.('submit') ?? false}
-            batchAllowed={(recs, perm) => demandComputationBatchExecuteAllowed(recs, perm)}
-            onRun={(id) => executeDemandComputation(id)}
-            labels={{
-              single: t('app.kuaizhizao.demandComputation.actionExecute'),
-              batch: t('app.kuaizhizao.demandComputation.batchExecute'),
-            }}
-            icon={<PlayCircleOutlined />}
-            size="middle"
-            onSuccess={handleComputationBatchSuccess}
-          />,
-          <UniCapabilityBatchButton
             key="demand-computation-batch-recompute"
             selectedRowKeys={selectedRowKeys}
             selectedRecords={selectedComputationsForBatch}
@@ -2093,6 +2238,7 @@ const DemandComputationPage: React.FC = () => {
             }}
             icon={<ReloadOutlined />}
             size="middle"
+            requireConfirm
             onSuccess={handleComputationBatchSuccess}
           />,
           <Button
@@ -2260,6 +2406,134 @@ const DemandComputationPage: React.FC = () => {
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
 
+      {/* 上拉来源预览 Modal */}
+      <Modal
+        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
+        open={sourcePullPreviewOpen}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        onCancel={resetSourcePullPreviewModal}
+        okText={t('app.kuaizhizao.demandComputation.createComputation')}
+        cancelText={t('common.cancel')}
+        confirmLoading={sourcePullPreviewConfirming}
+        onOk={handleSourcePullPreviewConfirm}
+        okButtonProps={{
+          disabled:
+            sourcePullPreviewLoading ||
+            !sourcePullPreviewData ||
+            !!sourcePullPreviewData?.has_blocking_issues,
+        }}
+      >
+        {sourcePullPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+          </div>
+        ) : sourcePullPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{sourcePullPreviewData.summary}</p>
+            {sourcePullPreviewData.has_blocking_issues ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={
+                  (sourcePullPreviewKind === 'demand'
+                    ? demandPushCapabilityReasonMessage(sourcePullPreviewData.blocking_reason, t)
+                    : sourcePullPreviewKind === 'sales_order'
+                      ? salesOrderCapabilityReasonMessage(sourcePullPreviewData.blocking_reason, t)
+                      : salesForecastCapabilityReasonMessage(sourcePullPreviewData.blocking_reason, t))
+                  || t('app.kuaizhizao.demandManagement.pushBlockedStatus')
+                }
+              />
+            ) : null}
+            {sourcePullPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={sourcePullPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: sourcePullPreviewKind === 'sales_order' ? 1020 : 960 }}
+                columns={[
+                  {
+                    title: t('common.select'),
+                    dataIndex: 'item_id',
+                    width: 64,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row.item_id)
+                      const maxQty = Number(row.max_push_quantity ?? 0)
+                      const disabled =
+                        !Number.isFinite(maxQty) ||
+                        maxQty <= 0 ||
+                        !!sourcePullPreviewData.has_blocking_issues
+                      const selectionLocked = sourcePullPreviewKind !== 'sales_order'
+                      return (
+                        <Switch
+                          size="small"
+                          disabled={disabled || selectionLocked}
+                          checked={sourcePullSelectedItemIds.includes(itemId)}
+                          onChange={(checked) => {
+                            if (selectionLocked) return
+                            setSourcePullSelectedItemIds((prev) =>
+                              checked ? Array.from(new Set([...prev, itemId])) : prev.filter((id) => id !== itemId),
+                            )
+                          }}
+                        />
+                      )
+                    },
+                  },
+                  { title: t('app.kuaizhizao.quotation.colMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+                  { title: t('app.kuaizhizao.quotation.colMaterialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
+                  { title: t('app.kuaizhizao.demandComputation.colRequiredQty'), dataIndex: 'quantity', width: 88, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 88, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 88, align: 'right' },
+                  ...(sourcePullPreviewKind === 'sales_order'
+                    ? [
+                        {
+                          title: t('app.kuaizhizao.salesOrder.colPushQty'),
+                          dataIndex: 'push_quantity',
+                          width: 130,
+                          render: (_: unknown, row: any) => {
+                            const itemId = Number(row.item_id)
+                            const maxQty = Number(row.max_push_quantity ?? row.quantity ?? 0)
+                            const selected = sourcePullSelectedItemIds.includes(itemId)
+                            return (
+                              <InputNumber
+                                min={0}
+                                max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
+                                precision={2}
+                                style={{ width: '100%' }}
+                                disabled={!selected || !!sourcePullPreviewData.has_blocking_issues}
+                                value={sourcePullQuantities[itemId]}
+                                onChange={(val) => {
+                                  const next = Number(val ?? 0)
+                                  setSourcePullQuantities((prev) => ({ ...prev, [itemId]: next }))
+                                }}
+                              />
+                            )
+                          },
+                        },
+                      ]
+                    : []),
+                  {
+                    title: t('app.kuaizhizao.quotation.colDeliveryDate'),
+                    dataIndex: 'delivery_date',
+                    width: 112,
+                    render: (v: string) => (v ? v.slice(0, 10) : '-'),
+                  },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.demandComputation.sourcePullPreviewNoLines')} />
+            )}
+            {sourcePullPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                {sourcePullPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+
       {/* 新建计算：FormModalTemplate（UI_Standard 新建/编辑 Modal） */}
       <FormModalTemplate
         title={t('app.kuaizhizao.demandComputation.createTitle')}
@@ -2379,10 +2653,18 @@ const DemandComputationPage: React.FC = () => {
         okText={t('app.kuaizhizao.demandComputation.confirmPush')}
         confirmLoading={pushPanelSubmitting}
         onOk={handlePushPanelConfirm}
+        okButtonProps={{
+          disabled:
+            pushPanelLoading ||
+            !!pushPreviewLoadError ||
+            (pushMode === 'confirm' && (pushPreviewData?.validation_failures?.length ?? 0) > 0),
+        }}
         onCancel={() => {
           setPushPanelRecord(null)
           setPushOptions(null)
           setPushPreviewData(null)
+          setPushPreviewLoadError(null)
+          setPushMode('draft')
           setPushConfig({})
         }}
       >
@@ -2390,6 +2672,9 @@ const DemandComputationPage: React.FC = () => {
           <div style={{ padding: 24, textAlign: 'center' }}>{t('app.kuaizhizao.demandComputation.loading')}</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {pushPreviewLoadError ? (
+              <Alert type="error" showIcon message={pushPreviewLoadError} />
+            ) : null}
             {pushOptions && (
               <>
                 {pushOptions.production_choices.length > 0 && (
@@ -2410,6 +2695,18 @@ const DemandComputationPage: React.FC = () => {
                     </Radio.Group>
                   </div>
                 )}
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                  <span>{t('app.kuaizhizao.salesOrder.pushModeLabel')}</span>
+                  <ThemedSegmented
+                    size="small"
+                    value={pushMode}
+                    onChange={(val) => setPushMode(val as 'draft' | 'confirm')}
+                    options={[
+                      { label: t('app.kuaizhizao.salesOrder.pushModeDraft'), value: 'draft' },
+                      { label: t('app.kuaizhizao.salesOrder.pushModeConfirm'), value: 'confirm' },
+                    ]}
+                  />
+                </div>
                 <p style={{ fontSize: 12, color: '#666' }}>
                   {t('app.kuaizhizao.demandComputation.pushOutsourceHint')}
                 </p>

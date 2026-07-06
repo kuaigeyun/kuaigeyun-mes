@@ -84,12 +84,6 @@ class StateTransitionService:
         {"from": DocumentStatus.FULL_CONVERTED.value, "to": DocumentStatus.PENDING_REVIEW.value, "description": "撤回审核"},
     ]
 
-    # 生产计划状态流转（草稿→已审核→已执行）
-    DEFAULT_PRODUCTION_PLAN_TRANSITIONS = [
-        {"from": "草稿", "to": "已审核", "description": "审核通过"},
-        {"from": "已审核", "to": "已执行", "description": "执行计划"},
-    ]
-
     # 需求计算状态流转（进行中→完成/失败，失败可重算）
     DEFAULT_DEMAND_COMPUTATION_TRANSITIONS = [
         {"from": "进行中", "to": "完成", "description": "计算完成"},
@@ -105,7 +99,6 @@ class StateTransitionService:
         "sales_forecast": DEFAULT_AUDIT_DOCUMENT_TRANSITIONS,
         "purchase_order": DEFAULT_AUDIT_DOCUMENT_TRANSITIONS,
         "purchase_requisition": DEFAULT_AUDIT_DOCUMENT_TRANSITIONS,
-        "production_plan": DEFAULT_PRODUCTION_PLAN_TRANSITIONS,
         "demand_computation": DEFAULT_DEMAND_COMPUTATION_TRANSITIONS,
     }
     

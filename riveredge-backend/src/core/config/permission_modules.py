@@ -35,7 +35,6 @@ PERMISSION_MODULE_MAP = {
     "finance": ["payable", "receivable", "receipt", "payment"],
     "manufacturing": [
         "work_order",
-        "production_plan",
         "process_inspection",
         "mrp",
         "lrp",

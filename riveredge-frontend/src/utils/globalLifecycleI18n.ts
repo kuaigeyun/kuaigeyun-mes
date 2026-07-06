@@ -49,7 +49,6 @@ export const LIFECYCLE_ONLY_STAGE_KEYS = [
   'manual_plan',
   'sales_invoice',
   'receivable_collection',
-  'production_plan',
   'work_order_released',
   'shipment_waiting',
   'material_picking',

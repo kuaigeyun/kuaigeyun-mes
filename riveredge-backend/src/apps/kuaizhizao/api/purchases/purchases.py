@@ -405,6 +405,54 @@ async def confirm_purchase_order(
     )
 
 
+@router.get("/purchase-orders/{order_id}/push-to-receipt-notice/preview", summary="Preview push to receipt notice")
+async def preview_push_purchase_order_to_receipt_notice(
+    order_id: int = Path(..., description="采购订单ID"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await PurchaseService().preview_push_to_receipt_notice(
+        tenant_id=tenant_id,
+        order_id=order_id,
+    )
+
+
+@router.get("/purchase-orders/{order_id}/push-to-receipt/preview", summary="Preview push to purchase receipt")
+async def preview_push_purchase_order_to_receipt(
+    order_id: int = Path(..., description="采购订单ID"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await PurchaseService().preview_push_to_receipt(
+        tenant_id=tenant_id,
+        order_id=order_id,
+    )
+
+
+@router.get("/purchase-orders/{order_id}/push-to-invoice/preview", summary="Preview push to purchase invoice")
+async def preview_push_purchase_order_to_invoice(
+    order_id: int = Path(..., description="采购订单ID"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await PurchaseService().preview_push_to_invoice(
+        tenant_id=tenant_id,
+        order_id=order_id,
+    )
+
+
+@router.get("/purchase-orders/{order_id}/push-to-purchase-return/preview", summary="Preview push to purchase return")
+async def preview_push_purchase_order_to_purchase_return(
+    order_id: int = Path(..., description="采购订单ID"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await PurchaseService().preview_push_to_purchase_return(
+        tenant_id=tenant_id,
+        order_id=order_id,
+    )
+
+
 @router.post("/purchase-orders/{order_id}/push-to-receipt-preview", summary="Preview push to purchase receipt")
 async def push_purchase_order_to_receipt_preview(
     order_id: int = Path(..., description="采购订单ID"),

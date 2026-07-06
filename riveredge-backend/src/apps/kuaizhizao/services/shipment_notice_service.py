@@ -9,10 +9,11 @@ Date: 2026-02-22
 
 import logging
 from collections import defaultdict
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from decimal import Decimal
 from tortoise.transactions import in_transaction
+from tortoise.expressions import Q
 
 from apps.common.base_service import AppBaseService
 
@@ -32,7 +33,10 @@ from apps.kuaizhizao.schemas.shipment_notice import (
     ShipmentNoticeItemResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
-from apps.kuaizhizao.services.document_action_policy.shipment_notice import assert_shipment_notice_capability
+from apps.kuaizhizao.services.document_action_policy.shipment_notice import (
+    assert_shipment_notice_capability,
+    derive_shipment_notice_capabilities,
+)
 from apps.kuaizhizao.services.document_action_policy.enricher import (
     enrich_shipment_notice_capabilities_on_response,
     enrich_shipment_notice_list_capabilities,
@@ -430,8 +434,8 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         skip: int = 0,
         limit: int = 20,
         **filters
-    ) -> List[ShipmentNoticeListResponse]:
-        """获取发货通知单列表"""
+    ) -> Dict[str, Any]:
+        """获取发货通知单列表（含 capabilities 与分页 total）。"""
         query = ShipmentNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if filters.get("status"):
             query = query.filter(status=filters["status"])
@@ -439,23 +443,37 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             query = query.filter(sales_order_id=filters["sales_order_id"])
         if filters.get("customer_id"):
             query = query.filter(customer_id=filters["customer_id"])
+        keyword = str(filters.get("keyword") or "").strip()
+        if keyword:
+            query = query.filter(
+                Q(notice_code__icontains=keyword)
+                | Q(sales_order_code__icontains=keyword)
+                | Q(customer_name__icontains=keyword)
+            )
 
+        total = await query.count()
         notices = await query.offset(skip).limit(limit).order_by("-created_at")
-        notice_ids = [int(n.id) for n in notices]
+        notice_list = list(notices)
+        notice_ids = [int(n.id) for n in notice_list]
         has_items_by_id = await self._notice_has_items_map(tenant_id, notice_ids)
-        withdrawable_by_id = await self._delivery_withdrawable_by_notice_id(tenant_id, notices)
+        withdrawable_by_id = await self._delivery_withdrawable_by_notice_id(tenant_id, notice_list)
         from apps.kuaizhizao.services.document_lifecycle_service import get_shipment_notice_lifecycle
         list_responses: List[ShipmentNoticeListResponse] = []
-        for r in notices:
+        for r in notice_list:
             resp = ShipmentNoticeListResponse.model_validate(r)
             resp.lifecycle = get_shipment_notice_lifecycle(r)
             list_responses.append(resp)
-        return await enrich_items(tenant_id, "shipment_notice", enrich_shipment_notice_list_capabilities(
-            notices,
+        enriched = await enrich_items(tenant_id, "shipment_notice", enrich_shipment_notice_list_capabilities(
+            notice_list,
             list_responses,
             has_items_by_id=has_items_by_id,
             delivery_withdrawable_by_id=withdrawable_by_id,
         ))
+        return {
+            "data": [item.model_dump() for item in enriched],
+            "total": total,
+            "success": True,
+        }
 
     async def update_shipment_notice(
         self,
@@ -674,6 +692,188 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             updated_by=notified_by,
         )
         return await ShipmentNotice.get(tenant_id=tenant_id, id=notice.id)
+
+    async def preview_notify_warehouse(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        *,
+        warehouse_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """通知仓库预览：返回通知明细数量、已占用、可通知量，不实际创建出库单。"""
+        notice = await ShipmentNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not notice:
+            raise NotFoundError(f"发货通知单不存在: {notice_id}")
+
+        notice_items = await ShipmentNoticeItem.filter(
+            tenant_id=tenant_id, notice_id=notice_id
+        ).order_by("id")
+        if not notice_items:
+            raise BusinessLogicError("发货通知单无明细，无法通知仓库")
+
+        effective_warehouse_id = warehouse_id or getattr(notice, "warehouse_id", None)
+        caps = derive_shipment_notice_capabilities(
+            notice,
+            has_items=True,
+            has_warehouse=effective_warehouse_id is not None,
+        )
+        push_allowed = caps.notify.allowed
+        blocking_reason = caps.notify.reason if not push_allowed else None
+
+        order_items = await SalesOrderItem.filter(
+            tenant_id=tenant_id,
+            sales_order_id=notice.sales_order_id,
+        ).all()
+        order_item_by_id = {int(it.id): it for it in order_items}
+
+        reserved_notice_ids = await ShipmentNotice.filter(
+            tenant_id=tenant_id,
+            sales_order_id=notice.sales_order_id,
+            status="已通知",
+            deleted_at__isnull=True,
+        ).exclude(id=notice.id).values_list("id", flat=True)
+
+        reserved_by_item_id: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+        if reserved_notice_ids:
+            reserved_items = await ShipmentNoticeItem.filter(
+                tenant_id=tenant_id,
+                notice_id__in=list(reserved_notice_ids),
+            ).all()
+            for rit in reserved_items:
+                so_item_id = getattr(rit, "sales_order_item_id", None)
+                if so_item_id is None:
+                    continue
+                reserved_by_item_id[int(so_item_id)] += Decimal(str(rit.notice_quantity or 0))
+
+        preview_items: List[Dict[str, Any]] = []
+        line_blocking_issues: List[str] = []
+        for n_item in notice_items:
+            notice_qty = Decimal(str(n_item.notice_quantity or 0))
+            so_item_id = getattr(n_item, "sales_order_item_id", None)
+            reserved_qty = Decimal("0")
+            available_qty = notice_qty
+            order_qty = notice_qty
+
+            if so_item_id is not None:
+                so_item_id = int(so_item_id)
+                so_item = order_item_by_id.get(so_item_id)
+                if so_item:
+                    order_qty = Decimal(str(so_item.order_quantity or 0))
+                    remaining_qty = (
+                        Decimal(str(so_item.remaining_quantity))
+                        if getattr(so_item, "remaining_quantity", None) is not None
+                        else Decimal(str(so_item.order_quantity or 0))
+                        - Decimal(str(so_item.delivered_quantity or 0))
+                    )
+                    remaining_qty = max(Decimal("0"), remaining_qty)
+                    reserved_qty = reserved_by_item_id.get(so_item_id, Decimal("0"))
+                    available_qty = max(Decimal("0"), remaining_qty - reserved_qty)
+                    if notice_qty > available_qty:
+                        material_label = (
+                            getattr(so_item, "material_code", None)
+                            or getattr(so_item, "material_name", None)
+                            or str(so_item_id)
+                        )
+                        line_blocking_issues.append(
+                            f"物料 {material_label} 通知数量 {notice_qty} 超过可通知欠发量 {available_qty}"
+                        )
+
+            preview_items.append({
+                "item_id": int(n_item.id),
+                "sales_order_item_id": int(so_item_id) if so_item_id is not None else None,
+                "material_code": str(getattr(n_item, "material_code", "") or "").strip(),
+                "material_name": str(getattr(n_item, "material_name", "") or "").strip(),
+                "quantity": float(order_qty),
+                "pushed_quantity": float(reserved_qty),
+                "max_push_quantity": float(available_qty),
+                "notice_quantity": float(notice_qty),
+            })
+
+        inventory_blocking: List[str] = []
+        if effective_warehouse_id is not None:
+            required_by_material: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+            material_labels: dict[int, str] = {}
+            for item in notice_items:
+                material_id = getattr(item, "material_id", None)
+                if not material_id:
+                    continue
+                qty = Decimal(str(getattr(item, "notice_quantity", 0) or 0))
+                if qty <= Decimal("0"):
+                    continue
+                material_id = int(material_id)
+                required_by_material[material_id] += qty
+                material_labels[material_id] = (
+                    getattr(item, "material_code", None)
+                    or getattr(item, "material_name", None)
+                    or str(material_id)
+                )
+
+            reserved_notice_query = ShipmentNotice.filter(
+                tenant_id=tenant_id,
+                status="已通知",
+                deleted_at__isnull=True,
+            ).exclude(id=notice.id).filter(warehouse_id=int(effective_warehouse_id))
+            reserved_notice_ids_wh = await reserved_notice_query.values_list("id", flat=True)
+
+            reserved_by_material: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+            if reserved_notice_ids_wh:
+                reserved_items_wh = await ShipmentNoticeItem.filter(
+                    tenant_id=tenant_id,
+                    notice_id__in=list(reserved_notice_ids_wh),
+                ).all()
+                for rit in reserved_items_wh:
+                    material_id = getattr(rit, "material_id", None)
+                    if not material_id:
+                        continue
+                    qty = Decimal(str(getattr(rit, "notice_quantity", 0) or 0))
+                    if qty <= Decimal("0"):
+                        continue
+                    reserved_by_material[int(material_id)] += qty
+
+            for material_id, required_qty in required_by_material.items():
+                available_qty = await get_material_available_quantity(
+                    tenant_id=tenant_id,
+                    material_id=material_id,
+                    warehouse_id=int(effective_warehouse_id),
+                )
+                effective_qty = max(
+                    Decimal("0"),
+                    Decimal(str(available_qty or 0)) - reserved_by_material.get(material_id, Decimal("0")),
+                )
+                if required_qty > effective_qty:
+                    label = material_labels.get(material_id, str(material_id))
+                    inventory_blocking.append(
+                        f"物料 {label} 通知数量 {required_qty} 超过库存可用量 {effective_qty}（已扣减预占）"
+                    )
+
+        if line_blocking_issues or inventory_blocking:
+            push_allowed = False
+            blocking_reason = blocking_reason or "shipment_notice.notify.overdelivery_or_inventory"
+        elif effective_warehouse_id is None and push_allowed:
+            push_allowed = False
+            blocking_reason = "shipment_notice.notify.no_warehouse"
+
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        return {
+            "target_type": "sales_delivery",
+            "summary": (
+                f"请确认将通知仓库的发货明细（{pushable_count}/{len(preview_items)} 行可通知）"
+                if push_allowed
+                else "当前发货通知单不可通知仓库"
+            ),
+            "notice_code": notice.notice_code,
+            "warehouse_required": getattr(notice, "warehouse_id", None) is None,
+            "warehouse_id": int(effective_warehouse_id) if effective_warehouse_id is not None else None,
+            "items": preview_items,
+            "has_blocking_issues": not push_allowed,
+            "blocking_reason": blocking_reason if not push_allowed else None,
+            "line_blocking_issues": line_blocking_issues + inventory_blocking,
+            "tip": "确认后将生成销售出库单（待出库），并标记本通知单为已通知。",
+        }
 
     async def notify_warehouse(
         self,

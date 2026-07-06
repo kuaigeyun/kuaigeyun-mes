@@ -662,6 +662,27 @@ async def push_all(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
+@router.get("/{computation_id:int}/push-to-purchase-requisition/preview", summary="Preview push to purchase requisition")
+async def preview_push_to_purchase_requisition(
+    computation_id: int = Path(..., description="计算ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """从需求计算下推采购申请预览（仅采购件）"""
+    try:
+        return await computation_service.preview_push_to_purchase_requisition(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("下推采购申请预览失败")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推采购申请预览失败")
+
+
 @router.post("/{computation_id:int}/push-to-purchase-requisition", summary="Push to purchase requisition")
 async def push_to_purchase_requisition(
     computation_id: int = Path(..., description="计算ID"),
@@ -688,19 +709,6 @@ async def push_to_purchase_requisition(
     except Exception as e:
         logger.exception("下推到采购申请失败")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推到采购申请失败")
-
-
-@router.post("/{computation_id:int}/push-to-production-plan", summary="Push to production plan")
-async def push_to_production_plan(
-    computation_id: int = Path(..., description="计算ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """已下线：需求计算不再直接下推生产计划。"""
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="需求计算直推生产计划已下线，请使用「直接生成工单」路径",
-    )
 
 
 @router.get("/history", summary="List demand computation history")

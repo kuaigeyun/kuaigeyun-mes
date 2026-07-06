@@ -710,6 +710,54 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             
             return updated_inspection
 
+    async def preview_push_to_purchase_return(self, tenant_id: int, inspection_id: int) -> dict:
+        """来料检验不合格下推采购退货单预览（不实际创建）。"""
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            derive_quality_inspection_capabilities,
+        )
+
+        inspection = await IncomingInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+        if not inspection:
+            raise NotFoundError(f"来料检验单不存在: {inspection_id}")
+
+        caps = derive_quality_inspection_capabilities(inspection, supports_purchase_return=True)
+        push_cap = caps.push_purchase_return
+        unqualified = float(inspection.unqualified_quantity or 0)
+        preview_items = []
+        if unqualified > 0:
+            preview_items.append(
+                {
+                    "item_id": int(inspection.id),
+                    "material_id": inspection.material_id,
+                    "material_code": inspection.material_code,
+                    "material_name": inspection.material_name,
+                    "material_spec": getattr(inspection, "material_spec", None),
+                    "unit": inspection.material_unit,
+                    "quantity": unqualified,
+                    "pushed_quantity": 0.0,
+                    "max_push_quantity": unqualified,
+                }
+            )
+
+        has_blocking = not push_cap.allowed or not preview_items
+        blocking_reason = push_cap.reason if not push_cap.allowed else (
+            "quality_inspection.push_purchase_return.not_allowed" if not preview_items else None
+        )
+        return {
+            "target_type": "purchase_return",
+            "order_id": inspection.id,
+            "order_code": inspection.inspection_code,
+            "summary": (
+                f"将从来料检验单 {inspection.inspection_code} 生成采购退货单（不合格数量 {unqualified}）"
+                if not has_blocking
+                else "当前来料检验单不可下推采购退货单"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": has_blocking,
+            "blocking_reason": blocking_reason,
+            "tip": "确认后将按不合格数量生成采购退货单草稿。",
+        }
+
     async def push_to_purchase_return(self, tenant_id: int, inspection_id: int, created_by: int) -> dict:
         """来料检验不合格 -> 一键生成采购退货单"""
         from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (

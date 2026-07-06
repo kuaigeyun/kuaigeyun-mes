@@ -5,7 +5,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { App, Button, Card, Col, Form, Row, Select, Space, Spin, Table, Typography } from 'antd';
+import {
+  App,
+  Button,
+  Card,
+  Col,
+  Form,
+  InputNumber,
+  Row,
+  Select,
+  Space,
+  Spin,
+  Table,
+  Typography,
+} from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import {
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
@@ -15,7 +28,7 @@ import {
 } from '../../../../../components/layout-templates';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
-import { workOrderApi } from '../../../services/production';
+import { workOrderApi } from '../../../services/work-order';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
@@ -29,20 +42,25 @@ import {
 } from './outboundEntryShared';
 import { getOutboundIssueTypeLabel } from './outboundHubTypes';
 import { OUTBOUND_LIST_PATH, outboundWorkOrderEntryPath } from './outboundPaths';
-import { draftOptionalNumber, usePullEntryFormDraft } from '../shared/pullEntryFormDraft';
+import {
+  draftOptionalNumber,
+  mergeMaterialIssueQuantities,
+  mergeRecordMaps,
+  usePullEntryFormDraft,
+} from '../shared/pullEntryFormDraft';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import type { PushPreviewResponse } from '../../../services/sales-order';
 
-type WorkOrderKittingLine = {
+type PickLine = {
   key: number;
-  material_code: string;
-  material_name: string;
-  material_unit?: string;
-  required_quantity: number;
-  picked_quantity: number;
-  shortage_quantity: number;
-  main_warehouse_available: number;
-  line_side_available: number;
-  status: string;
+  materialId: number;
+  materialCode: string;
+  materialName: string;
+  unit: string;
+  requiredQuantity: number;
+  pickedQuantity: number;
+  pendingQuantity: number;
+  issueQuantity: number;
 };
 
 const OutboundWorkOrderPullEntryPage: React.FC = () => {
@@ -59,12 +77,12 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [workOrder, setWorkOrder] = useState<Record<string, unknown> | null>(null);
+  const [previewSummary, setPreviewSummary] = useState<string | null>(null);
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
   const [warehouseId, setWarehouseId] = useState<number | undefined>();
   const [notes, setNotes] = useState('');
-  const [kittingItems, setKittingItems] = useState<WorkOrderKittingLine[]>([]);
-  const [kittingRate, setKittingRate] = useState<number>(0);
-  const [kittingStatus, setKittingStatus] = useState<string>('');
+  const [pickLines, setPickLines] = useState<PickLine[]>([]);
+  const [maxQuantities, setMaxQuantities] = useState<Record<number, number>>({});
   const { bindSnapshot, persistNow, clearDraft, applyDraftOnce } = usePullEntryFormDraft(
     'kuaizhizao:outbound-work-order-pull',
   );
@@ -74,21 +92,56 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const pageTitle = woCode
     ? `${pullFromWorkOrderAction.label} — ${woCode}`
     : pullFromWorkOrderAction.label;
-  const totalRequiredQty = useMemo(
-    () => kittingItems.reduce((sum, row) => sum + Number(row.required_quantity || 0), 0),
-    [kittingItems],
+
+  const totalIssueQty = useMemo(
+    () => pickLines.reduce((sum, line) => sum + Number(line.issueQuantity || 0), 0),
+    [pickLines],
   );
-  const kittingColumns = useMemo(
+
+  const lineColumns = useMemo(
     () => [
-      { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 140, ellipsis: true },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 180, ellipsis: true },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 70, align: 'center' as const },
-      { title: '需求数量', dataIndex: 'required_quantity', width: 110, align: 'right' as const },
-      { title: '已领数量', dataIndex: 'picked_quantity', width: 110, align: 'right' as const },
-      { title: '缺口数量', dataIndex: 'shortage_quantity', width: 110, align: 'right' as const },
-      { title: '主仓可用', dataIndex: 'main_warehouse_available', width: 130, align: 'right' as const },
-      { title: '线边可用', dataIndex: 'line_side_available', width: 120, align: 'right' as const },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.status'), dataIndex: 'status', width: 100, align: 'center' as const },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'materialCode', width: 120 },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'materialName', ellipsis: true },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.entry.requiredQty'),
+        dataIndex: 'requiredQuantity',
+        width: 100,
+        align: 'right' as const,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.pull.colPickedQty'),
+        dataIndex: 'pickedQuantity',
+        width: 100,
+        align: 'right' as const,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.pull.colPickableQty'),
+        dataIndex: 'pendingQuantity',
+        width: 100,
+        align: 'right' as const,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.entry.thisIssue'),
+        key: 'issueQuantity',
+        width: 140,
+        render: (_: unknown, line: PickLine) => (
+          <InputNumber
+            min={0}
+            max={line.pendingQuantity}
+            value={line.issueQuantity}
+            onChange={(v) => {
+              const qty = Number(v ?? 0);
+              setPickLines((prev) =>
+                prev.map((row) =>
+                  row.key === line.key ? { ...row, issueQuantity: qty } : row,
+                ),
+              );
+            }}
+            style={{ width: '100%' }}
+          />
+        ),
+      },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'unit', width: 60 },
     ],
     [t],
   );
@@ -104,11 +157,15 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       notes,
       receiverUuid: operatorHook.receiverUuid,
       receiverName: operatorHook.receiverName,
+      issueQuantities: Object.fromEntries(pickLines.map((line) => [line.materialId, line.issueQuantity])),
+      maxQuantities,
     }));
     persistNow();
   }, [
     warehouseId,
     notes,
+    pickLines,
+    maxQuantities,
     operatorHook.receiverUuid,
     operatorHook.receiverName,
     bindSnapshot,
@@ -140,47 +197,61 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
     void (async () => {
       setLoading(true);
       try {
-        const [woRaw, whRes] = await Promise.all([
+        const [woRaw, whRes, previewRaw] = await Promise.all([
           workOrderApi.get(String(woId)),
           masterWarehouseApi.list({ is_active: true, limit: 500 }),
+          workOrderApi.previewPushProductionPicking(woId) as Promise<PushPreviewResponse>,
         ]);
+        if (previewRaw?.has_blocking_issues) {
+          messageApi.warning(previewRaw.blocking_reason || t('app.kuaizhizao.warehouseOutbound.pull.woPreviewNoLines'));
+          leavePage();
+          return;
+        }
+        const previewItems = previewRaw?.items ?? [];
+        if (!previewItems.length) {
+          messageApi.warning(t('app.kuaizhizao.warehouseOutbound.pull.woPreviewNoLines'));
+          leavePage();
+          return;
+        }
         setWorkOrder(woRaw as Record<string, unknown>);
         setWarehouseOptions(mapWarehouseSelectOptions(whRes));
-        try {
-          const kittingRaw = (await workOrderApi.getKittingAnalysis(String(woId))) as {
-            kitting_rate?: number | string;
-            status?: string;
-            items?: Array<Record<string, unknown>>;
-          };
-          const nextRows = (kittingRaw?.items || []).map((item, idx) => ({
-            key: Number(item.material_id ?? idx),
-            material_code: String(item.material_code ?? ''),
-            material_name: String(item.material_name ?? ''),
-            material_unit: item.material_unit ? String(item.material_unit) : '',
-            required_quantity: Number(item.required_quantity ?? 0),
-            picked_quantity: Number(item.picked_quantity ?? 0),
-            shortage_quantity: Number(item.shortage_quantity ?? 0),
-            main_warehouse_available: Number(item.main_warehouse_available ?? 0),
-            line_side_available: Number(item.line_side_available ?? 0),
-            status: String(item.status ?? ''),
-          }));
-          setKittingItems(nextRows);
-          setKittingRate(Number(kittingRaw?.kitting_rate ?? 0));
-          setKittingStatus(String(kittingRaw?.status ?? ''));
-        } catch {
-          // 齐套分析异常不阻断取单页，仅降级为无明细展示
-          setKittingItems([]);
-          setKittingRate(0);
-          setKittingStatus('');
-        }
+        setPreviewSummary(previewRaw.summary ?? null);
+        const maxMap: Record<number, number> = {};
+        setPickLines(
+          previewItems.map((row) => {
+            const materialId = Number(row.item_id);
+            const pending = Number(row.max_push_quantity ?? 0);
+            maxMap[materialId] = pending;
+            return {
+              key: materialId,
+              materialId,
+              materialCode: String(row.material_code ?? ''),
+              materialName: String(row.material_name ?? ''),
+              unit: '',
+              requiredQuantity: Number(row.quantity ?? 0),
+              pickedQuantity: Number(row.pushed_quantity ?? 0),
+              pendingQuantity: pending,
+              issueQuantity: 0,
+            };
+          }),
+        );
+        setMaxQuantities(maxMap);
         applyDraftOnce((draft) => {
           const whId = draftOptionalNumber(draft.warehouseId);
           if (whId != null) setWarehouseId(whId);
           if (typeof draft.notes === 'string') setNotes(draft.notes);
+          if (draft.maxQuantities) {
+            setMaxQuantities((prev) => mergeRecordMaps(prev, draft.maxQuantities as Record<number, number>));
+          }
           operatorHook.restoreReceiver(
             typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
             typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
           );
+          if (draft.issueQuantities) {
+            setPickLines((prev) =>
+              mergeMaterialIssueQuantities(prev, draft.issueQuantities as Record<number, number>),
+            );
+          }
         });
       } catch (e: unknown) {
         messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseOutbound.entry.loadWorkOrderFailed'));
@@ -199,30 +270,43 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
     const whOpt = warehouseOptions.find((o) => o.value === warehouseId);
     if (!whOpt) return;
 
+    const activeLines = pickLines.filter((line) => line.issueQuantity > 0);
+    if (!activeLines.length) {
+      messageApi.warning(t('app.kuaizhizao.warehouseOutbound.entry.fillIssueQty'));
+      return;
+    }
+    for (const line of activeLines) {
+      const max = Number(maxQuantities[line.materialId] ?? line.pendingQuantity ?? 0);
+      if (line.issueQuantity > max) {
+        messageApi.error(
+          t('app.kuaizhizao.warehouseOutbound.entry.qtyExceedsPending', {
+            material: line.materialCode || line.materialName,
+            max,
+          }),
+        );
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
-      const result = await warehouseApi.productionPicking.batchPick({
-        work_order_ids: [woId],
+      const created = await warehouseApi.productionPicking.pullFromWorkOrder({
+        work_order_id: woId,
         warehouse_id: warehouseId,
         warehouse_name: whOpt.name,
+        picker_name: operatorHook.receiverName.trim() || undefined,
+        notes: notes.trim() || undefined,
+        lines: activeLines.map((line) => ({
+          material_id: line.materialId,
+          material_code: line.materialCode,
+          material_name: line.materialName,
+          material_unit: line.unit || '个',
+          issue_quantity: line.issueQuantity,
+        })),
       });
-      const list = Array.isArray(result) ? result : (result as { data?: unknown[]; items?: unknown[] })?.data
-        ?? (result as { items?: unknown[] })?.items
-        ?? [];
-      const created = (list[0] ?? {}) as { id?: number; picking_code?: string };
       if (created?.id == null) {
         messageApi.error(t('app.kuaizhizao.warehouseOutbound.entry.noPickingId'));
         return;
-      }
-      if (notes.trim() || operatorHook.receiverName.trim()) {
-        await warehouseApi.productionPicking.update(String(created.id), {
-          work_order_id: woId,
-          work_order_code: woCode,
-          warehouse_id: warehouseId,
-          warehouse_name: whOpt.name,
-          notes: notes.trim() || undefined,
-          picker_name: operatorHook.receiverName.trim() || undefined,
-        });
       }
       invalidateMenuBadgeCounts();
       clearDraft();
@@ -265,10 +349,10 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
             <Button disabled={submitting || loading} onClick={leavePage}>
               {t('app.kuaizhizao.warehouseOutbound.action.cancel')}
             </Button>
-            <Button loading={submitting} disabled={loading} onClick={() => void submit('draft')}>
+            <Button loading={submitting} disabled={loading || pickLines.length === 0} onClick={() => void submit('draft')}>
               {t('app.kuaizhizao.warehouseOutbound.action.generateDraft')}
             </Button>
-            <Button type="primary" loading={submitting} disabled={loading} onClick={() => void submit('confirm')}>
+            <Button type="primary" loading={submitting} disabled={loading || pickLines.length === 0} onClick={() => void submit('confirm')}>
               {t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound')}
             </Button>
           </Space>
@@ -343,11 +427,13 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
           <div className="uni-table-detail" style={{ marginTop: PAGE_SPACING.BLOCK_GAP }}>
             <UniTableDetailHeader
               title={t('app.kuaizhizao.warehouseOutbound.entry.issueDetails')}
-              extra={
-                <Typography.Text type="secondary">
-                  {`齐套率 ${Number.isFinite(kittingRate) ? kittingRate : 0}% / 总需求 ${totalRequiredQty}`}
-                  {kittingStatus ? ` / ${kittingStatus}` : ''}
-                </Typography.Text>
+              headerExtra={
+                previewSummary ? (
+                  <Typography.Text type="secondary">
+                    {previewSummary}
+                    {totalIssueQty > 0 ? ` / 本次领料 ${totalIssueQty}` : ''}
+                  </Typography.Text>
+                ) : undefined
               }
             />
             <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
@@ -358,10 +444,10 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
                   size="small"
                   rowKey="key"
                   pagination={false}
-                  scroll={{ x: 1200 }}
-                  dataSource={kittingItems}
-                  columns={kittingColumns}
-                  locale={{ emptyText: '暂无可领料明细' }}
+                  scroll={{ x: 1100 }}
+                  dataSource={pickLines}
+                  columns={lineColumns}
+                  locale={{ emptyText: t('app.kuaizhizao.warehouseOutbound.pull.woPreviewNoLines') }}
                 />
               </div>
             </div>

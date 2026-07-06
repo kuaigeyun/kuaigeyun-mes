@@ -15,6 +15,8 @@ export interface PurchaseRequisitionCapabilities {
   submit?: ActionCapability;
   approve?: ActionCapability;
   revoke_approval?: ActionCapability;
+  push_purchase_order?: ActionCapability;
+  push_inquiry?: ActionCapability;
 }
 
 export interface PurchaseRequisitionLifecycle {
@@ -156,6 +158,47 @@ export async function convertToPurchaseOrder(
   return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${requisitionId}/convert-to-purchase-order`, {
     method: 'POST',
     data,
+  });
+}
+
+export interface DocumentPushPreviewItem {
+  item_id: number;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string;
+  unit?: string;
+  quantity: number;
+  pushed_quantity: number;
+  max_push_quantity: number;
+  suggested_unit_price?: number;
+  supplier_id?: number;
+  required_date?: string;
+  in_active_inquiry?: boolean;
+}
+
+export interface DocumentPushPreview {
+  target_type: string;
+  summary: string;
+  items: DocumentPushPreviewItem[];
+  has_blocking_issues?: boolean;
+  blocking_reason?: string | null;
+  tip?: string;
+  requisition_id?: number;
+  requisition_code?: string;
+  computation_id?: number;
+  computation_code?: string;
+}
+
+export async function previewPushToPurchaseOrder(requisitionId: number): Promise<DocumentPushPreview> {
+  return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${requisitionId}/push-to-purchase-order/preview`, {
+    method: 'GET',
+  });
+}
+
+export async function previewPushToInquiry(requisitionId: number): Promise<DocumentPushPreview> {
+  return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${requisitionId}/push-to-purchase-inquiry/preview`, {
+    method: 'GET',
   });
 }
 

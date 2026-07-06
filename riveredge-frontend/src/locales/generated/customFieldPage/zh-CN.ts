@@ -4,8 +4,6 @@ const customFieldPageZhCN = {
   'customFieldPage.kuaizhizao-equipment.tableNameLabel': '设备表',
   'customFieldPage.kuaizhizao-mold.pageName': '模具台账',
   'customFieldPage.kuaizhizao-mold.tableNameLabel': '模具表',
-  'customFieldPage.kuaizhizao-plan-production-plan.pageName': '生产计划',
-  'customFieldPage.kuaizhizao-plan-production-plan.tableNameLabel': '生产计划表',
   'customFieldPage.kuaizhizao-production-outsource-order.pageName': '委外单',
   'customFieldPage.kuaizhizao-production-outsource-order.tableNameLabel': '委外单表',
   'customFieldPage.kuaizhizao-production-outsource-work-order.pageName': '委外工单',

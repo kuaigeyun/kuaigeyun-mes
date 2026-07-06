@@ -4,8 +4,6 @@ const customFieldPagezhHant = {
   'customFieldPage.kuaizhizao-equipment.tableNameLabel': '裝置表',
   'customFieldPage.kuaizhizao-mold.pageName': '模具臺賬',
   'customFieldPage.kuaizhizao-mold.tableNameLabel': '模具表',
-  'customFieldPage.kuaizhizao-plan-production-plan.pageName': '生產計劃',
-  'customFieldPage.kuaizhizao-plan-production-plan.tableNameLabel': '生產計劃表',
   'customFieldPage.kuaizhizao-production-outsource-order.pageName': '委外單',
   'customFieldPage.kuaizhizao-production-outsource-order.tableNameLabel': '委外單表',
   'customFieldPage.kuaizhizao-production-outsource-work-order.pageName': '委外工單',

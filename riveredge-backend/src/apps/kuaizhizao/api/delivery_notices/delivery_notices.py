@@ -25,6 +25,8 @@ from apps.kuaizhizao.schemas.delivery_notice import (
     DeliveryNoticeResponse,
     DeliveryNoticeListResponse,
     DeliveryNoticeWithItemsResponse,
+    DeliveryNoticePullCandidateListResponse,
+    DeliveryNoticePullPreviewResponse,
 )
 
 delivery_notice_service = DeliveryNoticeService()
@@ -33,6 +35,47 @@ router = APIRouter(
     tags=["App · Kuaige Zhizao · Delivery Notice"],
     dependencies=[Depends(require_kuaizhizao_module_access("delivery-notice", resolve_print=False))],
 )
+
+
+@router.get(
+    "/pull-candidates",
+    response_model=DeliveryNoticePullCandidateListResponse,
+    summary="List sales delivery pull candidates for delivery notice",
+)
+async def list_delivery_notice_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    keyword: Optional[str] = Query(None, description="出库单号/订单号/客户"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await delivery_notice_service.list_delivery_notice_pull_candidates(
+        tenant_id,
+        keyword=keyword,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/sales-delivery-preview",
+    response_model=DeliveryNoticePullPreviewResponse,
+    summary="Preview delivery notice from sales delivery",
+)
+async def preview_delivery_notice_from_sales_delivery(
+    sales_delivery_id: int = Query(..., description="销售出库单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DeliveryNoticePullPreviewResponse:
+    try:
+        return await delivery_notice_service.get_delivery_notice_pull_preview(
+            tenant_id=tenant_id,
+            sales_delivery_id=sales_delivery_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("", response_model=DeliveryNoticeResponse, summary="Create delivery notice")

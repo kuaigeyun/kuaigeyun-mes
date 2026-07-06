@@ -8,6 +8,7 @@ Date: 2025-12-27
 """
 
 from typing import Any, Dict, Optional
+from tortoise.backends.base.client import BaseDBAsyncClient
 from infra.services.interfaces.service_interface import TenantServiceInterface
 from infra.services.tenant_service import TenantService
 
@@ -141,5 +142,33 @@ class TenantServiceImpl(TenantServiceInterface):
             init_data_options=init_data_options,
             current_user_id=current_user_id,
             industry_preset=industry_preset,
+        )
+
+    async def get_shared_user_quota_summary(self, tenant_id: int) -> Dict[str, Any]:
+        """获取主组织共享用户池统计"""
+        return await self._tenant_service.get_shared_user_quota_summary(tenant_id)
+
+    async def sync_tenant_limits_from_plan(
+        self,
+        tenant_id: int,
+        skip_tenant_filter: bool = True,
+    ) -> Dict[str, Any]:
+        """从当前套餐同步组织配额上限"""
+        return await self._tenant_service.sync_tenant_limits_from_plan(
+            tenant_id,
+            skip_tenant_filter=skip_tenant_filter,
+        )
+
+    async def assert_shared_user_quota_capacity(
+        self,
+        tenant_id: int,
+        increment: int = 1,
+        using_db: Optional[BaseDBAsyncClient] = None,
+    ) -> None:
+        """校验共享用户池容量"""
+        await self._tenant_service.assert_shared_user_quota_capacity(
+            tenant_id,
+            increment=increment,
+            using_db=using_db,
         )
 

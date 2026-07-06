@@ -35,7 +35,6 @@ export const PERMISSION_MODULE_MAP: Record<string, string[]> = {
   finance: ['payable', 'receivable', 'receipt', 'payment'],
   manufacturing: [
     'work_order',
-    'production_plan',
     'process_inspection',
     'mrp',
     'lrp',

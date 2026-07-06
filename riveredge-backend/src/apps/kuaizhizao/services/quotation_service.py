@@ -140,11 +140,31 @@ class QuotationService:
         )
         if not missing:
             return False
-        await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
-            contract_id=None,
-            contract_code=None,
-            updated_by=operator_id,
+        so_still_live = not await QuotationService._quotation_conversion_downstream_missing(
+            tenant_id, q
         )
+        from_state = (q.status or "").strip()
+        updates: Dict[str, Any] = {
+            "contract_id": None,
+            "contract_code": None,
+            "updated_by": operator_id,
+        }
+        if from_state == "已转订单" and not so_still_live:
+            updates["status"] = "已接受"
+        await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(**updates)
+        if from_state == "已转订单" and not so_still_live:
+            from apps.common.base_service import AppBaseService
+
+            op_name = await AppBaseService().get_user_name(operator_id)
+            await self._log_quotation_state_transition(
+                tenant_id,
+                quotation_id,
+                "已转订单",
+                "已接受",
+                operator_id,
+                op_name,
+                "下游销售合同已删除，自动恢复客户确认",
+            )
         return True
 
     async def _detach_quotation_if_downstream_sales_order_deleted(
@@ -1665,6 +1685,170 @@ class QuotationService:
             id=quotation_id, tenant_id=tenant_id
         ).update(deleted_at=now)
 
+    async def _load_quotation_push_context(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        *,
+        operator_id: int = 0,
+    ) -> tuple[Any, list[Any], bool, bool, Any]:
+        """加载下推预览/转换共用上下文（含下游缺失检测与能力推导）。"""
+        await self._detach_quotation_if_downstream_sales_order_deleted(
+            tenant_id, quotation_id, operator_id, log_transition=False
+        )
+        await self._detach_quotation_if_contract_deleted(
+            tenant_id, quotation_id, operator_id
+        )
+        quotation = await Quotation.get_or_none(
+            tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+        )
+        if not quotation:
+            raise NotFoundError(f"报价单不存在: {quotation_id}")
+        conv_missing = await self._quotation_conversion_downstream_missing(
+            tenant_id, quotation
+        )
+        contract_missing = await self._quotation_contract_downstream_missing(
+            tenant_id, quotation
+        )
+        items = await QuotationItem.filter(
+            tenant_id=tenant_id, quotation_id=quotation_id
+        ).order_by("id")
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "quotation"
+        )
+        from apps.kuaizhizao.services.document_action_policy.quotation import (
+            derive_quotation_capabilities,
+        )
+
+        caps = derive_quotation_capabilities(
+            quotation,
+            audit_required=audit_required,
+            conversion_downstream_missing=conv_missing,
+            contract_downstream_missing=contract_missing,
+        )
+        return quotation, items, conv_missing, contract_missing, caps
+
+    @staticmethod
+    def _build_quotation_push_preview_items(
+        items: list[Any],
+        *,
+        push_allowed: bool,
+        already_pushed: bool,
+    ) -> list[Dict[str, Any]]:
+        preview_items: list[Dict[str, Any]] = []
+        for it in items:
+            qty = float(it.quote_quantity or 0)
+            if qty <= 0:
+                continue
+            if push_allowed:
+                pushed_qty = 0.0
+                max_push_qty = qty
+            elif already_pushed:
+                pushed_qty = qty
+                max_push_qty = 0.0
+            else:
+                pushed_qty = 0.0
+                max_push_qty = 0.0
+            preview_items.append(
+                {
+                    "item_id": int(it.id),
+                    "material_id": it.material_id,
+                    "material_code": it.material_code,
+                    "material_name": it.material_name,
+                    "material_spec": it.material_spec,
+                    "material_unit": it.material_unit,
+                    "quantity": qty,
+                    "pushed_quantity": pushed_qty,
+                    "max_push_quantity": max_push_qty,
+                    "delivery_date": (
+                        it.delivery_date.isoformat() if it.delivery_date else None
+                    ),
+                    "unit_price": float(it.unit_price or 0),
+                    "total_amount": float(it.total_amount or 0),
+                }
+            )
+        return preview_items
+
+    async def preview_push_quotation_to_sales_order(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+    ) -> Dict[str, Any]:
+        """下推销售订单预览：返回明细数量、已下推、可下推。"""
+        quotation, items, conv_missing, _contract_missing, caps = (
+            await self._load_quotation_push_context(tenant_id, quotation_id)
+        )
+        if not items:
+            raise BusinessLogicError("报价单无明细，无法下推销售订单")
+
+        push_allowed = caps.convert_to_order.allowed
+        already_pushed = bool(quotation.sales_order_id) and not conv_missing
+        preview_items = self._build_quotation_push_preview_items(
+            items,
+            push_allowed=push_allowed,
+            already_pushed=already_pushed,
+        )
+        if not preview_items:
+            raise BusinessLogicError("报价单无有效明细数量，无法下推销售订单")
+
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        return {
+            "target_type": "sales_order",
+            "summary": (
+                f"请选择本次要下推的报价明细（{pushable_count}/{len(preview_items)} 行可下推）"
+                if push_allowed
+                else "当前报价单不可下推销售订单"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": not push_allowed,
+            "blocking_reason": (
+                caps.convert_to_order.reason if not push_allowed else None
+            ),
+            "tip": "确认后将按全部报价明细创建销售订单；整单转换后报价单状态变为「已转订单」。",
+        }
+
+    async def preview_push_quotation_to_sales_contract(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+    ) -> Dict[str, Any]:
+        """下推销售合同预览：返回明细数量、已下推、可下推。"""
+        quotation, items, _conv_missing, contract_missing, caps = (
+            await self._load_quotation_push_context(tenant_id, quotation_id)
+        )
+        if not items:
+            raise BusinessLogicError("报价单无明细，无法下推销售合同")
+
+        push_allowed = caps.convert_to_contract.allowed
+        already_pushed = bool(quotation.contract_id) and not contract_missing
+        preview_items = self._build_quotation_push_preview_items(
+            items,
+            push_allowed=push_allowed,
+            already_pushed=already_pushed,
+        )
+        if not preview_items:
+            raise BusinessLogicError("报价单无有效明细数量，无法下推销售合同")
+
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        return {
+            "target_type": "sales_contract",
+            "summary": (
+                f"请确认将下推的报价明细（{pushable_count}/{len(preview_items)} 行可下推）"
+                if push_allowed
+                else "当前报价单不可下推销售合同"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": not push_allowed,
+            "blocking_reason": (
+                caps.convert_to_contract.reason if not push_allowed else None
+            ),
+            "tip": "确认后将按报价明细创建销售合同；转换后报价单状态变为「已转订单」。",
+        }
+
     async def convert_to_sales_order(
         self,
         tenant_id: int,
@@ -1727,6 +1911,11 @@ class QuotationService:
             items = [it for it in items if int(it.id) in selected_ids]
             if not items:
                 raise BusinessLogicError("所选报价明细为空，无法转为销售订单")
+            all_item_ids = {int(it.id) for it in await QuotationItem.filter(
+                tenant_id=tenant_id, quotation_id=quotation_id
+            )}
+            if selected_ids != all_item_ids:
+                raise BusinessLogicError("报价单须整单下推销售订单，请在下推预览中确认全部可下推明细")
 
         # 构建 SalesOrderCreate
         order_date = quotation.quotation_date

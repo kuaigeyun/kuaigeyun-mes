@@ -7,7 +7,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker, Modal, Card, theme, Tooltip } from 'antd';
+import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker, Modal, Card, theme, Tooltip, Alert, Switch } from 'antd';
 import {
   EyeOutlined,
   CheckOutlined,
@@ -29,7 +29,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
-import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
+import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE, PAGE_SPACING } from '../../../../../components/layout-templates';
@@ -60,14 +60,17 @@ import {
   withdrawPurchaseRequisitionSubmit,
   fixPurchaseRequisitionStatus,
   convertToPurchaseOrder,
+  previewPushToPurchaseOrder,
+  previewPushToInquiry,
   PurchaseRequisition,
   PurchaseRequisitionItem,
+  type DocumentPushPreview,
 } from '../../../services/purchase-requisition';
 import { createInquiryFromRequisition } from '../../../services/purchase-inquiry';
 import {
   listDemandComputations,
   pushToPurchaseRequisition,
-  getPushOptions,
+  previewPushToPurchaseRequisition,
 } from '../../../services/demand-computation';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
@@ -89,12 +92,16 @@ import { useTranslation } from 'react-i18next';
 import { useGlobalStore } from '../../../../../stores';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { DetailLifecycleCollaborationBlock } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { formatDateTime } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import {
+  demandComputationCapabilityReasonMessage,
+  purchaseRequisitionCapabilityReasonMessage,
+} from '../../../../../hooks/useDocumentCapabilities';
 
 /** 采购申请详情只读明细表最小横向宽度 */
 const PURCHASE_REQUISITION_DETAIL_ITEMS_MIN_WIDTH = 980;
@@ -122,19 +129,10 @@ type PullDemandComputationCandidate = {
   computation_status?: string;
   created_at?: string;
   updated_at?: string;
-  has_purchase_items?: boolean;
-  can_push_requisition?: boolean;
-  disabled_reason?: string;
 };
 
 function renderPurchaseRequisitionRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   return nodes;
-}
-
-function canPushPurchaseRequisition(record: PurchaseRequisition): boolean {
-  const lifecycle = (record as PurchaseRequisition & { lifecycle?: Record<string, unknown> }).lifecycle;
-  const flowClass = String(lifecycle?.flow_class ?? lifecycle?.current_stage_key ?? '').trim();
-  return flowClass === 'approved' || flowClass === 'partial';
 }
 
 const PURCHASE_REQUISITION_RESOURCE = 'kuaizhizao:purchase-requisition';
@@ -205,6 +203,27 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
+
+  const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
+  const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
+  const [pullPreviewConfirming, setPullPreviewConfirming] = useState(false);
+  const [pullPreviewData, setPullPreviewData] = useState<DocumentPushPreview | null>(null);
+  const [pullPreviewComputationId, setPullPreviewComputationId] = useState<number | null>(null);
+
+  const [pushPoPreviewOpen, setPushPoPreviewOpen] = useState(false);
+  const [pushPoPreviewLoading, setPushPoPreviewLoading] = useState(false);
+  const [pushPoPreviewConfirming, setPushPoPreviewConfirming] = useState(false);
+  const [pushPoPreviewData, setPushPoPreviewData] = useState<DocumentPushPreview | null>(null);
+  const [pushPoTarget, setPushPoTarget] = useState<PurchaseRequisition | null>(null);
+  const [pushPoDetailItems, setPushPoDetailItems] = useState<PurchaseRequisitionItem[]>([]);
+  const [pushPoSuppliers, setPushPoSuppliers] = useState<Array<{ id: number; code?: string; name: string }>>([]);
+
+  const [pushInquiryPreviewOpen, setPushInquiryPreviewOpen] = useState(false);
+  const [pushInquiryPreviewLoading, setPushInquiryPreviewLoading] = useState(false);
+  const [pushInquiryPreviewConfirming, setPushInquiryPreviewConfirming] = useState(false);
+  const [pushInquiryPreviewData, setPushInquiryPreviewData] = useState<DocumentPushPreview | null>(null);
+  const [pushInquiryTarget, setPushInquiryTarget] = useState<PurchaseRequisition | null>(null);
+  const [pushInquirySelectedItemIds, setPushInquirySelectedItemIds] = useState<number[]>([]);
 
   const [prTrackingRefreshKey, setPrTrackingRefreshKey] = useState(0);
 
@@ -533,15 +552,60 @@ const PurchaseRequisitionsPage: React.FC = () => {
         width: 180,
         align: 'center',
         render: (_, record) =>
-          record.can_push_requisition === false ? (
-            <Tag color="gold">{record.disabled_reason || t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate')}</Tag>
-          ) : (
+          record.computation_status === '完成' ? (
             <Tag color="success">{t('app.kuaizhizao.purchaseRequisition.pull.canCreate')}</Tag>
+          ) : (
+            <Tag color="gold">{t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate')}</Tag>
           ),
       },
     ],
     [t],
   );
+
+  const resetPullPreviewModal = useCallback(() => {
+    setPullPreviewOpen(false);
+    setPullPreviewData(null);
+    setPullPreviewComputationId(null);
+  }, []);
+
+  const showPullCreatePreview = useCallback(
+    (computationId: number) => {
+      setPullPreviewOpen(true);
+      setPullPreviewLoading(true);
+      setPullPreviewConfirming(false);
+      setPullPreviewData(null);
+      setPullPreviewComputationId(computationId);
+      previewPushToPurchaseRequisition(computationId)
+        .then((res) => setPullPreviewData(res))
+        .catch((error: any) => {
+          messageApi.error(
+            getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.pull.previewFailed')),
+          );
+          resetPullPreviewModal();
+        })
+        .finally(() => setPullPreviewLoading(false));
+    },
+    [messageApi, resetPullPreviewModal, t],
+  );
+
+  const handlePullPreviewConfirm = useCallback(async () => {
+    if (!pullPreviewComputationId || !pullPreviewData) return;
+    if (pullPreviewData.has_blocking_issues) return;
+    setPullPreviewConfirming(true);
+    try {
+      const res = await pushToPurchaseRequisition(pullPreviewComputationId);
+      messageApi.success(res?.message || t('app.kuaizhizao.purchaseRequisition.pull.success'));
+      actionRef.current?.reload();
+      invalidateMenuBadgeCounts();
+      resetPullPreviewModal();
+    } catch (error: any) {
+      messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.pull.failed')));
+    } finally {
+      setPullPreviewConfirming(false);
+    }
+  }, [invalidateMenuBadgeCounts, messageApi, pullPreviewComputationId, pullPreviewData, resetPullPreviewModal, t]);
+
+  const pullQueryCloseRef = useRef<(() => void) | null>(null);
 
   const pullFromComputationQuery = useUniPullQuery<PullDemandComputationCandidate>({
     rowKey: 'id',
@@ -549,71 +613,45 @@ const PurchaseRequisitionsPage: React.FC = () => {
     loadData: async ({ keyword, page, pageSize }) => {
       try {
         const kw = keyword.trim();
+        const skip = (page - 1) * pageSize;
         const listRes = await listDemandComputations({
-          skip: 0,
-          limit: 50,
+          skip,
+          limit: pageSize,
           computation_status: '完成',
           computation_code: kw || undefined,
         });
-        const rows = listRes?.data || [];
-        const candidates = await Promise.all(
-          rows
-            .filter((row) => row.id != null)
-            .map(async (row) => {
-              let hasPurchaseItems = true;
-              let canPushRequisition = true;
-              let disabledReason: string | undefined;
-              try {
-                const options = await getPushOptions(row.id!);
-                hasPurchaseItems = !!options.has_purchase_items;
-                canPushRequisition = hasPurchaseItems && (options.purchase_choices || []).includes('requisition');
-                if (!hasPurchaseItems) {
-                  disabledReason = t('app.kuaizhizao.purchaseRequisition.pull.noPurchaseItems');
-                } else if (!canPushRequisition) {
-                  disabledReason = t('app.kuaizhizao.purchaseRequisition.pull.requisitionExists');
-                }
-              } catch {
-                // capability probe failure should not block selectable rows
-              }
-              return {
+        const rows = (listRes?.data || [])
+          .filter((row) => row.id != null)
+          .map(
+            (row) =>
+              ({
                 id: row.id!,
                 computation_code: row.computation_code,
                 business_mode: row.business_mode,
                 computation_status: row.computation_status,
                 created_at: row.created_at,
                 updated_at: row.updated_at,
-                has_purchase_items: hasPurchaseItems,
-                can_push_requisition: canPushRequisition,
-                disabled_reason: disabledReason,
-              } as PullDemandComputationCandidate;
-            }),
-        );
-        const start = (page - 1) * pageSize;
-        return { data: candidates.slice(start, start + pageSize), total: candidates.length };
+              }) as PullDemandComputationCandidate,
+          );
+        return { data: rows, total: listRes?.total ?? rows.length };
       } catch (error: any) {
-        messageApi.error(error?.response?.data?.detail || error?.message || t('app.kuaizhizao.purchaseRequisition.pull.failed'));
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.pull.failed')));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => record.can_push_requisition === false,
-    onConfirm: async (keys, rows) => {
+    isRowDisabled: (record) => record.computation_status !== '完成',
+    onConfirm: async (keys) => {
       const selectedId = Number(keys[0]);
-      const selected = rows[0];
       if (!selectedId || selectedId <= 0) {
         messageApi.warning(t('app.kuaizhizao.purchaseRequisition.pull.selectComputation'));
         return;
       }
-      if (selected && selected.can_push_requisition === false) {
-        messageApi.warning(selected.disabled_reason || t('app.kuaizhizao.purchaseRequisition.pull.computationUnavailable'));
-        return;
-      }
-      const res = await pushToPurchaseRequisition(selectedId);
-      messageApi.success(res?.message || t('app.kuaizhizao.purchaseRequisition.pull.success'));
-      actionRef.current?.reload();
-      invalidateMenuBadgeCounts();
-      pullFromComputationQuery.closeModal();
+      pullQueryCloseRef.current?.();
+      showPullCreatePreview(selectedId);
     },
   });
+
+  pullQueryCloseRef.current = pullFromComputationQuery.closeModal;
 
   const mapItemsForApi = (
     validItems: Array<{
@@ -797,61 +835,47 @@ const PurchaseRequisitionsPage: React.FC = () => {
     return tableRowsRef.current.find((row) => row.id === id) ?? null;
   }, [selectedRowKeys]);
 
-  const canUseToolbarPush = selectedRequisitionForToolbar
-    ? canPushPurchaseRequisition(selectedRequisitionForToolbar)
-    : false;
+  const canPushPurchaseOrder = !!selectedRequisitionForToolbar?.capabilities?.push_purchase_order?.allowed;
+  const canPushInquiry = !!selectedRequisitionForToolbar?.capabilities?.push_inquiry?.allowed;
   const toolbarPushDisabledReason = useMemo(() => {
-    if (selectedRowKeys.length === 0) {
-      return t('app.kuaizhizao.purchaseRequisition.push.selectOne', { defaultValue: '请先选择一条采购申请' });
-    }
-    if (selectedRowKeys.length !== 1) {
-      return t('app.kuaizhizao.purchaseRequisition.push.singleOnly', {
-        count: selectedRowKeys.length,
-        defaultValue: '下推仅支持单条，请仅保留一条选中记录',
-      });
-    }
-    if (!selectedRequisitionForToolbar) {
-      return t('app.kuaizhizao.purchaseRequisition.push.rowUnavailable', { defaultValue: '当前选中记录不可用，请刷新后重试' });
-    }
-    if (!canUseToolbarPush) {
-      const lifecycle = (selectedRequisitionForToolbar as PurchaseRequisition & { lifecycle?: Record<string, unknown> }).lifecycle;
-      const flowClass = String(lifecycle?.flow_class ?? lifecycle?.current_stage_key ?? '-').trim() || '-';
-      return t('app.kuaizhizao.purchaseRequisition.push.flowBlocked', {
-        flowClass,
-        defaultValue: `当前流转类为 ${flowClass}，不可下推`,
-      });
+    const base = buildUniPushToolbarDisabledReason(t, {
+      selectedCount: selectedRowKeys.length,
+      hasSelectedRecord: !!selectedRequisitionForToolbar,
+    });
+    if (base) return base;
+    if (selectedRequisitionForToolbar && !canPushPurchaseOrder && !canPushInquiry) {
+      return (
+        purchaseRequisitionCapabilityReasonMessage(
+          selectedRequisitionForToolbar.capabilities?.push_purchase_order?.reason
+            || selectedRequisitionForToolbar.capabilities?.push_inquiry?.reason,
+          t,
+        ) || t('app.kuaizhizao.purchaseRequisition.push.flowBlocked', { flowClass: '-' })
+      );
     }
     return undefined;
-  }, [canUseToolbarPush, selectedRequisitionForToolbar, selectedRowKeys.length, t]);
+  }, [canPushInquiry, canPushPurchaseOrder, selectedRequisitionForToolbar, selectedRowKeys.length, t]);
 
-  const handleBatchDelete = async (keys: React.Key[]) => {
-    if (!keys || keys.length === 0) return;
-    try {
-      for (const id of keys) {
-        await deletePurchaseRequisition(Number(id));
-      }
-      messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-      invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
-    } catch (e: any) {
-      messageApi.error(e?.response?.data?.detail || t('common.deleteFailed'));
-    }
-  };
+  const resetPushPoPreviewModal = useCallback(() => {
+    setPushPoPreviewOpen(false);
+    setPushPoPreviewData(null);
+    setPushPoTarget(null);
+    setPushPoDetailItems([]);
+    setPushPoSuppliers([]);
+  }, []);
 
-  const handleConvert = async (record: PurchaseRequisition) => {
-    try {
-      const suppliers = await ensureSupplierList();
-      if (!suppliers.length) {
-        messageApi.warning(t('app.kuaizhizao.purchaseRequisition.maintainSupplierFirst'));
-        return;
-      }
-      const detail = await getPurchaseRequisition(record.id!);
-      const allItems = detail.items || [];
-      const unconverted = allItems.filter((i) => !i.purchase_order_id);
-      if (unconverted.length === 0) {
-        messageApi.info(t('app.kuaizhizao.purchaseRequisition.noPushLines'));
-        return;
-      }
+  const resetPushInquiryPreviewModal = useCallback(() => {
+    setPushInquiryPreviewOpen(false);
+    setPushInquiryPreviewData(null);
+    setPushInquiryTarget(null);
+    setPushInquirySelectedItemIds([]);
+  }, []);
+
+  const setupConvertFormFromDetail = useCallback(
+    (
+      allItems: PurchaseRequisitionItem[],
+      unconverted: PurchaseRequisitionItem[],
+      suppliers: Array<{ id: number; code?: string; name: string }>,
+    ) => {
       const defaultSupplierId = unconverted[0]?.supplier_id || suppliers[0]?.id;
       const quantities: Record<number, number> = {};
       const unitPrices: Record<number, number> = {};
@@ -870,104 +894,181 @@ const PurchaseRequisitionsPage: React.FC = () => {
         itemSuppliers: {},
         persistDefaultSupplier: false,
       };
+    },
+    [],
+  );
 
-      modalApi.confirm({
-        title: pushToPurchaseOrderAction.label,
-        icon: null,
-        width: MODAL_CONFIG.EXTRA_LARGE_WIDTH,
-        content: (
-          <ConvertForm
-            items={allItems}
-            unconvertedIds={unconverted.map((i) => i.id!).filter(Boolean)}
-            suppliers={suppliers}
-            formRef={convertFormRef}
-          />
-        ),
-        onOk: async () => {
-          const {
-            selectedIds,
-            supplierId,
-            supplierName,
-            itemQuantities,
-            itemUnitPrices,
-            itemSuppliers,
-            persistDefaultSupplier,
-          } = convertFormRef.current;
-          if (selectedIds.length === 0) {
-            messageApi.error(t('app.kuaizhizao.purchaseRequisition.selectPushLines'));
-            return Promise.reject();
-          }
-          const missing = selectedIds.some((id) => !itemSuppliers[id]);
-          if (missing) {
-            messageApi.error(t('app.kuaizhizao.purchaseRequisition.selectLineSupplier'));
-            return Promise.reject();
-          }
-          const invalidPrice = selectedIds.some((id) => {
-            const price = itemUnitPrices[id];
-            return price == null || !Number.isFinite(price) || price < 0;
-          });
-          if (invalidPrice) {
-            messageApi.error(t('app.kuaizhizao.purchaseRequisition.convert.invalidUnitPrice'));
-            return Promise.reject();
-          }
-          try {
-            const res = await convertToPurchaseOrder(record.id!, {
-              item_ids: selectedIds,
-              supplier_id: supplierId || undefined,
-              supplier_name: supplierName || undefined,
-              item_quantities: itemQuantities,
-              item_unit_prices: Object.fromEntries(
-                selectedIds.map((id) => [id, itemUnitPrices[id] ?? 0]),
-              ),
-              item_suppliers: Object.fromEntries(selectedIds.map((id) => [id, itemSuppliers[id]])),
-              persist_default_supplier_to_material: persistDefaultSupplier,
-            });
-            const pos = res.purchase_orders?.length
-              ? res.purchase_orders
-              : [{ purchase_order_id: res.purchase_order_id, purchase_order_code: res.purchase_order_code, supplier_id: supplierId }];
-            const codes = pos.map((p) => p.purchase_order_code).filter(Boolean).join('、');
-            messageApi.success(
-              codes
-                ? `${res.message || t('app.kuaizhizao.purchaseRequisition.pushSuccess')}：${codes}`
-                : (res.message || t('app.kuaizhizao.purchaseRequisition.pushSuccess')),
-              6,
-            );
-            invalidateMenuBadgeCounts();
-
-            actionRef.current?.reload();
-          } catch (e: unknown) {
-            messageApi.error(getApiErrorMessage(e, t('app.kuaizhizao.purchaseRequisition.pushFailed')));
-            return Promise.reject();
-          }
-        },
-      });
-    } catch {
-      messageApi.error(t('app.kuaizhizao.purchaseRequisition.loadDetailFailed'));
-    }
-  };
-
-  const handleCreateInquiry = async (record: PurchaseRequisition) => {
-    try {
-      const detail = await getPurchaseRequisition(record.id!);
-      const unconverted = (detail.items ?? []).filter((i) => !i.purchase_order_id);
-      if (unconverted.length === 0) {
-        messageApi.info(t('app.kuaizhizao.purchaseRequisition.noInquiryLines'));
-        return;
+  const openPushPoPreview = useCallback(
+    async (record: PurchaseRequisition) => {
+      if (!record.id) return;
+      setPushPoPreviewOpen(true);
+      setPushPoPreviewLoading(true);
+      setPushPoPreviewConfirming(false);
+      setPushPoPreviewData(null);
+      setPushPoTarget(record);
+      setPushPoDetailItems([]);
+      setPushPoSuppliers([]);
+      try {
+        const preview = await previewPushToPurchaseOrder(record.id);
+        setPushPoPreviewData(preview);
+        if (preview.has_blocking_issues) return;
+        const suppliers = await ensureSupplierList();
+        if (!suppliers.length) {
+          messageApi.warning(t('app.kuaizhizao.purchaseRequisition.maintainSupplierFirst'));
+          resetPushPoPreviewModal();
+          return;
+        }
+        const detail = await getPurchaseRequisition(record.id);
+        const pushableIds = new Set((preview.items || []).map((row) => Number(row.item_id)));
+        const allItems = detail.items || [];
+        const unconverted = allItems.filter((i) => i.id != null && pushableIds.has(i.id!) && !i.purchase_order_id);
+        if (unconverted.length === 0) {
+          messageApi.info(t('app.kuaizhizao.purchaseRequisition.noPushLines'));
+          resetPushPoPreviewModal();
+          return;
+        }
+        setupConvertFormFromDetail(allItems, unconverted, suppliers);
+        setPushPoDetailItems(allItems);
+        setPushPoSuppliers(suppliers);
+      } catch (error: any) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.loadDetailFailed')));
+        resetPushPoPreviewModal();
+      } finally {
+        setPushPoPreviewLoading(false);
       }
-      modalApi.confirm({
-        title: pushToInquiryAction.label,
-        content: t('app.kuaizhizao.purchaseRequisition.pushInquiryContent', { count: unconverted.length }),
-        onOk: async () => {
-          const doc = await createInquiryFromRequisition(record.id!, {
-            item_ids: unconverted.map((i) => i.id!).filter(Boolean),
-          });
-          messageApi.success(t('app.kuaizhizao.purchaseRequisition.inquiryCreated', { code: doc.inquiry_code }));
-          navigate(`${ROUTES.PURCHASE_INQUIRIES}?inquiryId=${doc.id}`);
-          actionRef.current?.reload();
-        },
+    },
+    [ensureSupplierList, messageApi, resetPushPoPreviewModal, setupConvertFormFromDetail, t],
+  );
+
+  const handlePushPoPreviewConfirm = useCallback(async () => {
+    if (!pushPoTarget?.id || !pushPoPreviewData || pushPoPreviewData.has_blocking_issues) return;
+    const {
+      selectedIds,
+      supplierId,
+      supplierName,
+      itemQuantities,
+      itemUnitPrices,
+      itemSuppliers,
+      persistDefaultSupplier,
+    } = convertFormRef.current;
+    if (selectedIds.length === 0) {
+      messageApi.error(t('app.kuaizhizao.purchaseRequisition.selectPushLines'));
+      return;
+    }
+    if (selectedIds.some((id) => !itemSuppliers[id])) {
+      messageApi.error(t('app.kuaizhizao.purchaseRequisition.selectLineSupplier'));
+      return;
+    }
+    if (
+      selectedIds.some((id) => {
+        const price = itemUnitPrices[id];
+        return price == null || !Number.isFinite(price) || price < 0;
+      })
+    ) {
+      messageApi.error(t('app.kuaizhizao.purchaseRequisition.convert.invalidUnitPrice'));
+      return;
+    }
+    setPushPoPreviewConfirming(true);
+    try {
+      const res = await convertToPurchaseOrder(pushPoTarget.id, {
+        item_ids: selectedIds,
+        supplier_id: supplierId || undefined,
+        supplier_name: supplierName || undefined,
+        item_quantities: itemQuantities,
+        item_unit_prices: Object.fromEntries(selectedIds.map((id) => [id, itemUnitPrices[id] ?? 0])),
+        item_suppliers: Object.fromEntries(selectedIds.map((id) => [id, itemSuppliers[id]])),
+        persist_default_supplier_to_material: persistDefaultSupplier,
       });
+      const pos = res.purchase_orders?.length
+        ? res.purchase_orders
+        : [{ purchase_order_id: res.purchase_order_id, purchase_order_code: res.purchase_order_code, supplier_id: supplierId }];
+      const codes = pos.map((p) => p.purchase_order_code).filter(Boolean).join('、');
+      messageApi.success(
+        codes
+          ? `${res.message || t('app.kuaizhizao.purchaseRequisition.pushSuccess')}：${codes}`
+          : (res.message || t('app.kuaizhizao.purchaseRequisition.pushSuccess')),
+        6,
+      );
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      resetPushPoPreviewModal();
+      setSelectedRowKeys([]);
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.pushFailed')));
+    } finally {
+      setPushPoPreviewConfirming(false);
+    }
+  }, [invalidateMenuBadgeCounts, messageApi, pushPoPreviewData, pushPoTarget, resetPushPoPreviewModal, t]);
+
+  const openPushInquiryPreview = useCallback(
+    async (record: PurchaseRequisition) => {
+      if (!record.id) return;
+      setPushInquiryPreviewOpen(true);
+      setPushInquiryPreviewLoading(true);
+      setPushInquiryPreviewConfirming(false);
+      setPushInquiryPreviewData(null);
+      setPushInquiryTarget(record);
+      setPushInquirySelectedItemIds([]);
+      try {
+        const preview = await previewPushToInquiry(record.id);
+        setPushInquiryPreviewData(preview);
+        const ids = (preview.items || [])
+          .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
+          .map((row) => Number(row.item_id));
+        setPushInquirySelectedItemIds(ids);
+      } catch (error: any) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.loadDetailFailed')));
+        resetPushInquiryPreviewModal();
+      } finally {
+        setPushInquiryPreviewLoading(false);
+      }
+    },
+    [messageApi, resetPushInquiryPreviewModal, t],
+  );
+
+  const handlePushInquiryPreviewConfirm = useCallback(async () => {
+    if (!pushInquiryTarget?.id || !pushInquiryPreviewData || pushInquiryPreviewData.has_blocking_issues) return;
+    const selectedIds = pushInquirySelectedItemIds.filter((id) =>
+      (pushInquiryPreviewData.items || []).some((row) => Number(row.item_id) === id && Number(row.max_push_quantity ?? 0) > 0),
+    );
+    if (!selectedIds.length) {
+      messageApi.warning(t('app.kuaizhizao.purchaseRequisition.selectPushLines'));
+      return;
+    }
+    setPushInquiryPreviewConfirming(true);
+    try {
+      const doc = await createInquiryFromRequisition(pushInquiryTarget.id, { item_ids: selectedIds });
+      messageApi.success(t('app.kuaizhizao.purchaseRequisition.inquiryCreated', { code: doc.inquiry_code }));
+      navigate(`${ROUTES.PURCHASE_INQUIRIES}?inquiryId=${doc.id}`);
+      actionRef.current?.reload();
+      resetPushInquiryPreviewModal();
+      setSelectedRowKeys([]);
+    } catch (error: any) {
+      messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.inquiryCreateFailed')));
+    } finally {
+      setPushInquiryPreviewConfirming(false);
+    }
+  }, [
+    messageApi,
+    navigate,
+    pushInquiryPreviewData,
+    pushInquirySelectedItemIds,
+    pushInquiryTarget,
+    resetPushInquiryPreviewModal,
+    t,
+  ]);
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) return;
+    try {
+      for (const id of keys) {
+        await deletePurchaseRequisition(Number(id));
+      }
+      messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.response?.data?.detail?.message ?? e?.message ?? t('app.kuaizhizao.purchaseRequisition.inquiryCreateFailed'));
+      messageApi.error(e?.response?.data?.detail || t('common.deleteFailed'));
     }
   };
 
@@ -1002,7 +1103,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
           const detail = await getPurchaseRequisition(requisitionId);
           void prefetchMaterialsForUnitSelect((detail.items ?? []).map((i) => i.material_id));
           setCurrentReq(detail);
-          await handleConvert({ ...detail, id: requisitionId });
+          await openPushPoPreview({ ...detail, id: requisitionId });
         } catch {
           messageApi.error(t('app.kuaizhizao.purchaseRequisition.openFailed'));
         }
@@ -1017,7 +1118,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
           const detail = await getPurchaseRequisition(requisitionId);
           void prefetchMaterialsForUnitSelect((detail.items ?? []).map((i) => i.material_id));
           setCurrentReq(detail);
-          await handleCreateInquiry({ ...detail, id: requisitionId });
+          await openPushInquiryPreview({ ...detail, id: requisitionId });
         } catch {
           messageApi.error(t('app.kuaizhizao.purchaseRequisition.openFailed'));
         }
@@ -1037,29 +1138,31 @@ const PurchaseRequisitionsPage: React.FC = () => {
         deepLinkHandledRef.current = null;
       }
     })();
-  }, [searchParams, location.pathname, navigate, messageApi, ensureSupplierList, t]);
+  }, [searchParams, location.pathname, navigate, messageApi, ensureSupplierList, openPushInquiryPreview, openPushPoPreview, t]);
 
   const toolbarPushMenuItems = useMemo(() => {
-    const flowBlockedReason = selectedRequisitionForToolbar && !canUseToolbarPush
-      ? (() => {
-          const lifecycle = (selectedRequisitionForToolbar as PurchaseRequisition & { lifecycle?: Record<string, unknown> }).lifecycle;
-          const flowClass = String(lifecycle?.flow_class ?? lifecycle?.current_stage_key ?? '-').trim() || '-';
-          return t('app.kuaizhizao.purchaseRequisition.push.flowBlocked', {
-            flowClass,
-            defaultValue: `当前流转类为 ${flowClass}，不可下推`,
-          });
-        })()
+    const pushPoBlockedReason = selectedRequisitionForToolbar && !canPushPurchaseOrder
+      ? purchaseRequisitionCapabilityReasonMessage(
+          selectedRequisitionForToolbar.capabilities?.push_purchase_order?.reason,
+          t,
+        )
+      : undefined;
+    const pushInquiryBlockedReason = selectedRequisitionForToolbar && !canPushInquiry
+      ? purchaseRequisitionCapabilityReasonMessage(
+          selectedRequisitionForToolbar.capabilities?.push_inquiry?.reason,
+          t,
+        )
       : undefined;
     return buildUniPushMenuItems([
       {
         key: 'push-purchase-order',
         label: pushToPurchaseOrderAction.label,
         icon: <SwapOutlined />,
-        disabled: !selectedRequisitionForToolbar || !canUseToolbarPush,
-        title: flowBlockedReason,
+        disabled: !selectedRequisitionForToolbar || !canPushPurchaseOrder,
+        title: pushPoBlockedReason,
         onClick: () => {
-          if (selectedRequisitionForToolbar && canUseToolbarPush) {
-            void handleConvert(selectedRequisitionForToolbar);
+          if (selectedRequisitionForToolbar && canPushPurchaseOrder) {
+            void openPushPoPreview(selectedRequisitionForToolbar);
           }
         },
       },
@@ -1067,19 +1170,20 @@ const PurchaseRequisitionsPage: React.FC = () => {
         key: 'push-inquiry',
         label: pushToInquiryAction.label,
         icon: <FileSearchOutlined />,
-        disabled: !selectedRequisitionForToolbar || !canUseToolbarPush,
-        title: flowBlockedReason,
+        disabled: !selectedRequisitionForToolbar || !canPushInquiry,
+        title: pushInquiryBlockedReason,
         onClick: () => {
-          if (selectedRequisitionForToolbar && canUseToolbarPush) {
-            void handleCreateInquiry(selectedRequisitionForToolbar);
+          if (selectedRequisitionForToolbar && canPushInquiry) {
+            void openPushInquiryPreview(selectedRequisitionForToolbar);
           }
         },
       },
     ]);
   }, [
-    canUseToolbarPush,
-    handleConvert,
-    handleCreateInquiry,
+    canPushInquiry,
+    canPushPurchaseOrder,
+    openPushInquiryPreview,
+    openPushPoPreview,
     pushToInquiryAction.label,
     pushToPurchaseOrderAction.label,
     selectedRequisitionForToolbar,
@@ -1660,15 +1764,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
               createIcon={<PlusOutlined />}
               createLabel={t('app.kuaizhizao.menu.purchase-management.purchase-requisitions.new')}
               onCreate={handleCreate}
-              menuItems={[
+              menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
                 {
                   key: 'pull-from-demand-computation',
-                  label: pullFromDemandComputationAction.label,
+                  actionKey: 'purchase_requisition.pull_from_demand_computation',
                   onClick: () => {
                     pullFromComputationQuery.openModal();
                   },
                 },
-              ]}
+              ])}
             />,
             <UniPushToolbarButton
               key={`purchase-requisition-push-${selectedRequisitionForToolbar?.id ?? 'none'}`}
@@ -1741,9 +1845,213 @@ const PurchaseRequisitionsPage: React.FC = () => {
         pageSize={pullFromComputationQuery.pageSize}
         total={pullFromComputationQuery.total}
         onPageChange={pullFromComputationQuery.handlePageChange}
-        okText={t('app.kuaizhizao.purchaseRequisition.pull.ok')}
+        okText={t('common.next')}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
+
+      <Modal
+        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
+        open={pullPreviewOpen}
+        destroyOnClose
+        width={1100}
+        onCancel={resetPullPreviewModal}
+        okText={t('app.kuaizhizao.purchaseRequisition.pull.ok')}
+        cancelText={t('common.cancel')}
+        confirmLoading={pullPreviewConfirming}
+        onOk={() => void handlePullPreviewConfirm()}
+        okButtonProps={{
+          disabled:
+            pullPreviewLoading ||
+            !pullPreviewData ||
+            !!pullPreviewData?.has_blocking_issues,
+        }}
+      >
+        {pullPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+          </div>
+        ) : pullPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
+            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={
+                  demandComputationCapabilityReasonMessage(pullPreviewData.blocking_reason, t) ||
+                  t('app.kuaizhizao.purchaseRequisition.pull.failed')
+                }
+              />
+            ) : null}
+            {pullPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pullPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 860 }}
+                columns={[
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseRequisition.pull.previewNoLines')} />
+            )}
+            {pullPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                {pullPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        title={pushToPurchaseOrderAction.label}
+        open={pushPoPreviewOpen}
+        destroyOnClose
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        onCancel={resetPushPoPreviewModal}
+        okText={pushToPurchaseOrderAction.label}
+        cancelText={t('common.cancel')}
+        confirmLoading={pushPoPreviewConfirming}
+        onOk={() => void handlePushPoPreviewConfirm()}
+        okButtonProps={{
+          disabled:
+            pushPoPreviewLoading ||
+            !pushPoPreviewData ||
+            !!pushPoPreviewData?.has_blocking_issues ||
+            pushPoDetailItems.length === 0,
+        }}
+      >
+        {pushPoPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+          </div>
+        ) : pushPoPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushPoPreviewData.summary}</p>
+            {pushPoPreviewData.has_blocking_issues && pushPoPreviewData.blocking_reason ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={
+                  purchaseRequisitionCapabilityReasonMessage(pushPoPreviewData.blocking_reason, t) ||
+                  t('app.kuaizhizao.purchaseRequisition.pushFailed')
+                }
+              />
+            ) : null}
+            {pushPoDetailItems.length > 0 && pushPoSuppliers.length > 0 ? (
+              <ConvertForm
+                items={pushPoDetailItems}
+                unconvertedIds={(pushPoPreviewData.items || [])
+                  .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
+                  .map((row) => Number(row.item_id))}
+                suppliers={pushPoSuppliers}
+                formRef={convertFormRef}
+              />
+            ) : null}
+            {pushPoPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                {pushPoPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        title={pushToInquiryAction.label}
+        open={pushInquiryPreviewOpen}
+        destroyOnClose
+        width={1100}
+        onCancel={resetPushInquiryPreviewModal}
+        okText={pushToInquiryAction.label}
+        cancelText={t('common.cancel')}
+        confirmLoading={pushInquiryPreviewConfirming}
+        onOk={() => void handlePushInquiryPreviewConfirm()}
+        okButtonProps={{
+          disabled:
+            pushInquiryPreviewLoading ||
+            !pushInquiryPreviewData ||
+            !!pushInquiryPreviewData?.has_blocking_issues,
+        }}
+      >
+        {pushInquiryPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+          </div>
+        ) : pushInquiryPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushInquiryPreviewData.summary}</p>
+            {pushInquiryPreviewData.has_blocking_issues && pushInquiryPreviewData.blocking_reason ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={
+                  purchaseRequisitionCapabilityReasonMessage(pushInquiryPreviewData.blocking_reason, t) ||
+                  t('app.kuaizhizao.purchaseRequisition.inquiryCreateFailed')
+                }
+              />
+            ) : null}
+            {pushInquiryPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pushInquiryPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 960 }}
+                columns={[
+                  {
+                    title: t('common.select'),
+                    dataIndex: 'item_id',
+                    width: 64,
+                    render: (_: unknown, row) => {
+                      const itemId = Number(row.item_id);
+                      const maxQty = Number(row.max_push_quantity ?? 0);
+                      const disabled = !Number.isFinite(maxQty) || maxQty <= 0;
+                      return (
+                        <Switch
+                          size="small"
+                          disabled={disabled}
+                          checked={pushInquirySelectedItemIds.includes(itemId)}
+                          onChange={(checked) => {
+                            setPushInquirySelectedItemIds((prev) =>
+                              checked ? Array.from(new Set([...prev, itemId])) : prev.filter((id) => id !== itemId),
+                            );
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseRequisition.noInquiryLines')} />
+            )}
+            {pushInquiryPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                {pushInquiryPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
 
 
       <DetailDrawerTemplate
@@ -1823,18 +2131,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   key: 'convert',
                   visible: !!currentReq,
                   render: () => {
-                    const canPush = currentReq ? canPushPurchaseRequisition(currentReq) : false;
-                    const flowClass = String(
-                      (currentReq as PurchaseRequisition & { lifecycle?: Record<string, unknown> })?.lifecycle?.flow_class
-                      ?? (currentReq as PurchaseRequisition & { lifecycle?: Record<string, unknown> })?.lifecycle?.current_stage_key
-                      ?? '',
-                    ).trim();
+                    const canPush = !!currentReq?.capabilities?.push_purchase_order?.allowed;
                     const blockedReason = canPush
                       ? undefined
-                      : t('app.kuaizhizao.purchaseRequisition.push.flowBlocked', {
-                          flowClass: flowClass || t('app.kuaizhizao.purchaseRequisition.push.unknownFlow', { defaultValue: '未知' }),
-                          defaultValue: `当前流转类为 ${flowClass || '未知'}，不可下推`,
-                        });
+                      : purchaseRequisitionCapabilityReasonMessage(
+                          currentReq?.capabilities?.push_purchase_order?.reason,
+                          t,
+                        );
                     return (
                       <Tooltip title={blockedReason}>
                         <Button
@@ -1842,7 +2145,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                           size="small"
                           icon={<SwapOutlined />}
                           disabled={!canPush}
-                          onClick={() => canPush && currentReq && handleConvert(currentReq)}
+                          onClick={() => canPush && currentReq && void openPushPoPreview(currentReq)}
                         >
                           {pushToPurchaseOrderAction.label}
                         </Button>
@@ -1854,18 +2157,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   key: 'create-inquiry',
                   visible: !!currentReq,
                   render: () => {
-                    const canPush = currentReq ? canPushPurchaseRequisition(currentReq) : false;
-                    const flowClass = String(
-                      (currentReq as PurchaseRequisition & { lifecycle?: Record<string, unknown> })?.lifecycle?.flow_class
-                      ?? (currentReq as PurchaseRequisition & { lifecycle?: Record<string, unknown> })?.lifecycle?.current_stage_key
-                      ?? '',
-                    ).trim();
+                    const canPush = !!currentReq?.capabilities?.push_inquiry?.allowed;
                     const blockedReason = canPush
                       ? undefined
-                      : t('app.kuaizhizao.purchaseRequisition.push.flowBlocked', {
-                          flowClass: flowClass || t('app.kuaizhizao.purchaseRequisition.push.unknownFlow', { defaultValue: '未知' }),
-                          defaultValue: `当前流转类为 ${flowClass || '未知'}，不可下推`,
-                        });
+                      : purchaseRequisitionCapabilityReasonMessage(
+                          currentReq?.capabilities?.push_inquiry?.reason,
+                          t,
+                        );
                     return (
                       <Tooltip title={blockedReason}>
                         <Button
@@ -1873,7 +2171,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                           size="small"
                           icon={<FileSearchOutlined />}
                           disabled={!canPush}
-                          onClick={() => canPush && currentReq && handleCreateInquiry(currentReq)}
+                          onClick={() => canPush && currentReq && void openPushInquiryPreview(currentReq)}
                         >
                           {pushToInquiryAction.label}
                         </Button>

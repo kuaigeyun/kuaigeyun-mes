@@ -307,6 +307,24 @@ async def convert_to_order(
 
 
 @router.get(
+    "/{contract_id}/push-to-sales-order/preview",
+    summary="Push sales contract to sales order preview",
+)
+async def preview_push_to_sales_order(
+    contract_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.preview_push_sales_contract_to_sales_order(
+            tenant_id, contract_id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get(
     "/{contract_id}/push-to-work-order/preview",
     summary="Direct push sales contract to work order preview",
 )

@@ -1302,41 +1302,121 @@ class SalesContractService(AppBaseService[SalesContract]):
         )
         return sales_order, await self.get_contract_by_id(tenant_id, contract_id)
 
-    async def preview_push_sales_contract_to_work_order(
+    async def _load_contract_push_preview_context(
         self, tenant_id: int, contract_id: int
-    ) -> Dict[str, Any]:
-        """销售合同直推工单预览：返回可选择的合同明细，不实际创建。"""
+    ) -> tuple[SalesContract, List[SalesContractItem], dict[str, Any], Any]:
         contract = await SalesContract.get_or_none(
             tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True
         )
         if not contract:
             raise NotFoundError("销售合同不存在")
-        all_items = await SalesContractItem.filter(
+        items = await SalesContractItem.filter(
             tenant_id=tenant_id, contract_id=contract_id
         ).order_by("id")
-        ctx = self._contract_capability_context(contract, all_items)
-        assert_sales_contract_capability(
+        ctx = self._contract_capability_context(contract, items)
+        from apps.kuaizhizao.services.document_action_policy.sales_contract import (
+            derive_sales_contract_capabilities,
+        )
+
+        caps = derive_sales_contract_capabilities(
             contract,
-            "push_to_work_order",
             has_items=ctx["has_items"],
             has_releasable_items=ctx["has_releasable_items"],
             remaining_amount=ctx["remaining_amount"],
+            remaining_quantity=ctx["remaining_quantity"],
+        )
+        return contract, items, ctx, caps
+
+    @staticmethod
+    def _build_contract_push_preview_items(
+        items: List[SalesContractItem],
+        *,
+        push_allowed: bool,
+    ) -> List[Dict[str, Any]]:
+        preview_items: List[Dict[str, Any]] = []
+        for it in items:
+            contract_qty = Decimal(str(it.contract_quantity or 0))
+            if contract_qty <= 0:
+                continue
+            released_qty = Decimal(str(it.released_quantity or 0))
+            remain_qty = SalesContractService._line_remaining_qty(it)
+            max_push_qty = remain_qty if push_allowed else Decimal("0")
+            preview_items.append(
+                {
+                    "item_id": int(it.id),
+                    "material_id": it.material_id,
+                    "material_code": it.material_code,
+                    "material_name": it.material_name,
+                    "material_unit": it.material_unit,
+                    "quantity": float(contract_qty),
+                    "pushed_quantity": float(released_qty),
+                    "max_push_quantity": float(max_push_qty),
+                    "delivery_date": (
+                        it.delivery_date.isoformat() if it.delivery_date else None
+                    ),
+                }
+            )
+        return preview_items
+
+    async def preview_push_sales_contract_to_sales_order(
+        self, tenant_id: int, contract_id: int
+    ) -> Dict[str, Any]:
+        """下推销售订单预览：返回合同明细数量、已释放、可释放。"""
+        contract, items, _ctx, caps = await self._load_contract_push_preview_context(
+            tenant_id, contract_id
+        )
+        if not items:
+            raise BusinessLogicError("合同无明细，无法下推销售订单")
+
+        push_allowed = caps.push_to_sales_order.allowed
+        preview_items = self._build_contract_push_preview_items(
+            items, push_allowed=push_allowed
+        )
+        if not preview_items:
+            raise BusinessLogicError("合同无有效明细数量，无法下推销售订单")
+
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        return {
+            "target_type": "sales_order",
+            "summary": (
+                f"请选择本次要下推的合同明细（{pushable_count}/{len(preview_items)} 行可下推）"
+                if push_allowed
+                else "当前销售合同不可下推销售订单"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": not push_allowed,
+            "blocking_reason": (
+                caps.push_to_sales_order.reason if not push_allowed else None
+            ),
+            "tip": "确认后将按所选明细与数量创建销售订单，并更新合同已释放数量。",
+        }
+
+    async def preview_push_sales_contract_to_work_order(
+        self, tenant_id: int, contract_id: int
+    ) -> Dict[str, Any]:
+        """销售合同直推工单预览：返回可选择的合同明细，不实际创建。"""
+        contract, all_items, _ctx, caps = await self._load_contract_push_preview_context(
+            tenant_id, contract_id
         )
         if not all_items:
             raise BusinessLogicError("合同无明细，无法直推工单")
 
+        push_allowed = caps.push_to_work_order.allowed
         from apps.kuaizhizao.utils.material_source_helper import (
             get_material_source_type,
             validate_material_source_config,
         )
 
         preview_items: List[Dict[str, Any]] = []
-        has_blocking_issues = False
+        has_material_blocking = False
         for it in all_items:
             contract_qty = Decimal(str(it.contract_quantity or 0))
             if contract_qty <= 0:
                 continue
             remain_qty = self._line_remaining_qty(it)
+            max_push_qty = remain_qty if push_allowed else Decimal("0")
             source_type = await get_material_source_type(tenant_id, it.material_id)
             _, source_errors = await validate_material_source_config(
                 tenant_id=tenant_id,
@@ -1345,16 +1425,20 @@ class SalesContractService(AppBaseService[SalesContract]):
             )
             errors = [str(e) for e in (source_errors or []) if str(e).strip()]
             if errors:
-                has_blocking_issues = True
+                has_material_blocking = True
             preview_items.append(
                 {
                     "item_id": int(it.id),
+                    "material_id": it.material_id,
                     "material_code": it.material_code,
                     "material_name": it.material_name,
+                    "material_unit": it.material_unit,
                     "quantity": float(contract_qty),
                     "pushed_quantity": float(Decimal(str(it.released_quantity or 0))),
-                    "max_push_quantity": float(remain_qty),
-                    "delivery_date": str(it.delivery_date) if it.delivery_date else None,
+                    "max_push_quantity": float(max_push_qty),
+                    "delivery_date": (
+                        it.delivery_date.isoformat() if it.delivery_date else None
+                    ),
                     "suggested_action": "生产",
                     "source_type": source_type or "Make",
                     "blocking_issues": errors,
@@ -1365,14 +1449,24 @@ class SalesContractService(AppBaseService[SalesContract]):
             raise BusinessLogicError("合同无可释放明细，无法直推工单")
 
         push_mode_default = await self.business_config_service.get_push_default_mode(tenant_id)
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
 
         return {
             "target_type": "work_order",
-            "summary": f"将生成工单（含半成品）候选 {len(preview_items)} 条",
+            "summary": (
+                f"请选择本次要下推的合同明细（{pushable_count}/{len(preview_items)} 行可下推）"
+                if push_allowed
+                else "当前销售合同不可直推工单"
+            ),
             "push_mode_default": (push_mode_default or "draft"),
             "items": preview_items,
-            "has_blocking_issues": has_blocking_issues,
-            "tip": "原材料由您自行计算采购",
+            "has_blocking_issues": (not push_allowed) or has_material_blocking,
+            "blocking_reason": (
+                caps.push_to_work_order.reason if not push_allowed else None
+            ),
+            "tip": "原材料由您自行计算采购；确认后将按所选明细与数量创建工单并更新合同已释放数量。",
         }
 
     async def push_sales_contract_to_work_order(

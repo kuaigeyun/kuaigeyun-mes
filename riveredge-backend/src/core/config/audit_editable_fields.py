@@ -97,12 +97,6 @@ _DEFAULT_EDITABLE: Dict[str, EditableFieldsSpec] = {
         "inquiry_date",
         "quote_deadline",
     ],
-    "production_plan": [
-        "notes",
-        "plan_name",
-        "plan_start_date",
-        "plan_end_date",
-    ],
 }
 
 _LOCKED_FIELDS = frozenset({"status", "review_status", "id", "uuid", "tenant_id"})

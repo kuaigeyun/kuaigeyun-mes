@@ -4,8 +4,6 @@ const customFieldPageviVN = {
   'customFieldPage.kuaizhizao-equipment.tableNameLabel': 'Thiết bị',
   'customFieldPage.kuaizhizao-mold.pageName': 'Sổ cái khuôn',
   'customFieldPage.kuaizhizao-mold.tableNameLabel': 'khuôn mẫu',
-  'customFieldPage.kuaizhizao-plan-production-plan.pageName': 'kế hoạch sản xuất',
-  'customFieldPage.kuaizhizao-plan-production-plan.tableNameLabel': 'Kế hoạch sản xuất',
   'customFieldPage.kuaizhizao-production-outsource-order.pageName': 'Đơn đặt hàng thuê ngoài',
   'customFieldPage.kuaizhizao-production-outsource-order.tableNameLabel': 'Đơn hàng thuê ngoài',
   'customFieldPage.kuaizhizao-production-outsource-work-order.pageName': 'Đơn đặt hàng công việc thuê ngoài',

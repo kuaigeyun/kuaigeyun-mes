@@ -303,6 +303,34 @@ export async function batchCreateDemands(demands: Partial<Demand>[]): Promise<Ba
   });
 }
 
+/** 需求下推需求计算预览 */
+export interface DemandPushPreviewResponse {
+  target_type: string;
+  summary: string;
+  demand_code?: string;
+  items: {
+    item_id?: number;
+    material_id?: number;
+    material_code: string;
+    material_name: string;
+    quantity: number;
+    pushed_quantity?: number;
+    max_push_quantity?: number;
+    delivery_date?: string;
+    forecast_month?: string;
+    has_bom?: boolean;
+  }[];
+  tip?: string;
+  has_blocking_issues?: boolean;
+  blocking_reason?: string | null;
+}
+
+export async function previewPushDemandToComputation(demandId: number): Promise<DemandPushPreviewResponse> {
+  return apiRequest<DemandPushPreviewResponse>(`/apps/kuaizhizao/demands/${demandId}/push-to-computation/preview`, {
+    method: 'GET',
+  });
+}
+
 /**
  * 下推需求到物料需求运算响应
  */

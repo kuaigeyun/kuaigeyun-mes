@@ -1,6 +1,10 @@
 /** Hub 聚合列表统一行类型 */
 
 import type { TFunction } from 'i18next';
+import {
+  inboundHubCapabilityReasonMessage,
+  salesReturnCapabilityReasonMessage,
+} from '../../../../../hooks/useDocumentCapabilities';
 
 export type InboundReceiptType =
   | 'purchase'
@@ -107,6 +111,15 @@ export function inboundReceiptTypeValueEnum(
 
 export function isInboundConfirmable(record: InboundHubOrder): boolean {
   return record.capabilities?.confirm?.allowed === true;
+}
+
+export function inboundConfirmCapabilityReasonMessage(record: InboundHubOrder, t: TFunction): string {
+  const reason = record.capabilities?.confirm?.reason;
+  if (!reason) return '';
+  if (record.receipt_type === 'sales_return') {
+    return salesReturnCapabilityReasonMessage(reason, t);
+  }
+  return inboundHubCapabilityReasonMessage(reason, t);
 }
 
 function pushUniqueRef(parts: string[], value: unknown) {

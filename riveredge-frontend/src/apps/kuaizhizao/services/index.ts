@@ -19,7 +19,6 @@ export {
   warehouseApi,
   qualityApi,
   financeApi,
-  planningApi,
 } from './production';
 
 export {

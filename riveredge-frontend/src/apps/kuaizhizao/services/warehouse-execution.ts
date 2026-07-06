@@ -27,6 +27,21 @@ export const warehouseApi = {
           warehouse_name: params.warehouse_name,
         },
       }),
+    /** 工单上拉创建生产领料单（单条、带明细） */
+    pullFromWorkOrder: async (data: {
+      work_order_id: number;
+      warehouse_id: number;
+      warehouse_name: string;
+      picker_name?: string;
+      notes?: string;
+      lines: Array<{
+        material_id: number;
+        material_code: string;
+        material_name: string;
+        material_unit: string;
+        issue_quantity: number;
+      }>;
+    }) => apiRequest('/apps/kuaizhizao/production-pickings/pull-from-work-order', { method: 'POST', data }),
     /** 获取仓库主动备料提醒列表 */
     getMaterialPrepReminders: async (params?: { skip?: number; limit?: number }) =>
       apiRequest('/apps/kuaizhizao/production-pickings/material-prep-reminders', { method: 'GET', params }),
@@ -40,10 +55,10 @@ export const warehouseApi = {
     confirm: async (id: string, data?: any) => apiRequest(`/apps/kuaizhizao/production-returns/${id}/confirm`, { method: 'POST', data }),
     withdraw: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/production-returns/${id}/withdraw`, { method: 'POST' }),
-    print: async (id: string, templateUuid?: string) =>
-      apiRequest(`/apps/kuaizhizao/production-returns/${id}/print`, {
+    previewFromWorkOrder: async (workOrderId: number) =>
+      apiRequest('/apps/kuaizhizao/production-returns/work-order-preview', {
         method: 'GET',
-        params: templateUuid ? { template_uuid: templateUuid } : undefined,
+        params: { work_order_id: workOrderId },
       }),
   },
   materialCall: {

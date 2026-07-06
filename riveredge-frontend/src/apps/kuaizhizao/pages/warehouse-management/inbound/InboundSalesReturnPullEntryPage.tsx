@@ -172,7 +172,7 @@ const InboundSalesReturnPullEntryPage: React.FC = () => {
         const qtyMap: Record<number, number> = {};
         previewRaw.lines.forEach((it) => {
           if (it.sales_order_item_id != null) {
-            qtyMap[it.sales_order_item_id] = Number(it.return_quantity ?? it.source_pending_quantity ?? 0);
+            qtyMap[it.sales_order_item_id] = 0;
           }
         });
         setPreview(previewRaw);

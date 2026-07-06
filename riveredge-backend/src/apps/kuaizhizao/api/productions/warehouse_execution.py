@@ -65,6 +65,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     ProductionPickingResponse,
     ProductionPickingListResponse,
     ProductionPickingWithItemsResponse,
+    ProductionPickingPullFromWorkOrderRequest,
     ProductionReturnCreate,
     ProductionReturnUpdate,
     ProductionReturnResponse,
@@ -87,6 +88,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     SalesReturnUpdate,
     SalesReturnResponse,
     WorkOrderInboundPreviewResponse,
+    ProductionReturnPreviewResponse,
     SalesOrderReturnPreviewResponse,
     PurchaseReceiptCreate,
     PurchaseReceiptUpdate,
@@ -167,6 +169,8 @@ from apps.kuaizhizao.schemas.batching_order import (
     BatchingOrderWithItemsResponse,
     PullFromWorkOrderRequest,
     BatchingOrderConfirmRequest,
+    BatchingPullCandidateListResponse,
+    BatchingPullPreviewResponse,
     BatchingCenterTaskListResponse,
 )
 
@@ -671,6 +675,33 @@ async def batch_pick_from_work_orders(
     )
 
 
+@router.post(
+    "/production-pickings/pull-from-work-order",
+    response_model=ProductionPickingWithItemsResponse,
+    summary="Create production picking from work order pull (single, with lines)",
+)
+async def create_production_picking_from_work_order_pull(
+    body: ProductionPickingPullFromWorkOrderRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPickingWithItemsResponse:
+    try:
+        return await ProductionPickingService().create_production_picking_from_work_order_pull(
+            tenant_id=tenant_id,
+            created_by=current_user.id,
+            work_order_id=body.work_order_id,
+            warehouse_id=body.warehouse_id,
+            warehouse_name=body.warehouse_name,
+            picker_name=body.picker_name,
+            notes=body.notes,
+            lines=body.lines,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.post("/production-pickings", response_model=ProductionPickingResponse, summary="Create production picking")
 async def create_production_picking(
     picking: ProductionPickingCreate,
@@ -837,6 +868,22 @@ async def get_material_prep_reminders(
 
 
 # ============ 生产退料管理 API ============
+
+@router.get(
+    "/production-returns/work-order-preview",
+    response_model=ProductionReturnPreviewResponse,
+    summary="Preview production return from work order",
+)
+async def preview_production_return_from_work_order(
+    work_order_id: int = Query(..., description="工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionReturnPreviewResponse:
+    return await ProductionReturnService().get_production_return_preview(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+    )
+
 
 @router.post("/production-returns", response_model=ProductionReturnResponse, summary="Create production return")
 async def create_production_return(
@@ -4490,6 +4537,42 @@ async def create_batching_order(
         raise _http_exception_with_trace(400, str(e), "/batching-orders", tenant_id)
     except BusinessLogicError as e:
         raise _http_exception_with_trace(400, str(e), "/batching-orders", tenant_id)
+
+
+@router.get(
+    "/batching-orders/pull-candidates",
+    response_model=BatchingPullCandidateListResponse,
+    summary="List work order pull candidates for batching order",
+)
+async def list_batching_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    keyword: Optional[str] = Query(None, description="工单号/名称"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await batching_order_service.list_batching_pull_candidates(
+        tenant_id,
+        keyword=keyword,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/batching-orders/work-order-preview",
+    response_model=BatchingPullPreviewResponse,
+    summary="Preview batching order from work order",
+)
+async def preview_batching_order_from_work_order(
+    work_order_id: int = Query(..., description="工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingPullPreviewResponse:
+    try:
+        return await batching_order_service.get_batching_pull_preview(tenant_id, work_order_id)
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/batching-orders/work-order-preview", tenant_id)
 
 
 @router.post("/batching-orders/pull-from-work-order", response_model=BatchingOrderWithItemsResponse, summary="Create batching order from work order")

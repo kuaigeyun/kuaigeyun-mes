@@ -22,6 +22,7 @@ from apps.kuaizhizao.schemas.receipt_notice import (
     ReceiptNoticeUpdate,
     ReceiptNoticeResponse,
     ReceiptNoticeListResponse,
+    ReceiptNoticeListPaginatedResponse,
     ReceiptNoticeWithItemsResponse,
 )
 
@@ -77,13 +78,14 @@ async def create_receipt_notice(
         )
 
 
-@router.get("", response_model=List[ReceiptNoticeListResponse], summary="List receipt notices")
+@router.get("", response_model=ReceiptNoticeListPaginatedResponse, summary="List receipt notices")
 async def list_receipt_notices(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     status: Optional[str] = Query(None),
     purchase_order_id: Optional[int] = Query(None),
     supplier_id: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -95,10 +97,35 @@ async def list_receipt_notices(
         status=status,
         purchase_order_id=purchase_order_id,
         supplier_id=supplier_id,
+        keyword=keyword,
     )
 
 
 # 固定子路径需注册在 /{notice_id} 之前，避免个别 ASGI/匹配顺序下误配
+@router.get("/{notice_id}/notify/preview", summary="Preview notify warehouse")
+async def preview_notify_warehouse(
+    notice_id: int = Path(..., description="通知单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """通知仓库预览：返回明细数量、已入库、可通知量，不实际创建采购入库单。"""
+    try:
+        return await receipt_notice_service.preview_notify_warehouse(
+            tenant_id=tenant_id,
+            notice_id=notice_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error("通知仓库预览失败: %s", e)
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="通知仓库预览失败",
+        )
+
+
 @router.post("/{notice_id}/notify", response_model=ReceiptNoticeResponse, summary="Notify warehouse")
 async def notify_warehouse(
     notice_id: int = Path(..., description="通知单ID"),

@@ -73,6 +73,13 @@ def derive_purchase_inquiry_capabilities(inquiry: Any) -> PurchaseInquiryCapabil
 
     revoke_cap = _cap(True)
 
+    push_po_cap = _cap(
+        st == PurchaseInquiryStatus.AWARDED.value,
+        "purchase_inquiry.push_purchase_order.not_allowed"
+        if st != PurchaseInquiryStatus.AWARDED.value
+        else None,
+    )
+
     return PurchaseInquiryCapabilities(
         update=update_cap,
         delete=delete_cap,
@@ -80,6 +87,7 @@ def derive_purchase_inquiry_capabilities(inquiry: Any) -> PurchaseInquiryCapabil
         withdraw_submit=withdraw_submit_cap,
         approve=approve_cap,
         revoke_approval=revoke_cap,
+        push_purchase_order=push_po_cap,
     )
 
 
@@ -92,6 +100,7 @@ def assert_purchase_inquiry_capability(inquiry: Any, action: str) -> None:
         "withdraw_submit": caps.withdraw_submit,
         "approve": caps.approve,
         "revoke_approval": caps.revoke_approval,
+        "push_purchase_order": caps.push_purchase_order,
     }
     cap = cap_map.get(action)
     if cap is None:

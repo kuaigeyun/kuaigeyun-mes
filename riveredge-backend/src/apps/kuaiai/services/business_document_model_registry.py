@@ -139,7 +139,6 @@ _REGISTRY: dict[str, tuple[str, DetailLoader]] = {
         "apps.kuaizhizao.models.finished_goods_receipt.FinishedGoodsReceipt",
         _warehouse_doc_detail,
     ),
-    "kuaizhizao:production-plan": ("apps.kuaizhizao.models.production_plan.ProductionPlan", _warehouse_doc_detail),
     "kuaizhizao:plan-management-rolling-scheduling": (
         "apps.kuaizhizao.models.rolling_schedule_plan.RollingSchedulePlan",
         _rolling_plan_detail,

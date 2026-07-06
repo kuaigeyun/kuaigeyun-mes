@@ -778,19 +778,6 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     allowManualEdit: true,
   },
 
-  // 快格轻制造 - 计划管理
-  {
-    pageCode: 'kuaizhizao-plan-production-plan',
-    pageName: '生产计划',
-    pagePath: '/apps/kuaizhizao/plan-management/production-plans',
-    codeField: 'code',
-    codeFieldLabel: '生产计划编号',
-    module: '快格轻制造',
-    moduleIcon: 'tool',
-    autoGenerate: true,
-    ruleCode: 'PRODUCTION_PLAN_CODE',
-    allowManualEdit: true,
-  },
   
   // 快格轻制造 - 采购管理（补充）
   {

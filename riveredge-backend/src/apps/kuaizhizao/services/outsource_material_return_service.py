@@ -66,6 +66,12 @@ class OutsourceMaterialReturnService(AppBaseService[OutsourceMaterialReturn]):
         if not owo:
             raise NotFoundError(f"委外工单ID {outsource_work_order_id} 不存在")
 
+        from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
+            assert_outsource_work_order_capability,
+        )
+
+        assert_outsource_work_order_capability(owo, "push_outsource_material_return")
+
         issues = await OutsourceMaterialIssue.filter(
             tenant_id=tenant_id,
             outsource_work_order_id=outsource_work_order_id,
@@ -156,6 +162,12 @@ class OutsourceMaterialReturnService(AppBaseService[OutsourceMaterialReturn]):
             ).first()
             if not owo:
                 raise NotFoundError(f"委外工单ID {return_data.outsource_work_order_id} 不存在")
+
+            from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
+                assert_outsource_work_order_capability,
+            )
+
+            assert_outsource_work_order_capability(owo, "push_outsource_material_return")
 
             await self._validate_return_quantity(tenant_id, return_data)
 

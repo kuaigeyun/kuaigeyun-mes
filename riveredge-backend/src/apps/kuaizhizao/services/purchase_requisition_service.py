@@ -838,6 +838,159 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         await m.save()
         return True
 
+    async def preview_push_to_purchase_order(
+        self,
+        tenant_id: int,
+        requisition_id: int,
+    ) -> Dict[str, Any]:
+        """下推采购订单预览：返回可转单明细及数量门禁，不实际创建。"""
+        req = await PurchaseRequisition.get_or_none(
+            tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
+        )
+        if not req:
+            raise NotFoundError(f"采购申请不存在: {requisition_id}")
+        assert_purchase_requisition_capability(req, "push_purchase_order")
+
+        detail = await self.get_requisition_by_id(tenant_id, requisition_id)
+        preview_items: List[Dict[str, Any]] = []
+        for item in detail.items or []:
+            if item.purchase_order_id:
+                continue
+            qty = float(item.quantity or 0)
+            if qty <= 0:
+                continue
+            pushed = float(item.converted_quantity_draft or 0) + float(
+                item.converted_quantity_confirmed or 0
+            )
+            max_push = max(0.0, qty - pushed)
+            if max_push <= 0:
+                continue
+            preview_items.append(
+                {
+                    "item_id": int(item.id),
+                    "material_id": item.material_id,
+                    "material_code": item.material_code,
+                    "material_name": item.material_name,
+                    "material_spec": item.material_spec,
+                    "unit": item.unit,
+                    "quantity": qty,
+                    "pushed_quantity": pushed,
+                    "max_push_quantity": max_push,
+                    "suggested_unit_price": float(item.suggested_unit_price or 0),
+                    "supplier_id": item.supplier_id,
+                    "required_date": str(item.required_date) if item.required_date else None,
+                }
+            )
+
+        pushable_count = len(preview_items)
+        has_blocking = pushable_count == 0
+        blocking_reason = (
+            "purchase_requisition.push_purchase_order.no_lines" if has_blocking else None
+        )
+        return {
+            "target_type": "purchase_order",
+            "requisition_id": requisition_id,
+            "requisition_code": detail.requisition_code,
+            "summary": (
+                f"请选择本次要下推的采购申请明细（{pushable_count} 行可下推）"
+                if not has_blocking
+                else "当前采购申请无可下推明细"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": has_blocking,
+            "blocking_reason": blocking_reason,
+            "tip": "系统将按所选明细与数量生成采购订单，可按供应商自动拆单。",
+        }
+
+    async def preview_push_to_inquiry(
+        self,
+        tenant_id: int,
+        requisition_id: int,
+    ) -> Dict[str, Any]:
+        """下推询价单预览：返回可询价明细及数量门禁，不实际创建。"""
+        req = await PurchaseRequisition.get_or_none(
+            tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
+        )
+        if not req:
+            raise NotFoundError(f"采购申请不存在: {requisition_id}")
+        assert_purchase_requisition_capability(req, "push_inquiry")
+
+        detail = await self.get_requisition_by_id(tenant_id, requisition_id)
+        candidate_items = [
+            i for i in (detail.items or []) if not i.purchase_order_id and float(i.quantity or 0) > 0
+        ]
+        candidate_ids = [int(i.id) for i in candidate_items if i.id is not None]
+        blocked_ids: set[int] = set()
+        if candidate_ids:
+            from apps.kuaizhizao.models.purchase_inquiry import PurchaseInquiry, PurchaseInquiryItem
+            from apps.kuaizhizao.constants.purchase_inquiry import INQUIRY_ACTIVE_STATUSES
+
+            active_items = await PurchaseInquiryItem.filter(
+                tenant_id=tenant_id,
+                source_requisition_item_id__in=candidate_ids,
+                purchase_order_id__isnull=True,
+            ).all()
+            inquiry_ids = {a.inquiry_id for a in active_items}
+            active_inquiries = (
+                await PurchaseInquiry.filter(
+                    tenant_id=tenant_id,
+                    id__in=list(inquiry_ids),
+                    deleted_at__isnull=True,
+                    status__in=list(INQUIRY_ACTIVE_STATUSES),
+                ).all()
+                if inquiry_ids
+                else []
+            )
+            active_inquiry_ids = {a.id for a in active_inquiries}
+            blocked_ids = {
+                int(a.source_requisition_item_id)
+                for a in active_items
+                if a.inquiry_id in active_inquiry_ids and a.source_requisition_item_id
+            }
+
+        preview_items: List[Dict[str, Any]] = []
+        for item in candidate_items:
+            if item.id is None:
+                continue
+            qty = float(item.quantity or 0)
+            in_active_inquiry = int(item.id) in blocked_ids
+            max_push = 0.0 if in_active_inquiry else qty
+            preview_items.append(
+                {
+                    "item_id": int(item.id),
+                    "material_id": item.material_id,
+                    "material_code": item.material_code,
+                    "material_name": item.material_name,
+                    "material_spec": item.material_spec,
+                    "unit": item.unit,
+                    "quantity": qty,
+                    "pushed_quantity": qty if in_active_inquiry else 0.0,
+                    "max_push_quantity": max_push,
+                    "required_date": str(item.required_date) if item.required_date else None,
+                    "in_active_inquiry": in_active_inquiry,
+                }
+            )
+
+        pushable_count = sum(1 for row in preview_items if float(row["max_push_quantity"]) > 0)
+        has_blocking = pushable_count == 0
+        blocking_reason = (
+            "purchase_requisition.push_inquiry.no_lines" if has_blocking else None
+        )
+        return {
+            "target_type": "purchase_inquiry",
+            "requisition_id": requisition_id,
+            "requisition_code": detail.requisition_code,
+            "summary": (
+                f"请选择本次要询价的采购申请明细（{pushable_count}/{len(preview_items)} 行可询价）"
+                if not has_blocking
+                else "当前采购申请无可询价明细"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": has_blocking,
+            "blocking_reason": blocking_reason,
+            "tip": "系统将按所选明细创建询价单，并推荐供应商参与报价。",
+        }
+
     async def convert_to_purchase_order(
         self,
         tenant_id: int,
@@ -852,10 +1005,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
 
-
-        normalized = normalize_status(req.status)
-        if normalized not in (DocumentStatus.AUDITED.value, DocumentStatus.CONFIRMED.value, DocumentStatus.PARTIAL_CONVERTED.value):
-            raise BusinessLogicError("只有已通过或部分转单状态的采购申请可转单")
+        assert_purchase_requisition_capability(req, "push_purchase_order")
 
         items = await PurchaseRequisitionItem.filter(
             tenant_id=tenant_id,

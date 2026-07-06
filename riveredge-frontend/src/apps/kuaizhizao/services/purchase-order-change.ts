@@ -1,5 +1,6 @@
 import { apiRequest } from '../../../services/api';
 import type { ChangeImpactPreview, OrderChangeItem } from './sales-order-change';
+import type { DocumentPushPreview } from './purchase';
 
 export interface ActionCapability {
   allowed: boolean;
@@ -68,6 +69,10 @@ export async function createPurchaseOrderChangeFromOrder(orderId: number, change
     method: 'POST',
     params: { change_reason: changeReason },
   });
+}
+
+export async function previewPurchaseOrderChangeFromOrder(orderId: number): Promise<DocumentPushPreview> {
+  return apiRequest(`/apps/kuaizhizao/purchase-order-change-orders/from-order/${orderId}/preview`);
 }
 
 export async function updatePurchaseOrderChange(id: number, data: Partial<PurchaseOrderChange>): Promise<PurchaseOrderChange> {

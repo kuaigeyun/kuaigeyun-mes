@@ -910,20 +910,6 @@ class BusinessConfigService:
         mode = str(raw or "confirm").strip().lower()
         return mode if mode in ("draft", "confirm") else "confirm"
 
-    async def get_planning_config(self, tenant_id: int) -> Dict[str, Any]:
-        """
-        获取计划管理相关配置。蓝图下线后，plan_enabled 已不再作为业务开关，
-        保留字段值为 True（由菜单控制是否可见）。
-        """
-        audit_required = await self.check_audit_required(tenant_id, "production_plan")
-        can_direct_wo = True
-        return {
-            "production_plan_enabled": True,
-            "production_plan_audit_required": audit_required,
-            "can_direct_generate_work_order": can_direct_wo,
-            "planning_mode": "direct" if can_direct_wo else "via_plan",
-        }
-
     async def get_work_order_picking_policy(self, tenant_id: int) -> Dict[str, Any]:
         config = await self.get_business_config(tenant_id)
         wo_params = config["parameters"].get("work_order", {})

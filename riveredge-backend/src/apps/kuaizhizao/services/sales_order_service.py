@@ -2480,6 +2480,8 @@ class SalesOrderService:
         demand_exists = demand is not None
         material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
 
+        pushed_to_computation = await self._is_order_pushed_to_computation(tenant_id, order)
+
         material_ids = [
             int(it.material_id)
             for it in items
@@ -2506,16 +2508,30 @@ class SalesOrderService:
                 "material_code": material_code,
                 "material_name": material_name,
                 "quantity": float(qty),
-                "max_push_quantity": float(qty),
+                "pushed_quantity": float(qty) if pushed_to_computation else 0.0,
+                "max_push_quantity": 0.0 if pushed_to_computation else float(qty),
                 "delivery_date": str(it.delivery_date) if it.delivery_date else None,
                 "has_bom": bom_map.get(material_id, False) if material_id else False,
             })
 
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
         return {
             "target_type": "demand_computation",
-            "summary": "将创建需求计算任务（LRP），基于BOM展开进行物料需求运算",
+            "summary": (
+                f"请选择本次要下推的订单明细（{pushable_count}/{len(preview_items)} 行可下推）"
+                if not pushed_to_computation
+                else "当前销售订单不可下推需求计算"
+            ),
             "demand_exists": demand_exists,
             "items": preview_items,
+            "has_blocking_issues": pushed_to_computation,
+            "blocking_reason": (
+                "sales_order.push_computation.already_pushed"
+                if pushed_to_computation
+                else None
+            ),
             "tip": "计算完成后可下推生产计划或工单",
         }
 
@@ -2635,160 +2651,6 @@ class SalesOrderService:
         # Demand 仍存表供计算与明细；关联路径见推导逻辑 _get_sales_order_downstream。
 
         return demand
-
-    async def push_sales_order_to_production_plan(
-        self,
-        tenant_id: int,
-        sales_order_id: int,
-        created_by: int,
-    ) -> Dict[str, Any]:
-        """
-        直推销售订单到生产计划（跳过需求计算）。
-        订单明细直接转为生产计划明细，不要求BOM，原材料由用户自行计算采购。
-        """
-        order = await SalesOrder.get_or_none(
-            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
-        )
-        if not order:
-            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        if not self._is_audited(order.status):
-            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
-        self._assert_order_executable(order)
-
-        items = await SalesOrderItem.filter(
-            tenant_id=tenant_id, sales_order_id=sales_order_id
-        ).order_by("id")
-        if not items:
-            raise BusinessLogicError("销售订单无明细，无法直推生产计划")
-
-        from datetime import date, datetime
-        from apps.kuaizhizao.models.production_plan import ProductionPlan
-        from apps.kuaizhizao.models.production_plan_item import ProductionPlanItem
-        from core.services.business.code_generation_service import CodeGenerationService
-        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-
-        dates = [it.delivery_date for it in items if it.delivery_date]
-        plan_start = min(dates) if dates else date.today()
-        plan_end = max(dates) if dates else date.today()
-
-        try:
-            plan_code = await CodeGenerationService.generate_code(
-                tenant_id=tenant_id,
-                rule_code="PRODUCTION_PLAN_CODE",
-                context={"prefix": "MRP-"},
-            )
-        except Exception:
-            plan_code = f"MRP-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-
-        plan = await ProductionPlan.create(
-            tenant_id=tenant_id,
-            plan_code=plan_code,
-            plan_name=f"生产计划-{order.order_code}（直推）",
-            plan_type="MRP",
-            source_type="SalesOrder",
-            source_id=sales_order_id,
-            source_code=order.order_code,
-            plan_start_date=plan_start,
-            plan_end_date=plan_end,
-            status="草稿",
-            execution_status="未执行",
-            created_by=created_by,
-            updated_by=created_by,
-        )
-
-        for it in items:
-            qty = float(it.order_quantity or 0)
-            if qty <= 0:
-                continue
-            await ProductionPlanItem.create(
-                tenant_id=tenant_id,
-                plan_id=plan.id,
-                material_id=it.material_id,
-                material_code=it.material_code,
-                material_name=it.material_name,
-                source_type="Make",
-                planned_quantity=Decimal(str(qty)),
-                planned_date=it.delivery_date or plan_start,
-                available_inventory=Decimal(0),
-                safety_stock=Decimal(0),
-                gross_requirement=Decimal(str(qty)),
-                net_requirement=Decimal(str(qty)),
-                suggested_action="生产",
-                work_order_quantity=Decimal(str(qty)),
-                purchase_order_quantity=Decimal(0),
-                lead_time=0,
-            )
-
-        relation_service = DocumentRelationNewService()
-        relation_data = DocumentRelationCreate(
-            source_type="sales_order",
-            source_id=sales_order_id,
-            source_code=order.order_code,
-            source_name=order.order_code,
-            target_type="production_plan",
-            target_id=plan.id,
-            target_code=plan.plan_code,
-            target_name=plan.plan_name,
-            relation_type="source",
-            relation_mode="push",
-            relation_desc="销售订单直推生产计划（跳过需求计算，原材料自行采购）",
-            business_mode="MTO",
-            demand_id=None,
-        )
-        await relation_service.create_relation(
-            tenant_id=tenant_id,
-            relation_data=relation_data,
-            created_by=created_by,
-        )
-
-        return {
-            "success": True,
-            "message": "直推成功，已生成生产计划（原材料由用户自行计算采购）",
-            "target_document": {"type": "production_plan", "id": plan.id, "code": plan.plan_code},
-        }
-
-    async def preview_push_sales_order_to_production_plan(
-        self, tenant_id: int, sales_order_id: int
-    ) -> Dict[str, Any]:
-        """下推生产计划预览：返回将生成的生产计划明细，不实际创建"""
-        order = await SalesOrder.get_or_none(
-            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
-        )
-        if not order:
-            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        if not self._is_audited(order.status):
-            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
-        self._assert_order_executable(order)
-
-        items = await SalesOrderItem.filter(
-            tenant_id=tenant_id, sales_order_id=sales_order_id
-        ).order_by("id")
-        if not items:
-            raise BusinessLogicError("销售订单无明细，无法直推生产计划")
-
-        material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
-        plan_items = []
-        for it in items:
-            qty = float(it.order_quantity or 0)
-            if qty <= 0:
-                continue
-            material_code, material_name = self._resolve_item_material_display(it, material_fallback)
-            plan_items.append({
-                "material_code": material_code,
-                "material_name": material_name,
-                "quantity": float(qty),
-                "delivery_date": str(it.delivery_date) if it.delivery_date else None,
-                "suggested_action": "生产",
-            })
-
-        return {
-            "target_type": "production_plan",
-            "summary": f"将生成 1 个生产计划，包含 {len(plan_items)} 条明细",
-            "plan_name_preview": f"生产计划-{order.order_code}（直推）",
-            "items": plan_items,
-            "tip": "原材料由您自行计算采购",
-        }
 
     async def push_sales_order_to_work_order(
         self,
@@ -3867,7 +3729,7 @@ class SalesOrderService:
                     "material_code": material_code,
                     "material_name": material_name,
                     "quantity": float(order_qty),
-                    "delivered_quantity": float(delivered_qty),
+                    "pushed_quantity": float(delivered_qty),
                     "max_push_quantity": float(remaining_qty),
                     "delivery_date": str(it.delivery_date) if it.delivery_date else None,
                     "suggested_action": "发货",
@@ -3885,6 +3747,196 @@ class SalesOrderService:
             "summary": f"请选择本次要通知发货的产品与数量（共 {pushable_count} 条可发货明细）",
             "items": preview_items,
             "tip": "系统将按所选数量生成发货通知单，并自动通知仓库生成销售出库。",
+        }
+
+    @staticmethod
+    async def _occupied_delivery_qty_by_material(
+        tenant_id: int, sales_order_id: int
+    ) -> Dict[int, Decimal]:
+        from apps.kuaizhizao.models.sales_delivery import SalesDelivery, SalesDeliveryItem
+
+        existing_deliveries = await SalesDelivery.filter(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            deleted_at__isnull=True,
+        ).exclude(status__in=["已取消", "cancelled", "CANCELLED"]).values("id", "status")
+        closed_statuses = {"已出库", "已完成", "completed", "COMPLETED", "done", "DONE"}
+        occupying_delivery_ids = [
+            int(d["id"])
+            for d in existing_deliveries
+            if d.get("id") is not None
+            and str(d.get("status") or "").strip() not in closed_statuses
+        ]
+        occupied_qty_by_material: Dict[int, Decimal] = {}
+        if occupying_delivery_ids:
+            occupying_items = await SalesDeliveryItem.filter(
+                tenant_id=tenant_id,
+                delivery_id__in=occupying_delivery_ids,
+            ).values("material_id", "delivery_quantity")
+            for row in occupying_items:
+                mid = int(row.get("material_id") or 0)
+                if mid <= 0:
+                    continue
+                qty = Decimal(str(row.get("delivery_quantity") or 0))
+                occupied_qty_by_material[mid] = occupied_qty_by_material.get(mid, Decimal("0")) + qty
+        return occupied_qty_by_material
+
+    async def preview_push_sales_order_to_delivery(
+        self, tenant_id: int, sales_order_id: int
+    ) -> Dict[str, Any]:
+        """下推销售出库预览：返回订单明细数量、已下推、可下推。"""
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        await self._assert_sales_order_capability_for_order(
+            tenant_id, order, "push_sales_delivery"
+        )
+
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        if not items:
+            raise BusinessLogicError("销售订单无明细，无法下推销售出库")
+
+        occupied_qty_by_material = await self._occupied_delivery_qty_by_material(
+            tenant_id, sales_order_id
+        )
+        material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
+        preview_items: List[Dict[str, Any]] = []
+        for it in items:
+            order_qty = Decimal(str(it.order_quantity or 0))
+            if order_qty <= 0:
+                continue
+            delivered_qty = Decimal(str(it.delivered_quantity or 0))
+            base_remaining = Decimal(
+                str(it.remaining_quantity if it.remaining_quantity is not None else (order_qty - delivered_qty))
+            )
+            base_remaining = max(Decimal("0"), base_remaining)
+            occupied_qty = occupied_qty_by_material.get(int(it.material_id or 0), Decimal("0"))
+            max_push_qty = base_remaining - occupied_qty
+            if max_push_qty < 0:
+                max_push_qty = Decimal("0")
+            material_code, material_name = self._resolve_item_material_display(it, material_fallback)
+            preview_items.append(
+                {
+                    "item_id": int(it.id),
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "quantity": float(order_qty),
+                    "pushed_quantity": float(delivered_qty + occupied_qty),
+                    "max_push_quantity": float(max_push_qty),
+                    "delivery_date": str(it.delivery_date) if it.delivery_date else None,
+                }
+            )
+
+        if not preview_items:
+            raise BusinessLogicError("销售订单无有效明细，无法下推销售出库")
+
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        return {
+            "target_type": "sales_delivery",
+            "summary": f"请选择本次要下推的出库明细（{pushable_count}/{len(preview_items)} 行可下推）",
+            "items": preview_items,
+            "tip": "确认后将按所选明细与数量生成销售出库单。",
+        }
+
+    async def preview_push_sales_order_to_invoice(
+        self, tenant_id: int, sales_order_id: int
+    ) -> Dict[str, Any]:
+        """下推销售发票预览：返回订单明细数量、已下推、可下推。"""
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        await self._assert_sales_order_capability_for_order(tenant_id, order, "push_invoice")
+
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        if not items:
+            raise BusinessLogicError("销售订单无明细，无法下推销售发票")
+
+        material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
+        preview_items: List[Dict[str, Any]] = []
+        for it in items:
+            qty = Decimal(str(it.order_quantity or 0))
+            if qty <= 0:
+                continue
+            material_code, material_name = self._resolve_item_material_display(it, material_fallback)
+            preview_items.append(
+                {
+                    "item_id": int(it.id),
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "quantity": float(qty),
+                    "pushed_quantity": 0.0,
+                    "max_push_quantity": float(qty),
+                }
+            )
+
+        if not preview_items:
+            raise BusinessLogicError("销售订单无有效明细，无法下推销售发票")
+
+        return {
+            "target_type": "sales_invoice",
+            "summary": f"请确认将下推的订单明细（{len(preview_items)} 行）",
+            "items": preview_items,
+            "tip": "确认后将按全部订单明细生成销售发票草稿。",
+        }
+
+    async def preview_push_sales_order_to_sales_return(
+        self, tenant_id: int, sales_order_id: int
+    ) -> Dict[str, Any]:
+        """下推销售退货预览：返回可退明细及数量三门。"""
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        await self._assert_sales_order_capability_for_order(
+            tenant_id, order, "push_sales_return"
+        )
+
+        from apps.kuaizhizao.services.warehouse_service import SalesReturnService
+
+        raw = await SalesReturnService().get_sales_order_return_preview(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+        )
+        preview_items: List[Dict[str, Any]] = []
+        for line in raw.lines:
+            preview_items.append(
+                {
+                    "item_id": int(line.sales_order_item_id),
+                    "material_code": line.material_code,
+                    "material_name": line.material_name,
+                    "quantity": float(line.source_doc_quantity),
+                    "pushed_quantity": float(line.source_received_quantity),
+                    "max_push_quantity": float(line.source_pending_quantity),
+                }
+            )
+
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        return {
+            "target_type": "sales_return",
+            "summary": (
+                f"请选择本次要退货的明细（{pushable_count}/{len(preview_items)} 行可退）"
+                if preview_items
+                else "当前销售订单无可退货明细"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": not preview_items,
+            "blocking_reason": (
+                "sales_order.push_return.no_delivered" if not preview_items else None
+            ),
+            "tip": "确认前须选择退货仓库；退货数量不能超过可退数量。",
         }
 
     async def push_sales_order_to_invoice(

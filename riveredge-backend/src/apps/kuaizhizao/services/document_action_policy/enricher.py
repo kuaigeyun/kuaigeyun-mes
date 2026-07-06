@@ -27,9 +27,6 @@ from apps.kuaizhizao.services.document_action_policy.shipment_notice import (
 from apps.kuaizhizao.services.document_action_policy.sales_return import (
     derive_sales_return_capabilities,
 )
-from apps.kuaizhizao.services.document_action_policy.production_plan import (
-    derive_production_plan_capabilities,
-)
 from apps.kuaizhizao.services.document_action_policy.demand_computation import (
     derive_demand_computation_capabilities,
 )
@@ -101,7 +98,6 @@ from apps.kuaizhizao.services.document_action_policy.types import (
     SalesReturnCapabilities,
     SalesOrderCapabilities,
     SalesOrderChangeCapabilities,
-    ProductionPlanCapabilities,
     DemandComputationCapabilities,
     DemandCapabilities,
     PurchaseRequisitionCapabilities,
@@ -543,96 +539,6 @@ def get_sales_return_capabilities_from_record(
     return derive_sales_return_capabilities(return_doc, has_items=has_items)
 
 
-async def _production_plan_audit_required(tenant_id: int) -> bool:
-    return await BusinessConfigService().check_audit_required(tenant_id, "production_plan")
-
-
-async def _production_plan_has_production_items(tenant_id: int, plan_id: int) -> bool:
-    from apps.kuaizhizao.models.production_plan_item import ProductionPlanItem
-
-    items = await ProductionPlanItem.filter(
-        tenant_id=tenant_id,
-        plan_id=plan_id,
-        suggested_action="生产",
-    ).all()
-    return any(float(i.work_order_quantity or 0) > 0 for i in items)
-
-
-async def _production_plan_has_production_items_by_ids(
-    tenant_id: int,
-    plan_ids: List[int],
-) -> dict[int, bool]:
-    from apps.kuaizhizao.models.production_plan_item import ProductionPlanItem
-
-    if not plan_ids:
-        return {}
-    items = await ProductionPlanItem.filter(
-        tenant_id=tenant_id,
-        plan_id__in=plan_ids,
-        suggested_action="生产",
-    ).all()
-    result: dict[int, bool] = {pid: False for pid in plan_ids}
-    for item in items:
-        if float(item.work_order_quantity or 0) > 0:
-            result[int(item.plan_id)] = True
-    return result
-
-
-def enrich_production_plan_capabilities_on_response(
-    plan: Any,
-    response: T,
-    *,
-    audit_required: bool = False,
-    has_production_items: bool = False,
-) -> T:
-    caps = derive_production_plan_capabilities(
-        plan,
-        audit_required=audit_required,
-        has_production_items=has_production_items,
-    )
-    if hasattr(response, "model_copy"):
-        return _attach_capabilities_to_response(response, caps)
-    return response
-
-
-async def enrich_production_plan_list_capabilities(
-    tenant_id: int,
-    plans: List[Any],
-    responses: List[T],
-) -> List[T]:
-    audit_required = await _production_plan_audit_required(tenant_id)
-    plan_ids = [int(getattr(p, "id", 0) or 0) for p in plans]
-    has_prod_map = await _production_plan_has_production_items_by_ids(tenant_id, plan_ids)
-    out: List[T] = []
-    for plan_model, resp in zip(plans, responses):
-        pid = int(getattr(plan_model, "id", 0) or 0)
-        caps = derive_production_plan_capabilities(
-            plan_model,
-            audit_required=audit_required,
-            has_production_items=has_prod_map.get(pid, False),
-        )
-        if hasattr(resp, "model_copy"):
-            out.append(_attach_capabilities_to_response(resp, caps))
-        else:
-            out.append(resp)
-    return out
-
-
-async def enrich_production_plan_detail_capabilities(
-    tenant_id: int,
-    plan: Any,
-    response: T,
-) -> T:
-    audit_required = await _production_plan_audit_required(tenant_id)
-    has_items = await _production_plan_has_production_items(tenant_id, int(plan.id))
-    return enrich_production_plan_capabilities_on_response(
-        plan,
-        response,
-        audit_required=audit_required,
-        has_production_items=has_items,
-    )
-
-
 def enrich_demand_computation_capabilities_on_response(
     computation: Any,
     response: T,
@@ -740,6 +646,106 @@ async def _purchase_order_outstanding_by_ids(tenant_id: int, order_ids: List[int
     return result
 
 
+async def _purchase_order_received_by_ids(tenant_id: int, order_ids: List[int]) -> dict[int, bool]:
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+    if not order_ids:
+        return {}
+    items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id__in=order_ids).all()
+    result: dict[int, bool] = {oid: False for oid in order_ids}
+    for item in items:
+        if float(item.received_quantity or 0) > 0:
+            result[int(item.order_id)] = True
+    return result
+
+
+async def _purchase_order_invoice_by_ids(tenant_id: int, order_ids: List[int]) -> dict[int, bool]:
+    from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+
+    if not order_ids:
+        return {}
+    result: dict[int, bool] = {oid: False for oid in order_ids}
+    invoice_order_ids = await PurchaseInvoice.filter(
+        tenant_id=tenant_id,
+        purchase_order_id__in=order_ids,
+        deleted_at__isnull=True,
+    ).values_list("purchase_order_id", flat=True)
+    for oid in invoice_order_ids:
+        result[int(oid)] = True
+    return result
+
+
+async def _purchase_order_returnable_by_ids(tenant_id: int, order_ids: List[int]) -> dict[int, bool]:
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+    from apps.kuaizhizao.models.purchase_return import PurchaseReturn
+    from apps.kuaizhizao.models.purchase_return_item import PurchaseReturnItem
+
+    if not order_ids:
+        return {}
+    result: dict[int, bool] = {oid: False for oid in order_ids}
+    items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id__in=order_ids).all()
+    received_by_order: dict[int, list] = {}
+    for item in items:
+        if float(item.received_quantity or 0) <= 0:
+            continue
+        received_by_order.setdefault(int(item.order_id), []).append(item)
+
+    return_ids = await PurchaseReturn.filter(
+        tenant_id=tenant_id,
+        purchase_order_id__in=order_ids,
+        deleted_at__isnull=True,
+    ).exclude(status="已取消").values_list("id", "purchase_order_id")
+    returned_by_order_material: dict[int, dict[int, float]] = {}
+    if return_ids:
+        rid_list = [int(r[0]) for r in return_ids]
+        return_items = await PurchaseReturnItem.filter(
+            tenant_id=tenant_id,
+            return_id__in=rid_list,
+        ).all()
+        order_by_return = {int(r[0]): int(r[1]) for r in return_ids}
+        for ri in return_items:
+            oid = order_by_return.get(int(ri.return_id))
+            if oid is None:
+                continue
+            mid = int(ri.material_id)
+            returned_by_order_material.setdefault(oid, {})
+            returned_by_order_material[oid][mid] = (
+                returned_by_order_material[oid].get(mid, 0.0) + float(ri.return_quantity or 0)
+            )
+
+    for oid, order_items in received_by_order.items():
+        returned_map = returned_by_order_material.get(oid, {})
+        for item in order_items:
+            received = float(item.received_quantity or 0)
+            returned = returned_map.get(int(item.material_id), 0.0)
+            if max(0.0, received - returned) > 0:
+                result[oid] = True
+                break
+    return result
+
+
+async def _purchase_order_pending_change_by_ids(tenant_id: int, order_ids: List[int]) -> dict[int, bool]:
+    from apps.kuaizhizao.constants import DocumentStatus
+    from apps.kuaizhizao.models.purchase_order_change_order import PurchaseOrderChangeOrder
+
+    if not order_ids:
+        return {}
+    result: dict[int, bool] = {oid: False for oid in order_ids}
+    pending_ids = await PurchaseOrderChangeOrder.filter(
+        tenant_id=tenant_id,
+        source_order_id__in=order_ids,
+        deleted_at__isnull=True,
+        status__in=[
+            DocumentStatus.DRAFT.value,
+            DocumentStatus.PENDING_REVIEW.value,
+            DocumentStatus.AUDITED.value,
+        ],
+    ).values_list("source_order_id", flat=True)
+    for oid in pending_ids:
+        result[int(oid)] = True
+    return result
+
+
 async def _purchase_order_downstream_by_ids(tenant_id: int, order_ids: List[int]) -> dict[int, bool]:
     from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
     from apps.kuaizhizao.models.purchase_order_change_order import PurchaseOrderChangeOrder
@@ -805,13 +811,21 @@ def enrich_purchase_order_capabilities_on_response(
     *,
     has_items: bool = True,
     has_outstanding: bool = False,
+    has_received: bool = False,
+    has_invoice: bool = False,
     has_downstream: bool = False,
+    has_pending_change: bool = False,
+    has_returnable: bool = False,
 ) -> T:
     caps = derive_purchase_order_capabilities(
         order,
         has_items=has_items,
         has_outstanding=has_outstanding,
+        has_received=has_received,
+        has_invoice=has_invoice,
         has_downstream=has_downstream,
+        has_pending_change=has_pending_change,
+        has_returnable=has_returnable,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -825,14 +839,23 @@ async def enrich_purchase_order_detail_capabilities(
     *,
     has_items: bool = True,
 ) -> T:
-    has_outstanding = await _purchase_order_has_outstanding(tenant_id, int(order.id))
-    has_downstream = await purchase_order_has_downstream(tenant_id, int(order.id))
+    order_id = int(order.id)
+    has_outstanding = await _purchase_order_has_outstanding(tenant_id, order_id)
+    has_received_map = await _purchase_order_received_by_ids(tenant_id, [order_id])
+    has_invoice_map = await _purchase_order_invoice_by_ids(tenant_id, [order_id])
+    has_downstream = await purchase_order_has_downstream(tenant_id, order_id)
+    pending_change_map = await _purchase_order_pending_change_by_ids(tenant_id, [order_id])
+    returnable_map = await _purchase_order_returnable_by_ids(tenant_id, [order_id])
     return enrich_purchase_order_capabilities_on_response(
         order,
         response,
         has_items=has_items,
         has_outstanding=has_outstanding,
+        has_received=has_received_map.get(order_id, False),
+        has_invoice=has_invoice_map.get(order_id, False),
         has_downstream=has_downstream,
+        has_pending_change=pending_change_map.get(order_id, False),
+        has_returnable=returnable_map.get(order_id, False),
     )
 
 
@@ -845,7 +868,11 @@ async def enrich_purchase_order_list_capabilities(
 ) -> List[T]:
     order_ids = [int(getattr(o, "id", 0) or 0) for o in orders]
     outstanding_map = await _purchase_order_outstanding_by_ids(tenant_id, order_ids)
+    received_map = await _purchase_order_received_by_ids(tenant_id, order_ids)
+    invoice_map = await _purchase_order_invoice_by_ids(tenant_id, order_ids)
     downstream_map = await _purchase_order_downstream_by_ids(tenant_id, order_ids)
+    pending_change_map = await _purchase_order_pending_change_by_ids(tenant_id, order_ids)
+    returnable_map = await _purchase_order_returnable_by_ids(tenant_id, order_ids)
     items_map = has_items_by_id or {}
     out: List[T] = []
     for order_model, resp in zip(orders, responses):
@@ -854,7 +881,11 @@ async def enrich_purchase_order_list_capabilities(
             order_model,
             has_items=items_map.get(oid, True),
             has_outstanding=outstanding_map.get(oid, False),
+            has_received=received_map.get(oid, False),
+            has_invoice=invoice_map.get(oid, False),
             has_downstream=downstream_map.get(oid, False),
+            has_pending_change=pending_change_map.get(oid, False),
+            has_returnable=returnable_map.get(oid, False),
         )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))
@@ -950,8 +981,13 @@ def enrich_purchase_return_list_capabilities(
     return out
 
 
-def enrich_work_order_capabilities_on_response(wo: Any, response: T) -> T:
-    caps = derive_work_order_capabilities(wo)
+def enrich_work_order_capabilities_on_response(
+    wo: Any,
+    response: T,
+    *,
+    has_returnable_picking: bool | None = None,
+) -> T:
+    caps = derive_work_order_capabilities(wo, has_returnable_picking=has_returnable_picking)
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
     return response
@@ -960,10 +996,15 @@ def enrich_work_order_capabilities_on_response(wo: Any, response: T) -> T:
 def enrich_work_order_list_capabilities(
     work_orders: List[Any],
     responses: List[T],
+    *,
+    has_returnable_picking_by_id: dict[int, bool] | None = None,
 ) -> List[T]:
     out: List[T] = []
+    lookup = has_returnable_picking_by_id or {}
     for wo, resp in zip(work_orders, responses):
-        caps = derive_work_order_capabilities(wo)
+        wo_id = getattr(wo, "id", None)
+        has_returnable = lookup.get(int(wo_id)) if wo_id is not None else None
+        caps = derive_work_order_capabilities(wo, has_returnable_picking=has_returnable)
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))
         else:
@@ -1049,6 +1090,24 @@ def enrich_outbound_hub_list_capabilities(
     out: List[T] = []
     for record, resp in zip(records, responses):
         caps = derive_outbound_hub_capabilities(record, outbound_type=outbound_type)
+        if hasattr(resp, "model_copy"):
+            out.append(_attach_capabilities_to_response(resp, caps))
+        else:
+            out.append(resp)
+    return out
+
+
+def enrich_outsource_work_order_list_capabilities(
+    records: List[Any],
+    responses: List[T],
+) -> List[T]:
+    from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
+        derive_outsource_work_order_capabilities,
+    )
+
+    out: List[T] = []
+    for record, resp in zip(records, responses):
+        caps = derive_outsource_work_order_capabilities(record)
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))
         else:

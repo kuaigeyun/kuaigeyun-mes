@@ -68,15 +68,9 @@
                 "permission": "kuaizhizao:plan-management-reports-demand-plan-detail:read"
               },
               {
-                "title": "app.kuaizhizao.menu.reports.production-plan-comparison",
-                "path": "/apps/kuaimes/plan-management/reports/production-plan-comparison",
-                "sort_order": 2,
-                "permission": "kuaizhizao:plan-management-reports-production-plan-comparison:read"
-              },
-              {
                 "title": "app.kuaizhizao.menu.reports.purchase-plan-comparison",
                 "path": "/apps/kuaimes/plan-management/reports/purchase-plan-comparison",
-                "sort_order": 3,
+                "sort_order": 2,
                 "permission": "kuaizhizao:plan-management-reports-purchase-plan-comparison:read"
               },
               {

@@ -478,6 +478,27 @@ async def approve_incoming_inspection(
     )
 
 
+@router.get(
+    "/incoming-inspections/{inspection_id}/push-to-purchase-return/preview",
+    summary="Preview push incoming inspection to purchase return",
+)
+async def preview_push_incoming_inspection_to_purchase_return(
+    inspection_id: int = Path(..., description="来料检验单ID"),
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """来料检验不合格下推采购退货单预览。"""
+    await _assert_incoming_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    return await IncomingInspectionService().preview_push_to_purchase_return(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+    )
+
+
 @router.post(
     "/incoming-inspections/{inspection_id}/push-to-purchase-return",
     response_model=Dict[str, Any],

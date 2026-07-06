@@ -193,6 +193,15 @@ export async function submitSalesForecast(id: number): Promise<SalesForecast> {
 }
 
 /**
+ * 下推销售预测到需求计算预览
+ */
+export async function previewPushSalesForecastToComputation(id: number): Promise<any> {
+  return apiRequest(`/apps/kuaizhizao/sales-forecasts/${id}/push-to-computation/preview`, {
+    method: 'GET',
+  });
+}
+
+/**
  * 下推到需求计算
  */
 export async function pushSalesForecastToComputation(

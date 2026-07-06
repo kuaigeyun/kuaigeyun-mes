@@ -1,6 +1,7 @@
 /** Hub 聚合列表统一行类型 */
 
 import type { TFunction } from 'i18next';
+import { outboundHubCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 
 export type OutboundIssueType =
   | 'production_picking'
@@ -95,6 +96,14 @@ export function isOutboundConfirmable(record: OutboundHubOrder): boolean {
 
 export function isOutboundWithdrawable(record: OutboundHubOrder): boolean {
   return record.capabilities?.withdraw?.allowed === true;
+}
+
+export function outboundConfirmCapabilityReasonMessage(record: OutboundHubOrder, t: TFunction): string {
+  return outboundHubCapabilityReasonMessage(record.capabilities?.confirm?.reason, t);
+}
+
+export function outboundWithdrawCapabilityReasonMessage(record: OutboundHubOrder, t: TFunction): string {
+  return outboundHubCapabilityReasonMessage(record.capabilities?.withdraw?.reason, t);
 }
 
 export function outboundDocumentCode(record: OutboundHubOrder): string {

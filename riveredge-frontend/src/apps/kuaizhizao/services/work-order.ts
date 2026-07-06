@@ -290,6 +290,10 @@ export const workOrderApi = {
   getKittingAnalysis: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${id}/kitting-analysis`, { method: 'GET' }),
 
+  /** 工单下推生产领料预览 */
+  previewPushProductionPicking: async (id: number | string) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${id}/push-production-picking/preview`, { method: 'GET' }),
+
   getScoreConfig: async () =>
     apiRequest('/apps/kuaizhizao/work-orders/score-config', { method: 'GET' }),
 

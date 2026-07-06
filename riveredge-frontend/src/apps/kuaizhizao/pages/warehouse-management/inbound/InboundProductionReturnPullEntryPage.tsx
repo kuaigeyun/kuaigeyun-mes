@@ -20,7 +20,6 @@ import { workOrderApi } from '../../../services/production';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
-import { PRODUCTION_PICKING_ELIGIBLE_STATUSES } from './inboundCreateConfig';
 import {
   InboundEntryReceiverField,
   InboundEntryRemarksSection,
@@ -33,10 +32,26 @@ import { INBOUND_LIST_PATH, inboundProductionReturnEntryPath } from './inboundPa
 import {
   draftDayjs,
   draftOptionalNumber,
-  mergeKeyedLineQuantities,
   usePullEntryFormDraft,
 } from '../shared/pullEntryFormDraft';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+
+type PreviewPicking = {
+  picking_id: number;
+  picking_code: string;
+  status: string;
+  lines: Array<{
+    picking_item_id?: number;
+    material_id?: number;
+    material_code?: string;
+    material_name?: string;
+    material_spec?: string;
+    material_unit?: string;
+    source_doc_quantity?: number;
+    source_received_quantity?: number;
+    source_pending_quantity?: number;
+  }>;
+};
 
 type ReturnLine = {
   key: number;
@@ -62,10 +77,9 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
   const initRef = useRef(false);
 
   const [loading, setLoading] = useState(false);
-  const [pickingLoading, setPickingLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [workOrder, setWorkOrder] = useState<Record<string, unknown> | null>(null);
-  const [pickingOptions, setPickingOptions] = useState<{ label: string; value: number }[]>([]);
+  const [previewPickings, setPreviewPickings] = useState<PreviewPicking[]>([]);
   const [pickingId, setPickingId] = useState<number | null>(null);
   const [pickingCode, setPickingCode] = useState('');
   const [lines, setLines] = useState<ReturnLine[]>([]);
@@ -86,6 +100,15 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
     ? `${pullFromProductionReturnAction.label} — ${woCode}`
     : pullFromProductionReturnAction.label;
 
+  const pickingOptions = useMemo(
+    () =>
+      previewPickings.map((picking) => ({
+        value: picking.picking_id,
+        label: `${picking.picking_code} - ${picking.status}`,
+      })),
+    [previewPickings],
+  );
+
   const totalReturnQty = useMemo(
     () => lines.reduce((sum, it) => sum + Number(it.return_quantity ?? 0), 0),
     [lines],
@@ -95,6 +118,40 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
     clearDraft();
     navigate(INBOUND_LIST_PATH);
   }, [clearDraft, navigate]);
+
+  const applyPickingSelection = useCallback(
+    (nextPickingId: number | null, qtyByItemId?: Record<number, number>, pickingsSource?: PreviewPicking[]) => {
+      setPickingId(nextPickingId);
+      const source = pickingsSource ?? previewPickings;
+      const picking = source.find((row) => row.picking_id === nextPickingId);
+      setPickingCode(picking?.picking_code || '');
+      const nextLines = (picking?.lines || [])
+        .filter((line) => Number(line.source_pending_quantity ?? 0) > 0)
+        .map((line, idx) => ({
+          key: Number(line.picking_item_id ?? idx),
+          picking_item_id: line.picking_item_id != null ? Number(line.picking_item_id) : undefined,
+          material_id: line.material_id != null ? Number(line.material_id) : undefined,
+          material_code: String(line.material_code ?? ''),
+          material_name: String(line.material_name ?? ''),
+          material_spec: line.material_spec ? String(line.material_spec) : undefined,
+          material_unit: String(line.material_unit || '个'),
+          picked_quantity: Number(line.source_pending_quantity ?? 0),
+          return_quantity: 0,
+        }));
+      if (qtyByItemId) {
+        setLines(
+          nextLines.map((row) =>
+            qtyByItemId[row.key] != null
+              ? { ...row, return_quantity: Number(qtyByItemId[row.key]) }
+              : row,
+          ),
+        );
+      } else {
+        setLines(nextLines);
+      }
+    },
+    [previewPickings],
+  );
 
   useEffect(() => {
     bindSnapshot(() => ({
@@ -118,73 +175,6 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
     bindSnapshot,
     persistNow,
   ]);
-
-  const loadPickings = useCallback(async (woId: number) => {
-    setPickingLoading(true);
-    try {
-      const res = await warehouseApi.productionPicking.list({
-        work_order_id: woId,
-        skip: 0,
-        limit: 100,
-      });
-      const list = Array.isArray(res)
-        ? res
-        : (res as { data?: unknown[]; items?: unknown[] })?.data
-          ?? (res as { items?: unknown[] })?.items
-          ?? [];
-      const eligible = list.filter((p: { status?: string }) =>
-        PRODUCTION_PICKING_ELIGIBLE_STATUSES.includes(String(p.status || '')),
-      );
-      setPickingOptions(
-        eligible.map((p: { id?: number; picking_code?: string; code?: string; status?: string }) => ({
-          value: Number(p.id),
-          label: `${p.picking_code || p.code || p.id} - ${p.status || ''}`,
-        })),
-      );
-    } catch {
-      setPickingOptions([]);
-      messageApi.error(t('app.kuaizhizao.warehouseInbound.entry.productionReturn.loadPickingFailed'));
-    } finally {
-      setPickingLoading(false);
-    }
-  }, [messageApi, t]);
-
-  const loadPickingLines = useCallback(async (nextPickingId: number) => {
-    setPickingLoading(true);
-    try {
-      const pickingDetail = (await warehouseApi.productionPicking.get(String(nextPickingId))) as {
-        picking_code?: string;
-        code?: string;
-        items?: Array<Record<string, unknown>>;
-      };
-      setPickingCode(pickingDetail.picking_code || pickingDetail.code || '');
-      const nextLines = (pickingDetail.items ?? [])
-        .filter((it) => Number(it.picked_quantity ?? it.pickedQuantity ?? 0) > 0)
-        .map((it, idx) => {
-          const picked = Number(it.picked_quantity ?? it.pickedQuantity ?? 0) || 0;
-          return {
-            key: Number(it.id ?? idx),
-            picking_item_id: it.id != null ? Number(it.id) : undefined,
-            material_id: it.material_id != null ? Number(it.material_id) : undefined,
-            material_code: String(it.material_code || ''),
-            material_name: String(it.material_name || ''),
-            material_spec: it.material_spec ? String(it.material_spec) : undefined,
-            material_unit: String(it.material_unit || '个'),
-            picked_quantity: picked,
-            return_quantity: picked,
-          };
-        });
-      setLines(nextLines);
-      if (!nextLines.length) {
-        messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.productionReturn.noReturnLines'));
-      }
-    } catch (e: unknown) {
-      setLines([]);
-      messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseInbound.entry.productionReturn.loadPickingLinesFailed'));
-    } finally {
-      setPickingLoading(false);
-    }
-  }, [messageApi, t]);
 
   useEffect(() => {
     if (!(Number.isFinite(workOrderId) && workOrderId > 0)) {
@@ -211,14 +201,22 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
     void (async () => {
       setLoading(true);
       try {
-        const [woRaw, whRes] = await Promise.all([
+        const [woRaw, whRes, previewRaw] = await Promise.all([
           workOrderApi.get(String(workOrderId)),
           masterWarehouseApi.list({ is_active: true, limit: 500 }),
+          warehouseApi.productionReturn.previewFromWorkOrder(workOrderId),
         ]);
+        const preview = previewRaw as { pickings?: PreviewPicking[]; message?: string };
+        const pickings = Array.isArray(preview.pickings) ? preview.pickings : [];
+        if (!pickings.length) {
+          messageApi.warning(preview.message || t('app.kuaizhizao.warehouseInbound.entry.productionReturn.noReturnLines'));
+          leavePage();
+          return;
+        }
         setWorkOrder(woRaw as Record<string, unknown>);
         setWarehouseOptions(mapWarehouseSelectOptions(whRes));
-        await loadPickings(workOrderId);
-        applyDraftOnce(async (draft) => {
+        setPreviewPickings(pickings);
+        applyDraftOnce((draft) => {
           const whId = draftOptionalNumber(draft.warehouseId);
           if (whId != null) setWarehouseId(whId);
           if (draft.returnTime) setReturnTime(draftDayjs(draft.returnTime));
@@ -228,19 +226,14 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
             typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
           );
           const draftPickingId = draftOptionalNumber(draft.pickingId);
+          const qtyByItemId = draft.lineReturnQty as Record<number, number> | undefined;
           if (draftPickingId != null) {
-            setPickingId(draftPickingId);
-            await loadPickingLines(draftPickingId);
-            const qtyByKey = draft.lineReturnQty as Record<number, number> | undefined;
-            if (qtyByKey) {
-              setLines((prev) =>
-                prev.map((row) =>
-                  qtyByKey[row.key] != null
-                    ? { ...row, return_quantity: Number(qtyByKey[row.key]) }
-                    : row,
-                ),
-              );
-            }
+            applyPickingSelection(draftPickingId, qtyByItemId, pickings);
+          } else {
+            const firstPicking = pickings.find((picking) =>
+              (picking.lines || []).some((line) => Number(line.source_pending_quantity ?? 0) > 0),
+            );
+            applyPickingSelection(firstPicking?.picking_id ?? null, undefined, pickings);
           }
         });
       } catch (e: unknown) {
@@ -250,7 +243,15 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [workOrderId, leavePage, loadPickings, loadPickingLines, messageApi, t, applyDraftOnce, receiverHook.restoreReceiver]);
+  }, [
+    workOrderId,
+    leavePage,
+    messageApi,
+    t,
+    applyDraftOnce,
+    receiverHook.restoreReceiver,
+    applyPickingSelection,
+  ]);
 
   const submit = async (mode: 'draft' | 'confirm') => {
     if (!pickingId) {
@@ -344,7 +345,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseInbound.col.spec'), dataIndex: 'material_spec', width: 120, ellipsis: true, render: (v: unknown) => v || '—' },
       { title: t('app.kuaizhizao.warehouseInbound.col.unit'), dataIndex: 'material_unit', width: 70, align: 'center' as const },
-      { title: t('app.kuaizhizao.warehouseInbound.col.pickedQty'), dataIndex: 'picked_quantity', width: 100, align: 'right' as const },
+      { title: t('app.kuaizhizao.warehouseInbound.col.returnableQty'), dataIndex: 'picked_quantity', width: 100, align: 'right' as const },
       {
         title: t('app.kuaizhizao.warehouseInbound.col.thisReturn'),
         width: 130,
@@ -385,13 +386,13 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
             <Button disabled={submitting || loading} onClick={leavePage}>
               {t('app.kuaizhizao.warehouseInbound.action.cancel')}
             </Button>
-            <Button loading={submitting} disabled={loading || pickingLoading} onClick={() => void submit('draft')}>
+            <Button loading={submitting} disabled={loading} onClick={() => void submit('draft')}>
               {t('app.kuaizhizao.warehouseInbound.action.generateDraft')}
             </Button>
             <Button
               type="primary"
               loading={submitting}
-              disabled={loading || pickingLoading}
+              disabled={loading}
               onClick={() => void submit('confirm')}
             >
               {t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
@@ -400,7 +401,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
         </>
       }
     >
-      <Spin spinning={loading || pickingLoading}>
+      <Spin spinning={loading}>
         <Card styles={{ body: { padding: PAGE_SPACING.PADDING } }}>
           <div className="form-modal-content-inner">
             {workOrder && (
@@ -440,10 +441,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
                           (opt?.label ?? '').toString().toLowerCase().includes((input ?? '').toLowerCase())
                         }
                         onChange={(v) => {
-                          const next = v ? Number(v) : null;
-                          setPickingId(next);
-                          setLines([]);
-                          if (next) void loadPickingLines(next);
+                          applyPickingSelection(v ? Number(v) : null);
                         }}
                       />
                     </Form.Item>

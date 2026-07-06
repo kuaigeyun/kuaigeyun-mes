@@ -69,7 +69,6 @@ from apps.kuaizhizao.services.sales_service import (
     SalesForecastService,
 )
 # BOM管理已移至master_data APP，不再需要BOMService
-from apps.kuaizhizao.services.planning_service import ProductionPlanningService
 from apps.kuaizhizao.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
@@ -110,6 +109,7 @@ from apps.kuaizhizao.schemas.outsource_work_order import (
     OutsourceMaterialReceiptCreate,
     OutsourceMaterialReceiptUpdate,
     OutsourceMaterialReceiptResponse,
+    OutsourceMaterialReceiptPreviewResponse,
     OutsourceMaterialReturnCreate,
     OutsourceMaterialReturnResponse,
     OutsourceMaterialReturnPreviewResponse,
@@ -266,15 +266,6 @@ from apps.kuaizhizao.schemas.bom import (
     MaterialRequirement,
     MRPRequirement,
 )
-from apps.kuaizhizao.schemas.planning import (
-    # 生产计划
-    ProductionPlanResponse,
-    ProductionPlanListResponse,
-    ProductionPlanCreate,
-    ProductionPlanUpdate,
-    ProductionPlanItemResponse,
-)
-
 from .work_orders import router as work_orders_router
 from .work_order_groups import router as work_order_groups_router
 from .reporting import router as reporting_router
@@ -896,6 +887,27 @@ async def print_sales_forecast(
     return JSONResponse(content=result, status_code=200)
 
 
+@router.get("/sales-forecasts/{forecast_id}/push-to-computation/preview", summary="Preview push to demand computation")
+async def preview_push_sales_forecast_to_computation(
+    forecast_id: int = Path(..., description="销售预测ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """下推需求计算预览：返回预测明细数量、已下推、可下推，不实际创建。"""
+    from apps.kuaizhizao.services.sales_service import SalesForecastService
+    from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+
+    try:
+        return await SalesForecastService().preview_push_to_computation(
+            tenant_id=tenant_id,
+            forecast_id=forecast_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+
 @router.post("/sales-forecasts/{forecast_id}/push-to-computation", summary="Push to demand computation")
 async def push_sales_forecast_to_computation(
     forecast_id: int = Path(..., description="销售预测ID"),
@@ -1501,280 +1513,6 @@ async def export_sales_forecasts(
 
 
 
-
-# ============ 生产计划管理 API ============
-
-# 此处原为废弃的MRP/LRP运算及结果查询接口，已移除。
-# 统一使用 DemandComputationService 进行需求计算。
-
-
-@router.get("/production-plans/planning-config", summary="Planning configuration")
-async def get_planning_config(
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    获取计划管理相关配置，供前端展示当前模式。
-    用于需求计算页展示「直连工单」或「经生产计划」的路径说明。
-    """
-    from infra.services.business_config_service import BusinessConfigService
-    return await BusinessConfigService().get_planning_config(tenant_id)
-
-
-@router.post("/production-plans", response_model=ProductionPlanResponse, summary="Create production plan manually")
-async def create_production_plan(
-    plan_data: ProductionPlanCreate,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> ProductionPlanResponse:
-    """
-    手动创建生产计划
-    
-    允许用户手动录入计划基本信息和明细项。
-    """
-    return await ProductionPlanningService().create_production_plan(
-        tenant_id=tenant_id,
-        plan_data=plan_data,
-        created_by=current_user.id
-    )
-
-
-
-@router.get("/production-plans", response_model=List[ProductionPlanListResponse], summary="List production plans")
-async def list_production_plans(
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    plan_type: Optional[str] = Query(None, description="计划类型（MRP/LRP）"),
-    status: Optional[str] = Query(None, description="计划状态"),
-    plan_code: Optional[str] = Query(None, description="计划编码"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> List[ProductionPlanListResponse]:
-    """
-    获取生产计划列表
-
-    支持多种筛选条件的高级搜索。
-    """
-    service = ProductionPlanningService()
-    return await service.list_production_plans(
-        tenant_id=tenant_id,
-        skip=skip,
-        limit=limit,
-        plan_type=plan_type,
-        status=status,
-        plan_code=plan_code,
-    )
-
-
-@router.get("/production-plans/statistics", summary="Production plan statistics")
-async def get_production_plan_statistics(
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """获取生产计划统计信息"""
-    return await ProductionPlanningService().get_production_plan_statistics(tenant_id)
-
-
-@router.get("/production-plans/{plan_id}", response_model=ProductionPlanResponse, summary="Get production plan")
-async def get_production_plan(
-    plan_id: int,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> ProductionPlanResponse:
-    """
-    根据ID获取生产计划详情
-
-    - **plan_id**: 生产计划ID
-    """
-    return await ProductionPlanningService().get_production_plan_by_id(
-        tenant_id=tenant_id,
-        plan_id=plan_id
-    )
-
-
-@router.get("/production-plans/{plan_id}/items", response_model=List[ProductionPlanItemResponse], summary="List production plan lines")
-async def get_production_plan_items(
-    plan_id: int,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> List[ProductionPlanItemResponse]:
-    """
-    获取生产计划明细列表
-
-    - **plan_id**: 生产计划ID
-    """
-    return await ProductionPlanningService().get_plan_items(
-        tenant_id=tenant_id,
-        plan_id=plan_id
-    )
-
-
-@router.post("/production-plans/{plan_id}/submit", response_model=ProductionPlanResponse, summary="Submit production plan for approval")
-async def submit_production_plan(
-    plan_id: int,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> ProductionPlanResponse:
-    """
-    提交生产计划审核（已驳回时重新提交）
-
-    - **plan_id**: 生产计划ID
-    """
-    return await ProductionPlanningService().submit_production_plan(
-        tenant_id=tenant_id,
-        plan_id=plan_id,
-        submitted_by=current_user.id
-    )
-
-
-@router.post("/production-plans/{plan_id}/withdraw", response_model=ProductionPlanResponse, summary="Withdraw production plan submission")
-async def withdraw_production_plan(
-    plan_id: int,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> ProductionPlanResponse:
-    """撤回生产计划提交（待审核 → 草稿）"""
-    return await ProductionPlanningService().withdraw_production_plan(
-        tenant_id=tenant_id,
-        plan_id=plan_id,
-        withdrawn_by=current_user.id,
-    )
-
-
-@router.post("/production-plans/{plan_id}/approve", response_model=ProductionPlanResponse, summary="Approve production plan")
-async def approve_production_plan(
-    plan_id: int,
-    rejection_reason: Optional[str] = Query(None, description="驳回原因"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> ProductionPlanResponse:
-    """
-    审核生产计划
-
-    - **plan_id**: 生产计划ID
-    - **rejection_reason**: 驳回原因（可选，不填则通过）
-    """
-    return await ProductionPlanningService().approve_production_plan(
-        tenant_id=tenant_id,
-        plan_id=plan_id,
-        approved_by=current_user.id,
-        rejection_reason=rejection_reason
-    )
-
-
-@router.post("/production-plans/{plan_id}/execute", response_model=ProductionPlanResponse, summary="Execute production plan")
-async def execute_production_plan(
-    plan_id: int,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> ProductionPlanResponse:
-    """
-    执行生产计划
-
-    根据计划明细生成工单和采购订单
-
-    - **plan_id**: 生产计划ID
-    """
-    return await ProductionPlanningService().execute_plan(
-        tenant_id=tenant_id,
-        plan_id=plan_id,
-        executed_by=current_user.id
-    )
-
-
-@router.put("/production-plans/{plan_id}", response_model=ProductionPlanResponse, summary="Update production plan")
-async def update_production_plan(
-    plan_id: int,
-    plan_data: ProductionPlanUpdate,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> ProductionPlanResponse:
-    """更新生产计划"""
-    return await ProductionPlanningService().update_production_plan(
-        tenant_id=tenant_id,
-        plan_id=plan_id,
-        plan_data=plan_data,
-        updated_by=current_user.id
-    )
-
-
-@router.delete("/production-plans/{plan_id}", summary="Delete production plan")
-async def delete_production_plan(
-    plan_id: int,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """删除生产计划"""
-    await ProductionPlanningService().delete_production_plan(
-        tenant_id=tenant_id,
-        plan_id=plan_id,
-        updated_by=current_user.id
-    )
-    return {"success": True, "message": "删除成功"}
-
-
-@router.post("/production-plans/{plan_id}/push-to-work-orders", summary="Convert production plan to work orders")
-async def push_production_plan_to_work_orders(
-    plan_id: int,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    从生产计划下推到工单
-
-    将生产计划中「建议行动=生产」的明细转为工单。
-    设计文档约定：POST /apps/kuaizhizao/production-plans/{id}/push-to-work-orders
-    """
-    try:
-        from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
-        from apps.kuaizhizao.models.production_plan import ProductionPlan
-        from apps.kuaizhizao.services.document_action_policy.production_plan import (
-            assert_production_plan_capability,
-        )
-        from infra.services.business_config_service import BusinessConfigService
-
-        plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True)
-        if not plan:
-            from infra.exceptions.exceptions import NotFoundError
-            raise NotFoundError(f"生产计划不存在: {plan_id}")
-        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "production_plan")
-        from apps.kuaizhizao.models.production_plan_item import ProductionPlanItem
-        prod_items = await ProductionPlanItem.filter(
-            tenant_id=tenant_id,
-            plan_id=plan_id,
-            suggested_action="生产",
-        ).all()
-        has_prod = any(float(i.work_order_quantity or 0) > 0 for i in prod_items)
-        assert_production_plan_capability(
-            plan,
-            "push_work_order",
-            audit_required=audit_required,
-            has_production_items=has_prod,
-        )
-
-        service = DocumentPushPullService()
-        result = await service.push_document(
-            tenant_id=tenant_id,
-            source_type="production_plan",
-            source_id=plan_id,
-            target_type="work_order",
-            push_params=None,
-            created_by=current_user.id,
-        )
-        return result
-    except Exception as e:
-        from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
-        if isinstance(e, NotFoundError):
-            raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/production-plans/{plan_id}/push-to-work-orders", tenant_id)
-        if isinstance(e, BusinessLogicError):
-            raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/production-plans/{plan_id}/push-to-work-orders", tenant_id)
-        logger.exception("生产计划转工单失败")
-        raise _http_exception_with_trace(
-            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            f"生产计划转工单失败: {str(e)}",
-            "/production-plans/{plan_id}/push-to-work-orders",
-            tenant_id,
-        )
 
 
 # ============ 采购订单管理 API ============
@@ -4038,6 +3776,31 @@ async def complete_outsource_material_receipt(
 
 
 # ==================== 委外退料 / 委外退货 API ====================
+
+@router.get(
+    "/outsource-work-orders/{work_order_id}/receipt-preview",
+    response_model=OutsourceMaterialReceiptPreviewResponse,
+    summary="Preview subcontract material receipt lines",
+)
+async def get_outsource_material_receipt_preview(
+    work_order_id: int = Path(..., description="委外工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceMaterialReceiptPreviewResponse:
+    try:
+        return await outsource_material_receipt_service.get_receipt_preview(
+            tenant_id=tenant_id,
+            outsource_work_order_id=work_order_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404, str(e), "/outsource-work-orders/{work_order_id}/receipt-preview", tenant_id
+        )
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(
+            400, str(e), "/outsource-work-orders/{work_order_id}/receipt-preview", tenant_id
+        )
+
 
 @router.get(
     "/outsource-work-orders/{work_order_id}/material-return-preview",

@@ -46,3 +46,18 @@ export async function updateUserProfile(data: UpdateUserProfileData): Promise<Us
     data,
   });
 }
+
+export interface ChangePasswordData {
+  old_password: string;
+  new_password: string;
+}
+
+/**
+ * 修改当前用户密码
+ */
+export async function changePassword(data: ChangePasswordData): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/personal/user-profile/change-password', {
+    method: 'POST',
+    data,
+  });
+}

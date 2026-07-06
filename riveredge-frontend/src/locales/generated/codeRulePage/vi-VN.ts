@@ -58,8 +58,6 @@ const codeRulePageviVN = {
   'codeRulePage.kuaizhizao-equipment-management-mold.pageName': 'khuôn mẫu',
   'codeRulePage.kuaizhizao-equipment-management-tool.codeFieldLabel': 'Mã công cụ',
   'codeRulePage.kuaizhizao-equipment-management-tool.pageName': 'Công cụ',
-  'codeRulePage.kuaizhizao-plan-production-plan.codeFieldLabel': 'Mã kế hoạch sản xuất',
-  'codeRulePage.kuaizhizao-plan-production-plan.pageName': 'kế hoạch sản xuất',
   'codeRulePage.kuaizhizao-production-outsource-material-receipt.codeFieldLabel': 'Số biên nhận thuê ngoài',
   'codeRulePage.kuaizhizao-production-outsource-material-receipt.pageName': 'Biên nhận vật tư thuê ngoài',
   'codeRulePage.kuaizhizao-production-outsource-material-return.codeFieldLabel': 'Số trả lại tài liệu thuê ngoài',

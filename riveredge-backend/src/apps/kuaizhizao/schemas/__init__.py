@@ -33,8 +33,7 @@ from .sales import *
 # 只保留MaterialRequirement和MRPRequirement用于MRP计算
 from .bom import MaterialRequirement, MRPRequirement
 
-# 生产计划模块
-from .planning import *
+# 生产计划模块已下线
 
 # 统一需求管理模块（新设计）
 from .demand import *
@@ -262,17 +261,6 @@ __all__ = [
     'BOMExpansionResult',
     'MaterialRequirement',
     'MRPRequirement',
-
-    # 生产计划相关
-    'ProductionPlanBase',
-    'ProductionPlanCreate',
-    'ProductionPlanUpdate',
-    'ProductionPlanResponse',
-    'ProductionPlanListResponse',
-    'ProductionPlanItemBase',
-    'ProductionPlanItemCreate',
-    'ProductionPlanItemUpdate',
-    'ProductionPlanItemResponse',
 
     # MRP运算相关
     'MRPResultBase',

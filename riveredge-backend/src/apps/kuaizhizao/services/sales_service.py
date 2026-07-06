@@ -1032,6 +1032,103 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         
         return file_path
 
+    async def preview_push_to_computation(
+        self,
+        tenant_id: int,
+        forecast_id: int,
+    ) -> Dict[str, Any]:
+        """下推需求计算预览：返回预测明细数量、已下推、可下推，不实际创建。"""
+        from apps.kuaizhizao.services.demand_service import DemandService
+        from apps.kuaizhizao.services.document_action_policy.sales_forecast import (
+            derive_sales_forecast_capabilities,
+        )
+        from apps.master_data.services.material_service import MaterialService
+
+        forecast_row = await SalesForecast.get_or_none(
+            tenant_id=tenant_id, id=forecast_id, deleted_at__isnull=True
+        )
+        if not forecast_row:
+            raise NotFoundError(f"销售预测不存在: {forecast_id}")
+
+        demand = await self._get_linked_demand_for_forecast(tenant_id, forecast_id)
+        pushed = self._is_forecast_pushed_to_computation(forecast_row, demand)
+        item_count = await SalesForecastItem.filter(
+            tenant_id=tenant_id, forecast_id=forecast_id
+        ).count()
+        caps = derive_sales_forecast_capabilities(
+            forecast_row,
+            pushed_to_computation=pushed,
+            has_items=item_count > 0,
+        )
+        push_allowed = caps.push_computation.allowed
+        blocking_reason = caps.push_computation.reason if not push_allowed else None
+
+        if demand and push_allowed and not pushed:
+            preview = await DemandService().preview_push_demand_to_computation(
+                tenant_id, demand.id
+            )
+            preview["forecast_code"] = forecast_row.forecast_code
+            preview["demand_exists"] = True
+            return preview
+
+        items = await SalesForecastItem.filter(
+            tenant_id=tenant_id, forecast_id=forecast_id
+        ).order_by("id")
+        if not items:
+            raise BusinessLogicError("销售预测无明细，无法下推需求计算")
+
+        material_ids = [
+            int(it.material_id)
+            for it in items
+            if getattr(it, "material_id", None) and int(it.material_id) > 0
+        ]
+        bom_map = await MaterialService.batch_check_has_bom(
+            tenant_id=tenant_id,
+            material_ids=material_ids,
+            only_active=True,
+        )
+
+        preview_items = []
+        for it in items:
+            qty = float(it.forecast_quantity or 0)
+            if qty <= 0:
+                continue
+            material_id = int(it.material_id) if getattr(it, "material_id", None) else None
+            preview_items.append({
+                "item_id": int(it.id),
+                "material_id": material_id,
+                "material_code": str(it.material_code or "").strip(),
+                "material_name": str(it.material_name or "").strip(),
+                "quantity": float(qty),
+                "pushed_quantity": float(qty) if pushed else 0.0,
+                "max_push_quantity": 0.0 if pushed or not push_allowed else float(qty),
+                "forecast_date": str(it.forecast_date) if it.forecast_date else None,
+                "forecast_month": str(it.forecast_month) if getattr(it, "forecast_month", None) else None,
+                "has_bom": bom_map.get(material_id, False) if material_id else False,
+            })
+
+        if not preview_items:
+            push_allowed = False
+            blocking_reason = blocking_reason or "sales_forecast.push_computation.no_items"
+
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        return {
+            "target_type": "demand_computation",
+            "summary": (
+                f"请确认将下推的预测明细（{pushable_count}/{len(preview_items)} 行可下推）"
+                if push_allowed
+                else "当前销售预测不可下推需求计算"
+            ),
+            "forecast_code": forecast_row.forecast_code,
+            "demand_exists": demand is not None,
+            "items": preview_items,
+            "has_blocking_issues": not push_allowed,
+            "blocking_reason": blocking_reason if not push_allowed else None,
+            "tip": "确认后将创建需求并下推需求计算任务；整单下推后不可重复操作。",
+        }
+
     async def push_to_computation(
         self,
         tenant_id: int,

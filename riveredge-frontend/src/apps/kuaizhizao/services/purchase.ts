@@ -29,7 +29,37 @@ export interface PurchaseOrderCapabilities {
   approve?: ActionCapability;
   revoke_approval?: ActionCapability;
   push_receipt_notice?: ActionCapability;
+  push_receipt?: ActionCapability;
+  push_invoice?: ActionCapability;
+  push_purchase_return?: ActionCapability;
+  create_change_order?: ActionCapability;
   print?: ActionCapability;
+}
+
+export interface DocumentPushPreviewItem {
+  item_id: number;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string;
+  unit?: string;
+  quantity: number;
+  pushed_quantity: number;
+  max_push_quantity: number;
+  supplier_id?: number;
+  unit_price?: number;
+  required_date?: string | null;
+}
+
+export interface DocumentPushPreview {
+  target_type?: string;
+  order_id?: number;
+  order_code?: string;
+  summary: string;
+  items: DocumentPushPreviewItem[];
+  has_blocking_issues: boolean;
+  blocking_reason?: string | null;
+  tip?: string | null;
 }
 
 /**
@@ -292,6 +322,42 @@ export async function withdrawPurchaseOrder(id: number): Promise<PurchaseOrder> 
 export async function revokePurchaseOrder(id: number): Promise<PurchaseOrder> {
   return apiRequest<PurchaseOrder>(`/core/uni-audit/purchase_order/${id}/revoke`, {
     method: 'POST',
+  });
+}
+
+/**
+ * 下推收货通知预览
+ */
+export async function previewPushToReceiptNotice(orderId: number): Promise<DocumentPushPreview> {
+  return apiRequest<DocumentPushPreview>(`/apps/kuaizhizao/purchase-orders/${orderId}/push-to-receipt-notice/preview`, {
+    method: 'GET',
+  });
+}
+
+/**
+ * 下推采购入库预览（数量门禁）
+ */
+export async function previewPushToReceipt(orderId: number): Promise<DocumentPushPreview> {
+  return apiRequest<DocumentPushPreview>(`/apps/kuaizhizao/purchase-orders/${orderId}/push-to-receipt/preview`, {
+    method: 'GET',
+  });
+}
+
+/**
+ * 下推采购发票预览
+ */
+export async function previewPushToInvoice(orderId: number): Promise<DocumentPushPreview> {
+  return apiRequest<DocumentPushPreview>(`/apps/kuaizhizao/purchase-orders/${orderId}/push-to-invoice/preview`, {
+    method: 'GET',
+  });
+}
+
+/**
+ * 下推采购退货预览
+ */
+export async function previewPushToPurchaseReturn(orderId: number): Promise<DocumentPushPreview> {
+  return apiRequest<DocumentPushPreview>(`/apps/kuaizhizao/purchase-orders/${orderId}/push-to-purchase-return/preview`, {
+    method: 'GET',
   });
 }
 

@@ -1543,6 +1543,30 @@ async def check_work_order_shortage(
 
 
 @router.get(
+    "/work-orders/{work_order_id}/push-production-picking/preview",
+    summary="Preview push work order to production picking",
+)
+async def preview_push_work_order_to_production_picking(
+    work_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """工单下推生产领料预览：返回齐套明细数量、已领料、可领料量。"""
+    from apps.kuaizhizao.services.warehouse_service import ProductionPickingService
+    from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+
+    try:
+        return await ProductionPickingService().preview_push_work_order_to_production_picking(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
     "/work-orders/{work_order_id}/kitting-analysis",
     response_model=WorkOrderKittingAnalysisResponse,
     summary="Work order kitting analysis",

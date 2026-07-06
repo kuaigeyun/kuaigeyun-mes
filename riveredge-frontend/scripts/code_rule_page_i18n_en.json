@@ -415,10 +415,6 @@
       "pageName": "Finished Goods Inspection",
       "codeFieldLabel": "Finished goods inspection code"
     },
-    "kuaizhizao-plan-production-plan": {
-      "pageName": "Production Plans",
-      "codeFieldLabel": "Production plan code"
-    },
     "kuaizhizao-purchase-return": {
       "pageName": "Purchase Returns",
       "codeFieldLabel": "Purchase return code"

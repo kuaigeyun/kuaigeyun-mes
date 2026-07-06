@@ -52,9 +52,6 @@ from .demand_service import DemandService
 
 # BOM管理已移至master_data APP，不再需要BOMService
 
-# 生产计划模块
-from .planning_service import ProductionPlanningService
-
 __all__ = [
     # 生产执行模块
     'WorkOrderService',
@@ -95,7 +92,4 @@ __all__ = [
 
     # BOM管理模块
     # BOMService已移除，BOM管理在master_data APP中
-
-    # 生产计划模块
-    'ProductionPlanningService',
 ]

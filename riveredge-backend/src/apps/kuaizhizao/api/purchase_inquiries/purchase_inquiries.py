@@ -199,6 +199,27 @@ async def award_quotes(
     return await PurchaseInquiryService().award_quotes(tenant_id, inquiry_id, data, current_user.id)
 
 
+@router.get(
+    "/purchase-inquiries/{inquiry_id}/push-to-purchase-order/preview",
+    summary="Preview push to purchase order",
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
+)
+async def preview_push_to_purchase_order(
+    inquiry_id: int = Path(...),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """下推采购订单预览"""
+    try:
+        return await PurchaseInquiryService().preview_push_to_purchase_order(
+            tenant_id=tenant_id,
+            inquiry_id=inquiry_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception(404, str(e))
+    except BusinessLogicError as e:
+        raise _http_exception(400, str(e))
+
+
 @router.post(
     "/purchase-inquiries/{inquiry_id}/convert-to-purchase-order",
     dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],

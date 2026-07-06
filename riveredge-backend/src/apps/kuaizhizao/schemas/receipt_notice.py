@@ -81,6 +81,13 @@ class ReceiptNoticeListResponse(ReceiptNoticeResponse):
     pass
 
 
+class ReceiptNoticeListPaginatedResponse(BaseSchema):
+    """收货通知单分页列表响应"""
+    data: List[ReceiptNoticeListResponse]
+    total: int
+    success: bool = True
+
+
 # === 收货通知单明细 ===
 
 class ReceiptNoticeItemBase(BaseSchema):

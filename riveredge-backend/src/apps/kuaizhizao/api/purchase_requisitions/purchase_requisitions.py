@@ -208,6 +208,40 @@ async def submit_requisition(
     )
 
 
+@router.get("/purchase-requisitions/{requisition_id}/push-to-purchase-order/preview", summary="Preview push to purchase order")
+async def preview_push_to_purchase_order(
+    requisition_id: int = Path(...),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """下推采购订单预览"""
+    try:
+        return await PurchaseRequisitionService().preview_push_to_purchase_order(
+            tenant_id=tenant_id,
+            requisition_id=requisition_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/purchase-requisitions/{requisition_id}/push-to-purchase-inquiry/preview", summary="Preview push to purchase inquiry")
+async def preview_push_to_purchase_inquiry(
+    requisition_id: int = Path(...),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """下推询价单预览"""
+    try:
+        return await PurchaseRequisitionService().preview_push_to_inquiry(
+            tenant_id=tenant_id,
+            requisition_id=requisition_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/purchase-requisitions/{requisition_id}/convert-to-purchase-order", summary="Push to purchase order")
 async def convert_to_purchase_order(
     data: ConvertToPurchaseOrderRequest,

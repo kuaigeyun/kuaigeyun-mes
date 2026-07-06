@@ -1,6 +1,6 @@
 /**
  * 生产执行相关服务（聚合导出）
- * 具体实现已拆分至 work-order、reporting、warehouse-execution、quality-execution、planning 等子模块
+ * 具体实现已拆分至 work-order、reporting、warehouse-execution、quality-execution 等子模块
  */
 
 import { apiRequest } from '../../../services/api';
@@ -9,8 +9,6 @@ export { workOrderApi, reworkOrderApi, getWorkOrderStatistics } from './work-ord
 export { reportingApi, materialBindingApi, getReportingStatistics } from './reporting';
 export { warehouseApi } from './warehouse-execution';
 export { qualityApi, inspectionPlanApi } from './quality-execution';
-export { planningApi } from './planning';
-
 export interface SchedulingConstraints {
   consider_human: boolean;
   consider_equipment: boolean;
@@ -203,6 +201,13 @@ export const outsourceMaterialReceiptApi = {
   // 完成委外收货
   complete: async (id: string) => {
     return apiRequest(`/apps/kuaizhizao/outsource-material-receipts/${id}/complete`, { method: 'POST' });
+  },
+
+  receiptPreview: async (outsourceWorkOrderId: number | string) => {
+    return apiRequest(
+      `/apps/kuaizhizao/outsource-work-orders/${outsourceWorkOrderId}/receipt-preview`,
+      { method: 'GET' },
+    );
   },
 };
 

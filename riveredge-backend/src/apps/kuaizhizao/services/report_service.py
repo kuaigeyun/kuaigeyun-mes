@@ -2237,7 +2237,6 @@ class ReportService:
         """计划报表汇总"""
         from apps.kuaizhizao.models.demand import Demand
         from apps.kuaizhizao.models.demand_item import DemandItem
-        from apps.kuaizhizao.models.production_plan import ProductionPlan
         from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
         from apps.kuaizhizao.models.inventory_alert import InventoryAlert
         from apps.kuaizhizao.models.work_order import WorkOrder
@@ -2263,10 +2262,6 @@ class ReportService:
             for it in items:
                 it["quantity"] = float(it["required_quantity"] or 0)
                 it["requirement_date"] = it["delivery_date"].strftime("%Y-%m-%d") if it["delivery_date"] else None
-            return {"data": items, "success": True}
-        elif report_type in ["production-plan-comparison", "pp_comparison"]:
-            # 生产计划对比
-            items = await ProductionPlan.filter(tenant_id=tenant_id).limit(100).values("plan_code", "plan_name", "status")
             return {"data": items, "success": True}
         elif report_type in ["purchase-plan-comparison", "pur_comparison"]:
             # 采购计划对比 - 使用 PurchaseRequisitionItem 获取明细

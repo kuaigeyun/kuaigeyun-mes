@@ -12,8 +12,6 @@ const presetEntityzhHant = {
   'preset.approvalProcess.payable.name': '應付單稽核',
   'preset.approvalProcess.process_inspection.desc': '工序檢驗稽核',
   'preset.approvalProcess.process_inspection.name': '工序檢驗稽核',
-  'preset.approvalProcess.production_plan.desc': '生產計劃稽核',
-  'preset.approvalProcess.production_plan.name': '生產計劃稽核',
   'preset.approvalProcess.purchase_inquiry.desc': '採購詢價稽核',
   'preset.approvalProcess.purchase_inquiry.name': '採購詢價稽核',
   'preset.approvalProcess.purchase_invoice.desc': '進項發票稽核',

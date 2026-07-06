@@ -190,7 +190,8 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
         setWarehouseOptions(mapWarehouseSelectOptions(whRes));
 
         if (pullType === 'outsource_receipt') {
-          setReceiptLine(buildReceiptLineFromWorkOrder(wo));
+          const line = buildReceiptLineFromWorkOrder(wo);
+          setReceiptLine({ ...line, receiptQuantity: 0, qualifiedQuantity: 0, unqualifiedQuantity: 0 });
           setPreviewLines([]);
         } else if (pullType === 'outsource_material_return') {
           const preview = (await outsourceMaterialReturnApi.returnPreview(woId)) as {
@@ -216,7 +217,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
                 material_name: String(line.material_name ?? line.materialName ?? ''),
                 unit: String(line.unit ?? '个'),
                 returnable_quantity: qty,
-                return_quantity: qty,
+                return_quantity: 0,
               };
             }),
           );
@@ -242,7 +243,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
                 receipt_id: receiptId || undefined,
                 unit: String(line.unit ?? wo.unit ?? '件'),
                 returnable_quantity: qty,
-                return_quantity: qty,
+                return_quantity: 0,
               };
             }),
           );

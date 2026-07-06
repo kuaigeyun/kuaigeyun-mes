@@ -407,7 +407,7 @@ const OperationsPage: React.FC = () => {
       actionRef.current?.reload();
     }
     if (result.failureCount > 0) {
-      messageApi.warning(t('app.kuaizhizao.productionPlan.importPartialFailed', { count: result.failureCount }));
+      messageApi.warning(t('app.master-data.importPartialResultIntro', { success: result.successCount, failure: result.failureCount }));
     }
   };
 

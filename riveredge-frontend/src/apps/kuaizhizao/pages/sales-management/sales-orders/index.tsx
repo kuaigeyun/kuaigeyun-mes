@@ -90,7 +90,7 @@ import {
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { UniAuditBatchMenuButton, UniBatchButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
-import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
+import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
   DOCUMENT_DETAIL_AMOUNT_STYLE,
@@ -121,6 +121,9 @@ import {
   previewPushSalesOrderToComputation,
   previewPushSalesOrderToWorkOrder,
   previewPushSalesOrderToShipmentNotice,
+  previewPushSalesOrderToDelivery,
+  previewPushSalesOrderToInvoice,
+  previewPushSalesOrderToSalesReturn,
   pushSalesOrderToComputation,
   pushSalesOrderToWorkOrder,
   pushSalesOrderToShipmentNotice,
@@ -1336,12 +1339,8 @@ const SalesOrdersPage: React.FC = () => {
   const [workCenterOptionsLoading, setWorkCenterOptionsLoading] = useState(false);
   const [workOrderPushMode, setWorkOrderPushMode] = useState<'draft' | 'confirm'>('draft');
   const [workOrderGranularity, setWorkOrderGranularity] = useState<'grouped' | 'per_unit'>('grouped');
-  const [pushToReturnVisible, setPushToReturnVisible] = useState(false);
-  const [pushToReturnOrder, setPushToReturnOrder] = useState<SalesOrder | null>(null);
-  const [pushToReturnQuantities, setPushToReturnQuantities] = useState<Record<number, number>>({});
   const [pushToReturnWarehouseId, setPushToReturnWarehouseId] = useState<number | undefined>(undefined);
   const [pushToReturnWarehouseName, setPushToReturnWarehouseName] = useState<string>('');
-  const [pushToReturnLoading, setPushToReturnLoading] = useState(false);
 
   const resolvePushPreviewModalTitle = (
     targetType: NonNullable<PushPreviewResponse['target_type']>,
@@ -1349,6 +1348,9 @@ const SalesOrdersPage: React.FC = () => {
     if (targetType === 'work_order') return pushToWorkOrderAction.label;
     if (targetType === 'shipment_notice') return pushToShipmentNoticeAction.label;
     if (targetType === 'demand_computation') return pushToDemandComputationAction.label;
+    if (targetType === 'sales_invoice') return pushToSalesInvoiceAction.label;
+    if (targetType === 'sales_delivery') return pushToSalesDeliveryAction.label;
+    if (targetType === 'sales_return') return pushToSalesReturnAction.label;
     throw new Error(`Unknown sales order push preview target_type: ${String(targetType)}`);
   };
 
@@ -1371,6 +1373,8 @@ const SalesOrdersPage: React.FC = () => {
     setWorkOrderSelectedWorkCenters({});
     setWorkOrderPushMode('draft');
     setWorkOrderGranularity('grouped');
+    setPushToReturnWarehouseId(undefined);
+    setPushToReturnWarehouseName('');
     const ensureWorkCentersLoaded = async () => {
       if (workCenterOptions.length > 0) return;
       try {
@@ -1394,7 +1398,14 @@ const SalesOrdersPage: React.FC = () => {
     fetchPreview()
       .then((res) => {
         setPushPreviewData(res);
-        if (res?.target_type === 'work_order' || res?.target_type === 'shipment_notice' || res?.target_type === 'demand_computation') {
+        const lineSelectableTargets = new Set([
+          'work_order',
+          'shipment_notice',
+          'demand_computation',
+          'sales_delivery',
+          'sales_return',
+        ]);
+        if (res?.target_type === 'work_order' || lineSelectableTargets.has(res.target_type)) {
           if (res?.target_type === 'work_order') {
             void ensureWorkCentersLoaded();
           }
@@ -1412,8 +1423,15 @@ const SalesOrdersPage: React.FC = () => {
           });
           setWorkOrderSelectedItemIds(ids);
           setWorkOrderPushQuantities(qtyMap);
-          const defaultMode = res.push_mode_default === 'confirm' ? 'confirm' : 'draft';
-          setWorkOrderPushMode(defaultMode);
+          if (res.target_type === 'work_order') {
+            const defaultMode = res.push_mode_default === 'confirm' ? 'confirm' : 'draft';
+            setWorkOrderPushMode(defaultMode);
+          }
+        } else if (res?.target_type === 'sales_invoice') {
+          const ids = (res.items || [])
+            .filter((row) => Number((row as any).max_push_quantity ?? 0) > 0)
+            .map((row) => Number((row as any).item_id));
+          setWorkOrderSelectedItemIds(ids);
         }
         setPushPreviewLoading(false);
       })
@@ -1429,6 +1447,13 @@ const SalesOrdersPage: React.FC = () => {
   /** 确认下推（执行实际下推） */
   const handlePushPreviewConfirm = async () => {
     if (!pushPreviewAction || !pushPreviewData) return;
+    if (pushPreviewData.has_blocking_issues && pushPreviewData.blocking_reason) {
+      messageApi.warning(
+        salesOrderCapabilityReasonMessage(pushPreviewData.blocking_reason, t) ||
+          t('app.kuaizhizao.salesOrder.pushFailed'),
+      );
+      return;
+    }
     setPushPreviewConfirming(true);
     try {
       if (pushPreviewData.target_type === 'work_order') {
@@ -1533,10 +1558,86 @@ const SalesOrdersPage: React.FC = () => {
           selected_item_ids: selectedIds,
           selected_quantities: selectedQuantities,
         });
-      } else {
-        await pushPreviewAction.doPush();
+      } else if (pushPreviewData.target_type === 'sales_delivery') {
+        const rows = (pushPreviewData.items || []).filter((row: any) => Number(row?.item_id) > 0);
+        const rowById = new Map<number, any>();
+        rows.forEach((row: any) => rowById.set(Number(row.item_id), row));
+        const selectedIds = workOrderSelectedItemIds.filter((id) => rowById.has(id));
+        if (!selectedIds.length) {
+          messageApi.warning(t('app.kuaizhizao.salesOrder.selectAtLeastOneLine'));
+          return;
+        }
+        const deliveryQuantities: Record<number, number> = {};
+        for (const id of selectedIds) {
+          const row = rowById.get(id);
+          const qty = Number(workOrderPushQuantities[id] ?? 0);
+          const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+          if (!Number.isFinite(qty) || qty <= 0) {
+            messageApi.warning(t('app.kuaizhizao.salesOrder.pushQtyInvalid', { code: row?.material_code || id }));
+            return;
+          }
+          if (Number.isFinite(maxQty) && maxQty > 0 && qty > maxQty) {
+            messageApi.warning(t('app.kuaizhizao.salesOrder.pushQtyExceedsRemaining', { code: row?.material_code || id }));
+            return;
+          }
+          deliveryQuantities[id] = qty;
+        }
+        const res = await pushPreviewAction.doPush({ delivery_quantities: deliveryQuantities });
+        messageApi.success(res?.message || t('app.kuaizhizao.salesOrder.deliveryCreated'));
+      } else if (pushPreviewData.target_type === 'sales_return') {
+        if (!pushToReturnWarehouseId || pushToReturnWarehouseId <= 0) {
+          messageApi.warning(t('app.kuaizhizao.salesOrder.returnWarehouseRequired'));
+          return;
+        }
+        const rows = (pushPreviewData.items || []).filter((row: any) => Number(row?.item_id) > 0);
+        const rowById = new Map<number, any>();
+        rows.forEach((row: any) => rowById.set(Number(row.item_id), row));
+        const selectedIds = workOrderSelectedItemIds.filter((id) => rowById.has(id));
+        if (!selectedIds.length) {
+          messageApi.warning(t('app.kuaizhizao.salesOrder.selectAtLeastOneLine'));
+          return;
+        }
+        const returnQuantities: Record<number, number> = {};
+        for (const id of selectedIds) {
+          const row = rowById.get(id);
+          const qty = Number(workOrderPushQuantities[id] ?? 0);
+          const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+          if (!Number.isFinite(qty) || qty <= 0) continue;
+          if (qty > maxQty) {
+            messageApi.error(t('app.kuaizhizao.salesOrder.returnQtyExceedsMax', { material: row?.material_code || id, max: maxQty }));
+            return;
+          }
+          returnQuantities[id] = qty;
+        }
+        if (!Object.keys(returnQuantities).length) {
+          messageApi.warning(t('app.kuaizhizao.salesOrder.selectAtLeastOneLine'));
+          return;
+        }
+        const result = await pushPreviewAction.doPush({
+          warehouse_id: pushToReturnWarehouseId,
+          warehouse_name: pushToReturnWarehouseName || undefined,
+          return_quantities: returnQuantities,
+        });
+        messageApi.success(
+          t('app.kuaizhizao.salesOrder.returnCreated', {
+            code: result?.return_code || t('app.kuaizhizao.salesOrder.createdFallback'),
+          }),
+        );
+      } else if (pushPreviewData.target_type === 'sales_invoice') {
+        const pushableIds = (pushPreviewData.items || [])
+          .filter((row) => Number((row as any).max_push_quantity ?? 0) > 0)
+          .map((row) => Number((row as any).item_id));
+        const selectedIds = workOrderSelectedItemIds.filter((id) => pushableIds.includes(id));
+        if (selectedIds.length !== pushableIds.length) {
+          messageApi.warning(t('app.kuaizhizao.salesOrder.invoicePushRequiresAllLines'));
+          return;
+        }
+        const res = await pushPreviewAction.doPush();
+        messageApi.success(res?.message || t('app.kuaizhizao.salesOrder.invoiceCreated'));
       }
-      messageApi.success(t('app.kuaizhizao.salesOrder.pushSuccess'));
+      if (['work_order', 'shipment_notice', 'demand_computation'].includes(pushPreviewData.target_type)) {
+        messageApi.success(t('app.kuaizhizao.salesOrder.pushSuccess'));
+      }
       pushPreviewAction.onSuccess();
       setPushPreviewOpen(false);
       setPushPreviewData(null);
@@ -1546,6 +1647,8 @@ const SalesOrdersPage: React.FC = () => {
       setWorkOrderSelectedWorkCenters({});
       setWorkOrderPushMode('draft');
       setWorkOrderGranularity('grouped');
+      setPushToReturnWarehouseId(undefined);
+      setPushToReturnWarehouseName('');
     } catch (error: any) {
       messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.pushFailed')));
     } finally {
@@ -1594,102 +1697,44 @@ const SalesOrdersPage: React.FC = () => {
       messageApi.warning(t('app.kuaizhizao.salesOrder.nodeInvoiceDisabled'));
       return;
     }
-    modalApi.confirm({
-      title: pushToSalesInvoiceAction.label,
-      content: t('app.kuaizhizao.salesOrder.pushToInvoiceConfirm'),
-      zIndex: elevatedModalZIndex,
-      onOk: async () => {
-        try {
-          const res = await pushSalesOrderToInvoice(id);
-          messageApi.success(res?.message || t('app.kuaizhizao.salesOrder.invoiceCreated'));
-          refreshDrawerOrder(id);
-        } catch (error: any) {
-          messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.pushFailed')));
-        }
-      },
-    });
+    showPushPreviewModal(
+      'sales_invoice',
+      () => previewPushSalesOrderToInvoice(id),
+      () => pushSalesOrderToInvoice(id),
+      () => refreshDrawerOrder(id),
+      id,
+    );
   };
 
   /** 处理下推到销售出库 */
   const handlePushToDelivery = async (id: number) => {
-    modalApi.confirm({
-      title: pushToSalesDeliveryAction.label,
-      content: t('app.kuaizhizao.salesOrder.pushToDeliveryConfirm'),
-      zIndex: elevatedModalZIndex,
-      onOk: async () => {
-        try {
-          const res = await pushSalesOrderToDelivery(id);
-          messageApi.success(res?.message || t('app.kuaizhizao.salesOrder.deliveryCreated'));
-          refreshDrawerOrder(id);
-        } catch (error: any) {
-          messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.pushDeliveryFailed')));
-        }
-      },
-    });
+    showPushPreviewModal(
+      'sales_delivery',
+      () => previewPushSalesOrderToDelivery(id),
+      (payload?: { delivery_quantities?: Record<number, number> }) =>
+        pushSalesOrderToDelivery(id, payload),
+      () => refreshDrawerOrder(id),
+      id,
+    );
   };
 
-  /** 打开下推销售退货弹窗 */
+  /** 下推销售退货（预览） */
   const handlePushToSalesReturn = async (id: number) => {
-    try {
-      const detail = await getSalesOrder(id, true, false);
-      const items = (detail.items || []).filter((it) => Number(it.delivered_quantity || 0) > 0);
-      if (items.length === 0) {
-        messageApi.warning(t('app.kuaizhizao.salesOrder.noReturnableQty'));
-        return;
-      }
-      const quantities: Record<number, number> = {};
-      items.forEach((it) => {
-        if (it.id != null) quantities[it.id] = Number(it.delivered_quantity || 0);
-      });
-      setPushToReturnOrder(detail);
-      setPushToReturnQuantities(quantities);
-      setPushToReturnVisible(true);
-    } catch (error: any) {
-      messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.detailFailed')));
-    }
+    showPushPreviewModal(
+      'sales_return',
+      () => previewPushSalesOrderToSalesReturn(id),
+      (payload?: {
+        warehouse_id: number;
+        warehouse_name?: string;
+        return_quantities?: Record<number, number>;
+      }) => pushSalesOrderToSalesReturn(id, payload!),
+      () => refreshDrawerOrder(id),
+      id,
+    );
   };
 
   const handlePushToSalesOrderChange = (id: number) => {
     navigate(`/apps/kuaizhizao/sales-management/sales-order-changes?source_order_id=${id}`);
-  };
-
-  /** 确认下推销售退货 */
-  const handlePushToSalesReturnConfirm = async () => {
-    if (!pushToReturnOrder?.id) return;
-    if (!pushToReturnWarehouseId || pushToReturnWarehouseId <= 0) {
-      messageApi.warning(t('app.kuaizhizao.salesOrder.returnWarehouseRequired'));
-      return;
-    }
-    const items = (pushToReturnOrder.items || []).filter((it) => Number(it.delivered_quantity || 0) > 0);
-    for (const it of items) {
-      if (it.id == null) continue;
-      const qty = Number(pushToReturnQuantities[it.id] || 0);
-      const max = Number(it.delivered_quantity || 0);
-      if (qty <= 0) continue;
-      if (qty > max) {
-        messageApi.error(t('app.kuaizhizao.salesOrder.returnQtyExceedsMax', { material: it.material_code || it.material_name, max }));
-        return;
-      }
-    }
-    setPushToReturnLoading(true);
-    try {
-      const result = await pushSalesOrderToSalesReturn(pushToReturnOrder.id, {
-        warehouse_id: pushToReturnWarehouseId,
-        warehouse_name: pushToReturnWarehouseName || undefined,
-        return_quantities: pushToReturnQuantities,
-      });
-      messageApi.success(t('app.kuaizhizao.salesOrder.returnCreated', { code: result?.return_code || t('app.kuaizhizao.salesOrder.createdFallback') }));
-      setPushToReturnVisible(false);
-      setPushToReturnOrder(null);
-      setPushToReturnQuantities({});
-      setPushToReturnWarehouseId(undefined);
-      setPushToReturnWarehouseName('');
-      refreshDrawerOrder(pushToReturnOrder.id);
-    } catch (error: any) {
-      messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.pushReturnFailed')));
-    } finally {
-      setPushToReturnLoading(false);
-    }
   };
 
   /** 直推工单（含预览） */
@@ -1701,7 +1746,7 @@ const SalesOrdersPage: React.FC = () => {
     showPushPreviewModal(
       'work_order',
       () => previewPushSalesOrderToWorkOrder(id),
-      () => pushSalesOrderToWorkOrder(id),
+      (payload?: any) => pushSalesOrderToWorkOrder(id, payload),
       () => refreshDrawerOrder(id),
       id,
     );
@@ -2562,18 +2607,14 @@ const SalesOrdersPage: React.FC = () => {
     () => (selectedOrderForToolbar ? buildToolbarPushMenuItems(selectedOrderForToolbar) : buildUniPushMenuItems([])),
     [buildToolbarPushMenuItems, selectedOrderForToolbar]
   );
-  const salesOrderToolbarPushDisabledReason = useMemo(() => {
-    if (selectedRowKeys.length === 0) {
-      return t('app.kuaizhizao.demandComputation.selectOneFirst');
-    }
-    if (selectedRowKeys.length !== 1) {
-      return t('app.kuaizhizao.demandComputation.pushSingleOnly');
-    }
-    if (!selectedOrderForToolbar) {
-      return t('app.kuaizhizao.demandComputation.selectedNotInList');
-    }
-    return undefined;
-  }, [selectedOrderForToolbar, selectedRowKeys.length, t]);
+  const salesOrderToolbarPushDisabledReason = useMemo(
+    () =>
+      buildUniPushToolbarDisabledReason(t, {
+        selectedCount: selectedRowKeys.length,
+        hasSelectedRecord: !!selectedOrderForToolbar,
+      }),
+    [selectedOrderForToolbar, selectedRowKeys.length, t],
+  );
 
   const salesOrderHighlightOverdueToolbar = useMemo(
     () => (
@@ -4506,76 +4547,6 @@ const SalesOrdersPage: React.FC = () => {
         </AntForm>
       </Modal>
 
-      <Modal
-        title={pushToSalesReturnAction.label}
-        open={pushToReturnVisible}
-        zIndex={elevatedModalZIndex}
-        onCancel={() => {
-          setPushToReturnVisible(false);
-          setPushToReturnOrder(null);
-          setPushToReturnQuantities({});
-          setPushToReturnWarehouseId(undefined);
-          setPushToReturnWarehouseName('');
-        }}
-        onOk={handlePushToSalesReturnConfirm}
-        confirmLoading={pushToReturnLoading}
-        okText={t('app.kuaizhizao.salesOrder.confirmPush')}
-        width={720}
-        destroyOnHidden
-      >
-        {pushToReturnOrder && (
-          <>
-            <p style={{ marginBottom: 12 }}>
-              {t('app.kuaizhizao.salesOrder.pushReturnDescription', { orderCode: pushToReturnOrder.order_code })}
-            </p>
-            <Row gutter={12} style={{ marginBottom: 12 }}>
-              <Col span={8}>
-                <InputNumber
-                  min={1}
-                  style={{ width: '100%' }}
-                  value={pushToReturnWarehouseId}
-                  onChange={(v) => setPushToReturnWarehouseId(Number(v) || undefined)}
-                  placeholder={t('app.kuaizhizao.salesOrder.returnWarehouseIdPlaceholder')}
-                />
-              </Col>
-              <Col span={16}>
-                <Input
-                  value={pushToReturnWarehouseName}
-                  onChange={(e) => setPushToReturnWarehouseName(e.target.value)}
-                  placeholder={t('app.kuaizhizao.salesOrder.returnWarehouseNamePlaceholder')}
-                />
-              </Col>
-            </Row>
-            <Table
-              size="small"
-              rowKey="id"
-              pagination={false}
-              dataSource={(pushToReturnOrder.items || []).filter((it) => Number(it.delivered_quantity || 0) > 0)}
-              columns={[
-                { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
-                { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
-                { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'required_quantity', width: 100, align: 'right' },
-                { title: t('app.kuaizhizao.salesOrder.deliveredQty'), dataIndex: 'delivered_quantity', width: 100, align: 'right' },
-                {
-                  title: t('app.kuaizhizao.salesOrder.returnQty'),
-                  width: 120,
-                  align: 'right',
-                  render: (_: any, record: SalesOrderItem) => record.id != null ? (
-                    <InputNumber
-                      min={0}
-                      max={Number(record.delivered_quantity || 0)}
-                      value={pushToReturnQuantities[record.id] ?? 0}
-                      onChange={(v) => setPushToReturnQuantities((prev) => ({ ...prev, [record.id!]: Number(v) || 0 }))}
-                      style={{ width: 100 }}
-                    />
-                  ) : null,
-                },
-              ]}
-            />
-          </>
-        )}
-      </Modal>
-
       {/* 下推预览弹窗 */}
       <Modal
         title={
@@ -4594,13 +4565,20 @@ const SalesOrdersPage: React.FC = () => {
           setWorkOrderSelectedWorkCenters({});
           setWorkOrderPushMode('draft');
           setWorkOrderGranularity('grouped');
+          setPushToReturnWarehouseId(undefined);
+          setPushToReturnWarehouseName('');
         }}
         okText={t('app.kuaizhizao.salesOrder.confirmPush')}
         cancelText={t('common.cancel')}
         width={1200}
         confirmLoading={pushPreviewConfirming}
         onOk={handlePushPreviewConfirm}
-        okButtonProps={{ disabled: pushPreviewLoading || !pushPreviewData }}
+        okButtonProps={{
+          disabled:
+            pushPreviewLoading ||
+            !pushPreviewData ||
+            (!!pushPreviewData?.has_blocking_issues && !!pushPreviewData?.blocking_reason),
+        }}
       >
         {pushPreviewLoading ? (
           <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
@@ -4610,6 +4588,37 @@ const SalesOrdersPage: React.FC = () => {
         ) : pushPreviewData ? (
           <div>
             <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushPreviewData.summary}</p>
+            {pushPreviewData.has_blocking_issues && pushPreviewData.blocking_reason ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={
+                  salesOrderCapabilityReasonMessage(pushPreviewData.blocking_reason, t) ||
+                  t('app.kuaizhizao.salesOrder.pushFailed')
+                }
+              />
+            ) : null}
+            {pushPreviewData.target_type === 'sales_return' ? (
+              <Row gutter={12} style={{ marginBottom: 12 }}>
+                <Col span={8}>
+                  <InputNumber
+                    min={1}
+                    style={{ width: '100%' }}
+                    value={pushToReturnWarehouseId}
+                    onChange={(v) => setPushToReturnWarehouseId(Number(v) || undefined)}
+                    placeholder={t('app.kuaizhizao.salesOrder.returnWarehouseIdPlaceholder')}
+                  />
+                </Col>
+                <Col span={16}>
+                  <Input
+                    value={pushToReturnWarehouseName}
+                    onChange={(e) => setPushToReturnWarehouseName(e.target.value)}
+                    placeholder={t('app.kuaizhizao.salesOrder.returnWarehouseNamePlaceholder')}
+                  />
+                </Col>
+              </Row>
+            ) : null}
             {pushPreviewData.target_type === 'work_order' && (
               <div style={{ marginBottom: 10 }}>
                 <Space>
@@ -4796,7 +4805,7 @@ const SalesOrdersPage: React.FC = () => {
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 160, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'delivered_quantity', key: 'delivered_quantity', width: 90, align: 'right' as const },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const },
                   { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const },
                   {
                     title: t('app.kuaizhizao.salesOrder.colShipQty'),
@@ -4859,6 +4868,8 @@ const SalesOrdersPage: React.FC = () => {
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 120, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 140, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 80, align: 'right' as const },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 80, align: 'right' as const },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 80, align: 'right' as const },
                   {
                     title: t('app.kuaizhizao.salesOrder.materialPickerHasBom'),
                     dataIndex: 'has_bom',
@@ -4909,6 +4920,78 @@ const SalesOrdersPage: React.FC = () => {
                     },
                   },
                   { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', key: 'delivery_date', width: 100 },
+                ]}
+                rowKey={(r: any, i) => `${r.item_id || r.material_code}-${i}`}
+                pagination={false}
+                style={{ marginBottom: 8 }}
+              />
+            ) : ['sales_delivery', 'sales_return', 'sales_invoice'].includes(pushPreviewData.target_type) &&
+              pushPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pushPreviewData.items}
+                columns={[
+                  {
+                    title: t('common.select'),
+                    dataIndex: 'item_id',
+                    key: 'select',
+                    width: 64,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id);
+                      if (!Number.isFinite(itemId) || itemId <= 0) return null;
+                      const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+                      const disabled =
+                        !Number.isFinite(maxQty) ||
+                        maxQty <= 0 ||
+                        pushPreviewData.target_type === 'sales_invoice' ||
+                        (!!pushPreviewData.has_blocking_issues && !!pushPreviewData.blocking_reason);
+                      return (
+                        <Switch
+                          size="small"
+                          disabled={disabled}
+                          checked={workOrderSelectedItemIds.includes(itemId)}
+                          onChange={(checked) => {
+                            setWorkOrderSelectedItemIds((prev) =>
+                              checked ? Array.from(new Set([...prev, itemId])) : prev.filter((id) => id !== itemId),
+                            );
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 130, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 160, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const },
+                  ...(pushPreviewData.target_type === 'sales_invoice'
+                    ? []
+                    : [
+                        {
+                          title: t('app.kuaizhizao.salesOrder.colPushQty'),
+                          dataIndex: 'push_quantity',
+                          key: 'push_quantity',
+                          width: 130,
+                          render: (_: unknown, row: any) => {
+                            const itemId = Number(row?.item_id);
+                            const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+                            return (
+                              <InputNumber
+                                min={0}
+                                max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
+                                precision={2}
+                                style={{ width: '100%' }}
+                                value={workOrderPushQuantities[itemId]}
+                                onChange={(val) => {
+                                  const next = Number(val ?? 0);
+                                  setWorkOrderPushQuantities((prev) => ({ ...prev, [itemId]: next }));
+                                }}
+                              />
+                            );
+                          },
+                        },
+                      ]),
+                  { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', key: 'delivery_date', width: 110 },
                 ]}
                 rowKey={(r: any, i) => `${r.item_id || r.material_code}-${i}`}
                 pagination={false}

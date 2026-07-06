@@ -239,8 +239,12 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
             receipt = await SemiFinishedGoodsReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
             if not receipt:
                 raise NotFoundError(f"半成品入库单不存在: {receipt_id}")
-            if receipt.status != "待入库":
-                raise BusinessLogicError("只有待入库状态的半成品入库单才能确认入库")
+
+            from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
+                assert_inbound_hub_capability,
+            )
+
+            assert_inbound_hub_capability(receipt, "confirm", receipt_type="semi_finished_goods")
 
             if confirmation_data:
                 update_dict = {}

@@ -23,6 +23,7 @@ import type { UploadFile, UploadProps } from 'antd';
 import {
   getUserProfile,
   updateUserProfile,
+  changePassword,
   UserProfile,
   UpdateUserProfileData,
 } from '../../../services/userProfile';
@@ -38,7 +39,6 @@ import {
   type AvatarCandidate,
 } from '../../../utils/generatedAvatar';
 import { getUserInfo, getTenantId, setTenantId, setUserInfo } from '../../../utils/auth';
-import { apiRequest } from '../../../services/api';
 import { useGlobalStore } from '../../../stores';
 
 const { Title, Text } = Typography;
@@ -435,14 +435,7 @@ const UserProfilePage: React.FC = () => {
         return;
       }
       
-      // 调用修改密码 API
-      await apiRequest('/personal/change-password', {
-        method: 'POST',
-        data: {
-          old_password,
-          new_password,
-        },
-      });
+      await changePassword({ old_password, new_password });
       
       messageApi.success(t('pages.personal.profile.passwordChangeSuccess'));
       

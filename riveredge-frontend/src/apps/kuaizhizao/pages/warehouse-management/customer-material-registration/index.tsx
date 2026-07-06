@@ -37,12 +37,6 @@ import { MaterialUnitSelect } from '../../../../../components/material-unit-sele
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { UniBatchButton } from '../../../../../components/uni-batch';
-import {
-  customerMaterialBatchCancelAllowed,
-  customerMaterialBatchConfirmAllowed,
-  customerMaterialBatchWithdrawAllowed,
-} from '../../../../../hooks/useDocumentCapabilities';
 import dayjs from 'dayjs';
 import { coerceFormDate } from '../../../../../utils/formDate';
 import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
@@ -108,6 +102,7 @@ interface CustomerMaterialRegistration {
     confirm?: { allowed?: boolean; reason?: string };
     withdraw?: { allowed?: boolean; reason?: string };
     cancel?: { allowed?: boolean; reason?: string };
+    delete?: { allowed?: boolean; reason?: string };
   };
 }
 
@@ -116,9 +111,6 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const tableRowsRef = useRef<CustomerMaterialRegistration[]>([]);
-  const [listVersion, setListVersion] = useState(0);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [entryMode, setEntryMode] = useState<'scan' | 'document'>('document');
   const formRef = useRef<any>(null);
@@ -140,14 +132,6 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
   const resourcePerms = useResourcePermissions('kuaizhizao:warehouse-management-customer-material-registration');
   const canStartProduction =
     !resourcePerms.enabled || (resourcePerms.canAction?.('execute') ?? false);
-
-  const selectedRegistrationsForBatch = useMemo(
-    () =>
-      selectedRowKeys
-        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
-        .filter((row): row is CustomerMaterialRegistration => row != null),
-    [selectedRowKeys, listVersion],
-  );
 
   const appendItemsFromMaterials = useCallback(
     async (selected: Material[]) => {
@@ -547,83 +531,14 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
-  const handleBatchProcess = async () => {
-    if (!selectedRowKeys.length) {
-      messageApi.warning(t('app.kuaizhizao.customerMaterialRegistration.selectRecordsFirst'));
-      return;
-    }
+  const handleDelete = async (record: CustomerMaterialRegistration) => {
     try {
-      const result = await customerMaterialRegistrationApi.batchProcess(selectedRowKeys);
-      const successCount = Number(result?.success_count || 0);
-      if (successCount > 0) {
-        messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.batchProcessSuccess', { count: successCount }));
-        invalidateMenuBadgeCounts();
-        setSelectedRowKeys([]);
-        actionRef.current?.reload();
-        return;
-      }
-      messageApi.error(t('app.kuaizhizao.customerMaterialRegistration.batchProcessFailed'));
+      await customerMaterialRegistrationApi.delete(record.id!.toString());
+      messageApi.success(t('common.deleteSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.customerMaterialRegistration.batchProcessFailed'));
-    }
-  };
-
-  const handleBatchWithdraw = async () => {
-    if (!selectedRowKeys.length) {
-      messageApi.warning(t('app.kuaizhizao.customerMaterialRegistration.selectRecordsFirst'));
-      return;
-    }
-    try {
-      const result = await customerMaterialRegistrationApi.batchWithdraw(selectedRowKeys);
-      const successCount = Number(result?.success_count || 0);
-      if (successCount > 0) {
-        messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.batchWithdrawSuccess', { count: successCount }));
-        invalidateMenuBadgeCounts();
-        setSelectedRowKeys([]);
-        actionRef.current?.reload();
-        return;
-      }
-      messageApi.error(t('app.kuaizhizao.customerMaterialRegistration.batchWithdrawFailed'));
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.customerMaterialRegistration.batchWithdrawFailed'));
-    }
-  };
-
-  const handleBatchCancel = async () => {
-    if (!selectedRowKeys.length) {
-      messageApi.warning(t('app.kuaizhizao.customerMaterialRegistration.selectRecordsFirst'));
-      return;
-    }
-    try {
-      const result = await customerMaterialRegistrationApi.batchCancel(selectedRowKeys);
-      const successCount = Number(result?.success_count || 0);
-      if (successCount > 0) {
-        messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.batchCancelSuccess', { count: successCount }));
-        invalidateMenuBadgeCounts();
-        setSelectedRowKeys([]);
-        actionRef.current?.reload();
-        return;
-      }
-      messageApi.error(t('app.kuaizhizao.customerMaterialRegistration.batchCancelFailed'));
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.customerMaterialRegistration.batchCancelFailed'));
-    }
-  };
-
-  const handleBatchDelete = async (keys: React.Key[]) => {
-    try {
-      const result = await customerMaterialRegistrationApi.batchDelete(keys);
-      const successCount = Number(result?.success_count || 0);
-      if (successCount > 0) {
-        messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.batchDeleteSuccess', { count: successCount }));
-        invalidateMenuBadgeCounts();
-        setSelectedRowKeys([]);
-        actionRef.current?.reload();
-        return;
-      }
-      messageApi.error(t('app.kuaizhizao.warehouseCommon.batchDeleteFailed'));
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.batchDeleteFailed'));
+      messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.operationFailed'));
     }
   };
 
@@ -693,31 +608,36 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       render: (_, record) => (
         <Space>
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
-          {record.status === 'pending' && (
-            <>
-              <Popconfirm title={t('app.kuaizhizao.customerMaterialRegistration.confirmProcess')} onConfirm={() => handleProcess(record)}>
-                <Button {...rowActionKind('execute')} {...rowActionLabelKeep()}>
-                  {t('app.kuaizhizao.customerMaterialRegistration.confirmInbound')}
-                </Button>
-              </Popconfirm>
-              <Popconfirm title={t('app.kuaizhizao.customerMaterialRegistration.confirmCancel')} onConfirm={() => handleCancel(record)}>
-                <Button {...rowActionKind('reject')} {...rowActionLabelKeep()}>
-                  {t('app.kuaizhizao.warehouseCommon.cancel')}
-                </Button>
-              </Popconfirm>
-            </>
+          {record.capabilities?.confirm?.allowed && (resourcePerms.canAction?.('execute') ?? false) && (
+            <Popconfirm title={t('app.kuaizhizao.customerMaterialRegistration.confirmProcess')} onConfirm={() => handleProcess(record)}>
+              <Button {...rowActionKind('execute')} {...rowActionLabelKeep()}>
+                {t('app.kuaizhizao.customerMaterialRegistration.confirmInbound')}
+              </Button>
+            </Popconfirm>
           )}
-          {record.status === 'processed' && (
+          {record.capabilities?.cancel?.allowed && (resourcePerms.canAction?.('reject') ?? false) && (
+            <Popconfirm title={t('app.kuaizhizao.customerMaterialRegistration.confirmCancel')} onConfirm={() => handleCancel(record)}>
+              <Button {...rowActionKind('reject')} {...rowActionLabelKeep()}>
+                {t('app.kuaizhizao.warehouseCommon.cancel')}
+              </Button>
+            </Popconfirm>
+          )}
+          {record.capabilities?.withdraw?.allowed && (resourcePerms.canAction?.('revoke') ?? false) && (
             <Popconfirm title={t('app.kuaizhizao.customerMaterialRegistration.confirmWithdraw')} onConfirm={() => handleWithdraw(record)}>
               <Button {...rowActionKind('revoke')} {...rowActionLabelKeep()}>
                 {t('app.kuaizhizao.customerMaterialRegistration.withdraw')}
               </Button>
             </Popconfirm>
           )}
+          {record.capabilities?.delete?.allowed && resourcePerms.canDelete && (
+            <Popconfirm title={t('app.kuaizhizao.customerMaterialRegistration.deleteConfirmOne')} onConfirm={() => handleDelete(record)}>
+              <Button {...rowActionKind('delete')} />
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
-  ], [t]);
+  ], [t, resourcePerms]);
 
   const detailColumns = useMemo(() => [
     { title: t('app.kuaizhizao.warehouseCommon.colCode'), dataIndex: 'registration_code' },
@@ -929,57 +849,6 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         showCreateButton
         createButtonText={createButtonLabel}
         onCreate={handleCreate}
-        enableRowSelection
-        selectedRowKeys={selectedRowKeys}
-        onRowSelectionChange={setSelectedRowKeys}
-        showDeleteButton
-        onDelete={handleBatchDelete}
-        deleteConfirmTitle={(count) => t('app.kuaizhizao.customerMaterialRegistration.deleteConfirm', { count })}
-        toolBarActionsAfterBatch={[
-          <UniBatchButton
-            key="batch-process"
-            selectedRowKeys={selectedRowKeys}
-            disabled={
-              selectedRegistrationsForBatch.length > 0 &&
-              !customerMaterialBatchConfirmAllowed(
-                selectedRegistrationsForBatch,
-                resourcePerms.canAction?.('execute') ?? false,
-              )
-            }
-            onAction={() => void handleBatchProcess()}
-          >
-            {t('app.kuaizhizao.customerMaterialRegistration.batchConfirmInbound')}
-          </UniBatchButton>,
-          <UniBatchButton
-            key="batch-withdraw"
-            selectedRowKeys={selectedRowKeys}
-            disabled={
-              selectedRegistrationsForBatch.length > 0 &&
-              !customerMaterialBatchWithdrawAllowed(
-                selectedRegistrationsForBatch,
-                resourcePerms.canAction?.('revoke') ?? false,
-              )
-            }
-            onAction={() => void handleBatchWithdraw()}
-          >
-            {t('app.kuaizhizao.customerMaterialRegistration.batchWithdraw')}
-          </UniBatchButton>,
-          <UniBatchButton
-            key="batch-cancel"
-            selectedRowKeys={selectedRowKeys}
-            danger
-            disabled={
-              selectedRegistrationsForBatch.length > 0 &&
-              !customerMaterialBatchCancelAllowed(
-                selectedRegistrationsForBatch,
-                resourcePerms.canAction?.('reject') ?? false,
-              )
-            }
-            onAction={() => void handleBatchCancel()}
-          >
-            {t('app.kuaizhizao.customerMaterialRegistration.batchCancel')}
-          </UniBatchButton>,
-        ]}
         request={async (params: any) => {
           const pageSize = params.pageSize || 20;
           const skip = (params.current! - 1) * pageSize;
@@ -990,8 +859,6 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
             status: params.status,
           });
           const rows = Array.isArray(result) ? result : [];
-          tableRowsRef.current = rows;
-          setListVersion((v) => v + 1);
           const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
           return { data: rows, success: true, total };
         }}

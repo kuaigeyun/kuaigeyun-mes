@@ -31,7 +31,9 @@ from apps.kuaizhizao.models import (
     PurchaseSupplierQuote,
     PurchaseSupplierQuoteItem,
 )
-from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
+from apps.kuaizhizao.services.document_action_policy.purchase_requisition import (
+    assert_purchase_requisition_capability,
+)
 from apps.kuaizhizao.schemas.purchase_inquiry import (
     AwardQuotesRequest,
     ComparisonCell,
@@ -347,13 +349,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         )
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
-        normalized = normalize_status(req.status)
-        if normalized not in (
-            DocumentStatus.AUDITED.value,
-            DocumentStatus.CONFIRMED.value,
-            DocumentStatus.PARTIAL_CONVERTED.value,
-        ):
-            raise BusinessLogicError("只有已通过或部分转单状态的采购申请可创建询价单")
+        assert_purchase_requisition_capability(req, "push_inquiry")
 
         pr_items = await PurchaseRequisitionItem.filter(
             tenant_id=tenant_id,
@@ -677,6 +673,131 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             }).save()
         return await self.get_inquiry_by_id(tenant_id, inquiry_id)
 
+    async def preview_push_to_purchase_order(
+        self,
+        tenant_id: int,
+        inquiry_id: int,
+    ) -> Dict[str, Any]:
+        """下推采购订单预览：返回已定标且可转单的询价明细及数量门禁，不实际创建。"""
+        from apps.kuaizhizao.models import PurchaseOrder, PurchaseOrderItem
+
+        inquiry = await PurchaseInquiry.get_or_none(
+            tenant_id=tenant_id, id=inquiry_id, deleted_at__isnull=True
+        )
+        if not inquiry:
+            raise NotFoundError(f"询价单不存在: {inquiry_id}")
+        assert_purchase_inquiry_capability(inquiry, "push_purchase_order")
+
+        items = await PurchaseInquiryItem.filter(
+            tenant_id=tenant_id, inquiry_id=inquiry_id
+        ).all()
+        item_ids = [int(i.id) for i in items if i.id is not None]
+
+        po_items_back = (
+            await PurchaseOrderItem.filter(
+                tenant_id=tenant_id,
+                source_type="PurchaseInquiry",
+                source_id__in=item_ids,
+            ).all()
+            if item_ids
+            else []
+        )
+        po_item_by_source: Dict[int, PurchaseOrderItem] = {
+            int(p.source_id): p for p in po_items_back if p.source_id is not None
+        }
+
+        preview_items: List[Dict[str, Any]] = []
+        for item in items:
+            if not item.awarded_supplier_id or not item.awarded_quote_item_id:
+                continue
+
+            linked_po_id = item.purchase_order_id
+            linked_po_item_id = item.purchase_order_item_id
+            po = (
+                await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=linked_po_id)
+                if linked_po_id
+                else None
+            )
+            po_item = (
+                await PurchaseOrderItem.get_or_none(
+                    tenant_id=tenant_id, id=linked_po_item_id
+                )
+                if linked_po_item_id and po
+                else None
+            )
+            back_po_item = po_item_by_source.get(int(item.id)) if item.id is not None else None
+            if not po_item and back_po_item:
+                po_item = back_po_item
+                po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=back_po_item.order_id)
+                await item.update_from_dict({
+                    "purchase_order_id": po.id if po else None,
+                    "purchase_order_item_id": back_po_item.id,
+                }).save()
+                linked_po_id = po.id if po else None
+            elif linked_po_id and (not po or not po_item):
+                await item.update_from_dict({
+                    "purchase_order_id": None,
+                    "purchase_order_item_id": None,
+                }).save()
+                linked_po_id = None
+                po_item = None
+
+            quote_item = await PurchaseSupplierQuoteItem.get_or_none(
+                tenant_id=tenant_id, id=item.awarded_quote_item_id
+            )
+            qty = float(
+                quote_item.quoted_quantity
+                if quote_item and quote_item.quoted_quantity
+                else (item.quantity or 0)
+            )
+            if qty <= 0:
+                continue
+
+            pushed = 0.0
+            if linked_po_id and po_item:
+                pushed = float(po_item.ordered_quantity or qty)
+
+            max_push = 0.0 if (linked_po_id and po_item) else qty
+            if max_push <= 0 and pushed <= 0:
+                continue
+
+            preview_items.append(
+                {
+                    "item_id": int(item.id),
+                    "material_id": item.material_id,
+                    "material_code": item.material_code,
+                    "material_name": item.material_name,
+                    "material_spec": item.material_spec,
+                    "unit": item.unit,
+                    "quantity": qty,
+                    "pushed_quantity": pushed,
+                    "max_push_quantity": max_push,
+                    "awarded_supplier_id": item.awarded_supplier_id,
+                    "required_date": str(item.required_date) if item.required_date else None,
+                }
+            )
+
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        has_blocking = pushable_count == 0
+        return {
+            "target_type": "purchase_order",
+            "inquiry_id": inquiry_id,
+            "inquiry_code": inquiry.inquiry_code,
+            "summary": (
+                f"请选择本次要下推的已定标询价明细（{pushable_count}/{len(preview_items)} 行可下推）"
+                if not has_blocking
+                else "当前询价单无可下推明细"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": has_blocking,
+            "blocking_reason": (
+                "purchase_inquiry.push_purchase_order.no_lines" if has_blocking else None
+            ),
+            "tip": "系统将按定标供应商与报价数量自动生成采购订单，并按供应商拆单。",
+        }
+
     async def convert_to_purchase_order(
         self,
         tenant_id: int,
@@ -689,8 +810,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         )
         if not inquiry:
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
-        if inquiry.status != PurchaseInquiryStatus.AWARDED.value:
-            raise BusinessLogicError("只有已定标状态的询价单可转采购订单")
+        assert_purchase_inquiry_capability(inquiry, "push_purchase_order")
 
         qs = PurchaseInquiryItem.filter(
             tenant_id=tenant_id,

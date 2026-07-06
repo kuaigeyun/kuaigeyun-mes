@@ -43,6 +43,28 @@ export interface ReceiptNotice {
   capabilities?: ReceiptNoticeCapabilities;
 }
 
+export interface ReceiptNoticeNotifyPreviewResponse {
+  target_type: string;
+  summary: string;
+  notice_code?: string;
+  warehouse_required?: boolean;
+  warehouse_id?: number | null;
+  items: Array<{
+    item_id?: number;
+    purchase_order_item_id?: number | null;
+    material_code: string;
+    material_name: string;
+    quantity: number;
+    pushed_quantity?: number;
+    max_push_quantity?: number;
+    notice_quantity?: number;
+  }>;
+  tip?: string;
+  has_blocking_issues?: boolean;
+  blocking_reason?: string | null;
+  line_blocking_issues?: string[];
+}
+
 const RECEIPT_NOTICE_LIMIT_MAX = 100;
 
 function clampReceiptNoticeLimit(limit: unknown): number | undefined {
@@ -61,6 +83,10 @@ export const receiptNoticeApi = {
     apiRequest(`/apps/kuaizhizao/receipt-notices/${id}`, { method: 'PUT', data }),
   delete: async (id: string) => apiRequest(`/apps/kuaizhizao/receipt-notices/${id}`, { method: 'DELETE' }),
   get: async (id: string) => apiRequest(`/apps/kuaizhizao/receipt-notices/${id}`, { method: 'GET' }),
+  previewNotify: async (id: string) =>
+    apiRequest<ReceiptNoticeNotifyPreviewResponse>(`/apps/kuaizhizao/receipt-notices/${id}/notify/preview`, {
+      method: 'GET',
+    }),
   notify: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/receipt-notices/${id}/notify`, { method: 'POST' }),
   withdraw: async (id: string) =>

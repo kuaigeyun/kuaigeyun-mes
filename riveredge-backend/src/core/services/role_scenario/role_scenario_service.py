@@ -189,15 +189,8 @@ ROLE_SCENARIOS: Dict[str, Dict[str, Any]] = {
     },
     "planner": {
         "name": "计划",
-        "description": "负责生产计划、MRP/LRP运算、工单下达等",
+        "description": "负责需求计算、MRP/LRP运算、工单下达等",
         "scenarios": [
-            {
-                "id": "production_planning",
-                "name": "生产计划",
-                "description": "创建和管理生产计划",
-                "features": ["生产计划列表", "生产计划创建", "生产计划执行"],
-                "permissions": ["production_plan:list", "production_plan:create", "production_plan:execute"],
-            },
             {
                 "id": "mrp_lrp",
                 "name": "MRP/LRP运算",
@@ -215,9 +208,9 @@ ROLE_SCENARIOS: Dict[str, Dict[str, Any]] = {
         ],
         "dashboard": {
             "widgets": [
-                {"type": "statistics", "title": "待执行计划", "api": "/apps/kuaizhizao/production-plans?status=pending"},
+                {"type": "statistics", "title": "进行中需求计算", "api": "/apps/kuaizhizao/demand-computations?computation_status=进行中"},
                 {"type": "statistics", "title": "待下达工单", "api": "/apps/kuaizhizao/work-orders?status=draft"},
-                {"type": "list", "title": "待执行计划列表", "api": "/apps/kuaizhizao/production-plans?status=pending&limit=10"},
+                {"type": "list", "title": "进行中需求计算", "api": "/apps/kuaizhizao/demand-computations?computation_status=进行中&limit=10"},
             ],
         },
     },

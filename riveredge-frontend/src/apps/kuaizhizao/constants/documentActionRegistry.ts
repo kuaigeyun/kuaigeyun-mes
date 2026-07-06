@@ -32,7 +32,6 @@ export type KuaizhizaoDocumentActionKey =
   | 'demand_computation.pull_from_demand'
   | 'demand_computation.pull_from_sales_order'
   | 'work_order.pull_from_demand_computation'
-  | 'work_order.pull_from_production_plan'
   | 'work_order.pull_from_sales_order'
   | 'work_order.pull_from_sales_contract'
   | 'outbound.pull_from_work_order'
@@ -331,14 +330,6 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('work_order.pull_from_demand_computation', 'label'),
     sourceLabelKey: documentActionI18n('work_order.pull_from_demand_computation', 'source'),
     targetLabelKey: documentActionI18n('work_order.pull_from_demand_computation', 'target'),
-  },
-  'work_order.pull_from_production_plan': {
-    key: 'work_order.pull_from_production_plan',
-    module: 'kuaizhizao',
-    kind: 'pull_create',
-    labelKey: documentActionI18n('work_order.pull_from_production_plan', 'label'),
-    sourceLabelKey: documentActionI18n('work_order.pull_from_production_plan', 'source'),
-    targetLabelKey: documentActionI18n('work_order.pull_from_production_plan', 'target'),
   },
   'work_order.pull_from_sales_order': {
     key: 'work_order.pull_from_sales_order',

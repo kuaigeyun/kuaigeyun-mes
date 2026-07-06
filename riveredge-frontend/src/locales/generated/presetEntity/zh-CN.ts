@@ -12,8 +12,6 @@ const presetEntityZhCN = {
   'preset.approvalProcess.payable.name': '应付单审核',
   'preset.approvalProcess.process_inspection.desc': '工序检验审核',
   'preset.approvalProcess.process_inspection.name': '工序检验审核',
-  'preset.approvalProcess.production_plan.desc': '生产计划审核',
-  'preset.approvalProcess.production_plan.name': '生产计划审核',
   'preset.approvalProcess.purchase_inquiry.desc': '采购询价审核',
   'preset.approvalProcess.purchase_inquiry.name': '采购询价审核',
   'preset.approvalProcess.purchase_invoice.desc': '进项发票审核',

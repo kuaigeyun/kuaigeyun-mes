@@ -668,7 +668,6 @@ class RoleService:
         ],
         "PRODUCTION_MANAGER": [
             "work_order",
-            "production_plan",
             "mrp",
             "lrp",
             "routing",
@@ -683,7 +682,6 @@ class RoleService:
         ],
         "PRODUCTION_TEAM_LEADER": [
             "work_order",
-            "production_plan",
             "process_inspection",
             "kuaizhizao:pricing",
             "kuaizhizao:work-order",
@@ -695,7 +693,6 @@ class RoleService:
         ],
         "PRODUCTION_CLERK": [
             "work_order",
-            "production_plan",
             "routing",
             "process",
             "kuaizhizao:pricing",

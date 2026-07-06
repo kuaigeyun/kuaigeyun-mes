@@ -4,8 +4,6 @@ const customFieldPagejaJP = {
   'customFieldPage.kuaizhizao-equipment.tableNameLabel': '装置',
   'customFieldPage.kuaizhizao-mold.pageName': '金型台帳',
   'customFieldPage.kuaizhizao-mold.tableNameLabel': '金型',
-  'customFieldPage.kuaizhizao-plan-production-plan.pageName': '生産計画',
-  'customFieldPage.kuaizhizao-plan-production-plan.tableNameLabel': '生産計画',
   'customFieldPage.kuaizhizao-production-outsource-order.pageName': '外部委託注文',
   'customFieldPage.kuaizhizao-production-outsource-order.tableNameLabel': '外注発注',
   'customFieldPage.kuaizhizao-production-outsource-work-order.pageName': '作業指示をアウトソーシングする',

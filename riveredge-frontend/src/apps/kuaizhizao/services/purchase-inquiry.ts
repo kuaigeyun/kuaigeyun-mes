@@ -3,6 +3,7 @@
  */
 
 import { apiRequest } from '../../../services/api';
+import type { DocumentPushPreview } from './purchase-requisition';
 
 export interface ActionCapability {
   allowed: boolean;
@@ -16,6 +17,7 @@ export interface PurchaseInquiryCapabilities {
   withdraw_submit?: ActionCapability;
   approve?: ActionCapability;
   revoke_approval?: ActionCapability;
+  push_purchase_order?: ActionCapability;
 }
 
 export interface PurchaseInquiryItem {
@@ -192,6 +194,12 @@ export async function convertInquiryToPurchaseOrder(
   data?: { item_ids?: number[]; persist_default_supplier_to_material?: boolean },
 ): Promise<{ purchase_orders: Array<{ purchase_order_id: number; purchase_order_code: string; supplier_id: number }> }> {
   return apiRequest(`/apps/kuaizhizao/purchase-inquiries/${inquiryId}/convert-to-purchase-order`, { method: 'POST', data: data ?? {} });
+}
+
+export async function previewPushInquiryToPurchaseOrder(inquiryId: number): Promise<DocumentPushPreview> {
+  return apiRequest(`/apps/kuaizhizao/purchase-inquiries/${inquiryId}/push-to-purchase-order/preview`, {
+    method: 'GET',
+  });
 }
 
 export async function submitPurchaseInquiry(id: number): Promise<PurchaseInquiry> {

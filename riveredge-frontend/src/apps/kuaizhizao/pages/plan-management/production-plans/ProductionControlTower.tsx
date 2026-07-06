@@ -13,7 +13,6 @@ import {
   AppstoreOutlined,
   SafetyOutlined,
   AuditOutlined,
-  ScheduleOutlined,
   ThunderboltOutlined,
   FireOutlined,
 } from '@ant-design/icons';
@@ -127,7 +126,6 @@ const ProductionControlTower: React.FC = () => {
     () => [
       { key: 'demand', title: t('app.kuaizhizao.planControlTower.shortcut.demandComputation'), icon: <RocketOutlined style={{ fontSize: 20, color: '#1890ff' }} />, path: '/apps/kuaizhizao/plan-management/demand-computation' },
       { key: 'scheduling', title: t('app.kuaizhizao.planControlTower.shortcut.visualScheduling'), icon: <AppstoreOutlined style={{ fontSize: 20, color: '#fa8c16' }} />, path: '/apps/kuaizhizao/plan-management/scheduling' },
-      { key: 'plans', title: t('app.kuaizhizao.planControlTower.shortcut.productionPlans'), icon: <ScheduleOutlined style={{ fontSize: 20, color: '#722ed1' }} />, path: '/apps/kuaizhizao/plan-management/production-plans' },
       { key: 'work-orders', title: t('app.kuaizhizao.planControlTower.shortcut.workOrderRelease'), icon: <SafetyOutlined style={{ fontSize: 20, color: '#52c41a' }} />, path: '/apps/kuaizhizao/production-execution/work-orders' },
       { key: 'shortage', title: t('app.kuaizhizao.planControlTower.shortcut.shortageAlert'), icon: <AlertOutlined style={{ fontSize: 20, color: '#ff4d4f' }} />, path: '/apps/kuaizhizao/plan-management/reports/material-shortage-alert' },
       { key: 'reporting', title: t('app.kuaizhizao.planControlTower.shortcut.reportingBoard'), icon: <DashboardOutlined style={{ fontSize: 20, color: '#13c2c2' }} />, path: '/apps/kuaizhizao/production-execution/reporting' },
@@ -138,14 +136,14 @@ const ProductionControlTower: React.FC = () => {
   const kpis: ModuleKpiDef[] = useMemo(
     () => [
       {
-        key: 'plans',
+        key: 'demand-computation',
         title: t('app.kuaizhizao.planControlTower.kpi.totalPlans'),
         value: s?.stats?.total_count ?? 0,
         subtitle: t('app.kuaizhizao.planControlTower.kpi.totalPlansSubtitle'),
         icon: <AuditOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
         boxShadow: '0 4px 12px rgba(24, 144, 255, 0.15)',
-        onClick: () => navigate('/apps/kuaizhizao/plan-management/production-plans'),
+        onClick: () => navigate('/apps/kuaizhizao/plan-management/demand-computation'),
         sideMetrics: [
           { label: t('app.kuaizhizao.planControlTower.kpi.pendingReview'), value: s?.stats?.pending_review_count ?? 0 },
           { label: t('app.kuaizhizao.planControlTower.kpi.executed'), value: s?.stats?.executed_count ?? 0 },

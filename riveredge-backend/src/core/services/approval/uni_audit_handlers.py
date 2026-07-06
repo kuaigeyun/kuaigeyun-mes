@@ -259,48 +259,6 @@ async def _dispatch_demand(
     _unsupported("demand", action)
 
 
-async def _dispatch_production_plan(
-    action: str,
-    *,
-    tenant_id: int,
-    entity_id: int,
-    user_id: int,
-    reason: Optional[str],
-) -> Any:
-    from apps.kuaizhizao.models.production_plan import ProductionPlan
-    from apps.kuaizhizao.services.planning_service import ProductionPlanningService
-    from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
-
-    svc = ProductionPlanningService()
-    if action == "submit":
-        plan = await ProductionPlan.get_or_none(
-            tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
-        )
-        if not plan:
-            raise NotFoundError(f"生产计划不存在: {entity_id}")
-        if plan.status == "已驳回":
-            return await svc.submit_production_plan(tenant_id, entity_id, user_id)
-        if plan.status == "草稿":
-            await ProductionPlan.filter(tenant_id=tenant_id, id=entity_id).update(
-                status="待审核",
-                review_status="待审核",
-                updated_by=user_id,
-            )
-            return await svc.get_production_plan_by_id(tenant_id, entity_id)
-        raise BusinessLogicError(f"当前状态不可提交审核: {plan.status}")
-    if action == "approve":
-        return await svc.approve_production_plan(tenant_id, entity_id, user_id)
-    if action == "reject":
-        return await svc.approve_production_plan(
-            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
-        )
-    if action == "withdraw":
-        return await svc.withdraw_production_plan(tenant_id, entity_id, user_id)
-    if action == "revoke":
-        _unsupported("production_plan", action)
-    _unsupported("production_plan", action)
-
-
 async def _dispatch_purchase_order(
     action: str,
     *,
@@ -668,7 +626,6 @@ HANDLERS: Dict[str, DispatchFn] = {
     "sales_delivery": _dispatch_sales_delivery,
     "sales_contract_change": _dispatch_sales_contract_change,
     "demand": _dispatch_demand,
-    "production_plan": _dispatch_production_plan,
     "purchase_order": _dispatch_purchase_order,
     "purchase_order_change": _dispatch_purchase_order_change,
     "purchase_request": _dispatch_purchase_request,

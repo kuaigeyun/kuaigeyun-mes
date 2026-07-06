@@ -14,7 +14,6 @@ from apps.kuaizhizao.models.outsource_order import OutsourceOrder
 from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
 from apps.kuaizhizao.models.process_inspection import ProcessInspection
 from apps.kuaizhizao.models.production_picking import ProductionPicking
-from apps.kuaizhizao.models.production_plan import ProductionPlan
 from apps.kuaizhizao.models.production_return import ProductionReturn
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
@@ -99,14 +98,6 @@ _EXTRA_PROVIDERS = [
         name_field="customer_name",
         order_by="return_code",
         scope_resource="kuaizhizao:sales-return",
-    ),
-    make_tenant_model_display_provider(
-        resource_key="kuaizhizao:production-plan",
-        model=ProductionPlan,
-        code_field="plan_code",
-        name_field="plan_name",
-        order_by="plan_code",
-        scope_resource="kuaizhizao:plan-management-scheduling",
     ),
     make_tenant_model_display_provider(
         resource_key="kuaizhizao:equipment",

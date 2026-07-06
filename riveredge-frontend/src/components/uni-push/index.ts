@@ -41,5 +41,30 @@ export function isUniPushToolbarSelectionBlocked(options: {
   return options.selectedCount !== 1 || !options.hasSelectedRecord;
 }
 
+export type UniPushToolbarDisabledReasonOptions = {
+  selectedCount: number;
+  hasSelectedRecord: boolean;
+  /** 选中态合法后的业务门禁（如状态不可下推） */
+  extraReason?: string;
+};
+
+/** 列表工具栏下推按钮禁用提示（与需求计算页规范一致） */
+export function buildUniPushToolbarDisabledReason(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  options: UniPushToolbarDisabledReasonOptions,
+): string | undefined {
+  const { selectedCount, hasSelectedRecord, extraReason } = options;
+  if (selectedCount === 0) {
+    return t('components.uniPush.toolbarSelectOneFirst');
+  }
+  if (selectedCount !== 1) {
+    return t('components.uniPush.toolbarPushSingleOnly');
+  }
+  if (!hasSelectedRecord) {
+    return t('components.uniPush.toolbarSelectedNotInList');
+  }
+  return extraReason;
+}
+
 export { UniPushToolbarButton } from './UniPushToolbarButton';
 export type { UniPushToolbarButtonProps } from './UniPushToolbarButton';

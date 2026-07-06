@@ -19,7 +19,7 @@ import {
 } from '../../../../../hooks/useDocumentCapabilities';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Space, Table, Row, Col, Form as AntForm, InputNumber, Input, Select, Dropdown, Tag, Card, Typography, Spin, Empty } from 'antd';
+import { App, Button, Space, Table, Row, Col, Form as AntForm, InputNumber, Input, Select, Dropdown, Tag, Card, Typography, Spin, Empty, Modal, Switch, Alert } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, CopyOutlined, EditOutlined, PrinterOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
@@ -74,7 +74,7 @@ import {
 } from '../../../../../components/custom-fields';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { formatDateTime } from '../../../../../utils/format';
 
@@ -238,6 +238,15 @@ const SalesReturnsPage: React.FC = () => {
   );
 
   const [pullWarehouseName, setPullWarehouseName] = useState('');
+  const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
+  const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
+  const [pullPreviewConfirming, setPullPreviewConfirming] = useState(false);
+  const [pullPreviewSalesOrderId, setPullPreviewSalesOrderId] = useState<number | null>(null);
+  const [pullPreviewLines, setPullPreviewLines] = useState<any[]>([]);
+  const [pullPreviewMessage, setPullPreviewMessage] = useState<string | null>(null);
+  const [pullSelectedItemIds, setPullSelectedItemIds] = useState<number[]>([]);
+  const [pullReturnQuantities, setPullReturnQuantities] = useState<Record<number, number>>({});
+  const pullPreviewWarehouseFormRef = useRef<ProFormInstance>();
   const formRef = useRef<ProFormInstance>(null);
 
   const {
@@ -462,6 +471,109 @@ const SalesReturnsPage: React.FC = () => {
     [t],
   );
 
+  const resetPullPreviewModal = () => {
+    setPullPreviewOpen(false);
+    setPullPreviewSalesOrderId(null);
+    setPullPreviewLines([]);
+    setPullPreviewMessage(null);
+    setPullSelectedItemIds([]);
+    setPullReturnQuantities({});
+    setPullWarehouseId(undefined);
+    setPullWarehouseName('');
+  };
+
+  const showPullReturnPreview = async (salesOrderId: number) => {
+    setPullPreviewOpen(true);
+    setPullPreviewLoading(true);
+    setPullPreviewConfirming(false);
+    setPullPreviewSalesOrderId(salesOrderId);
+    setPullPreviewLines([]);
+    setPullPreviewMessage(null);
+    setPullSelectedItemIds([]);
+    setPullReturnQuantities({});
+    setPullWarehouseId(undefined);
+    setPullWarehouseName('');
+    try {
+      const preview = (await warehouseApi.salesReturn.previewFromSalesOrder(salesOrderId)) as {
+        lines?: any[];
+        message?: string | null;
+      };
+      const lines = Array.isArray(preview?.lines) ? preview.lines : [];
+      setPullPreviewLines(lines);
+      setPullPreviewMessage(preview?.message ?? null);
+      const ids: number[] = [];
+      const qtyMap: Record<number, number> = {};
+      lines.forEach((line) => {
+        const itemId = Number(line.sales_order_item_id);
+        const maxQty = Number(line.source_pending_quantity ?? line.return_quantity ?? 0);
+        if (!Number.isFinite(itemId) || itemId <= 0 || maxQty <= 0) return;
+        ids.push(itemId);
+        qtyMap[itemId] = maxQty;
+      });
+      setPullSelectedItemIds(ids);
+      setPullReturnQuantities(qtyMap);
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.salesReturn.pullPreviewFailed'));
+      resetPullPreviewModal();
+    } finally {
+      setPullPreviewLoading(false);
+    }
+  };
+
+  const handlePullPreviewConfirm = async () => {
+    if (!pullPreviewSalesOrderId) return;
+    if (!pullWarehouseId || pullWarehouseId <= 0) {
+      messageApi.warning(t('app.kuaizhizao.salesReturn.selectReturnWarehouse'));
+      return;
+    }
+    const lineById = new Map(
+      pullPreviewLines
+        .filter((line) => Number(line.sales_order_item_id) > 0)
+        .map((line) => [Number(line.sales_order_item_id), line]),
+    );
+    const selectedIds = pullSelectedItemIds.filter((id) => lineById.has(id));
+    if (!selectedIds.length) {
+      messageApi.warning(t('app.kuaizhizao.salesReturn.pullPreviewSelectAtLeastOne'));
+      return;
+    }
+    const returnQuantities: Record<number, number> = {};
+    for (const id of selectedIds) {
+      const line = lineById.get(id);
+      const qty = Number(pullReturnQuantities[id] ?? 0);
+      const maxQty = Number(line?.source_pending_quantity ?? line?.return_quantity ?? 0);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        messageApi.warning(
+          t('app.kuaizhizao.salesOrder.pushQtyInvalid', { code: line?.material_code || id }),
+        );
+        return;
+      }
+      if (Number.isFinite(maxQty) && maxQty > 0 && qty > maxQty) {
+        messageApi.warning(
+          t('app.kuaizhizao.salesReturn.pullPreviewQtyExceeds', { code: line?.material_code || id }),
+        );
+        return;
+      }
+      returnQuantities[id] = qty;
+    }
+    setPullPreviewConfirming(true);
+    try {
+      await warehouseApi.salesReturn.pullFromSalesOrder({
+        sales_order_id: pullPreviewSalesOrderId,
+        warehouse_id: pullWarehouseId,
+        warehouse_name: pullWarehouseName || undefined,
+        return_quantities: returnQuantities,
+      });
+      messageApi.success(t('app.kuaizhizao.salesReturn.pullSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      resetPullPreviewModal();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.salesReturn.pullFailed'));
+    } finally {
+      setPullPreviewConfirming(false);
+    }
+  };
+
   const pullFromSalesOrderQuery = useUniPullQuery<PullSalesOrderCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
@@ -494,25 +606,12 @@ const SalesReturnsPage: React.FC = () => {
         messageApi.warning(t('app.kuaizhizao.salesReturn.selectSalesOrder'));
         return;
       }
-      if (!pullWarehouseId || pullWarehouseId <= 0) {
-        messageApi.warning(t('app.kuaizhizao.salesReturn.selectReturnWarehouse'));
-        return;
-      }
-      await warehouseApi.salesReturn.pullFromSalesOrder({
-        sales_order_id: selectedId,
-        warehouse_id: pullWarehouseId,
-        warehouse_name: pullWarehouseName || undefined,
-      });
-      messageApi.success(t('app.kuaizhizao.salesReturn.pullSuccess'));
-      invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
       pullFromSalesOrderQuery.closeModal();
+      void showPullReturnPreview(selectedId);
     },
   });
 
   const openPullFromSalesOrder = () => {
-    setPullWarehouseId(undefined);
-    setPullWarehouseName('');
     pullFromSalesOrderQuery.openModal();
   };
 
@@ -790,13 +889,13 @@ const SalesReturnsPage: React.FC = () => {
               createIcon={<PlusOutlined />}
               createLabel={t('app.kuaizhizao.salesReturn.create')}
               onCreate={handleCreate}
-              menuItems={[
+              menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
                 {
                   key: 'pull-from-sales-order',
-                  label: pullFromSalesOrderAction.label,
+                  actionKey: 'sales_return.pull_from_sales_order',
                   onClick: openPullFromSalesOrder,
                 },
-              ]}
+              ])}
             />,
           ]}
           request={async (params) => {
@@ -1166,21 +1265,123 @@ const SalesReturnsPage: React.FC = () => {
         pageSize={pullFromSalesOrderQuery.pageSize}
         total={pullFromSalesOrderQuery.total}
         onPageChange={pullFromSalesOrderQuery.handlePageChange}
-        okText={t('app.kuaizhizao.salesReturn.pullCreateButton')}
-        filterExtra={
-          <UniWarehouseSelect
-            label={t('app.kuaizhizao.salesReturn.returnWarehouse')}
-            placeholder={t('app.kuaizhizao.salesReturn.selectReturnWarehouseShort')}
-            value={pullWarehouseId}
-            onChange={(value, warehouse) => {
-              const nextId = Number(value);
-              setPullWarehouseId(Number.isFinite(nextId) && nextId > 0 ? nextId : undefined);
-              setPullWarehouseName((warehouse as any)?.name ?? '');
-            }}
-          />
-        }
-        okButtonProps={{ disabled: !pullWarehouseId || pullWarehouseId <= 0 }}
+        okText={t('common.next')}
       />
+
+      <Modal
+        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
+        open={pullPreviewOpen}
+        destroyOnClose
+        width={1100}
+        onCancel={resetPullPreviewModal}
+        okText={t('app.kuaizhizao.salesReturn.pullCreateButton')}
+        cancelText={t('common.cancel')}
+        confirmLoading={pullPreviewConfirming}
+        onOk={() => void handlePullPreviewConfirm()}
+        okButtonProps={{
+          disabled:
+            pullPreviewLoading ||
+            pullPreviewLines.length === 0 ||
+            !pullWarehouseId ||
+            pullWarehouseId <= 0,
+        }}
+      >
+        {pullPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+          </div>
+        ) : (
+          <div>
+            {pullPreviewMessage && pullPreviewLines.length === 0 ? (
+              <Alert type="warning" showIcon message={pullPreviewMessage} style={{ marginBottom: 12 }} />
+            ) : (
+              <p style={{ marginBottom: 12, fontWeight: 500 }}>
+                {t('app.kuaizhizao.salesReturn.pullPreviewSummary', {
+                  count: pullPreviewLines.filter((line) => Number(line.source_pending_quantity ?? 0) > 0).length,
+                  total: pullPreviewLines.length,
+                })}
+              </p>
+            )}
+            <div style={{ marginBottom: 16 }}>
+              <ProForm formRef={pullPreviewWarehouseFormRef} submitter={false} layout="vertical">
+                <UniWarehouseSelect
+                  name="warehouse_id"
+                  label={t('app.kuaizhizao.salesReturn.returnWarehouse')}
+                  required
+                  onChange={(value, warehouse) => {
+                    const nextId = Number(value);
+                    setPullWarehouseId(Number.isFinite(nextId) && nextId > 0 ? nextId : undefined);
+                    setPullWarehouseName((warehouse as any)?.name ?? '');
+                  }}
+                />
+              </ProForm>
+            </div>
+            {pullPreviewLines.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pullPreviewLines}
+                rowKey={(row) => String(row.sales_order_item_id)}
+                pagination={false}
+                scroll={{ x: 960 }}
+                columns={[
+                  {
+                    title: t('common.select'),
+                    dataIndex: 'sales_order_item_id',
+                    width: 64,
+                    render: (_: unknown, row) => {
+                      const itemId = Number(row.sales_order_item_id);
+                      const maxQty = Number(row.source_pending_quantity ?? 0);
+                      const disabled = !Number.isFinite(maxQty) || maxQty <= 0;
+                      return (
+                        <Switch
+                          size="small"
+                          disabled={disabled}
+                          checked={pullSelectedItemIds.includes(itemId)}
+                          onChange={(checked) => {
+                            setPullSelectedItemIds((prev) =>
+                              checked ? Array.from(new Set([...prev, itemId])) : prev.filter((id) => id !== itemId),
+                            );
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesReturn.colDeliveredQty'), dataIndex: 'source_doc_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesReturn.colReturnedQty'), dataIndex: 'source_received_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesReturn.colReturnableQty'), dataIndex: 'source_pending_quantity', width: 90, align: 'right' },
+                  {
+                    title: t('app.kuaizhizao.salesReturn.colReturnQty'),
+                    dataIndex: 'return_quantity',
+                    width: 130,
+                    render: (_: unknown, row) => {
+                      const itemId = Number(row.sales_order_item_id);
+                      const maxQty = Number(row.source_pending_quantity ?? 0);
+                      return (
+                        <InputNumber
+                          min={0}
+                          max={maxQty > 0 ? maxQty : undefined}
+                          precision={2}
+                          style={{ width: '100%' }}
+                          disabled={!pullSelectedItemIds.includes(itemId) || maxQty <= 0}
+                          value={pullReturnQuantities[itemId]}
+                          onChange={(val) => {
+                            setPullReturnQuantities((prev) => ({ ...prev, [itemId]: Number(val ?? 0) }));
+                          }}
+                        />
+                      );
+                    },
+                  },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.salesReturn.pullPreviewNoLines')} />
+            )}
+          </div>
+        )}
+      </Modal>
 
       <Suspense fallback={null}>
         <LazyUniImport

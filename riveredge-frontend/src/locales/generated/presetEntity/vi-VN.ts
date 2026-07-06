@@ -12,8 +12,6 @@ const presetEntityviVN = {
   'preset.approvalProcess.payable.name': 'Phê duyệt tài khoản phải trả',
   'preset.approvalProcess.process_inspection.desc': 'Phê duyệt kiểm tra trong quá trình',
   'preset.approvalProcess.process_inspection.name': 'Phê duyệt kiểm tra trong quá trình',
-  'preset.approvalProcess.production_plan.desc': 'Phê duyệt kế hoạch sản xuất',
-  'preset.approvalProcess.production_plan.name': 'Phê duyệt kế hoạch sản xuất',
   'preset.approvalProcess.purchase_inquiry.desc': 'Phê duyệt yêu cầu mua hàng',
   'preset.approvalProcess.purchase_inquiry.name': 'Phê duyệt yêu cầu mua hàng',
   'preset.approvalProcess.purchase_invoice.desc': 'Phê duyệt hóa đơn mua hàng',

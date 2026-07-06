@@ -685,24 +685,8 @@ class DemandService(AppBaseService[Demand]):
             return await PurchaseReceipt.filter(
                 tenant_id=tenant_id, purchase_order_id=target_id, deleted_at__isnull=True
             ).exists()
-        if target_type == "production_plan":
-            from apps.kuaizhizao.models.production_plan import ProductionPlan
-            from apps.kuaizhizao.models.document_relation import DocumentRelation
-            plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=target_id, deleted_at__isnull=True)
-            if not plan:
-                return False
-            if (getattr(plan, "execution_status", None) or "未执行") != "未执行":
-                return True
-            has_wo = await DocumentRelation.filter(
-                tenant_id=tenant_id,
-                source_type="production_plan",
-                source_id=target_id,
-                target_type="work_order"
-            ).exists()
-            return has_wo
         if target_type == "purchase_requisition":
-            from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
-            from apps.kuaizhizao.models.purchase_requisition_item import PurchaseRequisitionItem
+            from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition, PurchaseRequisitionItem
             req = await PurchaseRequisition.get_or_none(tenant_id=tenant_id, id=target_id, deleted_at__isnull=True)
             if not req:
                 return False
@@ -725,14 +709,13 @@ class DemandService(AppBaseService[Demand]):
         from apps.kuaizhizao.models.document_relation import DocumentRelation
         from apps.kuaizhizao.models.work_order import WorkOrder
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder
-        from apps.kuaizhizao.models.production_plan import ProductionPlan
         from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
 
         rels = await DocumentRelation.filter(
             tenant_id=tenant_id,
             source_type="demand_computation",
             source_id=computation_id,
-            target_type__in=("work_order", "purchase_order", "purchase_requisition", "production_plan")
+            target_type__in=("work_order", "purchase_order", "purchase_requisition")
         ).all()
 
         for rel in rels:
@@ -746,10 +729,6 @@ class DemandService(AppBaseService[Demand]):
                 await WorkOrder.filter(tenant_id=tenant_id, id=tid).update(**update_data)
             elif tt == "purchase_order":
                 await PurchaseOrder.filter(tenant_id=tenant_id, id=tid).delete()
-            elif tt == "production_plan":
-                await ProductionPlan.filter(tenant_id=tenant_id, id=tid).update(
-                    deleted_at=datetime.now(), updated_at=datetime.now()
-                )
             elif tt == "purchase_requisition":
                 await PurchaseRequisition.filter(tenant_id=tenant_id, id=tid).update(
                     deleted_at=datetime.now(), updated_at=datetime.now()
@@ -771,7 +750,7 @@ class DemandService(AppBaseService[Demand]):
         撤回需求计算
 
         将已下推到需求计算的需求撤回，清除计算记录及关联。
-        若下游单据（工单/采购单/生产计划/采购申请）未执行，允许撤回并级联删除；已执行则不允许撤回。
+        若下游单据（工单/采购单/采购申请）未执行，允许撤回并级联删除；已执行则不允许撤回。
 
         Args:
             tenant_id: 租户ID
@@ -788,7 +767,7 @@ class DemandService(AppBaseService[Demand]):
         from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
         from apps.kuaizhizao.models.document_relation import DocumentRelation
 
-        DOWNSTREAM_TYPES = ("work_order", "purchase_order", "purchase_requisition", "production_plan")
+        DOWNSTREAM_TYPES = ("work_order", "purchase_order", "purchase_requisition")
 
         async with in_transaction():
             demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
@@ -1738,6 +1717,95 @@ class DemandService(AppBaseService[Demand]):
             }
             for r in rows
         ]
+
+    async def preview_push_demand_to_computation(
+        self,
+        tenant_id: int,
+        demand_id: int,
+    ) -> Dict[str, Any]:
+        """下推需求计算预览：返回需求明细数量、已下推、可下推，不实际创建。"""
+        demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
+        if not demand:
+            raise NotFoundError("需求", str(demand_id))
+
+        items = await DemandItem.filter(
+            tenant_id=tenant_id, demand_id=demand_id
+        ).order_by("id")
+        if not items:
+            raise BusinessLogicError("需求无明细，无法下推需求计算")
+
+        already_pushed = False
+        if demand.pushed_to_computation:
+            from apps.kuaizhizao.models.demand_computation import DemandComputation
+
+            already_pushed = await DemandComputation.filter(
+                tenant_id=tenant_id, demand_id=demand_id
+            ).exists()
+
+        status_ok = demand.status in (DemandStatus.AUDITED, DemandStatus.CONFIRMED)
+        review_ok = demand.review_status == ReviewStatus.APPROVED
+        push_allowed = status_ok and review_ok and not already_pushed
+
+        blocking_reason = None
+        if already_pushed:
+            blocking_reason = "demand.push_computation.already_pushed"
+        elif not status_ok:
+            blocking_reason = "demand.push_computation.not_audited"
+        elif not review_ok:
+            blocking_reason = "demand.push_computation.not_approved"
+
+        material_ids = [
+            int(it.material_id)
+            for it in items
+            if getattr(it, "material_id", None) and int(it.material_id) > 0
+        ]
+        from apps.master_data.services.material_service import MaterialService
+
+        bom_map = await MaterialService.batch_check_has_bom(
+            tenant_id=tenant_id,
+            material_ids=material_ids,
+            only_active=True,
+        )
+
+        preview_items = []
+        for it in items:
+            qty = float(it.required_quantity or 0)
+            if qty <= 0:
+                continue
+            material_id = int(it.material_id) if getattr(it, "material_id", None) else None
+            preview_items.append({
+                "item_id": int(it.id),
+                "material_id": material_id,
+                "material_code": str(it.material_code or "").strip(),
+                "material_name": str(it.material_name or "").strip(),
+                "quantity": float(qty),
+                "pushed_quantity": float(qty) if already_pushed else 0.0,
+                "max_push_quantity": 0.0 if already_pushed or not push_allowed else float(qty),
+                "delivery_date": str(it.delivery_date) if it.delivery_date else None,
+                "forecast_month": str(it.forecast_month) if it.forecast_month else None,
+                "has_bom": bom_map.get(material_id, False) if material_id else False,
+            })
+
+        if not preview_items:
+            push_allowed = False
+            blocking_reason = blocking_reason or "demand.push_computation.no_items"
+
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        return {
+            "target_type": "demand_computation",
+            "summary": (
+                f"请确认将下推的需求明细（{pushable_count}/{len(preview_items)} 行可下推）"
+                if push_allowed
+                else "当前需求不可下推需求计算"
+            ),
+            "demand_code": demand.demand_code,
+            "items": preview_items,
+            "has_blocking_issues": not push_allowed,
+            "blocking_reason": blocking_reason if not push_allowed else None,
+            "tip": "确认后将按全部需求明细创建需求计算任务；整单下推后不可重复操作。",
+        }
 
     async def push_to_computation(
         self,

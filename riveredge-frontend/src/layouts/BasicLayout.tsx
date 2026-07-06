@@ -198,7 +198,6 @@ const MENU_BADGE_PATH_KEY: Record<string, string> = {
   '/apps/kuaizhizao/quality-management/process-inspection': 'process_inspection',
   '/apps/kuaizhizao/quality-management/finished-goods-inspection': 'finished_goods_inspection',
   '/apps/kuaizhizao/quality-management/inspection-plans': 'inspection_plan',
-  '/apps/kuaizhizao/plan-management/production-plans': 'production_plan',
   '/apps/kuaizhizao/plan-management/demand-computation': 'demand_computation',
   '/apps/kuaizhizao/equipment-management/equipment': 'equipment',
   '/apps/kuaizhizao/equipment-management/molds': 'mold',
@@ -218,7 +217,7 @@ const TOPBAR_SEARCH_HOT_MENU_PATHS: string[] = [
   '/apps/kuaizhizao/sales-management/sales-forecasts', // 销售预测
   '/apps/kuaizhizao/sales-management/sales-orders', // 销售订单
   '/apps/kuaizhizao/warehouse-management/inbound', // 入库单
-  '/apps/kuaizhizao/plan-management/production-plans', // 生产计划
+  '/apps/kuaizhizao/plan-management/demand-computation', // 需求计算
   '/apps/kuaizhizao/quality-management/incoming-inspection', // 来料检验
   '/apps/kuaizhizao/quality-management/process-inspection', // 过程检验
   '/apps/kuaizhizao/quality-management/finished-goods-inspection', // 成品检验

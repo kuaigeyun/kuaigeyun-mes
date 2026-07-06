@@ -2472,7 +2472,6 @@ class DemandComputationService:
         from apps.kuaizhizao.models.document_relation import DocumentRelation
         from apps.kuaizhizao.models.work_order import WorkOrder
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder
-        from apps.kuaizhizao.models.production_plan import ProductionPlan
         from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
         from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
 
@@ -2495,9 +2494,6 @@ class DemandComputationService:
             elif tt == "purchase_order":
                 po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=tid)
                 target_exists = po is not None
-            elif tt == "production_plan":
-                plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
-                target_exists = plan is not None
             elif tt == "purchase_requisition":
                 req = await PurchaseRequisition.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
                 target_exists = req is not None
@@ -2650,6 +2646,104 @@ class DemandComputationService:
             "default_purchase": default_purchase,
             "production_choices": production_choices,
             "purchase_choices": purchase_choices,
+        }
+
+    async def preview_push_to_purchase_requisition(
+        self,
+        tenant_id: int,
+        computation_id: int,
+    ) -> Dict[str, Any]:
+        """下推采购申请预览：返回将纳入采购申请的采购件明细，不实际创建。"""
+        from apps.master_data.models.material import Material
+
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+        if computation.computation_status != "完成":
+            raise BusinessLogicError("只能下推已完成的需求计算")
+
+        exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
+        already_pushed = exclusions["has_purchase_requisition"]
+
+        items = await DemandComputationItem.filter(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+            material_source_type=SOURCE_TYPE_BUY,
+        ).all()
+        buy_items = [
+            i
+            for i in items
+            if i.suggested_purchase_order_quantity and i.suggested_purchase_order_quantity > 0
+        ]
+
+        material_ids = sorted({int(i.material_id) for i in buy_items if i.material_id is not None})
+        material_rows = (
+            await Material.filter(tenant_id=tenant_id, id__in=material_ids).all()
+            if material_ids
+            else []
+        )
+        material_by_id = {m.id: m for m in material_rows}
+
+        preview_items: List[Dict[str, Any]] = []
+        for item in buy_items:
+            qty = float(item.suggested_purchase_order_quantity or 0)
+            if qty <= 0:
+                continue
+            material = material_by_id.get(int(item.material_id)) if item.material_id is not None else None
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            if material:
+                if not material_code:
+                    material_code = str(
+                        getattr(material, "main_code", None)
+                        or getattr(material, "code", None)
+                        or ""
+                    ).strip()
+                if not material_name:
+                    material_name = str(getattr(material, "name", "") or "").strip()
+            preview_items.append(
+                {
+                    "item_id": int(item.id),
+                    "material_id": item.material_id,
+                    "material_code": material_code or f"M{item.material_id}",
+                    "material_name": material_name or material_code or f"物料{item.material_id}",
+                    "quantity": qty,
+                    "pushed_quantity": qty if already_pushed else 0.0,
+                    "max_push_quantity": 0.0 if already_pushed else qty,
+                    "required_date": str(item.procurement_completion_date)
+                    if item.procurement_completion_date
+                    else None,
+                }
+            )
+
+        no_purchase_items = len(preview_items) == 0
+        has_blocking = already_pushed or no_purchase_items
+        blocking_reason = None
+        if already_pushed:
+            blocking_reason = "demand_computation.push_purchase_requisition.already_pushed"
+        elif no_purchase_items:
+            blocking_reason = "demand_computation.push_purchase_requisition.no_purchase_items"
+
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        return {
+            "target_type": "purchase_requisition",
+            "computation_id": computation_id,
+            "computation_code": computation.computation_code,
+            "summary": (
+                f"将生成采购申请，共 {pushable_count} 条采购件明细"
+                if not has_blocking
+                else (
+                    "该需求计算已下推采购申请且仍存在，请勿重复下推"
+                    if already_pushed
+                    else "需求计算中无采购件，无法下推采购申请"
+                )
+            ),
+            "items": preview_items,
+            "has_blocking_issues": has_blocking,
+            "blocking_reason": blocking_reason,
+            "tip": "确认后将一次性生成采购申请，包含全部可下推采购件明细。",
         }
 
     async def get_push_preview(

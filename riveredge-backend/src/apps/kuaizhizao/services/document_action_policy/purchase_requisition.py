@@ -48,6 +48,16 @@ def _is_revoke_approval_allowed(status: Any) -> bool:
     )
 
 
+def _can_push_downstream(status: Any) -> bool:
+    normalized = normalize_status(_norm(status))
+    return normalized in (
+        DocumentStatus.AUDITED.value,
+        DocumentStatus.CONFIRMED.value,
+        DocumentStatus.PARTIAL_CONVERTED.value,
+        "已通过",
+    )
+
+
 def derive_purchase_requisition_capabilities(req: Any) -> PurchaseRequisitionCapabilities:
     status = getattr(req, "status", None)
 
@@ -82,12 +92,28 @@ def derive_purchase_requisition_capabilities(req: Any) -> PurchaseRequisitionCap
         "purchase_requisition.revoke_approval.not_allowed" if not revoke_allowed else None,
     )
 
+    push_downstream_allowed = _can_push_downstream(status)
+    push_po_cap = _cap(
+        push_downstream_allowed,
+        "purchase_requisition.push_purchase_order.not_allowed"
+        if not push_downstream_allowed
+        else None,
+    )
+    push_inquiry_cap = _cap(
+        push_downstream_allowed,
+        "purchase_requisition.push_inquiry.not_allowed"
+        if not push_downstream_allowed
+        else None,
+    )
+
     return PurchaseRequisitionCapabilities(
         update=update_cap,
         delete=delete_cap,
         submit=submit_cap,
         approve=approve_cap,
         revoke_approval=revoke_cap,
+        push_purchase_order=push_po_cap,
+        push_inquiry=push_inquiry_cap,
     )
 
 
@@ -99,6 +125,8 @@ def assert_purchase_requisition_capability(req: Any, action: str) -> None:
         "submit": caps.submit,
         "approve": caps.approve,
         "revoke_approval": caps.revoke_approval,
+        "push_purchase_order": caps.push_purchase_order,
+        "push_inquiry": caps.push_inquiry,
     }
     cap = cap_map.get(action)
     if cap is None:

@@ -152,6 +152,8 @@ export const qualityApi = {
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/approve`, { method: 'POST', data }),
     pushToPurchaseReturn: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/push-to-purchase-return`, { method: 'POST' }),
+    previewPushToPurchaseReturn: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/push-to-purchase-return/preview`, { method: 'GET' }),
     createFromPurchaseReceipt: async (purchaseReceiptId: string) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/from-purchase-receipt/${purchaseReceiptId}`, { method: 'POST' }),
     ensureForPurchaseReceipt: async (purchaseReceiptId: string) =>

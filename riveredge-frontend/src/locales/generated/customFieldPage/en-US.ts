@@ -4,8 +4,6 @@ const customFieldPageEnUS = {
   'customFieldPage.kuaizhizao-equipment.tableNameLabel': 'Equipment',
   'customFieldPage.kuaizhizao-mold.pageName': 'Mold Ledger',
   'customFieldPage.kuaizhizao-mold.tableNameLabel': 'Molds',
-  'customFieldPage.kuaizhizao-plan-production-plan.pageName': 'Production Plans',
-  'customFieldPage.kuaizhizao-plan-production-plan.tableNameLabel': 'Production plans',
   'customFieldPage.kuaizhizao-production-outsource-order.pageName': 'Outsource Orders',
   'customFieldPage.kuaizhizao-production-outsource-order.tableNameLabel': 'Outsource orders',
   'customFieldPage.kuaizhizao-production-outsource-work-order.pageName': 'Outsource Work Orders',

@@ -31,7 +31,6 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 _CHANGE_IMPACT_STATUS_FIELDS = {
     "demand": "status",
     "demand_computation": "computation_status",
-    "production_plan": "plan_status",  # 或 status
     "work_order": "status",
 }
 
@@ -795,14 +794,8 @@ class DocumentRelationNewService:
                 doc = await model.get_or_none(tenant_id=tenant_id, id=document_id)
             if not doc:
                 return None
-            status_field = _CHANGE_IMPACT_STATUS_FIELDS.get(
-                document_type,
-                "plan_status" if document_type == "production_plan" else "status",
-            )
-            if document_type == "production_plan":
-                val = getattr(doc, "plan_status", None) or getattr(doc, "status", None)
-            else:
-                val = getattr(doc, status_field, None)
+            status_field = _CHANGE_IMPACT_STATUS_FIELDS.get(document_type, "status")
+            val = getattr(doc, status_field, None)
             return str(val) if val else None
         except Exception:
             return None
@@ -864,15 +857,13 @@ class DocumentRelationNewService:
                     affected_demands.append(item)
             elif doc_type == "demand_computation":
                 affected_computations.append(item)
-            elif doc_type == "production_plan":
-                affected_plans.append(item)
             elif doc_type == "work_order":
                 affected_work_orders.append(item)
 
         recommended_actions = []
         if affected_computations:
             recommended_actions.append("重算需求计算")
-        if affected_plans or affected_work_orders:
+        if affected_work_orders:
             recommended_actions.append("重新排程")
 
         return {
@@ -932,15 +923,13 @@ class DocumentRelationNewService:
                 affected_demands.append(item)
             elif doc_type == "demand_computation":
                 affected_computations.append(item)
-            elif doc_type == "production_plan":
-                affected_plans.append(item)
             elif doc_type == "work_order":
                 affected_work_orders.append(item)
 
         recommended_actions = []
         if affected_computations:
             recommended_actions.append("重算需求计算")
-        if affected_plans or affected_work_orders:
+        if affected_work_orders:
             recommended_actions.append("重新排程")
 
         return {

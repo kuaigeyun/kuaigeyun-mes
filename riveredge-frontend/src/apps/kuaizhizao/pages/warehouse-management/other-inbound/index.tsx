@@ -684,21 +684,6 @@ const OtherInboundPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          enableRowSelection={true}
-          showDeleteButton={true}
-          onDelete={async (keys) => {
-            try {
-              for (const id of keys) {
-                await warehouseApi.otherInbound.delete(String(id));
-              }
-              messageApi.success(t('app.kuaizhizao.warehouseOtherInbound.msg.batchDeleteSuccess', { count: keys.length }));
-              invalidateMenuBadgeCounts();
-              actionRef.current?.reload();
-            } catch (error: any) {
-              messageApi.error(error.message || t('app.kuaizhizao.warehouseOtherInbound.msg.deleteFailed'));
-            }
-          }}
-          deleteConfirmTitle={(count) => t('app.kuaizhizao.warehouseOtherInbound.confirm.batchDelete', { count })}
           scroll={{ x: 1200 }}
         />
       </ListPageTemplate>

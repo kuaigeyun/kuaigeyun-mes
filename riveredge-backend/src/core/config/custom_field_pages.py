@@ -363,15 +363,6 @@ CUSTOM_FIELD_PAGES: List[CustomFieldPageConfig] = [
         "module_icon": "tool",
     },
     {
-        "page_code": "kuaizhizao-plan-production-plan",
-        "page_name": "生产计划",
-        "page_path": "/apps/kuaizhizao/plan-management/production-plans",
-        "table_name": "apps_kuaizhizao_production_plans",
-        "table_name_label": "生产计划表",
-        "module": "快格轻制造",
-        "module_icon": "tool",
-    },
-    {
         "page_code": "kuaizhizao-equipment",
         "page_name": "设备台账",
         "page_path": "/apps/kuaizhizao/equipment-management/equipment",

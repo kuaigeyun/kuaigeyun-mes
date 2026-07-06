@@ -77,6 +77,25 @@ class ProductionPickingWithItemsResponse(ProductionPickingResponse):
     items: List["ProductionPickingItemResponse"] = Field(default_factory=list, description="领料明细列表")
 
 
+class ProductionPickingPullLineCreate(BaseSchema):
+    """生产领料 — 工单上拉录入行"""
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., max_length=50, description="物料编码")
+    material_name: str = Field(..., max_length=200, description="物料名称")
+    material_unit: str = Field("个", max_length=20, description="物料单位")
+    issue_quantity: float = Field(..., gt=0, description="本次领料数量")
+
+
+class ProductionPickingPullFromWorkOrderRequest(BaseSchema):
+    """生产领料 — 从工单上拉创建（单工单、带明细）"""
+    work_order_id: int = Field(..., description="工单ID")
+    warehouse_id: int = Field(..., description="出库仓库ID")
+    warehouse_name: str = Field(..., max_length=100, description="出库仓库名称")
+    picker_name: Optional[str] = Field(None, max_length=100, description="领料人姓名")
+    notes: Optional[str] = Field(None, description="备注")
+    lines: List[ProductionPickingPullLineCreate] = Field(..., min_length=1, description="领料明细")
+
+
 # === 生产领料单明细 ===
 
 class ProductionPickingItemBase(BaseSchema):
@@ -251,6 +270,22 @@ class WorkOrderInboundPreviewResponse(BaseSchema):
     work_order_code: str = Field(..., description="工单编码")
     inbound_doc_kind: str = Field(..., description="finished_goods | semi_finished_goods")
     lines: List[InboundCreatePreviewLine] = Field(default_factory=list, description="预览明细")
+    message: Optional[str] = Field(None, description="提示信息")
+
+
+class ProductionReturnPreviewPicking(BaseSchema):
+    """生产退料 — 领料单预览"""
+    picking_id: int = Field(..., description="领料单ID")
+    picking_code: str = Field(..., description="领料单编码")
+    status: str = Field(..., description="领料单状态")
+    lines: List[InboundCreatePreviewLine] = Field(default_factory=list, description="可退料明细")
+
+
+class ProductionReturnPreviewResponse(BaseSchema):
+    """生产退料 — 工单预览"""
+    work_order_id: int = Field(..., description="工单ID")
+    work_order_code: str = Field(..., description="工单编码")
+    pickings: List[ProductionReturnPreviewPicking] = Field(default_factory=list, description="可退料领料单")
     message: Optional[str] = Field(None, description="提示信息")
 
 

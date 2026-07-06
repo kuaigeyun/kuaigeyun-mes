@@ -326,3 +326,17 @@ class SharedUserQuotaResponse(BaseModel):
         description="按组织分布的用量明细（含主组织）",
     )
 
+
+class SyncTenantLimitsFromPlanResponse(BaseModel):
+    """从当前套餐同步配额结果"""
+
+    tenant_id: int = Field(..., description="主组织 ID")
+    plan: str = Field(..., description="当前套餐")
+    max_users: int = Field(..., description="同步后的用户配额上限")
+    max_storage: int = Field(..., description="同步后的存储配额上限（MB）")
+    previous_max_users: int = Field(..., description="同步前的用户配额上限")
+    previous_max_storage: int = Field(..., description="同步前的存储配额上限（MB）")
+    used_users: int = Field(..., description="当前共享池已用有效用户数")
+    remaining_users: int = Field(..., description="剩余可用用户数（不小于 0）")
+    over_quota: bool = Field(..., description="是否超配额（超配额时不影响已有用户，但禁止新增）")
+

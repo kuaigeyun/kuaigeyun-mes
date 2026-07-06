@@ -489,6 +489,27 @@ export async function getSharedUserQuota(tenantId: number): Promise<SharedUserQu
   });
 }
 
+export interface SyncTenantLimitsFromPlanResult {
+  tenant_id: number;
+  plan: string;
+  max_users: number;
+  max_storage: number;
+  previous_max_users: number;
+  previous_max_storage: number;
+  used_users: number;
+  remaining_users: number;
+  over_quota: boolean;
+}
+
+export async function syncTenantLimitsFromPlan(
+  tenantId: number,
+): Promise<SyncTenantLimitsFromPlanResult> {
+  return apiRequest<SyncTenantLimitsFromPlanResult>(
+    `/infra/tenants/${tenantId}/sync-limits-from-plan`,
+    { method: 'POST' },
+  );
+}
+
 /**
  * 获取组织使用量统计
  * 

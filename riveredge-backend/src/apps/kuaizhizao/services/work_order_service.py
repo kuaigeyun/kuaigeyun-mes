@@ -217,6 +217,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         )
 
     @staticmethod
+    def _get_production_return_service():
+        from apps.kuaizhizao.services.warehouse_service import ProductionReturnService
+
+        return ProductionReturnService()
+
+    @staticmethod
     async def has_confirmed_picking_for_work_order(tenant_id: int, work_order_id: int) -> bool:
         confirmed_statuses = ["已领料", "已确认", "confirmed", "picked"]
         return await ProductionPicking.filter(
@@ -1149,7 +1155,15 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         response = response.model_copy(
             update=WorkOrderTrackingService.tracking_fields_for_response(work_order)
         )
-        return enrich_work_order_capabilities_on_response(work_order, response)
+        returnable_map = await self._get_production_return_service().batch_work_orders_have_returnable_picking(
+            tenant_id,
+            [work_order_id],
+        )
+        return enrich_work_order_capabilities_on_response(
+            work_order,
+            response,
+            has_returnable_picking=returnable_map.get(work_order_id, False),
+        )
 
     async def compute_split_remaining_quantity(
         self,
@@ -1496,6 +1510,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         result = []
         result_dicts: list[dict] = []
         work_orders_to_update = []
+        wo_ids_for_cap = [wo.id for wo in work_orders if wo.id is not None]
+        returnable_by_wo = await self._get_production_return_service().batch_work_orders_have_returnable_picking(
+            tenant_id,
+            wo_ids_for_cap,
+        )
 
         for wo in work_orders:
             try:
@@ -1529,7 +1548,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     if gid in group_name_map:
                         item_dict["group_name"] = group_name_map[gid]
 
-                item_dict["capabilities"] = derive_work_order_capabilities(wo)
+                item_dict["capabilities"] = derive_work_order_capabilities(
+                    wo,
+                    has_returnable_picking=returnable_by_wo.get(int(wo.id), False) if wo.id is not None else False,
+                )
 
                 result_dicts.append(item_dict)
             except Exception as e:

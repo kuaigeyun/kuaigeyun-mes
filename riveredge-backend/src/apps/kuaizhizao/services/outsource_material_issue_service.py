@@ -74,6 +74,12 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
             if not outsource_work_order:
                 raise NotFoundError(f"委外工单ID {issue_data.outsource_work_order_id} 不存在")
 
+            from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
+                assert_outsource_work_order_capability,
+            )
+
+            assert_outsource_work_order_capability(outsource_work_order, "push_outsource_issue")
+
             # 处理编码
             code = issue_data.code
             if not code:
@@ -183,6 +189,12 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
         ).first()
         if not owo:
             raise NotFoundError(f"委外工单ID {outsource_work_order_id} 不存在")
+
+        from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
+            assert_outsource_work_order_capability,
+        )
+
+        assert_outsource_work_order_capability(owo, "push_outsource_issue")
 
         message: Optional[str] = None
         try:

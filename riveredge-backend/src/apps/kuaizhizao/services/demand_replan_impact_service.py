@@ -16,7 +16,6 @@ from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
 from apps.kuaizhizao.models.demand_impact_record import DemandImpactRecord
 from apps.kuaizhizao.models.demand_item import DemandItem
-from apps.kuaizhizao.models.production_plan import ProductionPlan
 from apps.kuaizhizao.models.work_order import WorkOrder
 
 
@@ -197,35 +196,6 @@ class DemandReplanImpactService:
             computation_ids.update(int(i) for i in extra_computation_ids)
 
         if computation_ids:
-            plan_source_types = ("DemandComputation", "demand_computation", "Demand")
-            for cid in computation_ids:
-                plans = await ProductionPlan.filter(
-                    tenant_id=tenant_id,
-                    source_id=cid,
-                    deleted_at__isnull=True,
-                ).all()
-                for p in plans:
-                    src_type = (getattr(p, "source_type", None) or "").strip()
-                    if src_type not in plan_source_types:
-                        continue
-                    pid = int(p.id)
-                    if pid in plan_ids:
-                        continue
-                    plan_ids.add(pid)
-                    records.append(
-                        {
-                            "impact_type": "plan",
-                            "impact_id": pid,
-                            "impact_code": p.plan_code,
-                            "impact_scope": "transitive",
-                            "impact_reason": "上游变更将影响计划可执行性，建议重算",
-                            "impact_payload": {"demand_ids": list(demand_ids), "computation_id": cid},
-                            "risk_level": "medium" if risk_level != "high" else "high",
-                            "needs_approval": needs_approval,
-                            "frozen_horizon_hit": frozen_hit,
-                        }
-                    )
-
             items = await DemandComputationItem.filter(
                 tenant_id=tenant_id,
                 computation_id__in=list(computation_ids),

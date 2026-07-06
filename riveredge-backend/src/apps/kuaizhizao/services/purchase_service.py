@@ -50,17 +50,6 @@ from apps.kuaizhizao.services.document_action_policy.purchase_order import (
     assert_purchase_order_capability,
 )
 
-# 采购入库选单：与前端 inboundCreateConfig.PURCHASE_ORDER_RECEIPT_ELIGIBLE_STATUSES 一致
-PURCHASE_RECEIPT_PULL_ELIGIBLE_STATUSES = (
-    "已审核",
-    "已确认",
-    "AUDITED",
-    "CONFIRMED",
-    "执行中",
-    "IN_PROGRESS",
-    "进行中",
-)
-
 
 class PurchaseService(AppBaseService[PurchaseOrder]):
     """采购订单服务类"""
@@ -450,7 +439,6 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         """
         query = PurchaseOrder.filter(
             tenant_id=tenant_id,
-            status__in=list(PURCHASE_RECEIPT_PULL_ELIGIBLE_STATUSES),
         )
 
         if current_user:
@@ -498,8 +486,28 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 )
             )
 
+        has_items_by_id = {
+            int(order.id): int(totals_by_order.get(order.id, {}).get("items_count", 0) or 0) > 0
+            for order in orders
+            if order.id is not None
+        }
+        enriched = await enrich_purchase_order_list_capabilities(
+            tenant_id, list(orders), candidates, has_items_by_id=has_items_by_id
+        )
+        normalized: List[PurchaseReceiptPullCandidate] = []
+        for item in enriched:
+            push_allowed = bool(
+                getattr(getattr(item, "capabilities", None), "push_receipt", None)
+                and item.capabilities.push_receipt.allowed
+            )
+            normalized.append(
+                item.model_copy(update={"pullable": push_allowed})
+                if hasattr(item, "model_copy")
+                else item
+            )
+
         return {
-            "data": [item.model_dump() for item in candidates],
+            "data": [item.model_dump() for item in normalized],
             "total": total,
             "success": True,
         }
@@ -1076,6 +1084,259 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     related_entity_id=order_id,
                 )
 
+    async def _build_outstanding_push_preview_items(
+        self,
+        tenant_id: int,
+        order_id: int,
+    ) -> tuple[List[Dict[str, Any]], List[PurchaseOrderItem]]:
+        """构建未入库明细的标准下推预览行（quantity/pushed_quantity/max_push_quantity）。"""
+        from apps.kuaizhizao.services.warehouse_service import sync_purchase_order_receipt_quantities
+
+        await sync_purchase_order_receipt_quantities(tenant_id, order_id)
+        order_items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            order_id=order_id,
+        ).all()
+        preview_items: List[Dict[str, Any]] = []
+        for item in order_items:
+            ordered = float(item.ordered_quantity or 0)
+            received = float(item.received_quantity or 0)
+            outstanding = float(item.outstanding_quantity or 0)
+            if outstanding <= 0:
+                continue
+            preview_items.append(
+                {
+                    "item_id": int(item.id),
+                    "material_id": item.material_id,
+                    "material_code": item.material_code,
+                    "material_name": item.material_name,
+                    "material_spec": item.material_spec,
+                    "unit": item.unit,
+                    "quantity": ordered,
+                    "pushed_quantity": received,
+                    "max_push_quantity": outstanding,
+                }
+            )
+        return preview_items, order_items
+
+    async def preview_push_to_receipt_notice(
+        self,
+        tenant_id: int,
+        order_id: int,
+    ) -> Dict[str, Any]:
+        order_model = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        if not order_model:
+            raise NotFoundError(f"采购订单不存在: {order_id}")
+
+        preview_items, order_items = await self._build_outstanding_push_preview_items(tenant_id, order_id)
+        has_outstanding = bool(preview_items)
+        assert_purchase_order_capability(
+            order_model,
+            "push_receipt_notice",
+            has_items=bool(order_items),
+            has_outstanding=has_outstanding,
+        )
+
+        pushable_count = len(preview_items)
+        has_blocking = pushable_count == 0
+        blocking_reason = (
+            "purchase_order.push_receipt.no_outstanding" if has_blocking else None
+        )
+        return {
+            "target_type": "receipt_notice",
+            "order_id": order_id,
+            "order_code": order_model.order_code,
+            "summary": (
+                f"请选择本次要下推的收货通知明细（{pushable_count} 行可下推）"
+                if not has_blocking
+                else "当前采购单无可下推收货通知明细"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": has_blocking,
+            "blocking_reason": blocking_reason,
+            "tip": "系统将按所选明细与数量生成收货通知单。",
+        }
+
+    async def preview_push_to_receipt(
+        self,
+        tenant_id: int,
+        order_id: int,
+    ) -> Dict[str, Any]:
+        order_model = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        if not order_model:
+            raise NotFoundError(f"采购订单不存在: {order_id}")
+
+        preview_items, order_items = await self._build_outstanding_push_preview_items(tenant_id, order_id)
+        has_outstanding = bool(preview_items)
+        assert_purchase_order_capability(
+            order_model,
+            "push_receipt",
+            has_items=bool(order_items),
+            has_outstanding=has_outstanding,
+        )
+
+        pushable_count = len(preview_items)
+        has_blocking = pushable_count == 0
+        blocking_reason = (
+            "purchase_order.push_receipt.no_outstanding" if has_blocking else None
+        )
+        return {
+            "target_type": "purchase_receipt",
+            "order_id": order_id,
+            "order_code": order_model.order_code,
+            "summary": (
+                f"请选择本次要下推的采购入库明细（{pushable_count} 行可下推）"
+                if not has_blocking
+                else "当前采购单无可下推采购入库明细"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": has_blocking,
+            "blocking_reason": blocking_reason,
+            "tip": "确认后将进入仓库与批号配置步骤。",
+        }
+
+    async def preview_push_to_invoice(
+        self,
+        tenant_id: int,
+        order_id: int,
+    ) -> Dict[str, Any]:
+        from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+
+        order_model = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        if not order_model:
+            raise NotFoundError(f"采购订单不存在: {order_id}")
+
+        order_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
+        has_invoice = await PurchaseInvoice.filter(
+            tenant_id=tenant_id,
+            purchase_order_id=order_id,
+            deleted_at__isnull=True,
+        ).exists()
+        assert_purchase_order_capability(
+            order_model,
+            "push_invoice",
+            has_items=bool(order_items),
+            has_invoice=has_invoice,
+        )
+
+        preview_items: List[Dict[str, Any]] = []
+        for item in order_items:
+            ordered = float(item.ordered_quantity or 0)
+            if ordered <= 0:
+                continue
+            preview_items.append(
+                {
+                    "item_id": int(item.id),
+                    "material_id": item.material_id,
+                    "material_code": item.material_code,
+                    "material_name": item.material_name,
+                    "material_spec": item.material_spec,
+                    "unit": item.unit,
+                    "quantity": ordered,
+                    "pushed_quantity": 0.0,
+                    "max_push_quantity": ordered,
+                    "unit_price": float(item.unit_price or 0),
+                }
+            )
+
+        has_blocking = has_invoice
+        blocking_reason = (
+            "purchase_order.push_invoice.already_exists" if has_blocking else None
+        )
+        return {
+            "target_type": "purchase_invoice",
+            "order_id": order_id,
+            "order_code": order_model.order_code,
+            "summary": (
+                f"将按采购订单 {order_model.order_code} 生成采购发票草稿（{len(preview_items)} 行明细）"
+                if not has_blocking
+                else "该采购单已存在采购发票，不能重复下推"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": has_blocking,
+            "blocking_reason": blocking_reason,
+            "tip": "发票号码等信息可在财务管理中补全。",
+        }
+
+    async def preview_push_to_purchase_return(
+        self,
+        tenant_id: int,
+        order_id: int,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.models.purchase_return import PurchaseReturn
+        from apps.kuaizhizao.models.purchase_return_item import PurchaseReturnItem
+
+        order_model = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        if not order_model:
+            raise NotFoundError(f"采购订单不存在: {order_id}")
+
+        order_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
+        has_received = any(float(item.received_quantity or 0) > 0 for item in order_items)
+        assert_purchase_order_capability(
+            order_model,
+            "push_purchase_return",
+            has_items=bool(order_items),
+            has_received=has_received,
+        )
+
+        return_ids = await PurchaseReturn.filter(
+            tenant_id=tenant_id,
+            purchase_order_id=order_id,
+            deleted_at__isnull=True,
+        ).exclude(status="已取消").values_list("id", flat=True)
+        returned_by_material: Dict[int, float] = {}
+        if return_ids:
+            return_items = await PurchaseReturnItem.filter(
+                tenant_id=tenant_id,
+                return_id__in=list(return_ids),
+            ).all()
+            for ri in return_items:
+                mid = int(ri.material_id)
+                returned_by_material[mid] = returned_by_material.get(mid, 0.0) + float(ri.return_quantity or 0)
+
+        preview_items: List[Dict[str, Any]] = []
+        for item in order_items:
+            received = float(item.received_quantity or 0)
+            if received <= 0:
+                continue
+            returned = returned_by_material.get(int(item.material_id), 0.0)
+            max_return = max(0.0, received - returned)
+            if max_return <= 0:
+                continue
+            preview_items.append(
+                {
+                    "item_id": int(item.id),
+                    "material_id": item.material_id,
+                    "material_code": item.material_code,
+                    "material_name": item.material_name,
+                    "material_spec": item.material_spec,
+                    "unit": item.unit,
+                    "quantity": received,
+                    "pushed_quantity": returned,
+                    "max_push_quantity": max_return,
+                }
+            )
+
+        pushable_count = len(preview_items)
+        has_blocking = pushable_count == 0
+        blocking_reason = (
+            "purchase_order.push_purchase_return.no_lines" if has_blocking else None
+        )
+        return {
+            "target_type": "purchase_return",
+            "order_id": order_id,
+            "order_code": order_model.order_code,
+            "summary": (
+                f"请选择本次要下推的采购退货明细（{pushable_count} 行可退）"
+                if not has_blocking
+                else "当前采购单无可退货明细"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": has_blocking,
+            "blocking_reason": blocking_reason,
+            "tip": "确认后将选择退货仓库并生成采购退货单。",
+        }
+
     async def push_to_receipt_preview(
         self,
         tenant_id: int,
@@ -1099,8 +1360,17 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         from decimal import Decimal
 
         order = await self.get_purchase_order_by_id(tenant_id, order_id)
-        if order.status not in LEGACY_AUDITED_VALUES:
-            raise BusinessLogicError("只有已审核或已确认的采购单才能下推到采购入库")
+        order_items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            order_id=order_id
+        ).all()
+        has_outstanding = any(float(item.outstanding_quantity or 0) > 0 for item in order_items)
+        assert_purchase_order_capability(
+            order,
+            "push_receipt",
+            has_items=bool(order_items),
+            has_outstanding=has_outstanding,
+        )
 
         from apps.kuaizhizao.services.warehouse_service import sync_purchase_order_receipt_quantities
 
@@ -1236,22 +1506,23 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         
         # 验证采购单存在且已审核
         order = await self.get_purchase_order_by_id(tenant_id, order_id)
-        if order.status not in LEGACY_AUDITED_VALUES:
-            raise BusinessLogicError("只有已审核或已确认的采购单才能下推到采购入库")
-
-        await sync_purchase_order_receipt_quantities(tenant_id, order_id)
-        
-        # 获取订单明细
         order_items = await PurchaseOrderItem.filter(
             tenant_id=tenant_id,
             order_id=order_id
         ).all()
-        
+        has_outstanding = any(float(item.outstanding_quantity or 0) > 0 for item in order_items)
+        assert_purchase_order_capability(
+            order,
+            "push_receipt",
+            has_items=bool(order_items),
+            has_outstanding=has_outstanding,
+        )
+
+        await sync_purchase_order_receipt_quantities(tenant_id, order_id)
+
         if not order_items:
             raise BusinessLogicError("采购单没有明细，无法生成入库单")
-        
-        # 检查是否有未入库的明细
-        has_outstanding = any(float(item.outstanding_quantity or 0) > 0 for item in order_items)
+
         if not has_outstanding:
             raise BusinessLogicError("采购单已全部入库，无法再次生成入库单")
         
@@ -1735,8 +2006,20 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         from apps.kuaicaiwu.schemas.finance import PurchaseInvoiceCreate
 
         order = await self.get_purchase_order_by_id(tenant_id, order_id)
-        if order.status not in LEGACY_AUDITED_VALUES:
-            raise BusinessLogicError("只有已审核或已确认的采购单才能下推到采购发票")
+        order_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
+        from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+
+        has_invoice = await PurchaseInvoice.filter(
+            tenant_id=tenant_id,
+            purchase_order_id=order_id,
+            deleted_at__isnull=True,
+        ).exists()
+        assert_purchase_order_capability(
+            order,
+            "push_invoice",
+            has_items=bool(order_items),
+            has_invoice=has_invoice,
+        )
 
         today = datetime.now().strftime("%Y%m%d")
         invoice_code = await self.generate_code(tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today}")

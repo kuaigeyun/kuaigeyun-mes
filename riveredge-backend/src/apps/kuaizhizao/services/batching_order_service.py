@@ -10,7 +10,7 @@ Date: 2026-02-28
 
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from decimal import Decimal
 
 from tortoise.transactions import in_transaction
@@ -136,6 +136,150 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
                 continue
             lines.append((item, shortage))
         return lines, analysis
+
+    @staticmethod
+    def _derive_batching_pull_capability(
+        work_order: WorkOrder,
+        *,
+        has_existing_draft: bool,
+        has_shortage: bool,
+    ) -> tuple[bool, Optional[str]]:
+        if work_order.status in ("completed", "cancelled", "已完工", "已取消"):
+            return False, "batching_order.pull_from_work_order.not_allowed"
+        if not work_order.product_id:
+            return False, "batching_order.pull_from_work_order.no_product"
+        if has_existing_draft:
+            return False, "batching_order.pull_from_work_order.existing_draft"
+        if not has_shortage:
+            return False, "batching_order.pull_from_work_order.no_shortage_lines"
+        return True, None
+
+    async def list_batching_pull_candidates(
+        self,
+        tenant_id: int,
+        *,
+        keyword: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Dict[str, Any]:
+        from tortoise.expressions import Q
+
+        query = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if keyword:
+            kw = keyword.strip()
+            if kw:
+                query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
+        total = await query.count()
+        work_orders = await query.offset(skip).limit(limit).order_by("-updated_at")
+        wo_ids = [int(wo.id) for wo in work_orders if wo.id is not None]
+
+        existing_draft_ids: set[int] = set()
+        if wo_ids:
+            drafts = await BatchingOrder.filter(
+                tenant_id=tenant_id,
+                work_order_id__in=wo_ids,
+                status__in=["draft", "picking"],
+                deleted_at__isnull=True,
+            ).values_list("work_order_id", flat=True)
+            existing_draft_ids = {int(x) for x in drafts if x is not None}
+
+        candidates: List[Dict[str, Any]] = []
+        for work_order in work_orders:
+            wo_id = int(work_order.id)
+            has_draft = wo_id in existing_draft_ids
+            has_shortage = False
+            if not has_draft and work_order.product_id:
+                try:
+                    shortage_lines, _ = await self._get_pick_shortage_lines(tenant_id, work_order)
+                    has_shortage = len(shortage_lines) > 0
+                except Exception:
+                    has_shortage = False
+            allowed, reason = self._derive_batching_pull_capability(
+                work_order,
+                has_existing_draft=has_draft,
+                has_shortage=has_shortage,
+            )
+            candidates.append(
+                {
+                    "id": wo_id,
+                    "code": str(work_order.code or ""),
+                    "name": str(work_order.name or "") or None,
+                    "status": str(work_order.status or ""),
+                    "planned_quantity": float(work_order.quantity or 0) if work_order.quantity is not None else None,
+                    "pullable": allowed,
+                    "capabilities": {
+                        "push_batching_order": {"allowed": allowed, "reason": reason},
+                    },
+                }
+            )
+        return {"data": candidates, "total": total, "success": True}
+
+    async def get_batching_pull_preview(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.services.document_action_policy.types import CAPABILITY_REASON_MESSAGES
+
+        work_order = await WorkOrder.get_or_none(
+            id=work_order_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not work_order:
+            raise NotFoundError(f"工单不存在: {work_order_id}")
+
+        existing = await BatchingOrder.get_or_none(
+            tenant_id=tenant_id,
+            work_order_id=work_order.id,
+            status__in=["draft", "picking"],
+            deleted_at__isnull=True,
+        )
+        shortage_lines, _analysis = await self._get_pick_shortage_lines(tenant_id, work_order)
+        allowed, reason = self._derive_batching_pull_capability(
+            work_order,
+            has_existing_draft=existing is not None,
+            has_shortage=len(shortage_lines) > 0,
+        )
+        if not allowed:
+            msg = CAPABILITY_REASON_MESSAGES.get(reason or "", reason or "不可取单")
+            return {
+                "work_order_id": work_order_id,
+                "work_order_code": str(work_order.code or ""),
+                "items": [],
+                "summary": f"工单 {work_order.code}：不可取单",
+                "message": reason,
+                "has_blocking_issues": True,
+                "blocking_reason": msg,
+            }
+
+        preview_lines: List[Dict[str, Any]] = []
+        for item, shortage in shortage_lines:
+            preview_lines.append(
+                {
+                    "item_id": int(item.material_id),
+                    "material_id": int(item.material_id),
+                    "material_code": str(item.material_code or ""),
+                    "material_name": str(item.material_name or ""),
+                    "material_unit": str(item.material_unit or "个"),
+                    "quantity": float(item.required_quantity or 0),
+                    "pushed_quantity": float(item.picked_quantity or 0),
+                    "max_push_quantity": float(shortage),
+                }
+            )
+        pushable = len(preview_lines)
+        blocking_reason = None
+        if pushable == 0:
+            blocking_reason = "当前工单无待配料缺料行"
+        return {
+            "work_order_id": work_order_id,
+            "work_order_code": str(work_order.code or ""),
+            "items": preview_lines,
+            "summary": f"工单 {work_order.code}：{pushable} 行可配料",
+            "message": None,
+            "has_blocking_issues": pushable == 0,
+            "blocking_reason": blocking_reason,
+        }
 
     async def _sync_shortage_lines_to_draft_order(
         self,

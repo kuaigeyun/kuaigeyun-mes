@@ -24,7 +24,6 @@ LIFECYCLE_AUDIT_MODE: Dict[str, LifecycleAuditMode] = {
     "sales_contract": "A",
     "sales_order_change": "A",
     "purchase_order_change": "A",
-    "production_plan": "A",
     "purchase_requisition": "A",
     "incoming_inspection": "A",
     "process_inspection": "A",
@@ -438,7 +437,6 @@ def get_sales_order_lifecycle(
         sub_stages = [
             {"key": "bom_check", "label": "BOM检查", "status": "done"},
             {"key": "demand_compute", "label": "需求计算", "status": "done" if pushed or "push_to_demand_computation" in actions else "active"},
-            {"key": "production_plan", "label": "生产计划", "status": "done" if "push_to_production_plan" in actions else "pending"},
             {"key": "work_order_released", "label": "工单下达", "status": "done" if "push_to_work_order" in actions else "pending"},
             {"key": "shipment_waiting", "label": "待出库", "status": "done" if "push_to_shipment_notice" in actions else "pending"},
             {"key": "delivered", "label": "已送货", "status": "done" if delivery >= 100 or "push_to_sales_delivery" in actions else "active" if delivery > 0 else "pending"},
@@ -923,7 +921,6 @@ def get_sales_forecast_lifecycle(
         sub_stages = [
             {"key": "bom_check", "label": "BOM检查", "status": "done"},
             {"key": "demand_compute", "label": "需求计算", "status": "done" if pushed or "push_to_demand_computation" in actions else "active"},
-            {"key": "production_plan", "label": "生产计划", "status": "done" if "push_to_production_plan" in actions else "pending"},
             {"key": "work_order_released", "label": "工单下达", "status": "done" if "push_to_work_order" in actions else "pending"},
             {"key": "shipment_waiting", "label": "待出库", "status": "done" if "push_to_shipment_notice" in actions else "pending"},
             {"key": "delivered", "label": "已送货", "status": "done" if delivery >= 100 or "push_to_sales_delivery" in actions else "active" if delivery > 0 else "pending"},
@@ -938,7 +935,6 @@ def get_sales_forecast_lifecycle(
         exec_suggestions = {
             "bom_check": ["完成 BOM 检查"],
             "demand_compute": ["执行需求计算（MRP）"],
-            "production_plan": ["制定生产计划"],
             "work_order_released": ["下达工单"],
             "shipment_waiting": ["准备出库"],
             "delivered": ["销售交货"],
@@ -958,62 +954,6 @@ def get_sales_forecast_lifecycle(
     return _mode_a_pre_effective_lifecycle(
         SALES_ORDER_MAIN_STAGES,
         _sf_sugg("audited"),
-        milestones=milestones,
-    )
-
-
-# ---------------------------------------------------------------------------
-# 生产计划生命周期节点（业务主轴：已执行；审核由 record.audit 独立列展示）
-# ---------------------------------------------------------------------------
-PRODUCTION_PLAN_MAIN_STAGES = [
-    {"key": "executed", "label": "已执行"},
-]
-
-
-def get_production_plan_lifecycle(
-    plan: Any,
-    milestones: Optional[List[Dict[str, Any]]] = None
-) -> Dict[str, Any]:
-    """生产计划生命周期计算"""
-    status = _norm(getattr(plan, "status", None))
-    review_status = _norm(getattr(plan, "review_status", None))
-    execution_status = _norm(getattr(plan, "execution_status", None))
-    milestones = milestones or []
-    business_effective = execution_status in ("已执行", "executed")
-
-    if status in ("已取消", "cancelled") or execution_status in ("已取消", "cancelled"):
-        return _mode_a_terminal_exception_lifecycle(
-            "已取消",
-            PRODUCTION_PLAN_MAIN_STAGES,
-            milestones=milestones,
-        )
-
-    if business_effective:
-        return {
-            "current_stage_key": "executed",
-            "current_stage_name": "已执行",
-            "status": "success",
-            "main_stages": _build_main_stages(PRODUCTION_PLAN_MAIN_STAGES, "executed"),
-            "sub_stages": None,
-            "next_step_suggestions": [],
-            "milestones": milestones,
-        }
-
-    if (
-        _mode_a_is_audit_pre_effective(status, review_status, business_effective=business_effective)
-        or status in ("已驳回", "rejected")
-        or _is_rejected(review_status)
-    ):
-        suggestions = ["执行计划"] if _is_approved(review_status) or _is_audited(status) else ["提交审核"]
-        return _mode_a_pre_effective_lifecycle(
-            PRODUCTION_PLAN_MAIN_STAGES,
-            suggestions,
-            milestones=milestones,
-        )
-
-    return _mode_a_pre_effective_lifecycle(
-        PRODUCTION_PLAN_MAIN_STAGES,
-        ["执行计划"],
         milestones=milestones,
     )
 

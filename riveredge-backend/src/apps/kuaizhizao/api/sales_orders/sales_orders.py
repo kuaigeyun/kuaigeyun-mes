@@ -900,52 +900,6 @@ async def push_sales_order_to_computation(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "下推销售订单到需求计算失败", "/sales-orders/{sales_order_id}/push-to-computation", tenant_id)
 
 
-@router.get("/{sales_order_id}/push-to-production-plan/preview", response_model=Dict[str, Any], summary="Direct push to production plan preview")
-async def preview_push_sales_order_to_production_plan(
-    sales_order_id: int = Path(..., description="销售订单ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """直推生产计划预览：返回将生成的生产计划明细，不实际创建"""
-    try:
-        result = await sales_order_service.preview_push_sales_order_to_production_plan(
-            tenant_id=tenant_id,
-            sales_order_id=sales_order_id,
-        )
-        return result
-    except NotFoundError as e:
-        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-production-plan/preview", tenant_id)
-    except (BusinessLogicError, ValidationError) as e:
-        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-production-plan/preview", tenant_id)
-
-
-@router.post("/{sales_order_id}/push-to-production-plan", response_model=Dict[str, Any], summary="Direct push sales order to production plan")
-async def push_sales_order_to_production_plan(
-    sales_order_id: int = Path(..., description="销售订单ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    直推销售订单到生产计划（跳过需求计算）
-    
-    订单明细直接转为生产计划明细，不要求BOM，原材料由用户自行计算采购。
-    """
-    try:
-        result = await sales_order_service.push_sales_order_to_production_plan(
-            tenant_id=tenant_id,
-            sales_order_id=sales_order_id,
-            created_by=current_user.id,
-        )
-        return result
-    except NotFoundError as e:
-        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-production-plan", tenant_id)
-    except (BusinessLogicError, ValidationError) as e:
-        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-production-plan", tenant_id)
-    except Exception as e:
-        logger.error(f"直推生产计划失败: {e}")
-        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "直推生产计划失败", "/sales-orders/{sales_order_id}/push-to-production-plan", tenant_id)
-
-
 @router.get("/{sales_order_id}/push-to-work-order/preview", response_model=Dict[str, Any], summary="Direct push to work order preview")
 async def preview_push_sales_order_to_work_order(
     sales_order_id: int = Path(..., description="销售订单ID"),
@@ -1175,6 +1129,54 @@ async def push_sales_order_to_shipment_notice(
     except Exception as e:
         logger.error(f"下推发货通知单失败: {e}")
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "下推发货通知单失败", "/sales-orders/{sales_order_id}/push-to-shipment-notice", tenant_id)
+
+
+@router.get("/{sales_order_id}/push-to-invoice/preview", response_model=Dict[str, Any], summary="Push to sales invoice preview")
+async def preview_push_sales_order_to_invoice(
+    sales_order_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await sales_order_service.preview_push_sales_order_to_invoice(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-invoice/preview", tenant_id)
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-invoice/preview", tenant_id)
+
+
+@router.get("/{sales_order_id}/push-to-delivery/preview", response_model=Dict[str, Any], summary="Push to sales delivery preview")
+async def preview_push_sales_order_to_delivery(
+    sales_order_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await sales_order_service.preview_push_sales_order_to_delivery(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-delivery/preview", tenant_id)
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-delivery/preview", tenant_id)
+
+
+@router.get("/{sales_order_id}/push-to-sales-return/preview", response_model=Dict[str, Any], summary="Push to sales return preview")
+async def preview_push_sales_order_to_sales_return(
+    sales_order_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await sales_order_service.preview_push_sales_order_to_sales_return(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-sales-return/preview", tenant_id)
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-sales-return/preview", tenant_id)
 
 
 @router.post("/{sales_order_id}/push-to-invoice", response_model=Dict[str, Any], summary="Push to sales invoice")

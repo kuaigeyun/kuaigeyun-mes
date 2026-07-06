@@ -20,7 +20,6 @@ def _get_model_registry() -> Dict[str, tuple]:
     from apps.kuaizhizao.models.purchase_order import PurchaseOrder
     from apps.kuaizhizao.models.demand_computation import DemandComputation
     from apps.kuaizhizao.models.sales_forecast import SalesForecast
-    from apps.kuaizhizao.models.production_plan import ProductionPlan
     from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
     from apps.kuaizhizao.models.quotation import Quotation
     from apps.kuaizhizao.models.sales_contract import SalesContract
@@ -66,7 +65,6 @@ def _get_model_registry() -> Dict[str, tuple]:
         "purchase_order": (PurchaseOrder, "order_code"),
         "demand_computation": (DemandComputation, "computation_code"),
         "sales_forecast": (SalesForecast, "forecast_code"),
-        "production_plan": (ProductionPlan, "plan_code"),
         "purchase_requisition": (PurchaseRequisition, "requisition_code"),
         "quotation": (Quotation, "quotation_code"),
         "sales_contract": (SalesContract, "contract_code"),
@@ -118,7 +116,6 @@ DOCUMENT_TYPE_LABEL_ZH: Dict[str, str] = {
     "purchase_order": "采购订单",
     "demand_computation": "需求计算",
     "sales_forecast": "销售预测",
-    "production_plan": "生产计划",
     "purchase_requisition": "采购申请",
     "quotation": "报价单",
     "sales_contract": "销售合同",

@@ -50,6 +50,8 @@ type IssueLine = {
   materialCode: string;
   materialName: string;
   unit: string;
+  requiredQuantity: number;
+  issuedQuantity: number;
   pendingQuantity: number;
   issueQuantity: number;
 };
@@ -91,6 +93,18 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
     () => [
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'materialCode', width: 120 },
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'materialName', ellipsis: true },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.entry.requiredQty'),
+        dataIndex: 'requiredQuantity',
+        width: 100,
+        align: 'right' as const,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.pull.colIssuedQty'),
+        dataIndex: 'issuedQuantity',
+        width: 100,
+        align: 'right' as const,
+      },
       {
         title: t('app.kuaizhizao.warehouseOutbound.entry.pendingIssueQty'),
         dataIndex: 'pendingQuantity',
@@ -181,8 +195,10 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
               materialCode: String(line.materialCode ?? line.material_code ?? ''),
               materialName: String(line.materialName ?? line.material_name ?? ''),
               unit: String(line.unit ?? ''),
+              requiredQuantity: Number(line.requiredQuantity ?? line.required_quantity ?? 0),
+              issuedQuantity: Number(line.issuedQuantity ?? line.issued_quantity ?? 0),
               pendingQuantity: pending,
-              issueQuantity: pending > 0 ? pending : 0,
+              issueQuantity: 0,
             };
           }),
         );

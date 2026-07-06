@@ -262,9 +262,55 @@ export interface ConvertToOrderResponse {
   quotation: Quotation;
 }
 
-export async function convertQuotationToOrder(quotationId: number): Promise<ConvertToOrderResponse> {
+export interface QuotationPushPreviewItem {
+  item_id: number;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string;
+  material_unit?: string;
+  quantity: number;
+  pushed_quantity: number;
+  max_push_quantity: number;
+  delivery_date?: string | null;
+  unit_price?: number;
+  total_amount?: number;
+}
+
+export interface QuotationPushPreviewResponse {
+  target_type: 'sales_order' | 'sales_contract';
+  summary: string;
+  items: QuotationPushPreviewItem[];
+  has_blocking_issues?: boolean;
+  blocking_reason?: string | null;
+  tip?: string;
+}
+
+export async function previewPushQuotationToSalesOrder(
+  quotationId: number,
+): Promise<QuotationPushPreviewResponse> {
+  return apiRequest<QuotationPushPreviewResponse>(
+    `/apps/kuaizhizao/quotations/${quotationId}/push-to-sales-order/preview`,
+    { method: 'GET' },
+  );
+}
+
+export async function previewPushQuotationToSalesContract(
+  quotationId: number,
+): Promise<QuotationPushPreviewResponse> {
+  return apiRequest<QuotationPushPreviewResponse>(
+    `/apps/kuaizhizao/quotations/${quotationId}/push-to-sales-contract/preview`,
+    { method: 'GET' },
+  );
+}
+
+export async function convertQuotationToOrder(
+  quotationId: number,
+  options?: { selected_item_ids?: number[] },
+): Promise<ConvertToOrderResponse> {
   return apiRequest<ConvertToOrderResponse>(`/apps/kuaizhizao/quotations/${quotationId}/convert-to-order`, {
     method: 'POST',
+    data: options?.selected_item_ids?.length ? { selected_item_ids: options.selected_item_ids } : undefined,
   });
 }
 

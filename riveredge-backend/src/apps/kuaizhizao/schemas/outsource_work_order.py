@@ -14,7 +14,7 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
-from apps.kuaizhizao.services.document_action_policy.types import InboundHubCapabilities
+from apps.kuaizhizao.services.document_action_policy.types import InboundHubCapabilities, OutsourceWorkOrderCapabilities
 
 
 class OutsourceWorkOrderBase(BaseModel):
@@ -95,6 +95,10 @@ class OutsourceWorkOrderResponse(OutsourceWorkOrderBase):
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    capabilities: Optional[OutsourceWorkOrderCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（与 outbound 委外发料上拉门禁一致）",
+    )
 
 
 class OutsourceWorkOrderListResponse(BaseModel):
@@ -247,6 +251,29 @@ class OutsourceMaterialReceiptBase(BaseModel):
 class OutsourceMaterialReceiptCreate(OutsourceMaterialReceiptBase):
     """创建委外收货 Schema"""
     pass
+
+
+class OutsourceMaterialReceiptPreviewLine(BaseModel):
+    """委外收货预览明细（产品行）"""
+    model_config = ConfigDict(from_attributes=True)
+
+    product_id: int = Field(..., description="产品物料ID")
+    product_code: str = Field(..., description="产品编码")
+    product_name: str = Field(..., description="产品名称")
+    unit: str = Field(..., description="单位")
+    ordered_quantity: Decimal = Field(..., description="委外数量")
+    received_quantity: Decimal = Field(..., description="已收数量")
+    pending_quantity: Decimal = Field(..., description="待收数量")
+
+
+class OutsourceMaterialReceiptPreviewResponse(BaseModel):
+    """委外收货预览响应"""
+    model_config = ConfigDict(from_attributes=True)
+
+    outsource_work_order_id: int = Field(...)
+    outsource_work_order_code: str = Field(...)
+    lines: List[OutsourceMaterialReceiptPreviewLine] = Field(default_factory=list)
+    message: Optional[str] = Field(None, description="提示信息")
 
 
 class OutsourceMaterialReceiptUpdate(BaseModel):

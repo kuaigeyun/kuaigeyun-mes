@@ -8,6 +8,7 @@
  */
 
 import { apiRequest } from '../../../services/api';
+import type { DocumentPushPreview } from './purchase-requisition';
 
 /**
  * 需求计算接口定义
@@ -326,6 +327,13 @@ export async function pushToPurchaseRequisition(id: number): Promise<{ success: 
   });
 }
 
+
+export async function previewPushToPurchaseRequisition(id: number): Promise<DocumentPushPreview> {
+  return apiRequest(`/apps/kuaizhizao/demand-computations/${id}/push-to-purchase-requisition/preview`, {
+    method: 'GET',
+  });
+}
+
 /**
  * 一键生成工单和采购单
  * @param generateMode 生成粒度：all=全部，work_order_only=仅工单，purchase_only=仅采购，outsource_only=仅委外工单
@@ -371,7 +379,6 @@ export async function getPushOptions(id: number): Promise<PushOptions> {
 /** 下推预览 */
 export interface PushPreview {
   computation_id: number
-  production_plan_count: number
   work_order_count: number
   outsource_work_order_count: number
   purchase_requisition_count: number
@@ -397,7 +404,12 @@ export async function getPushPreview(
 /** 一键下推 */
 export async function pushAll(
   id: number,
-  body: { production?: 'work_order'; purchase?: 'requisition' | 'purchase_order'; include_outsource?: boolean }
+  body: {
+    production?: 'work_order';
+    purchase?: 'requisition' | 'purchase_order';
+    include_outsource?: boolean;
+    push_mode?: 'draft' | 'confirm';
+  }
 ): Promise<{ success: boolean; message: string; results: Record<string, any> }> {
   return apiRequest(`/apps/kuaizhizao/demand-computations/${id}/push-all`, {
     method: 'POST',

@@ -42,7 +42,11 @@ def _is_list_work_order_row(wo: Any) -> bool:
     return row_kind == "work_order" or row_kind == ""
 
 
-def derive_work_order_capabilities(wo: Any) -> WorkOrderCapabilities:
+def derive_work_order_capabilities(
+    wo: Any,
+    *,
+    has_returnable_picking: bool | None = None,
+) -> WorkOrderCapabilities:
     if not _is_list_work_order_row(wo):
         deny = _cap(False, "work_order.not_applicable")
         return WorkOrderCapabilities(
@@ -54,6 +58,9 @@ def derive_work_order_capabilities(wo: Any) -> WorkOrderCapabilities:
             cancel=deny,
             set_priority=deny,
             print=deny,
+            push_production_picking=deny,
+            push_finished_goods_receipt=deny,
+            push_production_return=deny,
         )
 
     status = _norm(getattr(wo, "status", None))
@@ -123,6 +130,48 @@ def derive_work_order_capabilities(wo: Any) -> WorkOrderCapabilities:
 
     print_cap = _cap(True)
 
+    push_picking_allowed = (
+        not is_frozen
+        and not is_terminal
+        and not is_completed
+        and (is_released or is_in_progress)
+    )
+    push_picking_reason = None
+    if is_frozen:
+        push_picking_reason = "work_order.push_production_picking.frozen"
+    elif not push_picking_allowed:
+        push_picking_reason = "work_order.push_production_picking.not_allowed"
+    push_picking_cap = _cap(push_picking_allowed, push_picking_reason)
+
+    push_inbound_allowed = (
+        not is_frozen
+        and not is_terminal
+        and (is_in_progress or is_completed)
+    )
+    push_inbound_reason = None
+    if is_frozen:
+        push_inbound_reason = "work_order.push_finished_goods_receipt.frozen"
+    elif not push_inbound_allowed:
+        push_inbound_reason = "work_order.push_finished_goods_receipt.not_allowed"
+    push_inbound_cap = _cap(push_inbound_allowed, push_inbound_reason)
+
+    push_return_allowed = (
+        not is_frozen
+        and not is_terminal
+        and (is_in_progress or is_completed)
+    )
+    push_return_reason = None
+    if is_frozen:
+        push_return_reason = "work_order.push_production_return.frozen"
+    elif not (is_in_progress or is_completed):
+        push_return_reason = "work_order.push_production_return.not_allowed"
+    elif has_returnable_picking is False:
+        push_return_allowed = False
+        push_return_reason = "work_order.push_production_return.no_returnable_lines"
+    elif not push_return_allowed:
+        push_return_reason = "work_order.push_production_return.not_allowed"
+    push_return_cap = _cap(push_return_allowed, push_return_reason)
+
     return WorkOrderCapabilities(
         update=update_cap,
         delete=delete_cap,
@@ -132,11 +181,19 @@ def derive_work_order_capabilities(wo: Any) -> WorkOrderCapabilities:
         cancel=cancel_cap,
         set_priority=set_priority_cap,
         print=print_cap,
+        push_production_picking=push_picking_cap,
+        push_finished_goods_receipt=push_inbound_cap,
+        push_production_return=push_return_cap,
     )
 
 
-def assert_work_order_capability(wo: Any, action: str) -> None:
-    caps = derive_work_order_capabilities(wo)
+def assert_work_order_capability(
+    wo: Any,
+    action: str,
+    *,
+    has_returnable_picking: bool | None = None,
+) -> None:
+    caps = derive_work_order_capabilities(wo, has_returnable_picking=has_returnable_picking)
     cap_map = {
         "update": caps.update,
         "delete": caps.delete,
@@ -146,6 +203,9 @@ def assert_work_order_capability(wo: Any, action: str) -> None:
         "cancel": caps.cancel,
         "set_priority": caps.set_priority,
         "print": caps.print,
+        "push_production_picking": caps.push_production_picking,
+        "push_finished_goods_receipt": caps.push_finished_goods_receipt,
+        "push_production_return": caps.push_production_return,
     }
     cap = cap_map.get(action)
     if cap is None:

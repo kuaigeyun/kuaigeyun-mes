@@ -261,8 +261,12 @@ class PurchaseReceiptPullCandidate(BaseModel):
     ordered_total: Decimal = Field(default=Decimal(0), description="采购数量合计")
     received_total: Decimal = Field(default=Decimal(0), description="已入库数量合计")
     outstanding_total: Decimal = Field(default=Decimal(0), description="未入库数量合计")
-    pullable: bool = Field(..., description="是否可取单（未入库数量 > 0）")
+    pullable: bool = Field(..., description="是否可取单（与 capabilities.push_receipt 一致）")
     lifecycle: Optional[dict] = Field(None, description="生命周期（入库进度展示）")
+    capabilities: Optional[PurchaseOrderCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
+    )
 
 
 class PurchaseReceiptPullCandidateListResponse(BaseModel):

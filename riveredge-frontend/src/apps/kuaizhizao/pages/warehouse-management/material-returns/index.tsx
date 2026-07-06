@@ -469,21 +469,6 @@ const MaterialReturnsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          enableRowSelection={true}
-          showDeleteButton={true}
-          onDelete={async (keys) => {
-            try {
-              for (const id of keys) {
-                await warehouseApi.materialReturn.delete(String(id));
-              }
-              messageApi.success(t('app.kuaizhizao.warehouseMaterialReturn.msg.batchDeleteSuccess', { count: keys.length }));
-              invalidateMenuBadgeCounts();
-              actionRef.current?.reload();
-            } catch (error: any) {
-              messageApi.error(error.message || t('app.kuaizhizao.warehouseMaterialReturn.msg.deleteFailed'));
-            }
-          }}
-          deleteConfirmTitle={(count) => t('app.kuaizhizao.warehouseMaterialReturn.confirm.batchDelete', { count })}
           scroll={{ x: 1200 }}
         />
       </ListPageTemplate>

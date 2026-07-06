@@ -360,6 +360,65 @@ class TenantService:
             "tenants": tenants_usage,
         }
 
+    async def sync_tenant_limits_from_plan(
+        self,
+        tenant_id: int,
+        skip_tenant_filter: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        按组织当前套餐同步 max_users / max_storage。
+
+        若同步后配额低于已启用用户数，不删除或停用已有用户，但后续新增/启用用户将被拒绝，
+        直至有效用户数降至配额以下。
+        """
+        tenant = await self.get_tenant_by_id(tenant_id, skip_tenant_filter=skip_tenant_filter)
+        if not tenant:
+            raise ValidationError("组织不存在")
+
+        root_tenant = await self.resolve_root_tenant(tenant_id)
+        package_config = await PackageService().get_effective_package_config_for_plan(
+            root_tenant.plan
+        )
+        previous_max_users = int(root_tenant.max_users or 0)
+        previous_max_storage = int(root_tenant.max_storage or 0)
+        new_max_users = int(package_config["max_users"])
+        new_max_storage = int(package_config["max_storage_mb"])
+
+        root_tenant.max_users = new_max_users
+        root_tenant.max_storage = new_max_storage
+        await root_tenant.save(update_fields=["max_users", "max_storage"])
+
+        summary = await self.get_shared_user_quota_summary(root_tenant.id)
+
+        await self._log_activity(
+            tenant_id=root_tenant.id,
+            action="sync_limits_from_plan",
+            description=(
+                f"从套餐 {root_tenant.plan.value} 同步配额："
+                f"用户数 {previous_max_users} → {new_max_users}，"
+                f"存储 {previous_max_storage}MB → {new_max_storage}MB"
+                + (
+                    f"；当前已用 {summary['used_users']}，超配额"
+                    if summary["over_quota"]
+                    else ""
+                )
+            ),
+            operator_id=None,
+            operator_name=None,
+        )
+
+        return {
+            "tenant_id": root_tenant.id,
+            "plan": root_tenant.plan.value,
+            "max_users": new_max_users,
+            "max_storage": new_max_storage,
+            "previous_max_users": previous_max_users,
+            "previous_max_storage": previous_max_storage,
+            "used_users": summary["used_users"],
+            "remaining_users": summary["remaining_users"],
+            "over_quota": summary["over_quota"],
+        }
+
     async def assert_shared_user_quota_capacity(
         self,
         tenant_id: int,
@@ -470,15 +529,13 @@ class TenantService:
         old_plan = tenant.plan
         old_status = tenant.status
         
-        # 如果更新了套餐，自动更新 max_users 和 max_storage（如果未指定）
-        if "plan" in update_data:
-            new_plan = update_data["plan"]
-            if "max_users" not in update_data or "max_storage" not in update_data:
-                package_config = await PackageService().get_effective_package_config_for_plan(new_plan)
-                if "max_users" not in update_data:
-                    update_data["max_users"] = package_config["max_users"]
-                if "max_storage" not in update_data:
-                    update_data["max_storage"] = package_config["max_storage_mb"]
+        # 如果更新了套餐，配额与存储上限跟随新套餐（唯一真源：tenant.max_users / tenant.max_storage）
+        if "plan" in update_data and update_data["plan"] != tenant.plan:
+            package_config = await PackageService().get_effective_package_config_for_plan(
+                update_data["plan"]
+            )
+            update_data["max_users"] = package_config["max_users"]
+            update_data["max_storage"] = package_config["max_storage_mb"]
         
         for field, value in update_data.items():
             old_value = getattr(tenant, field, None)

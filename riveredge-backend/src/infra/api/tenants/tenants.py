@@ -20,6 +20,7 @@ from infra.schemas.tenant import (
     TenantUpdate,
     TenantCreate,
     SharedUserQuotaResponse,
+    SyncTenantLimitsFromPlanResponse,
 )
 from infra.services.tenant_service import TenantService, schedule_initialize_tenant_data
 from infra.api.deps.services import get_tenant_service_with_fallback
@@ -170,6 +171,39 @@ async def get_shared_user_quota_for_superadmin(
         f"root_tenant_id={summary['root_tenant_id']}"
     )
     return SharedUserQuotaResponse(**summary)
+
+
+@router.post(
+    "/{tenant_id}/sync-limits-from-plan",
+    response_model=SyncTenantLimitsFromPlanResponse,
+)
+async def sync_tenant_limits_from_plan_for_superadmin(
+    tenant_id: int,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback),
+):
+    """
+    按组织当前套餐同步用户/存储配额上限。
+
+    若新上限低于已启用用户数，已有用户不受影响，但禁止继续新增或启用用户，
+    直至有效用户数降至配额以下。
+    """
+    if not tenant_service:
+        tenant_service = TenantService()
+
+    try:
+        result = await tenant_service.sync_tenant_limits_from_plan(tenant_id)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        ) from e
+
+    logger.info(
+        f"平台超级管理员 {current_admin.username} 同步套餐配额: "
+        f"tenant_id={result['tenant_id']}, over_quota={result['over_quota']}"
+    )
+    return SyncTenantLimitsFromPlanResponse(**result)
 
 
 @router.post("/{tenant_id}/approve", response_model=TenantResponse)

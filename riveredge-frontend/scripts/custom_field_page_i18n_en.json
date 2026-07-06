@@ -245,10 +245,6 @@
       "pageName": "Finished Goods Inspection",
       "tableNameLabel": "Finished goods inspection"
     },
-    "kuaizhizao-plan-production-plan": {
-      "pageName": "Production Plans",
-      "tableNameLabel": "Production plans"
-    },
     "kuaizhizao-equipment": {
       "pageName": "Equipment Ledger",
       "tableNameLabel": "Equipment"

@@ -58,8 +58,6 @@ const codeRulePagejaJP = {
   'codeRulePage.kuaizhizao-equipment-management-mold.pageName': '金型',
   'codeRulePage.kuaizhizao-equipment-management-tool.codeFieldLabel': 'ツールコード',
   'codeRulePage.kuaizhizao-equipment-management-tool.pageName': 'ツール',
-  'codeRulePage.kuaizhizao-plan-production-plan.codeFieldLabel': '生産計画コード',
-  'codeRulePage.kuaizhizao-plan-production-plan.pageName': '生産計画',
   'codeRulePage.kuaizhizao-production-outsource-material-receipt.codeFieldLabel': '外注受付No.',
   'codeRulePage.kuaizhizao-production-outsource-material-receipt.pageName': '外部委託資材の受領',
   'codeRulePage.kuaizhizao-production-outsource-material-return.codeFieldLabel': '外注資材返却番号',

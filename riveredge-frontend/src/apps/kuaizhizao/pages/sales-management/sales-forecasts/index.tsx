@@ -10,8 +10,8 @@ import { renderRowActionsOverflow, rowActionKind } from '../../../../../componen
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
-import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Descriptions, Tooltip, Card } from 'antd'
-import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, AppstoreAddOutlined, ImportOutlined, ArrowLeftOutlined, PrinterOutlined } from '@ant-design/icons'
+import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Descriptions, Tooltip, Card, Alert, Empty, Spin, Switch } from 'antd'
+import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, AppstoreAddOutlined, ImportOutlined, ArrowLeftOutlined, PrinterOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -23,7 +23,6 @@ import { useAuditRequired } from '../../../../../hooks/useAuditRequired'
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions'
 import {
   salesForecastCapabilityReasonMessage,
-  salesForecastHasToolbarPushActions,
   useSalesForecastCapabilities,
 } from '../../../../../hooks/useDocumentCapabilities'
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
@@ -44,7 +43,7 @@ import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut'
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts'
 import { UniTable } from '../../../../../components/uni-table'
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
-import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
+import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -81,6 +80,7 @@ import {
   withdrawSalesForecast,
   withdrawSalesForecastApproval,
   pushSalesForecastToComputation,
+  previewPushSalesForecastToComputation,
   importSalesForecasts,
   exportSalesForecasts,
   getSalesForecastStatistics,
@@ -167,6 +167,12 @@ export default function SalesForecastsPage() {
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null)
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [trackingRefreshKey, setTrackingRefreshKey] = useState(0)
+  const [pushPreviewOpen, setPushPreviewOpen] = useState(false)
+  const [pushPreviewLoading, setPushPreviewLoading] = useState(false)
+  const [pushPreviewConfirming, setPushPreviewConfirming] = useState(false)
+  const [pushPreviewData, setPushPreviewData] = useState<any>(null)
+  const [pushPreviewForecastId, setPushPreviewForecastId] = useState<number | null>(null)
+  const [pushSelectedItemIds, setPushSelectedItemIds] = useState<number[]>([])
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const leaveSalesForecastFormPage = useCallback(() => {
     navigate(SALES_FORECAST_LIST_PATH);
@@ -802,29 +808,107 @@ export default function SalesForecastsPage() {
     });
   };
 
-  const handlePushToComputation = async (id: number) => {
-    if (!salesNodesEnabled.demand_computation) {
-      messageApi.warning(t('app.kuaizhizao.salesForecast.demandComputationDisabled'))
+  const handlePushToComputation = useCallback(
+    (id: number) => {
+      if (!salesNodesEnabled.demand_computation) {
+        messageApi.warning(t('app.kuaizhizao.salesForecast.demandComputationDisabled'))
+        return
+      }
+      setPushPreviewOpen(true)
+      setPushPreviewLoading(true)
+      setPushPreviewConfirming(false)
+      setPushPreviewData(null)
+      setPushPreviewForecastId(id)
+      setPushSelectedItemIds([])
+      previewPushSalesForecastToComputation(id)
+        .then((res) => {
+          setPushPreviewData(res)
+          const ids = (res.items || [])
+            .filter((row: any) => Number(row.max_push_quantity ?? 0) > 0)
+            .map((row: any) => Number(row.item_id))
+          setPushSelectedItemIds(ids)
+        })
+        .catch((error: any) => {
+          messageApi.error(error?.message || error?.detail || t('app.kuaizhizao.salesForecast.pushPreviewFailed'))
+          setPushPreviewOpen(false)
+          setPushPreviewForecastId(null)
+          setPushPreviewData(null)
+          setPushSelectedItemIds([])
+        })
+        .finally(() => setPushPreviewLoading(false))
+    },
+    [messageApi, salesNodesEnabled.demand_computation, t],
+  )
+
+  const resetPushPreviewModal = useCallback(() => {
+    setPushPreviewOpen(false)
+    setPushPreviewForecastId(null)
+    setPushPreviewData(null)
+    setPushSelectedItemIds([])
+  }, [])
+
+  const refreshForecastAfterPush = useCallback(
+    (forecastId: number) => {
+      invalidateForecastCache()
+      invalidateStatistics()
+      invalidateMenuBadge()
+      setTrackingRefreshKey((k) => k + 1)
+      actionRef.current?.reload()
+      if (drawerVisible && currentForecast?.id === forecastId) {
+        void getSalesForecast(forecastId)
+          .then(setCurrentForecast)
+          .catch(() => {})
+      }
+    },
+    [currentForecast?.id, drawerVisible],
+  )
+
+  const handlePushPreviewConfirm = useCallback(async () => {
+    if (!pushPreviewForecastId || !pushPreviewData) return
+    if (pushPreviewData.has_blocking_issues) return
+    const pushableIds = (pushPreviewData.items || [])
+      .filter((row: any) => Number(row.max_push_quantity ?? 0) > 0)
+      .map((row: any) => Number(row.item_id))
+    if (!pushableIds.length) {
+      messageApi.warning(t('app.kuaizhizao.salesForecast.pushPreviewSelectAtLeastOne'))
       return
     }
-    modalApi.confirm({
-      title: pushToComputationAction.label,
-      content: t('app.kuaizhizao.salesForecast.pushToComputationConfirm'),
-      onOk: async () => {
-        try {
-          await pushSalesForecastToComputation(id)
-          messageApi.success(t('app.kuaizhizao.salesForecast.pushSuccess'))
-          invalidateForecastCache();
-          invalidateStatistics();
-          invalidateMenuBadge();
-      setTrackingRefreshKey((k) => k + 1);
-      actionRef.current?.reload()
-        } catch (e: any) {
-          messageApi.error(e?.message || t('app.kuaizhizao.salesForecast.pushFailed'))
-        }
-      },
-    })
-  }
+    if (
+      pushSelectedItemIds.length !== pushableIds.length ||
+      !pushableIds.every((id) => pushSelectedItemIds.includes(id))
+    ) {
+      messageApi.warning(t('app.kuaizhizao.salesForecast.pushPreviewRequiresAllLines'))
+      return
+    }
+    setPushPreviewConfirming(true)
+    try {
+      const res = await pushSalesForecastToComputation(pushPreviewForecastId)
+      const code = res?.computation_code || res?.demand_computation?.computation_code
+      messageApi.success(
+        code
+          ? t('app.kuaizhizao.demandComputation.createdTarget', {
+              target: pushToComputationAction.targetLabel,
+              code,
+            })
+          : res?.message || t('app.kuaizhizao.salesForecast.pushSuccess'),
+      )
+      refreshForecastAfterPush(pushPreviewForecastId)
+      resetPushPreviewModal()
+    } catch (error: any) {
+      messageApi.error(error?.message || error?.response?.data?.detail || t('app.kuaizhizao.salesForecast.pushFailed'))
+    } finally {
+      setPushPreviewConfirming(false)
+    }
+  }, [
+    messageApi,
+    pushPreviewData,
+    pushPreviewForecastId,
+    pushSelectedItemIds,
+    pushToComputationAction.targetLabel,
+    refreshForecastAfterPush,
+    resetPushPreviewModal,
+    t,
+  ])
 
   const formatForecastPeriod = (period?: string) => {
     if (!period) return '-';
@@ -1177,18 +1261,14 @@ export default function SalesForecastsPage() {
     [selectedRowKeys],
   );
 
-  const toolbarPushDisabledReason = useMemo(() => {
-    if (selectedRowKeys.length === 0) {
-      return t('app.kuaizhizao.salesForecast.selectOne');
-    }
-    if (selectedRowKeys.length !== 1) {
-      return t('app.kuaizhizao.demandComputation.pushSingleOnly');
-    }
-    if (!selectedForecastForToolbar) {
-      return t('app.kuaizhizao.demandComputation.selectedNotInList');
-    }
-    return undefined;
-  }, [selectedForecastForToolbar, selectedRowKeys.length, t]);
+  const toolbarPushDisabledReason = useMemo(
+    () =>
+      buildUniPushToolbarDisabledReason(t, {
+        selectedCount: selectedRowKeys.length,
+        hasSelectedRecord: !!selectedForecastForToolbar,
+      }),
+    [selectedForecastForToolbar, selectedRowKeys.length, t],
+  );
 
   const toolbarPushItemDisabledReason = useMemo(() => {
     if (!selectedForecastForToolbar) return undefined;
@@ -1199,12 +1279,6 @@ export default function SalesForecastsPage() {
     if (!cap || cap.allowed) return undefined;
     return salesForecastCapabilityReasonMessage(cap.reason, t);
   }, [salesNodesEnabled.demand_computation, selectedForecastForToolbar, t]);
-
-  const canUseToolbarPush =
-    selectedRowKeys.length === 1 &&
-    !!selectedForecastForToolbar?.id &&
-    salesNodesEnabled.demand_computation &&
-    salesForecastHasToolbarPushActions(selectedForecastForToolbar);
 
   /** 较昨日对比：显示 +x / -x 格式 */
   const renderDOD = (today?: number, yesterday?: number) => {
@@ -1775,10 +1849,10 @@ export default function SalesForecastsPage() {
                 {
                   key: 'push-to-computation',
                   label: pushToComputationAction.label,
-                  disabled: !canUseToolbarPush,
+                  disabled: !!toolbarPushItemDisabledReason,
                   title: toolbarPushItemDisabledReason,
                   onClick: () => {
-                    if (!selectedForecastForToolbar?.id || !canUseToolbarPush) return;
+                    if (!selectedForecastForToolbar?.id || toolbarPushItemDisabledReason) return;
                     void handlePushToComputation(selectedForecastForToolbar.id);
                   },
                 },
@@ -1897,6 +1971,24 @@ export default function SalesForecastsPage() {
                   </Button>
                 </span>
               </Tooltip>
+              {salesNodesEnabled.demand_computation ? (
+                <Tooltip title={detailCapabilityGates.pushComputation.title}>
+                  <span>
+                    <Button
+                      type="primary"
+                      icon={<ArrowDownOutlined />}
+                      disabled={detailCapabilityGates.pushComputation.disabled || currentForecast.id == null}
+                      onClick={() => {
+                        const fid = currentForecast.id;
+                        if (detailCapabilityGates.pushComputation.disabled || fid == null) return;
+                        handlePushToComputation(fid);
+                      }}
+                    >
+                      {pushToComputationAction.label}
+                    </Button>
+                  </span>
+                </Tooltip>
+              ) : null}
               <UniWorkflowActions {...rowActionKind('skip')}
                 record={currentForecast}
                 entityName={t('app.kuaizhizao.salesForecast.title')}
@@ -2016,6 +2108,93 @@ export default function SalesForecastsPage() {
           </>
         )}
       </DetailDrawerTemplate>
+
+      <Modal
+        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
+        open={pushPreviewOpen}
+        width={1100}
+        onCancel={resetPushPreviewModal}
+        okText={t('app.kuaizhizao.salesOrder.confirmPush')}
+        cancelText={t('common.cancel')}
+        confirmLoading={pushPreviewConfirming}
+        onOk={handlePushPreviewConfirm}
+        okButtonProps={{
+          disabled: pushPreviewLoading || !pushPreviewData || !!pushPreviewData?.has_blocking_issues,
+        }}
+      >
+        {pushPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+          </div>
+        ) : pushPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushPreviewData.summary}</p>
+            {pushPreviewData.has_blocking_issues ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={
+                  salesForecastCapabilityReasonMessage(pushPreviewData.blocking_reason, t) ||
+                  t('app.kuaizhizao.salesForecast.pushBlockedStatus')
+                }
+              />
+            ) : null}
+            {pushPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pushPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 960 }}
+                columns={[
+                  {
+                    title: t('common.select'),
+                    dataIndex: 'item_id',
+                    width: 64,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row.item_id)
+                      const maxQty = Number(row.max_push_quantity ?? 0)
+                      const disabled =
+                        !Number.isFinite(maxQty) || maxQty <= 0 || !!pushPreviewData.has_blocking_issues
+                      return (
+                        <Switch
+                          size="small"
+                          disabled={disabled}
+                          checked={pushSelectedItemIds.includes(itemId)}
+                        />
+                      )
+                    },
+                  },
+                  { title: t('app.kuaizhizao.quotation.colMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+                  { title: t('app.kuaizhizao.quotation.colMaterialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesForecast.forecastQuantity'), dataIndex: 'quantity', width: 88, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 88, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 88, align: 'right' },
+                  {
+                    title: t('app.kuaizhizao.salesForecast.forecastDate'),
+                    dataIndex: 'forecast_date',
+                    width: 112,
+                    render: (_: unknown, row: any) => {
+                      const v = row.forecast_date || row.forecast_month
+                      return v ? String(v).slice(0, 10) : '-'
+                    },
+                  },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.salesForecast.pushPreviewNoLines')} />
+            )}
+            {pushPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                {pushPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+
       {PrintModal}
     </>
   )

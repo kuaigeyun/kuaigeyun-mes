@@ -56,6 +56,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
   const [items, setItems] = useState<SalesOrderItem[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
   const [quantities, setQuantities] = useState<Record<number, number>>({});
+  const [maxQuantities, setMaxQuantities] = useState<Record<number, number>>({});
   const [warehouseId, setWarehouseId] = useState<number | undefined>();
   const [deliveryTime, setDeliveryTime] = useState(() => dayjs());
   const [notes, setNotes] = useState('');
@@ -82,16 +83,23 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', ellipsis: true },
       {
         title: t('app.kuaizhizao.warehouseOutbound.entry.orderQty'),
-        dataIndex: 'quantity',
+        dataIndex: 'required_quantity',
         width: 100,
         align: 'right' as const,
       },
       {
-        title: t('app.kuaizhizao.warehouseOutbound.entry.pendingQty'),
-        key: 'pending',
+        title: t('app.kuaizhizao.salesOrder.colShippedQty'),
+        dataIndex: 'delivered_quantity',
         width: 100,
         align: 'right' as const,
-        render: (_: unknown, it: SalesOrderItem) => Number(it.remaining_quantity ?? 0),
+        render: (v: number | undefined) => Number(v ?? 0),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.colShippableQty'),
+        key: 'max_push',
+        width: 100,
+        align: 'right' as const,
+        render: (_: unknown, it: SalesOrderItem) => Number(maxQuantities[it.id!] ?? 0),
       },
       {
         title: t('app.kuaizhizao.warehouseOutbound.entry.thisOutbound'),
@@ -101,7 +109,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
           it.id != null ? (
             <InputNumber
               min={0}
-              max={Number(it.remaining_quantity ?? 0)}
+              max={Number(maxQuantities[it.id] ?? 0)}
               value={quantities[it.id]}
               onChange={(v) => setQuantities((prev) => ({ ...prev, [it.id!]: Number(v ?? 0) }))}
               style={{ width: '100%' }}
@@ -110,7 +118,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
       },
       { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 60 },
     ],
-    [quantities, t],
+    [quantities, maxQuantities, t],
   );
 
   const leavePage = useCallback(() => {
@@ -175,13 +183,15 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
         const initQty: Record<number, number> = {};
         lines.forEach((it) => {
           if (it.id == null) return;
-          const pending = Number(it.remaining_quantity ?? 0);
-          initQty[it.id] = pending > 0 ? pending : 0;
+          initQty[it.id] = 0;
         });
         setQuantities(initQty);
         applyDraftOnce((draft) => {
           if (draft.quantities) {
             setQuantities((prev) => mergeRecordMaps(prev, draft.quantities as Record<number, number>));
+          }
+          if (draft.maxQuantities) {
+            setMaxQuantities(draft.maxQuantities as Record<number, number>);
           }
           const whId = draftOptionalNumber(draft.warehouseId);
           if (whId != null) setWarehouseId(whId);
@@ -215,7 +225,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
       if (it.id == null) continue;
       const qty = Number(quantities[it.id] ?? 0);
       if (qty <= 0) continue;
-      const max = Number(it.remaining_quantity ?? 0);
+      const max = Number(maxQuantities[it.id] ?? 0);
       if (qty > max) {
         messageApi.error(
           t('app.kuaizhizao.warehouseOutbound.entry.qtyExceedsPending', {

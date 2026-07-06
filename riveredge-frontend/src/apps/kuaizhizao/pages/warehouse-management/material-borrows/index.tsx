@@ -92,7 +92,6 @@ const MaterialBorrowsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [borrowDetail, setBorrowDetail] = useState<MaterialBorrowDetail | null>(null);
@@ -325,21 +324,6 @@ const MaterialBorrowsPage: React.FC = () => {
     });
   };
 
-  const handleBatchDelete = async (keys: React.Key[]) => {
-    if (keys.length === 0) return;
-    try {
-      for (const k of keys) {
-        await warehouseApi.materialBorrow.delete(String(k));
-      }
-      messageApi.success(t('app.kuaizhizao.materialBorrow.msg.batchDeleteSuccess', { count: keys.length }));
-      setSelectedRowKeys([]);
-      invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.materialBorrow.msg.batchDeleteFailed'));
-    }
-  };
-
   const handleSyncConfirm = async (rows: Record<string, any>[]) => {
     try {
       let successCount = 0;
@@ -474,11 +458,6 @@ const MaterialBorrowsPage: React.FC = () => {
           showCreateButton
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
-          enableRowSelection
-          onRowSelectionChange={setSelectedRowKeys}
-          showDeleteButton
-          onDelete={handleBatchDelete}
-          deleteConfirmTitle={(count) => t('app.kuaizhizao.materialBorrow.msg.deleteConfirm', { count })}
           showImportButton={false}
           showExportButton
           onExport={async (type, keys, pageData) => {

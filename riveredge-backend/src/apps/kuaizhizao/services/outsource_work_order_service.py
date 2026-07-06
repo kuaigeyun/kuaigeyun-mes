@@ -371,8 +371,15 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
         total = await OutsourceWorkOrder.filter(query).count()
         work_orders = await OutsourceWorkOrder.filter(query).order_by("-created_at").offset(skip).limit(limit).all()
 
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_outsource_work_order_list_capabilities,
+        )
+
+        responses = [OutsourceWorkOrderResponse.model_validate(wo) for wo in work_orders]
+        enriched = enrich_outsource_work_order_list_capabilities(work_orders, responses)
+
         return OutsourceWorkOrderListResponse(
-            data=[OutsourceWorkOrderResponse.model_validate(wo) for wo in work_orders],
+            data=enriched,
             total=total,
             success=True
         )

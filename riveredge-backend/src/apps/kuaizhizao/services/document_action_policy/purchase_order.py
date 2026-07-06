@@ -19,6 +19,7 @@ from apps.kuaizhizao.services.document_action_policy.types import (
     CAPABILITY_REASON_MESSAGES,
     PurchaseOrderCapabilities,
 )
+from apps.kuaizhizao.services.order_change.helpers import is_source_order_locked_for_direct_edit
 
 
 def _cap(allowed: bool, reason: Optional[str] = None) -> ActionCapability:
@@ -50,12 +51,30 @@ def _is_rejected_status(status: Any) -> bool:
     return normalized == DocumentStatus.REJECTED.value or raw in ("已驳回", "rejected", "REJECTED")
 
 
+def _derive_outstanding_push_cap(status: Any, *, has_items: bool, has_outstanding: bool) -> ActionCapability:
+    push_allowed = False
+    push_reason = "purchase_order.push_receipt.not_audited"
+    if _is_audited_status(status):
+        if not has_items:
+            push_reason = "purchase_order.push_receipt.no_items"
+        elif not has_outstanding:
+            push_reason = "purchase_order.push_receipt.no_outstanding"
+        else:
+            push_allowed = True
+            push_reason = None
+    return _cap(push_allowed, push_reason)
+
+
 def derive_purchase_order_capabilities(
     order: Any,
     *,
     has_items: bool = True,
     has_outstanding: bool = False,
+    has_received: bool = False,
+    has_invoice: bool = False,
     has_downstream: bool = False,
+    has_pending_change: bool = False,
+    has_returnable: bool = False,
 ) -> PurchaseOrderCapabilities:
     status = getattr(order, "status", None)
     review_status = getattr(order, "review_status", None)
@@ -96,17 +115,53 @@ def derive_purchase_order_capabilities(
         else None,
     )
 
-    push_allowed = False
-    push_reason = "purchase_order.push_receipt.not_audited"
+    push_receipt_notice_cap = _derive_outstanding_push_cap(
+        status, has_items=has_items, has_outstanding=has_outstanding
+    )
+    push_receipt_cap = _derive_outstanding_push_cap(
+        status, has_items=has_items, has_outstanding=has_outstanding
+    )
+
+    invoice_allowed = False
+    invoice_reason = "purchase_order.push_invoice.not_audited"
     if _is_audited_status(status):
         if not has_items:
-            push_reason = "purchase_order.push_receipt.no_items"
-        elif not has_outstanding:
-            push_reason = "purchase_order.push_receipt.no_outstanding"
+            invoice_reason = "purchase_order.push_invoice.no_items"
+        elif has_invoice:
+            invoice_reason = "purchase_order.push_invoice.already_exists"
         else:
-            push_allowed = True
-            push_reason = None
-    push_cap = _cap(push_allowed, push_reason)
+            invoice_allowed = True
+            invoice_reason = None
+    push_invoice_cap = _cap(invoice_allowed, invoice_reason)
+
+    return_allowed = False
+    return_reason = "purchase_order.push_purchase_return.not_audited"
+    if _is_audited_status(status):
+        if not has_received:
+            return_reason = "purchase_order.push_purchase_return.no_received"
+        elif not has_returnable:
+            return_reason = "purchase_order.push_purchase_return.no_lines"
+        else:
+            return_allowed = True
+            return_reason = None
+    push_return_cap = _cap(return_allowed, return_reason)
+
+    create_change_allowed = False
+    create_change_reason = "purchase_order.create_change.not_allowed"
+    if update_allowed:
+        create_change_reason = "purchase_order.create_change.not_allowed"
+    elif has_pending_change:
+        create_change_reason = "purchase_order.create_change.pending_exists"
+    elif not _is_audited_status(status):
+        create_change_reason = "purchase_order.create_change.not_audited"
+    elif not is_source_order_locked_for_direct_edit(_norm(status), review_status):
+        create_change_reason = "purchase_order.create_change.not_allowed"
+    elif not has_items:
+        create_change_reason = "purchase_order.create_change.no_items"
+    else:
+        create_change_allowed = True
+        create_change_reason = None
+    create_change_cap = _cap(create_change_allowed, create_change_reason)
 
     revoke_allowed = False
     revoke_reason = "purchase_order.revoke_approval.not_allowed"
@@ -127,7 +182,11 @@ def derive_purchase_order_capabilities(
         withdraw_submit=withdraw_cap,
         approve=approve_cap,
         revoke_approval=revoke_cap,
-        push_receipt_notice=push_cap,
+        push_receipt_notice=push_receipt_notice_cap,
+        push_receipt=push_receipt_cap,
+        push_invoice=push_invoice_cap,
+        push_purchase_return=push_return_cap,
+        create_change_order=create_change_cap,
         print=print_cap,
     )
 
@@ -138,13 +197,21 @@ def assert_purchase_order_capability(
     *,
     has_items: bool = True,
     has_outstanding: bool = False,
+    has_received: bool = False,
+    has_invoice: bool = False,
     has_downstream: bool = False,
+    has_pending_change: bool = False,
+    has_returnable: bool = False,
 ) -> None:
     caps = derive_purchase_order_capabilities(
         order,
         has_items=has_items,
         has_outstanding=has_outstanding,
+        has_received=has_received,
+        has_invoice=has_invoice,
         has_downstream=has_downstream,
+        has_pending_change=has_pending_change,
+        has_returnable=has_returnable,
     )
     cap_map = {
         "update": caps.update,
@@ -154,6 +221,10 @@ def assert_purchase_order_capability(
         "approve": caps.approve,
         "revoke_approval": caps.revoke_approval,
         "push_receipt_notice": caps.push_receipt_notice,
+        "push_receipt": caps.push_receipt,
+        "push_invoice": caps.push_invoice,
+        "push_purchase_return": caps.push_purchase_return,
+        "create_change_order": caps.create_change_order,
     }
     cap = cap_map.get(action)
     if cap is None:

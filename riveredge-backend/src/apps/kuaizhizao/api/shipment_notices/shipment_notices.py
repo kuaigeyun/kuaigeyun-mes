@@ -25,6 +25,7 @@ from apps.kuaizhizao.schemas.shipment_notice import (
     ShipmentNoticeNotify,
     ShipmentNoticeResponse,
     ShipmentNoticeListResponse,
+    ShipmentNoticeListPaginatedResponse,
     ShipmentNoticeWithItemsResponse,
 )
 
@@ -80,13 +81,14 @@ async def create_shipment_notice(
         )
 
 
-@router.get("", response_model=List[ShipmentNoticeListResponse], summary="List shipment notices")
+@router.get("", response_model=ShipmentNoticeListPaginatedResponse, summary="List shipment notices")
 async def list_shipment_notices(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     status: Optional[str] = Query(None),
     sales_order_id: Optional[int] = Query(None),
     customer_id: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -98,6 +100,7 @@ async def list_shipment_notices(
         status=status,
         sales_order_id=sales_order_id,
         customer_id=customer_id,
+        keyword=keyword,
     )
 
 
@@ -155,6 +158,36 @@ async def delete_shipment_notice(
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/{notice_id}/notify/preview",
+    summary="Preview notify warehouse",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:shipment-notice:update"))],
+)
+async def preview_notify_warehouse(
+    notice_id: int = Path(..., description="通知单ID"),
+    warehouse_id: Optional[int] = Query(None, description="出库仓库ID（通知单未指定仓库时必填）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """通知仓库预览：返回明细数量、已占用、可通知量，不实际创建出库单。"""
+    try:
+        return await shipment_notice_service.preview_notify_warehouse(
+            tenant_id=tenant_id,
+            notice_id=notice_id,
+            warehouse_id=warehouse_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error("通知仓库预览失败: %s", e)
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="通知仓库预览失败",
+        )
 
 
 @router.post(

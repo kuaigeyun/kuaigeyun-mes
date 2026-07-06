@@ -58,8 +58,6 @@ const codeRulePagezhHant = {
   'codeRulePage.kuaizhizao-equipment-management-mold.pageName': '模具管理',
   'codeRulePage.kuaizhizao-equipment-management-tool.codeFieldLabel': '工裝編碼',
   'codeRulePage.kuaizhizao-equipment-management-tool.pageName': '工裝臺賬',
-  'codeRulePage.kuaizhizao-plan-production-plan.codeFieldLabel': '生產計劃編碼',
-  'codeRulePage.kuaizhizao-plan-production-plan.pageName': '生產計劃',
   'codeRulePage.kuaizhizao-production-outsource-material-receipt.codeFieldLabel': '委外收貨單編號',
   'codeRulePage.kuaizhizao-production-outsource-material-receipt.pageName': '委外收貨',
   'codeRulePage.kuaizhizao-production-outsource-material-return.codeFieldLabel': '委外退料單編號',

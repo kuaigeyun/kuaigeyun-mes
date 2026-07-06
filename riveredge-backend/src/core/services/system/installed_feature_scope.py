@@ -54,7 +54,6 @@ _PRINT_DOC_KUAIZHIZAO: FrozenSet[str] = frozenset(
         "purchase_order",
         "demand_computation",
         "sales_forecast",
-        "production_plan",
         "purchase_requisition",
         "quotation",
         "rework_order",

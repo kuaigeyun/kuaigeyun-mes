@@ -15,7 +15,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation, type TFunction } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Row, Col, Table, Input, InputNumber, Alert, Spin, Form as AntForm, DatePicker, Typography, Tooltip, Dropdown, Empty, Tabs, theme as AntdTheme } from 'antd';
+import { App, Button, Tag, Space, Modal, Row, Col, Table, Input, InputNumber, Alert, Spin, Form as AntForm, DatePicker, Typography, Tooltip, Dropdown, Empty, Tabs, theme as AntdTheme, Switch } from 'antd';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -29,7 +29,9 @@ import {
   approveDemand,
   rejectDemand,
   pushDemandToComputation,
+  previewPushDemandToComputation,
   withdrawDemandFromComputation,
+  type DemandPushPreviewResponse,
   listDemandRecalcHistory,
   listDemandSnapshots,
   getDemandStatistics,
@@ -41,9 +43,7 @@ import {
   DemandSnapshotItem,
 } from '../../../services/demand';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
-import { createDemandComputation } from '../../../services/demand-computation';
-import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { demandBatchMergeComputationAllowed } from '../../../../../hooks/useDocumentCapabilities';
+import { demandPushCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
@@ -54,7 +54,6 @@ import {
   EditOutlined,
   ArrowDownOutlined,
   RollbackOutlined,
-  MergeCellsOutlined,
   DeleteOutlined,
   PlusOutlined,
   AppstoreAddOutlined,
@@ -62,7 +61,6 @@ import {
   QuestionCircleOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
   UniTableStackedPrimaryCell,
@@ -250,7 +248,12 @@ const DemandManagementPage: React.FC = () => {
   // 需求计划页仅管理手工需求计划（demand_plan）
   const demandType = 'demand_plan' as const;
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const computationPerms = useResourcePermissions('plan-management-demand-computation');
+  const [pushPreviewOpen, setPushPreviewOpen] = useState(false);
+  const [pushPreviewLoading, setPushPreviewLoading] = useState(false);
+  const [pushPreviewConfirming, setPushPreviewConfirming] = useState(false);
+  const [pushPreviewData, setPushPreviewData] = useState<DemandPushPreviewResponse | null>(null);
+  const [pushPreviewDemandId, setPushPreviewDemandId] = useState<number | null>(null);
+  const [pushSelectedItemIds, setPushSelectedItemIds] = useState<number[]>([]);
   useNewShortcut(() => setCreatePlanModalVisible(true));
 
   const selectedDemandsForBatch = useMemo(
@@ -463,43 +466,93 @@ const DemandManagementPage: React.FC = () => {
     }
   };
 
-  const handleMergeComputationBulk = useCallback(async (ids: number[]) => {
-    const payload =
-      ids.length === 1
-        ? { demand_id: ids[0], computation_type: 'MRP' as const, computation_params: {} }
-        : { demand_ids: ids, computation_type: 'MRP' as const, computation_params: {} };
-    const computation = await createDemandComputation(payload);
-    invalidateStatistics();
-    actionRef.current?.reload();
-    if (computation?.id) {
-      window.location.href = `/apps/kuaizhizao/plan-management/demand-computation?highlight=${computation.id}`;
-    }
-    return { success_count: ids.length, failed_count: 0 };
-  }, [queryClient]);
+  const resetPushPreviewModal = useCallback(() => {
+    setPushPreviewOpen(false);
+    setPushPreviewData(null);
+    setPushPreviewDemandId(null);
+    setPushSelectedItemIds([]);
+  }, []);
 
-  const handlePushToComputation = async (id: number) => {
-    Modal.confirm({
-      title: pushToComputationAction.label,
-      content: t('app.kuaizhizao.demandManagement.pushToMrpConfirm'),
-      onOk: async () => {
-        try {
-          const result = await pushDemandToComputation(id);
-          messageApi.success(result.message || t('app.kuaizhizao.demandManagement.pushSuccess'));
-          invalidateStatistics();
-          actionRef.current?.reload();
-          if (currentDemand?.id === id) {
-            void getDemand(id)
-              .then((updated) => setCurrentDemand(updated))
-              .catch(() => {});
-            setDemandTrackingRefreshKey((k) => k + 1);
-          }
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.salesOrder.pushFailed'));
-          throw error;
-        }
-      },
-    });
-  };
+  const refreshDemandAfterPush = useCallback(
+    (id: number) => {
+      invalidateStatistics();
+      actionRef.current?.reload();
+      if (currentDemand?.id === id) {
+        void getDemand(id)
+          .then((updated) => setCurrentDemand(updated))
+          .catch(() => {});
+        setDemandTrackingRefreshKey((k) => k + 1);
+      }
+    },
+    [currentDemand?.id],
+  );
+
+  const showDemandPushPreview = useCallback(
+    (id: number) => {
+      setPushPreviewOpen(true);
+      setPushPreviewLoading(true);
+      setPushPreviewConfirming(false);
+      setPushPreviewData(null);
+      setPushPreviewDemandId(id);
+      setPushSelectedItemIds([]);
+      previewPushDemandToComputation(id)
+        .then((res) => {
+          setPushPreviewData(res);
+          const ids = (res.items || [])
+            .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
+            .map((row) => Number(row.item_id));
+          setPushSelectedItemIds(ids);
+        })
+        .catch((error: any) => {
+          messageApi.error(error?.message || error?.detail || t('app.kuaizhizao.demandManagement.pushPreviewFailed'));
+          resetPushPreviewModal();
+        })
+        .finally(() => setPushPreviewLoading(false));
+    },
+    [messageApi, resetPushPreviewModal, t],
+  );
+
+  const handlePushPreviewConfirm = useCallback(async () => {
+    if (!pushPreviewDemandId || !pushPreviewData) return;
+    if (pushPreviewData.has_blocking_issues) return;
+    const pushableIds = (pushPreviewData.items || [])
+      .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
+      .map((row) => Number(row.item_id));
+    if (!pushableIds.length) {
+      messageApi.warning(t('app.kuaizhizao.demandManagement.pushPreviewSelectAtLeastOne'));
+      return;
+    }
+    if (pushSelectedItemIds.length !== pushableIds.length || !pushableIds.every((id) => pushSelectedItemIds.includes(id))) {
+      messageApi.warning(t('app.kuaizhizao.demandManagement.pushPreviewRequiresAllLines'));
+      return;
+    }
+    setPushPreviewConfirming(true);
+    try {
+      const result = await pushDemandToComputation(pushPreviewDemandId);
+      messageApi.success(result.message || t('app.kuaizhizao.demandManagement.pushSuccess'));
+      refreshDemandAfterPush(pushPreviewDemandId);
+      resetPushPreviewModal();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.pushFailed'));
+    } finally {
+      setPushPreviewConfirming(false);
+    }
+  }, [
+    messageApi,
+    pushPreviewData,
+    pushPreviewDemandId,
+    pushSelectedItemIds,
+    refreshDemandAfterPush,
+    resetPushPreviewModal,
+    t,
+  ]);
+
+  const handlePushToComputation = useCallback(
+    (id: number) => {
+      showDemandPushPreview(id);
+    },
+    [showDemandPushPreview],
+  );
 
   const handleWithdrawFromComputation = async (id: number) => {
     Modal.confirm({
@@ -1100,37 +1153,6 @@ const DemandManagementPage: React.FC = () => {
           }}
           enableRowSelection={true}
           onRowSelectionChange={setSelectedRowKeys}
-          toolBarActionsAfterBatch={[
-            <UniCapabilityBatchButton
-              key="demand-merge-computation"
-              selectedRowKeys={selectedRowKeys}
-              selectedRecords={selectedDemandsForBatch}
-              capabilityKey="merge_computation"
-              permAllowed={computationPerms.canCreate}
-              batchAllowed={(recs, perm) => demandBatchMergeComputationAllowed(recs, perm)}
-              onRunBulk={handleMergeComputationBulk}
-              requireConfirm
-              labels={{
-                single: t('app.kuaizhizao.demandManagement.mergeComputation'),
-                batch: t('app.kuaizhizao.demandManagement.mergeComputation'),
-                batchConfirmTitle: () => t('app.kuaizhizao.demandManagement.mergeTitle'),
-                batchConfirmDescription: (count) => t('app.kuaizhizao.demandManagement.mergeConfirm', { count }),
-              }}
-              icon={<MergeCellsOutlined />}
-              size="middle"
-              onSuccess={() => {
-                setSelectedRowKeys([]);
-                messageApi.success(t('app.kuaizhizao.demandManagement.mergeCreated'));
-              }}
-              notAllowedMessage={t('app.kuaizhizao.demandManagement.mergeSelectFirst')}
-            />,
-            <Tooltip {...rowActionKind('skip')}
-              key="merge-computation-tip"
-              title={t('app.kuaizhizao.demandManagement.mergeComputationTooltip')}
-            >
-              <QuestionCircleOutlined style={{ color: 'var(--ant-color-text-tertiary)' }} />
-            </Tooltip>,
-          ]}
         />
       </ListPageTemplate>
 
@@ -1745,6 +1767,87 @@ const DemandManagementPage: React.FC = () => {
           </div>
         )}
       </DetailDrawerTemplate>
+
+      <Modal
+        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
+        open={pushPreviewOpen}
+        width={1100}
+        onCancel={resetPushPreviewModal}
+        okText={t('app.kuaizhizao.salesOrder.confirmPush')}
+        cancelText={t('common.cancel')}
+        confirmLoading={pushPreviewConfirming}
+        onOk={handlePushPreviewConfirm}
+        okButtonProps={{ disabled: pushPreviewLoading || !pushPreviewData || !!pushPreviewData?.has_blocking_issues }}
+      >
+        {pushPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+          </div>
+        ) : pushPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushPreviewData.summary}</p>
+            {pushPreviewData.has_blocking_issues ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={
+                  demandPushCapabilityReasonMessage(pushPreviewData.blocking_reason, t) ||
+                  t('app.kuaizhizao.demandManagement.pushBlockedStatus')
+                }
+              />
+            ) : null}
+            {pushPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pushPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 960 }}
+                columns={[
+                  {
+                    title: t('common.select'),
+                    dataIndex: 'item_id',
+                    width: 64,
+                    render: (_: unknown, row) => {
+                      const itemId = Number(row.item_id);
+                      const maxQty = Number(row.max_push_quantity ?? 0);
+                      const disabled = !Number.isFinite(maxQty) || maxQty <= 0 || !!pushPreviewData.has_blocking_issues;
+                      const selectionLocked = true;
+                      return (
+                        <Switch
+                          size="small"
+                          disabled={disabled || selectionLocked}
+                          checked={pushSelectedItemIds.includes(itemId)}
+                        />
+                      );
+                    },
+                  },
+                  { title: t('app.kuaizhizao.quotation.colMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+                  { title: t('app.kuaizhizao.quotation.colMaterialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
+                  { title: t('app.kuaizhizao.demandComputation.colRequiredQty'), dataIndex: 'quantity', width: 88, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 88, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 88, align: 'right' },
+                  {
+                    title: t('app.kuaizhizao.quotation.colDeliveryDate'),
+                    dataIndex: 'delivery_date',
+                    width: 112,
+                    render: (v: string) => (v ? v.slice(0, 10) : '-'),
+                  },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.demandManagement.pushPreviewNoLines')} />
+            )}
+            {pushPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                {pushPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
     </>
   );
 };
