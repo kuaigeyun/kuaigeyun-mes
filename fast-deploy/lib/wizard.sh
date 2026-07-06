@@ -15,9 +15,12 @@ WIZARD_RED=''
 WIZARD_BLUE=''
 WIZARD_PANEL_BORDER=''
 
-# KUAIGE LOGO 宽 48；主面板仅横线分隔（无左右竖框，避免 CJK 错位）
-WIZARD_PANEL_W=48
+# KUAIGE LOGO 宽 48；主面板宽度按 CJK 双宽字符对齐（横线不少于正文显示宽度）
+WIZARD_PANEL_W=120
 WIZARD_LOGO_W=48
+
+WIZARD_OFFICIAL_REPO_GITEE='https://gitee.com/kuaigeyun/kuaigeyun'
+WIZARD_OFFICIAL_REPO_GITHUB='https://github.com/kuaigeyun/kuaigeyun'
 
 wizard_supports_truecolor() {
     case "${COLORTERM:-}" in
@@ -140,6 +143,12 @@ wizard_print_kuaige_header() {
     wizard_print_kuaige_logo
     echo ""
     wizard_logo_print_caption "RiverEdge · Intelligent Deploy Console"
+}
+
+wizard_show_official_repo_notice() {
+    wizard_panel_line "${WIZARD_BOLD}${WIZARD_CYAN}OFFICIAL 正版仓库${WIZARD_RESET}  ${WIZARD_DIM}Gitee${WIZARD_RESET}  ${WIZARD_OFFICIAL_REPO_GITEE}  ${WIZARD_DIM}GitHub${WIZARD_RESET}  ${WIZARD_OFFICIAL_REPO_GITHUB}"
+    wizard_panel_line "${WIZARD_BOLD}${WIZARD_CYAN}NOTICE 渠道警示${WIZARD_RESET}  ${WIZARD_DIM}非上述官方仓库来源的分发、收费推广或所谓「官方授权版」，均与快格云制造无关联，请自行甄别。${WIZARD_RESET}"
+    wizard_panel_mid
 }
 
 wizard_panel_repeat() {
@@ -327,17 +336,14 @@ wizard_show_home_panel() {
 
     wizard_panel_begin
     wizard_panel_top
+    wizard_show_official_repo_notice
 
     wizard_panel_heading "SYSTEM 系统"
-    wizard_panel_kv "Host" "${os_label} · ${arch}"
-    wizard_panel_line "${WIZARD_DIM}Memory${WIZARD_RESET}  ${WIZARD_HOME_MEM:-—}  ${WIZARD_DIM}Disk${WIZARD_RESET}  ${WIZARD_HOME_DISK:-—}"
-    wizard_panel_kv "Mode" "${mode_label} · ${mirror_label}"
-    wizard_panel_kv "Git" "${WIZARD_HOME_GIT:-—}"
+    wizard_panel_line "${WIZARD_DIM}Host${WIZARD_RESET}  ${os_label} · ${arch}  ${WIZARD_DIM}Mode${WIZARD_RESET}  ${mode_label} · ${mirror_label}"
+    wizard_panel_line "${WIZARD_DIM}Memory${WIZARD_RESET}  ${WIZARD_HOME_MEM:-—}  ${WIZARD_DIM}Disk${WIZARD_RESET}  ${WIZARD_HOME_DISK:-—}  ${WIZARD_DIM}Git${WIZARD_RESET}  ${WIZARD_HOME_GIT:-—}"
 
-    wizard_panel_blank
     wizard_panel_heading "SERVICES 服务"
-    wizard_panel_kv "Web" "${WIZARD_ACCESS_WEB:-—}"
-    wizard_panel_kv "Platform" "${WIZARD_ACCESS_PLATFORM:-—}"
+    wizard_panel_line "${WIZARD_DIM}用户登录${WIZARD_RESET}  ${WIZARD_ACCESS_WEB:-—}  ${WIZARD_DIM}平台超管登录${WIZARD_RESET}  ${WIZARD_ACCESS_PLATFORM:-—}"
     svc_line="$(wizard_service_badge backend) $(wizard_service_badge worker)"
     if [ "$DEPLOY_MODE" = "dev" ]; then
         svc_line="${svc_line} $(wizard_service_badge frontend)"
@@ -350,11 +356,9 @@ wizard_show_home_panel() {
     wizard_panel_section "DEPLOY 部署"
     wizard_panel_menu_item "1" "全新安装" "检测环境与依赖，完成配置后启动"
     wizard_panel_menu_item "2" "修改配置" "修改数据库、超管账号与访问地址"
-    wizard_panel_menu_item "3" "更新系统" "fetch+reset 对齐远程，迁移并重启（无需手动 git pull）"
-    wizard_panel_blank
+    wizard_panel_menu_item "3" "更新系统" "fetch+reset 对齐远程，迁移并重启"
     wizard_panel_section "OPS 运维"
-    wizard_panel_menu_short "${WIZARD_CYAN}[4]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[5]${WIZARD_RESET} 启动  ${WIZARD_CYAN}[6]${WIZARD_RESET} 停止  ${WIZARD_CYAN}[7]${WIZARD_RESET} 重启"
-    wizard_panel_menu_short "${WIZARD_CYAN}[8]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[9]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
+    wizard_panel_menu_short "${WIZARD_CYAN}[4]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[5]${WIZARD_RESET} 启动  ${WIZARD_CYAN}[6]${WIZARD_RESET} 停止  ${WIZARD_CYAN}[7]${WIZARD_RESET} 重启  ${WIZARD_CYAN}[8]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[9]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
     wizard_panel_bot
     echo ""
 }
