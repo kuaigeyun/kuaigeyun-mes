@@ -139,7 +139,7 @@ class ShiftSchedulingService:
         return await ShiftSchedulingService._member_employee_ids(tenant_id, roster.work_group_id)
 
     @staticmethod
-    async def _roster_lookup_filter(
+    def _roster_lookup_filter(
         tenant_id: int,
         *,
         scope_type: str,
@@ -208,7 +208,7 @@ class ShiftSchedulingService:
     @staticmethod
     async def create_roster(tenant_id: int, data: ShiftRosterCreate) -> ShiftRosterResponse:
         period_start, period_end = week_bounds(data.period_start)
-        existing_q = await ShiftSchedulingService._roster_lookup_filter(
+        existing_q = ShiftSchedulingService._roster_lookup_filter(
             tenant_id,
             scope_type=data.scope_type,
             period_start=period_start,
@@ -302,13 +302,14 @@ class ShiftSchedulingService:
 
         scope_type = "employee" if employee_id else "work_group"
         ps, _ = week_bounds(period_start)
-        roster = await ShiftSchedulingService._roster_lookup_filter(
+        roster_q = ShiftSchedulingService._roster_lookup_filter(
             tenant_id,
             scope_type=scope_type,
             period_start=ps,
             work_group_id=work_group_id,
             employee_id=employee_id,
-        ).first()
+        )
+        roster = await roster_q.first()
         if roster:
             return await ShiftSchedulingService._roster_to_response(
                 roster, include_assignments=True

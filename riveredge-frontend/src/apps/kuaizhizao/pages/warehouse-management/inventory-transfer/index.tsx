@@ -480,7 +480,7 @@ const InventoryTransferPage: React.FC = () => {
       dataIndex: 'total_amount',
       width: 120,
       align: 'right',
-      render: (_, record) => `¥${record.total_amount?.toFixed(2) || '0.00'}`,
+      render: (_, record) => `¥${Number(record.total_amount ?? 0).toFixed(2)}`,
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
@@ -1115,7 +1115,7 @@ const InventoryTransferPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.inventoryTransfer.colTotalAmount'),
             dataIndex: 'total_amount',
-            render: (dom: React.ReactNode, entity: InventoryTransfer) => `¥${entity.total_amount?.toFixed(2) || '0.00'}`,
+            render: (dom: React.ReactNode, entity: InventoryTransfer) => `¥${Number(entity.total_amount ?? 0).toFixed(2)}`,
           },
           {
             title: t('app.kuaizhizao.inventoryTransfer.formTransferReason'),
@@ -1166,14 +1166,14 @@ const InventoryTransferPage: React.FC = () => {
                   dataIndex: 'unit_price',
                   width: 100,
                   align: 'right',
-                  render: (value: number) => `¥${value?.toFixed(2) || '0.00'}`,
+                  render: (value: number | string) => `¥${Number(value ?? 0).toFixed(2)}`,
                 },
                 {
                   title: t('app.kuaizhizao.warehouseCommon.colAmount'),
                   dataIndex: 'amount',
                   width: 100,
                   align: 'right',
-                  render: (value: number) => `¥${value?.toFixed(2) || '0.00'}`,
+                  render: (value: number | string) => `¥${Number(value ?? 0).toFixed(2)}`,
                 },
                 {
                   title: t('app.kuaizhizao.warehouseReports.colBatchNo'),

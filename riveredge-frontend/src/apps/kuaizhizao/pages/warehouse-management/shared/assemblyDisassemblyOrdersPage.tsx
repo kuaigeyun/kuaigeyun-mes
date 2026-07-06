@@ -22,6 +22,7 @@ import {
   WAREHOUSE_DETAIL_TABLE_STYLES,
 } from '../../../../../components/layout-templates';
 import type { LifecycleResult } from '../../../../../components/uni-lifecycle/types';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import type { LifecycleTranslateFn } from '../../../utils/lifecycleI18n';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
