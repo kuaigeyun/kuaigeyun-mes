@@ -14,8 +14,6 @@ import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { getLineSideInventoryLifecycle } from '../../../utils/lineSideInventoryLifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 
 interface LineSideWarehouse {
@@ -127,27 +125,6 @@ const LineSideWarehousePage: React.FC = () => {
         dataIndex: 'work_order_code',
         width: 120,
         render: (_, record) => record.work_order_code || '-',
-      },
-      {
-        title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
-        dataIndex: 'lifecycle_stage',
-        fixed: 'right',
-        align: 'left',
-        hideInSearch: true,
-        render: (_, record) => {
-          const lifecycle = getLineSideInventoryLifecycle(record as unknown as Record<string, unknown>, t);
-          return (
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          );
-        },
       },
     ],
     [t]

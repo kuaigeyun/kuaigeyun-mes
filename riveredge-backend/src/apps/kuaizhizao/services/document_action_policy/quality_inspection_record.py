@@ -31,6 +31,9 @@ def derive_quality_inspection_capabilities(
     inspection: Any,
     *,
     supports_purchase_return: bool = False,
+    supports_push_rework: bool = False,
+    pushed_purchase_return_quantity: float = 0.0,
+    pushed_rework_quantity: float = 0.0,
 ) -> QualityInspectionCapabilities:
     status = _norm(getattr(inspection, "status", None))
     review_status = _norm(getattr(inspection, "review_status", None))
@@ -61,11 +64,18 @@ def derive_quality_inspection_capabilities(
         "quality_inspection.create_defect.not_allowed" if not defect_allowed else None,
     )
 
-    push_return_allowed = supports_purchase_return and defect_allowed
-    push_return_cap = _cap(
-        push_return_allowed,
-        "quality_inspection.push_purchase_return.not_allowed" if not push_return_allowed else None,
-    )
+    push_return_cap = _cap(False, "quality_inspection.push_purchase_return.not_allowed")
+    if supports_purchase_return:
+        pushed_return_qty = max(0.0, float(pushed_purchase_return_quantity or 0))
+        max_push_return = max(0.0, unqualified_qty - pushed_return_qty)
+        if defect_allowed and max_push_return > 0:
+            push_return_cap = _cap(True)
+        elif defect_allowed and max_push_return <= 0:
+            push_return_cap = _cap(False, "quality_inspection.push_purchase_return.already_pushed")
+        elif unqualified_qty <= 0:
+            push_return_cap = _cap(False, "quality_inspection.push_purchase_return.not_allowed")
+        else:
+            push_return_cap = _cap(False, "quality_inspection.push_purchase_return.not_allowed")
 
     update_cap = _cap(
         status == "待检验",
@@ -74,12 +84,26 @@ def derive_quality_inspection_capabilities(
 
     print_cap = _cap(True)
 
+    push_rework_cap = _cap(False, "finished_goods_inspection.push_rework.not_allowed")
+    if supports_push_rework:
+        pushed_qty = max(0.0, float(pushed_rework_quantity or 0))
+        max_push = max(0.0, unqualified_qty - pushed_qty)
+        if defect_allowed and max_push > 0:
+            push_rework_cap = _cap(True)
+        elif defect_allowed and max_push <= 0:
+            push_rework_cap = _cap(False, "finished_goods_inspection.push_rework.already_pushed")
+        elif unqualified_qty <= 0:
+            push_rework_cap = _cap(False, "finished_goods_inspection.push_rework.no_unqualified")
+        else:
+            push_rework_cap = _cap(False, "finished_goods_inspection.push_rework.not_allowed")
+
     return QualityInspectionCapabilities(
         conduct=conduct_cap,
         approve=approve_cap,
         reject=reject_cap,
         create_defect=create_defect_cap,
         push_purchase_return=push_return_cap,
+        push_rework=push_rework_cap,
         update=update_cap,
         print=print_cap,
     )
@@ -90,10 +114,16 @@ def assert_quality_inspection_capability(
     action: str,
     *,
     supports_purchase_return: bool = False,
+    supports_push_rework: bool = False,
+    pushed_purchase_return_quantity: float = 0.0,
+    pushed_rework_quantity: float = 0.0,
 ) -> None:
     caps = derive_quality_inspection_capabilities(
         inspection,
         supports_purchase_return=supports_purchase_return,
+        supports_push_rework=supports_push_rework,
+        pushed_purchase_return_quantity=pushed_purchase_return_quantity,
+        pushed_rework_quantity=pushed_rework_quantity,
     )
     cap_map = {
         "conduct": caps.conduct,
@@ -101,6 +131,7 @@ def assert_quality_inspection_capability(
         "reject": caps.reject,
         "create_defect": caps.create_defect,
         "push_purchase_return": caps.push_purchase_return,
+        "push_rework": caps.push_rework,
         "update": caps.update,
         "print": caps.print,
     }

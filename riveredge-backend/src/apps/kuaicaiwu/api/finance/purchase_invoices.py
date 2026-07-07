@@ -3,14 +3,16 @@
 """
 
 import uuid
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from decimal import Decimal
+from typing import Optional, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
 from loguru import logger
 
 from apps.kuaicaiwu.schemas.finance import (
     PurchaseInvoiceCreate, PurchaseInvoiceUpdate, PurchaseInvoiceResponse, PurchaseInvoiceListResponse,
 )
 from apps.kuaicaiwu.services.finance_service import PurchaseInvoiceService
+from apps.kuaicaiwu.services.purchase_invoice_pull_service import PurchaseInvoicePullService
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
@@ -20,6 +22,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 router = APIRouter(prefix="/purchase-invoices", tags=["App · Kuaicaiwu · Finance"])
 
 invoice_service = PurchaseInvoiceService()
+purchase_invoice_pull_service = PurchaseInvoicePullService()
 
 
 def _http_exception_with_trace(
@@ -51,10 +54,50 @@ async def create_purchase_invoice(
     tenant_id: int = Depends(get_current_tenant)
 ):
     try:
-        invoice = await invoice_service.create_purchase_invoice(tenant_id, data, current_user.id)
-        return PurchaseInvoiceResponse.model_validate(invoice)
+        pull_preview: Optional[Dict[str, Any]] = None
+        if data.source_type and data.source_id:
+            pull_preview = await purchase_invoice_pull_service.assert_pull_create_allowed(
+                tenant_id=tenant_id,
+                source_type=str(data.source_type).strip(),
+                source_id=int(data.source_id),
+                total_amount=Decimal(data.total_amount),
+            )
+            if pull_preview:
+                po_id = pull_preview.get("purchase_order_id")
+                po_code = pull_preview.get("purchase_order_code")
+                if po_id and not data.purchase_order_id:
+                    data = data.model_copy(
+                        update={
+                            "purchase_order_id": int(po_id),
+                            "purchase_order_code": str(po_code or data.purchase_order_code or ""),
+                            "supplier_id": int(pull_preview.get("supplier_id") or data.supplier_id),
+                            "supplier_name": str(
+                                pull_preview.get("supplier_name") or data.supplier_name or ""
+                            ),
+                        }
+                    )
+
+        invoice = await invoice_service.create_purchase_invoice(
+            tenant_id,
+            data,
+            current_user.id,
+            skip_legacy_amount_gate=bool(pull_preview),
+        )
+        if pull_preview and data.source_type and data.source_id:
+            await purchase_invoice_pull_service.create_pull_relation(
+                tenant_id=tenant_id,
+                source_type=str(data.source_type).strip(),
+                source_id=int(data.source_id),
+                source_code=str(pull_preview.get("source_code") or ""),
+                invoice_id=int(invoice.id),
+                invoice_code=str(invoice.invoice_code),
+                created_by=current_user.id,
+            )
+        return invoice
     except ValidationError as e:
-        raise _http_exception_with_trace(422, str(e), "/purchase-invoices", tenant_id)
+        raise _http_exception_with_trace(422, str(e), "/purchase-invoices", tenant_id) from e
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(422, str(e), "/purchase-invoices", tenant_id) from e
 
 
 @router.get("", response_model=PurchaseInvoiceListResponse)
@@ -76,6 +119,74 @@ async def list_purchase_invoices(
         total=len(invoices),
         skip=skip,
         limit=limit
+    )
+
+
+@router.get(
+    "/pull-candidates/purchase-orders",
+    summary="List purchase order pull candidates for purchase invoice",
+)
+async def list_purchase_invoice_purchase_order_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await purchase_invoice_pull_service.list_purchase_order_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/pull-candidates/purchase-receipts",
+    summary="List purchase receipt pull candidates for purchase invoice",
+)
+async def list_purchase_invoice_purchase_receipt_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await purchase_invoice_pull_service.list_purchase_receipt_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/from-purchase-order/{order_id}/pull-preview",
+    summary="Preview pull purchase invoice from purchase order",
+)
+async def preview_pull_purchase_invoice_from_purchase_order(
+    order_id: int = Path(..., description="采购订单ID"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await purchase_invoice_pull_service.preview_pull_from_purchase_order(
+        tenant_id=tenant_id,
+        order_id=order_id,
+    )
+
+
+@router.get(
+    "/from-purchase-receipt/{receipt_id}/pull-preview",
+    summary="Preview pull purchase invoice from purchase receipt",
+)
+async def preview_pull_purchase_invoice_from_purchase_receipt(
+    receipt_id: int = Path(..., description="采购入库单ID"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await purchase_invoice_pull_service.preview_pull_from_purchase_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
     )
 
 

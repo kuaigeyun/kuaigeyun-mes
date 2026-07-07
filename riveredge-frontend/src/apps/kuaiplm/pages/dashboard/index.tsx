@@ -49,9 +49,9 @@ import {
 
   ModuleActionPanel,
 
-  ModuleChartPanel,
+  ModuleActionMasonry,
 
-  ModuleChartRow,
+  ModuleChartPanel,
 
 } from '../../../kuaizhizao/components/module-center';
 
@@ -125,6 +125,11 @@ const KuaiplmDashboard: React.FC = () => {
   }, [data?.project_gantt]);
 
   const myTasks = useMemo(() => (data?.my_tasks ?? []).slice(0, 6), [data?.my_tasks]);
+
+  const gateReviewTasks = useMemo(
+    () => (data?.my_tasks ?? []).filter((task) => task.gate_name).slice(0, 6),
+    [data?.my_tasks],
+  );
 
   const activeProjects = useMemo(() => {
     const items = data?.recent_projects ?? [];
@@ -344,15 +349,36 @@ const KuaiplmDashboard: React.FC = () => {
 
       }
 
+      fullWidthRow={
+        <ModuleChartPanel
+          title={
+            <span>
+              <ExperimentOutlined style={{ marginRight: 8 }} />
+              {t('app.kuaiplm.dashboard.chart.ganttTitle')}
+            </span>
+          }
+          extra={
+            <a onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
+              {t('app.kuaiplm.common.actions.manageProjects')}
+            </a>
+          }
+          loading={isLoading}
+          fitContent
+          layout="standalone"
+        >
+          <RdProjectGanttChart items={data?.project_gantt ?? []} />
+        </ModuleChartPanel>
+      }
+
       actionRow={
 
-        <>
+        <ModuleActionMasonry>
 
           <ModuleActionPanel
 
-            title={t('app.kuaiplm.dashboard.panel.activeProjects')}
+            layout="masonry"
 
-            lg={8}
+            title={t('app.kuaiplm.dashboard.panel.activeProjects')}
 
             loading={isLoading}
 
@@ -456,9 +482,9 @@ const KuaiplmDashboard: React.FC = () => {
 
           <ModuleActionPanel
 
-            title={t('app.kuaiplm.dashboard.panel.pendingChanges')}
+            layout="masonry"
 
-            lg={8}
+            title={t('app.kuaiplm.dashboard.panel.pendingChanges')}
 
             loading={changesLoading}
 
@@ -543,8 +569,8 @@ const KuaiplmDashboard: React.FC = () => {
           </ModuleActionPanel>
 
           <ModuleActionPanel
+            layout="masonry"
             title={t('app.kuaiplm.dashboard.panel.myTasks')}
-            lg={8}
             loading={isLoading}
             extra={
               <a onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
@@ -602,54 +628,53 @@ const KuaiplmDashboard: React.FC = () => {
               ]}
             />
           </ModuleActionPanel>
-        </>
 
-      }
-
-      chartRow={
-
-        <ModuleChartRow>
-
-          <ModuleChartPanel
-
-            title={
-
-              <span>
-
-                <ExperimentOutlined style={{ marginRight: 8 }} />
-
-                {t('app.kuaiplm.dashboard.chart.ganttTitle')}
-
-              </span>
-
-            }
-
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaiplm.dashboard.panel.pendingGateReviews')}
+            loading={isLoading}
             extra={
-              <a onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
-                {t('app.kuaiplm.common.actions.manageProjects')}
+              <a onClick={() => navigate('/apps/kuaiplm/phase2/design-reviews')}>
+                {t('app.kuaiplm.common.actions.viewAll')}
               </a>
             }
-
-            loading={isLoading}
-
-            height={560}
-
-            lg={24}
-
           >
-
-            <RdProjectGanttChart items={data?.project_gantt ?? []} />
-
-          </ModuleChartPanel>
-
-        </ModuleChartRow>
-
+            <Table
+              size="small"
+              dataSource={gateReviewTasks}
+              pagination={false}
+              rowKey="id"
+              locale={{ emptyText: t('app.kuaiplm.dashboard.empty.pendingGateReviews') }}
+              columns={[
+                {
+                  title: t('app.kuaiplm.common.columns.project'),
+                  dataIndex: 'project_code',
+                  ellipsis: true,
+                  render: (code, record: MyTaskItem) => (
+                    <a onClick={() => navigate(`/apps/kuaiplm/rd-projects/detail/${record.project_id}`)}>
+                      {code || record.project_name || '—'}
+                    </a>
+                  ),
+                },
+                {
+                  title: t('app.kuaiplm.common.columns.gate'),
+                  dataIndex: 'gate_name',
+                  width: 88,
+                  ellipsis: true,
+                },
+                {
+                  title: t('app.kuaiplm.common.columns.dueDate'),
+                  dataIndex: 'due_date',
+                  width: 72,
+                  render: (val) => (val ? formatDateTime(val, 'MM-DD') : '—'),
+                },
+              ]}
+            />
+          </ModuleActionPanel>
+        </ModuleActionMasonry>
       }
-
     />
-
   );
-
 };
 
 

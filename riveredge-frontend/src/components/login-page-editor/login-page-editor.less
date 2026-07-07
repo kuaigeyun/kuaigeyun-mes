@@ -1,3 +1,22 @@
+.login-rich-text-editor-label-row {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+
+  &.login-rich-text-editor-label-row--spread {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    margin-bottom: 8px;
+  }
+}
+
+.login-rich-text-editor-label-text {
+  font-weight: 600;
+}
+
 .login-page-editor-split {
   display: flex;
   align-items: stretch;
@@ -165,6 +184,40 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 13px;
     border-radius: var(--ant-border-radius, var(--ant-borderRadius, 6px));
+  }
+}
+
+[data-theme='dark'] {
+  .login-rich-text-editor {
+    .login-rich-text-editor-visual {
+      .ql-toolbar {
+        .ql-stroke {
+          stroke: var(--ant-color-text-secondary, rgba(255, 255, 255, 0.65));
+        }
+
+        .ql-fill {
+          fill: var(--ant-color-text-secondary, rgba(255, 255, 255, 0.65));
+        }
+
+        .ql-picker-label,
+        .ql-picker-item {
+          color: var(--ant-color-text, rgba(255, 255, 255, 0.85));
+        }
+      }
+
+      .ql-container {
+        background: var(--ant-color-bg-container, #141414);
+        color: var(--ant-color-text, rgba(255, 255, 255, 0.85));
+      }
+
+      .ql-editor {
+        color: var(--ant-color-text, rgba(255, 255, 255, 0.85));
+
+        &.ql-blank::before {
+          color: var(--ant-color-text-tertiary, rgba(255, 255, 255, 0.45));
+        }
+      }
+    }
   }
 }
 

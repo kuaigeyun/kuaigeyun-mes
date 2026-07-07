@@ -12,6 +12,7 @@ import {
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import dayjs from 'dayjs';
 import { mesDashboardService } from '../../../services/dashboard';
 import { listPurchaseOrders } from '../../../services/purchase';
 import { listPurchaseRequisitions } from '../../../services/purchase-requisition';
@@ -19,23 +20,25 @@ import { getPurchaseTop10 } from '../../../../../services/dashboard';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_PURCHASE_ORDER_FIELD_RESOURCE as PO } from '../../../constants/fieldPermissionResources';
 import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
+import { formatDateTime } from '../../../../../utils/format';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
   ModuleShortcutGrid,
   ModuleActionPanel,
+  ModuleActionMasonry,
   ModuleTodoList,
   ModuleChartPanel,
-  ModuleChartRow,
+  ModuleTrendLine,
 } from '../../../components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 
 const { Text } = Typography;
 
-const PurchaseTrendLine = lazy(async () => {
-  const { Line } = await import('@ant-design/charts');
-  return { default: (props: React.ComponentProps<typeof Line>) => <Line {...props} /> };
-});
+const PENDING_RECEIPT_STATUS = new Set([
+  'approved', 'partial_received', '已审核', '部分收货',
+  'APPROVED', 'AUDITED', 'CONFIRMED', 'RELEASED', 'IN_PROGRESS',
+]);
 
 const PurchaseTopColumn = lazy(async () => {
   const { Column } = await import('@ant-design/charts');
@@ -56,7 +59,7 @@ const PurchaseDashboard: React.FC = () => {
     'kz:purchase-dashboard:todos',
   );
   const { data: recentOrdersData, loading: ordersLoading } = useDashboardRequest(
-    () => listPurchaseOrders({ limit: 8 }),
+    () => listPurchaseOrders({ limit: 30 }),
     'kz:purchase-dashboard:recent-orders',
   );
   const { data: recentRequisitionsData, loading: requisitionsLoading } = useDashboardRequest(
@@ -76,6 +79,23 @@ const PurchaseDashboard: React.FC = () => {
   const recentOrders = recentOrdersData?.data || [];
   const recentRequisitions = recentRequisitionsData?.data || [];
   const todos = todosData?.items || [];
+
+  const pendingReceiptOrders = useMemo(
+    () =>
+      recentOrders.filter((r: { status?: string }) =>
+        PENDING_RECEIPT_STATUS.has(String(r.status ?? '')),
+      ),
+    [recentOrders],
+  );
+
+  const overdueReceiptOrders = useMemo(
+    () =>
+      pendingReceiptOrders.filter(
+        (r: { delivery_date?: string | null }) =>
+          r.delivery_date && dayjs(r.delivery_date).isBefore(dayjs(), 'day'),
+      ),
+    [pendingReceiptOrders],
+  );
 
   const kpis: ModuleKpiDef[] = useMemo(
     () => [
@@ -178,6 +198,25 @@ const PurchaseDashboard: React.FC = () => {
     [navigate, t],
   );
 
+  const overdueColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.purchaseDashboard.colOrderCode'),
+        dataIndex: 'order_code',
+        render: (text: string, record: { id: number }) => (
+          <a onClick={() => navigate(`/apps/kuaizhizao/purchase-management/purchase-orders/${record.id}`)}>{text}</a>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseDashboard.colDeliveryDate'),
+        dataIndex: 'delivery_date',
+        width: 96,
+        render: (date: string) => formatDateTime(date, 'MM-DD'),
+      },
+    ],
+    [navigate, t],
+  );
+
   const trendChartData = useMemo(() => {
     const items = trendData?.items || [];
     return items.map((it) => ({
@@ -205,18 +244,18 @@ const PurchaseDashboard: React.FC = () => {
         />
       }
       actionRow={
-        <>
+        <ModuleActionMasonry>
           <ModuleActionPanel
+            layout="masonry"
             title={t('app.kuaizhizao.purchaseDashboard.todosTitle')}
-            lg={8}
             loading={todosLoading}
             extra={<a onClick={() => navigate('/apps/kuaizhizao/purchase-management/purchase-requisitions')}>{t('app.kuaizhizao.purchaseDashboard.viewAll')}</a>}
           >
             <ModuleTodoList items={todos} emptyText={t('app.kuaizhizao.purchaseDashboard.noTodos')} />
           </ModuleActionPanel>
           <ModuleActionPanel
+            layout="masonry"
             title={t('app.kuaizhizao.purchaseDashboard.pendingRequisitionsTitle')}
-            lg={8}
             loading={requisitionsLoading}
             extra={<a onClick={() => navigate('/apps/kuaizhizao/purchase-management/purchase-requisitions')}>{t('app.kuaizhizao.purchaseDashboard.all')}</a>}
           >
@@ -228,35 +267,41 @@ const PurchaseDashboard: React.FC = () => {
               pagination={false}
               rowKey="id"
               columns={requisitionColumns}
+              locale={{ emptyText: t('app.kuaizhizao.purchaseDashboard.noPendingRequisitions') }}
             />
           </ModuleActionPanel>
           <ModuleActionPanel
+            layout="masonry"
             title={t('app.kuaizhizao.purchaseDashboard.pendingOrdersTitle')}
-            lg={8}
             loading={ordersLoading}
             extra={<a onClick={() => navigate('/apps/kuaizhizao/purchase-management/purchase-orders')}>{t('app.kuaizhizao.purchaseDashboard.all')}</a>}
           >
             <Table
               size="small"
-              dataSource={recentOrders
-                .filter((r: { status?: string }) => {
-                  const st = String(r.status ?? '');
-                  return [
-                    'approved', 'partial_received', '已审核', '部分收货',
-                    'APPROVED', 'AUDITED', 'CONFIRMED', 'RELEASED', 'IN_PROGRESS',
-                  ].includes(st);
-                })
-                .slice(0, 6)}
+              dataSource={pendingReceiptOrders.slice(0, 6)}
               pagination={false}
               rowKey="id"
               columns={orderColumns}
+              locale={{ emptyText: t('app.kuaizhizao.purchaseDashboard.noPendingOrders') }}
             />
           </ModuleActionPanel>
-        </>
-      }
-      chartRow={
-        <ModuleChartRow>
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.purchaseDashboard.overdueReceiptsTitle')}
+            loading={ordersLoading}
+            extra={<a onClick={() => navigate('/apps/kuaizhizao/purchase-management/purchase-orders?status=approved')}>{t('app.kuaizhizao.purchaseDashboard.all')}</a>}
+          >
+            <Table
+              size="small"
+              dataSource={overdueReceiptOrders.slice(0, 6)}
+              pagination={false}
+              rowKey="id"
+              columns={overdueColumns}
+              locale={{ emptyText: t('app.kuaizhizao.purchaseDashboard.noOverdueReceipts') }}
+            />
+          </ModuleActionPanel>
           <ModuleChartPanel
+            layout="masonry"
             title={t('app.kuaizhizao.purchaseDashboard.trendTitle')}
             loading={trendLoading}
             segmented={{
@@ -268,18 +313,19 @@ const PurchaseDashboard: React.FC = () => {
               onChange: (v) => setTrendType(v as 'amount' | 'quantity'),
             }}
           >
-            <Suspense fallback={null}>
-              <PurchaseTrendLine
+            <ModuleTrendLine
                 data={trendChartData}
                 xField="date"
                 yField="value"
                 height={240}
-                smooth
                 axis={{ y: { title: false }, x: { title: false } }}
               />
-            </Suspense>
           </ModuleChartPanel>
-          <ModuleChartPanel title={t('app.kuaizhizao.purchaseDashboard.topMaterialsTitle')} loading={topLoading}>
+          <ModuleChartPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.purchaseDashboard.topMaterialsTitle')}
+            loading={topLoading}
+          >
             <Suspense fallback={null}>
               <PurchaseTopColumn
                 data={topChartData}
@@ -291,7 +337,7 @@ const PurchaseDashboard: React.FC = () => {
               />
             </Suspense>
           </ModuleChartPanel>
-        </ModuleChartRow>
+        </ModuleActionMasonry>
       }
     />
   );

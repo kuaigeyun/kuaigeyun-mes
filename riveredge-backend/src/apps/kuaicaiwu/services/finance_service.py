@@ -118,7 +118,10 @@ class PayableService(AppBaseService[Payable]):
                 tenant_id=tenant_id,
                 payable_code=code,
                 created_by=created_by,
-                **payable_data.model_dump(exclude_unset=True, exclude={'created_by'})
+                **payable_data.model_dump(
+                    exclude_unset=True,
+                    exclude={'created_by', 'pull_source_type', 'pull_source_id'},
+                )
             )
             await self.accounting_event_service.record_event(
                 tenant_id=tenant_id,
@@ -349,10 +352,18 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 f"发票价税合计 {requested_total} 超过可开票金额 {available_total}（按入库累计金额硬门禁）"
             )
 
-    async def create_purchase_invoice(self, tenant_id: int, invoice_data: PurchaseInvoiceCreate, created_by: int) -> PurchaseInvoiceResponse:
+    async def create_purchase_invoice(
+        self,
+        tenant_id: int,
+        invoice_data: PurchaseInvoiceCreate,
+        created_by: int,
+        *,
+        skip_legacy_amount_gate: bool = False,
+    ) -> PurchaseInvoiceResponse:
         """创建采购发票"""
         async with in_transaction():
-            await self._validate_purchase_invoice_amount_gate(tenant_id=tenant_id, invoice_data=invoice_data)
+            if not skip_legacy_amount_gate:
+                await self._validate_purchase_invoice_amount_gate(tenant_id=tenant_id, invoice_data=invoice_data)
             user_info = await self.get_user_info(created_by)
             today = datetime.now().strftime("%Y%m%d")
             code = await self.generate_code(tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today}")
@@ -361,7 +372,10 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 tenant_id=tenant_id,
                 invoice_code=code,
                 created_by=created_by,
-                **invoice_data.model_dump(exclude_unset=True, exclude={'created_by'})
+                **invoice_data.model_dump(
+                    exclude_unset=True,
+                    exclude={"created_by", "source_type", "source_id"},
+                ),
             )
             await self.accounting_event_service.record_event(
                 tenant_id=tenant_id,
@@ -577,7 +591,10 @@ class ReceivableService(AppBaseService[Receivable]):
                 tenant_id=tenant_id,
                 receivable_code=code,
                 created_by=created_by,
-                **receivable_data.model_dump(exclude_unset=True, exclude={'created_by'})
+                **receivable_data.model_dump(
+                    exclude_unset=True,
+                    exclude={'created_by', 'pull_source_type', 'pull_source_id'},
+                )
             )
             await self.accounting_event_service.record_event(
                 tenant_id=tenant_id,

@@ -7,7 +7,7 @@
  * @date 2026-01-06
  */
 
-import { api } from './api';
+import { api, apiRequest } from './api';
 
 /**
  * 平台设置接口定义
@@ -179,4 +179,106 @@ function getDefaultVersion(): PlatformVersion {
     git_latest_commit_time: '-',
     git_repo_url: 'https://gitee.com/kuaigeyun/kuaigeyun',
   };
+}
+
+/** 构建来源状态 */
+export type BuildProvenanceStatus =
+  | 'official_self_hosted'
+  | 'official_unknown_commit'
+  | 'unverified_commit'
+  | 'unverified_build'
+  | 'unknown';
+
+/** 构建来源与可选统计配置 */
+export interface BuildProvenance {
+  status: BuildProvenanceStatus;
+  git_commit: string;
+  build_time: string;
+  build_git_remote: string;
+  build_git_branch: string;
+  build_git_remote_is_official: boolean;
+  official_repos: string[];
+  official_site: string;
+  install_instance_id: string;
+  telemetry_enabled: boolean;
+  telemetry_disclosure_path: string;
+  registered: boolean;
+  registry_summary_admin_available?: boolean;
+}
+
+export interface InstallRegisterPayload {
+  install_instance_id: string;
+  git_commit?: string;
+  build_time?: string;
+  provenance_status?: string;
+  app_version?: string;
+  build_git_remote?: string;
+  build_git_branch?: string;
+  host_hint?: string;
+}
+
+export interface InstallRegisterResult {
+  registered: boolean;
+  reason?: string;
+  official_repos?: string[];
+  official_site?: string;
+  message?: string;
+}
+
+/**
+ * 获取构建来源信息（公开接口）
+ */
+export async function getBuildProvenance(): Promise<BuildProvenance | null> {
+  try {
+    const response = await fetch('/api/v1/infra/platform/provenance');
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 可选实例登记（公开接口，失败静默由调用方处理）
+ */
+export async function registerInstallInstance(
+  payload: InstallRegisterPayload
+): Promise<InstallRegisterResult | null> {
+  try {
+    const response = await fetch('/api/v1/infra/install/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+const OFFICIAL_REPO_BLOB_BASE = 'https://gitee.com/kuaigeyun/kuaigeyun/blob/develop';
+
+/** 遥测披露文档外链（仓库内 docs 路径） */
+export function getTelemetryDisclosureUrl(path = 'docs/telemetry-disclosure.md'): string {
+  return `${OFFICIAL_REPO_BLOB_BASE}/${path.replace(/^\//, '')}`;
+}
+
+export interface InstallRepoSummaryItem {
+  build_git_remote: string;
+  instance_count: number;
+  last_seen_at?: string | null;
+}
+
+export interface InstallRepoSummary {
+  non_official_remotes: InstallRepoSummaryItem[];
+  official_remote_count: number;
+  disclaimer: string;
+}
+
+/** 构建来源汇总（仅 kuaigeyun.com 官方 SaaS + 平台超管） */
+export async function getInstallRepoSummary(): Promise<InstallRepoSummary> {
+  return apiRequest<InstallRepoSummary>('/infra/install/repo-summary', {
+    method: 'GET',
+  });
 }

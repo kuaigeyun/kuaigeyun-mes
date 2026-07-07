@@ -51,6 +51,8 @@ export interface QuickEntryGridProps {
   title?: React.ReactNode;
   /** 是否为深色模式 */
   isDark?: boolean;
+  /** theme：灰底 + 主色图标（看板侧栏默认）；vivid：多彩渐变 */
+  iconVariant?: 'theme' | 'vivid';
 }
 
 /**
@@ -65,12 +67,14 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
   renderMenuIcon,
   title,
   isDark = false,
+  iconVariant = 'theme',
 }) => {
   const { t } = useTranslation();
   const { token } = useToken();
   const navigate = useNavigate();
   const themeStyle = useThemeStore((s) => s.resolved.themeStyle) as QuickEntryThemeStyle;
   const isPlain = themeStyle === 'plain';
+  const useThemeIconStyle = iconVariant === 'theme' || isPlain;
   const [configModalVisible, setConfigModalVisible] = useState(false);
   const [selectedMenuKeys, setSelectedMenuKeys] = useState<React.Key[]>([]);
 
@@ -225,11 +229,11 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
                     }
                   }}
                   gradient={
-                    isPlain
+                    useThemeIconStyle
                       ? generateQuickEntryGradient(index, isDark, 'plain')
                       : item.gradient || generateQuickEntryGradient(index, isDark, 'vivid')
                   }
-                  plain={isPlain}
+                  plain={useThemeIconStyle}
                   editable={configModalVisible}
                   onDelete={() => handleDeleteItem(item.menu_uuid)}
                   onContextDelete={() => handleDeleteByContextMenu(item)}

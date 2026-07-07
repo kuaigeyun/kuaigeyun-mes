@@ -47,6 +47,7 @@ import { Spin } from 'antd';
 const LazyRegisterDrawer = lazy(() => import('./RegisterDrawer'));
 import { theme } from 'antd';
 import { getPlatformSettingsPublic, type PlatformSettings } from '../../services/publicPlatformSettings';
+import { getBuildProvenance } from '../../services/platformSettings';
 import { getLoginClientDownloads } from '../../services/clientRelease';
 import { applyFavicon } from '../../utils/favicon';
 import { LoginDescriptionContent } from '../../components/login-page-editor';
@@ -206,6 +207,12 @@ export default function LoginPage() {
   const [isLoadingPlatformSettings, setIsLoadingPlatformSettings] = useState(
     () => readPlatformSettingsPublicCache(platformSettingsCacheKey) === null,
   );
+
+  const { data: buildProvenance } = useQuery({
+    queryKey: ['buildProvenancePublic'],
+    queryFn: getBuildProvenance,
+    staleTime: 10 * 60 * 1000,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -2226,12 +2233,12 @@ export default function LoginPage() {
             {t('pages.login.browserHintShort')}
           </p>
           <div className="login-footer-links">
-            <Space separator={<span style={{ color: '#d9d9d9' }}>|</span>} size="small">
+            <Space separator={<span className="login-footer-separator">|</span>} size="small" wrap={false}>
               {(platformSettings?.icp_license || platformSettings?.icp_license_en) && (
                 <Text type="secondary" style={{ fontSize: '11px' }}>
                   {t('pages.login.icpLicense')}
-                  {i18n.language === 'en-US' 
-                    ? (platformSettings.icp_license_en || platformSettings.icp_license) 
+                  {i18n.language === 'en-US'
+                    ? (platformSettings.icp_license_en || platformSettings.icp_license)
                     : platformSettings.icp_license}
                 </Text>
               )}
@@ -2257,6 +2264,11 @@ export default function LoginPage() {
               >
                 {t('pages.login.privacyTerms')}
               </Button>
+              {buildProvenance && (
+                <Text type="secondary" style={{ fontSize: '11px' }}>
+                  {t('pages.login.provenanceLabel')}: {t(`components.iterationFloatButton.provenanceStatus.${buildProvenance.status}`)}
+                </Text>
+              )}
             </Space>
           </div>
         </div>

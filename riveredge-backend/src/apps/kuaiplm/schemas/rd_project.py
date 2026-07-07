@@ -19,6 +19,7 @@ class RdProjectGateBase(BaseModel):
     gate_name: str
     sort_order: int = 0
     status: str = "PENDING"
+    milestone_role: Optional[str] = "none"
     planned_date: Optional[date] = None
     actual_date: Optional[date] = None
     reviewer_id: Optional[int] = None
@@ -169,6 +170,7 @@ class RdProjectCreate(BaseModel):
     project_name: str
     project_type: str = "RD"
     source_project_id: Optional[int] = None
+    gate_template_id: Optional[int] = None
     description: Optional[str] = None
     material_id: Optional[int] = None
     material_code: Optional[str] = None
@@ -212,6 +214,7 @@ class RdProjectResponse(BaseModel):
     project_type: str = "RD"
     source_project_id: Optional[int] = None
     source_project_code: Optional[str] = None
+    gate_template_id: Optional[int] = None
     material_id: Optional[int] = None
     material_code: Optional[str] = None
     material_name: Optional[str] = None

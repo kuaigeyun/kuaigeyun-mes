@@ -662,6 +662,9 @@ export const DEMAND_COMPUTATION_CAPABILITY_REASON_MESSAGES: Record<string, strin
   'demand_computation.push_purchase_requisition.not_completed': '只能下推已完成的需求计算',
   'demand_computation.push_purchase_requisition.already_pushed': '该需求计算已下推采购申请且仍存在，请勿重复下推',
   'demand_computation.push_purchase_requisition.no_purchase_items': '需求计算中无采购件，无法下推采购申请',
+  'demand_computation.push_work_order.no_pushable_items': '可下推明细均已占用，无可新建工单',
+  'demand_computation.push_work_order.no_production_items': '需求计算中无生产件可生成工单',
+  'demand_computation.push_purchase_order.no_purchase_items': '无已配置默认供应商的采购件，无法下推采购订单',
 };
 
 export const PURCHASE_REQUISITION_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
@@ -917,9 +920,14 @@ export function qualityInspectionCapabilityReasonMessage(
 ): string {
   if (!code) return '';
   if (t) {
-    const key = `app.kuaizhizao.quality.incomingInspection.capability.${code}`;
-    const translated = t(key);
-    if (translated !== key) return translated;
+    for (const prefix of [
+      'app.kuaizhizao.quality.incomingInspection.capability',
+      'app.kuaizhizao.quality.process.capability',
+    ]) {
+      const key = `${prefix}.${code}`;
+      const translated = t(key);
+      if (translated !== key) return translated;
+    }
   }
   return QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES[code] ?? code;
 }
@@ -1203,6 +1211,25 @@ export const QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES: Record<string, strin
   'quality_inspection.approve.not_pending': '检验单审核状态不是待审核',
   'quality_inspection.create_defect.not_allowed': '只有已检验且不合格的检验单才能登记不良',
   'quality_inspection.push_purchase_return.not_allowed': '只有不合格的来料检验单才能下推采购退货单',
+  'quality_inspection.push_purchase_return.already_pushed': '不合格数量已全部下推采购退货，删除待退货单后可再次下推',
+  'incoming_inspection.pull_from_purchase_receipt.not_allowed': '当前状态的采购入库单不可上拉来料检验',
+  'incoming_inspection.pull_from_purchase_receipt.no_lines': '采购入库单无需要来料检验的明细',
+  'incoming_inspection.pull_from_purchase_receipt.already_pulled': '相关物料均已存在来料检验单，删除后可再次上拉',
+  'incoming_inspection.pull_from_customer_material_registration.not_allowed': '当前状态的代工来料单不可上拉来料检验',
+  'incoming_inspection.pull_from_customer_material_registration.no_lines': '代工来料单无需要来料检验的明细',
+  'incoming_inspection.pull_from_customer_material_registration.already_pulled': '相关物料均已存在来料检验单，删除后可再次上拉',
+  'finished_goods_inspection.push_rework.not_allowed': '只有不合格的成品检验单才能下推返工单',
+  'finished_goods_inspection.push_rework.already_pushed': '不合格数量已全部下推返工单，删除未完成返工单后可再次下推',
+  'finished_goods_inspection.push_rework.no_unqualified': '不合格数量为 0，无需下推返工单',
+  'finished_goods_inspection.pull_from_work_order.not_allowed': '当前状态的工单不可上拉成品检验',
+  'finished_goods_inspection.pull_from_work_order.no_product': '工单未关联产品物料，无法上拉成品检验',
+  'finished_goods_inspection.pull_from_work_order.no_inspection_required': '成品物料未配置成品检验，无需上拉',
+  'finished_goods_inspection.pull_from_work_order.already_pulled': '该工单已有待检验的成品检验单，删除后可再次上拉',
+  'process_inspection.pull_from_work_order.not_allowed': '当前状态的工单不可上拉过程检验',
+  'process_inspection.pull_from_work_order.no_product': '工单未关联产品物料，无法上拉过程检验',
+  'process_inspection.pull_from_work_order.no_inspection_required': '工单工序均未配置过程检验，无需上拉',
+  'process_inspection.pull_from_work_order.no_lines': '工单无工序明细，无法上拉过程检验',
+  'process_inspection.pull_from_work_order.already_pulled': '相关工序均已存在待检验的过程检验单，删除后可再次上拉',
   'quality_inspection.update.not_pending': '只能更新待检验状态的检验单',
 };
 
@@ -1211,6 +1238,12 @@ export const OQC_INSPECTION_CAPABILITY_REASON_MESSAGES: Record<string, string> =
   'oqc_inspection.approve.not_pending': '出货检验单当前不可审核',
   'oqc_inspection.revoke_approval.not_approved': '仅已审核通过的出货检验单可撤销审核',
   'oqc_inspection.delete.not_pending': '仅待检验状态的出货检验单可删除',
+  'oqc_inspection.pull_from_shipment_notice.not_allowed': '当前状态的发货通知单不可上拉出货检验',
+  'oqc_inspection.pull_from_shipment_notice.no_lines': '发货通知单无需要出货检验的明细',
+  'oqc_inspection.pull_from_shipment_notice.already_pulled': '相关明细均已存在出货检验单，删除后可再次上拉',
+  'oqc_inspection.pull_from_sales_delivery.not_allowed': '当前状态的销售出库单不可上拉出货检验',
+  'oqc_inspection.pull_from_sales_delivery.no_lines': '销售出库单无需要出货检验的明细',
+  'oqc_inspection.pull_from_sales_delivery.already_pulled': '相关明细均已存在出货检验单，删除后可再次上拉',
 };
 
 export const EIGHT_D_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
@@ -1301,6 +1334,19 @@ export function qualityInspectionRowGates(
       'app.kuaizhizao.quality.capability',
     ),
   };
+}
+
+export function oqcInspectionCapabilityReasonMessage(
+  code: string | null | undefined,
+  t?: TFunction,
+): string {
+  if (!code) return '';
+  if (t) {
+    const key = `app.kuaizhizao.quality.oqc.capability.${code}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return OQC_INSPECTION_CAPABILITY_REASON_MESSAGES[code] ?? code;
 }
 
 export function oqcInspectionRowGates(

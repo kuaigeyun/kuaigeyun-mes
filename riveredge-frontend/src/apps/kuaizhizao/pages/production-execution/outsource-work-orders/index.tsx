@@ -3,7 +3,7 @@ import { renderRowActionsOverflow, rowActionKind } from '../../../../../componen
  * 工单委外管理页面
  *
  * 提供工单委外的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
- * 支持委外发料、委外收货等功能。
+ * 发料/收货统一经仓储下推预览后进入录入页。
  *
  * 根据功能点2.1.10：工单委外管理（核心功能，新增）
  *
@@ -32,6 +32,7 @@ import {
 } from '@ant-design/pro-components';
 import {
   App,
+  Alert,
   Button,
   Tag,
   Modal,
@@ -40,11 +41,11 @@ import {
   Dropdown,
   Empty,
   Spin,
+  Table,
   theme as AntdTheme,
 } from 'antd';
 import { EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../services/dataDictionary';
 import { mapSystemDictionaryItemOptions } from '../../../../../utils/systemDictionaryI18n';
@@ -59,12 +60,8 @@ import {
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { SimpleSparkline } from '../../../../../components';
-import { outsourceWorkOrderApi, outsourceMaterialIssueApi, outsourceMaterialReceiptApi } from '../../../services/production';
-import OutsourceIssueFormContent, { type OutsourceIssueLine } from '../../../components/OutsourceIssueFormContent';
-import OutsourceReceiptFormContent, {
-  buildReceiptLineFromWorkOrder,
-  type OutsourceReceiptLine,
-} from '../../../components/OutsourceReceiptFormContent';
+import { outsourceWorkOrderApi } from '../../../services/production';
+import { outsourceMaterialIssueApi, outsourceMaterialReceiptApi } from '../../../services/production';
 import { getOutsourceWorkOrderLifecycle } from '../../../utils/outsourceWorkOrderLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -87,6 +84,11 @@ import {
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
+import { buildDocumentCreateDraftKey, setDocumentFormDraft } from '../../../../../utils/documentFormDraftCache';
+import { outsourceWorkOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import type { PushPreviewResponse } from '../../../services/sales-order';
 import { formatDateTime } from '../../../../../utils/format';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
@@ -146,6 +148,10 @@ interface OutsourceWorkOrder {
   qualified_quantity?: number;
   unqualified_quantity?: number;
   updated_at?: string;
+  capabilities?: {
+    push_outsource_issue?: { allowed?: boolean; reason?: string };
+    push_outsource_receipt?: { allowed?: boolean; reason?: string };
+  };
 }
 
 function unwrapMaterialList(response: unknown): any[] {
@@ -204,6 +210,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const { token } = AntdTheme.useToken();
   const outsourceWorkOrderDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
+  const tableRowsRef = useRef<OutsourceWorkOrder[]>([]);
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [statsVersion, setStatsVersion] = useState(0);
@@ -281,19 +288,13 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     void refreshLocalStats();
   }, [statsVersion, refreshLocalStats]);
 
-  // 委外发料 Modal 相关状态
-  const [issueModalVisible, setIssueModalVisible] = useState(false);
-  const [currentWorkOrderForIssue, setCurrentWorkOrderForIssue] = useState<OutsourceWorkOrder | null>(null);
-  const [issueLines, setIssueLines] = useState<OutsourceIssueLine[]>([]);
-  const [issuePreviewLoading, setIssuePreviewLoading] = useState(false);
-  const [issuePreviewMessage, setIssuePreviewMessage] = useState<string | null>(null);
-  const issueFormRef = useRef<any>(null);
-
-  // 委外收货 Modal 相关状态
-  const [receiptModalVisible, setReceiptModalVisible] = useState(false);
-  const [currentWorkOrderForReceipt, setCurrentWorkOrderForReceipt] = useState<OutsourceWorkOrder | null>(null);
-  const [receiptLine, setReceiptLine] = useState<OutsourceReceiptLine | null>(null);
-  const receiptFormRef = useRef<any>(null);
+  type OutsourcePushPreviewKind = 'outbound_issue' | 'inbound_receipt';
+  const [pushPreviewOpen, setPushPreviewOpen] = useState(false);
+  const [pushPreviewLoading, setPushPreviewLoading] = useState(false);
+  const [pushPreviewKind, setPushPreviewKind] = useState<OutsourcePushPreviewKind | null>(null);
+  const [pushPreviewWorkOrderId, setPushPreviewWorkOrderId] = useState<number | null>(null);
+  const [pushPreviewData, setPushPreviewData] = useState<PushPreviewResponse | null>(null);
+  const [pushPreviewSelectedMaterialIds, setPushPreviewSelectedMaterialIds] = useState<number[]>([]);
 
   // 当前选中产品的物料来源信息
   const [selectedMaterialSourceInfo, setSelectedMaterialSourceInfo] = useState<{
@@ -833,179 +834,289 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   };
 
   /**
-   * 处理委外发料
+   * 下推预览：映射委外发料预览为统一 PushPreviewResponse
    */
-  const handleIssue = async (record: OutsourceWorkOrder) => {
-    try {
-      const detail = await outsourceWorkOrderApi.get(record.id!.toString());
-      setCurrentWorkOrderForIssue(detail);
-      setIssueModalVisible(true);
-      setIssueLines([]);
-      setIssuePreviewMessage(null);
-      setIssuePreviewLoading(true);
-      setTimeout(() => {
-        issueFormRef.current?.resetFields();
-      }, 100);
-      try {
-        const preview = await outsourceMaterialIssueApi.issuePreview(detail.id!);
-        const rawLines = preview?.lines ?? preview?.data?.lines ?? [];
-        setIssuePreviewMessage(preview?.message ?? preview?.data?.message ?? null);
-        setIssueLines(
-          rawLines.map((l: any) => {
-            const pending = Number(l.pendingQuantity ?? l.pending_quantity ?? 0);
-            return {
-              key: Number(l.materialId ?? l.material_id),
-              materialId: Number(l.materialId ?? l.material_id),
-              materialCode: l.materialCode ?? l.material_code ?? '',
-              materialName: l.materialName ?? l.material_name ?? '',
-              unit: l.unit ?? '',
-              requiredQuantity: Number(l.requiredQuantity ?? l.required_quantity ?? 0),
-              issuedQuantity: Number(l.issuedQuantity ?? l.issued_quantity ?? 0),
-              pendingQuantity: pending,
-              availableQuantity: Number(l.availableQuantity ?? l.available_quantity ?? 0),
-              issueQuantity: pending > 0 ? pending : 0,
-            };
-          }),
+  const mapOutsourceIssuePreview = useCallback(
+    (preview: {
+      lines?: Array<{
+        material_id?: number;
+        material_code?: string;
+        material_name?: string;
+        required_quantity?: number | string;
+        issued_quantity?: number | string;
+        pending_quantity?: number | string;
+      }>;
+      message?: string | null;
+      outsource_work_order_code?: string;
+    }): PushPreviewResponse => {
+      const items = (preview.lines ?? []).map((line) => ({
+        item_id: Number(line.material_id),
+        material_code: String(line.material_code ?? ''),
+        material_name: String(line.material_name ?? ''),
+        quantity: Number(line.required_quantity ?? 0),
+        pushed_quantity: Number(line.issued_quantity ?? 0),
+        max_push_quantity: Number(line.pending_quantity ?? 0),
+      }));
+      const pushableCount = items.filter((row) => Number(row.max_push_quantity ?? 0) > 0).length;
+      let blockingReason: string | null = null;
+      if (!items.length || pushableCount === 0) {
+        blockingReason = preview.message || t('app.kuaizhizao.warehouseOutbound.pull.osPreviewNoLines');
+      }
+      return {
+        target_type: 'outsource_material_issue',
+        summary: t('app.kuaizhizao.warehouseOutbound.pull.osPreviewSummary', {
+          code: preview.outsource_work_order_code ?? '',
+          pushable: pushableCount,
+          total: items.length,
+        }),
+        items,
+        tip: t('app.kuaizhizao.warehouseOutbound.pull.osPreviewTip'),
+        has_blocking_issues: !!blockingReason,
+        blocking_reason: blockingReason,
+      };
+    },
+    [t],
+  );
+
+  const mapOutsourceReceiptPreview = useCallback(
+    (preview: {
+      lines?: Array<Record<string, unknown>>;
+      message?: string | null;
+      outsource_work_order_code?: string;
+    }): PushPreviewResponse => {
+      const items = (preview.lines ?? []).map((line) => ({
+        item_id: Number(line.product_id ?? 0),
+        material_code: String(line.product_code ?? ''),
+        material_name: String(line.product_name ?? ''),
+        quantity: Number(line.ordered_quantity ?? 0),
+        pushed_quantity: Number(line.received_quantity ?? 0),
+        max_push_quantity: Number(line.pending_quantity ?? 0),
+      }));
+      const pushableCount = items.filter((row) => Number(row.max_push_quantity ?? 0) > 0).length;
+      let blockingReason: string | null = null;
+      if (!items.length || pushableCount === 0) {
+        blockingReason = preview.message || t('app.kuaizhizao.warehouseInbound.pull.outsource.previewNoLines');
+      }
+      return {
+        target_type: 'outsource_receipt',
+        summary: t('app.kuaizhizao.warehouseInbound.pull.outsource.receiptPreviewSummary', {
+          code: preview.outsource_work_order_code ?? '',
+          pushable: pushableCount,
+          total: items.length,
+        }),
+        items,
+        tip: t('app.kuaizhizao.warehouseInbound.pull.outsource.previewTip'),
+        has_blocking_issues: !!blockingReason,
+        blocking_reason: blockingReason,
+      };
+    },
+    [t],
+  );
+
+  const resetPushPreview = useCallback(() => {
+    setPushPreviewOpen(false);
+    setPushPreviewLoading(false);
+    setPushPreviewKind(null);
+    setPushPreviewWorkOrderId(null);
+    setPushPreviewData(null);
+    setPushPreviewSelectedMaterialIds([]);
+  }, []);
+
+  const openPushPreview = useCallback(
+    async (kind: OutsourcePushPreviewKind, record: OutsourceWorkOrder) => {
+      if (!record.id) return;
+      const capKey = kind === 'outbound_issue' ? 'push_outsource_issue' : 'push_outsource_receipt';
+      if (record.capabilities?.[capKey]?.allowed !== true) {
+        const reason = outsourceWorkOrderCapabilityReasonMessage(record.capabilities?.[capKey]?.reason, t);
+        messageApi.warning(
+          reason ||
+            (kind === 'outbound_issue'
+              ? t('app.kuaizhizao.warehouseOutbound.pull.osPreviewBlocked')
+              : t('app.kuaizhizao.warehouseInbound.pull.outsource.previewBlocked')),
         );
-      } catch (err: any) {
-        messageApi.error(err?.message || t('app.kuaizhizao.outsourceWorkOrder.loadIssueLinesFailed'));
+        return;
+      }
+      setPushPreviewOpen(true);
+      setPushPreviewLoading(true);
+      setPushPreviewKind(kind);
+      setPushPreviewWorkOrderId(record.id);
+      setPushPreviewData(null);
+      setPushPreviewSelectedMaterialIds([]);
+      try {
+        if (kind === 'outbound_issue') {
+          const res = await outsourceMaterialIssueApi.issuePreview(record.id);
+          const raw = (res as { data?: unknown })?.data ?? res;
+          const mapped = mapOutsourceIssuePreview(raw as Parameters<typeof mapOutsourceIssuePreview>[0]);
+          setPushPreviewData(mapped);
+          setPushPreviewSelectedMaterialIds(
+            (mapped.items || [])
+              .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
+              .map((row) => Number(row.item_id)),
+          );
+        } else {
+          const res = await outsourceMaterialReceiptApi.receiptPreview(record.id);
+          const raw = (res as { data?: unknown })?.data ?? res;
+          setPushPreviewData(mapOutsourceReceiptPreview(raw as Parameters<typeof mapOutsourceReceiptPreview>[0]));
+        }
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(
+            error,
+            kind === 'outbound_issue'
+              ? t('app.kuaizhizao.warehouseOutbound.pull.osPreviewFailed')
+              : t('app.kuaizhizao.warehouseInbound.pull.outsource.previewFailed'),
+          ),
+        );
+        resetPushPreview();
       } finally {
-        setIssuePreviewLoading(false);
+        setPushPreviewLoading(false);
       }
-    } catch (error) {
-      messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.fetchDetailFailed'));
-    }
-  };
+    },
+    [mapOutsourceIssuePreview, mapOutsourceReceiptPreview, messageApi, resetPushPreview, t],
+  );
 
-  /**
-   * 处理提交委外发料
-   */
-  const handleSubmitIssue = async (values: any): Promise<void> => {
-    try {
-      if (!currentWorkOrderForIssue?.id) {
-        throw new Error(t('app.kuaizhizao.outsourceWorkOrder.workOrderNotFound'));
-      }
-
-      const activeLines = issueLines.filter((l) => l.issueQuantity > 0);
-      if (activeLines.length === 0) {
-        messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.issueNoLines'));
-        throw new Error('no lines');
-      }
-      if (!values.warehouseId) {
-        messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.issueSelectWarehouse'));
-        throw new Error('no warehouse');
-      }
-
-      await outsourceMaterialIssueApi.createBatch({
-        outsource_work_order_id: currentWorkOrderForIssue.id,
-        outsource_work_order_code: currentWorkOrderForIssue.code,
-        warehouse_id: values.warehouseId,
-        warehouse_name: values.warehouseName,
-        remarks: values.remarks,
-        lines: activeLines.map((l) => ({
-          material_id: l.materialId,
-          material_code: l.materialCode,
-          material_name: l.materialName,
-          quantity: l.issueQuantity,
-          unit: l.unit,
-        })),
+  const handlePushPreviewConfirm = useCallback(() => {
+    if (!pushPreviewWorkOrderId || !pushPreviewData || pushPreviewData.has_blocking_issues) return;
+    if (pushPreviewKind === 'outbound_issue') {
+      const rowById = new Map(
+        (pushPreviewData.items || []).map((row) => [Number(row.item_id), row]),
+      );
+      const selectedIds = pushPreviewSelectedMaterialIds.filter((id) => {
+        const row = rowById.get(id);
+        return row && Number(row.max_push_quantity ?? 0) > 0;
       });
-      messageApi.success(t('app.kuaizhizao.outsourceWorkOrder.issueSuccess', { count: activeLines.length }));
-      setIssueModalVisible(false);
-      setCurrentWorkOrderForIssue(null);
-      setIssueLines([]);
-      setIssuePreviewMessage(null);
-      issueFormRef.current?.resetFields();
-      setStatsVersion((v) => v + 1);
-      invalidateMenuBadgeCounts();
-
-      actionRef.current?.reload();
-    } catch (error: any) {
-      if (error?.message && error.message !== 'no lines' && error.message !== 'no warehouse') {
-        messageApi.error(error.message || t('app.kuaizhizao.outsourceWorkOrder.createIssueFailed'));
+      if (!selectedIds.length) {
+        messageApi.warning(t('app.kuaizhizao.warehouseOutbound.pull.osSelectLinesFirst'));
+        return;
       }
-      throw error;
+      const issueQuantities: Record<number, number> = {};
+      selectedIds.forEach((id) => {
+        issueQuantities[id] = Number(rowById.get(id)?.max_push_quantity ?? 0);
+      });
+      const entryPath = outboundOutsourceEntryPath(pushPreviewWorkOrderId);
+      const draftKey = buildDocumentCreateDraftKey('kuaizhizao:outbound-outsource-pull', entryPath, '');
+      setDocumentFormDraft(draftKey, { issueQuantities });
+      resetPushPreview();
+      navigate(entryPath);
+      return;
     }
-  };
-
-  /**
-   * 处理委外收货
-   */
-  const handleReceipt = async (record: OutsourceWorkOrder) => {
-    try {
-      const detail = await outsourceWorkOrderApi.get(record.id!.toString());
-      setCurrentWorkOrderForReceipt(detail);
-      setReceiptLine(buildReceiptLineFromWorkOrder(detail));
-      setReceiptModalVisible(true);
-      setTimeout(() => {
-        receiptFormRef.current?.resetFields();
-      }, 100);
-    } catch (error) {
-      messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.fetchDetailFailed'));
+    if (pushPreviewKind === 'inbound_receipt') {
+      const firstLine = pushPreviewData.items?.[0];
+      const qty = Number(firstLine?.max_push_quantity ?? 0);
+      const entryPath = inboundOutsourceEntryPath(pushPreviewWorkOrderId, 'outsource_receipt');
+      const draftKey = buildDocumentCreateDraftKey('kuaizhizao:inbound-outsource-pull', entryPath, '');
+      setDocumentFormDraft(draftKey, {
+        receiptLine: {
+          receiptQuantity: qty,
+          qualifiedQuantity: qty,
+          unqualifiedQuantity: 0,
+        },
+      });
+      resetPushPreview();
+      navigate(entryPath);
     }
-  };
+  }, [
+    messageApi,
+    navigate,
+    pushPreviewData,
+    pushPreviewKind,
+    pushPreviewSelectedMaterialIds,
+    pushPreviewWorkOrderId,
+    resetPushPreview,
+    t,
+  ]);
 
   const handlePushToInboundEntry = (record: OutsourceWorkOrder) => {
-    if (!record.id) return;
-    navigate(inboundOutsourceEntryPath(record.id, 'outsource_receipt'));
+    void openPushPreview('inbound_receipt', record);
   };
 
   const handlePushToOutboundEntry = (record: OutsourceWorkOrder) => {
-    if (!record.id) return;
-    navigate(outboundOutsourceEntryPath(record.id));
+    void openPushPreview('outbound_issue', record);
   };
 
-  /**
-   * 处理提交委外收货
-   */
-  const handleSubmitReceipt = async (values: any): Promise<void> => {
-    try {
-      if (!currentWorkOrderForReceipt?.id || !receiptLine) {
-        throw new Error(t('app.kuaizhizao.outsourceWorkOrder.workOrderNotFound'));
-      }
-      if (receiptLine.receiptQuantity <= 0) {
-        messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.receiptNoQty'));
-        throw new Error('no qty');
-      }
-      if (!values.warehouseId) {
-        messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.receiptSelectWarehouse'));
-        throw new Error('no warehouse');
-      }
-      if (receiptLine.receiptQuantity > receiptLine.pendingQuantity) {
-        messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.receiptOverQty'));
-        throw new Error('over qty');
-      }
+  const pushPreviewTitle = useMemo(() => {
+    if (pushPreviewKind === 'outbound_issue') return pushToOutboundAction.label;
+    if (pushPreviewKind === 'inbound_receipt') return pushToInboundAction.label;
+    return t('app.kuaizhizao.salesOrder.pushPreviewTitle');
+  }, [pushPreviewKind, pushToInboundAction.label, pushToOutboundAction.label, t]);
 
-      const submitData = {
-        outsource_work_order_id: currentWorkOrderForReceipt.id,
-        outsource_work_order_code: currentWorkOrderForReceipt.code,
-        quantity: receiptLine.receiptQuantity,
-        qualified_quantity: receiptLine.qualifiedQuantity || 0,
-        unqualified_quantity: receiptLine.unqualifiedQuantity || 0,
-        unit: receiptLine.unit || '件',
-        warehouse_id: values.warehouseId,
-        warehouse_name: values.warehouseName,
-        batch_number: values.batchNumber,
-        remarks: values.remarks,
-      };
+  const selectedOwoForToolbar = useMemo(() => {
+    if (selectedRowKeys.length !== 1) return null;
+    const id = Number(selectedRowKeys[0]);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    return tableRowsRef.current.find((row) => row.id === id) ?? null;
+  }, [selectedRowKeys]);
 
-      await outsourceMaterialReceiptApi.create(submitData);
-      messageApi.success(t('app.kuaizhizao.outsourceWorkOrder.receiptSuccess'));
-      setReceiptModalVisible(false);
-      setCurrentWorkOrderForReceipt(null);
-      setReceiptLine(null);
-      receiptFormRef.current?.resetFields();
-      setStatsVersion((v) => v + 1);
-      invalidateMenuBadgeCounts();
+  const owoPushEligible = !!selectedOwoForToolbar
+    && (selectedOwoForToolbar.status === 'released' || selectedOwoForToolbar.status === 'in_progress');
+  const canPushOutboundToolbar = owoPushEligible
+    && selectedOwoForToolbar?.capabilities?.push_outsource_issue?.allowed === true;
+  const canPushInboundToolbar = owoPushEligible
+    && selectedOwoForToolbar?.capabilities?.push_outsource_receipt?.allowed === true;
 
-      actionRef.current?.reload();
-    } catch (error: any) {
-      if (error?.message && !['no qty', 'no warehouse', 'over qty'].includes(error.message)) {
-        messageApi.error(error.message || t('app.kuaizhizao.outsourceWorkOrder.createReceiptFailed'));
-      }
-      throw error;
+  const toolbarPushDisabledReason = useMemo(() => {
+    const base = buildUniPushToolbarDisabledReason(t, {
+      selectedCount: selectedRowKeys.length,
+      hasSelectedRecord: !!selectedOwoForToolbar,
+    });
+    if (base) return base;
+    if (selectedOwoForToolbar && !canPushOutboundToolbar && !canPushInboundToolbar) {
+      return (
+        outsourceWorkOrderCapabilityReasonMessage(
+          selectedOwoForToolbar.capabilities?.push_outsource_issue?.reason
+            || selectedOwoForToolbar.capabilities?.push_outsource_receipt?.reason,
+          t,
+        ) || t('components.uniPush.disabled.unavailable')
+      );
     }
-  };
+    return undefined;
+  }, [canPushInboundToolbar, canPushOutboundToolbar, selectedOwoForToolbar, selectedRowKeys.length, t]);
+
+  const toolbarPushMenuItems = useMemo(
+    () =>
+      buildUniPushMenuItems([
+        {
+          key: 'push-outbound',
+          label: pushToOutboundAction.label,
+          disabled: !selectedOwoForToolbar || !canPushOutboundToolbar,
+          title: selectedOwoForToolbar && !canPushOutboundToolbar
+            ? outsourceWorkOrderCapabilityReasonMessage(
+                selectedOwoForToolbar.capabilities?.push_outsource_issue?.reason,
+                t,
+              )
+            : undefined,
+          onClick: () => {
+            if (selectedOwoForToolbar && canPushOutboundToolbar) {
+              handlePushToOutboundEntry(selectedOwoForToolbar);
+            }
+          },
+        },
+        {
+          key: 'push-inbound',
+          label: pushToInboundAction.label,
+          disabled: !selectedOwoForToolbar || !canPushInboundToolbar,
+          title: selectedOwoForToolbar && !canPushInboundToolbar
+            ? outsourceWorkOrderCapabilityReasonMessage(
+                selectedOwoForToolbar.capabilities?.push_outsource_receipt?.reason,
+                t,
+              )
+            : undefined,
+          onClick: () => {
+            if (selectedOwoForToolbar && canPushInboundToolbar) {
+              handlePushToInboundEntry(selectedOwoForToolbar);
+            }
+          },
+        },
+      ]),
+    [
+      canPushInboundToolbar,
+      canPushOutboundToolbar,
+      pushToInboundAction.label,
+      pushToOutboundAction.label,
+      selectedOwoForToolbar,
+      t,
+    ],
+  );
 
   const renderOwoRowActionNodes = (record: OutsourceWorkOrder): React.ReactNode[] => {
     const nodes: React.ReactNode[] = [];
@@ -1038,62 +1149,6 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         {t('common.edit')}
       </Button>
     );
-    if (record.status === 'released' || record.status === 'in_progress') {
-      nodes.push(
-        <Button {...rowActionKind('dispatch')}
-          key="issue"
-          type="link"
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            void handleIssue(record);
-          }}
-        >
-          {t('app.kuaizhizao.outsourceWorkOrder.actionIssue')}
-        </Button>
-      );
-      nodes.push(
-        <Button {...rowActionKind('read')}
-          key="receipt"
-          type="link"
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            void handleReceipt(record);
-          }}
-        >
-          {t('app.kuaizhizao.outsourceWorkOrder.actionReceipt')}
-        </Button>
-      );
-      nodes.push(
-        <Button
-          {...rowActionKind('audit')}
-          key="push-inbound"
-          type="link"
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            handlePushToInboundEntry(record);
-          }}
-        >
-          {pushToInboundAction.label}
-        </Button>
-      );
-      nodes.push(
-        <Button
-          {...rowActionKind('audit')}
-          key="push-outbound"
-          type="link"
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            handlePushToOutboundEntry(record);
-          }}
-        >
-          {pushToOutboundAction.label}
-        </Button>
-      );
-    }
     return nodes;
   };
 
@@ -1294,6 +1349,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
       if (Array.isArray(response)) {
         const enriched = await enrichOwoRecordsWithCustomFields(response);
+        tableRowsRef.current = enriched;
         return {
           data: enriched,
           success: true,
@@ -1303,6 +1359,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       if (response && typeof response === 'object') {
         const list = (response as any).data || (response as any).items || [];
         const enriched = await enrichOwoRecordsWithCustomFields(list);
+        tableRowsRef.current = enriched;
         return {
           data: enriched,
           success: (response as any).success !== false,
@@ -1367,6 +1424,14 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           showCreateButton={true}
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
+          toolBarRender={() => [
+            <UniPushToolbarButton
+              key={`outsource-work-order-push-${selectedOwoForToolbar?.id ?? 'none'}`}
+              menuItems={toolbarPushMenuItems}
+              disabled={selectedRowKeys.length !== 1 || !selectedOwoForToolbar}
+              disabledReason={toolbarPushDisabledReason}
+            />,
+          ]}
           showDeleteButton={true}
           onDelete={handleDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.outsourceWorkOrder.confirmBatchDelete', { count })}
@@ -1712,96 +1777,102 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         }
       />
 
-      {/* 委外发料 Modal */}
-      < FormModalTemplate
-        title={t('app.kuaizhizao.outsourceWorkOrder.issueTitle')}
-        open={issueModalVisible}
-        onClose={() => {
-          setIssueModalVisible(false);
-          setCurrentWorkOrderForIssue(null);
-          setIssueLines([]);
-          setIssuePreviewMessage(null);
-          issueFormRef.current?.resetFields();
+      <Modal
+        title={pushPreviewTitle}
+        open={pushPreviewOpen}
+        destroyOnClose
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        onCancel={resetPushPreview}
+        okText={t('common.next')}
+        cancelText={t('common.cancel')}
+        onOk={() => handlePushPreviewConfirm()}
+        okButtonProps={{
+          disabled:
+            pushPreviewLoading ||
+            !pushPreviewData ||
+            !!pushPreviewData?.has_blocking_issues ||
+            !(pushPreviewData?.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0),
         }}
-        onFinish={handleSubmitIssue}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        formRef={issueFormRef}
       >
-        {currentWorkOrderForIssue && (
-          <>
-            <OutsourceIssueFormContent
-              workOrder={currentWorkOrderForIssue}
-              lines={issueLines}
-              onLinesChange={setIssueLines}
-              loading={issuePreviewLoading}
-              previewMessage={issuePreviewMessage}
-            />
-            <UniWarehouseSelect
-              name="warehouseId"
-              label={t('app.kuaizhizao.outsourceWorkOrder.outboundWarehouse')}
-              placeholder={t('app.kuaizhizao.outsourceWorkOrder.selectWarehouse')}
-              required
-              colProps={{ span: 12 }}
-              onChange={(val, wh) => issueFormRef.current?.setFieldsValue({ warehouseName: wh?.name ?? '' })}
-            />
-            <ProFormText name="warehouseName" hidden />
-            <ProFormTextArea
-              name="remarks"
-              label={t('app.kuaizhizao.common.fieldNotes')}
-              placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderRemarks')}
-              fieldProps={{ rows: 2 }}
-              colProps={{ span: 24 }}
-            />
-          </>
-        )}
-      </FormModalTemplate >
-
-      {/* 委外收货 Modal */}
-      < FormModalTemplate
-        title={t('app.kuaizhizao.outsourceWorkOrder.receiptTitle')}
-        open={receiptModalVisible}
-        onClose={() => {
-          setReceiptModalVisible(false);
-          setCurrentWorkOrderForReceipt(null);
-          setReceiptLine(null);
-          receiptFormRef.current?.resetFields();
-        }}
-        onFinish={handleSubmitReceipt}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        formRef={receiptFormRef}
-      >
-        {currentWorkOrderForReceipt && (
-          <>
-            <OutsourceReceiptFormContent
-              workOrder={currentWorkOrderForReceipt}
-              line={receiptLine}
-              onLineChange={setReceiptLine}
-            />
-            <UniWarehouseSelect
-              name="warehouseId"
-              label={t('app.kuaizhizao.outsourceWorkOrder.inboundWarehouse')}
-              placeholder={t('app.kuaizhizao.outsourceWorkOrder.selectWarehouse')}
-              required
-              colProps={{ span: 12 }}
-              onChange={(val, wh) => receiptFormRef.current?.setFieldsValue({ warehouseName: wh?.name ?? '' })}
-            />
-            <ProFormText name="warehouseName" hidden />
-            <ProFormText
-              name="batchNumber"
-              label={t('app.kuaizhizao.outsourceWorkOrder.batchNumber')}
-              placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderBatchNumber')}
-              colProps={{ span: 12 }}
-            />
-            <ProFormTextArea
-              name="remarks"
-              label={t('app.kuaizhizao.common.fieldNotes')}
-              placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderRemarks')}
-              fieldProps={{ rows: 2 }}
-              colProps={{ span: 24 }}
-            />
-          </>
-        )}
-      </FormModalTemplate >
+        {pushPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+          </div>
+        ) : pushPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushPreviewData.summary}</p>
+            {pushPreviewData.has_blocking_issues && pushPreviewData.blocking_reason ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={
+                  outsourceWorkOrderCapabilityReasonMessage(pushPreviewData.blocking_reason, t) ||
+                  pushPreviewData.blocking_reason
+                }
+              />
+            ) : null}
+            {pushPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pushPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 960 }}
+                rowSelection={
+                  pushPreviewKind === 'outbound_issue'
+                    ? {
+                        selectedRowKeys: pushPreviewSelectedMaterialIds.map(String),
+                        onChange: (keys) => setPushPreviewSelectedMaterialIds(keys.map((k) => Number(k))),
+                        getCheckboxProps: (row) => ({
+                          disabled: Number(row.max_push_quantity ?? 0) <= 0,
+                        }),
+                      }
+                    : undefined
+                }
+                columns={[
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
+                  {
+                    title:
+                      pushPreviewKind === 'outbound_issue'
+                        ? t('app.kuaizhizao.warehouseOutbound.pull.colIssuedQty')
+                        : t('app.kuaizhizao.salesOrder.colPushedQty'),
+                    dataIndex: 'pushed_quantity',
+                    width: 90,
+                    align: 'right',
+                  },
+                  {
+                    title:
+                      pushPreviewKind === 'outbound_issue'
+                        ? t('app.kuaizhizao.warehouseOutbound.pull.colPendingIssue')
+                        : t('app.kuaizhizao.salesOrder.colPushableQty'),
+                    dataIndex: 'max_push_quantity',
+                    width: 90,
+                    align: 'right',
+                  },
+                ]}
+              />
+            ) : (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  pushPreviewKind === 'outbound_issue'
+                    ? t('app.kuaizhizao.warehouseOutbound.pull.osPreviewNoLines')
+                    : t('app.kuaizhizao.warehouseInbound.pull.outsource.previewNoLines')
+                }
+              />
+            )}
+            {pushPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                {pushPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
     </>
   );
 };

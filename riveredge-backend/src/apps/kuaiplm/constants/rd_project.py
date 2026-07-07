@@ -39,6 +39,11 @@ class RdProjectType(str, Enum):
     DELIVERY = "DELIVERY"
 
 
+class GateMilestoneRole(str, Enum):
+    NONE = "none"
+    SPAWN_DELIVERY = "spawn_delivery"
+
+
 PROJECT_TYPE_LABELS: Dict[str, str] = {
     RdProjectType.RD.value: "研发项目",
     RdProjectType.DELIVERY.value: "交付项目",

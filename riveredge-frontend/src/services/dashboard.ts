@@ -18,6 +18,7 @@ export interface TodoItem {
   type: string;
   title: string;
   description?: string;
+  meta?: Record<string, string>;
   priority: string;
   due_date?: string;
   status: string;

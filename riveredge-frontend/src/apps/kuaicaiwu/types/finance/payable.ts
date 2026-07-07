@@ -24,6 +24,7 @@ export interface Payable {
     notes?: string;
     created_at: string;
     updated_at: string;
+    capabilities?: { push_payment?: { allowed?: boolean; reason?: string } };
 }
 
 export interface PayableListParams {
@@ -50,6 +51,8 @@ export interface PayableCreateData {
     payment_terms?: string;
     invoice_received?: boolean;
     notes?: string;
+    pull_source_type?: 'purchase_order' | 'purchase_receipt';
+    pull_source_id?: number;
 }
 
 export interface PaymentRecordCreate {

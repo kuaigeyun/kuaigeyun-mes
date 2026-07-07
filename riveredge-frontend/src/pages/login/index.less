@@ -444,36 +444,59 @@
       left: 50%;
       bottom: max(16px, env(safe-area-inset-bottom, 0px));
       transform: translateX(-50%);
-      width: min(400px, calc(100% - 80px));
+      width: min(680px, calc(100% - 32px));
       max-width: 100%;
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 10px;
+      gap: 6px;
     }
 
     .login-browser-hint-footnote {
       margin: 0;
       padding: 0 4px;
+      width: 100%;
       text-align: center;
       font-size: 11px;
-      line-height: 1.5;
+      line-height: 1.55;
       letter-spacing: 0.01em;
       color: rgba(0, 0, 0, 0.32);
       user-select: none;
+      white-space: nowrap;
     }
 
     .login-footer-links {
       margin: 0;
+      padding: 0 4px;
+      width: 100%;
       text-align: center;
       font-size: 11px;
       line-height: 1.5;
+      overflow-x: auto;
+      scrollbar-width: none;
+
+      &::-webkit-scrollbar {
+        display: none;
+      }
+
+      .ant-space {
+        flex-wrap: nowrap;
+        justify-content: center;
+      }
+
+      .login-footer-separator {
+        color: rgba(0, 0, 0, 0.18);
+        user-select: none;
+        flex-shrink: 0;
+      }
 
       .ant-btn,
       .ant-typography {
         font-size: 11px !important;
         line-height: 1.5 !important;
+        white-space: nowrap;
+        flex-shrink: 0;
       }
     }
   }
@@ -497,8 +520,17 @@
       padding: 20px 20px 100px;
 
       .login-bottom-fixed {
-        width: min(400px, calc(100% - 40px));
+        width: calc(100% - 24px);
         bottom: max(12px, env(safe-area-inset-bottom, 0px));
+
+        .login-browser-hint-footnote {
+          white-space: normal;
+        }
+
+        .login-footer-links .ant-space {
+          flex-wrap: wrap;
+          row-gap: 4px;
+        }
       }
 
       .login-form-wrapper {

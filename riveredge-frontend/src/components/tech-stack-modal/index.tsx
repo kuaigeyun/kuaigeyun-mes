@@ -895,6 +895,22 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
           <Paragraph type="secondary" style={{ paddingLeft: token.paddingLG }}>
             {t('components.techStackModal.copyright.assetsSocial')}
           </Paragraph>
+
+          <Divider />
+
+          <Title level={5}>{t('components.techStackModal.copyright.provenanceTitle')}</Title>
+          <Paragraph>
+            {t('components.techStackModal.copyright.provenanceDesc')}
+          </Paragraph>
+          <Paragraph type="secondary">
+            <a
+              href="https://gitee.com/kuaigeyun/kuaigeyun/blob/develop/docs/telemetry-disclosure.md"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t('components.techStackModal.copyright.telemetryLink')}
+            </a>
+          </Paragraph>
         </div>
       ),
     },

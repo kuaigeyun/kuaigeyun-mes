@@ -9,8 +9,6 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Tag, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { getDueReminderLifecycle } from '../../../utils/equipmentLifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { moldApi } from '../../../services/equipment';
 
@@ -55,27 +53,6 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
           const v = r.usages_until_due ?? 0;
           if (v < 0) return <Tag color="red">{t('app.kuaizhizao.moldMaintenanceReminder.overdueUsages', { count: Math.abs(v) })}</Tag>;
           return <span>{v}</span>;
-        },
-      },
-      {
-        title: t('app.kuaizhizao.moldMaintenanceReminder.colLifecycle'),
-        dataIndex: 'lifecycle_stage',
-        fixed: 'right',
-        align: 'left',
-        hideInSearch: true,
-        render: (_, record) => {
-          const lifecycle = getDueReminderLifecycle(record as Record<string, unknown>);
-          return (
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          );
         },
       },
     ],

@@ -522,6 +522,84 @@ async def push_incoming_inspection_to_purchase_return(
     )
 
 
+@router.get(
+    "/incoming-inspections/pull-candidates/purchase-receipts",
+    summary="List purchase receipt pull candidates for incoming inspection",
+)
+async def list_incoming_inspection_purchase_receipt_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await IncomingInspectionService().list_purchase_receipt_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/incoming-inspections/pull-candidates/customer-material-registrations",
+    summary="List customer material pull candidates for incoming inspection",
+)
+async def list_incoming_inspection_customer_material_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await IncomingInspectionService().list_customer_material_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/incoming-inspections/from-purchase-receipt/{purchase_receipt_id}/pull-preview",
+    summary="Preview pull incoming inspection from purchase receipt",
+)
+async def preview_pull_incoming_inspection_from_purchase_receipt(
+    purchase_receipt_id: int = Path(..., description="采购入库单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    await _assert_purchase_receipt_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        purchase_receipt_id=purchase_receipt_id,
+    )
+    return await IncomingInspectionService().preview_pull_from_purchase_receipt(
+        tenant_id=tenant_id,
+        purchase_receipt_id=purchase_receipt_id,
+    )
+
+
+@router.get(
+    "/incoming-inspections/from-customer-material/{registration_id}/pull-preview",
+    summary="Preview pull incoming inspection from customer material registration",
+)
+async def preview_pull_incoming_inspection_from_customer_material(
+    registration_id: int = Path(..., description="代工来料单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    await _assert_customer_material_registration_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        registration_id=registration_id,
+    )
+    return await IncomingInspectionService().preview_pull_from_customer_material_registration(
+        tenant_id=tenant_id,
+        registration_id=registration_id,
+    )
+
+
 @router.post("/incoming-inspections/from-purchase-receipt/{purchase_receipt_id}", response_model=List[IncomingInspectionResponse], summary="Create incoming inspection from purchase receipt")
 async def create_inspection_from_purchase_receipt(
     purchase_receipt_id: int = Path(..., description="采购入库单ID"),
@@ -951,6 +1029,45 @@ async def create_process_inspection_from_work_order(
     )
 
 
+@router.get(
+    "/process-inspections/pull-candidates/work-orders",
+    summary="List work order pull candidates for process inspection",
+)
+async def list_process_inspection_work_order_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await ProcessInspectionService().list_work_order_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/process-inspections/from-work-order/{work_order_id}/pull-preview",
+    summary="Preview pull process inspection from work order",
+)
+async def preview_pull_process_inspection_from_work_order(
+    work_order_id: int = Path(..., description="工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    await _assert_work_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        work_order_id=work_order_id,
+    )
+    return await ProcessInspectionService().preview_pull_from_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+    )
+
+
 @router.post("/process-inspections/import", summary="Batch import in-process inspections")
 async def import_process_inspections(
     request: Dict[str, Any],
@@ -1308,6 +1425,45 @@ async def get_product_quality_certificate_variables(
         raise FastAPIHTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
 
 
+@router.get(
+    "/finished-goods-inspections/pull-candidates/work-orders",
+    summary="List work order pull candidates for finished goods inspection",
+)
+async def list_finished_goods_inspection_work_order_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await FinishedGoodsInspectionService().list_work_order_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/finished-goods-inspections/from-work-order/{work_order_id}/pull-preview",
+    summary="Preview pull finished goods inspection from work order",
+)
+async def preview_pull_finished_goods_inspection_from_work_order(
+    work_order_id: int = Path(..., description="工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    await _assert_work_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        work_order_id=work_order_id,
+    )
+    return await FinishedGoodsInspectionService().preview_pull_from_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+    )
+
+
 @router.post("/finished-goods-inspections/from-work-order", response_model=FinishedGoodsInspectionResponse, summary="Create finished goods inspection from work order")
 async def create_finished_goods_inspection_from_work_order(
     work_order_id: int = Query(..., description="工单ID"),
@@ -1331,6 +1487,27 @@ async def create_finished_goods_inspection_from_work_order(
     )
 
 
+@router.get(
+    "/finished-goods-inspections/{inspection_id}/push-to-rework/preview",
+    summary="Preview push finished goods inspection to rework order",
+)
+async def preview_push_finished_goods_inspection_to_rework(
+    inspection_id: int = Path(..., description="成品检验单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """成品检验不合格下推返工单预览。"""
+    await _assert_finished_goods_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    return await FinishedGoodsInspectionService().preview_push_to_rework(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+    )
+
+
 @router.post(
     "/finished-goods-inspections/{inspection_id}/push-to-rework",
     response_model=Dict[str, Any],
@@ -1338,6 +1515,7 @@ async def create_finished_goods_inspection_from_work_order(
 )
 async def push_finished_goods_inspection_to_rework(
     inspection_id: int = Path(..., description="成品检验单ID"),
+    quantity: Optional[float] = Body(None, embed=True, description="本次下推返工数量，缺省为可下推全额"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, Any]:
@@ -1351,6 +1529,7 @@ async def push_finished_goods_inspection_to_rework(
         tenant_id=tenant_id,
         inspection_id=inspection_id,
         created_by=current_user.id,
+        quantity=quantity,
     )
 
 

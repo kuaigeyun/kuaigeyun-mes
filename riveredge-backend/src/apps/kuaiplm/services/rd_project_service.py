@@ -18,6 +18,7 @@ from apps.kuaiplm.constants.rd_project import (
     DEFAULT_DELIVERY_GATES,
     DEFAULT_GATE_DELIVERABLES,
     DEFAULT_NPI_GATES,
+    GateMilestoneRole,
     SPAWN_INHERIT_LINK_TYPES,
     RdDeliverableStatus,
     RdGateStatus,
@@ -60,6 +61,7 @@ from apps.kuaiplm.schemas.rd_project import (
     RelatedArticleSummary,
     SpawnDeliveryProjectRequest,
 )
+from apps.kuaiplm.utils.gate_template_seed import load_template_gate_defs
 from apps.kuaiplm.utils.rd_project_progress import compute_project_progress
 from apps.master_data.models.material import Material
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -114,10 +116,39 @@ class RdProjectService(AppBaseService[RdProject]):
             data.source_project_code = source_codes.get(project.source_project_id)
         return data
 
-    def _resolve_gate_template(self, project_type: str):
+    async def _resolve_gate_template(
+        self,
+        tenant_id: int,
+        project_type: str,
+        gate_template_id: Optional[int] = None,
+    ):
+        try:
+            template, gate_defs, deliverables_map = await load_template_gate_defs(
+                tenant_id, project_type, gate_template_id
+            )
+            if template and gate_defs:
+                return template, gate_defs, deliverables_map
+        except ValueError as e:
+            raise BusinessLogicError(str(e))
+
         if project_type == RdProjectType.DELIVERY.value:
-            return DEFAULT_DELIVERY_GATES, DEFAULT_DELIVERY_DELIVERABLES
-        return DEFAULT_NPI_GATES, DEFAULT_GATE_DELIVERABLES
+            gate_defs = [
+                {**g, "milestone_role": GateMilestoneRole.NONE.value}
+                for g in DEFAULT_DELIVERY_GATES
+            ]
+            return None, gate_defs, DEFAULT_DELIVERY_DELIVERABLES
+        gate_defs = [
+            {
+                **g,
+                "milestone_role": (
+                    GateMilestoneRole.SPAWN_DELIVERY.value
+                    if g["gate_key"] == "release"
+                    else GateMilestoneRole.NONE.value
+                ),
+            }
+            for g in DEFAULT_NPI_GATES
+        ]
+        return None, gate_defs, DEFAULT_GATE_DELIVERABLES
 
     async def _copy_inherit_links(
         self,
@@ -165,8 +196,11 @@ class RdProjectService(AppBaseService[RdProject]):
         source_project_id: Optional[int],
         created_by: int,
         inherit_links_from: Optional[RdProject] = None,
+        gate_template_id: Optional[int] = None,
     ) -> RdProject:
-        gate_defs, deliverable_map = self._resolve_gate_template(project_type)
+        template, gate_defs, deliverable_map = await self._resolve_gate_template(
+            tenant_id, project_type, gate_template_id
+        )
         first_gate = gate_defs[0]["gate_key"] if gate_defs else None
         project = await RdProject.create(
             tenant_id=tenant_id,
@@ -176,6 +210,7 @@ class RdProjectService(AppBaseService[RdProject]):
             status=RdProjectStatus.DRAFT.value,
             project_type=project_type,
             source_project_id=source_project_id,
+            gate_template_id=template.id if template else None,
             material_id=material_id,
             material_code=material_code,
             material_name=material_name,
@@ -198,6 +233,7 @@ class RdProjectService(AppBaseService[RdProject]):
                 gate_name=gate_def["gate_name"],
                 sort_order=gate_def["sort_order"],
                 status=RdGateStatus.PENDING.value,
+                milestone_role=gate_def.get("milestone_role", GateMilestoneRole.NONE.value),
             )
             created_gates.append(gate)
         await self._seed_gate_deliverables(
@@ -410,6 +446,7 @@ class RdProjectService(AppBaseService[RdProject]):
                 source_project_id=data.source_project_id,
                 created_by=created_by,
                 inherit_links_from=inherit_from,
+                gate_template_id=data.gate_template_id,
             )
             source_codes = await self._load_source_project_codes(tenant_id, [project])
             return self._to_project_response(project, source_codes)
@@ -425,15 +462,16 @@ class RdProjectService(AppBaseService[RdProject]):
         if source.project_type != RdProjectType.RD.value:
             raise BusinessLogicError("仅研发项目可下推交付项目")
 
-        release_gate = await RdProjectGate.get_or_none(
+        spawn_gate = await RdProjectGate.get_or_none(
             tenant_id=tenant_id,
             project_id=source_project_id,
-            gate_key="release",
+            milestone_role=GateMilestoneRole.SPAWN_DELIVERY.value,
         )
-        if not release_gate or release_gate.status != RdGateStatus.PASSED.value:
-            status_label = release_gate.status if release_gate else "未找到"
+        if not spawn_gate or spawn_gate.status != RdGateStatus.PASSED.value:
+            status_label = spawn_gate.status if spawn_gate else "未找到"
+            gate_label = spawn_gate.gate_name if spawn_gate else "下推交付里程碑"
             raise BusinessLogicError(
-                f"研发项目量产发布阶段门尚未通过（当前: {status_label}），无法创建交付项目"
+                f"研发项目「{gate_label}」阶段门尚未通过（当前: {status_label}），无法创建交付项目"
             )
 
         async with in_transaction():

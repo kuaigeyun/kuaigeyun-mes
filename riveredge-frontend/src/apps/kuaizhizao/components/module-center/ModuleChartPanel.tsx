@@ -5,6 +5,7 @@ import {
   MODULE_PANEL_TITLE_ICON_SIZE,
   MODULE_PANEL_TITLE_STYLE,
   MODULE_CENTER_GUTTER,
+  modulePanelSurfaceStyle,
 } from './constants';
 
 export interface ModuleChartPanelProps {
@@ -17,10 +18,12 @@ export interface ModuleChartPanelProps {
   };
   loading?: boolean;
   height?: number;
+  /** 内容区随子元素高度（如研发看板甘特图），body 留 8px 内边距 */
+  fitContent?: boolean;
   children: React.ReactNode;
   lg?: number;
-  /** grid：Ant Row 栅格；masonry：配合 ModuleActionMasonry 瀑布流 */
-  layout?: 'grid' | 'masonry';
+  /** grid：Ant Row 栅格；masonry：瀑布流内块；standalone：ModuleCenterLayout fullWidthRow 整行（不再包 Col） */
+  layout?: 'grid' | 'masonry' | 'standalone';
 }
 
 export function ModuleChartPanel({
@@ -29,6 +32,7 @@ export function ModuleChartPanel({
   segmented,
   loading,
   height = 280,
+  fitContent = false,
   children,
   lg = 12,
   layout = 'grid',
@@ -46,6 +50,10 @@ export function ModuleChartPanel({
 
   const card = (
     <Card
+      variant="borderless"
+      className={['module-chart-panel', fitContent ? 'module-chart-panel--fit-content' : '']
+        .filter(Boolean)
+        .join(' ')}
       title={titleNode}
       extra={
         segmented ? (
@@ -60,7 +68,7 @@ export function ModuleChartPanel({
         )
       }
       style={{
-        borderRadius: token.borderRadiusLG,
+        ...modulePanelSurfaceStyle(token),
         width: '100%',
         ...(layout === 'grid' ? { height: '100%' } : {}),
       }}
@@ -71,15 +79,23 @@ export function ModuleChartPanel({
           borderBottom: `1px solid ${token.colorSplit}`,
         },
         title: MODULE_PANEL_TITLE_STYLE,
-        body: {
-          padding: '12px 16px 8px',
-          minHeight: height,
-          display: 'flex',
-          flexDirection: 'column',
-        },
+        body: fitContent
+          ? {
+              padding: 8,
+              display: 'block',
+            }
+          : {
+              padding: '12px 16px 8px',
+              minHeight: height,
+              display: 'flex',
+              flexDirection: 'column',
+            },
       }}
     >
-      <Spin spinning={!!loading} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <Spin
+        spinning={!!loading}
+        style={fitContent ? { display: 'block' } : { flex: 1, display: 'flex', flexDirection: 'column' }}
+      >
         {children}
       </Spin>
     </Card>
@@ -97,6 +113,10 @@ export function ModuleChartPanel({
         {card}
       </div>
     );
+  }
+
+  if (layout === 'standalone') {
+    return <div style={{ width: '100%', minWidth: 0 }}>{card}</div>;
   }
 
   return (

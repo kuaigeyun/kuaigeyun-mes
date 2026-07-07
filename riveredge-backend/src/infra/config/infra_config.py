@@ -42,6 +42,30 @@ class InfraSettings(BaseSettings):
         default="",
         description="当前部署构建/更新时间 ISO 8601 UTC（fast-deploy 写入 .env）",
     )
+    INSTALL_INSTANCE_ID: str = Field(
+        default="",
+        description="部署实例 UUID（fast-deploy 首次写入，用于可选登记引用）",
+    )
+    BUILD_GIT_REMOTE: str = Field(
+        default="",
+        description="部署时 git remote get-url origin（fast-deploy 写入 .env）",
+    )
+    BUILD_GIT_BRANCH: str = Field(
+        default="",
+        description="部署时 git 分支名（fast-deploy 写入 .env）",
+    )
+    INSTALL_TELEMETRY_ENABLED: bool = Field(
+        default=True,
+        description="是否允许可选实例登记（false 关闭，见 docs/telemetry-disclosure.md）",
+    )
+    OFFICIAL_PROVENANCE_ENABLED: bool = Field(
+        default=True,
+        description="是否启用 Gitee commit 外网校验（false 跳过外网校验）",
+    )
+    INSTALL_REPO_SUMMARY_ADMIN_ENABLED: bool = Field(
+        default=False,
+        description="是否启用构建来源汇总管理（仅 kuaigeyun.com 官方 SaaS 设为 true）",
+    )
 
     # 服务器配置
     HOST: str = Field(default="127.0.0.1", description="服务器地址（Windows 使用 127.0.0.1，Linux/Mac 使用 0.0.0.0）")

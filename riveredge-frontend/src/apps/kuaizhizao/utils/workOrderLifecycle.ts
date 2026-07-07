@@ -217,13 +217,33 @@ export function resolveWorkOrderListStatusFilter(
   return resolveWorkOrderListLifecycleParams(searchFormValues, searchFormValues).status;
 }
 
-/** 计划完工日已早于今天，且工单已下达或执行中（与列表「逾期」Tag 口径一致） */
+/** 终态工单不参与计划交期逾期判定（与后端菜单徽章口径一致） */
+const WORK_ORDER_OVERDUE_EXCLUDED_STATUSES = new Set([
+  'completed',
+  '已完成',
+  'COMPLETED',
+  'cancelled',
+  '已取消',
+  'CANCELLED',
+  'split',
+  '已拆分',
+  'SPLIT',
+]);
+
+/** 计划完工时刻已过，且工单非终态（与菜单逾期徽章、延期异常检测口径一致） */
 export function isWorkOrderPlannedEndOverdue(
   record: Pick<WorkOrder, 'planned_end_date' | 'status'>,
 ): boolean {
-  return Boolean(
-    record.planned_end_date
-      && ['released', 'in_progress', '已下达', '执行中'].includes(record.status || '')
-      && dayjs(record.planned_end_date).isBefore(dayjs(), 'day'),
-  );
+  if (!record.planned_end_date) {
+    return false;
+  }
+  const status = record.status || '';
+  if (WORK_ORDER_OVERDUE_EXCLUDED_STATUSES.has(status)) {
+    return false;
+  }
+  const lifecycleKey = STATUS_TO_KEY[status];
+  if (lifecycleKey && ['completed', 'cancelled', 'split'].includes(lifecycleKey)) {
+    return false;
+  }
+  return dayjs(record.planned_end_date).isBefore(dayjs());
 }

@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { App, Table } from 'antd';
 import {
   InboxOutlined,
@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { getWarehouseDashboardSummary, type WarehouseDashboardSummary } from '../../../services/warehouse-dashboard';
+import { inventoryAlertApi } from '../../../services/inventory-alert';
 import { mesDashboardService } from '../../../services/dashboard';
 import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
 import { AmountDisplay } from '../../../../../components/permission';
@@ -27,13 +28,9 @@ import {
   ModuleActionMasonry,
   ModuleTodoList,
   ModuleChartPanel,
+  ModuleTrendLine,
 } from '../../../components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
-
-const WarehouseTrendLine = lazy(async () => {
-  const { Line } = await import('@ant-design/charts');
-  return { default: (props: React.ComponentProps<typeof Line>) => <Line {...props} /> };
-});
 
 const WarehouseDashboard: React.FC = () => {
   const { t } = useTranslation();
@@ -56,6 +53,10 @@ const WarehouseDashboard: React.FC = () => {
     mesDashboardService.getWarehouseTrend,
     'kz:warehouse-dashboard:trend',
   );
+  const { data: alertRows, loading: alertsLoading } = useDashboardRequest(async () => {
+    const res = await inventoryAlertApi.list({ limit: 6, status: 'pending' });
+    return Array.isArray(res) ? res : (res as { items?: unknown[] })?.items ?? [];
+  }, 'kz:warehouse-dashboard:inventory-alerts');
 
   const s = data as WarehouseDashboardSummary | undefined;
   const todos = todosData?.items || [];
@@ -219,6 +220,27 @@ const WarehouseDashboard: React.FC = () => {
     [formatTime, t],
   );
 
+  const alertColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.warehouseDashboard.colMaterial'),
+        dataIndex: 'material_name',
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseDashboard.colAlertLevel'),
+        dataIndex: 'alert_level',
+        width: 72,
+        render: (level: string) => (
+          <Tag color={String(level).includes('缺') || level === 'out_of_stock' ? 'error' : 'warning'}>
+            {level || '—'}
+          </Tag>
+        ),
+      },
+    ],
+    [t],
+  );
+
   return (
     <ModuleCenterLayout
       loading={loading && !s}
@@ -226,6 +248,16 @@ const WarehouseDashboard: React.FC = () => {
       shortcutRow={<ModuleShortcutGrid items={shortcuts} colProps={{ xs: 12, sm: 8, md: 4 }} />}
       actionRow={
         <ModuleActionMasonry>
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.warehouseDashboard.todosTitle')}
+            loading={todosLoading}
+          >
+            <ModuleTodoList
+              items={todos}
+              emptyText={t('app.kuaizhizao.warehouseDashboard.noTodos')}
+            />
+          </ModuleActionPanel>
           <ModuleActionPanel
             layout="masonry"
             title={t('app.kuaizhizao.warehouseDashboard.pendingInboundTitle')}
@@ -241,6 +273,7 @@ const WarehouseDashboard: React.FC = () => {
               pagination={false}
               rowKey={(r) => `${r.doc_type}-${r.doc_code}`}
               columns={queueColumns}
+              locale={{ emptyText: t('app.kuaizhizao.warehouseDashboard.noPendingInbound') }}
             />
           </ModuleActionPanel>
           <ModuleActionPanel
@@ -258,16 +291,26 @@ const WarehouseDashboard: React.FC = () => {
               pagination={false}
               rowKey={(r) => `${r.doc_type}-${r.doc_code}`}
               columns={queueColumns}
+              locale={{ emptyText: t('app.kuaizhizao.warehouseDashboard.noPendingOutbound') }}
             />
           </ModuleActionPanel>
           <ModuleActionPanel
             layout="masonry"
-            title={t('app.kuaizhizao.warehouseDashboard.todosTitle')}
-            loading={todosLoading}
+            title={t('app.kuaizhizao.warehouseDashboard.inventoryAlertsTitle')}
+            loading={alertsLoading}
+            extra={
+              <a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory-alert')}>
+                {t('app.kuaizhizao.warehouseDashboard.more')}
+              </a>
+            }
           >
-            <ModuleTodoList
-              items={todos}
-              emptyText={t('app.kuaizhizao.warehouseDashboard.noTodos')}
+            <Table
+              size="small"
+              dataSource={(alertRows as Record<string, unknown>[]) ?? []}
+              pagination={false}
+              rowKey={(r) => String(r.id ?? r.uuid ?? `${r.material_id}-${r.warehouse_id}`)}
+              columns={alertColumns}
+              locale={{ emptyText: t('app.kuaizhizao.warehouseDashboard.noInventoryAlerts') }}
             />
           </ModuleActionPanel>
           <ModuleChartPanel
@@ -276,20 +319,17 @@ const WarehouseDashboard: React.FC = () => {
             loading={trendLoading}
             height={260}
           >
-            <Suspense fallback={null}>
-              <WarehouseTrendLine
+            <ModuleTrendLine
                 data={trendChartData}
                 xField="date"
                 yField="value"
                 colorField="type"
                 height={260}
                 autoFit
-                shapeField="smooth"
                 style={{ lineWidth: 2 }}
                 axis={{ x: { title: false }, y: { title: false } }}
                 legend={{ color: { itemLabelFontSize: 13 } }}
               />
-            </Suspense>
           </ModuleChartPanel>
         </ModuleActionMasonry>
       }

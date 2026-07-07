@@ -6,7 +6,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Tag, Drawer, Descriptions, Spin } from 'antd';
+import { App, Button, Modal, Typography, Tag, Drawer, Descriptions, Spin, Alert, Table, Empty } from 'antd';
 import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
@@ -15,13 +15,16 @@ import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import dayjs from 'dayjs';
 import { getFinanceVoucherLifecycle } from '../../../utils/financeLifecycle';
-import { receivableService } from '../../../services/finance/receivable';
-import { receiptService } from '../../../services/finance/receipt';
+import {
+  receiptService,
+  type ReceiptPullCandidate,
+  type ReceiptPullPreview,
+} from '../../../services/finance/receipt';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
 import {
@@ -33,6 +36,8 @@ import {
 } from '../../../utils/financeSharedOptions';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
+import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
+import { receiptCapabilityReasonMessage } from '../../../utils/receiptCapabilityMessages';
 import { formatDateTime } from '../../../../../utils/format';
 
 interface ReceiptVoucher {
@@ -53,22 +58,19 @@ interface ReceiptVoucher {
   created_at: string;
 }
 
-type PullReceivableCandidate = {
-  id: number;
-  receivable_code: string;
-  customer_id: number;
-  customer_name: string;
-  due_date?: string;
-  review_status?: string;
-  status?: string;
-  remaining_amount: number;
-};
+type PullReceivableCandidate = ReceiptPullCandidate;
 
 const R = 'app.kuaicaiwu.receipt';
 
 const ReceiptsPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
+  const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
+  const [pullPreviewData, setPullPreviewData] = useState<ReceiptPullPreview | null>(null);
+  const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
+  const pullFormRef = useRef<any>(null);
+  const pullFromReceivableCloseRef = useRef<(() => void) | null>(null);
   const [pullSubmitting, setPullSubmitting] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
@@ -155,86 +157,123 @@ const ReceiptsPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
-  const loadPullReceivableCandidates = async (
-    keyword: string,
-    page: number,
-    pageSize: number,
-  ): Promise<{ data: PullReceivableCandidate[]; total: number }> => {
-    const kw = keyword.trim().toLowerCase();
-    const res = await receivableService.listReceivables({ skip: 0, limit: 200 });
-    const rows = (res?.items || [])
-      .filter((r: any) => Number(r?.remaining_amount || 0) > 0)
-      .map((r: any) => ({
-        id: Number(r.id),
-        receivable_code: String(r.receivable_code || ''),
-        customer_id: Number(r.customer_id),
-        customer_name: String(r.customer_name || ''),
-        due_date: r.due_date,
-        review_status: r.review_status,
-        status: r.status,
-        remaining_amount: Number(r.remaining_amount || 0),
-      }))
-      .filter((r: PullReceivableCandidate) => {
-        if (!kw) return true;
-        return `${r.receivable_code} ${r.customer_name}`.toLowerCase().includes(kw);
+  const resetPullPreview = () => {
+    setPullPreviewOpen(false);
+    setPullPreviewSourceId(null);
+    setPullPreviewData(null);
+    pullFormRef.current?.resetFields();
+  };
+
+  const openPullPreview = async (receivableId: number) => {
+    setPullPreviewOpen(true);
+    setPullPreviewLoading(true);
+    setPullPreviewData(null);
+    setPullPreviewSourceId(receivableId);
+    try {
+      const data = await receiptService.previewPullFromReceivable(receivableId);
+      setPullPreviewData(data);
+      const maxPush = Number(data.items?.[0]?.max_push_quantity ?? 0);
+      pullFormRef.current?.setFieldsValue({
+        source_code: data.source_code,
+        customer_name: data.customer_name,
+        total_amount: maxPush > 0 ? maxPush : undefined,
+        receipt_date: dayjs(),
+        payment_method: '银行转账',
+        settlement_type: 'normal',
+        notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
+          source: pullFromReceivableAction.sourceLabel,
+          code: data.source_code,
+        }),
       });
-    const start = (page - 1) * pageSize;
-    return { data: rows.slice(start, start + pageSize), total: rows.length };
+    } catch (e: any) {
+      messageApi.error(
+        e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${R}.loadSourceFailed`),
+      );
+      resetPullPreview();
+    } finally {
+      setPullPreviewLoading(false);
+    }
   };
 
   const pullFromReceivableQuery = useUniPullQuery<PullReceivableCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
+    isRowDisabled: (record) => record.capabilities?.pull_receipt?.allowed === false,
     loadData: async ({ keyword, page, pageSize }) => {
       try {
-        return await loadPullReceivableCandidates(keyword, page, pageSize);
-      } catch {
+        const res = await receiptService.listReceivablePullCandidates({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+        });
+        return { data: res.data || [], total: res.total ?? 0 };
+      } catch (e: any) {
+        messageApi.error(
+          e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${R}.loadSourceFailed`),
+        );
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => Number(record.remaining_amount || 0) <= 0,
     onConfirm: async (keys, rows) => {
       const selected = rows.find((x) => String(x.id) === String(keys[0]));
-      if (!selected) {
-        messageApi.warning(t('app.kuaicaiwu.common.selectSource', { source: pullFromReceivableAction.sourceLabel }));
+      if (!selected?.id) {
+        messageApi.warning(t(`${R}.selectSource`, { label: pullFromReceivableAction.sourceLabel }));
         return;
       }
-    if (selected.remaining_amount <= 0) {
-      messageApi.warning(t('app.kuaicaiwu.common.sourceNoRemaining', {
-        source: pullFromReceivableAction.sourceLabel,
-        target: pullFromReceivableAction.targetLabel,
-      }));
-      return;
-    }
-      setPullSubmitting(true);
-      try {
-        await apiRequest('/apps/kuaicaiwu/receipts', {
-          method: 'POST',
-          data: {
-            customer_id: selected.customer_id,
-            customer_name: selected.customer_name,
-            total_amount: selected.remaining_amount,
-            receipt_date: formatDateTime(dayjs(), 'YYYY-MM-DD'),
-            payment_method: '银行转账',
-            notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
-              source: pullFromReceivableAction.sourceLabel,
-              code: selected.receivable_code,
-            }),
-          },
-        });
-        messageApi.success(t('app.kuaicaiwu.common.createdFromSource', {
-          source: pullFromReceivableAction.sourceLabel,
-          target: pullFromReceivableAction.targetLabel,
-        }));
-        pullFromReceivableQuery.closeModal();
-        actionRef.current?.reload();
-      } catch (e: any) {
-        messageApi.error(e?.response?.data?.detail || e?.message || t('common.createFailed'));
-      } finally {
-        setPullSubmitting(false);
-      }
+      pullFromReceivableCloseRef.current?.();
+      await openPullPreview(selected.id);
     },
   });
+  pullFromReceivableCloseRef.current = pullFromReceivableQuery.closeModal;
+
+  const handlePullCreateSubmit = async (values: any) => {
+    if (!pullPreviewData || !pullPreviewSourceId) return false;
+    if (pullPreviewData.has_blocking_issues) return false;
+    const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
+    const totalAmount = Number(values.total_amount) || 0;
+    if (totalAmount <= 0) {
+      messageApi.warning(t(`${R}.amountRequired`));
+      return false;
+    }
+    if (totalAmount > maxPush) {
+      messageApi.warning(t(`${R}.pullExceedMax`, { max: maxPush.toFixed(2) }));
+      return false;
+    }
+    const bank = bankAccountOptions.find((o) => o.value === values.bank_account_id);
+    setPullSubmitting(true);
+    try {
+      await receiptService.create({
+        customer_id: Number(pullPreviewData.customer_id || 0),
+        customer_name: pullPreviewData.customer_name || '',
+        source_type: 'receivable',
+        source_id: pullPreviewSourceId,
+        total_amount: totalAmount,
+        receipt_date: formatDateTime(values.receipt_date || dayjs(), 'YYYY-MM-DD'),
+        payment_method: values.payment_method,
+        bank_account_id: values.bank_account_id,
+        bank_account: bank?.account_number || values.bank_account,
+        settlement_type: values.settlement_type || 'normal',
+        notes:
+          String(values.notes ?? '').trim() ||
+          t('app.kuaicaiwu.common.createdFromSourceNote', {
+            source: pullFromReceivableAction.sourceLabel,
+            code: pullPreviewData.source_code,
+          }),
+        attachments: normalizeDocumentAttachments(values.attachments),
+      });
+      messageApi.success(t(`${R}.pullCreateSuccess`, { target: pullFromReceivableAction.targetLabel }));
+      resetPullPreview();
+      actionRef.current?.reload();
+      return true;
+    } catch (e: any) {
+      messageApi.error(
+        e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t('common.createFailed'),
+      );
+      return false;
+    } finally {
+      setPullSubmitting(false);
+    }
+  };
 
   const handleConfirm = async (record: ReceiptVoucher) => {
     Modal.confirm({
@@ -324,36 +363,46 @@ const ReceiptsPage: React.FC = () => {
     }
   };
 
-  const pullTableColumns = useMemo(() => [
-    { title: t(`${R}.pullCol.receivableCode`), dataIndex: 'receivable_code', width: 220, ellipsis: true },
-    { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', width: 220, ellipsis: true },
-    { title: t('app.kuaicaiwu.common.businessStatus'), dataIndex: 'status', width: 120, align: 'center' as const },
-    { title: t('app.kuaicaiwu.common.reviewStatus'), dataIndex: 'review_status', width: 120, align: 'center' as const },
-    {
-      title: t('app.kuaicaiwu.common.dueDate'),
-      dataIndex: 'due_date',
-      width: 120,
-      render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
-    },
-    {
-      title: t('app.kuaicaiwu.receivable.col.remainingAmount'),
-      dataIndex: 'remaining_amount',
-      width: 140,
-      align: 'right' as const,
-      render: (v: number) => `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`,
-    },
-    {
-      title: t(`${R}.pullCol.canCreate`),
-      key: 'can_create',
-      width: 100,
-      align: 'center' as const,
-      render: (_: unknown, r: PullReceivableCandidate) => (
-        Number(r.remaining_amount || 0) > 0
-          ? <Tag color="success">{t(`${R}.pullTag.canCreate`)}</Tag>
-          : <Tag>{t(`${R}.pullTag.cannotCreate`)}</Tag>
-      ),
-    },
-  ], [t]);
+  const pullTableColumns = useMemo(
+    () => [
+      { title: t(`${R}.pullCol.receivableCode`), dataIndex: 'code', width: 220, ellipsis: true },
+      { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', width: 200, ellipsis: true },
+      {
+        title: t('app.kuaicaiwu.common.businessStatus'),
+        dataIndex: 'source_status',
+        width: 120,
+        align: 'center' as const,
+        render: (v: unknown) => {
+          const { text, color } = getStatusDisplay(v);
+          return text === '-' ? '-' : <Tag color={color}>{text}</Tag>;
+        },
+      },
+      {
+        title: t('app.kuaicaiwu.common.reviewStatus'),
+        dataIndex: 'review_status',
+        width: 120,
+        align: 'center' as const,
+      },
+      {
+        title: t('app.kuaicaiwu.common.dueDate'),
+        dataIndex: 'source_date',
+        width: 120,
+        render: (v: unknown) => (v ? formatDateTime(String(v), 'YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaicaiwu.receivable.col.remainingAmount'),
+        dataIndex: 'remaining_amount',
+        width: 140,
+        align: 'right' as const,
+        render: (v: unknown) => `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`,
+      },
+    ],
+    [t],
+  );
+
+  const pullPreviewMaxPush = Number(pullPreviewData?.items?.[0]?.max_push_quantity ?? 0);
+  const formatPullMoney = (v: number) =>
+    `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
 
   const batchMenuItems = useMemo(() => [
     {
@@ -571,7 +620,7 @@ const ReceiptsPage: React.FC = () => {
         columns={pullTableColumns}
         dataSource={pullFromReceivableQuery.dataSource}
         loading={pullFromReceivableQuery.loading}
-        confirmLoading={pullSubmitting || pullFromReceivableQuery.confirmLoading}
+        confirmLoading={pullFromReceivableQuery.confirmLoading}
         selectionType={pullFromReceivableQuery.selectionType}
         selectedRowKeys={pullFromReceivableQuery.selectedRowKeys}
         onSelectedRowKeysChange={pullFromReceivableQuery.handleSelectedRowKeysChange}
@@ -586,8 +635,151 @@ const ReceiptsPage: React.FC = () => {
         pageSize={pullFromReceivableQuery.pageSize}
         total={pullFromReceivableQuery.total}
         onPageChange={pullFromReceivableQuery.handlePageChange}
-        okText={t('app.kuaicaiwu.common.createTarget', { target: pullFromReceivableAction.targetLabel })}
+        okText={t('components.uniLifecycle.nextStep')}
       />
+
+      <Modal
+        title={pullFromReceivableAction.label}
+        open={pullPreviewOpen}
+        destroyOnClose
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        onCancel={resetPullPreview}
+        okText={pullFromReceivableAction.targetLabel}
+        cancelText={t('common.cancel')}
+        confirmLoading={pullSubmitting}
+        onOk={() => pullFormRef.current?.submit?.()}
+        okButtonProps={{
+          disabled:
+            pullPreviewLoading ||
+            !pullPreviewData ||
+            !!pullPreviewData?.has_blocking_issues ||
+            pullPreviewMaxPush <= 0,
+        }}
+      >
+        {pullPreviewLoading ? (
+          <div
+            style={{
+              minHeight: 120,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 12,
+            }}
+          >
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>
+              {t('app.kuaizhizao.salesOrder.loadingPreview')}
+            </div>
+          </div>
+        ) : pullPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
+            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={receiptCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
+              />
+            ) : null}
+            {pullPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pullPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 720 }}
+                columns={[
+                  { title: t(`${R}.pullCol.receivableCode`), dataIndex: 'source_code', width: 140, ellipsis: true },
+                  { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', width: 160, ellipsis: true },
+                  {
+                    title: t(`${R}.pull.col.docAmount`),
+                    dataIndex: 'quantity',
+                    width: 120,
+                    align: 'right',
+                    render: (v: number) => formatPullMoney(v),
+                  },
+                  {
+                    title: t(`${R}.pull.col.receivedAmount`),
+                    dataIndex: 'pushed_quantity',
+                    width: 120,
+                    align: 'right',
+                    render: (v: number) => formatPullMoney(v),
+                  },
+                  {
+                    title: t(`${R}.pull.col.receivableAmount`),
+                    dataIndex: 'max_push_quantity',
+                    width: 120,
+                    align: 'right',
+                    render: (v: number) => formatPullMoney(v),
+                  },
+                ]}
+              />
+            ) : (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')}
+              />
+            )}
+            {pullPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 16 }}>
+                {pullPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+            {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
+              <ModalForm
+                formRef={pullFormRef}
+                submitter={false}
+                onFinish={handlePullCreateSubmit}
+                layout="vertical"
+              >
+                <ProFormText name="source_code" label={t(`${R}.pullCol.receivableCode`)} readonly />
+                <ProFormText name="customer_name" label={t('app.kuaicaiwu.common.customer')} readonly />
+                <ProFormMoney
+                  name="total_amount"
+                  label={t(`${R}.col.amount`)}
+                  min={0.01}
+                  rules={[{ required: true, message: t(`${R}.col.amount`) }]}
+                />
+                <ProFormDatePicker
+                  name="receipt_date"
+                  label={t(`${R}.col.receiptDate`)}
+                  rules={[{ required: true }]}
+                  fieldProps={{ style: { width: '100%' } }}
+                />
+                <ProFormSelect
+                  name="payment_method"
+                  label={t(`${R}.col.paymentMethod`)}
+                  options={paymentMethodOptions}
+                  rules={[{ required: true, message: t(`${R}.selectPaymentMethod`) }]}
+                />
+                <ProFormSelect
+                  name="settlement_type"
+                  label={t(`${R}.settlementType.label`)}
+                  options={receiptSettlementTypeOptions}
+                  initialValue="normal"
+                />
+                <ProFormSelect
+                  name="bank_account_id"
+                  label={t(`${R}.bankAccount`)}
+                  options={bankAccountOptions}
+                  placeholder={t(`${R}.bankAccountPlaceholder`)}
+                  showSearch
+                  allowClear
+                />
+                <ProFormText
+                  name="bank_account"
+                  label={t(`${R}.bankAccountNote`)}
+                  placeholder={t(`${R}.bankAccountNotePlaceholder`)}
+                />
+                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} />
+                <DocumentAttachmentsField category="receipt_attachments" />
+              </ModalForm>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
 
       <ModalForm
         title={t(`${R}.createTitle`)}

@@ -20,11 +20,11 @@ import {
   ModuleKpiRow,
   ModuleShortcutGrid,
   ModuleActionPanel,
+  ModuleActionMasonry,
   ModuleTodoList,
   ModuleChartPanel,
-  ModuleChartRow,
 } from '../../../../kuaizhizao/components/module-center';
-import type { ModuleKpiDef, ModuleShortcutDef } from '../../../../kuaizhizao/components/module-center';
+import type { ModuleKpiDef, ModuleShortcutDef, ModuleTodoItem } from '../../../../kuaizhizao/components/module-center';
 
 const FinanceCenterDashboard: React.FC = () => {
   const { t } = useTranslation();
@@ -94,6 +94,30 @@ const FinanceCenterDashboard: React.FC = () => {
         gradient: 'linear-gradient(135deg, #faad14 0%, #ffbb33 100%)',
         onClick: () => navigate('/apps/kuaicaiwu/finance-management/payables'),
       },
+      {
+        key: 'pipeline',
+        title: t('app.kuaicaiwu.financeDashboard.kpi.openFinanceDocuments'),
+        value: s?.open_finance_document_count ?? 0,
+        subtitle: t('app.kuaicaiwu.financeDashboard.kpi.openFinanceDocumentsSubtitle', {
+          receivable: s?.open_receivable_count ?? 0,
+          payable: s?.open_payable_count ?? 0,
+          receipt: s?.unsettled_receipt_count ?? 0,
+          payment: s?.unsettled_payment_count ?? 0,
+        }),
+        icon: <ReconciliationOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        gradient: 'linear-gradient(135deg, #722ed1 0%, #9254de 100%)',
+        onClick: () => navigate('/apps/kuaicaiwu/finance-management/document-reconciliation'),
+        sideMetrics: [
+          {
+            label: t('app.kuaicaiwu.financeDashboard.kpi.openReceivableAmount'),
+            value: `¥${Number(s?.open_receivable_amount ?? 0).toFixed(0)}`,
+          },
+          {
+            label: t('app.kuaicaiwu.financeDashboard.kpi.openPayableAmount'),
+            value: `¥${Number(s?.open_payable_amount ?? 0).toFixed(0)}`,
+          },
+        ],
+      },
     ],
     [navigate, s, kpis, t],
   );
@@ -136,59 +160,147 @@ const FinanceCenterDashboard: React.FC = () => {
         icon: <ReconciliationOutlined style={{ fontSize: 22, color: '#13c2c2' }} />,
         path: '/apps/kuaicaiwu/finance-management/partner-statements',
       },
+      {
+        key: 'doc-recon',
+        title: t('app.kuaicaiwu.financeDashboard.shortcut.documentReconciliation'),
+        icon: <FileTextOutlined style={{ fontSize: 22, color: '#722ed1' }} />,
+        path: '/apps/kuaicaiwu/finance-management/document-reconciliation',
+      },
     ],
     [t],
   );
 
-  const todoItems = useMemo(() => {
-    const list = [];
-    if ((s?.pending_receipts ?? 0) > 0) {
-      list.push({
-        id: 'fin-receipt',
-        type: 'finance',
-        title: t('app.kuaicaiwu.financeDashboard.todo.pendingReceipts', {
-          count: s?.pending_receipts ?? 0,
+  const makeTodo = (
+    id: string,
+    title: string,
+    link: string,
+    priority: 'high' | 'medium' | 'low',
+  ): ModuleTodoItem => ({
+    id,
+    type: 'finance',
+    title,
+    priority,
+    status: 'pending',
+    link,
+    created_at: new Date().toISOString(),
+  });
+
+  const pendingReceiptTodos = useMemo(() => {
+    if ((s?.pending_receipts ?? 0) <= 0) return [];
+    return [
+      makeTodo(
+        'fin-receipt',
+        t('app.kuaicaiwu.financeDashboard.todo.pendingReceipts', { count: s?.pending_receipts ?? 0 }),
+        '/apps/kuaicaiwu/finance-management/receipts',
+        'medium',
+      ),
+    ];
+  }, [s, t]);
+
+  const pendingPaymentTodos = useMemo(() => {
+    if ((s?.pending_payments ?? 0) <= 0) return [];
+    return [
+      makeTodo(
+        'fin-payment',
+        t('app.kuaicaiwu.financeDashboard.todo.pendingPayments', { count: s?.pending_payments ?? 0 }),
+        '/apps/kuaicaiwu/finance-management/payments',
+        'medium',
+      ),
+    ];
+  }, [s, t]);
+
+  const overdueArTodos = useMemo(() => {
+    if ((s?.overdue_receivables ?? 0) <= 0) return [];
+    return [
+      makeTodo(
+        'fin-ar',
+        t('app.kuaicaiwu.financeDashboard.todo.overdueReceivables', { count: s?.overdue_receivables ?? 0 }),
+        '/apps/kuaicaiwu/finance-management/receivables',
+        'high',
+      ),
+    ];
+  }, [s, t]);
+
+  const openDocTodos = useMemo(() => {
+    if ((s?.open_finance_document_count ?? 0) <= 0) return [];
+    return [
+      makeTodo(
+        'fin-pipeline',
+        t('app.kuaicaiwu.financeDashboard.todo.openFinanceDocuments', {
+          count: s?.open_finance_document_count ?? 0,
         }),
-        priority: 'medium',
-        status: 'pending',
-        link: '/apps/kuaicaiwu/finance-management/receipts',
-        created_at: new Date().toISOString(),
-      });
-    }
-    if ((s?.overdue_receivables ?? 0) > 0) {
-      list.push({
-        id: 'fin-ar',
-        type: 'finance',
-        title: t('app.kuaicaiwu.financeDashboard.todo.overdueReceivables', {
-          count: s?.overdue_receivables ?? 0,
-        }),
-        priority: 'high',
-        status: 'pending',
-        link: '/apps/kuaicaiwu/finance-management/receivables',
-        created_at: new Date().toISOString(),
-      });
-    }
-    return list;
+        '/apps/kuaicaiwu/finance-management/document-reconciliation',
+        'medium',
+      ),
+    ];
   }, [s, t]);
 
   return (
     <ModuleCenterLayout
       loading={loading && !s}
-      kpiRow={<ModuleKpiRow items={kpisRow} />}
-      shortcutRow={<ModuleShortcutGrid items={shortcuts} colProps={{ xs: 12, sm: 8, md: 4, lg: 4 }} />}
+      kpiRow={<ModuleKpiRow items={kpisRow} colProps={{ xs: 24, sm: 12, lg: 6 }} />}
+      shortcutRow={<ModuleShortcutGrid items={shortcuts} colProps={{ xs: 12, sm: 8, md: 4, lg: 4 }} fillByItemCount />}
       actionRow={
-        <ModuleActionPanel title={t('app.kuaicaiwu.financeDashboard.todosTitle')} lg={24}>
-          <ModuleTodoList
-            items={todoItems}
-            emptyText={t('app.kuaicaiwu.financeDashboard.noTodos')}
-          />
-        </ModuleActionPanel>
-      }
-      chartRow={
-        <ModuleChartRow>
+        <ModuleActionMasonry>
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaicaiwu.financeDashboard.panel.pendingReceipts')}
+            extra={
+              <a onClick={() => navigate('/apps/kuaicaiwu/finance-management/receipts')}>
+                {t('app.kuaicaiwu.financeDashboard.viewAll')}
+              </a>
+            }
+          >
+            <ModuleTodoList
+              items={pendingReceiptTodos}
+              emptyText={t('app.kuaicaiwu.financeDashboard.noPendingReceipts')}
+            />
+          </ModuleActionPanel>
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaicaiwu.financeDashboard.panel.pendingPayments')}
+            extra={
+              <a onClick={() => navigate('/apps/kuaicaiwu/finance-management/payments')}>
+                {t('app.kuaicaiwu.financeDashboard.viewAll')}
+              </a>
+            }
+          >
+            <ModuleTodoList
+              items={pendingPaymentTodos}
+              emptyText={t('app.kuaicaiwu.financeDashboard.noPendingPayments')}
+            />
+          </ModuleActionPanel>
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaicaiwu.financeDashboard.panel.overdueReceivables')}
+            extra={
+              <a onClick={() => navigate('/apps/kuaicaiwu/finance-management/receivables')}>
+                {t('app.kuaicaiwu.financeDashboard.viewAll')}
+              </a>
+            }
+          >
+            <ModuleTodoList
+              items={overdueArTodos}
+              emptyText={t('app.kuaicaiwu.financeDashboard.noOverdueReceivables')}
+            />
+          </ModuleActionPanel>
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaicaiwu.financeDashboard.panel.openDocuments')}
+            extra={
+              <a onClick={() => navigate('/apps/kuaicaiwu/finance-management/document-reconciliation')}>
+                {t('app.kuaicaiwu.financeDashboard.viewAll')}
+              </a>
+            }
+          >
+            <ModuleTodoList
+              items={openDocTodos}
+              emptyText={t('app.kuaicaiwu.financeDashboard.noOpenDocuments')}
+            />
+          </ModuleActionPanel>
           <ModuleChartPanel
+            layout="masonry"
             title={t('app.kuaicaiwu.financeDashboard.receivableAgingTitle')}
-            lg={12}
             loading={loadingArAging}
             height={360}
           >
@@ -199,8 +311,8 @@ const FinanceCenterDashboard: React.FC = () => {
             />
           </ModuleChartPanel>
           <ModuleChartPanel
+            layout="masonry"
             title={t('app.kuaicaiwu.financeDashboard.payableAgingTitle')}
-            lg={12}
             loading={loadingApAging}
             height={360}
           >
@@ -210,7 +322,7 @@ const FinanceCenterDashboard: React.FC = () => {
               onOpenDetail={navigate}
             />
           </ModuleChartPanel>
-        </ModuleChartRow>
+        </ModuleActionMasonry>
       }
     />
   );

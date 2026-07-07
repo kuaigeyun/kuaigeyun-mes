@@ -27,6 +27,7 @@ import {
   type ProjectType,
   type RdProject,
 } from '../../services/rd-project';
+import { listGateTemplates } from '../../services/gate-template';
 import {
   buildRdProjectLifecycleValueEnum,
   getRdProjectLifecycle,
@@ -53,6 +54,7 @@ const RdProjectsListPage: React.FC = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [createProjectType, setCreateProjectType] = useState<ProjectType>('RD');
+  const [gateTemplateOptions, setGateTemplateOptions] = useState<{ label: string; value: number }[]>([]);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const createFormRef = useRef<any>(null);
   const selectedOwnerRef = useRef<{ id: number; name: string } | null>(null);
@@ -66,22 +68,37 @@ const RdProjectsListPage: React.FC = () => {
     (async () => {
       if (!isAutoGenerateEnabled(activePageCode)) {
         setPreviewCode(null);
-        return;
-      }
-      try {
-        const ruleCode = getPageRuleCode(activePageCode);
-        if (!ruleCode) {
+      } else {
+        try {
+          const ruleCode = getPageRuleCode(activePageCode);
+          if (!ruleCode) {
+            setPreviewCode(null);
+          } else {
+            const res = await testGenerateCode({ rule_code: ruleCode });
+            setPreviewCode(res.code);
+            createFormRef.current?.setFieldsValue({ project_code: res.code });
+          }
+        } catch {
           setPreviewCode(null);
-          return;
         }
-        const res = await testGenerateCode({ rule_code: ruleCode });
-        setPreviewCode(res.code);
-        createFormRef.current?.setFieldsValue({ project_code: res.code });
+      }
+
+      try {
+        const res = await listGateTemplates({ project_type: createProjectType, is_active: true });
+        const options = res.items.map((tpl) => ({
+          label: tpl.is_default ? `${tpl.template_name} (${t('app.kuaiplm.gateTemplates.defaultBadge')})` : tpl.template_name,
+          value: tpl.id,
+        }));
+        setGateTemplateOptions(options);
+        const defaultTpl = res.items.find((tpl) => tpl.is_default) ?? res.items[0];
+        if (defaultTpl) {
+          createFormRef.current?.setFieldsValue({ gate_template_id: defaultTpl.id });
+        }
       } catch {
-        setPreviewCode(null);
+        setGateTemplateOptions([]);
       }
     })();
-  }, [createOpen, activePageCode]);
+  }, [createOpen, activePageCode, createProjectType, t]);
 
   const handleCreate = useCallback(() => setCreateOpen(true), []);
   useNewShortcut(handleCreate);
@@ -420,6 +437,7 @@ const RdProjectsListPage: React.FC = () => {
             project_name: values.project_name,
             project_type: values.project_type ?? 'RD',
             source_project_id: values.source_project_id ? Number(values.source_project_id) : undefined,
+            gate_template_id: values.gate_template_id ? Number(values.gate_template_id) : undefined,
             owner_id: selectedOwnerRef.current?.id,
             owner_name: selectedOwnerRef.current?.name,
             planned_start_date: values.planned_start_date
@@ -450,7 +468,11 @@ const RdProjectsListPage: React.FC = () => {
           fieldProps={{
             onChange: (val: ProjectType) => {
               setCreateProjectType(val);
-              createFormRef.current?.setFieldsValue({ project_code: undefined, source_project_id: undefined });
+              createFormRef.current?.setFieldsValue({
+                project_code: undefined,
+                source_project_id: undefined,
+                gate_template_id: undefined,
+              });
             },
           }}
         />
@@ -470,6 +492,14 @@ const RdProjectsListPage: React.FC = () => {
             }}
           />
         ) : null}
+        <ProFormSelect
+          name="gate_template_id"
+          label={t('app.kuaiplm.rdProjects.form.gateTemplate')}
+          placeholder={t('app.kuaiplm.rdProjects.form.gateTemplatePlaceholder')}
+          colProps={{ span: 24 }}
+          options={gateTemplateOptions}
+          rules={[{ required: gateTemplateOptions.length > 0 }]}
+        />
         <ProFormText
           name="project_code"
           label={t('app.kuaiplm.rdProjects.form.projectCode')}

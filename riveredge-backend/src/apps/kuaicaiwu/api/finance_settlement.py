@@ -11,9 +11,12 @@ from loguru import logger
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_user
 from apps.kuaicaiwu.services.finance_service import AccountSettlementService
+from apps.kuaicaiwu.services.settlement_gate_service import SettlementGateService
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 
 router = APIRouter(prefix="/settlement", tags=["App · Kuaicaiwu · Settlement & Reconciliation"])
 service = AccountSettlementService()
+settlement_gate_service = SettlementGateService()
 
 
 def _http_exception_with_trace(
@@ -66,6 +69,41 @@ async def get_payable_suggestions(
     )
     return {"items": items, "total": len(items)}
 
+
+@router.get("/receivable/preview", summary="Preview receivable settlement")
+async def preview_settle_receivable(
+    receivable_id: int = Query(..., description="应收单ID"),
+    receipt_id: int = Query(..., description="收款单ID"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:read")),
+    current_user: Any = Depends(get_current_user),
+):
+    try:
+        return await settlement_gate_service.preview_settle_receivable(
+            tenant_id=current_user.tenant_id,
+            receivable_id=receivable_id,
+            receipt_id=receipt_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/settlement/receivable/preview", current_user.tenant_id) from e
+
+
+@router.get("/payable/preview", summary="Preview payable settlement")
+async def preview_settle_payable(
+    payable_id: int = Query(..., description="应付单ID"),
+    payment_id: int = Query(..., description="付款单ID"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:read")),
+    current_user: Any = Depends(get_current_user),
+):
+    try:
+        return await settlement_gate_service.preview_settle_payable(
+            tenant_id=current_user.tenant_id,
+            payable_id=payable_id,
+            payment_id=payment_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/settlement/payable/preview", current_user.tenant_id) from e
+
+
 @router.post("/receivable", summary="Settle receivable")
 async def settle_receivable(
     receivable_id: int,
@@ -77,16 +115,26 @@ async def settle_receivable(
     _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:update")),
     current_user: Any = Depends(get_current_user)
 ):
-    return await service.settle_receivable(
-        current_user.tenant_id,
-        receivable_id,
-        receipt_id,
-        amount,
-        current_user.id,
-        currency=currency,
-        invoice_exchange_rate=invoice_exchange_rate,
-        payment_exchange_rate=payment_exchange_rate,
-    )
+    try:
+        await settlement_gate_service.assert_settle_receivable_allowed(
+            tenant_id=current_user.tenant_id,
+            receivable_id=receivable_id,
+            receipt_id=receipt_id,
+            amount=amount,
+        )
+        return await service.settle_receivable(
+            current_user.tenant_id,
+            receivable_id,
+            receipt_id,
+            amount,
+            current_user.id,
+            currency=currency,
+            invoice_exchange_rate=invoice_exchange_rate,
+            payment_exchange_rate=payment_exchange_rate,
+        )
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(422, str(e), "/settlement/receivable", current_user.tenant_id) from e
+
 
 @router.post("/payable", summary="Settle payable")
 async def settle_payable(
@@ -99,16 +147,25 @@ async def settle_payable(
     _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:update")),
     current_user: Any = Depends(get_current_user)
 ):
-    return await service.settle_payable(
-        current_user.tenant_id,
-        payable_id,
-        payment_id,
-        amount,
-        current_user.id,
-        currency=currency,
-        invoice_exchange_rate=invoice_exchange_rate,
-        payment_exchange_rate=payment_exchange_rate,
-    )
+    try:
+        await settlement_gate_service.assert_settle_payable_allowed(
+            tenant_id=current_user.tenant_id,
+            payable_id=payable_id,
+            payment_id=payment_id,
+            amount=amount,
+        )
+        return await service.settle_payable(
+            current_user.tenant_id,
+            payable_id,
+            payment_id,
+            amount,
+            current_user.id,
+            currency=currency,
+            invoice_exchange_rate=invoice_exchange_rate,
+            payment_exchange_rate=payment_exchange_rate,
+        )
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(422, str(e), "/settlement/payable", current_user.tenant_id) from e
 
 @router.post("/auto-settle/receivables", summary="Auto-settle all receivables for customer (FIFO)")
 async def auto_settle_receivables(

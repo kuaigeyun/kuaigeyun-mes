@@ -28,6 +28,7 @@ export interface RdProject {
   actual_end_date?: string | null;
   current_gate_key?: string | null;
   current_gate_name?: string;
+  gate_template_id?: number | null;
   notes?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -46,6 +47,7 @@ export interface RdProjectGate {
   reviewer_name?: string | null;
   review_notes?: string | null;
   criteria?: string | null;
+  milestone_role?: 'none' | 'spawn_delivery' | null;
 }
 
 export interface RdProjectTask {

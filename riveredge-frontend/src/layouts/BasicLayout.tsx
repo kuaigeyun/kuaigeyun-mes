@@ -6,7 +6,7 @@
 
 import { ProLayout } from '@ant-design/pro-components';
 import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { Spin, theme } from 'antd';
 import { PageLoadingFullscreen } from '../components/page-loading-lottie';
 import type { MenuDataItem } from '@ant-design/pro-components';
@@ -152,6 +152,7 @@ import { useConfigStore, resolveEffectiveHomePath, getDefaultTenantHomePath } fr
 import { useThemeStore } from '../stores/themeStore';
 import { getMenuBadgeCounts } from '../services/dashboard';
 import { verifyCopyright } from '../utils/copyrightIntegrity';
+import { getBuildProvenance, registerInstallInstance } from '../services/platformSettings';
 import { useTouchScreen } from '../hooks/useTouchScreen';
 
 /**
@@ -161,9 +162,9 @@ import { useTouchScreen } from '../hooks/useTouchScreen';
 const MENU_BADGE_PATH_KEY: Record<string, string> = {
   '/apps/kuaizhizao/production-execution/work-orders': 'work_order',
   '/apps/kuaizhizao/production-execution/rework-orders': 'rework_order',
-  '/apps/kuaizhizao/production-execution/material-shortage-exceptions': 'exception',
-  '/apps/kuaizhizao/production-execution/delivery-delay-exceptions': 'exception',
-  '/apps/kuaizhizao/production-execution/quality-exceptions': 'exception',
+  '/apps/kuaizhizao/production-execution/material-shortage-exceptions': 'material_shortage_exception',
+  '/apps/kuaizhizao/production-execution/delivery-delay-exceptions': 'delivery_delay_exception',
+  '/apps/kuaizhizao/production-execution/quality-exceptions': 'quality_exception',
   '/apps/kuaizhizao/production-execution/outsource-management': 'outsource_work_order',
   '/apps/kuaizhizao/production-execution/packing-binding': 'packing_binding',
   '/apps/kuaizhizao/purchase-management/purchase-orders': 'purchase_order',
@@ -592,6 +593,28 @@ type PermissionMenuDataItem = MenuDataItem & {
   permissionCodes?: string[];
 };
 
+/** 根据当前路由计算侧栏应展开的分组 key（不含叶子节点 key） */
+function computeMenuOpenKeysForPath(items: MenuDataItem[], currentPath: string): string[] {
+  const openKeys: string[] = [];
+  const walk = (nodes: MenuDataItem[], ancestors: string[]): boolean => {
+    for (const node of nodes) {
+      const nodeKey = node.key ?? node.path;
+      const keyStr = nodeKey ? String(nodeKey) : '';
+      const nextAncestors = keyStr ? [...ancestors, keyStr] : ancestors;
+      if (node.path === currentPath) {
+        openKeys.push(...ancestors);
+        return true;
+      }
+      if (node.children?.length && walk(node.children, nextAncestors)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  walk(items, []);
+  return [...new Set(openKeys)];
+}
+
 const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => [
   {
     path: '/system/dashboard',
@@ -725,6 +748,7 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
     ],
   },
   {
+    key: 'menu.infra',
     name: t('menu.infra'),
     icon: getMenuIcon(t('menu.infra'), '/infra/operation'),
     children: [
@@ -839,6 +863,35 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   // 版权声明关键字段校验（Layout 挂载时执行一次）
   useEffect(() => {
     verifyCopyright();
+  }, []);
+
+  // 可选实例登记：telemetry 开启时主界面进入后 POST 一次，失败静默
+  useEffect(() => {
+    const storageKey = 'install_register_sent';
+    if (localStorage.getItem(storageKey) === '1') return;
+
+    let cancelled = false;
+    (async () => {
+      const provenance = await getBuildProvenance();
+      if (cancelled || !provenance?.telemetry_enabled || !provenance.install_instance_id) {
+        return;
+      }
+      const result = await registerInstallInstance({
+        install_instance_id: provenance.install_instance_id,
+        git_commit: provenance.git_commit,
+        build_time: provenance.build_time,
+        provenance_status: provenance.status,
+        build_git_remote: provenance.build_git_remote,
+        build_git_branch: provenance.build_git_branch,
+      });
+      if (!cancelled && result?.registered) {
+        localStorage.setItem(storageKey, '1');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // 获取用户头像 URL（如果有 UUID）
@@ -2318,6 +2371,31 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return calculateSelectedKeys(filteredMenuData, location.pathname);
   }, [filteredMenuData, location.pathname, calculateSelectedKeys]);
 
+  const [sidebarOpenKeys, setSidebarOpenKeys] = useState<string[]>(() =>
+    computeMenuOpenKeysForPath(filteredMenuData, location.pathname)
+  );
+  const siderFooterRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setSidebarOpenKeys(computeMenuOpenKeysForPath(filteredMenuData, location.pathname));
+  }, [location.pathname, filteredMenuData]);
+
+  useLayoutEffect(() => {
+    const footerEl = siderFooterRef.current;
+    const siderChildren = footerEl?.closest('.ant-layout-sider-children') as HTMLElement | null;
+    if (!footerEl || !siderChildren) return;
+
+    const syncFooterInset = () => {
+      const footerHeight = Math.ceil(footerEl.getBoundingClientRect().height);
+      siderChildren.style.setProperty('--riveredge-sider-footer-height', `${footerHeight}px`);
+    };
+
+    syncFooterInset();
+    const observer = new ResizeObserver(syncFooterInset);
+    observer.observe(footerEl);
+    return () => observer.disconnect();
+  }, [collapsed, isFullscreen]);
+
   /**
    * 处理全屏切换 (浏览器级别，顶栏触发)
    */
@@ -3503,20 +3581,20 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           color: ${startMenuTheme.settingsBtnColor} !important;
         }
         /* ==================== 左侧菜单栏滚动条样式 ==================== */
-        /* 完全隐藏左侧菜单栏滚动条，不占用任何宽度 */
-        .ant-pro-layout .ant-pro-sider-menu::-webkit-scrollbar {
+        /* 完全隐藏左侧菜单栏滚动条，不占用任何宽度（滚动容器为 ProLayout 包裹层） */
+        .ant-pro-layout .ant-pro-sider .ant-layout-sider-children > div:has(> .ant-pro-sider-menu)::-webkit-scrollbar {
           width: 0 !important;
           height: 0 !important;
           display: none !important;
         }
-        .ant-pro-layout .ant-pro-sider-menu::-webkit-scrollbar-track {
+        .ant-pro-layout .ant-pro-sider .ant-layout-sider-children > div:has(> .ant-pro-sider-menu)::-webkit-scrollbar-track {
           display: none !important;
         }
-        .ant-pro-layout .ant-pro-sider-menu::-webkit-scrollbar-thumb {
+        .ant-pro-layout .ant-pro-sider .ant-layout-sider-children > div:has(> .ant-pro-sider-menu)::-webkit-scrollbar-thumb {
           display: none !important;
         }
         /* Firefox 左侧菜单栏滚动条样式 */
-        .ant-pro-layout .ant-pro-sider-menu {
+        .ant-pro-layout .ant-pro-sider .ant-layout-sider-children > div:has(> .ant-pro-sider-menu) {
           scrollbar-width: none !important;
         }
         /* 统一顶部、标签栏和菜单栏的背景色 - 使用 token 值并同步到 CSS 变量；Modal 内容区/footer 使用 colorBgElevated */
@@ -3631,25 +3709,43 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         
         /* （菜单图标颜色由 currentColor 继承自上面的菜单项文字色，无需单独的 .anticon 规则，已清理） */
         
-        /* 菜单栏增加与顶部间距 */
-        .ant-pro-layout .ant-pro-sider-menu {
-          padding-top: 8px !important;
-          /* 确保菜单容器有正确的布局 */
+        /* 侧栏 flex：ProLayout 中间滚动区承载 overflow，底栏固定，避免最后一项被遮挡 */
+        .ant-pro-layout .ant-pro-sider .ant-layout-sider-children {
           display: flex !important;
           flex-direction: column !important;
           height: 100% !important;
-          overflow-y: auto !important;
+          overflow: hidden !important;
+        }
+        .ant-pro-layout .ant-pro-sider .ant-layout-sider-children > div:has(> .ant-pro-sider-menu) {
+          flex: 1 1 auto !important;
+          min-height: 0 !important;
           overflow-x: hidden !important;
+          overflow-y: auto !important;
+          padding-bottom: var(--riveredge-sider-footer-height, 0px) !important;
+          box-sizing: border-box !important;
         }
-        /* 确保菜单项正常显示 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu {
-          flex-shrink: 0 !important;
+        .ant-pro-layout .ant-pro-sider-menu {
+          padding-top: 8px !important;
+          padding-bottom: 8px !important;
+          height: auto !important;
+          min-height: auto !important;
+          overflow: visible !important;
+          display: block !important;
         }
-        /* 菜单底部区域确保在底部 */
-        .ant-pro-layout .ant-pro-sider-footer {
-          margin-top: auto !important;
+        .ant-pro-layout .ant-pro-sider-footer,
+        .ant-pro-layout .riveredge-sider-footer-bar {
           flex-shrink: 0 !important;
+          position: relative !important;
+          z-index: 2 !important;
+          background: ${siderBgColor} !important;
+          /* 底栏容器不参与点击命中，仅按钮可点，避免透明区域挡住最后一项菜单 */
+          pointer-events: none !important;
+        }
+        .ant-pro-layout .riveredge-sider-footer-bar .ant-btn,
+        .ant-pro-layout .riveredge-sider-footer-bar button,
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn,
+        .ant-pro-layout .ant-pro-sider-footer button {
+          pointer-events: auto !important;
         }
         /* 嵌套菜单排版（明暗模式一致）：三级及以下保持原缩进，二级略向左 */
         .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-item,
@@ -4612,9 +4708,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
           return (
             <div
+              ref={siderFooterRef}
+              className="riveredge-sider-footer-bar"
               style={{
                 padding: '8px',
                 borderTop: `1px solid ${dividerColor}`,
+                flexShrink: 0,
               }}
             >
               <div
@@ -5207,7 +5306,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }}
         menuProps={{
           mode: 'inline',
-          // openKeys / onOpenChange 交由 ProLayout BaseMenu 原生管理：路由变化时按 matchMenuKeys 自动收起其它分组（autoClose 默认开启）
+          ...(collapsed || isFullscreen
+            ? {}
+            : {
+                openKeys: sidebarOpenKeys,
+                onOpenChange: (keys) => {
+                  setSidebarOpenKeys(keys as string[]);
+                },
+              }),
           selectedKeys: selectedKeys, // 只选中精确匹配的路径，不选中父级菜单
           // ⚠️ 关键修复：阻止 Ant Design Menu 的默认链接行为，防止整页刷新
           // Menu 会为有 path 的菜单项自动创建 <a> 标签，需要阻止默认行为

@@ -1,7 +1,7 @@
 import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDigit, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Empty, Space, Typography } from 'antd';
+import { Alert, App, Button, Empty, Modal, Space, Spin, Table, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -14,18 +14,15 @@ import {
 } from '../components/qualityTableColumns';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { OQCInspection, qualityImprovementApi } from '../../../services/quality-improvement';
+import type { DocumentPushPreview } from '../../../services/purchase-requisition';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
 import { pickInspectionConductExtras } from '../components/inspectionTemplateUtils';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import {
-  fetchSalesDeliveriesForOqc,
-  fetchShipmentNoticesForOqc,
-} from '../components/inspectionCreateSourceUtils';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
-import { oqcInspectionRowGates } from '../../../../../hooks/useDocumentCapabilities';
+import { oqcInspectionCapabilityReasonMessage, oqcInspectionRowGates } from '../../../../../hooks/useDocumentCapabilities';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useTranslation } from 'react-i18next';
@@ -38,6 +35,14 @@ import {
 } from '../components/qualityMeta';
 
 const OQC_RESOURCE = 'kuaizhizao:quality-management-oqc-inspection';
+
+type OqcPullSourceCandidate = {
+  id: number;
+  code: string;
+  capabilities?: { pull_oqc_inspection?: { allowed?: boolean; reason?: string } };
+};
+
+type PullPreviewKind = 'shipment_notice' | 'sales_delivery';
 
 const OQCInspectionPage: React.FC = () => {
   const { t } = useTranslation();
@@ -56,76 +61,143 @@ const OQCInspectionPage: React.FC = () => {
   const [conductVisible, setConductVisible] = useState(false);
   const [currentRow, setCurrentRow] = useState<OQCInspection | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
+  const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
+  const [pullPreviewConfirming, setPullPreviewConfirming] = useState(false);
+  const [pullPreviewData, setPullPreviewData] = useState<DocumentPushPreview | null>(null);
+  const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
+  const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
+  const [pullSelectedItemIds, setPullSelectedItemIds] = useState<number[]>([]);
+  const pullFromShipmentNoticeCloseRef = useRef<(() => void) | null>(null);
+  const pullFromSalesDeliveryCloseRef = useRef<(() => void) | null>(null);
 
-  type PullSourceCandidate = { id: number; code: string };
+  const resetPullPreview = () => {
+    setPullPreviewOpen(false);
+    setPullPreviewSourceId(null);
+    setPullPreviewData(null);
+    setPullPreviewKind(null);
+    setPullSelectedItemIds([]);
+  };
 
-  const pullFromShipmentNoticeQuery = useUniPullQuery<PullSourceCandidate>({
+  const openPullPreview = async (kind: PullPreviewKind, sourceId: number) => {
+    setPullPreviewKind(kind);
+    setPullPreviewOpen(true);
+    setPullPreviewLoading(true);
+    setPullPreviewConfirming(false);
+    setPullPreviewData(null);
+    setPullPreviewSourceId(sourceId);
+    setPullSelectedItemIds([]);
+    try {
+      const data =
+        kind === 'shipment_notice'
+          ? await qualityImprovementApi.oqc.previewPullFromShipmentNotice(sourceId)
+          : await qualityImprovementApi.oqc.previewPullFromSalesDelivery(sourceId);
+      setPullPreviewData(data as DocumentPushPreview);
+      const ids = (data.items || [])
+        .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
+        .map((row) => Number(row.item_id));
+      setPullSelectedItemIds(ids);
+    } catch (e: any) {
+      messageApi.error(e?.message || t('app.kuaizhizao.purchaseReturn.pull.previewFailed'));
+      resetPullPreview();
+    } finally {
+      setPullPreviewLoading(false);
+    }
+  };
+
+  const handlePullPreviewConfirm = async () => {
+    if (!pullPreviewSourceId || !pullPreviewData || !pullPreviewKind) return;
+    if (pullPreviewData.has_blocking_issues) return;
+    const rowById = new Map(
+      (pullPreviewData.items || []).map((row) => [Number(row.item_id), row]),
+    );
+    const selectedIds = pullSelectedItemIds.filter((id) => {
+      const row = rowById.get(id);
+      return row && Number(row.max_push_quantity ?? 0) > 0;
+    });
+    if (!selectedIds.length) {
+      messageApi.warning(t('app.kuaizhizao.quality.oqc.pull.selectLinesFirst'));
+      return;
+    }
+    setPullPreviewConfirming(true);
+    try {
+      const created =
+        pullPreviewKind === 'shipment_notice'
+          ? await qualityImprovementApi.oqc.createFromShipmentNotice(pullPreviewSourceId, selectedIds)
+          : await qualityImprovementApi.oqc.createFromSalesDelivery(pullPreviewSourceId, selectedIds);
+      messageApi.success(t('app.kuaizhizao.quality.oqc.messages.createSuccess', { count: created.length }));
+      resetPullPreview();
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e?.message || t('app.kuaizhizao.quality.oqc.messages.createFailed'));
+    } finally {
+      setPullPreviewConfirming(false);
+    }
+  };
+
+  const pullFromShipmentNoticeQuery = useUniPullQuery<OqcPullSourceCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
     loadData: async ({ keyword, page, pageSize }) => {
       try {
-        const options = await fetchShipmentNoticesForOqc();
-        const kw = keyword.trim().toLowerCase();
-        const rows = options
-          .map((it) => ({ id: Number(it.value), code: String(it.label || '') }))
-          .filter((it) => (kw ? it.code.toLowerCase().includes(kw) : true));
-        const start = (page - 1) * pageSize;
-        return { data: rows.slice(start, start + pageSize), total: rows.length };
+        const res = await qualityImprovementApi.oqc.listShipmentNoticePullCandidates({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+        });
+        return {
+          data: (res.data || []) as OqcPullSourceCandidate[],
+          total: res.total ?? 0,
+        };
       } catch (e: any) {
         messageApi.error(e?.message || t('app.kuaizhizao.quality.oqc.messages.loadShipmentNoticeFailed'));
         return { data: [], total: 0 };
       }
     },
+    isRowDisabled: (row) => row.capabilities?.pull_oqc_inspection?.allowed === false,
     onConfirm: async (keys, rows) => {
       const selected = rows.find((x) => String(x.id) === String(keys[0]));
       if (!selected?.id) {
         messageApi.warning(t('app.kuaizhizao.quality.oqc.messages.selectShipmentNotice'));
         return;
       }
-      try {
-        const created = await qualityImprovementApi.oqc.createFromShipmentNotice(selected.id);
-        messageApi.success(t('app.kuaizhizao.quality.oqc.messages.createSuccess', { count: created.length }));
-        pullFromShipmentNoticeQuery.closeModal();
-        actionRef.current?.reload();
-      } catch (e: any) {
-        messageApi.error(e?.message || t('app.kuaizhizao.quality.oqc.messages.createFailed'));
-      }
+      pullFromShipmentNoticeCloseRef.current?.();
+      await openPullPreview('shipment_notice', selected.id);
     },
   });
+  pullFromShipmentNoticeCloseRef.current = pullFromShipmentNoticeQuery.closeModal;
 
-  const pullFromSalesDeliveryQuery = useUniPullQuery<PullSourceCandidate>({
+  const pullFromSalesDeliveryQuery = useUniPullQuery<OqcPullSourceCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
     loadData: async ({ keyword, page, pageSize }) => {
       try {
-        const options = await fetchSalesDeliveriesForOqc();
-        const kw = keyword.trim().toLowerCase();
-        const rows = options
-          .map((it) => ({ id: Number(it.value), code: String(it.label || '') }))
-          .filter((it) => (kw ? it.code.toLowerCase().includes(kw) : true));
-        const start = (page - 1) * pageSize;
-        return { data: rows.slice(start, start + pageSize), total: rows.length };
+        const res = await qualityImprovementApi.oqc.listSalesDeliveryPullCandidates({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+        });
+        return {
+          data: (res.data || []) as OqcPullSourceCandidate[],
+          total: res.total ?? 0,
+        };
       } catch (e: any) {
         messageApi.error(e?.message || t('app.kuaizhizao.quality.oqc.messages.loadSalesDeliveryFailed'));
         return { data: [], total: 0 };
       }
     },
+    isRowDisabled: (row) => row.capabilities?.pull_oqc_inspection?.allowed === false,
     onConfirm: async (keys, rows) => {
       const selected = rows.find((x) => String(x.id) === String(keys[0]));
       if (!selected?.id) {
         messageApi.warning(t('app.kuaizhizao.quality.oqc.messages.selectSalesDelivery'));
         return;
       }
-      try {
-        const created = await qualityImprovementApi.oqc.createFromSalesDelivery(selected.id);
-        messageApi.success(t('app.kuaizhizao.quality.oqc.messages.createSuccess', { count: created.length }));
-        pullFromSalesDeliveryQuery.closeModal();
-        actionRef.current?.reload();
-      } catch (e: any) {
-        messageApi.error(e?.message || t('app.kuaizhizao.quality.oqc.messages.createFailed'));
-      }
+      pullFromSalesDeliveryCloseRef.current?.();
+      await openPullPreview('sales_delivery', selected.id);
     },
   });
+  pullFromSalesDeliveryCloseRef.current = pullFromSalesDeliveryQuery.closeModal;
 
   const columns: ProColumns<OQCInspection>[] = useMemo(
     () => [
@@ -334,7 +406,7 @@ const OQCInspectionPage: React.FC = () => {
           }}
         />
 
-        <UniPullQueryModal<PullSourceCandidate>
+        <UniPullQueryModal<OqcPullSourceCandidate>
           open={pullFromShipmentNoticeQuery.open}
           title={pullFromShipmentNoticeAction.label}
           onCancel={pullFromShipmentNoticeQuery.closeModal}
@@ -347,6 +419,7 @@ const OQCInspectionPage: React.FC = () => {
           selectionType={pullFromShipmentNoticeQuery.selectionType}
           selectedRowKeys={pullFromShipmentNoticeQuery.selectedRowKeys}
           onSelectedRowKeysChange={pullFromShipmentNoticeQuery.handleSelectedRowKeysChange}
+          isRowDisabled={pullFromShipmentNoticeQuery.isRowDisabled}
           searchDraft={pullFromShipmentNoticeQuery.searchDraft}
           onSearchDraftChange={pullFromShipmentNoticeQuery.setSearchDraft}
           onSearchApply={pullFromShipmentNoticeQuery.handleSearchApply}
@@ -357,10 +430,9 @@ const OQCInspectionPage: React.FC = () => {
           pageSize={pullFromShipmentNoticeQuery.pageSize}
           total={pullFromShipmentNoticeQuery.total}
           onPageChange={pullFromShipmentNoticeQuery.handlePageChange}
-          okText={t('app.kuaizhizao.quality.oqc.actions.createFromSource')}
         />
 
-        <UniPullQueryModal<PullSourceCandidate>
+        <UniPullQueryModal<OqcPullSourceCandidate>
           open={pullFromSalesDeliveryQuery.open}
           title={pullFromSalesDeliveryAction.label}
           onCancel={pullFromSalesDeliveryQuery.closeModal}
@@ -373,6 +445,7 @@ const OQCInspectionPage: React.FC = () => {
           selectionType={pullFromSalesDeliveryQuery.selectionType}
           selectedRowKeys={pullFromSalesDeliveryQuery.selectedRowKeys}
           onSelectedRowKeysChange={pullFromSalesDeliveryQuery.handleSelectedRowKeysChange}
+          isRowDisabled={pullFromSalesDeliveryQuery.isRowDisabled}
           searchDraft={pullFromSalesDeliveryQuery.searchDraft}
           onSearchDraftChange={pullFromSalesDeliveryQuery.setSearchDraft}
           onSearchApply={pullFromSalesDeliveryQuery.handleSearchApply}
@@ -383,8 +456,82 @@ const OQCInspectionPage: React.FC = () => {
           pageSize={pullFromSalesDeliveryQuery.pageSize}
           total={pullFromSalesDeliveryQuery.total}
           onPageChange={pullFromSalesDeliveryQuery.handlePageChange}
-          okText={t('app.kuaizhizao.quality.oqc.actions.createFromSource')}
         />
+
+        <Modal
+          title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
+          open={pullPreviewOpen}
+          destroyOnClose
+          width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+          onCancel={resetPullPreview}
+          okText={
+            pullPreviewKind === 'sales_delivery'
+              ? pullFromSalesDeliveryAction.label
+              : pullFromShipmentNoticeAction.label
+          }
+          cancelText={t('common.cancel')}
+          confirmLoading={pullPreviewConfirming}
+          onOk={() => void handlePullPreviewConfirm()}
+          okButtonProps={{
+            disabled:
+              pullPreviewLoading ||
+              !pullPreviewData ||
+              !!pullPreviewData?.has_blocking_issues ||
+              !pullSelectedItemIds.some((id) => {
+                const row = (pullPreviewData?.items || []).find((item) => Number(item.item_id) === id);
+                return row && Number(row.max_push_quantity ?? 0) > 0;
+              }),
+          }}
+        >
+          {pullPreviewLoading ? (
+            <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+              <Spin />
+              <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+            </div>
+          ) : pullPreviewData ? (
+            <div>
+              <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
+              {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  message={oqcInspectionCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
+                />
+              ) : null}
+              {pullPreviewData.items?.length > 0 ? (
+                <Table
+                  size="small"
+                  dataSource={pullPreviewData.items}
+                  rowKey={(row) => String(row.item_id)}
+                  pagination={false}
+                  scroll={{ x: 960 }}
+                  rowSelection={{
+                    selectedRowKeys: pullSelectedItemIds.map(String),
+                    onChange: (keys) => setPullSelectedItemIds(keys.map((k) => Number(k))),
+                    getCheckboxProps: (row) => ({
+                      disabled: Number(row.max_push_quantity ?? 0) <= 0,
+                    }),
+                  }}
+                  columns={[
+                    { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
+                    { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
+                    { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
+                    { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  ]}
+                />
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')} />
+              )}
+              {pullPreviewData.tip ? (
+                <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                  {pullPreviewData.tip}
+                </Typography.Paragraph>
+              ) : null}
+            </div>
+          ) : null}
+        </Modal>
 
         <FormModalTemplate
           title={t('app.kuaizhizao.quality.oqc.modal.conductTitle', { code: currentRow?.inspection_code || '' })}

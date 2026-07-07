@@ -3,8 +3,9 @@
 """
 
 import uuid
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from decimal import Decimal
+from typing import Optional, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
 from loguru import logger
 
 from apps.kuaicaiwu.schemas.finance import (
@@ -12,6 +13,7 @@ from apps.kuaicaiwu.schemas.finance import (
     PaymentRecordCreate
 )
 from apps.kuaicaiwu.services.finance_service import PayableService
+from apps.kuaicaiwu.services.payable_pull_service import PayablePullService
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
@@ -21,6 +23,9 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 router = APIRouter(prefix="/payables", tags=["App · Kuaicaiwu · Finance"])
 
 payable_service = PayableService()
+payable_pull_service = PayablePullService()
+
+_PULL_SOURCE_TYPES = frozenset({"purchase_order", "purchase_receipt"})
 
 
 def _http_exception_with_trace(
@@ -52,10 +57,50 @@ async def create_payable(
     tenant_id: int = Depends(get_current_tenant)
 ):
     try:
-        payable = await payable_service.create_payable(tenant_id, data, current_user.id)
+        pull_preview: Optional[Dict[str, Any]] = None
+        pull_source_type = str(data.pull_source_type or "").strip()
+        pull_source_id = data.pull_source_id
+        if pull_source_type and pull_source_id:
+            if pull_source_type not in _PULL_SOURCE_TYPES:
+                raise BusinessLogicError(f"不支持的上拉源单类型: {pull_source_type}")
+            pull_preview = await payable_pull_service.assert_pull_create_allowed(
+                tenant_id=tenant_id,
+                source_type=pull_source_type,
+                source_id=int(pull_source_id),
+                total_amount=Decimal(data.total_amount),
+            )
+
+        create_payload = data.model_dump(
+            exclude_unset=True,
+            exclude={"pull_source_type", "pull_source_id"},
+        )
+        if pull_preview:
+            create_payload["supplier_id"] = int(pull_preview.get("supplier_id") or create_payload.get("supplier_id"))
+            create_payload["supplier_name"] = str(
+                pull_preview.get("supplier_name") or create_payload.get("supplier_name") or ""
+            )
+            create_payload["source_type"] = pull_source_type
+            create_payload["source_id"] = int(pull_source_id)
+            create_payload["source_code"] = str(pull_preview.get("source_code") or create_payload.get("source_code") or "")
+
+        payable_data = PayableCreate.model_validate(create_payload)
+        payable = await payable_service.create_payable(tenant_id, payable_data, current_user.id)
+
+        if pull_preview and pull_source_type and pull_source_id:
+            await payable_pull_service.create_pull_relation(
+                tenant_id=tenant_id,
+                source_type=pull_source_type,
+                source_id=int(pull_source_id),
+                source_code=str(pull_preview.get("source_code") or payable.source_code or ""),
+                payable_id=int(payable.id),
+                payable_code=str(payable.payable_code),
+                created_by=current_user.id,
+            )
         return PayableResponse.model_validate(payable)
     except ValidationError as e:
         raise _http_exception_with_trace(422, str(e), "/payables", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(422, str(e), "/payables", tenant_id) from e
 
 
 @router.get("", response_model=PayableListResponse)
@@ -76,8 +121,10 @@ async def list_payables(
         supplier_id=supplier_id,
         pending_settlement=pending_settlement,
     )
+    enriched = await payable_pull_service.enrich_push_payment_capabilities(tenant_id, payables)
+    items = [PayableResponse.model_validate(row) for row in enriched]
     return PayableListResponse(
-        items=payables,
+        items=items,
         total=total,
         skip=skip,
         limit=limit
@@ -98,6 +145,74 @@ async def get_payable_aging(
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await payable_service.get_payable_aging_analysis(tenant_id)
+
+
+@router.get(
+    "/pull-candidates/purchase-orders",
+    summary="List purchase order pull candidates for payable",
+)
+async def list_payable_purchase_order_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await payable_pull_service.list_purchase_order_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/pull-candidates/purchase-receipts",
+    summary="List purchase receipt pull candidates for payable",
+)
+async def list_payable_purchase_receipt_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await payable_pull_service.list_purchase_receipt_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/from-purchase-order/{order_id}/pull-preview",
+    summary="Preview pull payable from purchase order",
+)
+async def preview_pull_payable_from_purchase_order(
+    order_id: int = Path(..., description="采购订单ID"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await payable_pull_service.preview_pull_from_purchase_order(
+        tenant_id=tenant_id,
+        order_id=order_id,
+    )
+
+
+@router.get(
+    "/from-purchase-receipt/{receipt_id}/pull-preview",
+    summary="Preview pull payable from purchase receipt",
+)
+async def preview_pull_payable_from_purchase_receipt(
+    receipt_id: int = Path(..., description="采购入库单ID"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await payable_pull_service.preview_pull_from_purchase_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+    )
 
 
 @router.get("/{id}", response_model=PayableResponse)

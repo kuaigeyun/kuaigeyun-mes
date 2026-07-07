@@ -24,6 +24,7 @@ export interface Receivable {
     notes?: string;
     created_at: string;
     updated_at: string;
+    capabilities?: { push_receipt?: { allowed?: boolean; reason?: string } };
 }
 
 export interface ReceivableListParams {
@@ -50,6 +51,8 @@ export interface ReceivableCreateData {
     payment_terms?: string;
     invoice_issued?: boolean;
     notes?: string;
+    pull_source_type?: 'sales_order' | 'sales_delivery';
+    pull_source_id?: number;
 }
 
 export interface ReceiptRecordCreate {

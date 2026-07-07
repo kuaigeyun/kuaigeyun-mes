@@ -187,6 +187,38 @@ def _max_reportable_quantity_for_op(work_order: WorkOrder, op: WorkOrderOperatio
     return max_completed_quantity_for_plan(plan_qty, om, ov)
 
 
+# 交期延期检测：与菜单工单「逾期」徽章同一口径（排除终态，不按白名单漏掉「执行中」等）
+WORK_ORDER_DELAY_EXCLUDED_STATUSES = (
+    "completed",
+    "已完成",
+    "COMPLETED",
+    "cancelled",
+    "已取消",
+    "CANCELLED",
+    "split",
+    "已拆分",
+    "SPLIT",
+)
+
+# 在制工单（缺料检测等场景）
+WORK_ORDER_IN_PROGRESS_STATUS = (
+    "in_progress",
+    "进行中",
+    "执行中",
+    "生产中",
+    "released",
+    "已下达",
+    "IN_PROGRESS",
+    "RELEASED",
+)
+
+
+def _normalize_naive_local_datetime(value: datetime) -> datetime:
+    if value.tzinfo is not None:
+        return value.astimezone().replace(tzinfo=None)
+    return value
+
+
 def _material_shortage_block_applies(block_level: int, stage: str) -> bool:
     """缺料拦截级别是否命中当前阶段。"""
     stage_map = {
@@ -2464,63 +2496,52 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             - delay_days: 延期天数
             - status: 工单状态
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now()
         query = WorkOrder.filter(
-            tenant_id=tenant_id
-        )
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            planned_end_date__isnull=False,
+        ).exclude(status__in=list(WORK_ORDER_DELAY_EXCLUDED_STATUSES))
 
-        # 状态过滤
         if status:
             query = query.filter(status=status)
-        else:
-            # 默认只查询未完成的工单
-            query = query.filter(status__in=['released', 'in_progress'])
-
-        # 查询有计划结束日期的工单，过期判断在 Python 侧统一时区后处理
-        query = query.filter(
-            planned_end_date__isnull=False,
-        )
 
         work_orders = await query.all()
         delayed_orders = []
 
         for wo in work_orders:
-            if wo.planned_end_date:
-                planned_end = wo.planned_end_date
-                # 统一时间基准，避免 naive / aware datetime 直接相减导致 TypeError
-                if planned_end.tzinfo is None:
-                    planned_end = planned_end.replace(tzinfo=timezone.utc)
-                else:
-                    planned_end = planned_end.astimezone(timezone.utc)
-                if planned_end >= now:
+            if not wo.planned_end_date:
+                continue
+            planned_end = _normalize_naive_local_datetime(wo.planned_end_date)
+            if planned_end >= now:
+                continue
+
+            if wo.actual_end_date:
+                actual_end = _normalize_naive_local_datetime(wo.actual_end_date)
+                delay_days = (actual_end - planned_end).days
+                if delay_days <= 0:
                     continue
+            else:
+                delay_days = (now - planned_end).days
+                if delay_days < 0:
+                    continue
+                if delay_days == 0:
+                    delay_days = 1
 
-                # 计算延期天数
-                if wo.actual_end_date:
-                    # 如果已完工，使用实际结束日期
-                    actual_end = wo.actual_end_date
-                    if actual_end.tzinfo is None:
-                        actual_end = actual_end.replace(tzinfo=timezone.utc)
-                    else:
-                        actual_end = actual_end.astimezone(timezone.utc)
-                    delay_days = (actual_end - planned_end).days
-                else:
-                    # 如果未完工，使用当前日期
-                    delay_days = (now - planned_end).days
+            if days_threshold > 0 and delay_days <= days_threshold:
+                continue
 
-                # 如果超过阈值，加入列表
-                if delay_days > days_threshold:
-                    delayed_orders.append({
-                        "work_order_id": wo.id,
-                        "work_order_code": wo.code,
-                        "work_order_name": wo.name,
-                        "product_name": wo.product_name,
-                        "planned_end_date": to_api_isoformat(wo.planned_end_date) if wo.planned_end_date else None,
-                        "actual_end_date": to_api_isoformat(wo.actual_end_date) if wo.actual_end_date else None,
-                        "delay_days": delay_days,
-                        "status": wo.status,
-                        "priority": wo.priority
-                    })
+            delayed_orders.append({
+                "work_order_id": wo.id,
+                "work_order_code": wo.code,
+                "work_order_name": wo.name,
+                "product_name": wo.product_name,
+                "planned_end_date": wo.planned_end_date,
+                "actual_end_date": wo.actual_end_date,
+                "delay_days": delay_days,
+                "status": wo.status,
+                "priority": wo.priority,
+            })
 
         # 按延期天数降序排序
         delayed_orders.sort(key=lambda x: x["delay_days"], reverse=True)

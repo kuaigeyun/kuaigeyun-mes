@@ -23,6 +23,46 @@
   overflow: visible;
 }
 
+/* 研发看板甘特：贴齐卡片内容区，高度由行数驱动 */
+.gantt-chart-wrapper--rd-dashboard {
+  width: 100%;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-sizing: border-box;
+}
+
+.gantt-chart-wrapper--rd-dashboard .wx-layout,
+.gantt-chart-wrapper--rd-dashboard .wx-content.wx-layout {
+  width: 100% !important;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 研发看板甘特：暗黑模式跟随 Ant Design token，与卡片内背景一致 */
+.gantt-chart-wrapper--rd-dashboard .wx-willow-dark-theme {
+  --wx-background: var(--ant-color-bg-container, #141414);
+  --wx-background-alt: var(--ant-color-fill-alter, rgba(255, 255, 255, 0.04));
+  --wx-background-hover: var(--ant-color-fill-secondary, rgba(255, 255, 255, 0.06));
+  --wx-gantt-border-color: var(--ant-color-border-secondary, #424242);
+  --wx-color-font: var(--ant-color-text, rgba(255, 255, 255, 0.85));
+  --wx-color-font-alt: var(--ant-color-text-secondary, rgba(255, 255, 255, 0.65));
+  --wx-grid-header-font-color: var(--ant-color-text, rgba(255, 255, 255, 0.85));
+  --wx-grid-body-font-color: var(--ant-color-text, rgba(255, 255, 255, 0.85));
+  --wx-gantt-select-color: var(--ant-color-fill-secondary, rgba(255, 255, 255, 0.08));
+  --wx-gantt-progress-border-color: var(--ant-color-border-secondary, #424242);
+}
+
+.module-chart-panel--fit-content.ant-card > .ant-card-body {
+  overflow: hidden;
+}
+
+.uni-dashboard .dashboard-main-scroll-inner .ant-row > .ant-col > .module-chart-panel--fit-content,
+.uni-dashboard .dashboard-main-scroll-inner .ant-row > .ant-col > div > .module-chart-panel--fit-content {
+  width: 100%;
+  max-width: 100%;
+}
+
 /* 尺寸与轨道 */
 .gantt-chart-wrapper ::-webkit-scrollbar,
 .gantt-chart-wrapper *::-webkit-scrollbar {

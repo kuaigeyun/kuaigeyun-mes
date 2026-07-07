@@ -90,6 +90,7 @@ import { useTranslation } from 'react-i18next';
 import { ROUTES } from '../../../constants/routes';
 import { inboundReceiptNoticeEntryPath } from '../../warehouse-management/inbound/inboundPaths';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { formatDateTime } from '../../../../../utils/format';
@@ -241,6 +242,63 @@ const ReceiptNoticesPage: React.FC = () => {
         .filter((row): row is ReceiptNotice => row != null),
     [selectedRowKeys],
   );
+
+  const selectedNoticeForToolbar = useMemo(() => {
+    if (selectedRowKeys.length !== 1) return null;
+    const id = Number(selectedRowKeys[0]);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    return tableRowsRef.current.find((row) => row.id === id) ?? null;
+  }, [selectedRowKeys]);
+
+  const canPushPurchaseReceiptToolbar = !!selectedNoticeForToolbar
+    && selectedNoticeForToolbar.capabilities?.withdraw?.allowed === true
+    && !selectedNoticeForToolbar.purchase_receipt_id;
+
+  const toolbarPushDisabledReason = useMemo(() => {
+    const base = buildUniPushToolbarDisabledReason(t, {
+      selectedCount: selectedRowKeys.length,
+      hasSelectedRecord: !!selectedNoticeForToolbar,
+    });
+    if (base) return base;
+    if (selectedNoticeForToolbar && !canPushPurchaseReceiptToolbar) {
+      if (selectedNoticeForToolbar.purchase_receipt_id) {
+        return t('app.kuaizhizao.receiptNotice.capability.notify.already_notified', {
+          defaultValue: '该收货通知单已关联采购入库单',
+        });
+      }
+      return receiptNoticeCapabilityReasonMessage(
+        selectedNoticeForToolbar.capabilities?.withdraw?.reason,
+        t,
+      ) || t('components.uniPush.disabled.unavailable');
+    }
+    return undefined;
+  }, [canPushPurchaseReceiptToolbar, selectedNoticeForToolbar, selectedRowKeys.length, t]);
+
+  const toolbarPushMenuItems = useMemo(() => {
+    const pushBlockedReason = selectedNoticeForToolbar && !canPushPurchaseReceiptToolbar
+      ? (selectedNoticeForToolbar.purchase_receipt_id
+        ? t('app.kuaizhizao.receiptNotice.capability.notify.already_notified', {
+          defaultValue: '该收货通知单已关联采购入库单',
+        })
+        : receiptNoticeCapabilityReasonMessage(
+            selectedNoticeForToolbar.capabilities?.withdraw?.reason,
+            t,
+          ))
+      : undefined;
+    return buildUniPushMenuItems([
+      {
+        key: 'push-purchase-receipt',
+        label: pushToPurchaseReceiptAction.label,
+        disabled: !selectedNoticeForToolbar || !canPushPurchaseReceiptToolbar,
+        title: pushBlockedReason,
+        onClick: () => {
+          if (selectedNoticeForToolbar && canPushPurchaseReceiptToolbar) {
+            handlePushToInboundEntry(selectedNoticeForToolbar);
+          }
+        },
+      },
+    ]);
+  }, [canPushPurchaseReceiptToolbar, pushToPurchaseReceiptAction.label, selectedNoticeForToolbar, t]);
 
   const createFormRef = useRef<any>(null);
   const editFormRef = useRef<any>(null);
@@ -705,22 +763,6 @@ const ReceiptNoticesPage: React.FC = () => {
                 {t('app.kuaizhizao.shipmentNotice.withdrawNotify')}
               </Button>
             );
-            if (!record.purchase_receipt_id) {
-              parts.push(
-                <Button
-                  {...rowActionKind('audit')}
-                  key="push-inbound"
-                  type="link"
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handlePushToInboundEntry(record);
-                  }}
-                >
-                  {pushToPurchaseReceiptAction.label}
-                </Button>
-              );
-            }
           }
           if (record.purchase_receipt_id) {
             parts.push(
@@ -741,7 +783,7 @@ const ReceiptNoticesPage: React.FC = () => {
         },
       },
     ],
-    [handleDelete, handleDetail, handleEdit, handleNotify, handlePushToInboundEntry, handleWithdraw, navigate, t, i18n.language],
+    [handleDelete, handleDetail, handleEdit, handleNotify, handleWithdraw, navigate, t, i18n.language],
   );
 
   const pullPurchaseOrderColumns = useMemo(
@@ -1303,6 +1345,12 @@ const ReceiptNoticesPage: React.FC = () => {
                   },
                 },
               ])}
+            />,
+            <UniPushToolbarButton
+              key={`receipt-notice-push-${selectedNoticeForToolbar?.id ?? 'none'}`}
+              menuItems={toolbarPushMenuItems}
+              disabled={selectedRowKeys.length !== 1 || !selectedNoticeForToolbar}
+              disabledReason={toolbarPushDisabledReason}
             />,
           ]}
           enableRowSelection

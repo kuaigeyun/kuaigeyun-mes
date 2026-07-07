@@ -9,16 +9,21 @@ Date: 2025-01-15
 
 from typing import List, Optional
 import re
+from decimal import Decimal
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from core.api.deps import get_current_user, get_current_tenant
 from core.utils.api_cache import cache_by_kwargs
 from core.utils.timezone_utils import to_api_isoformat
 from infra.models.user import User
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
-from apps.kuaizhizao.services.exception_service import ExceptionService
+from apps.kuaizhizao.services.menu_badge_counts_service import fetch_menu_badge_counts
+from apps.kuaizhizao.services.exception_service import (
+    ACTIVE_EXCEPTION_STATUSES,
+    ACTIVE_QUALITY_EXCEPTION_STATUSES,
+)
 from apps.kuaizhizao.models.material_shortage_exception import MaterialShortageException
 from apps.kuaizhizao.models.delivery_delay_exception import DeliveryDelayException
 from apps.kuaizhizao.models.quality_exception import QualityException
@@ -28,6 +33,61 @@ from apps.kuaizhizao.models.rework_order import ReworkOrder
 from loguru import logger
 
 router = APIRouter(prefix="/dashboard", tags=["App · Kuaige Zhizao · Dashboard"])
+
+_MONEY_META_KEYS = frozenset({
+    "amount", "total_amount", "price", "unit_price", "total_value", "total_price",
+})
+
+
+def _str_val(value: object) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text if text else None
+
+
+def _format_qty(value: object) -> Optional[str]:
+    if value is None:
+        return None
+    try:
+        qty = Decimal(str(value))
+        if qty == qty.to_integral_value():
+            return str(int(qty))
+        normalized = qty.normalize()
+        return format(normalized, "f").rstrip("0").rstrip(".") or "0"
+    except Exception:
+        return _str_val(value)
+
+
+def _join_parts(*parts: Optional[str]) -> Optional[str]:
+    items = [part.strip() for part in parts if part and str(part).strip()]
+    return " · ".join(items) if items else None
+
+
+def _todo_meta(**kwargs: object) -> Optional[dict[str, str]]:
+    out: dict[str, str] = {}
+    for key, value in kwargs.items():
+        if key in _MONEY_META_KEYS:
+            continue
+        text = _str_val(value)
+        if text:
+            out[key] = text
+    return out or None
+
+
+def _date_to_due(value: object) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time())
+    return None
+
+
+def _format_date(value: object) -> Optional[str]:
+    due = _date_to_due(value)
+    return due.strftime("%Y-%m-%d") if due else None
 
 
 class TodoItem(BaseModel):
@@ -42,6 +102,7 @@ class TodoItem(BaseModel):
     )
     title: str = Field(..., description="待办事项标题")
     description: Optional[str] = Field(None, description="待办事项描述")
+    meta: Optional[dict[str, str]] = Field(None, description="待办详情 i18n 参数（不含金额）")
     priority: str = Field(..., description="优先级（high/medium/low）")
     due_date: Optional[datetime] = Field(None, description="截止日期")
     status: str = Field(..., description="状态（pending/in_progress/completed）")
@@ -125,17 +186,33 @@ async def get_todos(
             wos = await WorkOrderService().list_work_orders(
                 tenant_id=tenant_id, status="released", skip=0, limit=limit,
             )
-            return [TodoItem(
-                id=f"work_order_{wo.id}",
-                type="work_order",
-                title=f"处理工单 {wo.code}",
-                description=f"产品：{wo.product_name}，数量：{wo.quantity}",
-                priority="medium",
-                due_date=wo.planned_end_date,
-                status="pending",
-                link=f"/apps/kuaizhizao/production-execution/work-orders/{wo.id}",
-                created_at=wo.created_at,
-            ) for wo in wos]
+            out: List[TodoItem] = []
+            for wo in wos:
+                qty = _format_qty(wo.quantity)
+                meta = _todo_meta(
+                    product_name=wo.product_name,
+                    quantity=qty,
+                    work_center_name=wo.work_center_name,
+                    planned_start=_format_date(wo.planned_start_date),
+                    planned_end=_format_date(wo.planned_end_date),
+                )
+                out.append(TodoItem(
+                    id=f"work_order_{wo.id}",
+                    type="work_order",
+                    title=f"处理工单 {wo.code}",
+                    description=_join_parts(
+                        f"产品：{wo.product_name}",
+                        f"数量：{qty}" if qty else None,
+                        f"工作中心：{wo.work_center_name}" if wo.work_center_name else None,
+                    ),
+                    meta=meta,
+                    priority="medium",
+                    due_date=wo.planned_end_date,
+                    status="pending",
+                    link=f"/apps/kuaizhizao/production-execution/work-orders/{wo.id}",
+                    created_at=wo.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取待处理工单失败: {e}")
             return []
@@ -143,19 +220,33 @@ async def get_todos(
     async def _fetch_material_shortages() -> List[TodoItem]:
         try:
             rows = await MaterialShortageException.filter(
-                tenant_id=tenant_id, status="open",
+                tenant_id=tenant_id, status__in=ACTIVE_EXCEPTION_STATUSES,
             ).limit(limit)
-            return [TodoItem(
-                id=f"exception_material_{exc.id}",
-                type="exception",
-                title=f"缺料异常：{exc.material_name}",
-                description=f"缺料数量：{exc.shortage_quantity}，工单：{exc.work_order_code}",
-                priority=exc.alert_level or "medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/production-execution/material-shortage-exceptions",
-                created_at=exc.created_at,
-            ) for exc in rows]
+            out: List[TodoItem] = []
+            for exc in rows:
+                shortage_qty = _format_qty(exc.shortage_quantity)
+                meta = _todo_meta(
+                    material_name=exc.material_name,
+                    shortage_quantity=shortage_qty,
+                    work_order_code=exc.work_order_code,
+                    required_quantity=_format_qty(exc.required_quantity),
+                )
+                out.append(TodoItem(
+                    id=f"exception_material_{exc.id}",
+                    type="exception",
+                    title=f"缺料异常：{exc.material_name}",
+                    description=_join_parts(
+                        f"缺料数量：{shortage_qty}" if shortage_qty else None,
+                        f"工单：{exc.work_order_code}",
+                    ),
+                    meta=meta,
+                    priority=exc.alert_level or "medium",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/production-execution/material-shortage-exceptions",
+                    created_at=exc.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取缺料异常待办失败: {e}")
             return []
@@ -163,19 +254,31 @@ async def get_todos(
     async def _fetch_delivery_delays() -> List[TodoItem]:
         try:
             rows = await DeliveryDelayException.filter(
-                tenant_id=tenant_id, status="open",
+                tenant_id=tenant_id, status__in=ACTIVE_EXCEPTION_STATUSES,
             ).limit(limit)
-            return [TodoItem(
-                id=f"exception_delay_{exc.id}",
-                type="exception",
-                title=f"延期异常：{exc.work_order_code}",
-                description=f"延期天数：{exc.delay_days}天",
-                priority="high",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/production-execution/delivery-delay-exceptions",
-                created_at=exc.created_at,
-            ) for exc in rows]
+            out: List[TodoItem] = []
+            for exc in rows:
+                meta = _todo_meta(
+                    work_order_code=exc.work_order_code,
+                    delay_days=exc.delay_days,
+                    planned_end=_format_date(exc.planned_end_date),
+                )
+                out.append(TodoItem(
+                    id=f"exception_delay_{exc.id}",
+                    type="exception",
+                    title=f"延期异常：{exc.work_order_code}",
+                    description=_join_parts(
+                        f"延期天数：{exc.delay_days}天",
+                        f"计划完工：{_format_date(exc.planned_end_date)}" if exc.planned_end_date else None,
+                    ),
+                    meta=meta,
+                    priority="high",
+                    due_date=exc.planned_end_date,
+                    status="pending",
+                    link="/apps/kuaizhizao/production-execution/delivery-delay-exceptions",
+                    created_at=exc.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取延期异常待办失败: {e}")
             return []
@@ -183,19 +286,34 @@ async def get_todos(
     async def _fetch_quality_exceptions() -> List[TodoItem]:
         try:
             rows = await QualityException.filter(
-                tenant_id=tenant_id, status="open",
+                tenant_id=tenant_id,
+                status__in=ACTIVE_QUALITY_EXCEPTION_STATUSES,
+                deleted_at__isnull=True,
             ).limit(limit)
-            return [TodoItem(
-                id=f"exception_quality_{exc.id}",
-                type="exception",
-                title=f"质量异常：{exc.title}",
-                description=exc.description,
-                priority=exc.severity or "medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/production-execution/quality-exceptions",
-                created_at=exc.created_at,
-            ) for exc in rows]
+            out: List[TodoItem] = []
+            for exc in rows:
+                summary = (exc.problem_description or "")[:120] if exc.problem_description else None
+                label = exc.material_name or exc.work_order_code or exc.exception_type
+                meta = _todo_meta(
+                    exception_type=exc.exception_type,
+                    summary=summary,
+                    severity=exc.severity,
+                    work_order_code=exc.work_order_code,
+                    material_name=exc.material_name,
+                )
+                out.append(TodoItem(
+                    id=f"exception_quality_{exc.id}",
+                    type="exception",
+                    title=f"质量异常：{label}",
+                    description=summary or exc.problem_description,
+                    meta=meta,
+                    priority=exc.severity or "medium",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/production-execution/quality-exceptions",
+                    created_at=exc.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取质量异常待办失败: {e}")
             return []
@@ -210,12 +328,23 @@ async def get_todos(
             for row in rows:
                 lvl = (row.alert_level or "warning").lower()
                 prio = "high" if lvl == "critical" else ("medium" if lvl == "warning" else "low")
-                msg = (row.alert_message or "")[:200] if row.alert_message else ""
+                current_qty = _format_qty(row.current_quantity)
+                alert_msg = (row.alert_message or "")[:120] if row.alert_message else None
+                meta = _todo_meta(
+                    material_name=row.material_name or row.material_code,
+                    warehouse_name=row.warehouse_name,
+                    current_quantity=current_qty,
+                    alert_message=alert_msg,
+                )
                 out.append(TodoItem(
                     id=f"inventory_alert_{row.id}",
                     type="warehouse",
                     title=f"库存预警：{row.material_name or row.material_code}",
-                    description=msg or f"{row.warehouse_name} · 当前 {row.current_quantity}",
+                    description=_join_parts(
+                        row.warehouse_name,
+                        f"当前 {current_qty}" if current_qty else None,
+                    ),
+                    meta=meta,
                     priority=prio,
                     due_date=None,
                     status="pending",
@@ -238,17 +367,27 @@ async def get_todos(
                 deleted_at__isnull=True,
                 status__in=tuple(_INBOUND_PENDING_STATUSES),
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"purchase_receipt_{pr.id}",
-                type="warehouse",
-                title=f"待入库：{pr.receipt_code}",
-                description=f"{pr.supplier_name} · {pr.warehouse_name}",
-                priority="medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/warehouse-management/inbound",
-                created_at=pr.created_at,
-            ) for pr in rows]
+            out: List[TodoItem] = []
+            for pr in rows:
+                qty = _format_qty(pr.total_quantity)
+                meta = _todo_meta(
+                    supplier_name=pr.supplier_name,
+                    warehouse_name=pr.warehouse_name,
+                    quantity=qty,
+                )
+                out.append(TodoItem(
+                    id=f"purchase_receipt_{pr.id}",
+                    type="warehouse",
+                    title=f"待入库：{pr.receipt_code}",
+                    description=_join_parts(pr.supplier_name, pr.warehouse_name, f"数量 {qty}" if qty else None),
+                    meta=meta,
+                    priority="medium",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/warehouse-management/inbound",
+                    created_at=pr.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取待入库待办失败: {e}")
             return []
@@ -264,17 +403,27 @@ async def get_todos(
                 deleted_at__isnull=True,
                 status__in=tuple(_INBOUND_PENDING_STATUSES),
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"finished_goods_receipt_{fg.id}",
-                type="warehouse",
-                title=f"成品待入库：{fg.receipt_code}",
-                description=f"{fg.work_order_code} · {fg.warehouse_name}",
-                priority="medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/warehouse-management/inbound",
-                created_at=fg.created_at,
-            ) for fg in rows]
+            out: List[TodoItem] = []
+            for fg in rows:
+                qty = _format_qty(fg.total_quantity)
+                meta = _todo_meta(
+                    work_order_code=fg.work_order_code,
+                    warehouse_name=fg.warehouse_name,
+                    quantity=qty,
+                )
+                out.append(TodoItem(
+                    id=f"finished_goods_receipt_{fg.id}",
+                    type="warehouse",
+                    title=f"成品待入库：{fg.receipt_code}",
+                    description=_join_parts(fg.work_order_code, fg.warehouse_name, f"数量 {qty}" if qty else None),
+                    meta=meta,
+                    priority="medium",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/warehouse-management/inbound",
+                    created_at=fg.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取成品待入库待办失败: {e}")
             return []
@@ -285,17 +434,25 @@ async def get_todos(
             rows = await ProductionReturn.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="待退料"
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"production_return_{row.id}",
-                type="warehouse",
-                title=f"生产退料待确认：{row.return_code}",
-                description=f"{row.work_order_code} · {row.warehouse_name}",
-                priority="medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/warehouse-management/inbound",
-                created_at=row.created_at,
-            ) for row in rows]
+            out: List[TodoItem] = []
+            for row in rows:
+                meta = _todo_meta(
+                    work_order_code=row.work_order_code,
+                    warehouse_name=row.warehouse_name,
+                )
+                out.append(TodoItem(
+                    id=f"production_return_{row.id}",
+                    type="warehouse",
+                    title=f"生产退料待确认：{row.return_code}",
+                    description=_join_parts(row.work_order_code, row.warehouse_name),
+                    meta=meta,
+                    priority="medium",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/warehouse-management/inbound",
+                    created_at=row.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取生产退料待办失败: {e}")
             return []
@@ -311,17 +468,27 @@ async def get_todos(
                 deleted_at__isnull=True,
                 status__in=tuple(_INBOUND_PENDING_STATUSES),
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"other_inbound_{row.id}",
-                type="warehouse",
-                title=f"其他入库待确认：{row.inbound_code}",
-                description=f"{row.reason_type} · {row.warehouse_name}",
-                priority="low",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/warehouse-management/other-inbound",
-                created_at=row.created_at,
-            ) for row in rows]
+            out: List[TodoItem] = []
+            for row in rows:
+                qty = _format_qty(row.total_quantity)
+                meta = _todo_meta(
+                    reason_type=row.reason_type,
+                    warehouse_name=row.warehouse_name,
+                    quantity=qty,
+                )
+                out.append(TodoItem(
+                    id=f"other_inbound_{row.id}",
+                    type="warehouse",
+                    title=f"其他入库待确认：{row.inbound_code}",
+                    description=_join_parts(row.reason_type, row.warehouse_name, f"数量 {qty}" if qty else None),
+                    meta=meta,
+                    priority="low",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/warehouse-management/other-inbound",
+                    created_at=row.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取其他入库待办失败: {e}")
             return []
@@ -332,17 +499,25 @@ async def get_todos(
             rows = await MaterialBorrow.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="待借出"
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"material_borrow_{row.id}",
-                type="warehouse",
-                title=f"借料待确认：{row.borrow_code}",
-                description=f"{row.borrower_name or ''} · {row.warehouse_name or ''}".strip(" ·") or None,
-                priority="medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/warehouse-management/material-borrows",
-                created_at=row.created_at,
-            ) for row in rows]
+            out: List[TodoItem] = []
+            for row in rows:
+                meta = _todo_meta(
+                    borrower_name=row.borrower_name,
+                    warehouse_name=row.warehouse_name,
+                )
+                out.append(TodoItem(
+                    id=f"material_borrow_{row.id}",
+                    type="warehouse",
+                    title=f"借料待确认：{row.borrow_code}",
+                    description=_join_parts(row.borrower_name, row.warehouse_name),
+                    meta=meta,
+                    priority="medium",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/warehouse-management/material-borrows",
+                    created_at=row.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取借料待办失败: {e}")
             return []
@@ -353,17 +528,25 @@ async def get_todos(
             rows = await MaterialReturn.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="待归还"
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"material_return_{row.id}",
-                type="warehouse",
-                title=f"还料待确认：{row.return_code}",
-                description=f"借料单 {row.borrow_code} · {row.warehouse_name}",
-                priority="medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/warehouse-management/material-returns",
-                created_at=row.created_at,
-            ) for row in rows]
+            out: List[TodoItem] = []
+            for row in rows:
+                meta = _todo_meta(
+                    borrow_code=row.borrow_code,
+                    warehouse_name=row.warehouse_name,
+                )
+                out.append(TodoItem(
+                    id=f"material_return_{row.id}",
+                    type="warehouse",
+                    title=f"还料待确认：{row.return_code}",
+                    description=_join_parts(f"借料单 {row.borrow_code}", row.warehouse_name),
+                    meta=meta,
+                    priority="medium",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/warehouse-management/material-returns",
+                    created_at=row.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取还料待办失败: {e}")
             return []
@@ -383,11 +566,25 @@ async def get_todos(
                     prio = "low"
                 else:
                     prio = "medium"
+                qty = _format_qty(row.requested_quantity)
+                qty_text = f"{qty}{row.material_unit}" if qty and row.material_unit else qty
+                meta = _todo_meta(
+                    work_order_code=row.work_order_code,
+                    material_name=row.material_name,
+                    quantity=qty_text or qty,
+                    caller_name=row.caller_name,
+                )
                 out.append(TodoItem(
                     id=f"material_call_{row.id}",
                     type="warehouse",
                     title=f"叫料待处理：{row.code}",
-                    description=f"{row.work_order_code} · {row.material_name}",
+                    description=_join_parts(
+                        row.work_order_code,
+                        row.material_name,
+                        f"数量 {qty_text}" if qty_text else None,
+                        row.caller_name,
+                    ),
+                    meta=meta,
                     priority=prio,
                     due_date=row.needed_at,
                     status="pending",
@@ -405,17 +602,32 @@ async def get_todos(
             rows = await ReceiptNotice.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="待收货"
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"receipt_notice_{row.id}",
-                type="purchase",
-                title=f"收货通知待收货：{row.notice_code}",
-                description=f"{row.supplier_name} · {row.purchase_order_code}",
-                priority="medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/purchase-management/receipt-notices",
-                created_at=row.created_at,
-            ) for row in rows]
+            out: List[TodoItem] = []
+            for row in rows:
+                qty = _format_qty(row.total_quantity)
+                meta = _todo_meta(
+                    supplier_name=row.supplier_name,
+                    purchase_order_code=row.purchase_order_code,
+                    quantity=qty,
+                    planned_date=_format_date(row.planned_receipt_date),
+                )
+                out.append(TodoItem(
+                    id=f"receipt_notice_{row.id}",
+                    type="purchase",
+                    title=f"收货通知待收货：{row.notice_code}",
+                    description=_join_parts(
+                        row.supplier_name,
+                        row.purchase_order_code,
+                        f"数量 {qty}" if qty else None,
+                    ),
+                    meta=meta,
+                    priority="medium",
+                    due_date=_date_to_due(row.planned_receipt_date),
+                    status="pending",
+                    link="/apps/kuaizhizao/purchase-management/receipt-notices",
+                    created_at=row.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取收货通知待办失败: {e}")
             return []
@@ -426,17 +638,30 @@ async def get_todos(
             rows = await ProductionPicking.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="待领料"
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"production_picking_{row.id}",
-                type="outbound",
-                title=f"生产领料待确认：{row.picking_code}",
-                description=f"工单 {row.work_order_code}",
-                priority="medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/warehouse-management/outbound",
-                created_at=row.created_at,
-            ) for row in rows]
+            out: List[TodoItem] = []
+            for row in rows:
+                meta = _todo_meta(
+                    work_order_code=row.work_order_code,
+                    workshop_name=row.workshop_name,
+                    picker_name=row.picker_name,
+                )
+                out.append(TodoItem(
+                    id=f"production_picking_{row.id}",
+                    type="outbound",
+                    title=f"生产领料待确认：{row.picking_code}",
+                    description=_join_parts(
+                        f"工单 {row.work_order_code}",
+                        row.workshop_name,
+                        row.picker_name,
+                    ),
+                    meta=meta,
+                    priority="medium",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/warehouse-management/outbound",
+                    created_at=row.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取生产领料待办失败: {e}")
             return []
@@ -447,17 +672,31 @@ async def get_todos(
             rows = await SalesDelivery.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="待出库"
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"sales_delivery_{row.id}",
-                type="outbound",
-                title=f"销售出库待确认：{row.delivery_code}",
-                description=f"{row.customer_name} · {row.warehouse_name}",
-                priority="medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/warehouse-management/outbound",
-                created_at=row.created_at,
-            ) for row in rows]
+            out: List[TodoItem] = []
+            for row in rows:
+                qty = _format_qty(row.total_quantity)
+                meta = _todo_meta(
+                    customer_name=row.customer_name,
+                    warehouse_name=row.warehouse_name,
+                    quantity=qty,
+                )
+                out.append(TodoItem(
+                    id=f"sales_delivery_{row.id}",
+                    type="outbound",
+                    title=f"销售出库待确认：{row.delivery_code}",
+                    description=_join_parts(
+                        row.customer_name,
+                        row.warehouse_name,
+                        f"数量 {qty}" if qty else None,
+                    ),
+                    meta=meta,
+                    priority="medium",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/warehouse-management/outbound",
+                    created_at=row.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取销售出库待办失败: {e}")
             return []
@@ -468,17 +707,31 @@ async def get_todos(
             rows = await OtherOutbound.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="待出库"
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"other_outbound_{row.id}",
-                type="outbound",
-                title=f"其他出库待确认：{row.outbound_code}",
-                description=f"{row.reason_type} · {row.warehouse_name}",
-                priority="low",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/warehouse-management/other-outbound",
-                created_at=row.created_at,
-            ) for row in rows]
+            out: List[TodoItem] = []
+            for row in rows:
+                qty = _format_qty(row.total_quantity)
+                meta = _todo_meta(
+                    reason_type=row.reason_type,
+                    warehouse_name=row.warehouse_name,
+                    quantity=qty,
+                )
+                out.append(TodoItem(
+                    id=f"other_outbound_{row.id}",
+                    type="outbound",
+                    title=f"其他出库待确认：{row.outbound_code}",
+                    description=_join_parts(
+                        row.reason_type,
+                        row.warehouse_name,
+                        f"数量 {qty}" if qty else None,
+                    ),
+                    meta=meta,
+                    priority="low",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/warehouse-management/other-outbound",
+                    created_at=row.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取其他出库待办失败: {e}")
             return []
@@ -494,17 +747,25 @@ async def get_todos(
                     "待审核", "PENDING_REVIEW", "PENDING",
                 ),
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"purchase_requisition_{row.id}",
-                type="purchase",
-                title=f"采购申请待审核：{row.requisition_code}",
-                description=row.requisition_name or row.applicant_name,
-                priority="medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/purchase-management/purchase-requisitions",
-                created_at=row.created_at,
-            ) for row in rows]
+            out: List[TodoItem] = []
+            for row in rows:
+                meta = _todo_meta(
+                    requisition_name=row.requisition_name,
+                    applicant_name=row.applicant_name,
+                )
+                out.append(TodoItem(
+                    id=f"purchase_requisition_{row.id}",
+                    type="purchase",
+                    title=f"采购申请待审核：{row.requisition_code}",
+                    description=_join_parts(row.requisition_name, row.applicant_name),
+                    meta=meta,
+                    priority="medium",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/purchase-management/purchase-requisitions",
+                    created_at=row.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取采购申请待办失败: {e}")
             return []
@@ -515,17 +776,31 @@ async def get_todos(
             rows = await PurchaseReturn.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="待退货"
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"purchase_return_{row.id}",
-                type="purchase",
-                title=f"采购退货待确认：{row.return_code}",
-                description=f"{row.supplier_name} · {row.warehouse_name}",
-                priority="medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/purchase-management/purchase-returns",
-                created_at=row.created_at,
-            ) for row in rows]
+            out: List[TodoItem] = []
+            for row in rows:
+                qty = _format_qty(row.total_quantity)
+                meta = _todo_meta(
+                    supplier_name=row.supplier_name,
+                    warehouse_name=row.warehouse_name,
+                    quantity=qty,
+                )
+                out.append(TodoItem(
+                    id=f"purchase_return_{row.id}",
+                    type="purchase",
+                    title=f"采购退货待确认：{row.return_code}",
+                    description=_join_parts(
+                        row.supplier_name,
+                        row.warehouse_name,
+                        f"数量 {qty}" if qty else None,
+                    ),
+                    meta=meta,
+                    priority="medium",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/purchase-management/purchase-returns",
+                    created_at=row.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取采购退货待办失败: {e}")
             return []
@@ -536,17 +811,36 @@ async def get_todos(
             rows = await ShipmentNotice.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="待发货"
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"shipment_notice_{row.id}",
-                type="sales",
-                title=f"发货通知待发货：{row.notice_code}",
-                description=f"{row.customer_name} · {row.sales_order_code}",
-                priority="medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/sales-management/shipment-notices",
-                created_at=row.created_at,
-            ) for row in rows]
+            out: List[TodoItem] = []
+            for row in rows:
+                qty = _format_qty(row.total_quantity)
+                address = (row.shipping_address or "")[:80] if row.shipping_address else None
+                meta = _todo_meta(
+                    customer_name=row.customer_name,
+                    sales_order_code=row.sales_order_code,
+                    quantity=qty,
+                    warehouse_name=row.warehouse_name,
+                    planned_date=_format_date(row.planned_ship_date),
+                    detail=address,
+                )
+                out.append(TodoItem(
+                    id=f"shipment_notice_{row.id}",
+                    type="sales",
+                    title=f"发货通知待发货：{row.notice_code}",
+                    description=_join_parts(
+                        row.customer_name,
+                        row.sales_order_code,
+                        f"数量 {qty}" if qty else None,
+                        row.warehouse_name,
+                    ),
+                    meta=meta,
+                    priority="medium",
+                    due_date=_date_to_due(row.planned_ship_date),
+                    status="pending",
+                    link="/apps/kuaizhizao/sales-management/shipment-notices",
+                    created_at=row.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取发货通知待办失败: {e}")
             return []
@@ -557,17 +851,31 @@ async def get_todos(
             rows = await SalesReturn.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="待退货"
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"sales_return_{row.id}",
-                type="sales",
-                title=f"销售退货待确认：{row.return_code}",
-                description=f"{row.customer_name} · {row.warehouse_name}",
-                priority="medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/sales-management/sales-returns",
-                created_at=row.created_at,
-            ) for row in rows]
+            out: List[TodoItem] = []
+            for row in rows:
+                qty = _format_qty(row.total_quantity)
+                meta = _todo_meta(
+                    customer_name=row.customer_name,
+                    warehouse_name=row.warehouse_name,
+                    quantity=qty,
+                )
+                out.append(TodoItem(
+                    id=f"sales_return_{row.id}",
+                    type="sales",
+                    title=f"销售退货待确认：{row.return_code}",
+                    description=_join_parts(
+                        row.customer_name,
+                        row.warehouse_name,
+                        f"数量 {qty}" if qty else None,
+                    ),
+                    meta=meta,
+                    priority="medium",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/sales-management/sales-returns",
+                    created_at=row.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取销售退货待办失败: {e}")
             return []
@@ -587,11 +895,17 @@ async def get_todos(
                     prio = "low"
                 else:
                     prio = "medium"
+                meta = _todo_meta(
+                    equipment_name=row.equipment_name,
+                    fault_type=row.fault_type,
+                    fault_level=row.fault_level,
+                )
                 out.append(TodoItem(
                     id=f"equipment_fault_{row.id}",
                     type="equipment",
                     title=f"设备故障待处理：{row.fault_no}",
-                    description=f"{row.equipment_name} · {row.fault_type}",
+                    description=_join_parts(row.equipment_name, row.fault_type, row.fault_level),
+                    meta=meta,
                     priority=prio,
                     due_date=None,
                     status="pending",
@@ -609,17 +923,31 @@ async def get_todos(
             rows = await IncomingInspection.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="待检验",
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"inspection_incoming_{ins.id}",
-                type="quality_inspection",
-                title=f"来料待检：{ins.inspection_code}",
-                description=f"{ins.material_name} · {ins.supplier_name}",
-                priority="medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/quality-management/incoming-inspection",
-                created_at=ins.created_at,
-            ) for ins in rows]
+            out: List[TodoItem] = []
+            for ins in rows:
+                qty = _format_qty(ins.inspection_quantity)
+                meta = _todo_meta(
+                    material_name=ins.material_name,
+                    supplier_name=ins.supplier_name,
+                    quantity=qty,
+                )
+                out.append(TodoItem(
+                    id=f"inspection_incoming_{ins.id}",
+                    type="quality_inspection",
+                    title=f"来料待检：{ins.inspection_code}",
+                    description=_join_parts(
+                        ins.material_name,
+                        ins.supplier_name,
+                        f"数量 {qty}" if qty else None,
+                    ),
+                    meta=meta,
+                    priority="medium",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/quality-management/incoming-inspection",
+                    created_at=ins.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取来料检验待办失败: {e}")
             return []
@@ -630,17 +958,31 @@ async def get_todos(
             rows = await ProcessInspection.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="待检验",
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"inspection_process_{ins.id}",
-                type="quality_inspection",
-                title=f"过程待检：{ins.inspection_code}",
-                description=f"{ins.operation_name} · 工单 {ins.work_order_code}",
-                priority="medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/quality-management/process-inspection",
-                created_at=ins.created_at,
-            ) for ins in rows]
+            out: List[TodoItem] = []
+            for ins in rows:
+                qty = _format_qty(ins.inspection_quantity)
+                meta = _todo_meta(
+                    operation_name=ins.operation_name,
+                    work_order_code=ins.work_order_code,
+                    quantity=qty,
+                )
+                out.append(TodoItem(
+                    id=f"inspection_process_{ins.id}",
+                    type="quality_inspection",
+                    title=f"过程待检：{ins.inspection_code}",
+                    description=_join_parts(
+                        ins.operation_name,
+                        f"工单 {ins.work_order_code}",
+                        f"数量 {qty}" if qty else None,
+                    ),
+                    meta=meta,
+                    priority="medium",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/quality-management/process-inspection",
+                    created_at=ins.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取过程检验待办失败: {e}")
             return []
@@ -651,17 +993,31 @@ async def get_todos(
             rows = await FinishedGoodsInspection.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="待检验",
             ).order_by("-created_at").limit(limit)
-            return [TodoItem(
-                id=f"inspection_finished_{ins.id}",
-                type="quality_inspection",
-                title=f"成品待检：{ins.inspection_code}",
-                description=f"{ins.material_name} · 工单 {ins.work_order_code}",
-                priority="medium",
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/quality-management/finished-goods-inspection",
-                created_at=ins.created_at,
-            ) for ins in rows]
+            out: List[TodoItem] = []
+            for ins in rows:
+                qty = _format_qty(ins.inspection_quantity)
+                meta = _todo_meta(
+                    material_name=ins.material_name,
+                    work_order_code=ins.work_order_code,
+                    quantity=qty,
+                )
+                out.append(TodoItem(
+                    id=f"inspection_finished_{ins.id}",
+                    type="quality_inspection",
+                    title=f"成品待检：{ins.inspection_code}",
+                    description=_join_parts(
+                        ins.material_name,
+                        f"工单 {ins.work_order_code}",
+                        f"数量 {qty}" if qty else None,
+                    ),
+                    meta=meta,
+                    priority="medium",
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/quality-management/finished-goods-inspection",
+                    created_at=ins.created_at,
+                ))
+            return out
         except Exception as e:
             logger.error(f"获取成品检验待办失败: {e}")
             return []
@@ -1070,7 +1426,8 @@ async def get_statistics(
         
         open_quality_exceptions = await QualityException.filter(
             tenant_id=tenant_id,
-            status="open",
+            status__in=ACTIVE_QUALITY_EXCEPTION_STATUSES,
+            deleted_at__isnull=True,
         ).all()
         
         # 获取报工统计，计算合格率
@@ -1544,676 +1901,7 @@ async def get_menu_badge_counts(
     返回各业务单据的「未完成」数量，key 与前端菜单 path 映射一致。
     用于左侧菜单业务类单据显示数量小徽标。
     """
-    counts = {}
-    from datetime import datetime
-    now = datetime.now()
-    now_date = now.date()
-    try:
-        # 工单：逾期 > 待审核 > 进行中
-        from apps.kuaizhizao.models.work_order import WorkOrder
-        counts["work_order"] = {
-            "overdue": await WorkOrder.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True,
-                planned_end_date__lt=now,
-            ).exclude(status__in=["completed", "已完成", "cancelled", "已取消"]).count(),
-            "pending": 0,
-            "in_progress": await WorkOrder.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True,
-                status__in=["released", "in_progress", "已下达", "进行中", "RELEASED", "IN_PROGRESS"],
-            ).count()
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts work_order: {e}")
-        counts["work_order"] = 0
-
-    try:
-        # 返工单
-        from apps.kuaizhizao.models.rework_order import ReworkOrder
-        counts["rework_order"] = {
-            "overdue": await ReworkOrder.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True,
-                planned_end_date__lt=now,
-            ).exclude(status__in=["completed", "已完成", "cancelled", "已取消"]).count(),
-            "pending": 0,
-            "in_progress": await ReworkOrder.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True,
-                status__in=["released", "in_progress", "已下达", "进行中", "RELEASED", "IN_PROGRESS"],
-            ).count()
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts rework_order: {e}")
-        counts["rework_order"] = 0
-
-    try:
-        # 异常
-        from apps.kuaizhizao.models.material_shortage_exception import MaterialShortageException
-        from apps.kuaizhizao.models.delivery_delay_exception import DeliveryDelayException
-        from apps.kuaizhizao.models.quality_exception import QualityException
-        c1 = await MaterialShortageException.filter(tenant_id=tenant_id, status="open").count()
-        c2 = await DeliveryDelayException.filter(tenant_id=tenant_id, status="open").count()
-        c3 = await QualityException.filter(tenant_id=tenant_id, status="open").count()
-        counts["exception"] = {
-            "overdue": 0,
-            "pending": c1 + c2 + c3,
-            "in_progress": 0
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts exception: {e}")
-        counts["exception"] = 0
-
-    try:
-        # 销售订单：逾期 > 待审核 > 进行中
-        from apps.kuaizhizao.models.sales_order import SalesOrder
-        counts["sales_order"] = {
-            "overdue": await SalesOrder.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True,
-                delivery_date__lt=now_date,
-            ).exclude(status__in=["COMPLETED", "已完成", "CANCELLED", "已取消"]).count(),
-            "pending": await SalesOrder.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True,
-                review_status__in=["PENDING", "PENDING_REVIEW", "待审核"],
-            ).exclude(status__in=["DRAFT", "草稿", "CANCELLED", "已取消"]).count(),
-            "in_progress": await SalesOrder.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True,
-                status__in=["IN_PROGRESS", "进行中", "APPROVED", "已审核", "CONFIRMED", "已确认", "AUDITED", "RELEASED", "执行中"],
-            ).count()
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts sales_order: {e}")
-        counts["sales_order"] = 0
-
-    try:
-        # 采购订单
-        from apps.kuaizhizao.models.purchase_order import PurchaseOrder
-        from apps.kuaizhizao.constants import DocumentStatus
-        po = PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        po_terminal = [
-            DocumentStatus.CANCELLED.value,
-            DocumentStatus.REJECTED.value,
-            DocumentStatus.COMPLETED.value,
-            "已取消",
-            "已驳回",
-            "已完成",
-            "CANCELLED",
-            "REJECTED",
-            "COMPLETED",
-        ]
-        counts["purchase_order"] = {
-            # 与采购申请一致采用“待处理口径”，菜单优先展示 pending / in_progress
-            "overdue": 0,
-            "pending": await po.filter(
-                review_status__in=["PENDING", "PENDING_REVIEW", "待审核"],
-            ).exclude(status__in=po_terminal).count(),
-            "in_progress": await po.filter(
-                status__in=[
-                    "IN_PROGRESS",
-                    "进行中",
-                    "APPROVED",
-                    "已审核",
-                    "CONFIRMED",
-                    "已确认",
-                    "AUDITED",
-                    "RELEASED",
-                    "执行中",
-                    "部分入库",
-                ],
-            ).exclude(status__in=po_terminal).count(),
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts purchase_order: {e}")
-        counts["purchase_order"] = 0
-
-    try:
-        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
-        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
-        prq = PurchaseRequisition.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        prq_term = [
-            DocumentStatus.CANCELLED.value,
-            DocumentStatus.REJECTED.value,
-            DocumentStatus.FULL_CONVERTED.value,
-            "已取消",
-            "已驳回",
-            "全部转单",
-            "CANCELLED",
-            "REJECTED",
-            "FULL_CONVERTED",
-        ]
-        counts["purchase_requisition"] = {
-            # 与采购订单一致采用“待处理口径”，避免逾期单独抢占红点
-            "overdue": 0,
-            "pending": await prq.filter(
-                review_status__in=[
-                    ReviewStatus.PENDING.value,
-                    "待审核",
-                    "PENDING",
-                    "PENDING_REVIEW",
-                ]
-            ).exclude(status__in=prq_term).count(),
-            "in_progress": await prq.filter(
-                status__in=[
-                    DocumentStatus.APPROVED.value,
-                    "已通过",
-                    DocumentStatus.PARTIAL_CONVERTED.value,
-                    "部分转单",
-                    DocumentStatus.AUDITED.value,
-                    "已审核",
-                ]
-            ).exclude(status__in=prq_term).count(),
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts purchase_requisition: {e}")
-        counts["purchase_requisition"] = 0
-
-    try:
-        # 销售预测
-        from apps.kuaizhizao.models.sales_forecast import SalesForecast
-        counts["sales_forecast"] = {
-            "overdue": await SalesForecast.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True,
-                end_date__lt=now_date,
-            ).exclude(status__in=["COMPLETED", "已完成", "CANCELLED", "已取消"]).count(),
-            "pending": await SalesForecast.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True,
-                review_status__in=["PENDING", "PENDING_REVIEW", "待审核"],
-            ).exclude(status__in=["DRAFT", "草稿", "CANCELLED", "已取消"]).count(),
-            "in_progress": await SalesForecast.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True,
-                status__in=["IN_PROGRESS", "进行中", "APPROVED", "已审核", "CONFIRMED", "已确认", "AUDITED", "RELEASED", "执行中"],
-            ).count()
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts sales_forecast: {e}")
-        counts["sales_forecast"] = 0
-    try:
-        # 采购入库：待审核 / 待入库（已审）— 与销售订单侧栏徽标三态一致
-        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
-        from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
-            _INBOUND_PENDING_STATUSES,
-        )
-        _rv_pending = ["待审核", "PENDING", "PENDING_REVIEW"]
-        _pr = PurchaseReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        pr_pending = await _pr.filter(review_status__in=_rv_pending).exclude(
-            status__in=["已完成", "COMPLETED", "已取消", "CANCELLED", "关闭"]
-        ).count()
-        pr_exec = await _pr.filter(status__in=tuple(_INBOUND_PENDING_STATUSES)).exclude(
-            review_status__in=_rv_pending
-        ).count()
-        counts["inbound"] = {"overdue": 0, "pending": pr_pending, "in_progress": pr_exec}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts inbound: {e}")
-        counts["inbound"] = 0
-    try:
-        # 质检：待检验（来料+过程+成品）
-        from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
-        from apps.kuaizhizao.models.process_inspection import ProcessInspection
-        from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
-        c1 = await IncomingInspection.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True,
-            status="待检验",
-        ).count()
-        c2 = await ProcessInspection.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True,
-            status="待检验",
-        ).count()
-        c3 = await FinishedGoodsInspection.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True,
-            status="待检验",
-        ).count()
-        counts["incoming_inspection"] = {"overdue": 0, "pending": c1, "in_progress": 0}
-        counts["process_inspection"] = {"overdue": 0, "pending": c2, "in_progress": 0}
-        counts["finished_goods_inspection"] = {"overdue": 0, "pending": c3, "in_progress": 0}
-        counts["quality_inspection"] = {"overdue": 0, "pending": c1 + c2 + c3, "in_progress": 0}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts quality_inspection: {e}")
-        counts["quality_inspection"] = 0
-        counts["incoming_inspection"] = 0
-        counts["process_inspection"] = 0
-        counts["finished_goods_inspection"] = 0
-    try:
-        # 设备：维修中、校验中
-        from apps.kuaizhizao.models.equipment import Equipment
-        _eq_cnt = await Equipment.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            status__in=["维修中", "校验中"],
-        ).count()
-        counts["equipment"] = {"overdue": 0, "pending": 0, "in_progress": _eq_cnt}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts equipment: {e}")
-        counts["equipment"] = 0
-    try:
-        # 模具：维修中、校验中
-        from apps.kuaizhizao.models.mold import Mold
-        _mold_cnt = await Mold.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            status__in=["维修中", "校验中"],
-        ).count()
-        counts["mold"] = {"overdue": 0, "pending": 0, "in_progress": _mold_cnt}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts mold: {e}")
-        counts["mold"] = 0
-    try:
-        # 需求计算：已审核通过且尚未下推到需求计算的需求数（与新建计算可选需求条件一致）
-        from apps.kuaizhizao.models.demand import Demand
-        from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
-
-        _audited_status = [
-            DemandStatus.AUDITED.value,
-            "AUDITED",
-            "已审核",
-            "CONFIRMED",
-            "已确认",
-        ]
-        _approved_review = [
-            ReviewStatus.APPROVED.value,
-            "APPROVED",
-            "审核通过",
-            "通过",
-            "已通过",
-        ]
-        _dc_cnt = await Demand.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            pushed_to_computation=False,
-            status__in=_audited_status,
-            review_status__in=_approved_review,
-        ).count()
-        counts["demand_computation"] = {"overdue": 0, "pending": _dc_cnt, "in_progress": 0}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts demand_computation: {e}")
-        counts["demand_computation"] = 0
-
-    try:
-        # 设备点检：待点检数量
-        from apps.kuaizhizao.models.equipment_point_inspection import EquipmentPointInspectionRecord
-        _epi = await EquipmentPointInspectionRecord.filter(
-            tenant_id=tenant_id,
-            status="待点检",
-            deleted_at__isnull=True
-        ).count()
-        counts["equipment_inspection"] = {"overdue": 0, "pending": _epi, "in_progress": 0}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts equipment_inspection: {e}")
-        counts["equipment_inspection"] = 0
-
-    try:
-        # 备品备件：低于安全库存的数量
-        from apps.kuaizhizao.models.spare_part import SparePart, SparePartInventory
-        from tortoise.functions import Sum
-        
-        # 获取所有备件及其当前总库存
-        # 注意：这里简单的逻辑是统计有多少种备件低于安全库存
-        all_parts = await SparePart.filter(tenant_id=tenant_id, is_active=True, deleted_at__isnull=True)
-        alert_count = 0
-        for part in all_parts:
-            # 聚合该备件在所有库位的库存
-            total_stock_data = await SparePartInventory.filter(
-                tenant_id=tenant_id, 
-                spare_part_id=part.id, 
-                deleted_at__isnull=True
-            ).annotate(total=Sum("stock_quantity")).values("total")
-            
-            total_stock = (total_stock_data[0]["total"] or 0) if total_stock_data else 0
-            if total_stock < part.safety_stock:
-                alert_count += 1
-        counts["spare_part"] = {"overdue": 0, "pending": alert_count, "in_progress": 0}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts spare_part: {e}")
-        counts["spare_part"] = 0
-
-    _rv_pending = ["待审核", "PENDING", "PENDING_REVIEW"]
-
-    try:
-        # 其他入库单
-        from apps.kuaizhizao.models.other_inbound import OtherInbound
-        oi = OtherInbound.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        oi_p = await oi.filter(review_status__in=_rv_pending).exclude(
-            status__in=["已完成", "已取消", "CANCELLED"]
-        ).count()
-        oi_x = await oi.filter(status="待入库").exclude(review_status__in=_rv_pending).count()
-        counts["other_inbound"] = {"overdue": 0, "pending": oi_p, "in_progress": oi_x}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts other_inbound: {e}")
-        counts["other_inbound"] = 0
-
-    try:
-        # 还料单
-        from apps.kuaizhizao.models.material_return import MaterialReturn
-        mr = MaterialReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        mr_p = await mr.filter(review_status__in=_rv_pending).exclude(status__in=["已完成", "已取消"]).count()
-        mr_x = await mr.filter(status="待归还").exclude(review_status__in=_rv_pending).count()
-        counts["material_return"] = {"overdue": 0, "pending": mr_p, "in_progress": mr_x}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts material_return: {e}")
-        counts["material_return"] = 0
-
-    try:
-        # 销售出库单（出库管理）
-        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
-        sd = SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        sd_p = await sd.filter(review_status__in=_rv_pending).exclude(
-            status__in=["已完成", "COMPLETED", "已取消", "CANCELLED"]
-        ).count()
-        sd_x = await sd.filter(status="待出库").exclude(review_status__in=_rv_pending).count()
-        counts["sales_outbound"] = {"overdue": 0, "pending": sd_p, "in_progress": sd_x}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts sales_outbound: {e}")
-        counts["sales_outbound"] = 0
-
-    try:
-        # 其他出库单
-        from apps.kuaizhizao.models.other_outbound import OtherOutbound
-        oo = OtherOutbound.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        oo_p = await oo.filter(review_status__in=_rv_pending).exclude(status__in=["已完成", "已取消"]).count()
-        oo_x = await oo.filter(status="待出库").exclude(review_status__in=_rv_pending).count()
-        counts["other_outbound"] = {"overdue": 0, "pending": oo_p, "in_progress": oo_x}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts other_outbound: {e}")
-        counts["other_outbound"] = 0
-
-    try:
-        # 借料单
-        from apps.kuaizhizao.models.material_borrow import MaterialBorrow
-        mb = MaterialBorrow.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        mb_p = await mb.filter(review_status__in=_rv_pending).exclude(status__in=["已归还", "已取消", "已完成"]).count()
-        mb_x = await mb.filter(status="待借出").exclude(review_status__in=_rv_pending).count()
-        counts["material_borrow"] = {"overdue": 0, "pending": mb_p, "in_progress": mb_x}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts material_borrow: {e}")
-        counts["material_borrow"] = 0
-
-    try:
-        # 送货单：待发送 / 已发送未签收
-        from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
-        dn = DeliveryNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True)
-        dn_p = await dn.filter(status="待发送").count()
-        dn_x = await dn.filter(status="已发送").count()
-        dn_od = await dn.filter(
-            planned_delivery_date__lt=now_date,
-            planned_delivery_date__isnull=False,
-        ).exclude(status__in=["已签收", "已取消"]).count()
-        counts["delivery_notice"] = {"overdue": dn_od, "pending": dn_p, "in_progress": dn_x}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts delivery_notice: {e}")
-        counts["delivery_notice"] = 0
-
-    try:
-        # 叫料请求
-        from apps.kuaizhizao.models.material_call_request import MaterialCallRequest
-        mc_pending = await MaterialCallRequest.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, is_active=True,
-            status__in=["pending", "processing", "partial"],
-        ).count()
-        counts["material_call"] = {"overdue": 0, "pending": mc_pending, "in_progress": 0}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts material_call: {e}")
-        counts["material_call"] = 0
-
-    try:
-        # 盘点单：进行中
-        from apps.kuaizhizao.models.stocktaking import Stocktaking
-        st_cnt = await Stocktaking.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status__in=["draft", "in_progress"],
-        ).count()
-        counts["stocktaking"] = {"overdue": 0, "pending": st_cnt, "in_progress": 0}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts stocktaking: {e}")
-        counts["stocktaking"] = 0
-
-    try:
-        # 库存调拨：未完成
-        from apps.kuaizhizao.models.inventory_transfer import InventoryTransfer
-        it_cnt = await InventoryTransfer.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True,
-            status__in=["draft", "in_progress"],
-        ).count()
-        counts["inventory_transfer"] = {"overdue": 0, "pending": it_cnt, "in_progress": 0}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts inventory_transfer: {e}")
-        counts["inventory_transfer"] = 0
-
-    try:
-        # 组装单 / 拆卸单
-        from apps.kuaizhizao.models.assembly_order import AssemblyOrder
-        from apps.kuaizhizao.models.disassembly_order import DisassemblyOrder
-        ao_cnt = await AssemblyOrder.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status__in=["draft", "in_progress"],
-        ).count()
-        do_cnt = await DisassemblyOrder.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status__in=["draft", "in_progress"],
-        ).count()
-        counts["assembly_order"] = {"overdue": 0, "pending": ao_cnt, "in_progress": 0}
-        counts["disassembly_order"] = {"overdue": 0, "pending": do_cnt, "in_progress": 0}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts assembly/disassembly: {e}")
-        counts["assembly_order"] = 0
-        counts["disassembly_order"] = 0
-
-    try:
-        # 配料中心
-        from apps.kuaizhizao.models.batching_order import BatchingOrder
-        bo_cnt = await BatchingOrder.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status__in=["draft", "picking"],
-        ).count()
-        counts["batching_order"] = {"overdue": 0, "pending": bo_cnt, "in_progress": 0}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts batching_order: {e}")
-        counts["batching_order"] = 0
-
-    try:
-        # 客户来料登记 pending
-        from apps.kuaizhizao.models.customer_material_registration import CustomerMaterialRegistration
-        cm_cnt = await CustomerMaterialRegistration.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="pending",
-        ).count()
-        counts["customer_material_registration"] = {"overdue": 0, "pending": cm_cnt, "in_progress": 0}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts customer_material_registration: {e}")
-        counts["customer_material_registration"] = 0
-
-    try:
-        # 报价单（与销售订单徽标语义对齐）
-        from apps.kuaizhizao.models.quotation import Quotation
-        qb = Quotation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        counts["quotation"] = {
-            "overdue": await qb.filter(
-                valid_until__lt=now_date,
-                valid_until__isnull=False,
-            ).exclude(status__in=["已接受", "已拒绝", "已转订单", "CANCELLED", "已取消"]).count(),
-            "pending": await qb.filter(review_status__in=_rv_pending).exclude(
-                status__in=["已拒绝", "CANCELLED", "已取消"]
-            ).count(),
-            "in_progress": await qb.filter(status="已发送").exclude(review_status__in=_rv_pending).count(),
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts quotation: {e}")
-        counts["quotation"] = 0
-
-    try:
-        from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
-        rn = ReceiptNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True)
-        counts["receipt_notice"] = {
-            "overdue": await rn.filter(
-                planned_receipt_date__lt=now_date,
-                planned_receipt_date__isnull=False,
-            ).exclude(status__in=["已入库", "已完成", "已取消"]).count(),
-            "pending": await rn.filter(status="待收货").count(),
-            "in_progress": await rn.filter(status="已通知").count(),
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts receipt_notice: {e}")
-        counts["receipt_notice"] = 0
-
-    try:
-        from apps.kuaizhizao.models.purchase_return import PurchaseReturn
-        prt = PurchaseReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        counts["purchase_return"] = {
-            "overdue": 0,
-            "pending": await prt.filter(review_status__in=_rv_pending).exclude(
-                status__in=["已完成", "已取消", "CANCELLED"]
-            ).count(),
-            "in_progress": await prt.filter(status="待退货").exclude(review_status__in=_rv_pending).count(),
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts purchase_return: {e}")
-        counts["purchase_return"] = 0
-
-    try:
-        from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
-        sn = ShipmentNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True)
-        counts["shipment_notice"] = {
-            "overdue": await sn.filter(
-                planned_ship_date__lt=now_date,
-                planned_ship_date__isnull=False,
-            ).exclude(status__in=["已出库", "已完成", "已取消"]).count(),
-            "pending": await sn.filter(status="待发货").count(),
-            "in_progress": await sn.filter(status="已通知").count(),
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts shipment_notice: {e}")
-        counts["shipment_notice"] = 0
-
-    try:
-        from apps.kuaizhizao.models.sales_return import SalesReturn
-        sr = SalesReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        counts["sales_return"] = {
-            "overdue": 0,
-            "pending": await sr.filter(review_status__in=_rv_pending).exclude(
-                status__in=["已完成", "已取消", "CANCELLED"]
-            ).count(),
-            "in_progress": await sr.filter(status="待退货").exclude(review_status__in=_rv_pending).count(),
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts sales_return: {e}")
-        counts["sales_return"] = 0
-
-    try:
-        from apps.kuaizhizao.models.customer_follow_up import CustomerFollowUp
-        _now_dt = datetime.now()
-        cfu_od = await CustomerFollowUp.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            next_follow_up_at__isnull=False,
-            next_follow_up_at__lt=_now_dt,
-        ).count()
-        counts["customer_follow_up"] = {"overdue": cfu_od, "pending": 0, "in_progress": 0}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts customer_follow_up: {e}")
-        counts["customer_follow_up"] = 0
-
-    try:
-        from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
-        ow = OutsourceWorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        ow_term = ["completed", "cancelled", "已完成", "已取消", "COMPLETED", "CANCELLED"]
-        counts["outsource_work_order"] = {
-            "overdue": await ow.filter(
-                planned_end_date__lt=now,
-                planned_end_date__isnull=False,
-            ).exclude(status__in=ow_term).count(),
-            "pending": await ow.filter(status="draft").count(),
-            "in_progress": await ow.filter(status__in=["released", "in_progress", "已下达", "进行中"]).count(),
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts outsource_work_order: {e}")
-        counts["outsource_work_order"] = 0
-
-    try:
-        # 装箱绑定菜单徽标口径：仅统计装箱绑定记录本身，不复用销售出库队列
-        from apps.kuaizhizao.models.packing_binding import PackingBinding
-        pb_total = await PackingBinding.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-        ).count()
-        counts["packing_binding"] = {"overdue": 0, "pending": 0, "in_progress": pb_total}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts packing_binding: {e}")
-        counts["packing_binding"] = 0
-
-    try:
-        from apps.kuaizhizao.models.equipment_fault import EquipmentFault
-        ef = EquipmentFault.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        counts["equipment_fault"] = {
-            "overdue": 0,
-            "pending": await ef.filter(status="待处理").count(),
-            "in_progress": await ef.filter(status="处理中").count(),
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts equipment_fault: {e}")
-        counts["equipment_fault"] = 0
-
-    try:
-        from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan
-        mp = MaintenancePlan.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        counts["maintenance_plan"] = {
-            "overdue": await mp.filter(
-                planned_end_date__lt=now,
-                planned_end_date__isnull=False,
-            ).exclude(status__in=["已完成", "已取消"]).count(),
-            "pending": await mp.filter(status__in=["草稿", "已发布"]).count(),
-            "in_progress": await mp.filter(status="执行中").count(),
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts maintenance_plan: {e}")
-        counts["maintenance_plan"] = 0
-
-    try:
-        from apps.kuaizhizao.models.maintenance_reminder import MaintenanceReminder
-        mrem = await MaintenanceReminder.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, is_handled=False
-        ).count()
-        counts["maintenance_reminder"] = {"overdue": 0, "pending": mrem, "in_progress": 0}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts maintenance_reminder: {e}")
-        counts["maintenance_reminder"] = 0
-
-    try:
-        from apps.kuaizhizao.models.inspection_plan import InspectionPlan
-        ip_cnt = await InspectionPlan.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, is_active=False,
-        ).count()
-        counts["inspection_plan"] = {"overdue": 0, "pending": ip_cnt, "in_progress": 0}
-    except Exception as e:
-        logger.warning(f"menu-badge-counts inspection_plan: {e}")
-        counts["inspection_plan"] = 0
-
-    try:
-        # 往来核销：与 settlement 页 pending_settlement / unsettled_only 列表口径一致
-        from apps.kuaicaiwu.models.receivable import Receivable
-        from apps.kuaicaiwu.models.payable import Payable
-        from apps.kuaicaiwu.models.receipt import Receipt
-        from apps.kuaicaiwu.models.payment import Payment
-
-        recv_pending = await Receivable.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, remaining_amount__gt=0,
-        ).count()
-        pay_pending = await Payable.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, remaining_amount__gt=0,
-        ).count()
-        recv_voucher = await Receipt.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, unsettled_amount__gt=0,
-        ).exclude(status="Cancelled").count()
-        pay_voucher = await Payment.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, unsettled_amount__gt=0,
-        ).exclude(status="Cancelled").count()
-        recv_overdue = await Receivable.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            remaining_amount__gt=0,
-            due_date__lt=now_date,
-            due_date__isnull=False,
-        ).count()
-
-        counts["finance_settlement"] = {
-            "overdue": recv_overdue,
-            "pending": recv_pending + pay_pending,
-            "in_progress": recv_voucher + pay_voucher,
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts finance_settlement: {e}")
-        counts["finance_settlement"] = 0
-
-    return counts
+    return await fetch_menu_badge_counts(tenant_id)
 
 
 # ==========================================

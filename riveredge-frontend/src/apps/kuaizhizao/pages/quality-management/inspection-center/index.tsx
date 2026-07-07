@@ -1,5 +1,5 @@
-import React, { useMemo, Suspense, lazy } from 'react';
-import { App, Button, Space, Typography, Tag, Skeleton } from 'antd';
+import React, { useMemo } from 'react';
+import { App, Button, List, Space, Typography, Tag, theme } from 'antd';
 import {
   ThunderboltOutlined,
   CheckCircleOutlined,
@@ -13,6 +13,7 @@ import {
   AuditOutlined,
   LineChartOutlined,
   NodeIndexOutlined,
+  RightOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +22,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/zh-cn';
 import 'dayjs/locale/en';
 import { qualityApi, type QualityAnomalyItem } from '../../../services/quality-execution';
+import { qualityImprovementApi } from '../../../services/quality-improvement';
 import { mesDashboardService } from '../../../services/dashboard';
 import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
 import {
@@ -28,20 +30,14 @@ import {
   ModuleKpiRow,
   ModuleShortcutGrid,
   ModuleActionPanel,
+  ModuleActionMasonry,
   ModuleTodoList,
   ModuleChartPanel,
-  ModuleChartRow,
+  ModuleTrendLine,
 } from '../../../components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 
 dayjs.extend(relativeTime);
-
-const PassRateLineChart = lazy(async () => {
-  const { Line } = await import('@ant-design/charts');
-  return {
-    default: (props: React.ComponentProps<typeof Line>) => <Line {...props} />,
-  };
-});
 
 const { Text } = Typography;
 
@@ -49,12 +45,14 @@ const INSPECTION_LIST_PATH: Record<string, string> = {
   incoming: '/apps/kuaizhizao/quality-management/incoming-inspection',
   process: '/apps/kuaizhizao/quality-management/process-inspection',
   finished: '/apps/kuaizhizao/quality-management/finished-goods-inspection',
+  oqc: '/apps/kuaizhizao/quality-management/oqc-inspection',
 };
 
 const INSPECTION_TYPE_KEY: Record<string, string> = {
   incoming: 'app.kuaizhizao.quality.common.type.incoming',
   process: 'app.kuaizhizao.quality.common.type.process',
   finished: 'app.kuaizhizao.quality.common.type.finished',
+  oqc: 'app.kuaizhizao.quality.common.type.oqc',
 };
 
 function anomalySeverity(a: QualityAnomalyItem): 'high' | 'medium' | 'low' {
@@ -71,6 +69,7 @@ const InspectionCenter: React.FC = () => {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const { message } = App.useApp();
+  const { token } = theme.useToken();
 
   const dayjsLocale =
     i18n.language === 'en-US' || i18n.language?.startsWith('en') ? 'en' : 'zh-cn';
@@ -80,7 +79,7 @@ const InspectionCenter: React.FC = () => {
     () => qualityApi.qualityStatistics.getInspectionCenterSummary(),
     'kz:quality-dashboard:summary',
     {
-      onError: (e: any) =>
+      onError: (e: { message?: string }) =>
         message.error(
           e?.message || t('app.kuaizhizao.quality.inspectionCenter.messages.loadSummaryFailed'),
         ),
@@ -91,7 +90,7 @@ const InspectionCenter: React.FC = () => {
     () => qualityApi.qualityStatistics.getAnomalies({ limit: 12 }),
     'kz:quality-dashboard:anomalies',
     {
-      onError: (e: any) =>
+      onError: (e: { message?: string }) =>
         message.error(
           e?.message || t('app.kuaizhizao.quality.inspectionCenter.messages.loadAnomaliesFailed'),
         ),
@@ -103,6 +102,11 @@ const InspectionCenter: React.FC = () => {
     'kz:quality-dashboard:todos',
   );
 
+  const { data: ncItems, loading: ncLoading } = useDashboardRequest(async () => {
+    const res = await qualityImprovementApi.nonconformingLedger.list({ limit: 6 });
+    return Array.isArray(res) ? res : [];
+  }, 'kz:quality-dashboard:nc-ledger');
+
   const anomalies = anomaliesResp?.anomalies ?? [];
   const qualityTodos = todosData?.items ?? [];
 
@@ -111,6 +115,16 @@ const InspectionCenter: React.FC = () => {
     (summary?.pending_process || 0) +
     (summary?.pending_finished || 0) +
     (summary?.pending_oqc || 0);
+
+  const pendingByType = useMemo(
+    () => [
+      { key: 'incoming', count: summary?.pending_incoming || 0 },
+      { key: 'process', count: summary?.pending_process || 0 },
+      { key: 'finished', count: summary?.pending_finished || 0 },
+      { key: 'oqc', count: summary?.pending_oqc || 0 },
+    ],
+    [summary],
+  );
 
   const kpis: ModuleKpiDef[] = useMemo(
     () => [
@@ -257,7 +271,6 @@ const InspectionCenter: React.FC = () => {
       data: rows,
       xField: 'date',
       yField: 'rate',
-      smooth: true,
       animation: false,
       padding: 'auto' as const,
       color: '#1890ff',
@@ -275,10 +288,10 @@ const InspectionCenter: React.FC = () => {
       kpiRow={<ModuleKpiRow items={kpis} />}
       shortcutRow={<ModuleShortcutGrid items={shortcuts} />}
       actionRow={
-        <>
+        <ModuleActionMasonry>
           <ModuleActionPanel
+            layout="masonry"
             title={t('app.kuaizhizao.quality.inspectionCenter.todoPanel')}
-            lg={8}
             loading={todosLoading}
           >
             <ModuleTodoList
@@ -287,8 +300,35 @@ const InspectionCenter: React.FC = () => {
             />
           </ModuleActionPanel>
           <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.quality.inspectionCenter.pendingByTypeTitle')}
+          >
+            <List
+              size="small"
+              dataSource={pendingByType}
+              renderItem={(item) => (
+                <List.Item
+                  style={{ cursor: 'pointer', padding: '8px 4px' }}
+                  onClick={() => navigate(INSPECTION_LIST_PATH[item.key] || '/')}
+                  actions={[
+                    <Tag color={item.count > 0 ? 'processing' : 'default'} key="count">
+                      {item.count}
+                    </Tag>,
+                    <RightOutlined key="go" style={{ color: token.colorTextTertiary, fontSize: 11 }} />,
+                  ]}
+                >
+                  <Text>
+                    {INSPECTION_TYPE_KEY[item.key]
+                      ? t(INSPECTION_TYPE_KEY[item.key])
+                      : item.key}
+                  </Text>
+                </List.Item>
+              )}
+            />
+          </ModuleActionPanel>
+          <ModuleActionPanel
+            layout="masonry"
             title={t('app.kuaizhizao.quality.inspectionCenter.anomalyPanel')}
-            lg={16}
             extra={
               <Button
                 type="link"
@@ -307,7 +347,7 @@ const InspectionCenter: React.FC = () => {
                     key={`${item.inspection_type}-${item.inspection_id}`}
                     style={{
                       padding: '12px 8px',
-                      borderBottom: '1px solid #f0f0f0',
+                      borderBottom: `1px solid ${token.colorBorderSecondary}`,
                       cursor: 'pointer',
                     }}
                     onClick={() => navigate(INSPECTION_LIST_PATH[item.inspection_type] || '/')}
@@ -334,24 +374,51 @@ const InspectionCenter: React.FC = () => {
               )}
             </div>
           </ModuleActionPanel>
-        </>
-      }
-      chartRow={
-        <ModuleChartRow>
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.quality.inspectionCenter.ncPendingTitle')}
+            loading={ncLoading}
+            extra={
+              <a onClick={() => navigate('/apps/kuaizhizao/quality-management/nonconforming-ledger')}>
+                {t('app.kuaizhizao.quality.common.actions.viewAll')}
+              </a>
+            }
+          >
+            <List
+              size="small"
+              dataSource={ncItems?.slice(0, 6) ?? []}
+              locale={{ emptyText: t('app.kuaizhizao.quality.inspectionCenter.ncEmpty') }}
+              renderItem={(item) => (
+                <List.Item
+                  style={{ cursor: 'pointer', padding: '8px 4px' }}
+                  onClick={() => navigate('/apps/kuaizhizao/quality-management/nonconforming-ledger')}
+                >
+                  <List.Item.Meta
+                    title={item.code}
+                    description={
+                      <Text type="secondary" ellipsis style={{ fontSize: 12 }}>
+                        {item.product_name || item.defect_reason || item.defect_type}
+                      </Text>
+                    }
+                  />
+                  <Tag color="warning">{item.status}</Tag>
+                </List.Item>
+              )}
+            />
+          </ModuleActionPanel>
           <ModuleChartPanel
+            layout="masonry"
             title={
               <Space>
                 <BarChartOutlined />
                 <span>{t('app.kuaizhizao.quality.inspectionCenter.passRateTrend')}</span>
               </Space>
             }
-            lg={24}
+            height={300}
           >
-            <Suspense fallback={<Skeleton active />}>
-              <PassRateLineChart {...trendConfig} height={300} />
-            </Suspense>
+            <ModuleTrendLine {...trendConfig} height={280} />
           </ModuleChartPanel>
-        </ModuleChartRow>
+        </ModuleActionMasonry>
       }
     />
   );

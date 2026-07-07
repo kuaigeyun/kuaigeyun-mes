@@ -1,21 +1,10 @@
 import React, { useMemo } from 'react';
-import { Empty, Tag, Typography } from 'antd';
+import { Empty } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useThemeStore } from '../../../../stores/themeStore';
 import type { ModuleTodoItem } from './types';
-import { isModuleDashboardPlain } from './moduleDashboardTheme';
 import { localizeDashboardTodoItem } from '../../../../utils/dashboardTodoI18n';
-import { formatDateTime } from '../../../../utils/format';
-
-const { Text } = Typography;
-
-const PRIORITY_COLOR: Record<string, string> = {
-  high: 'red',
-  critical: 'red',
-  medium: 'orange',
-  low: 'default',
-};
+import { DashboardTodoListItem } from '../../../../components/dashboard/DashboardTodoList';
 
 export function ModuleTodoList({
   items,
@@ -26,7 +15,6 @@ export function ModuleTodoList({
 }) {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
-  const plain = isModuleDashboardPlain(useThemeStore((s) => s.resolved.themeStyle));
 
   const localizedItems = useMemo(
     () => items.map((item) => localizeDashboardTodoItem(item, t)),
@@ -38,43 +26,14 @@ export function ModuleTodoList({
   }
 
   return (
-    <div>
+    <div className="dashboard-feed-list">
       {localizedItems.map((item) => (
-        <div
+        <DashboardTodoListItem
           key={item.id}
-          style={{ cursor: item.link ? 'pointer' : 'default', padding: '8px 4px' }}
-          onClick={() => item.link && navigate(item.link)}
-        >
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <Text strong style={{ fontSize: 13 }}>
-              {item.title}
-            </Text>
-            <Tag
-              color={plain ? 'default' : (PRIORITY_COLOR[item.priority?.toLowerCase()] ?? 'default')}
-              variant="filled"
-            >
-              {item.priority === 'high' || item.priority === 'critical'
-                ? t('pages.dashboard.todo.priorityUrgent')
-                : t('pages.dashboard.todo.priorityPending')}
-            </Tag>
-          </span>
-          <div>
-            {item.description ? (
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {item.description}
-              </Text>
-            ) : null}
-            {item.due_date ? (
-              <div>
-                <Text type="secondary" style={{ fontSize: 11 }}>
-                  {t('pages.dashboard.todo.dueDateShort', {
-                    date: formatDateTime(item.due_date, 'MM-DD'),
-                  })}
-                </Text>
-              </div>
-            ) : null}
-          </div>
-        </div>
+          item={item}
+          onNavigate={(link) => navigate(link)}
+          showHandleButton={false}
+        />
       ))}
     </div>
   );

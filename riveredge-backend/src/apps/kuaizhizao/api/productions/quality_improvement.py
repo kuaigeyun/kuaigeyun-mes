@@ -4,7 +4,7 @@
 包含：8D、不合格品台账、OQC、SPC。
 """
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, Path, Query, Request
 
@@ -368,6 +368,78 @@ async def create_oqc_inspection(
     tenant_id: int = Depends(get_current_tenant),
 ) -> OQCInspectionResponse:
     return await oqc_service.create(tenant_id=tenant_id, user_id=current_user.id, payload=payload)
+
+
+@router.get(
+    "/oqc-inspections/pull-candidates/shipment-notices",
+    summary="List shipment notice pull candidates for OQC",
+)
+async def list_oqc_shipment_notice_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    _auth=_OQC_READ,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await oqc_service.list_shipment_notice_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/oqc-inspections/pull-candidates/sales-deliveries",
+    summary="List sales delivery pull candidates for OQC",
+)
+async def list_oqc_sales_delivery_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    _auth=_OQC_READ,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await oqc_service.list_sales_delivery_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/oqc-inspections/from-shipment-notice/{notice_id}/pull-preview",
+    summary="Preview pull OQC from shipment notice",
+)
+async def preview_pull_oqc_from_shipment_notice(
+    notice_id: int = Path(..., description="发货通知单ID"),
+    _auth=_OQC_READ,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await oqc_service.preview_pull_from_shipment_notice(
+        tenant_id=tenant_id,
+        notice_id=notice_id,
+    )
+
+
+@router.get(
+    "/oqc-inspections/from-sales-delivery/{delivery_id}/pull-preview",
+    summary="Preview pull OQC from sales delivery",
+)
+async def preview_pull_oqc_from_sales_delivery(
+    delivery_id: int = Path(..., description="销售出库单ID"),
+    _auth=_OQC_READ,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await oqc_service.preview_pull_from_sales_delivery(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id,
+    )
 
 
 @router.post(

@@ -8,8 +8,8 @@ const pageModules = import.meta.glob('./pages/**/*.tsx') as Record<string, () =>
 const ROUTE_MODULE_OVERRIDES: Record<string, string> = {
   'plan-management/production-control-tower':
     './pages/plan-management/production-plans/ProductionControlTower.tsx',
-  /** Route 为 terminal，入口在 work-orders/kiosk */
-  'production-execution/terminal': './pages/production-execution/work-orders/kiosk.tsx',
+  // 生产终端路由已下线
+  // 'production-execution/terminal': './pages/production-execution/work-orders/kiosk.tsx',
 };
 
 function runLoader(key: string | undefined): void {

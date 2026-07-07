@@ -11,7 +11,7 @@ import { App, Button, DatePicker, Descriptions, Select, Space, Typography, Table
 import { CalculatorOutlined, EyeOutlined, CheckOutlined, RollbackOutlined, DownloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import {
   detailDrawerDescriptionItems,
   DetailDrawerTemplate,
@@ -213,27 +213,6 @@ const SummariesPage: React.FC = () => {
         width: 168,
         hideInSearch: true,
         render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-      },
-      {
-        title: t('app.kuaizhizao.performance.common.columns.lifecycle'),
-        dataIndex: 'lifecycle_stage',
-        fixed: 'right',
-        align: 'left',
-        hideInSearch: true,
-        render: (_, record) => {
-          const lifecycle = getPerformanceSummaryLifecycle(record as unknown as Record<string, unknown>, t);
-          return (
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          );
-        },
       },
       {
         title: t('app.kuaizhizao.performance.common.columns.actions'),

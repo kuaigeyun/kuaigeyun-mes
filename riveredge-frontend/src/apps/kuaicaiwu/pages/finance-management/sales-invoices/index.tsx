@@ -6,7 +6,7 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Space, Dropdown, Tag } from 'antd';
+import { App, Button, Modal, Typography, Space, Dropdown, Tag, Alert, Spin, Table, Empty } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { CheckCircleOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
@@ -14,7 +14,7 @@ import { apiRequest } from '../../../../../services/api';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
@@ -29,9 +29,13 @@ import {
 } from '../../../utils/salesInvoiceUi';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
-import { listSalesOrders } from '../../../../kuaizhizao/services/sales-order';
-import { warehouseApi } from '../../../../kuaizhizao/services/warehouse-execution';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
+import {
+  salesInvoiceService,
+  type SalesInvoicePullCandidate,
+  type SalesInvoicePullPreview,
+} from '../../../services/finance/sales-invoice';
+import { salesInvoiceCapabilityReasonMessage } from '../../../utils/salesInvoiceCapabilityMessages';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
@@ -59,17 +63,7 @@ interface SalesInvoice {
   receivable_code?: string | null;
 }
 
-type PullInvoiceCandidate = {
-  source_type: 'sales_order' | 'sales_delivery';
-  source_id: number;
-  source_code: string;
-  customer_id?: number;
-  customer_name?: string;
-  source_date?: string;
-  source_status?: string;
-  amount?: number;
-  converted?: boolean;
-};
+type PullPreviewKind = 'sales_order' | 'sales_delivery';
 
 const TAX_RATE_OPTIONS = [
   { label: '13%', value: 13 },
@@ -100,8 +94,14 @@ const SalesInvoicesPage: React.FC = () => {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [pullSubmitting, setPullSubmitting] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [pullFormVisible, setPullFormVisible] = useState(false);
-  const [pullSelectedSource, setPullSelectedSource] = useState<PullInvoiceCandidate | null>(null);
+  const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
+  const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
+  const [pullPreviewData, setPullPreviewData] = useState<SalesInvoicePullPreview | null>(null);
+  const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
+  const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
+  const pullFormRef = useRef<any>(null);
+  const pullFromSalesOrderCloseRef = useRef<(() => void) | null>(null);
+  const pullFromSalesDeliveryCloseRef = useRef<(() => void) | null>(null);
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
   const { message: messageApi } = App.useApp();
   const pullFromSalesOrderAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_sales_order');
@@ -147,144 +147,116 @@ const SalesInvoicesPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
-  const fetchExistingSourceCodesFromInvoices = async (): Promise<Set<string>> => {
-    const codes = new Set<string>();
-    const pageSize = 200;
-    let skip = 0;
-    let total = Infinity;
-    while (skip < total) {
-      const res = await apiRequest<any>('/apps/kuaicaiwu/sales-invoices', {
-        params: { skip, limit: pageSize },
-      });
-      const items = res?.items || [];
-      total = Number(res?.total ?? items.length);
-      items.forEach((x: any) => {
-        const code = String(x?.sales_order_code || '').trim();
-        if (code) codes.add(code);
-      });
-      if (items.length < pageSize) break;
-      skip += pageSize;
-    }
-    return codes;
+  const resetPullPreview = () => {
+    setPullPreviewOpen(false);
+    setPullPreviewSourceId(null);
+    setPullPreviewData(null);
+    setPullPreviewKind(null);
+    pullFormRef.current?.resetFields();
   };
 
-  const loadPullCandidatesBySource = async (
-    sourceType: 'sales_order' | 'sales_delivery',
-    keyword: string,
-    page: number,
-    pageSize: number,
-  ): Promise<{ data: PullInvoiceCandidate[]; total: number }> => {
-    const kw = keyword.trim().toLowerCase();
-    const existedCodes = await fetchExistingSourceCodesFromInvoices();
-    if (sourceType === 'sales_order') {
-      const orderRes = await listSalesOrders({ skip: 0, limit: 200, keyword: kw || undefined });
-      const rows = (orderRes?.data || []).map((row: any) => {
-        const code = String(row.order_code || row.code || row.id || '');
-        const amount = Number(row.total_amount || 0);
-        return {
-          source_type: 'sales_order' as const,
-          source_id: Number(row.id),
-          source_code: code,
-          customer_id: row.customer_id,
-          customer_name: row.customer_name,
-          source_date: row.order_date,
-          source_status: row.status,
-          amount,
-          converted: existedCodes.has(code),
-        };
+  const openPullPreview = async (kind: PullPreviewKind, sourceId: number) => {
+    setPullPreviewKind(kind);
+    setPullPreviewOpen(true);
+    setPullPreviewLoading(true);
+    setPullPreviewData(null);
+    setPullPreviewSourceId(sourceId);
+    try {
+      const data =
+        kind === 'sales_order'
+          ? await salesInvoiceService.previewPullFromSalesOrder(sourceId)
+          : await salesInvoiceService.previewPullFromSalesDelivery(sourceId);
+      setPullPreviewData(data);
+      const maxPush = Number(data.items?.[0]?.max_push_quantity ?? 0);
+      const taxRate = 13;
+      const defaultExcl = maxPush > 0 ? Number((maxPush / (1 + taxRate / 100)).toFixed(2)) : 0;
+      const sourceLabel =
+        kind === 'sales_order' ? pullFromSalesOrderAction.sourceLabel : pullFromSalesDeliveryAction.sourceLabel;
+      pullFormRef.current?.setFieldsValue({
+        source_code: data.source_code,
+        customer_name: data.customer_name,
+        invoice_date: dayjs(),
+        invoice_type: '增值税专用发票',
+        tax_rate: taxRate,
+        invoice_amount: defaultExcl,
+        notes: t(`${P}.pullNotes`, { source: sourceLabel, code: data.source_code }),
       });
-      const filtered = rows.filter((r: PullInvoiceCandidate) => (kw ? `${r.source_code} ${r.customer_name || ''}`.toLowerCase().includes(kw) : true));
-      const start = (page - 1) * pageSize;
-      return { data: filtered.slice(start, start + pageSize), total: filtered.length };
+    } catch (e: any) {
+      messageApi.error(
+        e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
+      );
+      resetPullPreview();
+    } finally {
+      setPullPreviewLoading(false);
     }
-    const deliveryRes: any = await warehouseApi.salesDelivery.list({ skip: 0, limit: 200, keyword: kw || undefined });
-    const rows = (Array.isArray(deliveryRes) ? deliveryRes : (deliveryRes?.data || [])).map((row: any) => {
-      const code = String(row.delivery_code || row.code || row.id || '');
-      const amount = Number(row.total_amount || 0);
-      return {
-        source_type: 'sales_delivery' as const,
-        source_id: Number(row.id),
-        source_code: code,
-        customer_id: row.customer_id,
-        customer_name: row.customer_name,
-        source_date: row.delivery_date || row.delivery_time,
-        source_status: row.status,
-        amount,
-        converted: existedCodes.has(code),
-      };
-    });
-    const filtered = rows.filter((r: PullInvoiceCandidate) => (kw ? `${r.source_code} ${r.customer_name || ''}`.toLowerCase().includes(kw) : true));
-    const start = (page - 1) * pageSize;
-    return { data: filtered.slice(start, start + pageSize), total: filtered.length };
   };
 
-  const openPullFormFromRows = (
-    sourceType: 'sales_order' | 'sales_delivery',
-    keys: React.Key[],
-    rows: PullInvoiceCandidate[],
-    closeModal: () => void,
-  ) => {
-    const selected = rows.find((x) => String(x.source_id) === String(keys[0]));
-    if (!selected) {
-      messageApi.warning(t(`${P}.selectSource`, {
-        label: sourceType === 'sales_order' ? pullFromSalesOrderAction.sourceLabel : pullFromSalesDeliveryAction.sourceLabel,
-      }));
-      return;
-    }
-    if (!selected) return;
-    if (selected.converted) {
-      messageApi.warning(t(`${P}.sourceConverted`, {
-        source: sourceType === 'sales_order' ? pullFromSalesOrderAction.sourceLabel : pullFromSalesDeliveryAction.sourceLabel,
-        target: pullFromSalesOrderAction.targetLabel,
-      }));
-      return;
-    }
-    const invoiceAmount = Number(selected.amount || 0);
-    if (invoiceAmount <= 0) {
-      messageApi.warning(t(`${P}.zeroAmount`, { target: pullFromSalesOrderAction.targetLabel }));
-      return;
-    }
-    setPullSelectedSource(selected);
-    closeModal();
-    setPullFormVisible(true);
-  };
-
-  const pullFromSalesOrderQuery = useUniPullQuery<PullInvoiceCandidate>({
-    rowKey: 'source_id',
+  const pullFromSalesOrderQuery = useUniPullQuery<SalesInvoicePullCandidate>({
+    rowKey: 'id',
     selectionType: 'radio',
-    isRowDisabled: (record) => !!record.converted,
+    isRowDisabled: (record) => record.capabilities?.pull_sales_invoice?.allowed === false,
     loadData: async ({ keyword, page, pageSize }) => {
       try {
-        return await loadPullCandidatesBySource('sales_order', keyword, page, pageSize);
+        const res = await salesInvoiceService.listSalesOrderPullCandidates({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+        });
+        return { data: res.data || [], total: res.total ?? 0 };
       } catch (e: any) {
-        messageApi.error(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`));
+        messageApi.error(
+          e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
+        );
         return { data: [], total: 0 };
       }
     },
     onConfirm: async (keys, rows) => {
-      openPullFormFromRows('sales_order', keys, rows, pullFromSalesOrderQuery.closeModal);
+      const selected = rows.find((x) => String(x.id) === String(keys[0]));
+      if (!selected?.id) {
+        messageApi.warning(t(`${P}.selectSource`, { label: pullFromSalesOrderAction.sourceLabel }));
+        return;
+      }
+      pullFromSalesOrderCloseRef.current?.();
+      await openPullPreview('sales_order', selected.id);
     },
   });
+  pullFromSalesOrderCloseRef.current = pullFromSalesOrderQuery.closeModal;
 
-  const pullFromSalesDeliveryQuery = useUniPullQuery<PullInvoiceCandidate>({
-    rowKey: 'source_id',
+  const pullFromSalesDeliveryQuery = useUniPullQuery<SalesInvoicePullCandidate>({
+    rowKey: 'id',
     selectionType: 'radio',
-    isRowDisabled: (record) => !!record.converted,
+    isRowDisabled: (record) => record.capabilities?.pull_sales_invoice?.allowed === false,
     loadData: async ({ keyword, page, pageSize }) => {
       try {
-        return await loadPullCandidatesBySource('sales_delivery', keyword, page, pageSize);
+        const res = await salesInvoiceService.listSalesDeliveryPullCandidates({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+        });
+        return { data: res.data || [], total: res.total ?? 0 };
       } catch (e: any) {
-        messageApi.error(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`));
+        messageApi.error(
+          e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
+        );
         return { data: [], total: 0 };
       }
     },
     onConfirm: async (keys, rows) => {
-      openPullFormFromRows('sales_delivery', keys, rows, pullFromSalesDeliveryQuery.closeModal);
+      const selected = rows.find((x) => String(x.id) === String(keys[0]));
+      if (!selected?.id) {
+        messageApi.warning(t(`${P}.selectSource`, { label: pullFromSalesDeliveryAction.sourceLabel }));
+        return;
+      }
+      pullFromSalesDeliveryCloseRef.current?.();
+      await openPullPreview('sales_delivery', selected.id);
     },
   });
+  pullFromSalesDeliveryCloseRef.current = pullFromSalesDeliveryQuery.closeModal;
 
   const handlePullCreateSubmit = async (values: any) => {
-    if (!pullSelectedSource) return false;
+    if (!pullPreviewData || !pullPreviewSourceId || !pullPreviewKind) return false;
+    if (pullPreviewData.has_blocking_issues) return false;
+    const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
     const invoiceAmount = Number(values.invoice_amount) || 0;
     if (invoiceAmount <= 0) {
       messageApi.warning(t(`${P}.amountRequired`));
@@ -293,17 +265,25 @@ const SalesInvoicesPage: React.FC = () => {
     const taxRate = Number(values.tax_rate) || 13;
     const taxAmount = Number((invoiceAmount * taxRate / 100).toFixed(2));
     const totalAmount = Number((invoiceAmount + taxAmount).toFixed(2));
-    const sourceLabel = pullSelectedSource.source_type === 'sales_order'
-      ? pullFromSalesOrderAction.sourceLabel
-      : pullFromSalesDeliveryAction.sourceLabel;
+    if (totalAmount > maxPush) {
+      messageApi.warning(t(`${P}.pullExceedMax`, { max: maxPush.toFixed(2) }));
+      return false;
+    }
+    const sourceLabel =
+      pullPreviewKind === 'sales_order'
+        ? pullFromSalesOrderAction.sourceLabel
+        : pullFromSalesDeliveryAction.sourceLabel;
     setPullSubmitting(true);
     try {
       await apiRequest('/apps/kuaicaiwu/sales-invoices', {
         method: 'POST',
         data: {
-          customer_id: pullSelectedSource.customer_id,
-          customer_name: pullSelectedSource.customer_name || '',
-          sales_order_code: pullSelectedSource.source_code,
+          customer_id: pullPreviewData.customer_id,
+          customer_name: pullPreviewData.customer_name || '',
+          sales_order_id: pullPreviewData.sales_order_id ?? undefined,
+          sales_order_code: pullPreviewData.sales_order_code ?? pullPreviewData.source_code,
+          source_type: pullPreviewKind,
+          source_id: pullPreviewSourceId,
           invoice_number: String(values.invoice_number ?? '').trim(),
           invoice_date: formatDateTime(values.invoice_date || dayjs(), 'YYYY-MM-DD'),
           invoice_type: values.invoice_type || '增值税专用发票',
@@ -311,13 +291,12 @@ const SalesInvoicesPage: React.FC = () => {
           invoice_amount: invoiceAmount,
           tax_amount: taxAmount,
           total_amount: totalAmount,
-          notes: String(values.notes ?? '').trim() || t(`${P}.pullNotes`, { source: sourceLabel, code: pullSelectedSource.source_code }),
+          notes: String(values.notes ?? '').trim() || t(`${P}.pullNotes`, { source: sourceLabel, code: pullPreviewData.source_code }),
           attachments: normalizeDocumentAttachments(values.attachments),
         },
       });
       messageApi.success(t(`${P}.pullCreateSuccess`, { target: pullFromSalesOrderAction.targetLabel }));
-      setPullFormVisible(false);
-      setPullSelectedSource(null);
+      resetPullPreview();
       actionRef.current?.reload();
       return true;
     } catch (e: any) {
@@ -576,7 +555,7 @@ const SalesInvoicesPage: React.FC = () => {
 
   const pullTableColumns = useMemo(
     () => [
-      { title: t(`${P}.pull.col.sourceCode`), dataIndex: 'source_code', width: 220, ellipsis: true },
+      { title: t(`${P}.pull.col.sourceCode`), dataIndex: 'code', width: 220, ellipsis: true },
       { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', width: 220, ellipsis: true },
       {
         title: t(`${P}.pull.col.docStatus`),
@@ -601,17 +580,17 @@ const SalesInvoicesPage: React.FC = () => {
         align: 'right' as const,
         render: (v: number) => `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`,
       },
-      {
-        title: t(`${P}.pull.col.convertStatus`),
-        key: 'convert_status',
-        width: 140,
-        align: 'center' as const,
-        render: (_: unknown, r: PullInvoiceCandidate) =>
-          r.converted ? <Tag color="gold">{t(`${P}.pull.converted`)}</Tag> : <Tag color="success">{t(`${P}.pull.convertible`)}</Tag>,
-      },
     ],
     [t],
   );
+
+  const pullPreviewMaxPush = Number(pullPreviewData?.items?.[0]?.max_push_quantity ?? 0);
+  const formatPullMoney = (v: number) =>
+    `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
+  const pullPreviewTargetLabel =
+    pullPreviewKind === 'sales_delivery'
+      ? pullFromSalesDeliveryAction.targetLabel
+      : pullFromSalesOrderAction.targetLabel;
 
   return (
     <ListPageTemplate>
@@ -692,14 +671,14 @@ const SalesInvoicesPage: React.FC = () => {
         columns={columns}
       />
 
-      <UniPullQueryModal<PullInvoiceCandidate>
+      <UniPullQueryModal<SalesInvoicePullCandidate>
         open={pullFromSalesOrderQuery.open}
         title={pullFromSalesOrderAction.label}
         onCancel={pullFromSalesOrderQuery.closeModal}
         onOk={() => {
           void pullFromSalesOrderQuery.handleConfirm();
         }}
-        rowKey="source_id"
+        rowKey="id"
         columns={pullTableColumns}
         dataSource={pullFromSalesOrderQuery.dataSource}
         loading={pullFromSalesOrderQuery.loading}
@@ -721,14 +700,14 @@ const SalesInvoicesPage: React.FC = () => {
         okText={t('components.uniLifecycle.nextStep')}
       />
 
-      <UniPullQueryModal<PullInvoiceCandidate>
+      <UniPullQueryModal<SalesInvoicePullCandidate>
         open={pullFromSalesDeliveryQuery.open}
         title={pullFromSalesDeliveryAction.label}
         onCancel={pullFromSalesDeliveryQuery.closeModal}
         onOk={() => {
           void pullFromSalesDeliveryQuery.handleConfirm();
         }}
-        rowKey="source_id"
+        rowKey="id"
         columns={pullTableColumns}
         dataSource={pullFromSalesDeliveryQuery.dataSource}
         loading={pullFromSalesDeliveryQuery.loading}
@@ -750,75 +729,131 @@ const SalesInvoicesPage: React.FC = () => {
         okText={t('components.uniLifecycle.nextStep')}
       />
 
-      <ModalForm
-        title={t(`${P}.pullFormTitle`)}
-        open={pullFormVisible}
-        onOpenChange={(open) => {
-          if (pullSubmitting) return;
-          setPullFormVisible(open);
-          if (!open) {
-            setPullSelectedSource(null);
-          }
-        }}
-        onFinish={handlePullCreateSubmit}
-        width={560}
-        modalProps={{ destroyOnHidden: true }}
-        submitter={{ submitButtonProps: { loading: pullSubmitting } }}
-        initialValues={
-          pullSelectedSource
-            ? {
-                source_code: pullSelectedSource.source_code,
-                customer_name: pullSelectedSource.customer_name,
-                invoice_date: pullSelectedSource.source_date ? dayjs(pullSelectedSource.source_date) : dayjs(),
-                invoice_type: '增值税专用发票',
-                tax_rate: 13,
-                invoice_amount: pullSelectedSource.amount,
-                notes: t(`${P}.pullNotes`, {
-                  source:
-                    pullSelectedSource.source_type === 'sales_order'
-                      ? pullFromSalesOrderAction.sourceLabel
-                      : pullFromSalesDeliveryAction.sourceLabel,
-                  code: pullSelectedSource.source_code,
-                }),
-              }
-            : undefined
+      <Modal
+        title={
+          pullPreviewKind === 'sales_delivery'
+            ? pullFromSalesDeliveryAction.label
+            : pullFromSalesOrderAction.label
         }
+        open={pullPreviewOpen}
+        destroyOnClose
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        onCancel={resetPullPreview}
+        okText={pullPreviewTargetLabel}
+        cancelText={t('common.cancel')}
+        confirmLoading={pullSubmitting}
+        onOk={() => pullFormRef.current?.submit?.()}
+        okButtonProps={{
+          disabled:
+            pullPreviewLoading ||
+            !pullPreviewData ||
+            !!pullPreviewData?.has_blocking_issues ||
+            pullPreviewMaxPush <= 0,
+        }}
       >
-        <ProFormText name="source_code" label={t(`${P}.form.sourceCode`)} readonly />
-        <ProFormText name="customer_name" label={t('app.kuaicaiwu.common.customer')} readonly />
-        <ProFormText
-          name="invoice_number"
-          label={t('app.kuaicaiwu.invoice.col.invoiceNumber')}
-          placeholder={t(`${P}.form.invoiceNumberOptional`)}
-        />
-        <ProFormSelect
-          name="invoice_type"
-          label={t(`${P}.col.invoiceType`)}
-          options={invoiceTypeOptions}
-          rules={[{ required: true, message: t(`${P}.form.selectInvoiceType`) }]}
-        />
-        <ProFormDatePicker
-          name="invoice_date"
-          label={t('app.kuaicaiwu.common.invoiceDate')}
-          rules={[{ required: true, message: t(`${P}.form.selectInvoiceDate`) }]}
-          fieldProps={{ style: { width: '100%' } }}
-        />
-        <ProFormSelect
-          name="tax_rate"
-          label={t(`${P}.form.taxRate`)}
-          options={TAX_RATE_OPTIONS}
-          rules={[{ required: true, message: t(`${P}.form.selectTaxRate`) }]}
-        />
-        <ProFormDigit
-          name="invoice_amount"
-          label={t(`${P}.col.exclTax`)}
-          min={0}
-          rules={[{ required: true, message: t(`${P}.amountRequired`) }]}
-          fieldProps={{ precision: 2, style: { width: '100%' } }}
-        />
-        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} />
-        <DocumentAttachmentsField category="sales_invoice_attachments" />
-      </ModalForm>
+        {pullPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+          </div>
+        ) : pullPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
+            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={salesInvoiceCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
+              />
+            ) : null}
+            {pullPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pullPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 720 }}
+                columns={[
+                  { title: t(`${P}.pull.col.sourceCode`), dataIndex: 'source_code', width: 140, ellipsis: true },
+                  { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', width: 160, ellipsis: true },
+                  {
+                    title: t(`${P}.pull.col.docAmount`),
+                    dataIndex: 'quantity',
+                    width: 120,
+                    align: 'right',
+                    render: (v: number) => formatPullMoney(v),
+                  },
+                  {
+                    title: t(`${P}.pull.col.invoicedAmount`),
+                    dataIndex: 'pushed_quantity',
+                    width: 120,
+                    align: 'right',
+                    render: (v: number) => formatPullMoney(v),
+                  },
+                  {
+                    title: t(`${P}.pull.col.invoiceableAmount`),
+                    dataIndex: 'max_push_quantity',
+                    width: 120,
+                    align: 'right',
+                    render: (v: number) => formatPullMoney(v),
+                  },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')} />
+            )}
+            {pullPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 16 }}>
+                {pullPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+            {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
+              <ModalForm
+                formRef={pullFormRef}
+                submitter={false}
+                onFinish={handlePullCreateSubmit}
+                layout="vertical"
+              >
+                <ProFormText name="source_code" label={t(`${P}.form.sourceCode`)} readonly />
+                <ProFormText name="customer_name" label={t('app.kuaicaiwu.common.customer')} readonly />
+                <ProFormText
+                  name="invoice_number"
+                  label={t('app.kuaicaiwu.invoice.col.invoiceNumber')}
+                  placeholder={t(`${P}.form.invoiceNumberOptional`)}
+                />
+                <ProFormSelect
+                  name="invoice_type"
+                  label={t(`${P}.col.invoiceType`)}
+                  options={invoiceTypeOptions}
+                  rules={[{ required: true, message: t(`${P}.form.selectInvoiceType`) }]}
+                />
+                <ProFormDatePicker
+                  name="invoice_date"
+                  label={t('app.kuaicaiwu.common.invoiceDate')}
+                  rules={[{ required: true, message: t(`${P}.form.selectInvoiceDate`) }]}
+                  fieldProps={{ style: { width: '100%' } }}
+                />
+                <ProFormSelect
+                  name="tax_rate"
+                  label={t(`${P}.form.taxRate`)}
+                  options={TAX_RATE_OPTIONS}
+                  rules={[{ required: true, message: t(`${P}.form.selectTaxRate`) }]}
+                />
+                <ProFormDigit
+                  name="invoice_amount"
+                  label={t(`${P}.col.exclTax`)}
+                  min={0}
+                  rules={[{ required: true, message: t(`${P}.amountRequired`) }]}
+                  fieldProps={{ precision: 2, style: { width: '100%' } }}
+                />
+                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} />
+                <DocumentAttachmentsField category="sales_invoice_attachments" />
+              </ModalForm>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
 
       <ModalForm
         title={

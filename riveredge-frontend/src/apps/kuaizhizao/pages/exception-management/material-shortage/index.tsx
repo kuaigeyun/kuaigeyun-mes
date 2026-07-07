@@ -18,6 +18,7 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { exceptionApi } from '../../../services/production';
+import { ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES } from '../../../constants/exceptionStatuses';
 
 interface MaterialShortageException {
   id?: number;
@@ -250,19 +251,24 @@ const MaterialShortageExceptionPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         showAdvancedSearch={true}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           try {
-            const result = await exceptionApi.materialShortage.list({
+            const listParams: Record<string, unknown> = {
               skip: (params.current! - 1) * params.pageSize!,
               limit: params.pageSize,
-              work_order_id: params.work_order_id,
-              status: params.status,
-              alert_level: params.alert_level,
-            });
+              work_order_id: searchFormValues?.work_order_id,
+              alert_level: searchFormValues?.alert_level,
+            };
+            if (searchFormValues?.status) {
+              listParams.status = searchFormValues.status;
+            } else {
+              listParams.statuses = ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES;
+            }
+            const result = await exceptionApi.materialShortage.list(listParams);
             return {
-              data: result || [],
+              data: result.items,
               success: true,
-              total: result?.length || 0,
+              total: result.total,
             };
           } catch (error) {
             return {

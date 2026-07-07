@@ -496,6 +496,417 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             OQCInspectionResponse.model_validate(row),
         )
 
+    _OQC_SHIPMENT_NOTICE_PULL_ELIGIBLE_STATUSES = frozenset({"待发货", "已通知"})
+    _OQC_SALES_DELIVERY_PULL_ELIGIBLE_STATUSES = frozenset({"待出库"})
+
+    async def _ensure_oqc_pull_enabled(self, tenant_id: int) -> None:
+        from apps.kuaizhizao.services.inspection_policy_service import get_quality_inspection_stage_toggles
+
+        toggles = await get_quality_inspection_stage_toggles(tenant_id)
+        if not toggles.get("oqc_enabled", True):
+            raise BusinessLogicError("当前组织已关闭出货检验（OQC）环节，禁止上拉出货检验")
+
+    def _derive_oqc_pull_capability(
+        self,
+        *,
+        source_allowed: bool,
+        preview_items: List[Dict[str, Any]],
+        not_allowed_reason: str,
+        no_lines_reason: str,
+        already_pulled_reason: str,
+    ) -> tuple[bool, Optional[str]]:
+        if not source_allowed:
+            return False, not_allowed_reason
+        if not preview_items:
+            return False, no_lines_reason
+        pushable = any(float(row.get("max_push_quantity") or 0) > 0 for row in preview_items)
+        if not pushable:
+            return False, already_pulled_reason
+        return True, None
+
+    async def _build_pull_preview_items_for_shipment_notice(
+        self,
+        tenant_id: int,
+        notice: Any,
+        items: List[Any],
+        *,
+        existing_by_material: Optional[Dict[int, Any]] = None,
+        policy_cache: Optional[Dict[int, str]] = None,
+    ) -> List[Dict[str, Any]]:
+        from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
+
+        if existing_by_material is None:
+            mids = [int(i.material_id) for i in items if i.material_id]
+            existing_rows = await OQCInspection.filter(
+                tenant_id=tenant_id,
+                shipment_notice_id=int(notice.id),
+                material_id__in=mids,
+                deleted_at__isnull=True,
+            ).all()
+            existing_by_material = {
+                int(row.material_id): row for row in existing_rows if row.material_id is not None
+            }
+
+        cache: Dict[int, str] = policy_cache if policy_cache is not None else {}
+        preview_items: List[Dict[str, Any]] = []
+        for item in items:
+            mid = getattr(item, "material_id", None)
+            if not mid:
+                continue
+            qty = float(getattr(item, "notice_quantity", 0) or 0)
+            if qty <= 0:
+                continue
+            mid_int = int(mid)
+            if mid_int not in cache:
+                eff, _, _ = await resolve_inspection_policy(tenant_id, "oqc", material_id=mid_int)
+                cache[mid_int] = eff
+            if cache[mid_int] == "none":
+                continue
+            existing = existing_by_material.get(mid_int)
+            pushed = float(existing.inspection_quantity or 0) if existing else 0.0
+            max_push = qty if not existing else 0.0
+            preview_items.append(
+                {
+                    "item_id": int(item.id),
+                    "material_id": mid_int,
+                    "material_code": str(getattr(item, "material_code", "") or ""),
+                    "material_name": str(getattr(item, "material_name", "") or ""),
+                    "quantity": qty,
+                    "pushed_quantity": pushed,
+                    "max_push_quantity": max_push,
+                }
+            )
+        return preview_items
+
+    async def _build_pull_preview_items_for_sales_delivery(
+        self,
+        tenant_id: int,
+        delivery: Any,
+        items: List[Any],
+        *,
+        existing_by_material: Optional[Dict[int, Any]] = None,
+        policy_cache: Optional[Dict[int, str]] = None,
+    ) -> List[Dict[str, Any]]:
+        from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
+
+        delivery_id = int(delivery.id)
+        if existing_by_material is None:
+            mids = [int(i.material_id) for i in items if i.material_id]
+            existing_rows = await OQCInspection.filter(
+                tenant_id=tenant_id,
+                source_type="sales_delivery",
+                source_id=delivery_id,
+                material_id__in=mids,
+                deleted_at__isnull=True,
+            ).all()
+            existing_by_material = {
+                int(row.material_id): row for row in existing_rows if row.material_id is not None
+            }
+
+        cache: Dict[int, str] = policy_cache if policy_cache is not None else {}
+        preview_items: List[Dict[str, Any]] = []
+        for item in items:
+            mid = getattr(item, "material_id", None)
+            if not mid:
+                continue
+            qty = float(getattr(item, "delivery_quantity", 0) or 0)
+            if qty <= 0:
+                continue
+            mid_int = int(mid)
+            if mid_int not in cache:
+                eff, _, _ = await resolve_inspection_policy(tenant_id, "oqc", material_id=mid_int)
+                cache[mid_int] = eff
+            if cache[mid_int] == "none":
+                continue
+            existing = existing_by_material.get(mid_int)
+            pushed = float(existing.inspection_quantity or 0) if existing else 0.0
+            max_push = qty if not existing else 0.0
+            preview_items.append(
+                {
+                    "item_id": int(item.id),
+                    "material_id": mid_int,
+                    "material_code": str(getattr(item, "material_code", "") or ""),
+                    "material_name": str(getattr(item, "material_name", "") or ""),
+                    "quantity": qty,
+                    "pushed_quantity": pushed,
+                    "max_push_quantity": max_push,
+                }
+            )
+        return preview_items
+
+    async def preview_pull_from_shipment_notice(
+        self,
+        tenant_id: int,
+        notice_id: int,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
+        from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
+
+        await self._ensure_oqc_pull_enabled(tenant_id)
+        notice = await ShipmentNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not notice:
+            raise NotFoundError(f"发货通知单不存在: {notice_id}")
+
+        items = await ShipmentNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).all()
+        source_allowed = (
+            str(getattr(notice, "status", "") or "").strip() in self._OQC_SHIPMENT_NOTICE_PULL_ELIGIBLE_STATUSES
+            and bool(items)
+        )
+        preview_items = await self._build_pull_preview_items_for_shipment_notice(
+            tenant_id, notice, items
+        )
+        allowed, reason = self._derive_oqc_pull_capability(
+            source_allowed=source_allowed,
+            preview_items=preview_items,
+            not_allowed_reason="oqc_inspection.pull_from_shipment_notice.not_allowed",
+            no_lines_reason="oqc_inspection.pull_from_shipment_notice.no_lines",
+            already_pulled_reason="oqc_inspection.pull_from_shipment_notice.already_pulled",
+        )
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        notice_code = str(notice.notice_code or notice_id)
+        return {
+            "target_type": "oqc_inspection",
+            "source_id": notice_id,
+            "source_code": notice_code,
+            "summary": (
+                f"将从发货通知单 {notice_code} 创建出货检验（{pushable_count}/{len(preview_items)} 条可上拉）"
+                if preview_items and allowed
+                else f"发货通知单 {notice_code} 当前不可上拉出货检验"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": not allowed,
+            "blocking_reason": reason,
+            "tip": "请勾选可上拉明细后确认；删除出货检验单后，可上拉数量自动回退。",
+        }
+
+    async def preview_pull_from_sales_delivery(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+        from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+
+        await self._ensure_oqc_pull_enabled(tenant_id)
+        delivery = await SalesDelivery.get_or_none(
+            tenant_id=tenant_id, id=delivery_id, deleted_at__isnull=True
+        )
+        if not delivery:
+            raise NotFoundError(f"销售出库单不存在: {delivery_id}")
+
+        items = await SalesDeliveryItem.filter(tenant_id=tenant_id, delivery_id=delivery_id).all()
+        source_allowed = (
+            str(getattr(delivery, "status", "") or "").strip() in self._OQC_SALES_DELIVERY_PULL_ELIGIBLE_STATUSES
+            and bool(items)
+        )
+        preview_items = await self._build_pull_preview_items_for_sales_delivery(
+            tenant_id, delivery, items
+        )
+        allowed, reason = self._derive_oqc_pull_capability(
+            source_allowed=source_allowed,
+            preview_items=preview_items,
+            not_allowed_reason="oqc_inspection.pull_from_sales_delivery.not_allowed",
+            no_lines_reason="oqc_inspection.pull_from_sales_delivery.no_lines",
+            already_pulled_reason="oqc_inspection.pull_from_sales_delivery.already_pulled",
+        )
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        delivery_code = str(delivery.delivery_code or delivery_id)
+        return {
+            "target_type": "oqc_inspection",
+            "source_id": delivery_id,
+            "source_code": delivery_code,
+            "summary": (
+                f"将从销售出库单 {delivery_code} 创建出货检验（{pushable_count}/{len(preview_items)} 条可上拉）"
+                if preview_items and allowed
+                else f"销售出库单 {delivery_code} 当前不可上拉出货检验"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": not allowed,
+            "blocking_reason": reason,
+            "tip": "请勾选可上拉明细后确认；删除出货检验单后，可上拉数量自动回退。",
+        }
+
+    async def list_shipment_notice_pull_candidates(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
+        from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
+
+        try:
+            await self._ensure_oqc_pull_enabled(tenant_id)
+        except BusinessLogicError:
+            return {"data": [], "total": 0, "success": True}
+
+        query = ShipmentNotice.filter(
+            tenant_id=tenant_id,
+            status__in=list(self._OQC_SHIPMENT_NOTICE_PULL_ELIGIBLE_STATUSES),
+            deleted_at__isnull=True,
+        )
+        kw = str(keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(notice_code__icontains=kw) | Q(customer_name__icontains=kw)
+            )
+        total = await query.count()
+        notices = await query.offset(skip).limit(limit).order_by("-created_at")
+        notice_ids = [int(n.id) for n in notices]
+        if not notice_ids:
+            return {"data": [], "total": total, "success": True}
+
+        all_items = await ShipmentNoticeItem.filter(
+            tenant_id=tenant_id,
+            notice_id__in=notice_ids,
+        ).all()
+        items_by_notice: Dict[int, List[Any]] = {}
+        for item in all_items:
+            items_by_notice.setdefault(int(item.notice_id), []).append(item)
+
+        inspections = await OQCInspection.filter(
+            tenant_id=tenant_id,
+            shipment_notice_id__in=notice_ids,
+            deleted_at__isnull=True,
+        ).all()
+
+        policy_cache: Dict[int, str] = {}
+        rows: List[Dict[str, Any]] = []
+        for notice in notices:
+            nid = int(notice.id)
+            notice_items = items_by_notice.get(nid, [])
+            existing_by_material: Dict[int, Any] = {}
+            for insp in inspections:
+                if insp.shipment_notice_id == nid and insp.material_id:
+                    existing_by_material[int(insp.material_id)] = insp
+            preview_items = await self._build_pull_preview_items_for_shipment_notice(
+                tenant_id,
+                notice,
+                notice_items,
+                existing_by_material=existing_by_material,
+                policy_cache=policy_cache,
+            )
+            allowed, reason = self._derive_oqc_pull_capability(
+                source_allowed=bool(notice_items),
+                preview_items=preview_items,
+                not_allowed_reason="oqc_inspection.pull_from_shipment_notice.not_allowed",
+                no_lines_reason="oqc_inspection.pull_from_shipment_notice.no_lines",
+                already_pulled_reason="oqc_inspection.pull_from_shipment_notice.already_pulled",
+            )
+            label = f"{notice.notice_code or nid}"
+            if getattr(notice, "customer_name", None):
+                label = f"{label} · {notice.customer_name}"
+            rows.append(
+                {
+                    "id": nid,
+                    "code": label,
+                    "notice_code": notice.notice_code,
+                    "customer_name": notice.customer_name,
+                    "capabilities": {
+                        "pull_oqc_inspection": {
+                            "allowed": allowed,
+                            "reason": reason,
+                        }
+                    },
+                }
+            )
+        return {"data": rows, "total": total, "success": True}
+
+    async def list_sales_delivery_pull_candidates(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+        from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+
+        try:
+            await self._ensure_oqc_pull_enabled(tenant_id)
+        except BusinessLogicError:
+            return {"data": [], "total": 0, "success": True}
+
+        query = SalesDelivery.filter(
+            tenant_id=tenant_id,
+            status__in=list(self._OQC_SALES_DELIVERY_PULL_ELIGIBLE_STATUSES),
+            deleted_at__isnull=True,
+        )
+        kw = str(keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(delivery_code__icontains=kw) | Q(customer_name__icontains=kw)
+            )
+        total = await query.count()
+        deliveries = await query.offset(skip).limit(limit).order_by("-created_at")
+        delivery_ids = [int(d.id) for d in deliveries]
+        if not delivery_ids:
+            return {"data": [], "total": total, "success": True}
+
+        all_items = await SalesDeliveryItem.filter(
+            tenant_id=tenant_id,
+            delivery_id__in=delivery_ids,
+        ).all()
+        items_by_delivery: Dict[int, List[Any]] = {}
+        for item in all_items:
+            items_by_delivery.setdefault(int(item.delivery_id), []).append(item)
+
+        inspections = await OQCInspection.filter(
+            tenant_id=tenant_id,
+            source_type="sales_delivery",
+            source_id__in=delivery_ids,
+            deleted_at__isnull=True,
+        ).all()
+
+        policy_cache: Dict[int, str] = {}
+        rows: List[Dict[str, Any]] = []
+        for delivery in deliveries:
+            did = int(delivery.id)
+            delivery_items = items_by_delivery.get(did, [])
+            existing_by_material: Dict[int, Any] = {}
+            for insp in inspections:
+                if insp.source_id == did and insp.material_id:
+                    existing_by_material[int(insp.material_id)] = insp
+            preview_items = await self._build_pull_preview_items_for_sales_delivery(
+                tenant_id,
+                delivery,
+                delivery_items,
+                existing_by_material=existing_by_material,
+                policy_cache=policy_cache,
+            )
+            allowed, reason = self._derive_oqc_pull_capability(
+                source_allowed=bool(delivery_items),
+                preview_items=preview_items,
+                not_allowed_reason="oqc_inspection.pull_from_sales_delivery.not_allowed",
+                no_lines_reason="oqc_inspection.pull_from_sales_delivery.no_lines",
+                already_pulled_reason="oqc_inspection.pull_from_sales_delivery.already_pulled",
+            )
+            label = f"{delivery.delivery_code or did}"
+            if getattr(delivery, "customer_name", None):
+                label = f"{label} · {delivery.customer_name}"
+            rows.append(
+                {
+                    "id": did,
+                    "code": label,
+                    "delivery_code": delivery.delivery_code,
+                    "customer_name": delivery.customer_name,
+                    "capabilities": {
+                        "pull_oqc_inspection": {
+                            "allowed": allowed,
+                            "reason": reason,
+                        }
+                    },
+                }
+            )
+        return {"data": rows, "total": total, "success": True}
+
     async def create_from_shipment_notice(
         self,
         tenant_id: int,

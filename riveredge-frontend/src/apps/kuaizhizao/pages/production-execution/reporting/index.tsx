@@ -3,6 +3,7 @@ import { renderRowActionsOverflow, rowActionKind } from '../../../../../componen
  * 报工管理页面
  *
  * 提供报工记录的管理和查询功能；扫码报工见移动端 kiosk。
+ * 新建报工须经上拉选源 → 数量预览 → 录入表单，禁止手工选工单/工序。
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
@@ -52,7 +53,6 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
   ListPageTemplate,
@@ -75,8 +75,11 @@ import { hasModulePermission } from '../../../../../utils/permissionContract';
 import { useGlobalStore } from '../../../../../stores';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import type { User } from '../../../../../services/user';
-import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity } from '../../../utils/workOrderReporting';
+import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity, getReportableQuantityBreakdown } from '../../../utils/workOrderReporting';
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload';
+import ReportableQuantityPanel from '../../../components/ReportableQuantityPanel';
+import type { PushPreviewResponse } from '../../../services/sales-order';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import ReportingInboundWarehouseField from '../../../components/ReportingInboundWarehouseField';
 import {
   isInboundWarehouseRequiredForLastOperation,
@@ -141,6 +144,44 @@ interface PullReportingOperationCandidate extends PullReportingWorkOrderCandidat
   operation_code?: string;
   operation_name?: string;
   operation_sequence?: number | string;
+  reportable_quantity_cap?: number;
+  reportable_quantity_pushed?: number;
+  reportable_quantity_max?: number;
+}
+
+function buildReportingPullPreview(
+  workOrder: { code?: string; name?: string; quantity?: number },
+  operation: { operation_id?: number; operation_code?: string; operation_name?: string; name?: string },
+  workOrderQuantity: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): PushPreviewResponse {
+  const breakdown = getReportableQuantityBreakdown(operation, workOrderQuantity);
+  const items = [
+    {
+      item_id: Number(operation.operation_id ?? 0),
+      material_code: String(operation.operation_code ?? ''),
+      material_name: String(operation.operation_name ?? operation.name ?? ''),
+      quantity: breakdown.planCap,
+      pushed_quantity: breakdown.operationCompleted,
+      max_push_quantity: breakdown.effectiveRemaining,
+    },
+  ];
+  let blockingReason: string | null = null;
+  if (breakdown.effectiveRemaining <= 0) {
+    blockingReason = t('app.kuaizhizao.workReporting.pullPreviewNoReportable');
+  }
+  return {
+    target_type: 'reporting_record',
+    summary: t('app.kuaizhizao.workReporting.pullPreviewSummary', {
+      workOrderCode: workOrder.code ?? '',
+      operationName: operation.operation_name ?? operation.name ?? '',
+      max: breakdown.effectiveRemaining,
+    }),
+    items,
+    tip: t('app.kuaizhizao.workReporting.pullPreviewTip'),
+    has_blocking_issues: !!blockingReason,
+    blocking_reason: blockingReason,
+  };
 }
 
 function normalizeReportingStatus(status?: string): string {
@@ -404,12 +445,46 @@ const ReportingPage: React.FC = () => {
   );
   const createModalProxyWorkerRef = useRef<Pick<User, 'id' | 'full_name' | 'username'> | null>(null);
 
-  const openReportingCreateFromWorkOrder = useCallback(
-    async (workOrderId: number, selectedOperationId?: number) => {
-      if (!workOrderId) return;
+  const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
+  const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
+  const [pullPreviewData, setPullPreviewData] = useState<PushPreviewResponse | null>(null);
+  const [pullPreviewContext, setPullPreviewContext] = useState<{
+    workOrder: any;
+    operation: any;
+    operations: any[];
+  } | null>(null);
+
+  const resetPullPreview = useCallback(() => {
+    setPullPreviewOpen(false);
+    setPullPreviewLoading(false);
+    setPullPreviewData(null);
+    setPullPreviewContext(null);
+  }, []);
+
+  const openReportingCreateFromPullContext = useCallback(
+    (workOrder: any, operations: any[], operation: any) => {
+      if (!workOrder?.id || !operation?.operation_id) return;
       formRef.current?.resetFields();
-      setReportOperations([]);
-      setReportOperationId(null);
+      setReportWorkOrders([workOrder]);
+      setReportWorkOrderId(Number(workOrder.id));
+      setReportOperations(operations);
+      setReportOperationId(Number(operation.operation_id));
+      setReportingModalVisible(true);
+      formRef.current?.setFieldsValue({
+        work_order_id: workOrder.id,
+        operation_id: operation.operation_id,
+      });
+    },
+    [],
+  );
+
+  const openReportingPullPreview = useCallback(
+    async (workOrderId: number, operationId: number) => {
+      if (!workOrderId || !operationId) return;
+      setPullPreviewOpen(true);
+      setPullPreviewLoading(true);
+      setPullPreviewData(null);
+      setPullPreviewContext(null);
       try {
         const [workOrder, operationsRes] = await Promise.all([
           workOrderApi.get(workOrderId.toString()),
@@ -420,31 +495,36 @@ const ReportingPage: React.FC = () => {
           : (operationsRes as any)?.data ?? (operationsRes as any)?.items ?? [];
         if (!Array.isArray(operations) || operations.length === 0) {
           messageApi.warning(t('app.kuaizhizao.workReporting.workOrderOrOperationMissing'));
+          resetPullPreview();
           return;
         }
-        const preferredOperation =
-          operations.find((op: any) => Number(op.operation_id) === Number(selectedOperationId))
-          || operations.find((op: any) => String(op.status ?? '').toLowerCase() !== 'completed')
-          || operations[0];
-        setReportWorkOrders([workOrder]);
-        setReportWorkOrderId(workOrder.id ?? workOrderId);
-        setReportOperations(operations);
-        setReportOperationId(preferredOperation?.operation_id ?? null);
-        setReportingModalVisible(true);
-        formRef.current?.setFieldsValue({
-          work_order_id: workOrder.id ?? workOrderId,
-          operation_id: preferredOperation?.operation_id,
-        });
-      } catch (error: any) {
-        messageApi.error(error?.message || t('app.kuaizhizao.workReporting.loadWorkOrdersFailed'));
-        setReportWorkOrders([]);
-        setReportOperations([]);
-        setReportWorkOrderId(null);
-        setReportOperationId(null);
+        const operation =
+          operations.find((op: any) => Number(op.operation_id) === Number(operationId)) ?? null;
+        if (!operation) {
+          messageApi.warning(t('app.kuaizhizao.workReporting.workOrderOrOperationMissing'));
+          resetPullPreview();
+          return;
+        }
+        const planQty = Number(workOrder.quantity ?? 0) || 0;
+        const preview = buildReportingPullPreview(workOrder, operation, planQty, t);
+        setPullPreviewData(preview);
+        setPullPreviewContext({ workOrder, operation, operations });
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.workReporting.pullPreviewFailed')));
+        resetPullPreview();
+      } finally {
+        setPullPreviewLoading(false);
       }
     },
-    [messageApi, t],
+    [messageApi, resetPullPreview, t],
   );
+
+  const handlePullPreviewConfirm = useCallback(() => {
+    if (!pullPreviewContext || !pullPreviewData || pullPreviewData.has_blocking_issues) return;
+    const { workOrder, operation, operations } = pullPreviewContext;
+    resetPullPreview();
+    openReportingCreateFromPullContext(workOrder, operations, operation);
+  }, [openReportingCreateFromPullContext, pullPreviewContext, pullPreviewData, resetPullPreview]);
 
   const pullFromWorkOrderQuery = useUniPullQuery<PullReportingOperationCandidate>({
     rowKey: 'pull_row_key',
@@ -477,15 +557,22 @@ const ReportingPage: React.FC = () => {
               ? operationsRes
               : (operationsRes as any)?.data ?? (operationsRes as any)?.items ?? [];
             if (!Array.isArray(operations) || operations.length === 0) return [];
-            return operations.map((op: any) => ({
-              ...workOrder,
-              pull_row_key: `${workOrder.id}-${op.operation_id}`,
-              work_order_id: Number(workOrder.id),
-              operation_id: Number(op.operation_id),
-              operation_code: op.operation_code,
-              operation_name: op.operation_name || op.name,
-              operation_sequence: op.sequence,
-            }));
+            const planQty = Number(workOrder.quantity ?? 0) || 0;
+            return operations.map((op: any) => {
+              const breakdown = getReportableQuantityBreakdown(op, planQty);
+              return {
+                ...workOrder,
+                pull_row_key: `${workOrder.id}-${op.operation_id}`,
+                work_order_id: Number(workOrder.id),
+                operation_id: Number(op.operation_id),
+                operation_code: op.operation_code,
+                operation_name: op.operation_name || op.name,
+                operation_sequence: op.sequence,
+                reportable_quantity_cap: breakdown.planCap,
+                reportable_quantity_pushed: breakdown.operationCompleted,
+                reportable_quantity_max: breakdown.effectiveRemaining,
+              };
+            });
           }),
         )
       ).flat();
@@ -510,14 +597,19 @@ const ReportingPage: React.FC = () => {
         total,
       };
     },
+    isRowDisabled: (record) => Number(record.reportable_quantity_max ?? 0) <= 0,
     onConfirm: async (_selectedKeys, selectedRows) => {
       const selected = selectedRows[0];
       if (!selected?.work_order_id || !selected?.operation_id) {
         messageApi.warning(t('app.kuaizhizao.workReporting.formWorkOrderRequired'));
         return;
       }
+      if (Number(selected.reportable_quantity_max ?? 0) <= 0) {
+        messageApi.warning(t('app.kuaizhizao.workReporting.pullPreviewBlocked'));
+        return;
+      }
       pullFromWorkOrderQuery.closeModal();
-      await openReportingCreateFromWorkOrder(selected.work_order_id, selected.operation_id);
+      await openReportingPullPreview(selected.work_order_id, selected.operation_id);
     },
   });
 
@@ -586,9 +678,9 @@ const ReportingPage: React.FC = () => {
   }, [reportingModalVisible, reportIsLastOperation, reportWorkOrderId]);
 
   /**
-   * 处理新建报工（打开弹窗并加载工单列表）
+   * 处理新建报工（打开上拉选源）
    */
-  const handleNewReporting = async () => {
+  const handleNewReporting = () => {
     pullFromWorkOrderQuery.openModal();
   };
   useNewShortcut(() => {
@@ -599,32 +691,10 @@ const ReportingPage: React.FC = () => {
     [t],
   );
 
-  /**
-   * 新建报工：工单变更时加载工序
-   */
-  const handleReportWorkOrderChange = async (workOrderId: number) => {
-    setReportWorkOrderId(workOrderId);
-    setReportOperations([]);
-    setReportOperationId(null);
-    formRef.current?.setFieldsValue({ operation_id: undefined });
-    if (!workOrderId) return;
-    try {
-      const operations = await workOrderApi.getOperations(workOrderId.toString());
-      const ops = Array.isArray(operations) ? operations : (operations as any)?.data ?? (operations as any)?.items ?? [];
-      setReportOperations(Array.isArray(ops) ? ops : []);
-    } catch (e) {
-      messageApi.error(t('app.kuaizhizao.workReporting.loadOperationsFailed'));
-      setReportOperations([]);
-    }
-  };
-
-  /**
-   * 新建报工：工序变更时只更新状态，实际自动填充由 useEffect 依赖驱动。
-   * 这样就不必用 setTimeout 去 "等条件字段挂载"——useEffect 天然在提交后运行。
-   */
-  const handleReportOperationChange = (operationId: number) => {
-    setReportOperationId(operationId);
-  };
+  const reportSelectedWorkOrder = useMemo(
+    () => (Array.isArray(reportWorkOrders) ? reportWorkOrders : []).find((wo: any) => wo.id === reportWorkOrderId),
+    [reportWorkOrders, reportWorkOrderId],
+  );
 
   useEffect(() => {
     if (!reportOperationId || !reportWorkOrderId) return;
@@ -741,6 +811,7 @@ const ReportingPage: React.FC = () => {
       messageApi.success(t('app.kuaizhizao.workReporting.createSuccess'));
       setReportingModalVisible(false);
       formRef.current?.resetFields();
+      setReportWorkOrders([]);
       setReportOperations([]);
       setReportWorkOrderId(null);
       setReportOperationId(null);
@@ -1355,6 +1426,7 @@ const ReportingPage: React.FC = () => {
         open={reportingModalVisible}
         onClose={() => {
           setReportingModalVisible(false);
+          setReportWorkOrders([]);
           setReportOperations([]);
           setReportWorkOrderId(null);
           setReportOperationId(null);
@@ -1370,56 +1442,43 @@ const ReportingPage: React.FC = () => {
             <Alert type="info" showIcon message={reportLastInboundHint} />
           </Col>
         )}
-        <Col span={12}>
-          <ProFormItem
-            name="work_order_id"
-            label={t('app.kuaizhizao.workReporting.formWorkOrder')}
-            rules={[{ required: true, message: t('app.kuaizhizao.workReporting.formWorkOrderRequired') }]}
-          >
-            <UniDropdown
-              placeholder={t('app.kuaizhizao.workReporting.formWorkOrderPlaceholder')}
-              showSearch
-              options={(Array.isArray(reportWorkOrders) ? reportWorkOrders : []).map((wo: any) => ({
-                label: `${wo.code || wo.work_order_code || ''} - ${wo.name || wo.work_order_name || ''}`,
-                value: wo.id,
-              }))}
-              onChange={(value: any) => handleReportWorkOrderChange(value as number)}
-              advancedSearch={{
-                label: t('app.kuaizhizao.workReporting.advancedSearchWorkOrder'),
-                fields: [
-                  { name: 'code', label: t('app.kuaizhizao.workReporting.colWorkOrderCode'), type: 'text' },
-                  { name: 'name', label: t('app.kuaizhizao.workReporting.colWorkOrderName'), type: 'text' },
-                ],
-                onSearch: async (params) => {
-                  const res = await workOrderApi.list({ ...params, status: 'in_progress' });
-                  const list = Array.isArray(res) ? res : (res as any)?.items ?? [];
-                  return list.map((wo: any) => ({
-                    label: `${wo.code} - ${wo.name}`,
-                    value: wo.id,
-                  }));
-                },
-              }}
-            />
-          </ProFormItem>
-        </Col>
-        <Col span={12}>
-          <ProFormItem
-            name="operation_id"
-            label={t('app.kuaizhizao.workReporting.formOperation')}
-            rules={[{ required: true, message: t('app.kuaizhizao.workReporting.formOperationRequired') }]}
-          >
-            <UniDropdown
-              placeholder={reportWorkOrderId ? t('app.kuaizhizao.workReporting.formOperationPlaceholder') : t('app.kuaizhizao.workReporting.formOperationSelectWorkOrderFirst')}
-              showSearch
-              disabled={!reportWorkOrderId || (Array.isArray(reportOperations) ? reportOperations : []).length === 0}
-              options={(Array.isArray(reportOperations) ? reportOperations : []).map((op: any) => ({
-                label: `${op.operation_name || op.name} (${op.sequence || ''})`,
-                value: op.operation_id,
-              }))}
-              onChange={(value: any) => handleReportOperationChange(value as number)}
-            />
-          </ProFormItem>
-        </Col>
+        {reportSelectedWorkOrder && reportSelectedOperation ? (
+          <>
+            <Col span={24}>
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={t('app.kuaizhizao.workReporting.formSourceLocked')}
+              />
+            </Col>
+            <Col span={24}>
+              <Card size="small" style={{ marginBottom: 12 }}>
+                <Descriptions column={2} size="small">
+                  <Descriptions.Item label={t('app.kuaizhizao.workReporting.colWorkOrderCode')}>
+                    {reportSelectedWorkOrder.code || '—'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('app.kuaizhizao.workReporting.colWorkOrderName')}>
+                    {reportSelectedWorkOrder.name || '—'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('app.kuaizhizao.workReporting.formOperation')} span={2}>
+                    {`${reportSelectedOperation.operation_name || reportSelectedOperation.name || '—'} (${reportSelectedOperation.operation_code || '—'})`}
+                  </Descriptions.Item>
+                </Descriptions>
+              </Card>
+            </Col>
+            <Col span={24} style={{ marginBottom: 12 }}>
+              <ReportableQuantityPanel
+                operation={reportSelectedOperation}
+                workOrderQuantity={Number(reportSelectedWorkOrder.quantity ?? 0) || 0}
+                operations={reportOperations}
+                workOrderId={reportWorkOrderId ?? undefined}
+              />
+            </Col>
+          </>
+        ) : null}
+        <ProFormText name="work_order_id" hidden />
+        <ProFormText name="operation_id" hidden />
         {canProxyReporting && (
           <Col span={24}>
             <UniUserSelect
@@ -1492,10 +1551,11 @@ const ReportingPage: React.FC = () => {
 
       <UniPullQueryModal<PullReportingOperationCandidate>
         open={pullFromWorkOrderQuery.open}
-        title={t('app.kuaizhizao.workReporting.formWorkOrder')}
+        title={t('app.kuaizhizao.workReporting.pullSelectSource')}
         onCancel={pullFromWorkOrderQuery.closeModal}
         onOk={pullFromWorkOrderQuery.handleConfirm}
         rowKey="pull_row_key"
+        isRowDisabled={pullFromWorkOrderQuery.isRowDisabled}
         columns={[
           { title: t('app.kuaizhizao.workReporting.colWorkOrderCode'), dataIndex: 'code', width: 180, ellipsis: true },
           { title: t('app.kuaizhizao.workReporting.colWorkOrderName'), dataIndex: 'name', width: 220, ellipsis: true },
@@ -1506,17 +1566,14 @@ const ReportingPage: React.FC = () => {
             ellipsis: true,
             render: (_, row) => `${row.operation_name || '-'} (${row.operation_code || '-'})`,
           },
-          { title: t('app.kuaizhizao.workOrder.colPlannedQty'), dataIndex: 'quantity', width: 120, align: 'right' },
+          { title: t('app.kuaizhizao.workOrder.colPlannedQty'), dataIndex: 'quantity', width: 100, align: 'right' },
+          { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'reportable_quantity_cap', width: 90, align: 'right' },
+          { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'reportable_quantity_pushed', width: 90, align: 'right' },
+          { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'reportable_quantity_max', width: 90, align: 'right' },
           {
             title: t('app.kuaizhizao.workOrder.colPlannedStart'),
             dataIndex: 'planned_start_date',
-            width: 180,
-            render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
-          },
-          {
-            title: t('app.kuaizhizao.workOrder.colPlannedEnd'),
-            dataIndex: 'planned_end_date',
-            width: 180,
+            width: 160,
             render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
           },
         ]}
@@ -1536,9 +1593,64 @@ const ReportingPage: React.FC = () => {
         pageSize={pullFromWorkOrderQuery.pageSize}
         total={pullFromWorkOrderQuery.total}
         onPageChange={pullFromWorkOrderQuery.handlePageChange}
-        okText={t('app.kuaizhizao.workReporting.createButton')}
+        okText={t('common.next')}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
+
+      <Modal
+        title={t('app.kuaizhizao.workReporting.pullPreviewTitle')}
+        open={pullPreviewOpen}
+        destroyOnClose
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        onCancel={resetPullPreview}
+        okText={t('common.next')}
+        cancelText={t('common.cancel')}
+        onOk={() => handlePullPreviewConfirm()}
+        okButtonProps={{
+          disabled:
+            pullPreviewLoading ||
+            !pullPreviewData ||
+            !!pullPreviewData?.has_blocking_issues ||
+            !(pullPreviewData?.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0),
+        }}
+      >
+        {pullPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+          </div>
+        ) : pullPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
+            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
+              <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={pullPreviewData.blocking_reason} />
+            ) : null}
+            {pullPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pullPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 860 }}
+                columns={[
+                  { title: t('app.kuaizhizao.workReporting.formOperation'), dataIndex: 'material_code', width: 120, ellipsis: true },
+                  { title: t('app.kuaizhizao.workReporting.colOperation'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.workReporting.pullPreviewNoReportable')} />
+            )}
+            {pullPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                {pullPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
 
 
       {/* 创建报废记录Modal */}

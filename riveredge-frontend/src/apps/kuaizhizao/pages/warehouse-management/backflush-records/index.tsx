@@ -14,8 +14,6 @@ import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { getBackflushRecordLifecycle } from '../../../utils/backflushRecordLifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 
@@ -122,27 +120,6 @@ const BackflushRecordsPage: React.FC = () => {
           completed: { text: t('app.kuaizhizao.warehouseCommon.statusCompleted') },
           failed: { text: t('app.kuaizhizao.backflushRecords.statusFailed') },
           cancelled: { text: t('app.kuaizhizao.warehouseCommon.statusCancelled') },
-        },
-      },
-      {
-        title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
-        dataIndex: 'lifecycle_stage',
-        fixed: 'right',
-        align: 'left',
-        hideInSearch: true,
-        render: (_, record) => {
-          const lifecycle = getBackflushRecordLifecycle(record as unknown as Record<string, unknown>, t);
-          return (
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          );
         },
       },
       {

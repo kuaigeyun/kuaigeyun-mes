@@ -2746,11 +2746,315 @@ class DemandComputationService:
             "tip": "确认后将一次性生成采购申请，包含全部可下推采购件明细。",
         }
 
+    async def _build_work_order_pull_preview_items(
+        self,
+        tenant_id: int,
+        computation: DemandComputation,
+        items: List[DemandComputationItem],
+        *,
+        generate_mode: str = "work_order_only",
+    ) -> List[Dict[str, Any]]:
+        """按与 generate_orders 一致的规则构建工单上拉预览明细（数量三列）。"""
+        from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
+        from apps.kuaizhizao.utils.work_order_group_bom_tree import (
+            flatten_production_tree,
+            allocate_suggested_quantity,
+            quantize_qty,
+        )
+
+        preview_items: List[Dict[str, Any]] = []
+
+        def _append_row(
+            *,
+            material_id: int,
+            material_code: str,
+            material_name: str,
+            quantity: float,
+            pushed: bool,
+            source_type: Optional[str],
+            target_document: str,
+        ) -> None:
+            if quantity <= 0:
+                return
+            preview_items.append(
+                {
+                    "item_id": material_id,
+                    "material_id": material_id,
+                    "material_code": material_code or f"M{material_id}",
+                    "material_name": material_name or material_code or f"物料{material_id}",
+                    "quantity": quantity,
+                    "pushed_quantity": quantity if pushed else 0.0,
+                    "max_push_quantity": 0.0 if pushed else quantity,
+                    "source_type": source_type,
+                    "target_document": target_document,
+                }
+            )
+
+        group_svc = WorkOrderGroupService()
+        use_group_by_demand_item = False
+        if generate_mode in ("all", "work_order_only", "outsource_only"):
+            use_group_by_demand_item = await group_svc.should_group_by_demand_item(tenant_id)
+
+        if use_group_by_demand_item:
+            already_pushed_keys = await group_svc.collect_pushed_keys(tenant_id, computation.id)
+            item_by_material = {i.material_id: i for i in items}
+            trees = computation.demand_item_bom_trees or []
+            for tree in trees:
+                demand_item_id = tree.get("demand_item_id")
+                if demand_item_id is None:
+                    continue
+                nodes = flatten_production_tree(tree)
+                wo_nodes = [
+                    n
+                    for n in nodes
+                    if n.get("source_type")
+                    in (SOURCE_TYPE_MAKE, SOURCE_TYPE_CONFIGURE, SOURCE_TYPE_OUTSOURCE)
+                    and float(n.get("required_quantity") or 0) > 0
+                ]
+                for node in wo_nodes:
+                    st = node.get("source_type")
+                    if generate_mode == "work_order_only" and st == SOURCE_TYPE_OUTSOURCE:
+                        continue
+                    if generate_mode == "outsource_only" and st != SOURCE_TYPE_OUTSOURCE:
+                        continue
+                    mid = int(node["material_id"])
+                    comp_item = item_by_material.get(mid)
+                    if not comp_item:
+                        continue
+                    total_gross = float(comp_item.gross_requirement or comp_item.required_quantity or 0)
+                    total_suggested = float(comp_item.suggested_work_order_quantity or 0)
+                    qty = float(
+                        quantize_qty(
+                            allocate_suggested_quantity(
+                                float(node.get("required_quantity") or 0),
+                                total_gross,
+                                total_suggested,
+                            )
+                        )
+                    )
+                    if qty <= 0:
+                        continue
+                    pushed = (int(demand_item_id), mid) in already_pushed_keys or (
+                        None,
+                        mid,
+                    ) in already_pushed_keys
+                    target = (
+                        "outsource_work_order"
+                        if st == SOURCE_TYPE_OUTSOURCE
+                        else "work_order"
+                    )
+                    _append_row(
+                        material_id=mid,
+                        material_code=str(node.get("material_code") or comp_item.material_code or ""),
+                        material_name=str(node.get("material_name") or comp_item.material_name or ""),
+                        quantity=qty,
+                        pushed=pushed,
+                        source_type=st,
+                        target_document=target,
+                    )
+            return preview_items
+
+        exclusions = await self._get_already_pushed_exclusions(tenant_id, computation.id)
+        already_pushed_materials = exclusions["wo_material_ids"] | exclusions["outsource_material_ids"]
+        seen_keys: set = set()
+
+        def _aggregate_qty(group: List[DemandComputationItem]) -> float:
+            return sum(float(g.suggested_work_order_quantity or 0) for g in group)
+
+        for item in items:
+            source_type = item.material_source_type
+            if source_type == SOURCE_TYPE_PHANTOM:
+                continue
+            if generate_mode == "purchase_only" and source_type in (
+                SOURCE_TYPE_MAKE,
+                SOURCE_TYPE_OUTSOURCE,
+                SOURCE_TYPE_CONFIGURE,
+            ):
+                continue
+            if generate_mode == "work_order_only" and source_type == SOURCE_TYPE_BUY:
+                continue
+            if generate_mode == "outsource_only" and source_type != SOURCE_TYPE_OUTSOURCE:
+                continue
+
+            if source_type == SOURCE_TYPE_MAKE:
+                key = (item.material_id, SOURCE_TYPE_MAKE)
+                if key in seen_keys or item.material_id in already_pushed_materials:
+                    continue
+                group = [
+                    i
+                    for i in items
+                    if i.material_id == item.material_id
+                    and i.material_source_type == SOURCE_TYPE_MAKE
+                    and float(i.suggested_work_order_quantity or 0) > 0
+                ]
+                qty = _aggregate_qty(group)
+                seen_keys.add(key)
+                _append_row(
+                    material_id=int(item.material_id),
+                    material_code=str(item.material_code or ""),
+                    material_name=str(item.material_name or ""),
+                    quantity=qty,
+                    pushed=item.material_id in already_pushed_materials,
+                    source_type=SOURCE_TYPE_MAKE,
+                    target_document="work_order",
+                )
+            elif source_type == SOURCE_TYPE_OUTSOURCE:
+                key = (item.material_id, SOURCE_TYPE_OUTSOURCE)
+                if key in seen_keys or item.material_id in already_pushed_materials:
+                    continue
+                group = [
+                    i
+                    for i in items
+                    if i.material_id == item.material_id
+                    and i.material_source_type == SOURCE_TYPE_OUTSOURCE
+                    and float(i.suggested_work_order_quantity or 0) > 0
+                ]
+                qty = _aggregate_qty(group)
+                seen_keys.add(key)
+                _append_row(
+                    material_id=int(item.material_id),
+                    material_code=str(item.material_code or ""),
+                    material_name=str(item.material_name or ""),
+                    quantity=qty,
+                    pushed=item.material_id in already_pushed_materials,
+                    source_type=SOURCE_TYPE_OUTSOURCE,
+                    target_document="outsource_work_order",
+                )
+            elif source_type == SOURCE_TYPE_CONFIGURE:
+                key = (item.material_id, SOURCE_TYPE_CONFIGURE)
+                if key in seen_keys or item.material_id in already_pushed_materials:
+                    continue
+                group = [
+                    i
+                    for i in items
+                    if i.material_id == item.material_id
+                    and i.material_source_type == SOURCE_TYPE_CONFIGURE
+                    and float(i.suggested_work_order_quantity or 0) > 0
+                ]
+                qty = _aggregate_qty(group)
+                seen_keys.add(key)
+                _append_row(
+                    material_id=int(item.material_id),
+                    material_code=str(item.material_code or ""),
+                    material_name=str(item.material_name or ""),
+                    quantity=qty,
+                    pushed=item.material_id in already_pushed_materials,
+                    source_type=SOURCE_TYPE_CONFIGURE,
+                    target_document="work_order",
+                )
+            elif not source_type and item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
+                key = (item.material_id, "legacy")
+                if key in seen_keys or item.material_id in already_pushed_materials:
+                    continue
+                group = [
+                    i
+                    for i in items
+                    if not i.material_source_type
+                    and i.material_id == item.material_id
+                    and float(i.suggested_work_order_quantity or 0) > 0
+                ]
+                qty = _aggregate_qty(group)
+                seen_keys.add(key)
+                _append_row(
+                    material_id=int(item.material_id),
+                    material_code=str(item.material_code or ""),
+                    material_name=str(item.material_name or ""),
+                    quantity=qty,
+                    pushed=item.material_id in already_pushed_materials,
+                    source_type=None,
+                    target_document="work_order",
+                )
+
+        return preview_items
+
+    async def _build_purchase_order_pull_preview_items(
+        self,
+        tenant_id: int,
+        computation_id: int,
+        items: List[DemandComputationItem],
+    ) -> tuple[List[Dict[str, Any]], str, str, bool, Optional[str]]:
+        """按与 generate_orders(purchase_only) 一致规则构建采购订单下推预览明细。"""
+        from apps.master_data.models.material import Material
+
+        exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
+        already_pushed_po = exclusions["po_material_ids"]
+
+        material_ids = sorted(
+            {
+                int(i.material_id)
+                for i in items
+                if i.material_id is not None
+                and i.material_source_type == SOURCE_TYPE_BUY
+                and i.material_id not in already_pushed_po
+                and i.suggested_purchase_order_quantity
+                and float(i.suggested_purchase_order_quantity) > 0
+            }
+        )
+        material_rows = (
+            await Material.filter(tenant_id=tenant_id, id__in=material_ids).all()
+            if material_ids
+            else []
+        )
+        material_by_id = {m.id: m for m in material_rows}
+
+        preview_items: List[Dict[str, Any]] = []
+        for item in items:
+            if item.material_source_type != SOURCE_TYPE_BUY:
+                continue
+            if item.material_id in already_pushed_po:
+                continue
+            qty = float(item.suggested_purchase_order_quantity or 0)
+            if qty <= 0:
+                continue
+            sc = (item.material_source_config or {}).get("source_config", {})
+            if not sc.get("default_supplier_id"):
+                continue
+            material = material_by_id.get(int(item.material_id)) if item.material_id is not None else None
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            if material:
+                if not material_code:
+                    material_code = str(
+                        getattr(material, "main_code", None)
+                        or getattr(material, "code", None)
+                        or ""
+                    ).strip()
+                if not material_name:
+                    material_name = str(getattr(material, "name", "") or "").strip()
+            preview_items.append(
+                {
+                    "item_id": int(item.id),
+                    "material_id": item.material_id,
+                    "material_code": material_code or f"M{item.material_id}",
+                    "material_name": material_name or material_code or f"物料{item.material_id}",
+                    "quantity": qty,
+                    "pushed_quantity": 0.0,
+                    "max_push_quantity": qty,
+                    "target_document": "purchase_order",
+                }
+            )
+
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        has_blocking = pushable_count == 0
+        blocking_reason = (
+            "demand_computation.push_purchase_order.no_purchase_items" if has_blocking else None
+        )
+        summary = (
+            f"将按供应商生成采购订单，共 {pushable_count} 条已配置供应商的采购件明细"
+            if not has_blocking
+            else "无已配置默认供应商且未下推的采购件，无法下推采购订单"
+        )
+        tip = "确认后将按默认供应商分组生成采购订单。"
+        return preview_items, summary, tip, has_blocking, blocking_reason
+
     async def get_push_preview(
         self,
         tenant_id: int,
         computation_id: int,
-        push_config: Optional[Dict[str, Any]] = None
+        push_config: Optional[Dict[str, Any]] = None,
+        generate_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         获取下推预览（不实际执行），用于下推前展示将生成的单据数量。
@@ -2832,8 +3136,70 @@ class DemandComputationService:
         biz_config = BusinessConfigService()
         can_direct_wo = await biz_config.can_direct_generate_work_order_from_computation(tenant_id)
 
+        preview_items: List[Dict[str, Any]] = []
+        preview_summary_parts: List[str] = []
+        preview_tip_parts: List[str] = []
+        blocking_reasons: List[str] = []
+
+        if production == "work_order" and not outsource_only:
+            mode = generate_mode or "work_order_only"
+            wo_items = await self._build_work_order_pull_preview_items(
+                tenant_id,
+                computation,
+                items,
+                generate_mode=mode,
+            )
+            preview_items.extend(wo_items)
+            pushable_count = sum(
+                1 for row in wo_items if float(row.get("max_push_quantity") or 0) > 0
+            )
+            preview_summary_parts.append(
+                f"需求计算 {computation.computation_code}：{pushable_count}/{len(wo_items)} 条可下推生成工单"
+                if wo_items
+                else f"需求计算 {computation.computation_code} 中无生产件可生成工单"
+            )
+            preview_tip_parts.append("确认后将按可下推数量生成生产工单/委外工单。")
+            if not pushable_count:
+                blocking_reasons.append(
+                    "demand_computation.push_work_order.no_pushable_items"
+                    if wo_items
+                    else "demand_computation.push_work_order.no_production_items"
+                )
+
+        if purchase == "requisition":
+            pr_preview = await self.preview_push_to_purchase_requisition(tenant_id, computation_id)
+            for row in pr_preview.get("items") or []:
+                preview_items.append({**row, "target_document": "purchase_requisition"})
+            if pr_preview.get("summary"):
+                preview_summary_parts.append(str(pr_preview["summary"]))
+            if pr_preview.get("tip"):
+                preview_tip_parts.append(str(pr_preview["tip"]))
+            if pr_preview.get("has_blocking_issues") and pr_preview.get("blocking_reason"):
+                blocking_reasons.append(str(pr_preview["blocking_reason"]))
+
+        elif purchase == "purchase_order":
+            po_items, po_summary, po_tip, po_blocking, po_reason = (
+                await self._build_purchase_order_pull_preview_items(
+                    tenant_id, computation_id, items
+                )
+            )
+            preview_items.extend(po_items)
+            preview_summary_parts.append(po_summary)
+            preview_tip_parts.append(po_tip)
+            if po_blocking and po_reason:
+                blocking_reasons.append(po_reason)
+
+        preview_summary = "；".join(preview_summary_parts) if preview_summary_parts else None
+        preview_tip = " ".join(preview_tip_parts) if preview_tip_parts else None
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        has_blocking_issues = pushable_count == 0 and bool(production or purchase)
+        blocking_reason = blocking_reasons[0] if has_blocking_issues and blocking_reasons else None
+
         return {
             "computation_id": computation_id,
+            "computation_code": computation.computation_code,
             "work_order_count": work_order_count,
             "outsource_work_order_count": outsource_work_order_count,
             "purchase_requisition_count": purchase_requisition_count,
@@ -2844,6 +3210,11 @@ class DemandComputationService:
             "outsource_count": outsource_count,
             "purchase_items_with_supplier": purchase_items_with_supplier,
             "purchase_items_without_supplier": purchase_items_without_supplier,
+            "items": preview_items,
+            "summary": preview_summary,
+            "tip": preview_tip,
+            "has_blocking_issues": has_blocking_issues,
+            "blocking_reason": blocking_reason,
         }
 
     async def push_all(

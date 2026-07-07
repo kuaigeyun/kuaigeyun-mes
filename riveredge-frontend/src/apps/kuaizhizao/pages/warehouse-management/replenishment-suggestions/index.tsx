@@ -22,10 +22,8 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { warehouseApi } from '../../../services/production';
-import { getReplenishmentSuggestionLifecycle } from '../../../utils/replenishmentSuggestionLifecycle';
 import { formatDateTime } from '../../../../../utils/format';
 
 interface ReplenishmentSuggestion {
@@ -192,27 +190,6 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       width: 168,
       hideInSearch: true,
       render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-    },
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getReplenishmentSuggestionLifecycle(record as Record<string, unknown>, t);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      },
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colActions'),

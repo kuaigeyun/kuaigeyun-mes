@@ -44,6 +44,7 @@
 - **在线演示**：[https://kuaigeyun.com](https://kuaigeyun.com)（支持免注册体验，数据可能定期重置）
 - **部署入口**：`[fast-deploy/deploy.sh](fast-deploy/README.md)`（Windows / Linux）
 - **完整文档**：`[docs/部署指南.md](docs/部署指南.md)`
+- **可选实例统计披露**：自托管部署可展示构建来源；首次进入主界面时**可选**上报不含业务数据的元数据。详见 [`docs/telemetry-disclosure.md`](docs/telemetry-disclosure.md)。设置 `INSTALL_TELEMETRY_ENABLED=false` 可关闭，不影响功能。
 
 **⛔ 部署建议**  
 **建议在独立空白服务器或虚拟机环境中进行安装与验证**，避免与既有业务系统产生端口、数据库或配置冲突。**不建议**在已承载生产业务的服务器上直接试装或试升级。  

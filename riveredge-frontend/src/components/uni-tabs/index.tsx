@@ -52,6 +52,46 @@ function isDashboardLikePage(pathname: string): boolean {
   return false;
 }
 
+function tabPathname(tabKey: string): string {
+  return (tabKey.split('?')[0] || '/').replace(/\/$/, '') || '/';
+}
+
+/**
+ * 仅做 redirect 的别名路由：不应单独占标签（目标页会承接导航）。
+ * 新增同类路由时在此补充 pattern。
+ */
+const REDIRECT_ONLY_TAB_PATH_PATTERNS: RegExp[] = [
+  /^\/apps\/kuaiplm\/knowledge-base\/detail\/[^/]+$/,
+];
+
+function shouldSkipTabPath(pathOrKey: string): boolean {
+  const pathname = tabPathname(pathOrKey);
+  return REDIRECT_ONLY_TAB_PATH_PATTERNS.some((re) => re.test(pathname));
+}
+
+/** 持久化/历史数据：同 pathname 只保留一条（优先保留带 query 的 key） */
+function dedupeTabsByPathname(tabList: TabItem[]): TabItem[] {
+  const result: TabItem[] = [];
+  const pathnameIndex = new Map<string, number>();
+
+  tabList.forEach((tab) => {
+    if (shouldSkipTabPath(tab.key)) return;
+    const pathname = tabPathname(tab.key);
+    const existingIdx = pathnameIndex.get(pathname);
+    if (existingIdx === undefined) {
+      pathnameIndex.set(pathname, result.length);
+      result.push(tab);
+      return;
+    }
+    const existing = result[existingIdx];
+    if (!existing.key.includes('?') && tab.key.includes('?')) {
+      result[existingIdx] = tab;
+    }
+  });
+
+  return result;
+}
+
 /**
  * 标签项接口
  */
@@ -181,7 +221,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           } else {
             // 首页标签由路由同步 effect 按 tenantHomePath 注入，不在此处写死工作台/应用中心
           }
-          return validTabs;
+          return dedupeTabsByPathname(validTabs);
         }
       }
     } catch (e) { console.warn('Failed to load tabs from cache', e); }
@@ -252,12 +292,26 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       if (excludePaths.some((p) => path.startsWith(p))) {
         return;
       }
+      if (shouldSkipTabPath(path)) {
+        return;
+      }
 
       setTabs((prevTabs) => {
         // 检查标签是否已存在
         const existingTab = prevTabs.find((tab) => tab.key === path);
         if (existingTab) {
           return prevTabs;
+        }
+
+        const pathname = tabPathname(path);
+        const existingSamePathname = prevTabs.find((tab) => tabPathname(tab.key) === pathname);
+        if (existingSamePathname) {
+          // 同一路由仅 query 变化（如知识库 articleId）：更新已有标签，不新开
+          return prevTabs.map((tab) =>
+            tab.key === existingSamePathname.key
+              ? { ...tab, key: path, path, label: getTabTitle(path) }
+              : tab,
+          );
         }
 
         // 添加新标签
@@ -465,7 +519,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           pinned: false,
         });
       }
-      return validTabs;
+      return dedupeTabsByPathname(validTabs);
     } catch {
       return null;
     }

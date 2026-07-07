@@ -146,6 +146,7 @@ class DynamicDatabaseConfigService:
             "infra.models.saved_search",
             "infra.models.industry_template",  # 行业模板模型（平台级）
             "infra.models.platform_settings",
+            "infra.models.install_registration",
             "infra.models.invitation_code",
             "infra.models.biometric",
 
@@ -155,6 +156,7 @@ class DynamicDatabaseConfigService:
             # 快研发 (kuaiplm) — 随代码部署，与静态 TORTOISE_ORM 一致；
             # 避免 API 路由可访问但 RdProject 等模型未注册导致 default_connection=None
             "apps.kuaiplm.models.rd_project",
+            "apps.kuaiplm.models.gate_template",
             "apps.kuaiplm.models.knowledge_base",
             "apps.kuaiplm.models.phase2",
         ]

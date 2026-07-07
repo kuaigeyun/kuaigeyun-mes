@@ -3,8 +3,9 @@
 """
 
 import uuid
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from decimal import Decimal
+from typing import Optional, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
 from loguru import logger
 
 from apps.kuaicaiwu.schemas.finance import (
@@ -12,6 +13,7 @@ from apps.kuaicaiwu.schemas.finance import (
     ReceiptRecordCreate
 )
 from apps.kuaicaiwu.services.finance_service import ReceivableService
+from apps.kuaicaiwu.services.receivable_pull_service import ReceivablePullService
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
@@ -21,6 +23,9 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 router = APIRouter(prefix="/receivables", tags=["App · Kuaicaiwu · Finance"])
 
 receivable_service = ReceivableService()
+receivable_pull_service = ReceivablePullService()
+
+_PULL_SOURCE_TYPES = frozenset({"sales_order", "sales_delivery"})
 
 
 def _http_exception_with_trace(
@@ -52,10 +57,50 @@ async def create_receivable(
     tenant_id: int = Depends(get_current_tenant)
 ):
     try:
-        receivable = await receivable_service.create_receivable(tenant_id, data, current_user.id)
+        pull_preview: Optional[Dict[str, Any]] = None
+        pull_source_type = str(data.pull_source_type or "").strip()
+        pull_source_id = data.pull_source_id
+        if pull_source_type and pull_source_id:
+            if pull_source_type not in _PULL_SOURCE_TYPES:
+                raise BusinessLogicError(f"不支持的上拉源单类型: {pull_source_type}")
+            pull_preview = await receivable_pull_service.assert_pull_create_allowed(
+                tenant_id=tenant_id,
+                source_type=pull_source_type,
+                source_id=int(pull_source_id),
+                total_amount=Decimal(data.total_amount),
+            )
+
+        create_payload = data.model_dump(
+            exclude_unset=True,
+            exclude={"pull_source_type", "pull_source_id"},
+        )
+        if pull_preview:
+            create_payload["customer_id"] = int(pull_preview.get("customer_id") or create_payload.get("customer_id"))
+            create_payload["customer_name"] = str(
+                pull_preview.get("customer_name") or create_payload.get("customer_name") or ""
+            )
+            create_payload["source_type"] = pull_source_type
+            create_payload["source_id"] = int(pull_source_id)
+            create_payload["source_code"] = str(pull_preview.get("source_code") or create_payload.get("source_code") or "")
+
+        receivable_data = ReceivableCreate.model_validate(create_payload)
+        receivable = await receivable_service.create_receivable(tenant_id, receivable_data, current_user.id)
+
+        if pull_preview and pull_source_type and pull_source_id:
+            await receivable_pull_service.create_pull_relation(
+                tenant_id=tenant_id,
+                source_type=pull_source_type,
+                source_id=int(pull_source_id),
+                source_code=str(pull_preview.get("source_code") or receivable.source_code or ""),
+                receivable_id=int(receivable.id),
+                receivable_code=str(receivable.receivable_code),
+                created_by=current_user.id,
+            )
         return ReceivableResponse.model_validate(receivable)
     except ValidationError as e:
         raise _http_exception_with_trace(422, str(e), "/receivables", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(422, str(e), "/receivables", tenant_id) from e
 
 
 @router.get("", response_model=ReceivableListResponse)
@@ -76,8 +121,10 @@ async def list_receivables(
         customer_id=customer_id,
         pending_settlement=pending_settlement,
     )
+    enriched = await receivable_pull_service.enrich_push_receipt_capabilities(tenant_id, receivables)
+    items = [ReceivableResponse.model_validate(row) for row in enriched]
     return ReceivableListResponse(
-        items=receivables,
+        items=items,
         total=total,
         skip=skip,
         limit=limit
@@ -98,6 +145,74 @@ async def get_receivable_aging(
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await receivable_service.get_receivable_aging_analysis(tenant_id)
+
+
+@router.get(
+    "/pull-candidates/sales-orders",
+    summary="List sales order pull candidates for receivable",
+)
+async def list_receivable_sales_order_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receivable:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await receivable_pull_service.list_sales_order_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/pull-candidates/sales-deliveries",
+    summary="List sales delivery pull candidates for receivable",
+)
+async def list_receivable_sales_delivery_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receivable:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await receivable_pull_service.list_sales_delivery_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/from-sales-order/{order_id}/pull-preview",
+    summary="Preview pull receivable from sales order",
+)
+async def preview_pull_receivable_from_sales_order(
+    order_id: int = Path(..., description="销售订单ID"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receivable:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await receivable_pull_service.preview_pull_from_sales_order(
+        tenant_id=tenant_id,
+        order_id=order_id,
+    )
+
+
+@router.get(
+    "/from-sales-delivery/{delivery_id}/pull-preview",
+    summary="Preview pull receivable from sales delivery",
+)
+async def preview_pull_receivable_from_sales_delivery(
+    delivery_id: int = Path(..., description="销售出库单ID"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receivable:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await receivable_pull_service.preview_pull_from_sales_delivery(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id,
+    )
 
 
 @router.get("/{id}", response_model=ReceivableResponse)

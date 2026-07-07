@@ -88,6 +88,7 @@ import { DashboardUsageTipsCarousel } from './DashboardUsageTipsCarousel';
 import { MobileWorkplace } from './MobileWorkplace';
 import { useTouchScreen } from '../../../hooks/useTouchScreen';
 import { useAutoGuide } from '../../../components/onboarding-guide/useAutoGuide';
+import { DashboardTodoList } from '../../../components/dashboard/DashboardTodoList';
 
 
 
@@ -170,29 +171,6 @@ function filterDashboardTodoTabItems<T extends { key: string }>(
   countByKey: Record<string, number>,
 ): T[] {
   return items.filter((tab) => tab.key === 'all' || (countByKey[tab.key] ?? 0) > 0);
-}
-
-function renderDashboardSimpleTodoList(
-  items: TodoItem[],
-  emptyDescription: string,
-  onNavigate: (link: string) => void,
-) {
-  if (items.length === 0) {
-    return <Empty description={emptyDescription} image={Empty.PRESENTED_IMAGE_SIMPLE} />;
-  }
-  return (
-    <div className="dashboard-feed-list">
-      {items.map((item) => (
-        <div
-          key={item.id}
-          className="dashboard-feed-item dashboard-feed-item--interactive"
-          onClick={() => item.link && onNavigate(item.link)}
-        >
-          <div className="dashboard-feed-item__title">{item.title}</div>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 /**
@@ -507,6 +485,23 @@ export default function DashboardPage() {
     },
   });
 
+  const handleDashboardTodo = useCallback(
+    (todoId: string) => handleTodoMutation.mutate({ todoId, action: 'handle' }),
+    [handleTodoMutation],
+  );
+
+  const renderDashboardTodoTab = useCallback(
+    (items: typeof localizedTodos, emptyDescription: string) => (
+      <DashboardTodoList
+        items={items}
+        emptyDescription={emptyDescription}
+        onNavigate={(link) => navigate(link)}
+        onHandle={handleDashboardTodo}
+      />
+    ),
+    [handleDashboardTodo, navigate],
+  );
+
   // 快捷入口数据准备
   const quickEntryItems = useMemo(() => {
     if (quickEntryLoading) {
@@ -800,122 +795,50 @@ export default function DashboardPage() {
                 {
                   key: 'all',
                   label: formatDashboardTodoTabLabel(t('pages.dashboard.tabAll'), localizedTodos.length),
-                  children: (
-                    <div className="dashboard-feed-list">
-                      {localizedTodos.length > 0 ? (
-                        localizedTodos.map((item) => (
-                          <div
-                            key={item.id}
-                            className="dashboard-todo-item"
-                            onClick={() => {
-                              if (item.link) {
-                                navigate(item.link);
-                              }
-                            }}
-                          >
-                            <div className="dashboard-todo-item__main">
-                              <p className="dashboard-todo-item__title">{item.title}</p>
-                              {item.description ? (
-                                <span className="dashboard-todo-item__desc">{item.description}</span>
-                              ) : null}
-                              {item.due_date ? (
-                                <span className="dashboard-todo-item__desc">
-                                  {t('pages.dashboard.dueDateShort', {
-                                    date: formatDateTime(item.due_date, 'YYYY-MM-DD'),
-                                  })}
-                                </span>
-                              ) : null}
-                            </div>
-                            <Button
-                              size="small"
-                              type="primary"
-                              className="dashboard-todo-item__action"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleTodoMutation.mutate({ todoId: item.id, action: 'handle' });
-                              }}
-                            >
-                              {t('pages.dashboard.handle')}
-                            </Button>
-                          </div>
-                        ))
-                      ) : (
-                        <Empty description={t('pages.dashboard.emptyTodo')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                      )}
-                    </div>
-                  ),
+                  children: renderDashboardTodoTab(localizedTodos, t('pages.dashboard.emptyTodo')),
                 },
                 {
                   key: 'sales',
                   label: formatDashboardTodoTabLabel(t('pages.dashboard.tabSales'), todosSales.length),
-                  children: renderDashboardSimpleTodoList(
-                    todosSales,
-                    t('pages.dashboard.emptySalesTodo'),
-                    (link) => navigate(link),
-                  ),
+                  children: renderDashboardTodoTab(todosSales, t('pages.dashboard.emptySalesTodo')),
                 },
                 {
                   key: 'purchase',
                   label: formatDashboardTodoTabLabel(t('pages.dashboard.tabPurchase'), todosPurchase.length),
-                  children: renderDashboardSimpleTodoList(
-                    todosPurchase,
-                    t('pages.dashboard.emptyPurchaseTodo'),
-                    (link) => navigate(link),
-                  ),
+                  children: renderDashboardTodoTab(todosPurchase, t('pages.dashboard.emptyPurchaseTodo')),
                 },
                 {
                   key: 'work_order',
                   label: formatDashboardTodoTabLabel(t('pages.dashboard.tabWorkOrder'), todosWorkOrder.length),
-                  children: renderDashboardSimpleTodoList(
-                    todosWorkOrder,
-                    t('pages.dashboard.emptyWorkOrderTodo'),
-                    (link) => navigate(link),
-                  ),
+                  children: renderDashboardTodoTab(todosWorkOrder, t('pages.dashboard.emptyWorkOrderTodo')),
                 },
                 {
                   key: 'exception',
                   label: formatDashboardTodoTabLabel(t('pages.dashboard.tabException'), todosException.length),
-                  children: renderDashboardSimpleTodoList(
-                    todosException,
-                    t('pages.dashboard.emptyExceptionTodo'),
-                    (link) => navigate(link),
-                  ),
+                  children: renderDashboardTodoTab(todosException, t('pages.dashboard.emptyExceptionTodo')),
                 },
                 {
                   key: 'quality_inspection',
                   label: formatDashboardTodoTabLabel(t('pages.dashboard.tabQualityInspection'), todosQualityInspection.length),
-                  children: renderDashboardSimpleTodoList(
+                  children: renderDashboardTodoTab(
                     todosQualityInspection,
                     t('pages.dashboard.emptyQualityInspectionTodo'),
-                    (link) => navigate(link),
                   ),
                 },
                 {
                   key: 'equipment',
                   label: formatDashboardTodoTabLabel(t('pages.dashboard.tabEquipment'), todosEquipment.length),
-                  children: renderDashboardSimpleTodoList(
-                    todosEquipment,
-                    t('pages.dashboard.emptyEquipmentTodo'),
-                    (link) => navigate(link),
-                  ),
+                  children: renderDashboardTodoTab(todosEquipment, t('pages.dashboard.emptyEquipmentTodo')),
                 },
                 {
                   key: 'warehouse',
                   label: formatDashboardTodoTabLabel(t('pages.dashboard.tabWarehouse'), todosWarehouse.length),
-                  children: renderDashboardSimpleTodoList(
-                    todosWarehouse,
-                    t('pages.dashboard.emptyWarehouseTodo'),
-                    (link) => navigate(link),
-                  ),
+                  children: renderDashboardTodoTab(todosWarehouse, t('pages.dashboard.emptyWarehouseTodo')),
                 },
                 {
                   key: 'outbound',
                   label: formatDashboardTodoTabLabel(t('pages.dashboard.tabOutbound'), todosOutbound.length),
-                  children: renderDashboardSimpleTodoList(
-                    todosOutbound,
-                    t('pages.dashboard.emptyOutboundTodo'),
-                    (link) => navigate(link),
-                  ),
+                  children: renderDashboardTodoTab(todosOutbound, t('pages.dashboard.emptyOutboundTodo')),
                 },
               ],
                 dashboardTodoTabCountByKey,

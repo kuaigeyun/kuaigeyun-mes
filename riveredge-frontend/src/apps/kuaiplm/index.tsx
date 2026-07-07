@@ -23,12 +23,14 @@ const KnowledgeArticleDetailPage = lazy(() => import('./pages/knowledge-base/det
 const RequirementsPage = lazy(() => import('./pages/phase2/requirements/index'));
 const DesignReviewsPage = lazy(() => import('./pages/phase2/design-reviews/index'));
 const FmeaPage = lazy(() => import('./pages/phase2/fmea/index'));
+const GateTemplatesPage = lazy(() => import('./pages/gate-templates/index'));
 
 const KuaiplmApp: React.FC = () => (
   <Routes>
     <Route path="dashboard" element={withPageSuspense(DashboardPage)} />
     <Route path="rd-projects" element={withPageSuspense(RdProjectsListPage)} />
     <Route path="rd-projects/detail/:id" element={withPageSuspense(RdProjectDetailPage)} />
+    <Route path="gate-templates" element={withPageSuspense(GateTemplatesPage)} />
     <Route path="change-management" element={withPageSuspense(ChangeManagementPage)} />
     <Route path="knowledge-base" element={withPageSuspense(KnowledgeBasePage)} />
     <Route path="knowledge-base/detail/:id" element={withPageSuspense(KnowledgeArticleDetailPage)} />

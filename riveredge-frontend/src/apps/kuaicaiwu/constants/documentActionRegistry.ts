@@ -1,6 +1,10 @@
 export type KuaicaiwuDocumentActionKey =
   | 'sales_invoice.pull_from_sales_order'
   | 'sales_invoice.pull_from_sales_delivery'
+  | 'receivable.pull_from_sales_order'
+  | 'receivable.pull_from_sales_delivery'
+  | 'payable.pull_from_purchase_order'
+  | 'payable.pull_from_purchase_receipt'
   | 'receipt.pull_from_receivable'
   | 'purchase_invoice.pull_from_purchase_order'
   | 'purchase_invoice.pull_from_purchase_receipt'
@@ -31,6 +35,38 @@ export const KUAICAIWU_DOCUMENT_ACTION_REGISTRY: Record<KuaicaiwuDocumentActionK
     label: '从销售出库创建销项发票',
     sourceLabel: '销售出库',
     targetLabel: '销项发票',
+  },
+  'receivable.pull_from_sales_order': {
+    key: 'receivable.pull_from_sales_order',
+    module: 'kuaicaiwu',
+    kind: 'pull_create',
+    label: '从销售订单创建应收单',
+    sourceLabel: '销售订单',
+    targetLabel: '应收单',
+  },
+  'receivable.pull_from_sales_delivery': {
+    key: 'receivable.pull_from_sales_delivery',
+    module: 'kuaicaiwu',
+    kind: 'pull_create',
+    label: '从销售出库创建应收单',
+    sourceLabel: '销售出库',
+    targetLabel: '应收单',
+  },
+  'payable.pull_from_purchase_order': {
+    key: 'payable.pull_from_purchase_order',
+    module: 'kuaicaiwu',
+    kind: 'pull_create',
+    label: '从采购订单创建应付单',
+    sourceLabel: '采购订单',
+    targetLabel: '应付单',
+  },
+  'payable.pull_from_purchase_receipt': {
+    key: 'payable.pull_from_purchase_receipt',
+    module: 'kuaicaiwu',
+    kind: 'pull_create',
+    label: '从采购入库创建应付单',
+    sourceLabel: '采购入库',
+    targetLabel: '应付单',
   },
   'receipt.pull_from_receivable': {
     key: 'receipt.pull_from_receivable',

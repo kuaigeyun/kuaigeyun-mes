@@ -7,8 +7,8 @@
 
 import { ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Tabs } from 'antd';
-import { LogoutOutlined, SafetyCertificateOutlined, SettingOutlined, UserOutlined, GlobalOutlined } from '@ant-design/icons';
-import { useState } from 'react';
+import { LogoutOutlined, SafetyCertificateOutlined, SettingOutlined, UserOutlined, GlobalOutlined, DeploymentUnitOutlined } from '@ant-design/icons';
+import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import { 
@@ -23,6 +23,9 @@ import { useGlobalStore } from '../../../stores';
 import { useTranslation } from 'react-i18next';
 import PlatformSettingsPage from './settings';
 import LicenseCenterTab from './license-center';
+import BuildProvenanceSummaryTab from './build-provenance-summary';
+import { getBuildProvenance } from '../../../services/platformSettings';
+import { canShowRegistrySummaryAdmin } from '../../../utils/officialRegistrySite';
 // import InfraSuperAdminForm from './form'; // 暂时注释掉，等待后续实现
 
 /**
@@ -43,6 +46,16 @@ export default function InfraSuperAdminPage() {
     queryKey: ['infraSuperAdmin'],
     queryFn: getInfraSuperAdmin,
   });
+
+  const { data: buildProvenance } = useQuery({
+    queryKey: ['buildProvenanceAdminGate'],
+    queryFn: getBuildProvenance,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const showProvenanceSummaryTab = canShowRegistrySummaryAdmin(
+    buildProvenance?.registry_summary_admin_available,
+  );
 
   // 更新平台超级管理员信息
   const updateMutation = useMutation({
@@ -82,56 +95,68 @@ export default function InfraSuperAdminPage() {
   /**
    * 处理退出登录
    */
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     Modal.confirm({
       title: t('pages.infra.admin.logoutConfirmTitle'),
       content: t('pages.infra.admin.logoutConfirmContent'),
       onOk: () => {
-        // 清除认证信息
         clearAuth();
-        // 清除全局状态中的用户信息
         setCurrentUser(undefined);
-        // 清除查询缓存
         queryClient.clear();
         messageApi.success(t('pages.infra.admin.logoutSuccess'));
-        // ⚠️ 关键修复：使用 navigate 跳转，避免页面刷新
         navigate('/infra/login', { replace: true });
       },
     });
-  };
+  }, [messageApi, navigate, queryClient, setCurrentUser, t]);
 
-  const tabItems = [
-    {
-      key: 'settings',
-      label: (
-        <span>
-          <SettingOutlined />
-          {t('pages.infra.admin.tabSettings')}
-        </span>
-      ),
-      children: <PlatformSettingsPage mode="basic" />,
-    },
-    {
-      key: 'login-settings',
-      label: (
-        <span>
-          <GlobalOutlined />
-          {t('pages.infra.platform.loginConfig')}
-        </span>
-      ),
-      children: <PlatformSettingsPage mode="login" />,
-    },
-    {
-      key: 'license-center',
-      label: (
-        <span>
-          <SafetyCertificateOutlined />
-          {t('pages.infra.admin.tabLicenseCenter', { defaultValue: '许可证中心' })}
-        </span>
-      ),
-      children: <LicenseCenterTab />,
-    },
-    {
+  const tabItems = useMemo(() => {
+    const items = [
+      {
+        key: 'settings',
+        label: (
+          <span>
+            <SettingOutlined />
+            {t('pages.infra.admin.tabSettings')}
+          </span>
+        ),
+        children: <PlatformSettingsPage mode="basic" />,
+      },
+      {
+        key: 'login-settings',
+        label: (
+          <span>
+            <GlobalOutlined />
+            {t('pages.infra.platform.loginConfig')}
+          </span>
+        ),
+        children: <PlatformSettingsPage mode="login" />,
+      },
+      {
+        key: 'license-center',
+        label: (
+          <span>
+            <SafetyCertificateOutlined />
+            {t('pages.infra.admin.tabLicenseCenter', { defaultValue: '许可证中心' })}
+          </span>
+        ),
+        children: <LicenseCenterTab />,
+      },
+    ];
+
+    if (showProvenanceSummaryTab) {
+      items.push({
+        key: 'provenance-summary',
+        label: (
+          <span>
+            <DeploymentUnitOutlined />
+            {t('pages.infra.admin.tabProvenanceSummary')}
+          </span>
+        ),
+        children: <BuildProvenanceSummaryTab />,
+      });
+    }
+
+    items.push({
       key: 'admin',
       label: (
         <span>
@@ -201,8 +226,10 @@ export default function InfraSuperAdminPage() {
           )}
         </>
       ),
-    },
-  ];
+    });
+
+    return items;
+  }, [admin, handleLogout, isLoading, showProvenanceSummaryTab, t]);
 
   return (
     <MultiTabListPageTemplate

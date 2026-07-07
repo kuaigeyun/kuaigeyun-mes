@@ -1,7 +1,32 @@
 import { apiRequest } from '../../../../services/api';
+import type { DocumentPushPreview } from '../../../kuaizhizao/services/purchase-requisition';
 import { Receivable, ReceivableCreateData, ReceivableListParams, ReceiptRecordCreate } from '../../types/finance/receivable';
 
 const RECEIVABLE_API = '/apps/kuaicaiwu/receivables';
+
+export type ReceivablePullPreview = DocumentPushPreview & {
+  source_type?: 'sales_order' | 'sales_delivery';
+  customer_id?: number;
+  customer_name?: string;
+  sales_order_id?: number | null;
+  sales_order_code?: string | null;
+};
+
+export type ReceivablePullCandidate = {
+  id: number;
+  code: string;
+  order_code?: string;
+  delivery_code?: string;
+  customer_name?: string;
+  source_status?: string;
+  source_date?: string;
+  amount?: number;
+  capabilities?: { pull_receivable?: { allowed?: boolean; reason?: string } };
+};
+
+export type ReceivableListItem = Receivable & {
+  capabilities?: { push_receipt?: { allowed?: boolean; reason?: string } };
+};
 
 export const receivableService = {
   createReceivable: (data: ReceivableCreateData) => {
@@ -12,11 +37,33 @@ export const receivableService = {
   },
 
   listReceivables: (params: ReceivableListParams) => {
-    return apiRequest<{ items: Receivable[]; total: number }>(RECEIVABLE_API, {
+    return apiRequest<{ items: ReceivableListItem[]; total: number }>(RECEIVABLE_API, {
       method: 'GET',
       params,
     });
   },
+
+  listSalesOrderPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+    apiRequest<{ data: ReceivablePullCandidate[]; total: number; success: boolean }>(
+      `${RECEIVABLE_API}/pull-candidates/sales-orders`,
+      { method: 'GET', params },
+    ),
+
+  listSalesDeliveryPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+    apiRequest<{ data: ReceivablePullCandidate[]; total: number; success: boolean }>(
+      `${RECEIVABLE_API}/pull-candidates/sales-deliveries`,
+      { method: 'GET', params },
+    ),
+
+  previewPullFromSalesOrder: async (orderId: number) =>
+    apiRequest<ReceivablePullPreview>(`${RECEIVABLE_API}/from-sales-order/${orderId}/pull-preview`, {
+      method: 'GET',
+    }),
+
+  previewPullFromSalesDelivery: async (deliveryId: number) =>
+    apiRequest<ReceivablePullPreview>(`${RECEIVABLE_API}/from-sales-delivery/${deliveryId}/pull-preview`, {
+      method: 'GET',
+    }),
 
   getReceivable: (id: number) => {
     return apiRequest<Receivable>(`${RECEIVABLE_API}/${id}`, {

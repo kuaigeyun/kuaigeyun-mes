@@ -7,6 +7,8 @@ export { ModuleActionPanel } from './ModuleActionPanel';
 export { ModuleActionMasonry } from './ModuleActionMasonry';
 export { ModuleTodoList } from './ModuleTodoList';
 export { ModuleChartPanel, ModuleChartRow } from './ModuleChartPanel';
+export { ModuleTrendLine } from './ModuleTrendLine';
+export type { ModuleTrendLineProps } from './ModuleTrendLine';
 export {
   isModuleDashboardPlain,
   resolveModuleKpiVisual,

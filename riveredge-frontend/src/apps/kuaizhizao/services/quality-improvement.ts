@@ -190,6 +190,24 @@ export const qualityImprovementApi = {
         method: 'POST',
         data: lineIds?.length ? { line_ids: lineIds } : {},
       }),
+    listShipmentNoticePullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+      apiRequest<{ data: Array<Record<string, unknown>>; total: number; success: boolean }>(
+        '/apps/kuaizhizao/oqc-inspections/pull-candidates/shipment-notices',
+        { method: 'GET', params },
+      ),
+    listSalesDeliveryPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+      apiRequest<{ data: Array<Record<string, unknown>>; total: number; success: boolean }>(
+        '/apps/kuaizhizao/oqc-inspections/pull-candidates/sales-deliveries',
+        { method: 'GET', params },
+      ),
+    previewPullFromShipmentNotice: async (noticeId: number) =>
+      apiRequest(`/apps/kuaizhizao/oqc-inspections/from-shipment-notice/${noticeId}/pull-preview`, {
+        method: 'GET',
+      }),
+    previewPullFromSalesDelivery: async (deliveryId: number) =>
+      apiRequest(`/apps/kuaizhizao/oqc-inspections/from-sales-delivery/${deliveryId}/pull-preview`, {
+        method: 'GET',
+      }),
     conduct: async (id: number, data: any) =>
       apiRequest<OQCInspection>(`/apps/kuaizhizao/oqc-inspections/${id}/conduct`, { method: 'POST', data }),
     approve: async (id: number, approve = true) =>

@@ -26,6 +26,7 @@ import * as LucideIcons from 'lucide-react';
 import WeatherWidget from '../../../components/weather/WeatherWidget';
 import { getWeatherCardGradient } from '../../../components/weather/weatherBackground';
 import { formatDateTime } from '../../../utils/format';
+import { DASHBOARD_SECTION_CARD_CLASS } from './dashboardCardSurface';
 
 const { Title, Text } = Typography;
 
@@ -106,8 +107,10 @@ export const MobileWorkplace: React.FC<MobileWorkplaceProps> = ({
   const pagePadding = 20;
 
   return (
-    <div style={{ 
-      padding: `${pagePadding}px`, 
+    <div
+      className="dashboard-mobile-workplace"
+      style={{
+      padding: `${pagePadding}px`,
       background: isDark ? '#000' : '#f8fafc', 
       minHeight: '100%',
       display: 'flex',
@@ -154,6 +157,7 @@ export const MobileWorkplace: React.FC<MobileWorkplaceProps> = ({
         <Col span={14}>
           <Card
             variant="borderless"
+            className={DASHBOARD_SECTION_CARD_CLASS}
             style={{ 
               height: 100, 
               borderRadius: cardRadius, 
@@ -177,6 +181,7 @@ export const MobileWorkplace: React.FC<MobileWorkplaceProps> = ({
         <Col span={10}>
           <Card
             variant="borderless"
+            className={DASHBOARD_SECTION_CARD_CLASS}
             style={{ 
               height: 100, 
               borderRadius: cardRadius, 
@@ -214,8 +219,9 @@ export const MobileWorkplace: React.FC<MobileWorkplaceProps> = ({
             { label: t('pages.dashboard.statQualitySummary'), value: formatDashboardRate(statistics?.quality?.quality_rate), suffix: '%', semantic: 'quality_rate', numeric: statistics?.quality?.quality_rate, icon: <LucideIcons.ClipboardCheck size={18} /> },
           ].map((item, idx) => (
             <Col span={12} key={idx}>
-              <Card 
+              <Card
                 variant="borderless"
+                className={DASHBOARD_SECTION_CARD_CLASS}
                 styles={{ body: { padding: '16px 12px' } }}
                 style={{ 
                   borderRadius: cardRadius,
@@ -264,7 +270,7 @@ export const MobileWorkplace: React.FC<MobileWorkplaceProps> = ({
           <Text strong style={{ fontSize: 16 }}>{t('pages.dashboard.quickEntry')}</Text>
           <Button type="link" size="small" style={{ padding: 0 }}>{t('common.edit')}</Button>
         </div>
-        <Card variant="borderless" style={{ borderRadius: cardRadius, background: isDark ? '#111' : '#fff' }} styles={{ body: { padding: '20px 10px' } }}>
+        <Card variant="borderless" className={DASHBOARD_SECTION_CARD_CLASS} style={{ borderRadius: cardRadius, background: isDark ? '#111' : '#fff' }} styles={{ body: { padding: '20px 10px' } }}>
           <Row gutter={[0, 20]}>
             {quickEntries.slice(0, 8).map((item, idx) => (
               <Col span={6} key={idx} onClick={() => navigate(item.menu_path)} style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -301,9 +307,10 @@ export const MobileWorkplace: React.FC<MobileWorkplaceProps> = ({
         {todos.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {todos.slice(0, 5).map((todo) => (
-              <Card 
+              <Card
                 key={todo.id}
                 variant="borderless"
+                className={DASHBOARD_SECTION_CARD_CLASS}
                 styles={{ body: { padding: '16px' } }}
                 style={{ 
                   borderRadius: cardRadius,
@@ -330,6 +337,16 @@ export const MobileWorkplace: React.FC<MobileWorkplaceProps> = ({
                       {todo.priority === 'high' && <Tag color="error" style={{ margin: 0, borderRadius: 6, fontSize: 10 }}>{t('pages.dashboard.priorityHigh')}</Tag>}
                     </div>
                     <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>{todo.description}</Text>
+                    {todo.detail ? (
+                      <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>{todo.detail}</Text>
+                    ) : null}
+                    {todo.due_date ? (
+                      <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                        {t('pages.dashboard.todo.dueDateShort', {
+                          date: formatDateTime(todo.due_date, 'YYYY-MM-DD'),
+                        })}
+                      </Text>
+                    ) : null}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 8 }}>
                       <ClockCircleOutlined style={{ fontSize: 12, opacity: 0.5 }} />
                       <Text type="secondary" style={{ fontSize: 11 }}>{formatDateTime(todo.created_at, 'MM-DD HH:mm')}</Text>

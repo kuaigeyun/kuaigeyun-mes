@@ -10,6 +10,7 @@ Date: 2025-01-01
 from fastapi import APIRouter
 
 # 导入子路由（按资源分目录，主文件复数与目录一致）
+from .exceptions.exceptions import router as exceptions_router
 from .productions.productions import router as production_router
 from .productions.document_relations_legacy import router as document_relations_legacy_router
 from .productions.production_control_api import router as production_control_router
@@ -90,6 +91,7 @@ router.include_router(receipt_notice_router)  # 收货通知单管理
 router.include_router(customer_follow_up_router)  # 客户跟进（销售极简 CRM）
 router.include_router(sales_opportunity_router)  # 销售商机
 router.include_router(customer_pool_router)  # 客户池（公海管理）
+router.include_router(exceptions_router)
 router.include_router(production_router)
 router.include_router(document_relations_legacy_router)
 router.include_router(purchase_router)

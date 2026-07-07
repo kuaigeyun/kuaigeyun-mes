@@ -10,6 +10,10 @@ import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SaveOutline
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, TwoColumnLayout } from '../../../../components/layout-templates';
+import LoginRichTextEditor, {
+  type LoginRichTextEditorMode,
+} from '../../../../components/login-page-editor/LoginRichTextEditor';
+import { ThemedSegmented } from '../../../../components/themed-segmented';
 import {
   createKbArticle,
   createKbSpace,
@@ -46,6 +50,7 @@ const KnowledgeBasePage: React.FC = () => {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [articles, setArticles] = useState<KbArticle[]>([]);
   const [activeArticle, setActiveArticle] = useState<KbArticle | null>(null);
+  const [editorMode, setEditorMode] = useState<LoginRichTextEditorMode>('visual');
 
   const articleStatusOptions = useMemo(() => getKuaiplmKnowledgeStatusOptions(t), [t]);
   const unnamedDocument = t('app.kuaiplm.knowledgeBase.unnamedDocument');
@@ -633,12 +638,29 @@ const KnowledgeBasePage: React.FC = () => {
                   {activeArticle.updated_at ? formatDateTime(activeArticle.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'}
                 </Typography.Text>
               </Space>
-              <Input.TextArea
-                value={activeArticle.content ?? ''}
-                onChange={(e) => setActiveArticle({ ...activeArticle, content: e.target.value })}
-                placeholder={t('app.kuaiplm.knowledgeBase.form.contentPlaceholder')}
-                autoSize={{ minRows: 20, maxRows: 40 }}
-              />
+              <div style={{ width: '100%' }}>
+                <div className="login-rich-text-editor-label-row login-rich-text-editor-label-row--spread">
+                  <Typography.Text strong className="login-rich-text-editor-label-text">
+                    {t('app.kuaiplm.knowledgeBase.form.content')}
+                  </Typography.Text>
+                  <ThemedSegmented
+                    size="small"
+                    value={editorMode}
+                    onChange={(next) => setEditorMode(next as LoginRichTextEditorMode)}
+                    options={[
+                      { label: t('pages.system.siteSettings.loginEditorVisual'), value: 'visual' },
+                      { label: t('pages.system.siteSettings.loginEditorCode'), value: 'code' },
+                    ]}
+                  />
+                </div>
+                <LoginRichTextEditor
+                  mode={editorMode}
+                  value={activeArticle.content ?? ''}
+                  onChange={(content) => setActiveArticle({ ...activeArticle, content })}
+                  placeholder={t('app.kuaiplm.knowledgeBase.form.contentPlaceholder')}
+                  minHeight={480}
+                />
+              </div>
             </Space>
           ),
         }}

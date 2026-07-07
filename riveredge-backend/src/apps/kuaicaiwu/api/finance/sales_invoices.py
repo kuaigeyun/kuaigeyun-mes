@@ -5,8 +5,8 @@
 """
 
 import uuid
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import Optional, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
 from datetime import date, datetime
 from decimal import Decimal
 from loguru import logger
@@ -29,6 +29,8 @@ from apps.kuaicaiwu.models.invoice import Invoice, InvoiceItem
 from apps.kuaicaiwu.constants import RECEIVABLE_SOURCE_SALES_INVOICE
 from apps.kuaicaiwu.services.finance_service import ReceivableService
 from apps.kuaicaiwu.services.invoice_service import InvoiceService
+from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
+from infra.exceptions.exceptions import BusinessLogicError
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from core.services.authorization.permission_policy_service import PermissionPolicyService
@@ -40,6 +42,7 @@ router = APIRouter(prefix="/sales-invoices", tags=["App · Kuaicaiwu · Finance"
 business_config_service = BusinessConfigService()
 receivable_service = ReceivableService()
 invoice_service = InvoiceService()
+sales_invoice_service = SalesInvoiceService()
 
 
 async def _generate_sales_invoice_code(tenant_id: int) -> str:
@@ -236,34 +239,60 @@ async def create_sales_invoice(
     tenant_id: int = Depends(get_current_tenant)
 ):
     """创建销售发票"""
-    code = await _generate_sales_invoice_code(tenant_id)
-    invoice = await Invoice.create(
-        tenant_id=tenant_id,
-        invoice_code=code,
-        category="OUT",
-        invoice_number=data.invoice_number,
-        invoice_date=data.invoice_date,
-        invoice_type=data.invoice_type or "增值税专用发票",
-        partner_id=data.customer_id,
-        partner_name=data.customer_name,
-        tax_rate=data.tax_rate / 100,  # convert 13 -> 0.13
-        amount_excluding_tax=data.invoice_amount,
-        tax_amount=data.tax_amount,
-        total_amount=data.total_amount,
-        source_document_code=data.sales_order_code,
-        attachment_uuid=data.attachment_path,
-        attachments=data.attachments,
-        description=data.notes,
-        status="未审核",
-        created_by=current_user.id,
-    )
-    await _maybe_auto_generate_receivable_for_sales_invoice(
-        tenant_id=tenant_id,
-        invoice=invoice,
-        created_by=current_user.id,
-    )
-    invoice = await _get_or_404(tenant_id, invoice.id)
-    return await _serialize(tenant_id, current_user.id, invoice)
+    try:
+        pull_preview: Optional[Dict[str, Any]] = None
+        if data.source_type and data.source_id:
+            pull_preview = await sales_invoice_service.assert_pull_create_allowed(
+                tenant_id=tenant_id,
+                source_type=str(data.source_type).strip(),
+                source_id=int(data.source_id),
+                total_amount=Decimal(data.total_amount),
+            )
+
+        source_document_code = data.sales_order_code
+        if pull_preview:
+            source_document_code = str(pull_preview.get("source_code") or source_document_code or "")
+
+        code = await _generate_sales_invoice_code(tenant_id)
+        invoice = await Invoice.create(
+            tenant_id=tenant_id,
+            invoice_code=code,
+            category="OUT",
+            invoice_number=data.invoice_number,
+            invoice_date=data.invoice_date,
+            invoice_type=data.invoice_type or "增值税专用发票",
+            partner_id=data.customer_id,
+            partner_name=data.customer_name,
+            tax_rate=data.tax_rate / 100,  # convert 13 -> 0.13
+            amount_excluding_tax=data.invoice_amount,
+            tax_amount=data.tax_amount,
+            total_amount=data.total_amount,
+            source_document_code=source_document_code,
+            attachment_uuid=data.attachment_path,
+            attachments=data.attachments,
+            description=data.notes,
+            status="未审核",
+            created_by=current_user.id,
+        )
+        if pull_preview and data.source_type and data.source_id:
+            await sales_invoice_service.create_pull_relation(
+                tenant_id=tenant_id,
+                source_type=str(data.source_type).strip(),
+                source_id=int(data.source_id),
+                source_code=str(pull_preview.get("source_code") or source_document_code or ""),
+                invoice_id=int(invoice.id),
+                invoice_code=str(invoice.invoice_code),
+                created_by=current_user.id,
+            )
+        await _maybe_auto_generate_receivable_for_sales_invoice(
+            tenant_id=tenant_id,
+            invoice=invoice,
+            created_by=current_user.id,
+        )
+        invoice = await _get_or_404(tenant_id, invoice.id)
+        return await _serialize(tenant_id, current_user.id, invoice)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(422, str(e), "/sales-invoices", tenant_id) from e
 
 
 @router.get("", response_model=SalesInvoiceListResponse)
@@ -295,6 +324,74 @@ async def list_sales_invoices(
     return SalesInvoiceListResponse(
         items=serialized,
         total=total, skip=skip, limit=limit
+    )
+
+
+@router.get(
+    "/pull-candidates/sales-orders",
+    summary="List sales order pull candidates for sales invoice",
+)
+async def list_sales_invoice_sales_order_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await sales_invoice_service.list_sales_order_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/pull-candidates/sales-deliveries",
+    summary="List sales delivery pull candidates for sales invoice",
+)
+async def list_sales_invoice_sales_delivery_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await sales_invoice_service.list_sales_delivery_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/from-sales-order/{order_id}/pull-preview",
+    summary="Preview pull sales invoice from sales order",
+)
+async def preview_pull_sales_invoice_from_sales_order(
+    order_id: int = Path(..., description="销售订单ID"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await sales_invoice_service.preview_pull_from_sales_order(
+        tenant_id=tenant_id,
+        order_id=order_id,
+    )
+
+
+@router.get(
+    "/from-sales-delivery/{delivery_id}/pull-preview",
+    summary="Preview pull sales invoice from sales delivery",
+)
+async def preview_pull_sales_invoice_from_sales_delivery(
+    delivery_id: int = Path(..., description="销售出库单ID"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await sales_invoice_service.preview_pull_from_sales_delivery(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id,
     )
 
 

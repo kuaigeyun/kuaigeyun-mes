@@ -15,8 +15,8 @@ function plainShortcutIcon(icon: React.ReactNode, colorPrimary: string): React.R
   } as { style?: React.CSSProperties });
 }
 
-function normalizeShortcutIcon(icon: React.ReactNode, plain: boolean, colorPrimary: string): React.ReactNode {
-  const node = plain ? plainShortcutIcon(icon, colorPrimary) : icon;
+function normalizeShortcutIcon(icon: React.ReactNode, colorPrimary: string): React.ReactNode {
+  const node = plainShortcutIcon(icon, colorPrimary);
   if (!isValidElement(node)) return node;
   const prev = (node.props as { style?: React.CSSProperties }).style;
   return cloneElement(node, {
@@ -39,7 +39,7 @@ export function ModuleShortcutGrid({
   const screens = Grid.useBreakpoint();
   const themeStyle = useThemeStore((s) => s.resolved.themeStyle);
   const plain = isModuleDashboardPlain(themeStyle);
-  const equalFillOnDesktop = fillByItemCount && !!screens.lg && items.length > 0;
+  const equalFillOnDesktop = fillByItemCount && !!screens.md && items.length > 0;
 
   return (
     <div
@@ -103,7 +103,7 @@ export function ModuleShortcutGrid({
                 className="module-shortcut-grid__icon"
                 style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}
               >
-                {normalizeShortcutIcon(sc.icon, plain, token.colorPrimary)}
+                {normalizeShortcutIcon(sc.icon, token.colorPrimary)}
               </span>
               <Text
                 ellipsis

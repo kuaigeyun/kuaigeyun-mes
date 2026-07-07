@@ -419,7 +419,7 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
         assigned_to: Optional[int] = None,
         skip: int = 0,
         limit: int = 100,
-    ) -> List[ExceptionProcessRecordListResponse]:
+    ) -> tuple[List[ExceptionProcessRecordListResponse], int]:
         """
         获取异常处理记录列表
 
@@ -433,7 +433,7 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
             limit: 限制数量
 
         Returns:
-            List[ExceptionProcessRecordListResponse]: 处理记录列表
+            (列表, 总数)
         """
         query = ExceptionProcessRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
@@ -446,9 +446,10 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
         if assigned_to:
             query = query.filter(assigned_to=assigned_to)
 
+        total = await query.count()
         records = await query.order_by("-created_at").offset(skip).limit(limit)
         responses = [ExceptionProcessRecordListResponse.model_validate(r) for r in records]
-        return enrich_exception_process_record_list_capabilities(records, responses)
+        return enrich_exception_process_record_list_capabilities(records, responses), total
 
     async def _validate_exception_exists(
         self,

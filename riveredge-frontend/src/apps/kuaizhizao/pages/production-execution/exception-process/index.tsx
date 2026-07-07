@@ -17,11 +17,13 @@ import { ProDescriptions } from '@ant-design/pro-components';
 import { EyeOutlined, UserOutlined, ArrowRightOutlined, CheckCircleOutlined, CloseCircleOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { exceptionApi } from '../../../services/production';
-import { getExceptionProcessLifecycle } from '../../../utils/exceptionProcessLifecycle';
+import {
+  ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES,
+  ACTIVE_QUALITY_EXCEPTION_STATUSES,
+} from '../../../constants/exceptionStatuses';
 import { apiRequest } from '../../../../../services/api';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { exceptionProcessBatchCancelAllowed } from '../../../../../hooks/useDocumentCapabilities';
@@ -184,27 +186,27 @@ const ExceptionProcessPage: React.FC = () => {
     const loadExceptions = async () => {
       try {
         const [materialShortage, deliveryDelay, quality] = await Promise.all([
-          exceptionApi.materialShortage.list({ limit: 1000 }).catch(() => []),
-          exceptionApi.deliveryDelay.list({ limit: 1000 }).catch(() => []),
-          exceptionApi.quality.list({ limit: 1000 }).catch(() => []),
+          exceptionApi.materialShortage.list({ limit: 1000, statuses: ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES }),
+          exceptionApi.deliveryDelay.list({ limit: 1000, statuses: ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES }),
+          exceptionApi.quality.list({ limit: 1000, statuses: ACTIVE_QUALITY_EXCEPTION_STATUSES }),
         ]);
 
         const exceptions: any[] = [];
-        (Array.isArray(materialShortage) ? materialShortage : []).forEach((item: any) => {
+        materialShortage.items.forEach((item: any) => {
           exceptions.push({
             ...item,
             exception_type: 'material_shortage',
             display_name: t(`${PROC}.displayName.materialShortage`, { code: item.work_order_code }),
           });
         });
-        (Array.isArray(deliveryDelay) ? deliveryDelay : []).forEach((item: any) => {
+        deliveryDelay.items.forEach((item: any) => {
           exceptions.push({
             ...item,
             exception_type: 'delivery_delay',
             display_name: t(`${PROC}.displayName.deliveryDelay`, { code: item.work_order_code }),
           });
         });
-        (Array.isArray(quality) ? quality : []).forEach((item: any) => {
+        quality.items.forEach((item: any) => {
           exceptions.push({
             ...item,
             exception_type: 'quality',
@@ -215,8 +217,9 @@ const ExceptionProcessPage: React.FC = () => {
         });
 
         setExceptionList(exceptions);
-      } catch (error) {
-        console.error('获取异常列表失败:', error);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : t(`${P}.message.fetchListFailed`);
+        messageApi.error(message);
       }
     };
     loadExceptions();
@@ -363,24 +366,6 @@ const ExceptionProcessPage: React.FC = () => {
       width: 100,
     },
     {
-      title: t(`${P}.col.lifecycle`),
-      dataIndex: 'lifecycle_stage',
-      render: (_, record) => {
-        const lifecycle = getExceptionProcessLifecycle(record as unknown as Record<string, unknown>, t);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      },
-    },
-    {
       title: t(`${P}.col.currentStep`),
       dataIndex: 'current_step',
       width: 120,
@@ -501,11 +486,11 @@ const ExceptionProcessPage: React.FC = () => {
             }
 
             try {
-              const result = await exceptionApi.process.list(apiParams);
+              const page = await exceptionApi.process.list(apiParams);
               return {
-                data: Array.isArray(result) ? result : (result?.data || result?.items || []),
+                data: page.items,
                 success: true,
-                total: Array.isArray(result) ? result.length : (result?.total || result?.count || 0),
+                total: page.total,
               };
             } catch (error: any) {
               console.error('获取异常处理流程列表失败:', error);

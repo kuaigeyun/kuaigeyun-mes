@@ -40,10 +40,11 @@ export function ModuleActionPanel({
     <ProCard
       title={titleNode}
       headerBordered
+      bordered
       loading={loading}
       style={{
         borderRadius: token.borderRadiusLG,
-        boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)',
+        boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
         ...(layout === 'grid' ? { height: '100%' } : {}),
       }}
       styles={{

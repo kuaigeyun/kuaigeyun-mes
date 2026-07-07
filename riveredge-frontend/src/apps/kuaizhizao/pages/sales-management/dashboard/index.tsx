@@ -1,37 +1,25 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { 
-  Row, Col, Progress, Typography, Tag, Spin,
-  Segmented, Button, Empty, Tooltip, Badge, theme
-} from 'antd';
-import { ProCard } from '@ant-design/pro-components';
-import { 
-  FileTextOutlined, 
-  SendOutlined, 
-  RiseOutlined, 
+import React, { useMemo, useState, useCallback } from 'react';
+import { Table, Tag, Typography, Progress, Button, theme } from 'antd';
+import {
+  FileTextOutlined,
+  SendOutlined,
+  RiseOutlined,
   UserOutlined,
   CustomerServiceOutlined,
   SolutionOutlined,
   FileDoneOutlined,
-  ClockCircleOutlined,
-  CalendarOutlined,
-  TrophyOutlined,
-  PhoneOutlined,
-  MessageOutlined,
-  MailOutlined,
-  CheckCircleOutlined,
-  ExclamationCircleOutlined,
+  TeamOutlined,
+  BellOutlined,
+  FileProtectOutlined,
   PlusOutlined,
-  AuditOutlined,
-  RightOutlined,
-  LockOutlined,
-  WechatOutlined
+  TrophyOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
-import { Line } from '@ant-design/charts';
 import { mesDashboardService } from '../../../services/dashboard';
 import { listSalesOrders } from '../../../services/sales-order';
+import { listQuotations } from '../../../services/quotation';
 import { customerFollowUpApi } from '../../../services/customer-follow-up';
 import { getSalesTop10 } from '../../../../../services/dashboard';
 import { getSalesReport } from '../../../services/reports';
@@ -47,16 +35,20 @@ import { resolveAmountFieldVisibility } from '../../../../../utils/fieldMaskPerm
 import { getStatusDisplay } from '../../../constants/documentStatus';
 import { formatDateTime } from '../../../../../utils/format';
 import {
+  ModuleCenterLayout,
   ModuleKpiRow,
   ModuleShortcutGrid,
+  ModuleActionPanel,
+  ModuleActionMasonry,
+  ModuleTodoList,
+  ModuleChartPanel,
+  ModuleTrendLine,
   isModuleDashboardPlain,
   resolveModuleRankBadgeStyle,
-  resolveModuleFollowUpIconColors,
 } from '../../../components/module-center';
-import { UniDashboard } from '../../../../../components/uni-dashboard';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 
-const { Text, Title, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 
 /** 与后端 SALES_ORDER_PENDING_SHIP_STATUS 对齐 */
 const PENDING_DELIVERY_STATUS = new Set([
@@ -65,10 +57,19 @@ const PENDING_DELIVERY_STATUS = new Set([
   'APPROVED', 'AUDITED', 'CONFIRMED', 'RELEASED', 'IN_PROGRESS',
 ]);
 
+const PENDING_QUOTATION_STATUS = new Set([
+  '草稿', '待审核', 'draft', 'pending', 'DRAFT', 'PENDING_REVIEW', 'PENDING',
+]);
+
 function isPendingDeliveryOrder(order: { status?: string; delivery_progress?: number | null }): boolean {
   const status = String(order?.status ?? '').trim();
   if (!status || !PENDING_DELIVERY_STATUS.has(status)) return false;
   return Number(order?.delivery_progress ?? 0) < 100;
+}
+
+function isDeliveryOverdue(deliveryDate?: string | null): boolean {
+  if (!deliveryDate) return false;
+  return dayjs(deliveryDate).isBefore(dayjs(), 'day');
 }
 
 const SalesDashboard: React.FC = () => {
@@ -83,234 +84,123 @@ const SalesDashboard: React.FC = () => {
   const showMoney =
     resolveAmountFieldVisibility(fieldMasks, SO, 'total_amount', canViewKuaizhizaoPricing(currentUser)) === 'show';
 
-  // 看板控制状态
   const [trendType, setTrendType] = useState<'revenue' | 'quantity'>(showMoney ? 'revenue' : 'quantity');
   const [rankType, setRankType] = useState<'products' | 'customers'>('products');
-  const trendChartColor = isPlain || trendType === 'revenue' ? token.colorPrimary : '#52c41a';
-  const trendChartAxis = useMemo(
-    () => ({
-      x: {
-        title: false,
-        labelFill: token.colorTextSecondary,
-        labelFontSize: 11,
-        lineStroke: token.colorBorderSecondary,
-        tickStroke: token.colorBorderSecondary,
-      },
-      y: {
-        title: false,
-        grid: true,
-        labelFill: token.colorTextSecondary,
-        labelFontSize: 11,
-        gridStroke: token.colorBorderSecondary,
-        gridLineDash: [4, 4] as [number, number],
-        line: false,
-        tick: false,
-      },
-    }),
-    [token.colorTextSecondary, token.colorBorderSecondary],
-  );
-  
-  // 1. 获取汇总数据
+
   const { data: summary, loading: summaryLoading } = useDashboardRequest(
     mesDashboardService.getSalesSummary,
     'kz:sales-dashboard:summary',
   );
-  
-  // 2. 获取待交付订单（多取一些，前端筛选后滚动展示）
-  const { data: recentOrdersData, loading: ordersLoading } = useDashboardRequest(async () => {
-    return listSalesOrders({ limit: 30, order_by: 'delivery_date' });
-  }, 'kz:sales-dashboard:recent-orders');
-  
-  // 3. 获取最近跟进记录
-  const { data: followUpsData, loading: followUpsLoading } = useDashboardRequest(async () => {
-    return customerFollowUpApi.list({ limit: 8 });
-  }, 'kz:sales-dashboard:follow-ups');
 
-  // 4. 获取热销产品排行
-  const { data: topProductsData, loading: topProductsLoading } = useDashboardRequest(async () => {
-    try {
-      return await getSalesTop10();
-    } catch {
-      return [];
-    }
-  }, 'kz:sales-dashboard:top-products');
+  const { data: todosData, loading: todosLoading } = useDashboardRequest(
+    () => mesDashboardService.getTodosByModule('sales', 8),
+    'kz:sales-dashboard:todos',
+  );
 
-  // 5. 获取月度趋势
-  const { data: salesTrendRaw, loading: trendLoading } = useDashboardRequest(async () => {
-    try {
-      const res = await getSalesReport({ report_type: 'trend' });
-      return res.data || [];
-    } catch {
-      return [];
-    }
-  }, 'kz:sales-dashboard:trend');
+  const { data: pendingFollowUpsData, loading: pendingFollowUpsLoading } = useDashboardRequest(
+    () => customerFollowUpApi.list({ pending_only: true, limit: 5 }),
+    'kz:sales-dashboard:pending-follow-ups',
+  );
 
-  // 6. 获取待跟进提醒
-  const { data: pendingTasksData, loading: pendingTasksLoading } = useDashboardRequest(async () => {
-    try {
-      const res = await customerFollowUpApi.list({ pending_only: true, limit: 5 });
-      return res?.items || [];
-    } catch {
-      return [];
-    }
-  }, 'kz:sales-dashboard:pending-tasks');
+  const { data: recentOrdersData, loading: ordersLoading } = useDashboardRequest(
+    () => listSalesOrders({ limit: 50, order_by: 'delivery_date' }),
+    'kz:sales-dashboard:recent-orders',
+  );
 
-  const { data: contractAlerts = [], loading: contractAlertsLoading } = useDashboardRequest(async () => {
-    try {
-      return await salesContractApi.listAlerts();
-    } catch {
-      return [];
-    }
-  }, 'kz:sales-dashboard:contract-alerts');
+  const { data: quotationsData, loading: quotationsLoading } = useDashboardRequest(
+    () => listQuotations({ limit: 20 }),
+    'kz:sales-dashboard:quotations',
+  );
 
-  const { data: frameworkContracts = [], loading: frameworkLoading } = useDashboardRequest(async () => {
-    try {
-      return await salesContractApi.executionSummary();
-    } catch {
-      return [];
-    }
-  }, 'kz:sales-dashboard:framework-contracts');
+  const { data: followUpsData, loading: followUpsLoading } = useDashboardRequest(
+    () => customerFollowUpApi.list({ limit: 6 }),
+    'kz:sales-dashboard:follow-ups',
+  );
 
+  const { data: topProductsData, loading: topProductsLoading } = useDashboardRequest(
+    () => getSalesTop10(),
+    'kz:sales-dashboard:top-products',
+  );
+
+  const { data: salesTrendRaw, loading: trendLoading } = useDashboardRequest(
+    () => getSalesReport({ report_type: 'trend' }).then((res) => res.data || []),
+    'kz:sales-dashboard:trend',
+  );
+
+  const { data: contractAlerts = [], loading: contractAlertsLoading } = useDashboardRequest(
+    () => salesContractApi.listAlerts(),
+    'kz:sales-dashboard:contract-alerts',
+  );
+
+  const { data: frameworkContracts = [], loading: frameworkLoading } = useDashboardRequest(
+    () => salesContractApi.executionSummary(),
+    'kz:sales-dashboard:framework-contracts',
+  );
+
+  const s = summary as Record<string, number> | undefined;
+  const todos = todosData?.items || [];
+  const pendingFollowUps = pendingFollowUpsData?.items || [];
+  const pendingFollowUpTotal = pendingFollowUpsData?.total ?? pendingFollowUps.length;
   const recentOrders = recentOrdersData?.data || [];
+  const recentFollowUps = followUpsData?.items || [];
+
+  const pendingQuotations = useMemo(
+    () =>
+      (quotationsData?.data || []).filter((q) =>
+        PENDING_QUOTATION_STATUS.has(String(q.status ?? '').trim()),
+      ),
+    [quotationsData],
+  );
+
   const pendingDeliveryOrders = useMemo(
     () =>
       recentOrders
         .filter(isPendingDeliveryOrder)
-        .sort((a: any, b: any) => {
+        .sort((a: { delivery_date?: string | null }, b: { delivery_date?: string | null }) => {
+          const aOverdue = isDeliveryOverdue(a.delivery_date);
+          const bOverdue = isDeliveryOverdue(b.delivery_date);
+          if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
           const da = a.delivery_date ? dayjs(a.delivery_date) : dayjs('2099-12-31');
           const db = b.delivery_date ? dayjs(b.delivery_date) : dayjs('2099-12-31');
           return da.valueOf() - db.valueOf();
         }),
     [recentOrders],
   );
-  const deliveryScrollRef = useRef<HTMLDivElement>(null);
-  const deliveryScrollPausedRef = useRef(false);
 
-  const renderDeliveryOrderRow = useCallback(
-    (record: any) => {
-      const { text: statusText, color: statusColor } = getStatusDisplay(
-        record.status ? String(record.status) : undefined,
-      );
-      return (
-        <div
-          key={record.id}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '8px 4px',
-            borderBottom: `1px solid ${token.colorBorderSecondary}`,
-          }}
-        >
-          <div style={{ width: 96, minWidth: 96, flexShrink: 0 }}>
-            <a
-              onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-orders')}
-              style={{ fontWeight: 500, fontSize: 12, lineHeight: 1.3 }}
-            >
-              {record.order_code}
-            </a>
-            <Text type="secondary" ellipsis style={{ fontSize: 11, display: 'block', maxWidth: 96 }}>
-              {record.customer_name}
-            </Text>
-          </div>
-          <div style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
-            <Progress
-              percent={record.delivery_progress || 0}
-              size="small"
-              strokeColor={isPlain ? token.colorPrimary : { '0%': '#108ee9', '100%': '#87d068' }}
-              style={{ margin: 0 }}
-            />
-            <span style={{ fontSize: 10, color: token.colorTextTertiary }}>
-              {t('app.kuaizhizao.salesDashboard.deliveryDue', {
-                date: record.delivery_date
-                  ? formatDateTime(record.delivery_date, 'MM-DD')
-                  : t('app.kuaizhizao.salesDashboard.deliveryTbd'),
-              })}
-            </span>
-          </div>
-          <Tag color={statusColor} style={{ margin: 0, fontSize: 10, padding: '0 4px', flexShrink: 0 }}>
-            {statusText}
-          </Tag>
-        </div>
-      );
-    },
-    [isPlain, navigate, t, token.colorBorderSecondary, token.colorPrimary, token.colorTextTertiary],
-  );
-
-  useEffect(() => {
-    const el = deliveryScrollRef.current;
-    if (!el || pendingDeliveryOrders.length <= 4) return;
-
-    let frameId = 0;
-    const tick = () => {
-      if (!deliveryScrollPausedRef.current && el) {
-        el.scrollTop += 0.4;
-        const maxScroll = el.scrollHeight - el.clientHeight;
-        if (maxScroll > 0 && el.scrollTop >= maxScroll - 1) {
-          el.scrollTop = 0;
-        }
-      }
-      frameId = window.requestAnimationFrame(tick);
-    };
-    frameId = window.requestAnimationFrame(tick);
-
-    const pause = () => {
-      deliveryScrollPausedRef.current = true;
-    };
-    const resume = () => {
-      deliveryScrollPausedRef.current = false;
-    };
-    el.addEventListener('mouseenter', pause);
-    el.addEventListener('mouseleave', resume);
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-      el.removeEventListener('mouseenter', pause);
-      el.removeEventListener('mouseleave', resume);
-    };
-  }, [pendingDeliveryOrders.length]);
-
-  const recentFollowUps = followUpsData?.items || [];
-  const s = summary as any;
-
-  // 格式化趋势数据 (根据真实数据生成最近 6 个月的走势，不存在的月份显示为 0)
-  const trendData = (() => {
+  const trendData = useMemo(() => {
     const raw = salesTrendRaw || [];
-    // 生成最近 6 个月份的列表
-    const months = Array.from({ length: 6 }).map((_, i) => dayjs().subtract(5 - i, 'month').format('YYYY-MM'));
-    const rawMap = new Map(raw.map((r: any) => [r.month, r]));
-    
-    return months.map(m => {
+    const months = Array.from({ length: 6 }).map((_, i) =>
+      dayjs().subtract(5 - i, 'month').format('YYYY-MM'),
+    );
+    const rawMap = new Map(raw.map((r: { month?: string; revenue?: number; total_amount?: number; quantity?: number; order_count?: number }) => [r.month, r]));
+    return months.map((m) => {
       const exist = rawMap.get(m);
       if (exist) {
         return {
           month: m,
           revenue: Number(exist.revenue ?? exist.total_amount) || 0,
-          quantity: Number(exist.quantity ?? exist.order_count) || 0
+          quantity: Number(exist.quantity ?? exist.order_count) || 0,
         };
       }
-      return {
-        month: m,
-        revenue: 0,
-        quantity: 0
-      };
+      return { month: m, revenue: 0, quantity: 0 };
     });
-  })();
+  }, [salesTrendRaw]);
 
-  // 格式化热销产品排行 (完全呈现真实排行)
-  const topProducts = (() => {
+  const topProducts = useMemo(() => {
     const raw = topProductsData || [];
-    return raw.map((r: any) => ({
-      material_name: r.material_name || r.name || t('app.kuaizhizao.salesDashboard.unknownProduct'),
-      quantity: Number(r.quantity) || 0,
-      amount: Number(r.amount) || 0
-    })).filter(x => x.quantity > 0).slice(0, 5);
-  })();
+    return raw
+      .map((r: { material_name?: string; name?: string; quantity?: number; amount?: number }) => ({
+        material_name: r.material_name || r.name || t('app.kuaizhizao.salesDashboard.unknownProduct'),
+        quantity: Number(r.quantity) || 0,
+        amount: Number(r.amount) || 0,
+      }))
+      .filter((x) => x.quantity > 0)
+      .slice(0, 5);
+  }, [topProductsData, t]);
 
-  // 格式化核心客户排行 (根据真实订单汇总排行，不填充 mock 数据)
-  const topCustomers = (() => {
+  const topCustomers = useMemo(() => {
     const map: Record<string, { name: string; amount: number; orderCount: number }> = {};
-    recentOrders.forEach((o: any) => {
+    recentOrders.forEach((o: { customer_name?: string; total_amount?: number }) => {
       if (!o.customer_name) return;
       if (!map[o.customer_name]) {
         map[o.customer_name] = { name: o.customer_name, amount: 0, orderCount: 0 };
@@ -318,82 +208,35 @@ const SalesDashboard: React.FC = () => {
       map[o.customer_name].amount += Number(o.total_amount) || 0;
       map[o.customer_name].orderCount += 1;
     });
-    const list = Object.values(map).sort((a, b) => b.amount - a.amount);
-    return list.slice(0, 5);
-  })();
+    return Object.values(map)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5);
+  }, [recentOrders]);
 
-  // 今日待办 (仅呈现真实待跟进提醒)
-  const pendingTasks = (() => {
-    return (pendingTasksData || []) as any[];
-  })();
-
-  // 最近跟进历史 (仅呈现真实跟进记录)
-  const recentFollowUpItems = (() => {
-    return (recentFollowUps || []) as any[];
-  })();
-
-  // 渲染排行徽章
-  const renderRankBadge = (rank: number) => {
-    const style = resolveModuleRankBadgeStyle(rank, isPlain, token, isDark);
-    return (
-      <span style={{
-        width: 22,
-        height: 22,
-        borderRadius: '50%',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: style.background,
-        color: style.color,
-        fontWeight: 700,
-        fontSize: 11,
-        boxShadow: style.boxShadow,
-      }}>
-        {rank}
-      </span>
-    );
-  };
-
-  // 跟进类型图标
-  const getFollowUpIcon = (code?: string) => {
-    const c = String(code || '').toUpperCase();
-    const { bg, fg } = resolveModuleFollowUpIconColors(code, isPlain, token);
-    let icon = <MessageOutlined style={{ display: 'block', fontSize: 12 }} />;
-
-    if (c.includes('PHONE') || c.includes('电话')) {
-      icon = <PhoneOutlined style={{ display: 'block', fontSize: 12 }} />;
-    } else if (c.includes('MEETING') || c.includes('拜访') || c.includes('现场')) {
-      icon = <UserOutlined style={{ display: 'block', fontSize: 12 }} />;
-    } else if (c.includes('EMAIL') || c.includes('邮件')) {
-      icon = <MailOutlined style={{ display: 'block', fontSize: 12 }} />;
-    } else if (c.includes('WECHAT') || c.includes('微信') || c.includes('IM') || c.includes('沟通')) {
-      icon = <WechatOutlined style={{ display: 'block', fontSize: 12 }} />;
-    }
-
-    return (
-      <div
-        style={{
-          backgroundColor: bg,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: 24,
-          height: 24,
-          minWidth: 24,
-          maxWidth: 24,
-          borderRadius: '50%',
-          color: fg,
-          flexShrink: 0,
-          ...(isPlain ? { border: `1px solid ${token.colorPrimaryBorder}` } : {}),
-        }}
-      >
-        {icon}
-      </div>
-    );
-  };
+  const overdueFollowUpCount = useMemo(
+    () =>
+      pendingFollowUps.filter((item) =>
+        item.next_follow_up_at ? dayjs(item.next_follow_up_at).isBefore(dayjs(), 'day') : false,
+      ).length,
+    [pendingFollowUps],
+  );
 
   const kpis: ModuleKpiDef[] = useMemo(
     () => [
+      {
+        key: 'follow-ups',
+        title: t('app.kuaizhizao.salesDashboard.kpi.pendingFollowUps'),
+        value: pendingFollowUpTotal,
+        subtitle: t('app.kuaizhizao.salesDashboard.kpi.pendingFollowUpsSubtitle'),
+        icon: <CustomerServiceOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        gradient: 'linear-gradient(135deg, #fa8c16 0%, #ffc069 100%)',
+        boxShadow: '0 4px 12px rgba(250, 140, 22, 0.15)',
+        onClick: () => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups'),
+        sideMetrics: [{
+          label: t('app.kuaizhizao.salesDashboard.kpi.overdue'),
+          value: overdueFollowUpCount,
+        }],
+      },
       {
         key: 'quotations',
         title: t('app.kuaizhizao.salesDashboard.kpi.pendingQuotations'),
@@ -403,21 +246,27 @@ const SalesDashboard: React.FC = () => {
         gradient: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
         boxShadow: '0 4px 12px rgba(24, 144, 255, 0.15)',
         onClick: () => navigate('/apps/kuaizhizao/sales-management/quotations'),
-        sideMetrics: [{ label: t('app.kuaizhizao.salesDashboard.kpi.newThisMonth'), value: s?.new_quotations_this_month ?? 0 }],
+        sideMetrics: [{
+          label: t('app.kuaizhizao.salesDashboard.kpi.newThisMonth'),
+          value: s?.new_quotations_this_month ?? 0,
+        }],
       },
       {
         key: 'shipments',
         title: t('app.kuaizhizao.salesDashboard.kpi.pendingShipments'),
         value: s?.pending_shipments ?? 0,
         subtitle:
-          s?.overdue_shipments > 0
-            ? t('app.kuaizhizao.salesDashboard.kpi.overdueShipmentsSubtitle', { count: s.overdue_shipments })
+          (s?.overdue_shipments ?? 0) > 0
+            ? t('app.kuaizhizao.salesDashboard.kpi.overdueShipmentsSubtitle', { count: s?.overdue_shipments })
             : t('app.kuaizhizao.salesDashboard.kpi.allOnTime'),
         icon: <SendOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
         boxShadow: '0 4px 12px rgba(255, 77, 79, 0.15)',
         onClick: () => navigate('/apps/kuaizhizao/sales-management/sales-orders?status=approved'),
-        sideMetrics: [{ label: t('app.kuaizhizao.salesDashboard.kpi.overdue'), value: s?.overdue_shipments ?? 0 }],
+        sideMetrics: [{
+          label: t('app.kuaizhizao.salesDashboard.kpi.overdue'),
+          value: s?.overdue_shipments ?? 0,
+        }],
       },
       {
         key: 'revenue',
@@ -429,7 +278,7 @@ const SalesDashboard: React.FC = () => {
             value={s?.total_amount != null ? Number(s.total_amount) : null}
             prefix=""
             suffix=""
-            style={{ fontSize: 30, fontWeight: 700, color: '#fff' }}
+            style={{ fontSize: 26, fontWeight: 700, color: '#fff' }}
           />
         ),
         icon: <RiseOutlined style={{ fontSize: 24, color: '#fff' }} />,
@@ -445,7 +294,7 @@ const SalesDashboard: React.FC = () => {
         ],
       },
     ],
-    [navigate, s, showMoney, t],
+    [navigate, overdueFollowUpCount, pendingFollowUpTotal, s, showMoney, t],
   );
 
   const moduleShortcuts: ModuleShortcutDef[] = useMemo(
@@ -469,473 +318,315 @@ const SalesDashboard: React.FC = () => {
         path: '/apps/kuaizhizao/sales-management/customer-follow-ups',
       },
       {
-        key: 'customers',
-        title: t('app.kuaizhizao.salesDashboard.shortcut.customers'),
-        icon: <UserOutlined style={{ fontSize: 22, color: '#722ed1' }} />,
-        path: '/apps/master-data/supply-chain/customers',
+        key: 'customer-pool',
+        title: t('app.kuaizhizao.salesDashboard.shortcut.customerPool'),
+        icon: <TeamOutlined style={{ fontSize: 22, color: '#722ed1' }} />,
+        path: '/apps/kuaizhizao/sales-management/customer-pool',
+      },
+      {
+        key: 'shipment',
+        title: t('app.kuaizhizao.salesDashboard.shortcut.shipmentNotice'),
+        icon: <BellOutlined style={{ fontSize: 22, color: '#13c2c2' }} />,
+        path: '/apps/kuaizhizao/sales-management/shipment-notices',
+      },
+      {
+        key: 'contract',
+        title: t('app.kuaizhizao.salesDashboard.shortcut.salesContract'),
+        icon: <FileProtectOutlined style={{ fontSize: 22, color: '#eb2f96' }} />,
+        path: '/apps/kuaizhizao/sales-management/sales-contracts',
       },
     ],
     [t],
   );
 
+  const quotationColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.salesDashboard.colQuotationCode'),
+        dataIndex: 'quotation_code',
+        render: (text: string) => (
+          <a onClick={() => navigate('/apps/kuaizhizao/sales-management/quotations')}>{text}</a>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.salesDashboard.colCustomer'),
+        dataIndex: 'customer_name',
+        ellipsis: true,
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        width: 80,
+        render: (status: string) => {
+          const { text, color } = getStatusDisplay(status);
+          return <Tag color={color}>{text}</Tag>;
+        },
+      },
+    ],
+    [navigate, t],
+  );
+
+  const deliveryColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.salesDashboard.colOrderCode'),
+        dataIndex: 'order_code',
+        width: 110,
+        render: (text: string) => (
+          <a onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-orders')}>{text}</a>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.salesDashboard.colCustomer'),
+        dataIndex: 'customer_name',
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.salesDashboard.colDeliveryDate'),
+        dataIndex: 'delivery_date',
+        width: 88,
+        render: (date: string | null, record: { delivery_date?: string | null }) =>
+          date ? (
+            <span>
+              {formatDateTime(date, 'MM-DD')}
+              {isDeliveryOverdue(record.delivery_date) ? (
+                <Tag color="error" style={{ marginLeft: 4, fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>
+                  {t('app.kuaizhizao.salesDashboard.deliveryOverdue')}
+                </Tag>
+              ) : null}
+            </span>
+          ) : (
+            t('app.kuaizhizao.salesDashboard.deliveryTbd')
+          ),
+      },
+      {
+        title: t('app.kuaizhizao.salesDashboard.deliveryProgress'),
+        dataIndex: 'delivery_progress',
+        width: 72,
+        render: (val: number | null) => `${Number(val ?? 0)}%`,
+      },
+    ],
+    [navigate, t],
+  );
+
+  const renderRankBadge = useCallback(
+    (rank: number) => {
+      const style = resolveModuleRankBadgeStyle(rank, isPlain, token, isDark);
+      return (
+        <span
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: '50%',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: style.background,
+            color: style.color,
+            fontWeight: 700,
+            fontSize: 11,
+            boxShadow: style.boxShadow,
+          }}
+        >
+          {rank}
+        </span>
+      );
+    },
+    [isDark, isPlain, token],
+  );
+
+  const contractPanelLoading = contractAlertsLoading || frameworkLoading;
+  const hasContractContent = contractAlerts.length > 0 || frameworkContracts.length > 0;
 
   return (
-    <UniDashboard className="sales-module-dashboard" style={{ padding: 0, overflow: 'visible' }}>
-      <Spin spinning={summaryLoading && !s}>
-        <Row gutter={[16, 16]}>
-          {/* KPI 区 */}
-          <Col span={24}>
-            <ModuleKpiRow items={kpis} />
-          </Col>
+    <ModuleCenterLayout
+      loading={summaryLoading && !s}
+      kpiRow={<ModuleKpiRow items={kpis} colProps={{ xs: 24, sm: 12, lg: 6 }} />}
+      shortcutRow={
+        <ModuleShortcutGrid
+          items={moduleShortcuts}
+          colProps={{ xs: 12, sm: 8, md: 4, lg: 4 }}
+          fillByItemCount
+        />
+      }
+      actionRow={
+        <ModuleActionMasonry>
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.salesDashboard.todosTitle')}
+            loading={todosLoading}
+            extra={
+              <a onClick={() => navigate('/apps/kuaizhizao/sales-management/shipment-notices')}>
+                {t('app.kuaizhizao.salesDashboard.viewAll')}
+              </a>
+            }
+          >
+            <ModuleTodoList items={todos} emptyText={t('app.kuaizhizao.salesDashboard.noTodos')} />
+          </ModuleActionPanel>
 
-          {/* 快捷功能 */}
-          <Col span={24}>
-            <ModuleShortcutGrid items={moduleShortcuts} />
-          </Col>
-
-          {/* 工作台 Row 1: 任务、交期、 CRM 动态 */}
-          <Col xs={24} lg={8}>
-            <ProCard
-              title={
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <AuditOutlined style={{ color: '#fa8c16' }} />
-                  <span>{t('app.kuaizhizao.salesDashboard.tasksTitle')}</span>
-                </div>
-              }
-              headerBordered
-              style={{ height: '100%', borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
-              styles={{ body: {padding: '10px 12px' } }}
-            >
-              {s?.pending_quotations > 0 && (
-                <div
-                  onClick={() => navigate('/apps/kuaizhizao/sales-management/quotations')}
-                  style={{
-                    background: isPlain ? token.colorPrimaryBg : token.colorWarningBg,
-                    border: `1px solid ${isPlain ? token.colorPrimaryBorder : token.colorWarningBorder}`,
-                    borderRadius: token.borderRadius,
-                    padding: '8px 10px',
-                    marginBottom: 10,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    transition: 'all 0.3s',
-                  }}
-                >
-                  <ExclamationCircleOutlined style={{ color: isPlain ? token.colorPrimary : token.colorWarning, fontSize: 16 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <Text strong style={{ color: isPlain ? token.colorText : token.colorWarningText, fontSize: 12, lineHeight: 1.35 }}>
-                      {t('app.kuaizhizao.salesDashboard.pendingQuotationsAlert')}
-                    </Text>
-                    <div style={{ fontSize: 11, color: isPlain ? token.colorTextSecondary : token.colorWarningText, marginTop: 1, lineHeight: 1.35, opacity: 0.85 }}>
-                      {t('app.kuaizhizao.salesDashboard.pendingQuotationsDetail', { count: s.pending_quotations })}
-                    </div>
-                  </div>
-                  <RightOutlined style={{ color: isPlain ? token.colorPrimary : token.colorWarning, fontSize: 11, flexShrink: 0 }} />
-                </div>
-              )}
-
-              <div style={{ minHeight: 160 }}>
-                {pendingTasksLoading ? (
-                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 140 }}>
-                    <Spin size="small" />
-                  </div>
-                ) : pendingTasks.length === 0 ? (
-                  <Empty description={t('app.kuaizhizao.salesDashboard.noFollowUpToday')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                ) : (
-                  pendingTasks.slice(0, 3).map((item: any) => (
-                    <div key={item.id} style={{
-                      padding: '7px 10px',
-                      borderRadius: token.borderRadiusSM,
-                      background: token.colorFillQuaternary,
-                      border: `1px solid ${token.colorBorderSecondary}`,
-                      marginBottom: 6,
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, flex: 1 }}>
-                          <Badge status="processing" style={{ flexShrink: 0 }} />
-                          <Text strong ellipsis style={{ fontSize: 12, lineHeight: 1.3 }}>{item.customer_name}</Text>
-                        </div>
-                        <Tag color="warning" style={{ margin: 0, fontSize: 10, lineHeight: '18px', padding: '0 5px', flexShrink: 0 }}>
-                          {t('app.kuaizhizao.salesDashboard.pendingFollowUp')}
-                        </Tag>
-                      </div>
-                      <Paragraph
-                        type="secondary"
-                        ellipsis={{ rows: 1 }}
-                        style={{ fontSize: 11, lineHeight: 1.35, marginBottom: 4 }}
-                      >
-                        {item.content || t('app.kuaizhizao.salesDashboard.noFollowUpContent')}
-                      </Paragraph>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
-                        <Text type="secondary" style={{ fontSize: 10, lineHeight: 1.2 }}>
-                          {t('app.kuaizhizao.salesDashboard.plannedFollowUp', {
-                            date: formatDateTime(item.next_follow_up_at, 'YYYY-MM-DD'),
-                          })}
-                        </Text>
-                        <Button
-                          type="link"
-                          size="small"
-                          icon={<PlusOutlined />}
-                          onClick={() => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups')}
-                          style={{ fontSize: 11, height: 20, padding: 0, flexShrink: 0 }}
-                        >
-                          {t('app.kuaizhizao.salesDashboard.goFollowUp')}
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </ProCard>
-          </Col>
-
-          <Col xs={24} lg={8}>
-            <ProCard
-              title={
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <SolutionOutlined style={{ color: '#52c41a' }} />
-                  <span>{t('app.kuaizhizao.salesDashboard.deliveryTrackingTitle')}</span>
-                </div>
-              }
-              headerBordered
-              style={{ height: '100%', borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
-              styles={{ body: {padding: 8 } }}
-              extra={<a onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-orders')}>{t('app.kuaizhizao.salesDashboard.viewAll')}</a>}
-            >
-              <div style={{ height: 250, overflow: 'hidden' }}>
-                {ordersLoading ? (
-                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
-                    <Spin size="small" />
-                  </div>
-                ) : pendingDeliveryOrders.length === 0 ? (
-                  <Empty description={t('app.kuaizhizao.salesDashboard.noPendingDelivery')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                ) : (
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.salesDashboard.followUpTodayTitle')}
+            loading={pendingFollowUpsLoading}
+            extra={
+              <a onClick={() => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups')}>
+                {t('app.kuaizhizao.salesDashboard.viewAll')}
+              </a>
+            }
+          >
+            {pendingFollowUps.length === 0 ? (
+              <ModuleTodoList items={[]} emptyText={t('app.kuaizhizao.salesDashboard.noFollowUpToday')} />
+            ) : (
+              <div className="dashboard-feed-list">
+                {pendingFollowUps.slice(0, 5).map((item) => (
                   <div
-                    ref={deliveryScrollRef}
+                    key={item.id}
                     style={{
-                      height: '100%',
-                      overflowY: pendingDeliveryOrders.length > 4 ? 'hidden' : 'auto',
-                      paddingRight: 2,
+                      padding: '8px 10px',
+                      borderRadius: 6,
+                      marginBottom: 6,
+                      border: `1px solid ${token.colorBorderSecondary}`,
                     }}
                   >
-                    {pendingDeliveryOrders.map(renderDeliveryOrderRow)}
-                    {pendingDeliveryOrders.length > 4 &&
-                      pendingDeliveryOrders.map((record: any) =>
-                        renderDeliveryOrderRow({ ...record, id: `dup-${record.id}` }),
-                      )}
-                  </div>
-                )}
-              </div>
-            </ProCard>
-          </Col>
-
-          <Col xs={24} lg={8}>
-            <ProCard
-              title={
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <CustomerServiceOutlined style={{ color: '#722ed1' }} />
-                  <span>{t('app.kuaizhizao.salesDashboard.recentFollowUpTitle')}</span>
-                </div>
-              }
-              headerBordered
-              style={{ height: '100%', borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
-              styles={{ body: {padding: '10px 12px 8px' } }}
-              extra={<a onClick={() => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups')}>{t('app.kuaizhizao.salesDashboard.viewAll')}</a>}
-            >
-              <div style={{ minHeight: 250, maxHeight: 320, overflowY: 'auto', paddingRight: 2 }}>
-                {followUpsLoading ? (
-                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
-                    <Spin size="small" />
-                  </div>
-                ) : recentFollowUpItems.length === 0 ? (
-                  <Empty description={t('app.kuaizhizao.salesDashboard.noRecentFollowUp')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                ) : (
-                  recentFollowUpItems.slice(0, 5).map((item: any) => (
-                    <div
-                      key={item.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 8,
-                        padding: '7px 0',
-                        borderBottom: `1px solid ${token.colorBorderSecondary}`,
-                      }}
-                    >
-                      {getFollowUpIcon(item.activity_type_code)}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
-                          <Text strong ellipsis style={{ fontSize: 12, lineHeight: 1.3 }}>
-                            {item.customer_name}
-                          </Text>
-                          <Text type="secondary" style={{ fontSize: 10, flexShrink: 0 }}>
-                            {formatDateTime(item.occurred_at || item.created_at, 'MM-DD HH:mm')}
-                          </Text>
-                        </div>
-                        <Paragraph
-                          ellipsis={{ rows: 1 }}
-                          style={{ fontSize: 11, color: token.colorTextSecondary, marginTop: 2, marginBottom: 0, lineHeight: 1.35 }}
-                        >
-                          {item.content || t('app.kuaizhizao.salesDashboard.noFollowUpRecord')}
-                        </Paragraph>
-                      </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                      <Text strong ellipsis style={{ fontSize: 12, flex: 1 }}>
+                        {item.customer_name}
+                      </Text>
+                      <Tag
+                        color={item.next_follow_up_at && dayjs(item.next_follow_up_at).isBefore(dayjs(), 'day') ? 'error' : 'warning'}
+                        style={{ margin: 0, fontSize: 10 }}
+                      >
+                        {t('app.kuaizhizao.salesDashboard.pendingFollowUp')}
+                      </Tag>
                     </div>
-                  ))
-                )}
-              </div>
-            </ProCard>
-          </Col>
-
-          {/* 工作台 Row 2: 业绩走势与排行 */}
-          <Col xs={24} lg={14} style={{ display: 'flex', flexDirection: 'column' }}>
-            <ProCard
-              title={
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <RiseOutlined style={{ color: token.colorPrimary }} />
-                  <span>{t('app.kuaizhizao.salesDashboard.trendTitle')}</span>
-                </div>
-              }
-              headerBordered
-              style={{ flex: 1, height: '100%', borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
-              styles={{ body: {display: 'flex', flexDirection: 'column', flex: 1 } }}
-              extra={
-                <Segmented
-                  options={[
-                    { label: t('app.kuaizhizao.salesDashboard.trendRevenue'), value: 'revenue', disabled: !showMoney },
-                    { label: t('app.kuaizhizao.salesDashboard.trendQuantity'), value: 'quantity' },
-                  ]}
-                  value={trendType}
-                  onChange={(val) => setTrendType(val as any)}
-                  size="small"
-                />
-              }
-            >
-              <div style={{ padding: '8px 0', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                {trendLoading ? (
-                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 280 }}>
-                    <Spin />
-                  </div>
-                ) : (
-                  <Line
-                    data={trendData}
-                    xField="month"
-                    yField={trendType}
-                    height={280}
-                    autoFit
-                    shapeField="smooth"
-                    style={{
-                      stroke: trendChartColor,
-                      lineWidth: 2,
-                    }}
-                    point={{
-                      size: 4,
-                      shape: 'circle',
-                      style: {
-                        fill: token.colorBgContainer,
-                        stroke: trendChartColor,
-                        lineWidth: 2,
-                      },
-                    }}
-                    scale={{
-                      y: {
-                        formatter: (val: any) => {
-                          if (trendType === 'revenue') {
-                            return showMoney
-                              ? t('app.kuaizhizao.salesDashboard.trendRevenueUnit', {
-                                  value: (Number(val) / 10000).toFixed(0),
-                                })
-                              : '***';
-                          }
-                          return t('app.kuaizhizao.salesDashboard.trendOrderUnit', { value: val });
-                        },
-                      },
-                    }}
-                    axis={trendChartAxis}
-                  />
-                )}
-              </div>
-            </ProCard>
-          </Col>
-
-          <Col xs={24} lg={10} style={{ display: 'flex', flexDirection: 'column' }}>
-            <ProCard
-              title={
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <TrophyOutlined style={{ color: '#fa8c16' }} />
-                  <span>{t('app.kuaizhizao.salesDashboard.rankingTitle')}</span>
-                </div>
-              }
-              headerBordered
-              style={{ flex: 1, height: '100%', borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
-              styles={{ body: {display: 'flex', flexDirection: 'column', flex: 1 } }}
-              extra={
-                <Segmented
-                  options={[
-                    { label: t('app.kuaizhizao.salesDashboard.rankProducts'), value: 'products' },
-                    { label: t('app.kuaizhizao.salesDashboard.rankCustomers'), value: 'customers' },
-                  ]}
-                  value={rankType}
-                  onChange={(val) => setRankType(val as any)}
-                  size="small"
-                />
-              }
-            >
-              <div style={{ 
-                padding: '8px 4px', 
-                flex: 1, 
-                display: 'flex', 
-                flexDirection: 'column',
-                justifyContent: (rankType === 'products' ? topProducts.length : topCustomers.length) === 0 ? 'center' : 'flex-start'
-              }}>
-                {rankType === 'products' ? (
-                  topProductsLoading ? (
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 260 }}>
-                      <Spin />
+                    <Paragraph type="secondary" ellipsis={{ rows: 1 }} style={{ fontSize: 11, margin: '4px 0' }}>
+                      {item.content || t('app.kuaizhizao.salesDashboard.noFollowUpContent')}
+                    </Paragraph>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text type="secondary" style={{ fontSize: 10 }}>
+                        {t('app.kuaizhizao.salesDashboard.plannedFollowUp', {
+                          date: formatDateTime(item.next_follow_up_at, 'YYYY-MM-DD'),
+                        })}
+                      </Text>
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<PlusOutlined />}
+                        onClick={() => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups')}
+                        style={{ fontSize: 11, height: 20, padding: 0 }}
+                      >
+                        {t('app.kuaizhizao.salesDashboard.goFollowUp')}
+                      </Button>
                     </div>
-                  ) : topProducts.length === 0 ? (
-                    <Empty description={t('app.kuaizhizao.salesDashboard.noProductRank')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                  ) : (
-                    topProducts.map((item: any, idx: number) => (
-                      <div key={idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 12 }}>
-                        {renderRankBadge(idx + 1)}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <Text strong ellipsis style={{ fontSize: 13 }}>{item.material_name}</Text>
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                              {t('app.kuaizhizao.salesDashboard.piecesUnit', { count: item.quantity.toLocaleString() })}
-                            </Text>
-                          </div>
-                          <Progress
-                            percent={Math.min(100, Math.round((item.quantity / Math.max(...topProducts.map(p => p.quantity || 1))) * 100))}
-                            strokeColor={isPlain ? token.colorPrimary : { '0%': token.colorPrimary, '100%': '#52c41a' }}
-                            showInfo={false}
-                            size={[100, 6]}
-                          />
-                        </div>
-                      </div>
-                    ))
-                  )
-                ) : (
-                  topCustomers.length === 0 ? (
-                    <Empty description={t('app.kuaizhizao.salesDashboard.noCustomerRank')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                  ) : (
-                    topCustomers.map((item: any, idx: number) => (
-                      <div key={idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 12 }}>
-                        {renderRankBadge(idx + 1)}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <Text strong ellipsis style={{ fontSize: 13 }}>{item.name}</Text>
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                              {t('app.kuaizhizao.salesDashboard.orderCountUnit', { count: item.orderCount })} | <AmountDisplay resource={SO} fieldName="amount" value={item.amount} />
-                            </Text>
-                          </div>
-                          <Progress
-                            percent={Math.min(100, Math.round((item.amount / Math.max(...topCustomers.map(c => c.amount || 1))) * 100))}
-                            strokeColor={isPlain ? token.colorPrimary : { '0%': '#722ed1', '100%': '#ff4d4f' }}
-                            showInfo={false}
-                            size={[100, 6]}
-                          />
-                        </div>
-                      </div>
-                    ))
-                  )
-                )}
+                  </div>
+                ))}
               </div>
-            </ProCard>
-          </Col>
-        </Row>
+            )}
+          </ModuleActionPanel>
 
-        <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-          <Col xs={24} lg={12}>
-            <ProCard
-              title={
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <ExclamationCircleOutlined />
-                  <span>{t('app.kuaizhizao.salesDashboard.contractAlertsTitle')}</span>
-                </div>
-              }
-              headerBordered
-              extra={
-                <Button type="link" size="small" onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-contracts')}>
-                  {t('app.kuaizhizao.salesDashboard.viewAll')}
-                </Button>
-              }
-              style={{ borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
-            >
-              {contractAlertsLoading ? (
-                <Spin />
-              ) : contractAlerts.length === 0 ? (
-                <Empty description={t('app.kuaizhizao.salesDashboard.noContractAlerts')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-              ) : (
-                contractAlerts.slice(0, 6).map((item) => (
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.salesDashboard.pendingQuotationsTitle')}
+            loading={quotationsLoading}
+            extra={
+              <a onClick={() => navigate('/apps/kuaizhizao/sales-management/quotations')}>
+                {t('app.kuaizhizao.salesDashboard.viewAll')}
+              </a>
+            }
+          >
+            <Table
+              size="small"
+              dataSource={pendingQuotations.slice(0, 6)}
+              pagination={false}
+              rowKey="id"
+              columns={quotationColumns}
+              locale={{ emptyText: t('app.kuaizhizao.salesDashboard.noPendingQuotations') }}
+            />
+          </ModuleActionPanel>
+
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.salesDashboard.deliveryTrackingTitle')}
+            loading={ordersLoading}
+            extra={
+              <a onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-orders')}>
+                {t('app.kuaizhizao.salesDashboard.viewAll')}
+              </a>
+            }
+          >
+            <Table
+              size="small"
+              dataSource={pendingDeliveryOrders.slice(0, 8)}
+              pagination={false}
+              rowKey="id"
+              columns={deliveryColumns}
+              locale={{ emptyText: t('app.kuaizhizao.salesDashboard.noPendingDelivery') }}
+            />
+          </ModuleActionPanel>
+
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.salesDashboard.recentFollowUpTitle')}
+            loading={followUpsLoading}
+            extra={
+              <a onClick={() => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups')}>
+                {t('app.kuaizhizao.salesDashboard.viewAll')}
+              </a>
+            }
+          >
+            {recentFollowUps.length === 0 ? (
+              <ModuleTodoList items={[]} emptyText={t('app.kuaizhizao.salesDashboard.noRecentFollowUp')} />
+            ) : (
+              <div className="dashboard-feed-list">
+                {recentFollowUps.map((item) => (
                   <div
-                    key={`${item.alert_type}-${item.contract_id}`}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() =>
-                      navigate('/apps/kuaizhizao/sales-management/sales-contracts', {
-                        state: { openContractId: item.contract_id },
-                      })
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        navigate('/apps/kuaizhizao/sales-management/sales-contracts', {
-                          state: { openContractId: item.contract_id },
-                        });
-                      }
-                    }}
+                    key={item.id}
                     style={{
                       display: 'flex',
                       justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '8px 0',
+                      gap: 8,
+                      padding: '6px 0',
                       borderBottom: `1px solid ${token.colorBorderSecondary}`,
-                      cursor: 'pointer',
                     }}
                   >
-                    <div style={{ minWidth: 0 }}>
-                      <Text strong>{item.contract_code}</Text>
-                      <div style={{ fontSize: 12, color: token.colorTextSecondary }}>{item.customer_name}</div>
-                      <Text type={item.severity === 'high' ? 'danger' : 'secondary'} style={{ fontSize: 12 }}>
-                        {item.message}
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <Text strong ellipsis style={{ fontSize: 12, display: 'block' }}>
+                        {item.customer_name}
                       </Text>
+                      <Paragraph
+                        ellipsis={{ rows: 1 }}
+                        style={{ fontSize: 11, margin: '2px 0 0', color: token.colorTextSecondary }}
+                      >
+                        {item.content || t('app.kuaizhizao.salesDashboard.noFollowUpRecord')}
+                      </Paragraph>
                     </div>
-                    <Tag color={item.severity === 'high' ? 'error' : 'warning'}>
-                      {item.alert_type === 'expiry'
-                        ? t('app.kuaizhizao.salesDashboard.alertExpiry')
-                        : item.alert_type === 'low_balance'
-                          ? t('app.kuaizhizao.salesDashboard.alertLowBalance')
-                          : t('app.kuaizhizao.salesDashboard.alertMilestone')}
-                    </Tag>
+                    <Text type="secondary" style={{ fontSize: 10, flexShrink: 0 }}>
+                      {formatDateTime(item.occurred_at || item.created_at, 'MM-DD HH:mm')}
+                    </Text>
                   </div>
-                ))
-              )}
-            </ProCard>
-          </Col>
-          <Col xs={24} lg={12}>
-            <ProCard
-              title={
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <AuditOutlined />
-                  <span>{t('app.kuaizhizao.salesDashboard.frameworkContractsTitle')}</span>
-                </div>
+                ))}
+              </div>
+            )}
+          </ModuleActionPanel>
+
+          {(hasContractContent || contractPanelLoading) && (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.salesDashboard.contractPanelTitle')}
+              loading={contractPanelLoading}
+              extra={
+                <a onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-contracts')}>
+                  {t('app.kuaizhizao.salesDashboard.viewAll')}
+                </a>
               }
-              headerBordered
-              style={{ borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
             >
-              {frameworkLoading ? (
-                <Spin />
-              ) : frameworkContracts.length === 0 ? (
-                <Empty description={t('app.kuaizhizao.salesDashboard.noFrameworkContracts')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              {!hasContractContent ? (
+                <ModuleTodoList items={[]} emptyText={t('app.kuaizhizao.salesDashboard.noContractAlerts')} />
               ) : (
-                frameworkContracts.slice(0, 6).map((item) => {
-                  const pct =
-                    Number(item.total_amount) > 0
-                      ? Math.round((Number(item.released_amount) / Number(item.total_amount)) * 100)
-                      : 0;
-                  return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {contractAlerts.slice(0, 4).map((item) => (
                     <div
-                      key={item.contract_id}
+                      key={`${item.alert_type}-${item.contract_id}`}
                       role="button"
                       tabIndex={0}
                       onClick={() =>
@@ -950,32 +641,171 @@ const SalesDashboard: React.FC = () => {
                           });
                         }
                       }}
-                      style={{ marginBottom: 12, cursor: 'pointer' }}
+                      style={{
+                        padding: '8px 10px',
+                        borderRadius: 6,
+                        border: `1px solid ${token.colorBorderSecondary}`,
+                        cursor: 'pointer',
+                      }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text strong ellipsis>{item.contract_code}</Text>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                        <Text strong>{item.contract_code}</Text>
+                        <Tag color={item.severity === 'high' ? 'error' : 'warning'}>
+                          {item.alert_type === 'expiry'
+                            ? t('app.kuaizhizao.salesDashboard.alertExpiry')
+                            : item.alert_type === 'low_balance'
+                              ? t('app.kuaizhizao.salesDashboard.alertLowBalance')
+                              : t('app.kuaizhizao.salesDashboard.alertMilestone')}
+                        </Tag>
+                      </div>
+                      <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+                        {item.customer_name}
+                      </Text>
+                      <Text type={item.severity === 'high' ? 'danger' : 'secondary'} style={{ fontSize: 12 }}>
+                        {item.message}
+                      </Text>
+                    </div>
+                  ))}
+                  {frameworkContracts.slice(0, 4).map((item) => {
+                    const pct =
+                      Number(item.total_amount) > 0
+                        ? Math.round((Number(item.released_amount) / Number(item.total_amount)) * 100)
+                        : 0;
+                    return (
+                      <div
+                        key={item.contract_id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() =>
+                          navigate('/apps/kuaizhizao/sales-management/sales-contracts', {
+                            state: { openContractId: item.contract_id },
+                          })
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            navigate('/apps/kuaizhizao/sales-management/sales-contracts', {
+                              state: { openContractId: item.contract_id },
+                            });
+                          }
+                        }}
+                        style={{
+                          padding: '8px 10px',
+                          borderRadius: 6,
+                          border: `1px solid ${token.colorBorderSecondary}`,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <Text strong ellipsis>{item.contract_code}</Text>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {t('app.kuaizhizao.salesDashboard.remainingAmount', {
+                              amount: Number(item.remaining_amount).toLocaleString(),
+                            })}
+                          </Text>
+                        </div>
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                          {t('app.kuaizhizao.salesDashboard.remainingAmount', {
-                            amount: Number(item.remaining_amount).toLocaleString(),
-                          })}
+                          {item.customer_name}
+                        </Text>
+                        <Progress percent={pct} size="small" style={{ marginTop: 4 }} />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </ModuleActionPanel>
+          )}
+
+          <ModuleChartPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.salesDashboard.trendTitle')}
+            loading={trendLoading}
+            segmented={{
+              value: trendType,
+              options: [
+                ...(showMoney
+                  ? [{ label: t('app.kuaizhizao.salesDashboard.trendRevenue'), value: 'revenue' }]
+                  : []),
+                { label: t('app.kuaizhizao.salesDashboard.trendQuantity'), value: 'quantity' },
+              ],
+              onChange: (v) => setTrendType(v as 'revenue' | 'quantity'),
+            }}
+          >
+            <ModuleTrendLine
+                data={trendData}
+                xField="month"
+                yField={trendType}
+                height={260}
+                autoFit
+                style={{ stroke: isPlain || trendType === 'revenue' ? '#1890ff' : '#52c41a', lineWidth: 2 }}
+              />
+          </ModuleChartPanel>
+
+          <ModuleChartPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.salesDashboard.rankingTitle')}
+            loading={topProductsLoading}
+            segmented={{
+              value: rankType,
+              options: [
+                { label: t('app.kuaizhizao.salesDashboard.rankProducts'), value: 'products' },
+                { label: t('app.kuaizhizao.salesDashboard.rankCustomers'), value: 'customers' },
+              ],
+              onChange: (v) => setRankType(v as 'products' | 'customers'),
+            }}
+          >
+            <div style={{ padding: '4px 0' }}>
+              {rankType === 'products' ? (
+                topProducts.length === 0 ? (
+                  <ModuleTodoList items={[]} emptyText={t('app.kuaizhizao.salesDashboard.noProductRank')} />
+                ) : (
+                  topProducts.map((item, idx) => (
+                    <div key={item.material_name} style={{ display: 'flex', alignItems: 'center', marginBottom: 14, gap: 12 }}>
+                      {renderRankBadge(idx + 1)}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <Text strong ellipsis style={{ fontSize: 13 }}>{item.material_name}</Text>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {t('app.kuaizhizao.salesDashboard.piecesUnit', { count: item.quantity })}
+                          </Text>
+                        </div>
+                        <Progress
+                          percent={Math.min(100, Math.round((item.quantity / Math.max(...topProducts.map((p) => p.quantity || 1))) * 100))}
+                          showInfo={false}
+                          size={[100, 6]}
+                        />
+                      </div>
+                    </div>
+                  ))
+                )
+              ) : topCustomers.length === 0 ? (
+                <ModuleTodoList items={[]} emptyText={t('app.kuaizhizao.salesDashboard.noCustomerRank')} />
+              ) : (
+                topCustomers.map((item, idx) => (
+                  <div key={item.name} style={{ display: 'flex', alignItems: 'center', marginBottom: 14, gap: 12 }}>
+                    {renderRankBadge(idx + 1)}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text strong ellipsis style={{ fontSize: 13 }}>{item.name}</Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {t('app.kuaizhizao.salesDashboard.orderCountUnit', { count: item.orderCount })}
+                          {' | '}
+                          <AmountDisplay resource={SO} fieldName="amount" value={item.amount} />
                         </Text>
                       </div>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {item.customer_name}
-                        {item.valid_to
-                          ? t('app.kuaizhizao.salesDashboard.validUntil', { date: item.valid_to })
-                          : ''}
-                      </Text>
-                      <Progress percent={pct} size="small" style={{ marginTop: 4 }} />
+                      <Progress
+                        percent={Math.min(100, Math.round((item.amount / Math.max(...topCustomers.map((c) => c.amount || 1))) * 100))}
+                        showInfo={false}
+                        size={[100, 6]}
+                      />
                     </div>
-                  );
-                })
+                  </div>
+                ))
               )}
-            </ProCard>
-          </Col>
-        </Row>
-      </Spin>
-    </UniDashboard>
+            </div>
+          </ModuleChartPanel>
+        </ModuleActionMasonry>
+      }
+    />
   );
 };
 

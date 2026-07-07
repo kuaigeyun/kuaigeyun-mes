@@ -1,23 +1,41 @@
 /**
  * 右下角悬浮按钮
  *
- * 展示系统迭代提示、版本信息及意见反馈入口。
+ * 展示系统迭代提示、版本信息、构建来源及意见反馈入口。
  * 是否显示由平台设置 float_button_enabled 控制。
- * 时间按系统设置的时区统一格式化显示。
  */
 
 import React, { useState, useMemo } from 'react';
-import { FloatButton, Modal, Typography, Spin } from 'antd';
+import { Alert, FloatButton, Modal, Tag, Typography, Spin } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { getPlatformSettingsPublic, getPlatformVersion, type PlatformVersion } from '../../services/platformSettings';
+import {
+  getPlatformSettingsPublic,
+  getPlatformVersion,
+  getBuildProvenance,
+  getTelemetryDisclosureUrl,
+  type BuildProvenanceStatus,
+} from '../../services/platformSettings';
 import { useConfigStore } from '../../stores/configStore';
 import { formatTimeInTimezone } from '../../utils/formatTimeInTimezone';
 
 const { Paragraph, Link } = Typography;
 
 const GIT_REPO_URL = 'https://gitee.com/kuaigeyun/kuaigeyun';
+const OFFICIAL_SITE = 'https://kuaigeyun.com';
+
+const UNVERIFIED_STATUSES: BuildProvenanceStatus[] = [
+  'unverified_commit',
+  'unverified_build',
+];
+
+function provenanceTagColor(status: BuildProvenanceStatus): string {
+  if (status === 'official_self_hosted') return 'success';
+  if (status === 'official_unknown_commit') return 'processing';
+  if (UNVERIFIED_STATUSES.includes(status)) return 'warning';
+  return 'default';
+}
 
 export default function IterationFloatButton() {
   const { t } = useTranslation();
@@ -42,16 +60,27 @@ export default function IterationFloatButton() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: provenance, isLoading: provenanceLoading } = useQuery({
+    queryKey: ['buildProvenance'],
+    queryFn: getBuildProvenance,
+    enabled: visible,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const handleOpen = () => setVisible(true);
 
   const buildTimeDisplay = useMemo(
-    () => formatTimeInTimezone(version?.build_time, displayTimezone),
-    [version?.build_time, displayTimezone]
+    () => formatTimeInTimezone(version?.build_time || provenance?.build_time, displayTimezone),
+    [version?.build_time, provenance?.build_time, displayTimezone]
   );
   const gitTimeDisplay = useMemo(
     () => formatTimeInTimezone(version?.git_latest_commit_time, displayTimezone),
     [version?.git_latest_commit_time, displayTimezone]
   );
+
+  const status = provenance?.status ?? 'unknown';
+  const showUnverifiedAlert = UNVERIFIED_STATUSES.includes(status as BuildProvenanceStatus);
+  const loading = versionLoading || provenanceLoading;
 
   if (!enabled) return null;
 
@@ -72,7 +101,7 @@ export default function IterationFloatButton() {
         width={440}
         destroyOnHidden
       >
-        <Spin spinning={versionLoading}>
+        <Spin spinning={loading}>
           <div style={{ marginBottom: 20 }}>
             <Paragraph style={{ marginBottom: 12, color: 'rgba(0,0,0,0.85)' }}>
               {t('components.iterationFloatButton.iterationNotice')}
@@ -83,6 +112,12 @@ export default function IterationFloatButton() {
             <Paragraph type="secondary" style={{ marginBottom: 4, fontSize: 13 }}>
               {t('components.iterationFloatButton.gitLatestTime')}: {gitTimeDisplay}
             </Paragraph>
+            {(provenance?.git_commit || version?.git_commit) && (
+              <Paragraph type="secondary" style={{ marginBottom: 4, fontSize: 13 }}>
+                {t('components.iterationFloatButton.gitCommit')}:{' '}
+                {provenance?.git_commit || version?.git_commit}
+              </Paragraph>
+            )}
             <Link
               style={{ fontSize: 13 }}
               onClick={() => window.open(version?.git_repo_url || GIT_REPO_URL, '_blank')}
@@ -90,6 +125,42 @@ export default function IterationFloatButton() {
               {t('components.iterationFloatButton.viewRepo')}
             </Link>
           </div>
+
+          {provenance && (
+            <div style={{ marginBottom: 20 }}>
+              <Paragraph strong style={{ marginBottom: 8, fontSize: 13 }}>
+                {t('components.iterationFloatButton.provenanceTitle')}
+              </Paragraph>
+              <Tag color={provenanceTagColor(status as BuildProvenanceStatus)}>
+                {t(`components.iterationFloatButton.provenanceStatus.${status}`)}
+              </Tag>
+              {provenance.build_git_remote && (
+                <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 4, fontSize: 12 }}>
+                  {provenance.build_git_remote_is_official
+                    ? t('components.iterationFloatButton.officialRemote')
+                    : provenance.build_git_remote}
+                </Paragraph>
+              )}
+              {showUnverifiedAlert && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginTop: 8 }}
+                  message={t('components.iterationFloatButton.unverifiedAlert')}
+                  description={
+                    <Link onClick={() => window.open(provenance.official_site || OFFICIAL_SITE, '_blank')}>
+                      {t('components.iterationFloatButton.viewOfficialSite')}
+                    </Link>
+                  }
+                />
+              )}
+              <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 11 }}>
+                <Link href={getTelemetryDisclosureUrl(provenance.telemetry_disclosure_path)} target="_blank">
+                  {t('components.iterationFloatButton.telemetryDisclosure')}
+                </Link>
+              </Paragraph>
+            </div>
+          )}
 
           <div style={{ borderTop: '1px solid var(--river-divider-color)', paddingTop: 16 }}>
             <Paragraph strong style={{ marginBottom: 12 }}>

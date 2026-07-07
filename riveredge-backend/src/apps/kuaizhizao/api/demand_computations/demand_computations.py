@@ -608,6 +608,10 @@ async def get_push_preview(
     production: Optional[str] = Query(None, description="生产路径：work_order"),
     purchase: Optional[str] = Query(None, description="采购路径：requisition|purchase_order"),
     outsource_only: bool = Query(False, description="仅委外工单预览"),
+    generate_mode: Optional[str] = Query(
+        None,
+        description="生成粒度：work_order_only=仅工单（与工单上拉一致）",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -624,6 +628,7 @@ async def get_push_preview(
             tenant_id=tenant_id,
             computation_id=computation_id,
             push_config=push_config if push_config else None,
+            generate_mode=generate_mode,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

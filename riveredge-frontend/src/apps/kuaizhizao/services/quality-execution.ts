@@ -3,6 +3,7 @@
  */
 
 import { apiRequest } from '../../../services/api';
+import type { PushPreviewResponse } from './sales-order';
 
 /** 检验统计（用于指标卡片） */
 export interface InspectionStatistics {
@@ -154,6 +155,24 @@ export const qualityApi = {
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/push-to-purchase-return`, { method: 'POST' }),
     previewPushToPurchaseReturn: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/push-to-purchase-return/preview`, { method: 'GET' }),
+    listPurchaseReceiptPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+      apiRequest<{ data: Array<Record<string, unknown>>; total: number; success: boolean }>(
+        '/apps/kuaizhizao/incoming-inspections/pull-candidates/purchase-receipts',
+        { method: 'GET', params },
+      ),
+    listCustomerMaterialPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+      apiRequest<{ data: Array<Record<string, unknown>>; total: number; success: boolean }>(
+        '/apps/kuaizhizao/incoming-inspections/pull-candidates/customer-material-registrations',
+        { method: 'GET', params },
+      ),
+    previewPullFromPurchaseReceipt: async (purchaseReceiptId: string) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/from-purchase-receipt/${purchaseReceiptId}/pull-preview`, {
+        method: 'GET',
+      }),
+    previewPullFromCustomerMaterial: async (registrationId: string) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/from-customer-material/${registrationId}/pull-preview`, {
+        method: 'GET',
+      }),
     createFromPurchaseReceipt: async (purchaseReceiptId: string) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/from-purchase-receipt/${purchaseReceiptId}`, { method: 'POST' }),
     ensureForPurchaseReceipt: async (purchaseReceiptId: string) =>
@@ -192,6 +211,15 @@ export const qualityApi = {
         `/apps/kuaizhizao/process-inspections/from-work-order?work_order_id=${workOrderId}&operation_id=${operationId}`,
         { method: 'POST' }
       ),
+    listWorkOrderPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+      apiRequest<{ data: Array<Record<string, unknown>>; total: number; success: boolean }>(
+        '/apps/kuaizhizao/process-inspections/pull-candidates/work-orders',
+        { method: 'GET', params },
+      ),
+    previewPullFromWorkOrder: async (workOrderId: string) =>
+      apiRequest(`/apps/kuaizhizao/process-inspections/from-work-order/${workOrderId}/pull-preview`, {
+        method: 'GET',
+      }),
     createDefect: async (inspectionId: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/process-inspections/${inspectionId}/create-defect`, { method: 'POST', data }),
     import: async (data: any[][]) =>
@@ -212,8 +240,25 @@ export const qualityApi = {
       apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/conduct`, { method: 'POST', data }),
     approve: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/approve`, { method: 'POST', data }),
-    pushToRework: async (id: string) =>
-      apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/push-to-rework`, { method: 'POST' }),
+    pushToRework: async (id: string, data?: { quantity?: number }) =>
+      apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/push-to-rework`, {
+        method: 'POST',
+        data: data?.quantity != null ? { quantity: data.quantity } : undefined,
+      }),
+    previewPushToRework: async (id: string) =>
+      apiRequest<PushPreviewResponse>(
+        `/apps/kuaizhizao/finished-goods-inspections/${id}/push-to-rework/preview`,
+        { method: 'GET' },
+      ),
+    listWorkOrderPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+      apiRequest<{ data: Array<Record<string, unknown>>; total: number; success: boolean }>(
+        '/apps/kuaizhizao/finished-goods-inspections/pull-candidates/work-orders',
+        { method: 'GET', params },
+      ),
+    previewPullFromWorkOrder: async (workOrderId: string) =>
+      apiRequest(`/apps/kuaizhizao/finished-goods-inspections/from-work-order/${workOrderId}/pull-preview`, {
+        method: 'GET',
+      }),
     certificate: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/certificate`, { method: 'POST', data }),
     createFromWorkOrder: async (workOrderId: string) =>

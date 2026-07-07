@@ -65,7 +65,7 @@ export function resolveModuleKpiVisual(
       card: {
         background: vividGradient,
         boxShadow: vividBoxShadow ?? '0 4px 12px rgba(0, 0, 0, 0.08)',
-        border: 'none',
+        border: `1px solid ${token.colorBorderSecondary}`,
       },
       titleColor: 'rgba(255, 255, 255, 0.9)',
       valueColor: '#fff',

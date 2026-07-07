@@ -4,7 +4,7 @@
 
 import React, { useEffect, useMemo } from 'react';
 import { Empty } from 'antd';
-import { Gantt, Willow } from '@svar-ui/react-gantt';
+import { Gantt, Willow, WillowDark } from '@svar-ui/react-gantt';
 import '@svar-ui/react-gantt/all.css';
 import '../../kuaizhizao/components/gantt-scrollbar.less';
 import dayjs from 'dayjs';
@@ -12,6 +12,7 @@ import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { ensureGanttIconsCssLoaded } from '../../../utils/loadGanttIconsCss';
 import { formatDateTime } from '../../../utils/format';
+import { useThemeStore } from '../../../stores/themeStore';
 
 export interface RdProjectGanttItem {
   id: number;
@@ -75,8 +76,19 @@ interface RdProjectGanttChartProps {
   items: RdProjectGanttItem[];
 }
 
+/** 与 @svar-ui/react-gantt 默认行高、三行时间刻度对齐，用于看板卡片自适应高度 */
+const RD_GANTT_CELL_HEIGHT = 36;
+const RD_GANTT_SCALE_HEIGHT = 28;
+const RD_GANTT_SCALE_ROWS = 3;
+
+function rdGanttContentHeight(rowCount: number): number {
+  return RD_GANTT_SCALE_ROWS * RD_GANTT_SCALE_HEIGHT + rowCount * RD_GANTT_CELL_HEIGHT;
+}
+
 const RdProjectGanttChart: React.FC<RdProjectGanttChartProps> = ({ items }) => {
   const { t } = useTranslation();
+  const isDark = useThemeStore((s) => s.resolved.isDark);
+  const GanttTheme = isDark ? WillowDark : Willow;
 
   useEffect(() => {
     ensureGanttIconsCssLoaded();
@@ -115,12 +127,17 @@ const RdProjectGanttChart: React.FC<RdProjectGanttChartProps> = ({ items }) => {
   }, [tasks]);
 
   if (tasks.length === 0) {
-    return <Empty description={t('app.kuaiplm.gantt.empty')} />;
+    return <Empty description={t('app.kuaiplm.gantt.empty')} style={{ padding: '32px 16px' }} />;
   }
 
+  const contentHeight = rdGanttContentHeight(tasks.length);
+
   return (
-    <div className="gantt-chart-wrapper" style={{ ['--gantt-max-height' as string]: '520px' }}>
-      <Willow>
+    <div
+      className="gantt-chart-wrapper gantt-chart-wrapper--visual gantt-chart-wrapper--rd-dashboard"
+      style={{ height: contentHeight }}
+    >
+      <GanttTheme>
         <Gantt
           tasks={tasks}
           links={[]}
@@ -130,8 +147,10 @@ const RdProjectGanttChart: React.FC<RdProjectGanttChartProps> = ({ items }) => {
           zoom
           readonly
           columns={columns}
+          cellHeight={RD_GANTT_CELL_HEIGHT}
+          scaleHeight={RD_GANTT_SCALE_HEIGHT}
         />
-      </Willow>
+      </GanttTheme>
     </div>
   );
 };

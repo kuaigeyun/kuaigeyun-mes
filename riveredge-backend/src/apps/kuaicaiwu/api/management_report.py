@@ -7,6 +7,7 @@ from typing import Dict, Any
 from apps.kuaicaiwu.api._kuaicaiwu_route_access import require_kuaicaiwu_module_access
 from core.api.deps.deps import get_current_user
 from apps.kuaicaiwu.services.management_report_service import ManagementReportService
+from apps.kuaicaiwu.services.finance_aggregation_service import FinanceAggregationService
 
 router = APIRouter(
     prefix="/management-report",
@@ -14,12 +15,13 @@ router = APIRouter(
     dependencies=[Depends(require_kuaicaiwu_module_access("cost-report"))],
 )
 service = ManagementReportService()
+aggregation_service = FinanceAggregationService()
 
 @router.get("/finance-summary", summary="Finance center KPI summary")
 async def get_finance_summary(
     current_user: Any = Depends(get_current_user),
 ):
-    """财务中心：待审核收付款、逾期应收应付。"""
+    """财务中心：待审核收付款、逾期应收应付、业财管道摘要。"""
     from apps.kuaicaiwu.models.receivable import Receivable
     from apps.kuaicaiwu.models.payable import Payable
     from apps.kuaicaiwu.models.receipt import Receipt
@@ -30,7 +32,7 @@ async def get_finance_summary(
     tenant_id = current_user.tenant_id
     today = date.today()
 
-    r_pending, p_pending, r_overdue, p_overdue = await asyncio.gather(
+    r_pending, p_pending, r_overdue, p_overdue, pipeline = await asyncio.gather(
         Receipt.filter(tenant_id=tenant_id, status="Draft", deleted_at__isnull=True).count(),
         Payment.filter(tenant_id=tenant_id, status="Draft", deleted_at__isnull=True).count(),
         Receivable.filter(
@@ -45,6 +47,7 @@ async def get_finance_summary(
             due_date__lt=today,
             deleted_at__isnull=True,
         ).count(),
+        aggregation_service.get_pipeline_summary(tenant_id),
     )
 
     return {
@@ -52,6 +55,7 @@ async def get_finance_summary(
         "pending_payments": p_pending,
         "overdue_receivables": r_overdue,
         "overdue_payables": p_overdue,
+        **pipeline,
     }
 
 

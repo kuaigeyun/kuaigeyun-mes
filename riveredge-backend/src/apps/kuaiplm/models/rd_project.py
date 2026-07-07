@@ -9,6 +9,7 @@ from tortoise import fields
 
 from core.models.base import BaseModel
 from apps.kuaiplm.constants.rd_project import (
+    GateMilestoneRole,
     RdDeliverableStatus,
     RdGateStatus,
     RdProjectLinkType,
@@ -36,6 +37,7 @@ class RdProject(BaseModel):
         description="项目类型 RD | DELIVERY",
     )
     source_project_id = fields.IntField(null=True, description="来源研发项目ID")
+    gate_template_id = fields.IntField(null=True, description="阶段门模板ID")
     material_id = fields.IntField(null=True, description="目标物料ID")
     material_code = fields.CharField(max_length=50, null=True, description="目标物料编码")
     material_name = fields.CharField(max_length=200, null=True, description="目标物料名称")
@@ -61,6 +63,7 @@ class RdProject(BaseModel):
             ("status",),
             ("tenant_id", "project_type"),
             ("source_project_id",),
+            ("gate_template_id",),
         ]
 
     class PydanticMeta:
@@ -86,6 +89,12 @@ class RdProjectGate(BaseModel):
     reviewer_name = fields.CharField(max_length=100, null=True, description="评审人姓名")
     review_notes = fields.TextField(null=True, description="评审备注")
     criteria = fields.TextField(null=True, description="通过准则")
+    milestone_role = fields.CharField(
+        max_length=30,
+        default=GateMilestoneRole.NONE.value,
+        null=True,
+        description="里程碑角色 none | spawn_delivery",
+    )
 
     class Meta:
         table = "apps_kuaiplm_rd_project_gates"

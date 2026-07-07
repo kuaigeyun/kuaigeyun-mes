@@ -9,11 +9,15 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
+from apps.kuaicaiwu.services.finance_aggregation_service import FinanceAggregationService
 from core.utils.timezone_utils import to_api_isoformat
 
 
 class DocumentReconciliationService:
     """业财单据对账与链路核对。"""
+
+    def __init__(self) -> None:
+        self._aggregation = FinanceAggregationService()
 
     FINANCE_DOC_TYPES = {
         "receivable",
@@ -119,6 +123,7 @@ class DocumentReconciliationService:
                 })
 
         linked_count = sum(1 for s in steps if s["status"] == "linked")
+        steps = await self._aggregation.enrich_chain_steps(tenant_id, steps)
         return {
             "flow_type": flow,
             "anchor": {"document_type": document_type, "document_id": document_id},
@@ -263,14 +268,23 @@ class DocumentReconciliationService:
             ).all()
             for row in receivables:
                 rel = await self.reconcile_document(tenant_id, "receivable", row.id)
-                items.append({
-                    "doc_type": "receivable",
-                    "doc_id": row.id,
-                    "doc_code": row.receivable_code,
-                    "amount": float(row.total_amount or 0),
-                    "remaining_amount": float(row.remaining_amount or 0),
-                    "finance_related_count": rel["finance_related_count"],
-                })
+                items.append(
+                    self._aggregation.enrich_gap_item(
+                        doc_type="receivable",
+                        total_amount=Decimal(str(row.total_amount or 0)),
+                        settled_amount=Decimal(str(row.received_amount or 0)),
+                        remaining_amount=Decimal(str(row.remaining_amount or 0)),
+                        finance_related_count=int(rel["finance_related_count"]),
+                        base={
+                            "doc_type": "receivable",
+                            "doc_id": row.id,
+                            "doc_code": row.receivable_code,
+                            "amount": float(row.total_amount or 0),
+                            "remaining_amount": float(row.remaining_amount or 0),
+                            "finance_related_count": rel["finance_related_count"],
+                        },
+                    )
+                )
             receipts = await Receipt.filter(
                 tenant_id=tenant_id,
                 customer_id=partner_id,
@@ -280,15 +294,25 @@ class DocumentReconciliationService:
             ).all()
             for row in receipts:
                 rel = await self.reconcile_document(tenant_id, "receipt", row.id)
-                items.append({
-                    "doc_type": "receipt",
-                    "doc_id": row.id,
-                    "doc_code": row.receipt_code,
-                    "amount": float(row.total_amount or 0),
-                    "unsettled_amount": float(row.unsettled_amount or 0),
-                    "settlement_type": getattr(row, "settlement_type", "normal"),
-                    "finance_related_count": rel["finance_related_count"],
-                })
+                unsettled = Decimal(str(row.unsettled_amount or 0))
+                items.append(
+                    self._aggregation.enrich_gap_item(
+                        doc_type="receipt",
+                        total_amount=Decimal(str(row.total_amount or 0)),
+                        settled_amount=Decimal(str(row.settled_amount or 0)),
+                        remaining_amount=unsettled,
+                        finance_related_count=int(rel["finance_related_count"]),
+                        base={
+                            "doc_type": "receipt",
+                            "doc_id": row.id,
+                            "doc_code": row.receipt_code,
+                            "amount": float(row.total_amount or 0),
+                            "unsettled_amount": float(unsettled),
+                            "settlement_type": getattr(row, "settlement_type", "normal"),
+                            "finance_related_count": rel["finance_related_count"],
+                        },
+                    )
+                )
         else:
             payables = await Payable.filter(
                 tenant_id=tenant_id,
@@ -299,14 +323,23 @@ class DocumentReconciliationService:
             ).all()
             for row in payables:
                 rel = await self.reconcile_document(tenant_id, "payable", row.id)
-                items.append({
-                    "doc_type": "payable",
-                    "doc_id": row.id,
-                    "doc_code": row.payable_code,
-                    "amount": float(row.total_amount or 0),
-                    "remaining_amount": float(row.remaining_amount or 0),
-                    "finance_related_count": rel["finance_related_count"],
-                })
+                items.append(
+                    self._aggregation.enrich_gap_item(
+                        doc_type="payable",
+                        total_amount=Decimal(str(row.total_amount or 0)),
+                        settled_amount=Decimal(str(row.paid_amount or 0)),
+                        remaining_amount=Decimal(str(row.remaining_amount or 0)),
+                        finance_related_count=int(rel["finance_related_count"]),
+                        base={
+                            "doc_type": "payable",
+                            "doc_id": row.id,
+                            "doc_code": row.payable_code,
+                            "amount": float(row.total_amount or 0),
+                            "remaining_amount": float(row.remaining_amount or 0),
+                            "finance_related_count": rel["finance_related_count"],
+                        },
+                    )
+                )
             payments = await Payment.filter(
                 tenant_id=tenant_id,
                 supplier_id=partner_id,
@@ -316,27 +349,38 @@ class DocumentReconciliationService:
             ).all()
             for row in payments:
                 rel = await self.reconcile_document(tenant_id, "payment", row.id)
-                items.append({
-                    "doc_type": "payment",
-                    "doc_id": row.id,
-                    "doc_code": row.payment_code,
-                    "amount": float(row.total_amount or 0),
-                    "unsettled_amount": float(row.unsettled_amount or 0),
-                    "settlement_type": getattr(row, "settlement_type", "normal"),
-                    "finance_related_count": rel["finance_related_count"],
-                })
+                unsettled = Decimal(str(row.unsettled_amount or 0))
+                items.append(
+                    self._aggregation.enrich_gap_item(
+                        doc_type="payment",
+                        total_amount=Decimal(str(row.total_amount or 0)),
+                        settled_amount=Decimal(str(row.settled_amount or 0)),
+                        remaining_amount=unsettled,
+                        finance_related_count=int(rel["finance_related_count"]),
+                        base={
+                            "doc_type": "payment",
+                            "doc_id": row.id,
+                            "doc_code": row.payment_code,
+                            "amount": float(row.total_amount or 0),
+                            "unsettled_amount": float(unsettled),
+                            "settlement_type": getattr(row, "settlement_type", "normal"),
+                            "finance_related_count": rel["finance_related_count"],
+                        },
+                    )
+                )
 
         if only_gaps:
             items = [i for i in items if self._is_finance_gap(i)]
 
-        open_balance = sum(
-            Decimal(str(i.get("remaining_amount") or i.get("unsettled_amount") or 0))
-            for i in items
-        )
+        open_balance = sum(Decimal(str(i.get("max_push_quantity") or 0)) for i in items)
         return {
             "partner_type": partner_type,
             "partner_id": partner_id,
             "period": {"start": to_api_isoformat(start_date), "end": to_api_isoformat(end_date)},
             "items": items,
+            "gap_count": len(items),
             "open_balance_total": float(open_balance),
         }
+
+    async def get_pipeline_summary(self, tenant_id: int) -> Dict[str, Any]:
+        return await self._aggregation.get_pipeline_summary(tenant_id)

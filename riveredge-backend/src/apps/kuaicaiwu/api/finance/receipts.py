@@ -3,8 +3,9 @@
 """
 
 import uuid
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from decimal import Decimal
+from typing import Optional, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
 from datetime import date, datetime
 from loguru import logger
 
@@ -14,13 +15,16 @@ from apps.kuaicaiwu.schemas.finance import (
 )
 from apps.kuaicaiwu.models.receipt import Receipt
 from apps.kuaicaiwu.services.finance_service import AccountSettlementService
+from apps.kuaicaiwu.services.receipt_pull_service import ReceiptPullService
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
+from infra.exceptions.exceptions import BusinessLogicError
 
 router = APIRouter(prefix="/receipts", tags=["App · Kuaicaiwu · Finance"])
+receipt_pull_service = ReceiptPullService()
 
 
 def _http_exception_with_trace(
@@ -70,28 +74,56 @@ async def create_receipt(
     tenant_id: int = Depends(get_current_tenant)
 ):
     """创建收款单"""
-    today = datetime.now().strftime("%Y%m%d")
-    count = await Receipt.filter(tenant_id=tenant_id).count()
-    code = f"SK{today}{count + 1:04d}"
-    receipt = await Receipt.create(
-        tenant_id=tenant_id,
-        receipt_code=code,
-        customer_id=data.customer_id,
-        customer_name=data.customer_name,
-        total_amount=data.total_amount,
-        settled_amount=0,
-        unsettled_amount=data.total_amount,
-        receipt_date=data.receipt_date,
-        payment_method=data.payment_method,
-        bank_account=data.bank_account,
-        bank_account_id=data.bank_account_id,
-        settlement_type=data.settlement_type or "normal",
-        status="Draft",
-        notes=data.notes,
-        attachments=data.attachments,
-        created_by=current_user.id,
-    )
-    return await _serialize(tenant_id, current_user.id, receipt)
+    try:
+        pull_preview: Optional[Dict[str, Any]] = None
+        if data.source_type and data.source_id:
+            pull_preview = await receipt_pull_service.assert_pull_create_allowed(
+                tenant_id=tenant_id,
+                source_type=str(data.source_type).strip(),
+                source_id=int(data.source_id),
+                total_amount=Decimal(data.total_amount),
+            )
+
+        today = datetime.now().strftime("%Y%m%d")
+        count = await Receipt.filter(tenant_id=tenant_id).count()
+        code = f"SK{today}{count + 1:04d}"
+        customer_id = data.customer_id
+        customer_name = data.customer_name
+        if pull_preview:
+            customer_id = int(pull_preview.get("customer_id") or customer_id)
+            customer_name = str(pull_preview.get("customer_name") or customer_name or "")
+
+        receipt = await Receipt.create(
+            tenant_id=tenant_id,
+            receipt_code=code,
+            customer_id=customer_id,
+            customer_name=customer_name,
+            total_amount=data.total_amount,
+            settled_amount=0,
+            unsettled_amount=data.total_amount,
+            receipt_date=data.receipt_date,
+            payment_method=data.payment_method,
+            bank_account=data.bank_account,
+            bank_account_id=data.bank_account_id,
+            settlement_type=data.settlement_type or "normal",
+            status="Draft",
+            notes=data.notes,
+            attachments=data.attachments,
+            created_by=current_user.id,
+        )
+        if pull_preview and data.source_type and data.source_id:
+            await receipt_pull_service.create_pull_relation(
+                tenant_id=tenant_id,
+                source_type=str(data.source_type).strip(),
+                source_id=int(data.source_id),
+                source_code=str(pull_preview.get("source_code") or ""),
+                receipt_id=int(receipt.id),
+                receipt_code=str(receipt.receipt_code),
+                created_by=current_user.id,
+            )
+        return await _serialize(tenant_id, current_user.id, receipt)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(422, str(e), "/receipts", tenant_id) from e
 
 
 @router.get("", response_model=ReceiptVoucherListResponse)
@@ -140,6 +172,40 @@ async def list_receipts(
     return ReceiptVoucherListResponse(
         items=serialized,
         total=total, skip=skip, limit=limit
+    )
+
+
+@router.get(
+    "/pull-candidates/receivables",
+    summary="List receivable pull candidates for receipt",
+)
+async def list_receipt_receivable_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receipt:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await receipt_pull_service.list_receivable_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/from-receivable/{receivable_id}/pull-preview",
+    summary="Preview pull receipt from receivable",
+)
+async def preview_pull_receipt_from_receivable(
+    receivable_id: int = Path(..., description="应收单ID"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receipt:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await receipt_pull_service.preview_pull_from_receivable(
+        tenant_id=tenant_id,
+        receivable_id=receivable_id,
     )
 
 

@@ -162,6 +162,7 @@ TORTOISE_ORM = {
                 "infra.models.saved_search",  # 保存搜索条件模型
                 "infra.models.industry_template",  # 行业模板模型
                 "infra.models.platform_settings",  # 平台设置模型
+                "infra.models.install_registration",  # 可选实例安装登记
                 # 系统级模型（core）
                 "core.models.role",
                 "core.models.permission",
@@ -289,6 +290,7 @@ TORTOISE_ORM = {
                 "apps.kuaicaiwu.models.standard_cost",  # 标准成本
                 # 快研发 kuaiplm
                 "apps.kuaiplm.models.rd_project",
+                "apps.kuaiplm.models.gate_template",
                 "apps.kuaiplm.models.knowledge_base",
                 "apps.kuaiplm.models.phase2",
                 "apps.kuaizhizao.models.sales_forecast",  # 销售预测模型

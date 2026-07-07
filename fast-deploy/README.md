@@ -26,6 +26,8 @@ cd riveredge
 
 子命令 `check / install / configure / migrate / build / start / stop / status / update` 可用于单步操作。
 
+`update` / 向导安装会在 `riveredge-backend/.env` 写入发版元数据（`GIT_SHA`、`INSTALL_INSTANCE_ID`、`BUILD_GIT_REMOTE` 等），供构建来源展示与可选实例统计。详见 [`docs/telemetry-disclosure.md`](../docs/telemetry-disclosure.md)；关闭登记：`INSTALL_TELEMETRY_ENABLED=false`。
+
 ## 脚本对照
 
 | 场景 | 命令 |

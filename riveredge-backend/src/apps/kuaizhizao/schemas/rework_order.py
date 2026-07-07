@@ -24,6 +24,7 @@ class ReworkOrderBase(BaseModel):
     code: Optional[str] = Field(None, description="返工单编码（可选，创建时自动生成）")
     original_work_order_id: Optional[int] = Field(None, description="原工单ID（关联WorkOrder）")
     original_work_order_uuid: Optional[str] = Field(None, max_length=36, description="原工单UUID")
+    original_work_order_code: Optional[str] = Field(None, max_length=50, description="原工单号（展示用，关联查询）")
     
     # 产品信息
     product_id: int = Field(..., description="产品ID（关联物料）")
@@ -151,6 +152,7 @@ class ReworkOrderListResponse(BaseModel):
     code: str
     original_work_order_id: Optional[int]
     original_work_order_uuid: Optional[str]
+    original_work_order_code: Optional[str] = None
     product_id: int
     product_code: str
     product_name: str

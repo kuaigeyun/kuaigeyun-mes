@@ -638,8 +638,10 @@ const RdProjectDetailPage: React.FC = () => {
   const projectId = project.id ?? id;
   const projectType = (project.project_type ?? 'RD') as ProjectType;
   const isRdProject = projectType === 'RD';
-  const releaseGate = gates.find((g) => g.gate_key === 'release');
-  const releasePassed = releaseGate?.status === 'PASSED';
+  const spawnDeliveryGate = gates.find(
+    (g) => g.milestone_role === 'spawn_delivery' || (!g.milestone_role && g.gate_key === 'release'),
+  );
+  const spawnDeliveryPassed = spawnDeliveryGate?.status === 'PASSED';
 
   const collaborationItems = isRdProject
     ? [
@@ -719,7 +721,7 @@ const RdProjectDetailPage: React.FC = () => {
               {t('app.kuaiplm.rdProjects.detail.startConfirmTitle').replace('?', '')}
             </Button>
           ) : null}
-          {isRdProject && releasePassed ? (
+          {isRdProject && spawnDeliveryPassed ? (
             <Button
               type="primary"
               icon={<RocketOutlined />}

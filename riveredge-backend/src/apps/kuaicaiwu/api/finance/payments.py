@@ -3,9 +3,10 @@
 """
 
 import uuid
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from datetime import date
+from decimal import Decimal
+from typing import Optional, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
+from datetime import date, datetime
 from loguru import logger
 
 from apps.kuaicaiwu.schemas.finance import (
@@ -13,15 +14,15 @@ from apps.kuaicaiwu.schemas.finance import (
     PaymentVoucherResponse, PaymentVoucherListResponse,
 )
 from apps.kuaicaiwu.models.payment import Payment
+from apps.kuaicaiwu.services.payment_pull_service import PaymentPullService
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
-from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
-from apps.common.base_service import AppBaseService
-from datetime import datetime
+from infra.exceptions.exceptions import BusinessLogicError
 
 router = APIRouter(prefix="/payments", tags=["App · Kuaicaiwu · Finance"])
+payment_pull_service = PaymentPullService()
 
 
 def _http_exception_with_trace(
@@ -64,29 +65,56 @@ async def create_payment(
     tenant_id: int = Depends(get_current_tenant)
 ):
     """创建付款单"""
-    today = datetime.now().strftime("%Y%m%d")
-    # 生成编号
-    count = await Payment.filter(tenant_id=tenant_id).count()
-    code = f"PK{today}{count + 1:04d}"
-    payment = await Payment.create(
-        tenant_id=tenant_id,
-        payment_code=code,
-        supplier_id=data.supplier_id,
-        supplier_name=data.supplier_name,
-        total_amount=data.total_amount,
-        settled_amount=0,
-        unsettled_amount=data.total_amount,
-        payment_date=data.payment_date,
-        payment_method=data.payment_method,
-        bank_account=data.bank_account,
-        bank_account_id=data.bank_account_id,
-        settlement_type=data.settlement_type or "normal",
-        status="Draft",
-        notes=data.notes,
-        attachments=data.attachments,
-        created_by=current_user.id,
-    )
-    return _serialize(payment)
+    try:
+        pull_preview: Optional[Dict[str, Any]] = None
+        if data.source_type and data.source_id:
+            pull_preview = await payment_pull_service.assert_pull_create_allowed(
+                tenant_id=tenant_id,
+                source_type=str(data.source_type).strip(),
+                source_id=int(data.source_id),
+                total_amount=Decimal(data.total_amount),
+            )
+
+        today = datetime.now().strftime("%Y%m%d")
+        count = await Payment.filter(tenant_id=tenant_id).count()
+        code = f"PK{today}{count + 1:04d}"
+        supplier_id = data.supplier_id
+        supplier_name = data.supplier_name
+        if pull_preview:
+            supplier_id = int(pull_preview.get("supplier_id") or supplier_id)
+            supplier_name = str(pull_preview.get("supplier_name") or supplier_name or "")
+
+        payment = await Payment.create(
+            tenant_id=tenant_id,
+            payment_code=code,
+            supplier_id=supplier_id,
+            supplier_name=supplier_name,
+            total_amount=data.total_amount,
+            settled_amount=0,
+            unsettled_amount=data.total_amount,
+            payment_date=data.payment_date,
+            payment_method=data.payment_method,
+            bank_account=data.bank_account,
+            bank_account_id=data.bank_account_id,
+            settlement_type=data.settlement_type or "normal",
+            status="Draft",
+            notes=data.notes,
+            attachments=data.attachments,
+            created_by=current_user.id,
+        )
+        if pull_preview and data.source_type and data.source_id:
+            await payment_pull_service.create_pull_relation(
+                tenant_id=tenant_id,
+                source_type=str(data.source_type).strip(),
+                source_id=int(data.source_id),
+                source_code=str(pull_preview.get("source_code") or ""),
+                payment_id=int(payment.id),
+                payment_code=str(payment.payment_code),
+                created_by=current_user.id,
+            )
+        return _serialize(payment)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(422, str(e), "/payments", tenant_id) from e
 
 
 @router.get("", response_model=PaymentVoucherListResponse)
@@ -122,6 +150,40 @@ async def list_payments(
     return PaymentVoucherListResponse(
         items=[_serialize(p) for p in items],
         total=total, skip=skip, limit=limit
+    )
+
+
+@router.get(
+    "/pull-candidates/payables",
+    summary="List payable pull candidates for payment",
+)
+async def list_payment_payable_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await payment_pull_service.list_payable_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
+    "/from-payable/{payable_id}/pull-preview",
+    summary="Preview pull payment from payable",
+)
+async def preview_pull_payment_from_payable(
+    payable_id: int = Path(..., description="应付单ID"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await payment_pull_service.preview_pull_from_payable(
+        tenant_id=tenant_id,
+        payable_id=payable_id,
     )
 
 

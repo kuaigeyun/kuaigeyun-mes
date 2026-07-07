@@ -1030,12 +1030,21 @@ set_deploy_env_value() {
 # 须在启动后端前调用，以便新进程加载 PLATFORM_BUILD_TIME / GIT_SHA。
 record_deploy_release_metadata() {
     ensure_env_file
-    local sha build_time
+    local sha build_time install_id remote branch
     sha="$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null | tr -d '[:space:]')"
     build_time="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    remote="$(git -C "$PROJECT_ROOT" remote get-url origin 2>/dev/null | tr -d '[:space:]' || true)"
+    branch="$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null | tr -d '[:space:]' || true)"
+    install_id="$(read_env_value INSTALL_INSTANCE_ID 2>/dev/null || true)"
+    if [ -z "$install_id" ]; then
+        install_id="$(python -c "import uuid; print(uuid.uuid4())" 2>/dev/null || true)"
+        [ -n "$install_id" ] && set_env_value INSTALL_INSTANCE_ID "$install_id"
+    fi
     [ -n "$sha" ] && set_env_value GIT_SHA "$sha"
     set_env_value PLATFORM_BUILD_TIME "$build_time"
-    log_info "发版记录: commit=${sha:-unknown} deploy_time=${build_time}"
+    [ -n "$remote" ] && set_env_value BUILD_GIT_REMOTE "$remote"
+    [ -n "$branch" ] && [ "$branch" != "HEAD" ] && set_env_value BUILD_GIT_BRANCH "$branch"
+    log_info "发版记录: install_id=${install_id:-unknown} commit=${sha:-unknown} remote=${remote:-unknown} branch=${branch:-unknown} deploy_time=${build_time}"
 }
 
 admin_config_complete() {

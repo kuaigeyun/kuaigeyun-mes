@@ -73,14 +73,20 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
     const { containerRef, containerHeight } = useMultiTabPageContainerHeight([activeTabKey, header]);
     const currentTab = tabs.find(tab => tab.key === activeTabKey);
 
+    const tabPanePadding = typeof padding === 'number' ? { padding } : { padding };
     const bodyInner = preserveMounted ? (
         <>
             {tabs.map((tab) => (
                 <div
                     key={tab.key}
+                    className="multi-tab-list-page-tab-pane"
                     style={{
-                        display: tab.key === activeTabKey ? 'block' : 'none',
-                        ...(typeof padding === 'number' ? { padding } : { padding }),
+                        display: tab.key === activeTabKey ? 'flex' : 'none',
+                        flexDirection: 'column',
+                        height: '100%',
+                        minHeight: 0,
+                        boxSizing: 'border-box',
+                        ...tabPanePadding,
                     }}
                 >
                     {tab.children}

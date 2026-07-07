@@ -133,6 +133,7 @@ import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } f
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions'
 import {
   demandComputationBatchRecomputeAllowed,
+  demandComputationCapabilityReasonMessage,
   demandPushCapabilityReasonMessage,
   salesForecastCapabilityReasonMessage,
   salesOrderCapabilityReasonMessage,
@@ -966,8 +967,15 @@ const DemandComputationPage: React.FC = () => {
   /** 下推面板：配置变化时刷新预览 */
   React.useEffect(() => {
     if (!pushPanelRecord || pushPanelLoading) return
-    const params: any = {}
-    if (pushConfig.production) params.production = pushConfig.production
+    const params: {
+      production?: 'work_order'
+      purchase?: 'requisition' | 'purchase_order'
+      generate_mode?: 'work_order_only'
+    } = {}
+    if (pushConfig.production) {
+      params.production = pushConfig.production
+      params.generate_mode = 'work_order_only'
+    }
     if (pushConfig.purchase) params.purchase = pushConfig.purchase
     setPushPreviewLoadError(null)
     getPushPreview(pushPanelRecord.id!, Object.keys(params).length ? params : undefined)
@@ -2649,7 +2657,7 @@ const DemandComputationPage: React.FC = () => {
       <Modal
         open={!!pushPanelRecord}
         title={t('app.kuaizhizao.demandComputation.pushPanelTitle', { code: pushPanelRecord?.computation_code || '' })}
-        width={MODAL_CONFIG.SMALL_WIDTH}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         okText={t('app.kuaizhizao.demandComputation.confirmPush')}
         confirmLoading={pushPanelSubmitting}
         onOk={handlePushPanelConfirm}
@@ -2657,6 +2665,10 @@ const DemandComputationPage: React.FC = () => {
           disabled:
             pushPanelLoading ||
             !!pushPreviewLoadError ||
+            !!pushPreviewData?.has_blocking_issues ||
+            !(pushPreviewData?.items || []).some(
+              (row) => Number(row.max_push_quantity ?? 0) > 0,
+            ) ||
             (pushMode === 'confirm' && (pushPreviewData?.validation_failures?.length ?? 0) > 0),
         }}
         onCancel={() => {
@@ -2713,12 +2725,87 @@ const DemandComputationPage: React.FC = () => {
               </>
             )}
             {pushPreviewData && (
-              <div>
-                <p style={{ marginBottom: 12 }}>{t('app.kuaizhizao.demandComputation.pushWillGenerate')}</p>
-                <ul style={{ marginBottom: 12, paddingLeft: 20 }}>
-                  {(pushPreviewData as any).work_order_group_count > 0 && (
-                    <li>{t('app.kuaizhizao.demandComputation.pushWorkOrderGroups', { count: (pushPreviewData as any).work_order_group_count })}</li>
-                  )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {pushPreviewData.summary ? (
+                  <p style={{ marginBottom: 0, fontWeight: 500 }}>{pushPreviewData.summary}</p>
+                ) : null}
+                {pushPreviewData.has_blocking_issues && pushPreviewData.blocking_reason ? (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message={
+                      demandComputationCapabilityReasonMessage(
+                        pushPreviewData.blocking_reason,
+                        t,
+                      ) || pushPreviewData.blocking_reason
+                    }
+                  />
+                ) : null}
+                {(pushPreviewData.items?.length ?? 0) > 0 ? (
+                  <Table
+                    size="small"
+                    dataSource={pushPreviewData.items}
+                    rowKey={(row) => `${row.item_id}-${row.target_document ?? 'line'}`}
+                    pagination={false}
+                    scroll={{ x: 1000 }}
+                    columns={[
+                      {
+                        title: t('app.kuaizhizao.salesOrder.materialCode'),
+                        dataIndex: 'material_code',
+                        width: 130,
+                        ellipsis: true,
+                      },
+                      {
+                        title: t('app.kuaizhizao.salesOrder.materialName'),
+                        dataIndex: 'material_name',
+                        width: 160,
+                        ellipsis: true,
+                      },
+                      {
+                        title: t('app.kuaizhizao.demandComputation.pushPreviewColTarget'),
+                        dataIndex: 'target_document',
+                        width: 110,
+                        render: (v: string) => {
+                          if (v === 'outsource_work_order') {
+                            return t('app.kuaizhizao.workOrder.computationPullPreviewTargetOutsource')
+                          }
+                          if (v === 'purchase_requisition') {
+                            return t('app.kuaizhizao.demandComputation.pushPreviewTargetPurchaseRequisition')
+                          }
+                          if (v === 'purchase_order') {
+                            return t('app.kuaizhizao.demandComputation.pushPreviewTargetPurchaseOrder')
+                          }
+                          return t('app.kuaizhizao.workOrder.computationPullPreviewTargetWorkOrder')
+                        },
+                      },
+                      {
+                        title: t('app.kuaizhizao.salesOrder.quantity'),
+                        dataIndex: 'quantity',
+                        width: 90,
+                        align: 'right',
+                      },
+                      {
+                        title: t('app.kuaizhizao.salesOrder.colPushedQty'),
+                        dataIndex: 'pushed_quantity',
+                        width: 90,
+                        align: 'right',
+                      },
+                      {
+                        title: t('app.kuaizhizao.salesOrder.colPushableQty'),
+                        dataIndex: 'max_push_quantity',
+                        width: 90,
+                        align: 'right',
+                      },
+                    ]}
+                  />
+                ) : (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={t('app.kuaizhizao.demandComputation.pushPreviewNoLines')}
+                  />
+                )}
+                <p style={{ marginBottom: 0 }}>{t('app.kuaizhizao.demandComputation.pushWillGenerate')}</p>
+                <ul style={{ margin: 0, paddingLeft: 20 }}>
                   {pushPreviewData.work_order_count > 0 && (
                     <li>{t('app.kuaizhizao.demandComputation.pushWorkOrders', { count: pushPreviewData.work_order_count })}</li>
                   )}
@@ -2736,17 +2823,24 @@ const DemandComputationPage: React.FC = () => {
                   )}
                 </ul>
                 {pushPreviewData.validation_failures && pushPreviewData.validation_failures.length > 0 && (
-                  <div style={{ marginTop: 12, padding: 12, background: '#fff7e6', borderRadius: 4 }}>
-                    <div style={{ fontWeight: 'bold', marginBottom: 8 }}>{t('app.kuaizhizao.demandComputation.validationFailedMaterials')}</div>
-                    <ul style={{ margin: 0, paddingLeft: 20 }}>
-                      {pushPreviewData.validation_failures.map((v, i) => (
-                        <li key={i}>
-                          {v.material_code} ({v.material_name}): {v.errors.join(', ')}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message={t('app.kuaizhizao.demandComputation.validationFailedMaterials')}
+                    description={
+                      <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
+                        {pushPreviewData.validation_failures.map((v, i) => (
+                          <li key={i}>
+                            {v.material_code} ({v.material_name}): {v.errors.join(', ')}
+                          </li>
+                        ))}
+                      </ul>
+                    }
+                  />
                 )}
+                {pushPreviewData.tip ? (
+                  <p style={{ marginBottom: 0, fontSize: 12, color: '#666' }}>{pushPreviewData.tip}</p>
+                ) : null}
               </div>
             )}
           </div>

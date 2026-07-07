@@ -1,20 +1,24 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import type { ActionType } from '@ant-design/pro-components';
 import { ProColumns } from '@ant-design/pro-components';
-import { Modal, message, Space, InputNumber, Divider, Typography, Row, Col, Alert, Button } from 'antd';
+import { Modal, message, Space, InputNumber, Divider, Typography, Row, Col, Alert, Button, Spin, Table, Empty } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
-import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
-import { settlementService } from '../../../services/finance/settlement';
+import { MultiTabListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { settlementService, type SettlementPreview } from '../../../services/finance/settlement';
 import { receivableService } from '../../../services/finance/receivable';
 import { receiptService } from '../../../services/finance/receipt';
 import { payableService } from '../../../services/finance/payable';
 import { paymentService } from '../../../services/finance/payment';
+import { settlementCapabilityReasonMessage } from '../../../utils/settlementCapabilityMessages';
 
 const P = 'app.kuaicaiwu.settlement';
 const C = 'app.kuaicaiwu.common';
+
+const formatSettleMoney = (value: number) =>
+  `¥${Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const SettlementPage: React.FC = () => {
   const { t } = useTranslation();
@@ -28,15 +32,114 @@ const SettlementPage: React.FC = () => {
   const [selectedPayable, setSelectedPayable] = useState<Record<string, unknown> | null>(null);
   const [selectedPayment, setSelectedPayment] = useState<Record<string, unknown> | null>(null);
   const [settleAmount, setSettleAmount] = useState<number>(0);
+  const [arPreviewLoading, setArPreviewLoading] = useState(false);
+  const [arPreviewData, setArPreviewData] = useState<SettlementPreview | null>(null);
+  const [apPreviewLoading, setApPreviewLoading] = useState(false);
+  const [apPreviewData, setApPreviewData] = useState<SettlementPreview | null>(null);
+  const [settleSubmitting, setSettleSubmitting] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
   const tableOnlyViewTypes = ['table'] as const;
 
+  const arPreviewOpen = !!(selectedReceivable && selectedReceipt);
+  const apPreviewOpen = !!(selectedPayable && selectedPayment);
+  const arMaxSettle = Number(arPreviewData?.max_settle_quantity ?? 0);
+  const apMaxSettle = Number(apPreviewData?.max_settle_quantity ?? 0);
+
+  const resetArSelection = useCallback(() => {
+    setSelectedReceivable(null);
+    setSelectedReceipt(null);
+    setArPreviewData(null);
+    setSettleAmount(0);
+  }, []);
+
+  const resetApSelection = useCallback(() => {
+    setSelectedPayable(null);
+    setSelectedPayment(null);
+    setApPreviewData(null);
+    setSettleAmount(0);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedReceivable?.id || !selectedReceipt?.id) {
+      setArPreviewData(null);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      setArPreviewLoading(true);
+      setArPreviewData(null);
+      try {
+        const data = await settlementService.previewReceivableSettle(
+          Number(selectedReceivable.id),
+          Number(selectedReceipt.id),
+        );
+        if (cancelled) return;
+        setArPreviewData(data);
+        const maxPush = Number(data.max_settle_quantity ?? 0);
+        setSettleAmount(maxPush > 0 ? maxPush : 0);
+      } catch (error: any) {
+        if (!cancelled) {
+          message.error(
+            error?.response?.data?.detail?.message || error?.message || t(`${P}.previewFailed`),
+          );
+          resetArSelection();
+        }
+      } finally {
+        if (!cancelled) setArPreviewLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedReceivable?.id, selectedReceipt?.id, resetArSelection, t]);
+
+  useEffect(() => {
+    if (!selectedPayable?.id || !selectedPayment?.id) {
+      setApPreviewData(null);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      setApPreviewLoading(true);
+      setApPreviewData(null);
+      try {
+        const data = await settlementService.previewPayableSettle(
+          Number(selectedPayable.id),
+          Number(selectedPayment.id),
+        );
+        if (cancelled) return;
+        setApPreviewData(data);
+        const maxPush = Number(data.max_settle_quantity ?? 0);
+        setSettleAmount(maxPush > 0 ? maxPush : 0);
+      } catch (error: any) {
+        if (!cancelled) {
+          message.error(
+            error?.response?.data?.detail?.message || error?.message || t(`${P}.previewFailed`),
+          );
+          resetApSelection();
+        }
+      } finally {
+        if (!cancelled) setApPreviewLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPayable?.id, selectedPayment?.id, resetApSelection, t]);
+
   const handleManualSettleReceivable = async () => {
-    if (!selectedReceivable || !selectedReceipt || settleAmount <= 0) {
+    if (!selectedReceivable || !selectedReceipt || !arPreviewData || arPreviewData.has_blocking_issues) {
       message.error(t(`${P}.invalidAmount`));
       return;
     }
+    if (settleAmount <= 0 || settleAmount > arMaxSettle) {
+      message.error(t(`${P}.pullExceedMax`, { max: arMaxSettle.toFixed(2) }));
+      return;
+    }
+    setSettleSubmitting(true);
     try {
       await settlementService.settleReceivable(
         selectedReceivable.id as number,
@@ -44,20 +147,28 @@ const SettlementPage: React.FC = () => {
         settleAmount,
       );
       message.success(t(`${P}.settleSuccess`));
-      setSelectedReceivable(null);
-      setSelectedReceipt(null);
+      resetArSelection();
       receivableActionRef.current?.reload();
       receiptActionRef.current?.reload();
     } catch (error: any) {
-      message.error(t(`${P}.settleFailed`, { message: error.message }));
+      message.error(
+        error?.response?.data?.detail?.message || error?.message || t(`${P}.settleFailed`, { message: '' }),
+      );
+    } finally {
+      setSettleSubmitting(false);
     }
   };
 
   const handleManualSettlePayable = async () => {
-    if (!selectedPayable || !selectedPayment || settleAmount <= 0) {
+    if (!selectedPayable || !selectedPayment || !apPreviewData || apPreviewData.has_blocking_issues) {
       message.error(t(`${P}.invalidAmount`));
       return;
     }
+    if (settleAmount <= 0 || settleAmount > apMaxSettle) {
+      message.error(t(`${P}.pullExceedMax`, { max: apMaxSettle.toFixed(2) }));
+      return;
+    }
+    setSettleSubmitting(true);
     try {
       await settlementService.settlePayable(
         selectedPayable.id as number,
@@ -65,13 +176,101 @@ const SettlementPage: React.FC = () => {
         settleAmount,
       );
       message.success(t(`${P}.settleSuccess`));
-      setSelectedPayable(null);
-      setSelectedPayment(null);
+      resetApSelection();
       payableActionRef.current?.reload();
       paymentActionRef.current?.reload();
     } catch (error: any) {
-      message.error(t(`${P}.settleFailed`, { message: error.message }));
+      message.error(
+        error?.response?.data?.detail?.message || error?.message || t(`${P}.settleFailed`, { message: '' }),
+      );
+    } finally {
+      setSettleSubmitting(false);
     }
+  };
+
+  const renderPreviewBody = (preview: SettlementPreview | null, loading: boolean, partnerLabel: string) => {
+    if (loading) {
+      return (
+        <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+          <Spin />
+          <div style={{ color: 'var(--ant-color-primary)' }}>{t(`${P}.loadingPreview`)}</div>
+        </div>
+      );
+    }
+    if (!preview) return null;
+    return (
+      <Space orientation="vertical" style={{ width: '100%' }} size={12}>
+        <Typography.Paragraph style={{ marginBottom: 0, fontWeight: 500 }}>{preview.summary}</Typography.Paragraph>
+        {preview.has_blocking_issues && preview.blocking_reason ? (
+          <Alert
+            type="warning"
+            showIcon
+            message={settlementCapabilityReasonMessage(preview.blocking_reason, t)}
+          />
+        ) : null}
+        {preview.items?.length ? (
+          <Table
+            size="small"
+            dataSource={preview.items}
+            rowKey={(row) => `${row.doc_type}-${row.item_id}`}
+            pagination={false}
+            scroll={{ x: 800 }}
+            columns={[
+              {
+                title: t(`${P}.preview.col.docType`),
+                dataIndex: 'doc_type',
+                width: 100,
+                render: (v: string) => t(`${P}.preview.docType.${v}`, { defaultValue: v }),
+              },
+              { title: t(`${C}.code`), dataIndex: 'source_code', width: 140, ellipsis: true },
+              { title: partnerLabel, dataIndex: 'partner_name', width: 160, ellipsis: true },
+              {
+                title: t(`${P}.preview.col.docAmount`),
+                dataIndex: 'quantity',
+                width: 120,
+                align: 'right',
+                render: (v: number) => formatSettleMoney(v),
+              },
+              {
+                title: t(`${P}.preview.col.settledAmount`),
+                dataIndex: 'pushed_quantity',
+                width: 120,
+                align: 'right',
+                render: (v: number) => formatSettleMoney(v),
+              },
+              {
+                title: t(`${P}.preview.col.settleableAmount`),
+                dataIndex: 'max_push_quantity',
+                width: 120,
+                align: 'right',
+                render: (v: number) => formatSettleMoney(v),
+              },
+            ]}
+          />
+        ) : (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.previewNoLines`)} />
+        )}
+        {preview.tip ? (
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            {preview.tip}
+          </Typography.Paragraph>
+        ) : null}
+        {!preview.has_blocking_issues && Number(preview.max_settle_quantity) > 0 ? (
+          <>
+            <Divider style={{ margin: '8px 0' }} />
+            <Typography.Text>{t(`${P}.settleAmount`)}</Typography.Text>
+            <InputNumber
+              style={{ width: '100%' }}
+              value={settleAmount}
+              min={0.01}
+              max={Number(preview.max_settle_quantity)}
+              precision={2}
+              onChange={(val) => setSettleAmount(val || 0)}
+            />
+          </>
+        ) : null}
+      </Space>
+    );
   };
 
   const receivableColumns: ProColumns<Record<string, unknown>>[] = useMemo(
@@ -97,7 +296,9 @@ const SettlementPage: React.FC = () => {
             key="sel"
             onClick={() => {
               setSelectedReceivable(record);
-              setSettleAmount(Number(record.remaining_amount) || 0);
+              setSelectedReceipt(null);
+              setArPreviewData(null);
+              setSettleAmount(0);
             }}
           >
             {t(`${P}.select`)}
@@ -125,10 +326,23 @@ const SettlementPage: React.FC = () => {
         title: t('common.actions'),
         valueType: 'option',
         width: 80,
-        render: (_, record) => [<a key="m" onClick={() => setSelectedReceipt(record)}>{t(`${P}.match`)}</a>],
+        render: (_, record) => [
+          <a
+            key="m"
+            onClick={() => {
+              if (!selectedReceivable) {
+                message.warning(t(`${P}.selectReceivableFirst`));
+                return;
+              }
+              setSelectedReceipt(record);
+            }}
+          >
+            {t(`${P}.match`)}
+          </a>,
+        ],
       },
     ],
-    [t],
+    [t, selectedReceivable],
   );
 
   const payableColumns: ProColumns<Record<string, unknown>>[] = useMemo(
@@ -154,7 +368,9 @@ const SettlementPage: React.FC = () => {
             key="sel"
             onClick={() => {
               setSelectedPayable(record);
-              setSettleAmount(Number(record.remaining_amount) || 0);
+              setSelectedPayment(null);
+              setApPreviewData(null);
+              setSettleAmount(0);
             }}
           >
             {t(`${P}.select`)}
@@ -182,15 +398,36 @@ const SettlementPage: React.FC = () => {
         title: t('common.actions'),
         valueType: 'option',
         width: 80,
-        render: (_, record) => [<a key="m" onClick={() => setSelectedPayment(record)}>{t(`${P}.match`)}</a>],
+        render: (_, record) => [
+          <a
+            key="m"
+            onClick={() => {
+              if (!selectedPayable) {
+                message.warning(t(`${P}.selectPayableFirst`));
+                return;
+              }
+              setSelectedPayment(record);
+            }}
+          >
+            {t(`${P}.match`)}
+          </a>,
+        ],
       },
     ],
-    [t],
+    [t, selectedPayable],
   );
 
   const receivableSettlement = (
     <>
       <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t(`${P}.arAlertExtended`)} />
+      {selectedReceivable ? (
+        <Alert
+          type="success"
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={t(`${P}.selectedReceivable`, { code: String(selectedReceivable.receivable_code ?? '') })}
+        />
+      ) : null}
       <Row gutter={16}>
         <Col span={12}>
           <UniTable
@@ -251,32 +488,22 @@ const SettlementPage: React.FC = () => {
 
       <Modal
         title={t(`${P}.confirmArTitle`)}
-        open={!!(selectedReceivable && selectedReceipt)}
+        open={arPreviewOpen}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onOk={handleManualSettleReceivable}
-        onCancel={() => {
-          setSelectedReceivable(null);
-          setSelectedReceipt(null);
+        onCancel={resetArSelection}
+        confirmLoading={settleSubmitting}
+        okText={t(`${P}.confirmSettle`)}
+        okButtonProps={{
+          disabled:
+            arPreviewLoading ||
+            !arPreviewData ||
+            !!arPreviewData?.has_blocking_issues ||
+            arMaxSettle <= 0 ||
+            settleAmount <= 0,
         }}
       >
-        <Space orientation="vertical" style={{ width: '100%' }}>
-          <p>
-            {t(`${P}.confirmArContent`, {
-              receiptCode: String(selectedReceipt?.receipt_code ?? ''),
-              receivableCode: String(selectedReceivable?.receivable_code ?? ''),
-            })}
-          </p>
-          <Divider />
-          <Typography.Text>{t(`${P}.settleAmount`)}：</Typography.Text>
-          <InputNumber
-            style={{ width: '100%' }}
-            value={settleAmount}
-            onChange={(val) => setSettleAmount(val || 0)}
-            max={Math.min(
-              Number(selectedReceivable?.remaining_amount) || 0,
-              Number(selectedReceipt?.unsettled_amount) || 0,
-            )}
-          />
-        </Space>
+        {renderPreviewBody(arPreviewData, arPreviewLoading, t('app.kuaicaiwu.common.customer'))}
       </Modal>
     </>
   );
@@ -284,6 +511,14 @@ const SettlementPage: React.FC = () => {
   const payableSettlement = (
     <>
       <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t(`${P}.apAlertExtended`)} />
+      {selectedPayable ? (
+        <Alert
+          type="success"
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={t(`${P}.selectedPayable`, { code: String(selectedPayable.payable_code ?? '') })}
+        />
+      ) : null}
       <Row gutter={16}>
         <Col span={12}>
           <UniTable
@@ -344,42 +579,30 @@ const SettlementPage: React.FC = () => {
 
       <Modal
         title={t(`${P}.confirmApTitle`)}
-        open={!!(selectedPayable && selectedPayment)}
+        open={apPreviewOpen}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onOk={handleManualSettlePayable}
-        onCancel={() => {
-          setSelectedPayable(null);
-          setSelectedPayment(null);
+        onCancel={resetApSelection}
+        confirmLoading={settleSubmitting}
+        okText={t(`${P}.confirmSettle`)}
+        okButtonProps={{
+          disabled:
+            apPreviewLoading ||
+            !apPreviewData ||
+            !!apPreviewData?.has_blocking_issues ||
+            apMaxSettle <= 0 ||
+            settleAmount <= 0,
         }}
       >
-        <Space orientation="vertical" style={{ width: '100%' }}>
-          <p>
-            {t(`${P}.confirmApContent`, {
-              paymentCode: String(selectedPayment?.payment_code ?? ''),
-              payableCode: String(selectedPayable?.payable_code ?? ''),
-            })}
-          </p>
-          <Divider />
-          <Typography.Text>{t(`${P}.settleAmount`)}：</Typography.Text>
-          <InputNumber
-            style={{ width: '100%' }}
-            value={settleAmount}
-            onChange={(val) => setSettleAmount(val || 0)}
-            max={Math.min(
-              Number(selectedPayable?.remaining_amount) || 0,
-              Number(selectedPayment?.unsettled_amount) || 0,
-            )}
-          />
-        </Space>
+        {renderPreviewBody(apPreviewData, apPreviewLoading, t('app.kuaicaiwu.common.supplier'))}
       </Modal>
     </>
   );
 
   const handleTabChange = (key: string) => {
     setActiveTab(key);
-    setSelectedReceivable(null);
-    setSelectedReceipt(null);
-    setSelectedPayable(null);
-    setSelectedPayment(null);
+    resetArSelection();
+    resetApSelection();
   };
 
   const tabBarExtraContent = useMemo(

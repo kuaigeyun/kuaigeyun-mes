@@ -168,6 +168,30 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             )
         ]
 
+    async def _load_original_work_order_code_map(
+        self,
+        tenant_id: int,
+        original_work_order_ids: List[int],
+    ) -> dict[int, str]:
+        unique_ids = [wo_id for wo_id in dict.fromkeys(original_work_order_ids) if wo_id]
+        if not unique_ids:
+            return {}
+        rows = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            id__in=unique_ids,
+            deleted_at__isnull=True,
+        ).values("id", "code")
+        return {row["id"]: row["code"] for row in rows}
+
+    @staticmethod
+    def _attach_original_work_order_code(
+        resp: ReworkOrderResponse | ReworkOrderListResponse,
+        code_map: dict[int, str],
+        original_work_order_id: Optional[int],
+    ) -> None:
+        if original_work_order_id and original_work_order_id in code_map:
+            resp.original_work_order_code = code_map[original_work_order_id]
+
     async def _create_rework_document_relation(
         self,
         tenant_id: int,
@@ -320,6 +344,8 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
 
         resp = ReworkOrderResponse.model_validate(rework_order)
         resp.rework_operations = await self._get_rework_operations(tenant_id, rework_order.id)
+        if original_work_order:
+            resp.original_work_order_code = original_work_order.code
         return resp
 
     async def create_rework_order_from_work_order(
@@ -437,6 +463,13 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         from apps.kuaizhizao.services.document_lifecycle_service import get_rework_order_lifecycle
         resp.lifecycle = get_rework_order_lifecycle(rework_order)
         resp.rework_operations = await self._get_rework_operations(tenant_id, rework_order_id)
+        if rework_order.original_work_order_id:
+            code_map = await self._load_original_work_order_code_map(
+                tenant_id, [rework_order.original_work_order_id]
+            )
+            self._attach_original_work_order_code(
+                resp, code_map, rework_order.original_work_order_id
+            )
         return resp
 
     async def get_rework_order_by_uuid(
@@ -467,6 +500,13 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         resp = ReworkOrderResponse.model_validate(rework_order)
         from apps.kuaizhizao.services.document_lifecycle_service import get_rework_order_lifecycle
         resp.lifecycle = get_rework_order_lifecycle(rework_order)
+        if rework_order.original_work_order_id:
+            code_map = await self._load_original_work_order_code_map(
+                tenant_id, [rework_order.original_work_order_id]
+            )
+            self._attach_original_work_order_code(
+                resp, code_map, rework_order.original_work_order_id
+            )
         return resp
 
     async def list_rework_orders(
@@ -517,10 +557,15 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
 
         rework_orders = await query.offset(skip).limit(limit).order_by("-created_at")
         from apps.kuaizhizao.services.document_lifecycle_service import get_rework_order_lifecycle
+        original_ids = [
+            ro.original_work_order_id for ro in rework_orders if ro.original_work_order_id
+        ]
+        code_map = await self._load_original_work_order_code_map(tenant_id, original_ids)
         result = []
         for ro in rework_orders:
             resp = ReworkOrderListResponse.model_validate(ro)
             resp.lifecycle = get_rework_order_lifecycle(ro)
+            self._attach_original_work_order_code(resp, code_map, ro.original_work_order_id)
             result.append(resp)
         return result
 

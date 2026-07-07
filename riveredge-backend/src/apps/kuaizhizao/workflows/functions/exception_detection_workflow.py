@@ -9,6 +9,7 @@ from loguru import logger
 
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.services.exception_service import ExceptionService
+from apps.kuaizhizao.services.work_order_service import WORK_ORDER_IN_PROGRESS_STATUS
 from core.tasks.dispatcher import TaskEvent, dispatch_event
 from core.tasks.event_compat import Event, TriggerEvent
 from core.utils.timezone_utils import to_api_isoformat
@@ -51,7 +52,7 @@ async def exception_detection_worker_function(event: Event) -> Dict[str, Any]:
         try:
             work_orders = await WorkOrder.filter(
                 tenant_id=tenant_id,
-                status__in=["released", "in_progress"],
+                status__in=list(WORK_ORDER_IN_PROGRESS_STATUS),
                 deleted_at__isnull=True,
             ).all()
             for work_order in work_orders:
@@ -117,7 +118,7 @@ async def exception_detection_by_tenant_function(event: Event) -> Dict[str, Any]
         else:
             work_orders = await WorkOrder.filter(
                 tenant_id=tenant_id,
-                status__in=["released", "in_progress"],
+                status__in=list(WORK_ORDER_IN_PROGRESS_STATUS),
                 deleted_at__isnull=True,
             ).all()
             for work_order in work_orders:

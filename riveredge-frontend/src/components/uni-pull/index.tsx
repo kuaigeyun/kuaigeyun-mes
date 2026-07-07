@@ -82,6 +82,23 @@ export const UniPullLoadButton: React.FC<UniPullLoadButtonProps> = ({
 }) => {
   const { t } = useTranslation();
   const resolvedLabel = label ?? t('components.uniPull.loadFromDocument');
+  const actionableItems = menuItems.filter((item) => !item.disabled);
+
+  if (actionableItems.length === 1 && actionableItems[0].onClick) {
+    const onlyItem = actionableItems[0];
+    return (
+      <Button
+        key={compactKey}
+        type={type}
+        color={color}
+        variant={variant}
+        icon={icon ?? <FileSearchOutlined />}
+        onClick={onlyItem.onClick}
+      >
+        {resolvedLabel}
+      </Button>
+    );
+  }
 
   return (
   <Dropdown

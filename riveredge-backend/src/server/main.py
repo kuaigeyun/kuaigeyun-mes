@@ -46,6 +46,8 @@ from infra.api.client_releases.client_releases import public_router as client_re
 from infra.api.client_releases.client_releases import router as client_releases_router
 from infra.api.client_releases.client_releases import tenant_router as client_releases_tenant_router
 from infra.api.platform_settings.version import router as platform_version_router
+from infra.api.platform_settings.provenance import router as platform_provenance_router
+from infra.api.platform_settings.install_register import router as install_register_router
 from infra.api.business_config.business_config import router as business_config_router
 from infra.api.application_dedicated.application_dedicated import router as application_dedicated_router
 
@@ -814,6 +816,8 @@ app.include_router(tenants_public_router, prefix="/api/v1")
 app.include_router(platform_settings_public_router, prefix="/api/v1/infra")
 # 公开的平台版本接口（用于悬浮按钮展示迭代信息）
 app.include_router(platform_version_router, prefix="/api/v1/infra")
+app.include_router(platform_provenance_router, prefix="/api/v1/infra")
+app.include_router(install_register_router, prefix="/api/v1/infra")
 # 公开的文件接口（不需要认证，用于平台LOGO等公开资源）
 app.include_router(files_public_router, prefix="/api/v1/core")
 

@@ -11,11 +11,13 @@ import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Tag, Button, Space } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, ClockCircleOutlined, ToolOutlined, CloseCircleOutlined, UserAddOutlined } from '@ant-design/icons';
+import { App, Tag, Button } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
+import { renderRowActionsOverflow, rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
+import { ExceptionListPage } from '../../../services/production';
+import { ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES } from '../../../constants/exceptionStatuses';
 
 const P = 'app.kuaizhizao.productionException';
 
@@ -229,65 +231,67 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
+      valueType: 'option',
       width: 250,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            {t('common.detail')}
-          </Button>
-          {record.status === 'pending' && (
-            <>
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+              {t('common.detail')}
+            </Button>,
+            record.status === 'pending' ? (
               <Button
-                type="link"
-                size="small"
-                icon={<ToolOutlined />}
+                key="adjust"
+                {...rowActionKind('update')}
+                {...rowActionLabelKeep()}
                 onClick={() => openHandleModal(record, 'adjust_plan')}
               >
                 {t(`${P}.action.adjustPlan`)}
               </Button>
+            ) : null,
+            record.status === 'pending' ? (
               <Button
-                type="link"
-                size="small"
-                icon={<UserAddOutlined />}
+                key="resources"
+                {...rowActionKind('assign')}
+                {...rowActionLabelKeep()}
                 onClick={() => openHandleModal(record, 'increase_resources')}
               >
                 {t(`${P}.action.increaseResources`)}
               </Button>
+            ) : null,
+            record.status === 'pending' ? (
               <Button
-                type="link"
-                size="small"
-                icon={<ClockCircleOutlined />}
+                key="expedite"
+                {...rowActionKind('execute')}
+                {...rowActionLabelKeep()}
                 onClick={() => openHandleModal(record, 'expedite')}
               >
                 {t(`${P}.action.expedite`)}
               </Button>
+            ) : null,
+            record.status === 'pending' ? (
               <Button
-                type="link"
-                size="small"
-                icon={<CheckCircleOutlined />}
+                key="resolve"
+                {...rowActionKind('complete')}
+                {...rowActionLabelKeep()}
                 onClick={() => openHandleModal(record, 'resolve')}
               >
                 {t(`${P}.action.resolve`)}
               </Button>
+            ) : null,
+            record.status === 'pending' ? (
               <Button
-                type="link"
-                size="small"
-                icon={<CloseCircleOutlined />}
+                key="cancel"
+                {...rowActionKind('reject')}
                 onClick={() => openHandleModal(record, 'cancel')}
-                danger
               >
                 {t(`${P}.action.cancel`)}
               </Button>
-            </>
-          )}
-        </Space>
-      ),
+            ) : null,
+          ],
+          { keyPrefix: `delivery-delay-actions-${record.id ?? 'row'}` },
+        ),
     },
   ], [t]);
 
@@ -299,21 +303,29 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           try {
-            const result = await apiRequest('/apps/kuaizhizao/exceptions/delivery-delay', {
-              method: 'GET',
-              params: {
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-                status: params.status,
-                alert_level: params.alert_level,
+            const queryParams: Record<string, unknown> = {
+              skip: (params.current! - 1) * params.pageSize!,
+              limit: params.pageSize,
+              alert_level: searchFormValues?.alert_level,
+            };
+            if (searchFormValues?.status) {
+              queryParams.status = searchFormValues.status;
+            } else {
+              queryParams.statuses = ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES;
+            }
+            const result = await apiRequest<ExceptionListPage<DeliveryDelayException>>(
+              '/apps/kuaizhizao/exceptions/delivery-delay',
+              {
+                method: 'GET',
+                params: queryParams,
               },
-            });
+            );
             return {
-              data: result || [],
+              data: result.items,
               success: true,
-              total: result?.length || 0,
+              total: result.total,
             };
           } catch {
             messageApi.error(t(`${P}.message.fetchListFailed`));

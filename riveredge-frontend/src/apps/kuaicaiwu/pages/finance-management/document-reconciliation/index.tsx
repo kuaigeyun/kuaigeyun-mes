@@ -8,18 +8,14 @@ import dayjs from 'dayjs';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
 import { apiRequest } from '../../../../../services/api';
-import { documentReconciliationService } from '../../../services/finance/document-reconciliation';
+import { documentReconciliationService, type DocumentReconciliationGapItem } from '../../../services/finance/document-reconciliation';
 import { formatSettlementType } from '../../../utils/financeUiLabels';
+import { documentReconciliationGapReasonMessage } from '../../../utils/documentReconciliationCapabilityMessages';
 
-type GapRow = {
-  doc_type?: string;
-  doc_id?: number;
-  doc_code?: string;
-  amount?: number;
-  remaining_amount?: number;
-  unsettled_amount?: number;
-  finance_related_count?: number;
-  settlement_type?: string;
+type GapRow = DocumentReconciliationGapItem;
+type GapSummary = {
+  gap_count?: number;
+  open_balance_total?: number;
 };
 type ChainStep = {
   step_label?: string;
@@ -28,9 +24,13 @@ type ChainStep = {
   document_code?: string;
   document_id?: number;
   amount?: number;
+  quantity?: number;
+  pushed_quantity?: number;
+  max_push_quantity?: number;
 };
 
 const D = 'app.kuaicaiwu.documentReconciliation';
+const S = 'app.kuaicaiwu.settlement';
 
 const DOC_TYPE_I18N_KEY: Record<string, string> = {
   receivable: `${D}.docType.receivable`,
@@ -64,6 +64,7 @@ const DocumentReconciliationPage: React.FC = () => {
   const [chainLoading, setChainLoading] = useState(false);
   const [chainSteps, setChainSteps] = useState<ChainStep[]>([]);
   const [chainMeta, setChainMeta] = useState<{ completion_rate?: number; linked_count?: number; total_steps?: number }>({});
+  const [gapSummary, setGapSummary] = useState<GapSummary>({});
   const [partnerOptions, setPartnerOptions] = useState<{ label: string; value: number }[]>([]);
 
   const loadPartners = async (partnerType: 'Customer' | 'Supplier') => {
@@ -93,9 +94,13 @@ const DocumentReconciliationPage: React.FC = () => {
         end_date: values.period[1].format('YYYY-MM-DD'),
         only_gaps: true,
       });
-      const items = (result as any)?.items ?? [];
+      const items = result?.items ?? [];
       const nextRows = Array.isArray(items) ? items : [];
       gapRowsRef.current = nextRows;
+      setGapSummary({
+        gap_count: result?.gap_count ?? nextRows.length,
+        open_balance_total: result?.open_balance_total,
+      });
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t(`${D}.queryFailed`));
@@ -157,15 +162,33 @@ const DocumentReconciliationPage: React.FC = () => {
       render: (_, r) => formatDocType(r.doc_type, t),
     },
     { title: t(`${D}.col.docCode`), dataIndex: 'doc_code', width: 160, ellipsis: true },
-    { title: t(`${D}.col.amount`), dataIndex: 'amount', valueType: 'money', align: 'right' },
     {
-      title: t(`${D}.col.unsettled`),
+      title: t(`${S}.preview.col.docAmount`),
+      dataIndex: 'quantity',
+      valueType: 'money',
       align: 'right',
       width: 120,
-      render: (_, r) => {
-        const val = r.remaining_amount ?? r.unsettled_amount;
-        return val != null ? `¥${Number(val).toFixed(2)}` : '—';
-      },
+    },
+    {
+      title: t(`${S}.preview.col.settledAmount`),
+      dataIndex: 'pushed_quantity',
+      valueType: 'money',
+      align: 'right',
+      width: 120,
+    },
+    {
+      title: t(`${S}.preview.col.settleableAmount`),
+      dataIndex: 'max_push_quantity',
+      valueType: 'money',
+      align: 'right',
+      width: 120,
+    },
+    {
+      title: t(`${D}.col.gapReason`),
+      dataIndex: 'gap_reason',
+      width: 180,
+      ellipsis: true,
+      render: (_, r) => (r.gap_reason ? documentReconciliationGapReasonMessage(r.gap_reason, t) : '—'),
     },
     {
       title: t(`${D}.col.link`),
@@ -264,6 +287,9 @@ const DocumentReconciliationPage: React.FC = () => {
             row.doc_code,
             settlementLabel,
             row.amount,
+            row.quantity,
+            row.pushed_quantity,
+            row.max_push_quantity,
             row.remaining_amount ?? row.unsettled_amount,
           ]
             .filter((v) => v != null && v !== '')
@@ -305,19 +331,29 @@ const DocumentReconciliationPage: React.FC = () => {
   ], [t]);
 
   const gapPanel = (
-    <UniTable<GapRow>
-      actionRef={actionRef}
-      enableRowSelection
-      headerActions={gapHeaderActions}
-      request={gapRequest}
-      tanstackQuery={{ enabled: false }}
-      rowKey={(r) => `${r.doc_type}-${r.doc_id}`}
-      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.document-reconciliation.gaps"
-      columns={columns}
-      loading={loading}
-      search={false}
-      pagination={{ pageSize: 20 }}
-    />
+    <>
+      {gapSummary.gap_count != null ? (
+        <Card size="small" style={{ marginBottom: 16 }}>
+          {t(`${D}.summary`, {
+            count: gapSummary.gap_count ?? 0,
+            amount: Number(gapSummary.open_balance_total ?? 0).toFixed(2),
+          })}
+        </Card>
+      ) : null}
+      <UniTable<GapRow>
+        actionRef={actionRef}
+        enableRowSelection
+        headerActions={gapHeaderActions}
+        request={gapRequest}
+        tanstackQuery={{ enabled: false }}
+        rowKey={(r) => `${r.doc_type}-${r.doc_id}`}
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.document-reconciliation.gaps"
+        columns={columns}
+        loading={loading}
+        search={false}
+        pagination={{ pageSize: 20 }}
+      />
+    </>
   );
 
   const chainPanel = (
@@ -370,7 +406,24 @@ const DocumentReconciliationPage: React.FC = () => {
           description: (
             <Space orientation="vertical" size={0}>
               <span>{step.document_code || '—'}</span>
-              {step.amount != null ? (
+              {step.quantity != null ? (
+                <span>
+                  {t(`${S}.preview.col.docAmount`)}
+                  {' '}
+                  ¥
+                  {Number(step.quantity).toFixed(2)}
+                  {' · '}
+                  {t(`${S}.preview.col.settledAmount`)}
+                  {' '}
+                  ¥
+                  {Number(step.pushed_quantity ?? 0).toFixed(2)}
+                  {' · '}
+                  {t(`${S}.preview.col.settleableAmount`)}
+                  {' '}
+                  ¥
+                  {Number(step.max_push_quantity ?? 0).toFixed(2)}
+                </span>
+              ) : step.amount != null ? (
                 <span>
                   {t('app.kuaicaiwu.invoice.line.amount')}
                   {' '}

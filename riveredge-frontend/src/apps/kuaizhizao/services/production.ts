@@ -5,6 +5,11 @@
 
 import { apiRequest } from '../../../services/api';
 
+export type ExceptionListPage<T> = {
+  items: T[];
+  total: number;
+};
+
 export { workOrderApi, reworkOrderApi, getWorkOrderStatistics } from './work-order';
 export { reportingApi, materialBindingApi, getReportingStatistics } from './reporting';
 export { warehouseApi } from './warehouse-execution';
@@ -326,8 +331,11 @@ export const financeApi = {
 export const exceptionApi = {
   // 缺料异常
   materialShortage: {
-    list: async (params?: any) => {
-      return apiRequest('/apps/kuaizhizao/exceptions/material-shortage', { method: 'GET', params });
+    list: async (params?: Record<string, unknown>) => {
+      return apiRequest<ExceptionListPage<Record<string, unknown>>>(
+        '/apps/kuaizhizao/exceptions/material-shortage',
+        { method: 'GET', params },
+      );
     },
     handle: async (id: string, action: string, alternativeMaterialId?: number, remarks?: string) => {
       return apiRequest(`/apps/kuaizhizao/exceptions/material-shortage/${id}/handle`, {
@@ -342,8 +350,11 @@ export const exceptionApi = {
 
   // 延期异常
   deliveryDelay: {
-    list: async (params?: any) => {
-      return apiRequest('/apps/kuaizhizao/exceptions/delivery-delay', { method: 'GET', params });
+    list: async (params?: Record<string, unknown>) => {
+      return apiRequest<ExceptionListPage<Record<string, unknown>>>(
+        '/apps/kuaizhizao/exceptions/delivery-delay',
+        { method: 'GET', params },
+      );
     },
     handle: async (id: string, action: string, remarks?: string) => {
       return apiRequest(`/apps/kuaizhizao/exceptions/delivery-delay/${id}/handle`, {
@@ -361,8 +372,11 @@ export const exceptionApi = {
 
   // 质量异常
   quality: {
-    list: async (params?: any) => {
-      return apiRequest('/apps/kuaizhizao/exceptions/quality', { method: 'GET', params });
+    list: async (params?: Record<string, unknown>) => {
+      return apiRequest<ExceptionListPage<Record<string, unknown>>>(
+        '/apps/kuaizhizao/exceptions/quality',
+        { method: 'GET', params },
+      );
     },
     handle: async (
       id: string,
@@ -402,8 +416,11 @@ export const exceptionApi = {
       return apiRequest('/apps/kuaizhizao/exceptions/process/start', { method: 'POST', data });
     },
     // 获取异常处理流程列表
-    list: async (params?: any) => {
-      return apiRequest('/apps/kuaizhizao/exceptions/process', { method: 'GET', params });
+    list: async (params?: Record<string, unknown>) => {
+      return apiRequest<ExceptionListPage<Record<string, unknown>>>(
+        '/apps/kuaizhizao/exceptions/process',
+        { method: 'GET', params },
+      );
     },
     // 获取异常处理流程详情
     get: async (id: string) => {

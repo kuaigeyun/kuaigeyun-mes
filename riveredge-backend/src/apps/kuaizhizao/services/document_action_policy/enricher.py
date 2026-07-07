@@ -1172,10 +1172,16 @@ def enrich_quality_inspection_capabilities_on_response(
     response: T,
     *,
     supports_purchase_return: bool = False,
+    supports_push_rework: bool = False,
+    pushed_purchase_return_quantity: float = 0.0,
+    pushed_rework_quantity: float = 0.0,
 ) -> T:
     caps = derive_quality_inspection_capabilities(
         inspection,
         supports_purchase_return=supports_purchase_return,
+        supports_push_rework=supports_push_rework,
+        pushed_purchase_return_quantity=pushed_purchase_return_quantity,
+        pushed_rework_quantity=pushed_rework_quantity,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -1187,12 +1193,26 @@ def enrich_quality_inspection_list_capabilities(
     responses: List[T],
     *,
     supports_purchase_return: bool = False,
+    supports_push_rework: bool = False,
+    pushed_purchase_return_qty_by_inspection_id: Optional[Dict[int, float]] = None,
+    pushed_rework_qty_by_inspection_id: Optional[Dict[int, float]] = None,
 ) -> List[T]:
+    pushed_return_map = pushed_purchase_return_qty_by_inspection_id or {}
+    pushed_map = pushed_rework_qty_by_inspection_id or {}
     out: List[T] = []
     for inspection, resp in zip(inspections, responses):
+        pushed_return_qty = 0.0
+        pushed_qty = 0.0
+        inspection_id = getattr(inspection, "id", None)
+        if inspection_id is not None:
+            pushed_return_qty = float(pushed_return_map.get(int(inspection_id), 0.0))
+            pushed_qty = float(pushed_map.get(int(inspection_id), 0.0))
         caps = derive_quality_inspection_capabilities(
             inspection,
             supports_purchase_return=supports_purchase_return,
+            supports_push_rework=supports_push_rework,
+            pushed_purchase_return_quantity=pushed_return_qty,
+            pushed_rework_quantity=pushed_qty,
         )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))

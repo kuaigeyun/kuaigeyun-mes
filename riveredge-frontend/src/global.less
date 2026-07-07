@@ -238,6 +238,17 @@
     overflow-y: auto;
     overflow-x: hidden;
   }
+
+  > .ant-card-body:has(.multi-tab-list-page-tab-pane) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+}
+
+.multi-tab-list-page-tab-pane {
+  flex: 1;
+  min-height: 0;
 }
 
 /* 特殊布局 Modal 排除限高（如 MobileDevicePreview、工位机 kiosk 等） */
@@ -1559,6 +1570,12 @@ code {
   overflow: hidden;
 }
 
+/* 模块看板快捷入口：图标统一主题色，覆盖各看板硬编码色 */
+.module-shortcut-grid .module-shortcut-grid__item .anticon,
+.module-shortcut-grid .module-shortcut-grid__item svg {
+  color: var(--ant-color-primary) !important;
+}
+
 /* 配置中心：参数分类侧栏使用内容区背景，不受主题「左侧菜单栏」siderBgColor 影响 */
 .config-center-page .config-center-category-sider.ant-layout-sider {
   background: var(--ant-color-bg-container, #fff) !important;
@@ -2166,12 +2183,42 @@ code {
   --dashboard-card-shadow: var(--ant-box-shadow-tertiary);
 }
 
+/* ProLayout 主分割线：与看板/工作台卡片边框一致（默认 colorSplit 过浅） */
+.ant-pro-layout .ant-layout-header.ant-pro-layout-header {
+  border-block-end: 1px solid var(--dashboard-card-border-color) !important;
+}
+.ant-pro-layout .ant-pro-sider .ant-layout-sider-children {
+  border-inline-end: 1px solid var(--dashboard-card-border-color) !important;
+}
+
 .dashboard-section__card.ant-card,
 .dashboard-kpi-panel.ant-card,
 .dashboard-cwc-card.ant-card,
 .dashboard-usage-tips-card.ant-card {
-  border: var(--dashboard-card-border);
+  border: var(--dashboard-card-border) !important;
   background: var(--ant-color-bg-container, #fff);
+  box-shadow: var(--dashboard-card-shadow);
+}
+
+/* 系统工作台：borderless Card 也统一外框（与 section 卡一致） */
+.dashboard-main-body .ant-card:not(.ant-card .ant-card) {
+  border: var(--dashboard-card-border) !important;
+  box-shadow: var(--dashboard-card-shadow);
+}
+
+/* 模块看板（uni-dashboard）：ProCard / KPI / 图表面板统一外框 */
+.uni-dashboard .ant-pro-card:not(.ant-pro-card-ghost) {
+  border: var(--dashboard-card-border) !important;
+  box-shadow: var(--dashboard-card-shadow);
+}
+.uni-dashboard .module-kpi-card.ant-card,
+.uni-dashboard .module-chart-panel.ant-card {
+  border: var(--dashboard-card-border) !important;
+  box-shadow: var(--dashboard-card-shadow);
+}
+
+.dashboard-mobile-workplace .ant-card {
+  border: var(--dashboard-card-border) !important;
   box-shadow: var(--dashboard-card-shadow);
 }
 
@@ -2527,7 +2574,7 @@ code {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.3;
-  color: #000;
+  color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2537,7 +2584,7 @@ code {
   font-size: 12px;
   font-weight: 600;
   line-height: 1.3;
-  color: #000;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65));
   white-space: nowrap;
 }
 .dashboard-wip-operation-card__body {
@@ -2589,7 +2636,7 @@ code {
 .dashboard-wip-operation-card__metric-label {
   font-size: 11px;
   font-weight: 500;
-  color: var(--ant-color-text-tertiary, rgba(0, 0, 0, 0.45));
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65));
   white-space: nowrap;
 }
 .dashboard-wip-operation-card__metric-value {
@@ -2608,8 +2655,48 @@ code {
 .dashboard-wip-operation-card__metric-value--danger {
   color: var(--ant-color-error, #ff4d4f);
 }
-[data-theme='dark'] .dashboard-wip-operation-card__main {
-  background: rgba(255, 255, 255, 0.03);
+[data-theme='dark'] {
+  .dashboard-wip-operation-card__main {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .dashboard-wip-operation-card__head-name {
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  .dashboard-wip-operation-card__head-progress {
+    color: rgba(255, 255, 255, 0.78);
+  }
+
+  .dashboard-wip-operation-card__main-value {
+    color: rgba(255, 255, 255, 0.88);
+  }
+
+  .dashboard-wip-operation-card__main-label {
+    color: rgba(255, 255, 255, 0.65);
+  }
+
+  .dashboard-wip-operation-card__metric-label {
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .dashboard-wip-operation-card__metric-value,
+  .dashboard-wip-operation-card__metric-value--primary {
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  .dashboard-wip-operation-card__metric-value--success {
+    color: #95de64;
+  }
+
+  .dashboard-wip-operation-card__metric-value--danger {
+    color: #ff7875;
+  }
+
+  .dashboard-wip-operation-card--plain .dashboard-wip-operation-card__head-name,
+  .dashboard-wip-operation-card--plain .dashboard-wip-operation-card__head-progress {
+    color: var(--ant-color-primary, #1677ff);
+  }
 }
 
 /* 工作台：最新操作 / 待办列表排版 */
@@ -2721,12 +2808,24 @@ code {
   flex: 1 1 auto;
   min-width: 0;
 }
+.dashboard-todo-item__title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .dashboard-todo-item__title {
   margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 13px;
   font-weight: 500;
   line-height: 1.45;
   color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
+}
+.dashboard-todo-item__tag {
+  margin: 0;
+  flex-shrink: 0;
 }
 .dashboard-todo-item__desc {
   display: block;
@@ -2734,6 +2833,24 @@ code {
   font-size: 12px;
   line-height: 1.5;
   color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65));
+}
+.dashboard-todo-item__detail {
+  display: block;
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ant-color-text-tertiary, rgba(0, 0, 0, 0.45));
+}
+.dashboard-todo-item__meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 4px;
+}
+.dashboard-todo-item__meta {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ant-color-text-tertiary, rgba(0, 0, 0, 0.45));
 }
 .dashboard-todo-item__action {
   flex-shrink: 0;

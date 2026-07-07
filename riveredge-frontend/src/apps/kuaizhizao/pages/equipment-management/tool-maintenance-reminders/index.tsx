@@ -10,8 +10,6 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Button, Tag, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { getDueReminderLifecycle } from '../../../utils/equipmentLifecycle';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { toolApi } from '../../../services/equipment';
@@ -122,27 +120,6 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
           overdue: { text: t('app.kuaizhizao.toolMaintenanceReminder.statusOverdue'), status: 'Error' },
         },
       },
-      {
-        title: t('app.kuaizhizao.toolMaintenanceReminder.colLifecycle'),
-        dataIndex: 'lifecycle_stage',
-        fixed: 'right',
-        align: 'left',
-        hideInSearch: true,
-        render: (_, record) => {
-          const lifecycle = getDueReminderLifecycle(record as Record<string, unknown>);
-          return (
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          );
-        },
-      },
     ],
     [t],
   );
@@ -187,27 +164,6 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
         valueEnum: {
           due_soon: { text: t('app.kuaizhizao.toolMaintenanceReminder.statusDueSoon'), status: 'Warning' },
           overdue: { text: t('app.kuaizhizao.toolMaintenanceReminder.statusOverdue'), status: 'Error' },
-        },
-      },
-      {
-        title: t('app.kuaizhizao.toolMaintenanceReminder.colLifecycle'),
-        dataIndex: 'lifecycle_stage',
-        fixed: 'right',
-        align: 'left',
-        hideInSearch: true,
-        render: (_, record) => {
-          const lifecycle = getDueReminderLifecycle(record as Record<string, unknown>);
-          return (
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          );
         },
       },
     ],

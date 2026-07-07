@@ -4,12 +4,16 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Typography } from 'antd';
-import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Typography, Modal, Spin, Alert, Table, Empty } from 'antd';
+import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import type { ProFormInstance } from '@ant-design/pro-components';
-import { EyeOutlined, DollarOutlined } from '@ant-design/icons';
+import { EyeOutlined, DollarOutlined, PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
-import { payableService } from '../../../services/finance/payable';
+import {
+    payableService,
+    type PayablePullCandidate,
+    type PayablePullPreview,
+} from '../../../services/finance/payable';
 import { Payable, PayableCreateData } from '../../../types/finance/payable';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
@@ -22,10 +26,14 @@ import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getPayableLifecycle } from '../../../utils/financeLifecycle';
 import { buildPayableStatusEnum, buildReviewStatusEnum } from '../../../utils/financeSharedOptions';
+import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
+import { payableCapabilityReasonMessage } from '../../../utils/payableCapabilityMessages';
 import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
@@ -33,15 +41,31 @@ import { formatDateTime } from '../../../../../utils/format';
 
 const P = 'app.kuaicaiwu.payable';
 
+type PullPreviewKind = 'purchase_order' | 'purchase_receipt';
+
+const formatPullMoney = (value: number) =>
+  `¥${Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 const PayableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
     const createFormRef = useRef<ProFormInstance>(null);
+    const pullFormRef = useRef<ProFormInstance>(null);
     const [createModalVisible, setCreateModalVisible] = useState(false);
+    const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
+    const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
+    const [pullSubmitting, setPullSubmitting] = useState(false);
+    const [pullPreviewData, setPullPreviewData] = useState<PayablePullPreview | null>(null);
+    const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
+    const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
+    const pullFromPurchaseOrderCloseRef = useRef<(() => void) | null>(null);
+    const pullFromPurchaseReceiptCloseRef = useRef<(() => void) | null>(null);
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
     const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
     const { message: messageApi } = App.useApp();
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
+    const pullFromPurchaseOrderAction = getKuaicaiwuDocumentAction('payable.pull_from_purchase_order');
+    const pullFromPurchaseReceiptAction = getKuaicaiwuDocumentAction('payable.pull_from_purchase_receipt');
 
     const payableImportTemplate = useMemo(
         () =>
@@ -112,6 +136,184 @@ const PayableList: React.FC = () => {
         setCreateModalVisible(false);
         actionRef.current?.reload();
     };
+
+    const resetPullPreview = () => {
+        setPullPreviewOpen(false);
+        setPullPreviewSourceId(null);
+        setPullPreviewData(null);
+        setPullPreviewKind(null);
+        pullFormRef.current?.resetFields();
+    };
+
+    const openPullPreview = async (kind: PullPreviewKind, sourceId: number) => {
+        setPullPreviewKind(kind);
+        setPullPreviewOpen(true);
+        setPullPreviewLoading(true);
+        setPullPreviewData(null);
+        setPullPreviewSourceId(sourceId);
+        try {
+            const data =
+                kind === 'purchase_order'
+                    ? await payableService.previewPullFromPurchaseOrder(sourceId)
+                    : await payableService.previewPullFromPurchaseReceipt(sourceId);
+            setPullPreviewData(data);
+            const maxPush = Number(data.items?.[0]?.max_push_quantity ?? 0);
+            const sourceLabel =
+                kind === 'purchase_order'
+                    ? pullFromPurchaseOrderAction.sourceLabel
+                    : pullFromPurchaseReceiptAction.sourceLabel;
+            pullFormRef.current?.setFieldsValue({
+                source_code: data.source_code,
+                supplier_name: data.supplier_name,
+                total_amount: maxPush > 0 ? maxPush : undefined,
+                due_date: dayjs().add(30, 'day'),
+                business_date: dayjs(),
+                notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
+                    source: sourceLabel,
+                    code: data.source_code,
+                }),
+            });
+        } catch (e: any) {
+            messageApi.error(
+                e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
+            );
+            resetPullPreview();
+        } finally {
+            setPullPreviewLoading(false);
+        }
+    };
+
+    const pullFromPurchaseOrderQuery = useUniPullQuery<PayablePullCandidate>({
+        rowKey: 'id',
+        selectionType: 'radio',
+        isRowDisabled: (record) => record.capabilities?.pull_payable?.allowed === false,
+        loadData: async ({ keyword, page, pageSize }) => {
+            try {
+                const res = await payableService.listPurchaseOrderPullCandidates({
+                    skip: (page - 1) * pageSize,
+                    limit: pageSize,
+                    keyword: keyword.trim() || undefined,
+                });
+                return { data: res.data || [], total: res.total ?? 0 };
+            } catch (e: any) {
+                messageApi.error(
+                    e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
+                );
+                return { data: [], total: 0 };
+            }
+        },
+        onConfirm: async (keys, rows) => {
+            const selected = rows.find((x) => String(x.id) === String(keys[0]));
+            if (!selected?.id) {
+                messageApi.warning(t(`${P}.selectSource`, { label: pullFromPurchaseOrderAction.sourceLabel }));
+                return;
+            }
+            pullFromPurchaseOrderCloseRef.current?.();
+            await openPullPreview('purchase_order', selected.id);
+        },
+    });
+    pullFromPurchaseOrderCloseRef.current = pullFromPurchaseOrderQuery.closeModal;
+
+    const pullFromPurchaseReceiptQuery = useUniPullQuery<PayablePullCandidate>({
+        rowKey: 'id',
+        selectionType: 'radio',
+        isRowDisabled: (record) => record.capabilities?.pull_payable?.allowed === false,
+        loadData: async ({ keyword, page, pageSize }) => {
+            try {
+                const res = await payableService.listPurchaseReceiptPullCandidates({
+                    skip: (page - 1) * pageSize,
+                    limit: pageSize,
+                    keyword: keyword.trim() || undefined,
+                });
+                return { data: res.data || [], total: res.total ?? 0 };
+            } catch (e: any) {
+                messageApi.error(
+                    e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
+                );
+                return { data: [], total: 0 };
+            }
+        },
+        onConfirm: async (keys, rows) => {
+            const selected = rows.find((x) => String(x.id) === String(keys[0]));
+            if (!selected?.id) {
+                messageApi.warning(t(`${P}.selectSource`, { label: pullFromPurchaseReceiptAction.sourceLabel }));
+                return;
+            }
+            pullFromPurchaseReceiptCloseRef.current?.();
+            await openPullPreview('purchase_receipt', selected.id);
+        },
+    });
+    pullFromPurchaseReceiptCloseRef.current = pullFromPurchaseReceiptQuery.closeModal;
+
+    const handlePullCreateSubmit = async (values: any) => {
+        if (!pullPreviewData || !pullPreviewSourceId || !pullPreviewKind) return false;
+        if (pullPreviewData.has_blocking_issues) return false;
+        const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
+        const totalAmount = Number(values.total_amount) || 0;
+        if (totalAmount <= 0) {
+            messageApi.warning(t(`${P}.amountRequired`));
+            return false;
+        }
+        if (totalAmount > maxPush) {
+            messageApi.warning(t(`${P}.pullExceedMax`, { max: maxPush.toFixed(2) }));
+            return false;
+        }
+        const sourceLabel =
+            pullPreviewKind === 'purchase_order'
+                ? pullFromPurchaseOrderAction.sourceLabel
+                : pullFromPurchaseReceiptAction.sourceLabel;
+        setPullSubmitting(true);
+        try {
+            await payableService.createPayable({
+                source_type: pullPreviewKind,
+                source_id: pullPreviewSourceId,
+                source_code: pullPreviewData.source_code || '',
+                pull_source_type: pullPreviewKind,
+                pull_source_id: pullPreviewSourceId,
+                supplier_id: Number(pullPreviewData.supplier_id || 0),
+                supplier_name: pullPreviewData.supplier_name || '',
+                total_amount: totalAmount,
+                paid_amount: 0,
+                remaining_amount: totalAmount,
+                due_date: formatDateTime(values.due_date || dayjs().add(30, 'day'), 'YYYY-MM-DD'),
+                business_date: formatDateTime(values.business_date || dayjs(), 'YYYY-MM-DD'),
+                status: '未付款',
+                review_status: '待审核',
+                notes:
+                    String(values.notes ?? '').trim() ||
+                    t('app.kuaicaiwu.common.createdFromSourceNote', {
+                        source: sourceLabel,
+                        code: pullPreviewData.source_code,
+                    }),
+                attachments: normalizeDocumentAttachments(values.attachments),
+            });
+            messageApi.success(t(`${P}.pullCreateSuccess`, { target: pullFromPurchaseOrderAction.targetLabel }));
+            resetPullPreview();
+            actionRef.current?.reload();
+            return true;
+        } catch (e: any) {
+            messageApi.error(
+                e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t('common.createFailed'),
+            );
+            return false;
+        } finally {
+            setPullSubmitting(false);
+        }
+    };
+
+    const pullPreviewMaxPush = Number(pullPreviewData?.items?.[0]?.max_push_quantity ?? 0);
+    const pullPreviewTargetLabel = pullFromPurchaseOrderAction.targetLabel;
+
+    const pullTableColumns: ProColumns<PayablePullCandidate>[] = useMemo(
+        () => [
+            { title: t(`${P}.pullCol.sourceCode`), dataIndex: 'code', width: 220, ellipsis: true },
+            { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', width: 160, ellipsis: true },
+            { title: t(`${P}.pullCol.sourceStatus`), dataIndex: 'source_status', width: 100, ellipsis: true },
+            { title: t(`${P}.pullCol.sourceDate`), dataIndex: 'source_date', width: 120, ellipsis: true },
+            { title: t(`${P}.pullCol.docAmount`), dataIndex: 'amount', valueType: 'money', width: 120, align: 'right' },
+        ],
+        [t],
+    );
 
     const handleBatchDelete = async (keys: React.Key[]) => {
         try {
@@ -260,7 +462,8 @@ const PayableList: React.FC = () => {
                             size="small"
                             onSuccess={() => actionRef.current?.reload()}
                         />,
-                        record.remaining_amount > 0 ? (
+                        record.remaining_amount > 0 &&
+                        record.capabilities?.push_payment?.allowed !== false ? (
                             <Button {...rowActionKind('execute')}
                                 key="pay"
                                 type="link"
@@ -316,9 +519,33 @@ const PayableList: React.FC = () => {
                     }
                 }}
                 rowKey="id"
-                showCreateButton
+                showCreateButton={false}
                 createButtonText={t(`${P}.createTitle`)}
                 onCreate={() => setCreateModalVisible(true)}
+                toolBarRender={() => [
+                    <UniPullCreateToolbar
+                        key="create-payable-with-pull"
+                        createIcon={<PlusOutlined />}
+                        createLabel={t(`${P}.createTitle`)}
+                        onCreate={() => setCreateModalVisible(true)}
+                        menuItems={buildKuaicaiwuPullCreateMenuItems([
+                            {
+                                key: 'pull-from-purchase-order',
+                                actionKey: 'payable.pull_from_purchase_order',
+                                onClick: () => {
+                                    pullFromPurchaseOrderQuery.openModal();
+                                },
+                            },
+                            {
+                                key: 'pull-from-purchase-receipt',
+                                actionKey: 'payable.pull_from_purchase_receipt',
+                                onClick: () => {
+                                    pullFromPurchaseReceiptQuery.openModal();
+                                },
+                            },
+                        ])}
+                    />,
+                ]}
                 enableRowSelection
                 selectedRowKeys={selectedRowKeys}
                 onRowSelectionChange={setSelectedRowKeys}
@@ -433,6 +660,179 @@ const PayableList: React.FC = () => {
                     }
                 }}
             />
+
+            <UniPullQueryModal<PayablePullCandidate>
+                open={pullFromPurchaseOrderQuery.open}
+                title={pullFromPurchaseOrderAction.label}
+                onCancel={pullFromPurchaseOrderQuery.closeModal}
+                onOk={() => {
+                    void pullFromPurchaseOrderQuery.handleConfirm();
+                }}
+                rowKey="id"
+                columns={pullTableColumns}
+                dataSource={pullFromPurchaseOrderQuery.dataSource}
+                loading={pullFromPurchaseOrderQuery.loading}
+                confirmLoading={pullFromPurchaseOrderQuery.confirmLoading}
+                selectionType={pullFromPurchaseOrderQuery.selectionType}
+                selectedRowKeys={pullFromPurchaseOrderQuery.selectedRowKeys}
+                onSelectedRowKeysChange={pullFromPurchaseOrderQuery.handleSelectedRowKeysChange}
+                isRowDisabled={pullFromPurchaseOrderQuery.isRowDisabled}
+                searchDraft={pullFromPurchaseOrderQuery.searchDraft}
+                onSearchDraftChange={pullFromPurchaseOrderQuery.setSearchDraft}
+                onSearchApply={pullFromPurchaseOrderQuery.handleSearchApply}
+                onSearchClear={pullFromPurchaseOrderQuery.handleSearchClear}
+                appliedKeyword={pullFromPurchaseOrderQuery.appliedKeyword}
+                searchPlaceholder={t(`${P}.pull.searchPlaceholder`)}
+                page={pullFromPurchaseOrderQuery.page}
+                pageSize={pullFromPurchaseOrderQuery.pageSize}
+                total={pullFromPurchaseOrderQuery.total}
+                onPageChange={pullFromPurchaseOrderQuery.handlePageChange}
+                okText={t('components.uniLifecycle.nextStep')}
+            />
+
+            <UniPullQueryModal<PayablePullCandidate>
+                open={pullFromPurchaseReceiptQuery.open}
+                title={pullFromPurchaseReceiptAction.label}
+                onCancel={pullFromPurchaseReceiptQuery.closeModal}
+                onOk={() => {
+                    void pullFromPurchaseReceiptQuery.handleConfirm();
+                }}
+                rowKey="id"
+                columns={pullTableColumns}
+                dataSource={pullFromPurchaseReceiptQuery.dataSource}
+                loading={pullFromPurchaseReceiptQuery.loading}
+                confirmLoading={pullFromPurchaseReceiptQuery.confirmLoading}
+                selectionType={pullFromPurchaseReceiptQuery.selectionType}
+                selectedRowKeys={pullFromPurchaseReceiptQuery.selectedRowKeys}
+                onSelectedRowKeysChange={pullFromPurchaseReceiptQuery.handleSelectedRowKeysChange}
+                isRowDisabled={pullFromPurchaseReceiptQuery.isRowDisabled}
+                searchDraft={pullFromPurchaseReceiptQuery.searchDraft}
+                onSearchDraftChange={pullFromPurchaseReceiptQuery.setSearchDraft}
+                onSearchApply={pullFromPurchaseReceiptQuery.handleSearchApply}
+                onSearchClear={pullFromPurchaseReceiptQuery.handleSearchClear}
+                appliedKeyword={pullFromPurchaseReceiptQuery.appliedKeyword}
+                searchPlaceholder={t(`${P}.pull.searchPlaceholder`)}
+                page={pullFromPurchaseReceiptQuery.page}
+                pageSize={pullFromPurchaseReceiptQuery.pageSize}
+                total={pullFromPurchaseReceiptQuery.total}
+                onPageChange={pullFromPurchaseReceiptQuery.handlePageChange}
+                okText={t('components.uniLifecycle.nextStep')}
+            />
+
+            <Modal
+                title={
+                    pullPreviewKind === 'purchase_receipt'
+                        ? pullFromPurchaseReceiptAction.label
+                        : pullFromPurchaseOrderAction.label
+                }
+                open={pullPreviewOpen}
+                destroyOnClose
+                width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+                onCancel={resetPullPreview}
+                okText={pullPreviewTargetLabel}
+                cancelText={t('common.cancel')}
+                confirmLoading={pullSubmitting}
+                onOk={() => pullFormRef.current?.submit?.()}
+                okButtonProps={{
+                    disabled:
+                        pullPreviewLoading ||
+                        !pullPreviewData ||
+                        !!pullPreviewData?.has_blocking_issues ||
+                        pullPreviewMaxPush <= 0,
+                }}
+            >
+                {pullPreviewLoading ? (
+                    <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                        <Spin />
+                        <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+                    </div>
+                ) : pullPreviewData ? (
+                    <div>
+                        <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
+                        {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
+                            <Alert
+                                type="warning"
+                                showIcon
+                                style={{ marginBottom: 12 }}
+                                message={payableCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
+                            />
+                        ) : null}
+                        {pullPreviewData.items?.length > 0 ? (
+                            <Table
+                                size="small"
+                                dataSource={pullPreviewData.items}
+                                rowKey={(row) => String(row.item_id)}
+                                pagination={false}
+                                scroll={{ x: 720 }}
+                                columns={[
+                                    { title: t(`${P}.pull.col.sourceCode`), dataIndex: 'source_code', width: 140, ellipsis: true },
+                                    { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', width: 160, ellipsis: true },
+                                    {
+                                        title: t(`${P}.pull.col.docAmount`),
+                                        dataIndex: 'quantity',
+                                        width: 120,
+                                        align: 'right',
+                                        render: (v: number) => formatPullMoney(v),
+                                    },
+                                    {
+                                        title: t(`${P}.pull.col.payableAmount`),
+                                        dataIndex: 'pushed_quantity',
+                                        width: 120,
+                                        align: 'right',
+                                        render: (v: number) => formatPullMoney(v),
+                                    },
+                                    {
+                                        title: t(`${P}.pull.col.payableableAmount`),
+                                        dataIndex: 'max_push_quantity',
+                                        width: 120,
+                                        align: 'right',
+                                        render: (v: number) => formatPullMoney(v),
+                                    },
+                                ]}
+                            />
+                        ) : (
+                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')} />
+                        )}
+                        {pullPreviewData.tip ? (
+                            <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 16 }}>
+                                {pullPreviewData.tip}
+                            </Typography.Paragraph>
+                        ) : null}
+                        {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
+                            <ModalForm
+                                formRef={pullFormRef}
+                                submitter={false}
+                                onFinish={handlePullCreateSubmit}
+                                layout="vertical"
+                            >
+                                <ProFormText name="source_code" label={t(`${P}.pullCol.sourceCode`)} readonly />
+                                <ProFormText name="supplier_name" label={t('app.kuaicaiwu.common.supplier')} readonly />
+                                <ProFormMoney
+                                    name="total_amount"
+                                    label={t(`${P}.col.amount`)}
+                                    min={0.01}
+                                    max={pullPreviewMaxPush}
+                                    rules={[{ required: true, message: t(`${P}.amountRequired`) }]}
+                                />
+                                <ProFormDatePicker
+                                    name="due_date"
+                                    label={t('app.kuaicaiwu.common.dueDate')}
+                                    rules={[{ required: true }]}
+                                    fieldProps={buildFutureDateShortcutFieldProps({
+                                        getForm: () => pullFormRef.current,
+                                        fieldName: 'due_date',
+                                        baseFieldName: 'business_date',
+                                        t,
+                                    })}
+                                />
+                                <ProFormDatePicker name="business_date" label={t('app.kuaicaiwu.common.businessDate')} />
+                                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
+                                <DocumentAttachmentsField category="payable_attachments" />
+                            </ModalForm>
+                        ) : null}
+                    </div>
+                ) : null}
+            </Modal>
 
             <ModalForm
                 title={t(`${P}.createTitle`)}

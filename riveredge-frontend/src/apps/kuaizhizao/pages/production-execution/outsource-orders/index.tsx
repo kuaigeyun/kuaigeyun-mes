@@ -1,8 +1,7 @@
 /**
  * 工序委外管理页面
  *
- * 提供工序委外的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
- * 支持从工单工序创建工序委外单。
+ * 提供工序委外的 CRUD 功能；新建须经上拉选源 → 数量预览 → 录入表单。
  *
  * Author: Luigi Lu
  * Date: 2025-01-04
@@ -23,6 +22,8 @@ import {
   ProFormDigit,
   ProFormTextArea,
   ProFormItem,
+  ProFormText,
+  ProFormDependency,
 } from '@ant-design/pro-components';
 import {
   App,
@@ -35,10 +36,14 @@ import {
   Dropdown,
   Empty,
   Spin,
+  Table,
+  Alert,
+  Card,
   theme as AntdTheme,
 } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import {
   ListPageTemplate,
@@ -51,7 +56,10 @@ import {
 } from '../../../../../components/layout-templates';
 import { SimpleSparkline } from '../../../../../components';
 import CodeField from '../../../../../components/code-field';
-import { outsourceOrderApi } from '../../../services/production';
+import { outsourceOrderApi, workOrderApi } from '../../../services/production';
+import { mapOutsourceOptionsToPullPreview } from '../../../utils/outsourceOrderPullPreview';
+import type { PushPreviewResponse } from '../../../services/sales-order';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { getOutsourceOrderLifecycle } from '../../../utils/outsourceOrderLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -107,6 +115,23 @@ interface OutsourceOrder {
   attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
   updated_at?: string;
+}
+
+interface PullOutsourceOperationCandidate {
+  pull_row_key: string;
+  work_order_id: number;
+  work_order_code?: string;
+  work_order_name?: string;
+  product_name?: string;
+  work_order_operation_id: number;
+  operation_code?: string;
+  operation_name?: string;
+  sequence?: number;
+  max_quantity: number;
+  completed_quantity: number;
+  already_outsourced_quantity: number;
+  outsourceable_quantity: number;
+  occupied_quantity: number;
 }
 
 interface Supplier {
@@ -212,6 +237,242 @@ export const OutsourceOrdersTable: React.FC = () => {
 
   // 供应商列表
   const [supplierList, setSupplierList] = useState<Supplier[]>([]);
+
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const createFormRef = useRef<any>(null);
+  const [createWorkOrder, setCreateWorkOrder] = useState<{
+    id: number;
+    code?: string;
+    name?: string;
+    product_name?: string;
+  } | null>(null);
+  const [createLockedOperation, setCreateLockedOperation] = useState<PullOutsourceOperationCandidate | null>(null);
+  const [createMaxOutsourceQty, setCreateMaxOutsourceQty] = useState(0);
+
+  const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
+  const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
+  const [pullPreviewData, setPullPreviewData] = useState<PushPreviewResponse | null>(null);
+  const [pullPreviewContext, setPullPreviewContext] = useState<{
+    workOrder: any;
+    operation: PullOutsourceOperationCandidate;
+  } | null>(null);
+
+  const resetPullPreview = useCallback(() => {
+    setPullPreviewOpen(false);
+    setPullPreviewLoading(false);
+    setPullPreviewData(null);
+    setPullPreviewContext(null);
+  }, []);
+
+  const openCreateModalFromPullContext = useCallback(
+    (workOrder: any, operation: PullOutsourceOperationCandidate) => {
+      setCreateWorkOrder({
+        id: Number(workOrder.id ?? operation.work_order_id),
+        code: workOrder.code ?? operation.work_order_code,
+        name: workOrder.name ?? operation.work_order_name,
+        product_name: workOrder.product_name,
+      });
+      setCreateLockedOperation(operation);
+      setCreateMaxOutsourceQty(Number(operation.outsourceable_quantity ?? 0));
+      setCreateModalVisible(true);
+      createFormRef.current?.resetFields();
+      createFormRef.current?.setFieldsValue({
+        work_order_operation_id: operation.work_order_operation_id,
+      });
+    },
+    [],
+  );
+
+  const openOutsourcePullPreview = useCallback(
+    async (workOrderId: number, workOrderOperationId: number) => {
+      setPullPreviewOpen(true);
+      setPullPreviewLoading(true);
+      setPullPreviewData(null);
+      setPullPreviewContext(null);
+      try {
+        const [workOrder, optionsRes] = await Promise.all([
+          workOrderApi.get(String(workOrderId)),
+          outsourceOrderApi.getOutsourceOptions(String(workOrderId)),
+        ]);
+        const options = Array.isArray(optionsRes) ? optionsRes : [];
+        const matched = options.find(
+          (opt: any) => Number(opt.work_order_operation_id) === Number(workOrderOperationId),
+        );
+        if (!matched || Number(matched.outsourceable_quantity ?? 0) <= 0) {
+          messageApi.warning(t('app.kuaizhizao.outsourceOrder.pullPreviewBlocked'));
+          resetPullPreview();
+          return;
+        }
+        const operationRow: PullOutsourceOperationCandidate = {
+          pull_row_key: `${workOrderId}-${workOrderOperationId}`,
+          work_order_id: workOrderId,
+          work_order_code: workOrder.code,
+          work_order_name: workOrder.name,
+          product_name: workOrder.product_name,
+          work_order_operation_id: Number(matched.work_order_operation_id),
+          operation_code: matched.operation_code,
+          operation_name: matched.operation_name,
+          sequence: matched.sequence,
+          max_quantity: Number(matched.max_quantity ?? 0),
+          completed_quantity: Number(matched.completed_quantity ?? 0),
+          already_outsourced_quantity: Number(matched.already_outsourced_quantity ?? 0),
+          outsourceable_quantity: Number(matched.outsourceable_quantity ?? 0),
+          occupied_quantity:
+            Number(matched.completed_quantity ?? 0) + Number(matched.already_outsourced_quantity ?? 0),
+        };
+        const preview = mapOutsourceOptionsToPullPreview(
+          String(workOrder.code ?? ''),
+          [matched],
+          t,
+        );
+        setPullPreviewData(preview);
+        setPullPreviewContext({ workOrder, operation: operationRow });
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.outsourceOrder.pullPreviewFailed')));
+        resetPullPreview();
+      } finally {
+        setPullPreviewLoading(false);
+      }
+    },
+    [messageApi, resetPullPreview, t],
+  );
+
+  const handlePullPreviewConfirm = useCallback(() => {
+    if (!pullPreviewContext || !pullPreviewData || pullPreviewData.has_blocking_issues) return;
+    const { workOrder, operation } = pullPreviewContext;
+    resetPullPreview();
+    openCreateModalFromPullContext(workOrder, operation);
+  }, [openCreateModalFromPullContext, pullPreviewContext, pullPreviewData, resetPullPreview]);
+
+  const pullFromWorkOrderQuery = useUniPullQuery<PullOutsourceOperationCandidate>({
+    rowKey: 'pull_row_key',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
+      const normalizedKeyword = keyword.trim().toLowerCase();
+      const chunkSize = 100;
+      const maxRows = 1000;
+      const workOrders: Array<{ id: number; code?: string; name?: string; product_name?: string; quantity?: number }> = [];
+      let skip = 0;
+      while (workOrders.length < maxRows) {
+        const res = await workOrderApi.list({
+          status: 'in_progress',
+          keyword: normalizedKeyword || undefined,
+          skip,
+          limit: chunkSize,
+        });
+        const chunk = Array.isArray(res) ? res : (res as any)?.data ?? (res as any)?.items ?? [];
+        if (!Array.isArray(chunk) || chunk.length === 0) break;
+        workOrders.push(...chunk);
+        if (chunk.length < chunkSize) break;
+        skip += chunkSize;
+      }
+      const rows = (
+        await Promise.all(
+          workOrders.map(async (workOrder) => {
+            if (!workOrder?.id) return [];
+            const optionsRes = await outsourceOrderApi.getOutsourceOptions(String(workOrder.id));
+            const options = Array.isArray(optionsRes) ? optionsRes : [];
+            return options
+              .filter((opt: any) => Number(opt.outsourceable_quantity ?? 0) > 0)
+              .map((opt: any) => ({
+                pull_row_key: `${workOrder.id}-${opt.work_order_operation_id}`,
+                work_order_id: Number(workOrder.id),
+                work_order_code: workOrder.code,
+                work_order_name: workOrder.name,
+                product_name: workOrder.product_name,
+                work_order_operation_id: Number(opt.work_order_operation_id),
+                operation_code: opt.operation_code,
+                operation_name: opt.operation_name,
+                sequence: opt.sequence,
+                max_quantity: Number(opt.max_quantity ?? 0),
+                completed_quantity: Number(opt.completed_quantity ?? 0),
+                already_outsourced_quantity: Number(opt.already_outsourced_quantity ?? 0),
+                outsourceable_quantity: Number(opt.outsourceable_quantity ?? 0),
+                occupied_quantity:
+                  Number(opt.completed_quantity ?? 0) + Number(opt.already_outsourced_quantity ?? 0),
+              }));
+          }),
+        )
+      ).flat();
+      const filteredRows = normalizedKeyword
+        ? rows.filter((row) => {
+          const workOrderCode = String(row.work_order_code || '').toLowerCase();
+          const workOrderName = String(row.work_order_name || '').toLowerCase();
+          const operationCode = String(row.operation_code || '').toLowerCase();
+          const operationName = String(row.operation_name || '').toLowerCase();
+          return (
+            workOrderCode.includes(normalizedKeyword)
+            || workOrderName.includes(normalizedKeyword)
+            || operationCode.includes(normalizedKeyword)
+            || operationName.includes(normalizedKeyword)
+          );
+        })
+        : rows;
+      const total = filteredRows.length;
+      const start = (page - 1) * pageSize;
+      return {
+        data: filteredRows.slice(start, start + pageSize),
+        total,
+      };
+    },
+    isRowDisabled: (record) => Number(record.outsourceable_quantity ?? 0) <= 0,
+    onConfirm: async (_selectedKeys, selectedRows) => {
+      const selected = selectedRows[0];
+      if (!selected?.work_order_id || !selected?.work_order_operation_id) {
+        messageApi.warning(t('app.kuaizhizao.outsourceOrder.pullSelectOperationFirst'));
+        return;
+      }
+      if (Number(selected.outsourceable_quantity ?? 0) <= 0) {
+        messageApi.warning(t('app.kuaizhizao.outsourceOrder.pullPreviewBlocked'));
+        return;
+      }
+      pullFromWorkOrderQuery.closeModal();
+      await openOutsourcePullPreview(selected.work_order_id, selected.work_order_operation_id);
+    },
+  });
+
+  const handleSubmitCreate = async (values: any): Promise<void> => {
+    if (!createWorkOrder?.id || !createLockedOperation) {
+      messageApi.error(t('app.kuaizhizao.outsourceOrder.createFromWorkOrder'));
+      throw new Error(t('app.kuaizhizao.outsourceOrder.createFromWorkOrder'));
+    }
+    const outsourceQty = Number(values.outsource_quantity);
+    if (!Number.isFinite(outsourceQty) || outsourceQty <= 0) {
+      messageApi.error(t('app.kuaizhizao.outsourceOrder.ruleEnterOutsourceQty'));
+      throw new Error('invalid qty');
+    }
+    if (outsourceQty > createMaxOutsourceQty) {
+      messageApi.error(t('app.kuaizhizao.outsourceOrder.ruleEnterOutsourceQty'));
+      throw new Error('exceed qty');
+    }
+    try {
+      await outsourceOrderApi.createFromWorkOrder(String(createWorkOrder.id), {
+        work_order_operation_id: createLockedOperation.work_order_operation_id,
+        supplier_id: values.supplier_id,
+        outsource_quantity: outsourceQty,
+        unit_price: values.unit_price,
+        planned_start_date: values.planned_start_date
+          ? values.planned_start_date.format('YYYY-MM-DD HH:mm:ss')
+          : undefined,
+        planned_end_date: values.planned_end_date
+          ? values.planned_end_date.format('YYYY-MM-DD HH:mm:ss')
+          : undefined,
+        remarks: values.remarks,
+      });
+      messageApi.success(t('app.kuaizhizao.outsourceOrder.createSuccess'));
+      setCreateModalVisible(false);
+      setCreateWorkOrder(null);
+      setCreateLockedOperation(null);
+      setCreateMaxOutsourceQty(0);
+      createFormRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      setStatsVersion((v) => v + 1);
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.outsourceOrder.createFailed'));
+      throw error;
+    }
+  };
 
   const refreshLocalStats = useCallback(async () => {
     try {
@@ -442,17 +703,9 @@ export const OutsourceOrdersTable: React.FC = () => {
     });
   };
 
-  /** 工序委外单需从工单工序下推创建，本页不提供直建 */
+  /** 工序委外单须经上拉选源创建 */
   const handleCreate = () => {
-    Modal.confirm({
-      title: t('app.kuaizhizao.outsourceOrder.createGuideTitle'),
-      content: t('app.kuaizhizao.outsourceOrder.createGuideContent'),
-      okText: t('app.kuaizhizao.outsourceOrder.goToWorkOrders'),
-      cancelText: t('common.cancel'),
-      onOk: () => {
-        navigate('/apps/kuaizhizao/production-execution/work-orders');
-      },
-    });
+    pullFromWorkOrderQuery.openModal();
   };
   useNewShortcut(handleCreate);
   const createButtonLabel = useMemo(
@@ -760,6 +1013,211 @@ export const OutsourceOrdersTable: React.FC = () => {
         })}
       />
       </ListPageTemplate>
+
+      <UniPullQueryModal<PullOutsourceOperationCandidate>
+        open={pullFromWorkOrderQuery.open}
+        title={t('app.kuaizhizao.outsourceOrder.pullSelectSource')}
+        onCancel={pullFromWorkOrderQuery.closeModal}
+        onOk={pullFromWorkOrderQuery.handleConfirm}
+        rowKey="pull_row_key"
+        isRowDisabled={pullFromWorkOrderQuery.isRowDisabled}
+        columns={[
+          { title: t('app.kuaizhizao.outsourceOrder.colWorkOrderCode'), dataIndex: 'work_order_code', width: 160, ellipsis: true },
+          { title: t('app.kuaizhizao.workReporting.colWorkOrderName'), dataIndex: 'work_order_name', width: 180, ellipsis: true },
+          {
+            title: t('app.kuaizhizao.outsourceOrder.colOperationName'),
+            key: 'operation_display',
+            width: 200,
+            ellipsis: true,
+            render: (_, row) => `${row.operation_name || '-'} (${row.operation_code || '-'})`,
+          },
+          { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'max_quantity', width: 90, align: 'right' },
+          { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'occupied_quantity', width: 90, align: 'right' },
+          { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'outsourceable_quantity', width: 90, align: 'right' },
+        ]}
+        dataSource={pullFromWorkOrderQuery.dataSource}
+        loading={pullFromWorkOrderQuery.loading}
+        confirmLoading={pullFromWorkOrderQuery.confirmLoading}
+        selectionType={pullFromWorkOrderQuery.selectionType}
+        selectedRowKeys={pullFromWorkOrderQuery.selectedRowKeys}
+        onSelectedRowKeysChange={pullFromWorkOrderQuery.handleSelectedRowKeysChange}
+        searchDraft={pullFromWorkOrderQuery.searchDraft}
+        onSearchDraftChange={pullFromWorkOrderQuery.setSearchDraft}
+        onSearchApply={pullFromWorkOrderQuery.handleSearchApply}
+        onSearchClear={pullFromWorkOrderQuery.handleSearchClear}
+        appliedKeyword={pullFromWorkOrderQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.workReporting.formWorkOrderPlaceholder')}
+        page={pullFromWorkOrderQuery.page}
+        pageSize={pullFromWorkOrderQuery.pageSize}
+        total={pullFromWorkOrderQuery.total}
+        onPageChange={pullFromWorkOrderQuery.handlePageChange}
+        okText={t('common.next')}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+      />
+
+      <Modal
+        title={t('app.kuaizhizao.outsourceOrder.pullPreviewTitle')}
+        open={pullPreviewOpen}
+        destroyOnClose
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        onCancel={resetPullPreview}
+        okText={t('common.next')}
+        cancelText={t('common.cancel')}
+        onOk={() => handlePullPreviewConfirm()}
+        okButtonProps={{
+          disabled:
+            pullPreviewLoading ||
+            !pullPreviewData ||
+            !!pullPreviewData?.has_blocking_issues ||
+            !(pullPreviewData?.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0),
+        }}
+      >
+        {pullPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+          </div>
+        ) : pullPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
+            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
+              <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={pullPreviewData.blocking_reason} />
+            ) : null}
+            {pullPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pullPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 860 }}
+                columns={[
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.outsourceOrder.pullPreviewNoLines')} />
+            )}
+            {pullPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                {pullPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+
+      <FormModalTemplate
+        title={t('app.kuaizhizao.outsourceOrder.createModalTitle')}
+        open={createModalVisible}
+        onClose={() => {
+          setCreateModalVisible(false);
+          setCreateWorkOrder(null);
+          setCreateLockedOperation(null);
+          setCreateMaxOutsourceQty(0);
+          createFormRef.current?.resetFields();
+        }}
+        onFinish={handleSubmitCreate}
+        formRef={createFormRef}
+        {...MODAL_CONFIG}
+      >
+        {createWorkOrder && createLockedOperation ? (
+          <>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={t('app.kuaizhizao.outsourceOrder.formSourceLocked')}
+            />
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Descriptions column={2} size="small">
+                <Descriptions.Item label={t('app.kuaizhizao.outsourceOrder.colWorkOrderCode')}>
+                  {createWorkOrder.code || '—'}
+                </Descriptions.Item>
+                <Descriptions.Item label={t('app.kuaizhizao.workReporting.colWorkOrderName')}>
+                  {createWorkOrder.name || '—'}
+                </Descriptions.Item>
+                <Descriptions.Item label={t('app.kuaizhizao.outsourceOrder.colOperationName')} span={2}>
+                  {`${createLockedOperation.operation_name || '—'} (${createLockedOperation.operation_code || '—'})`}
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
+            <ProFormText name="work_order_operation_id" hidden />
+            <ProFormItem
+              name="supplier_id"
+              label={t('app.kuaizhizao.outsourceOrder.fieldSupplier')}
+              rules={[{ required: true, message: t('app.kuaizhizao.outsourceOrder.ruleSelectSupplier') }]}
+            >
+              <UniDropdown
+                placeholder={t('app.kuaizhizao.outsourceOrder.placeholderSupplier')}
+                showSearch
+                allowClear
+                style={{ width: '100%' }}
+                options={supplierList.map((s: Supplier) => ({
+                  label: `${s.code} - ${s.name}`,
+                  value: s.id,
+                }))}
+                quickCreate={{ label: t('app.kuaizhizao.outsourceOrder.supplierManage'), onClick: () => navigate('/apps/master-data/supply-chain/suppliers') }}
+              />
+            </ProFormItem>
+            <ProFormDigit
+              name="outsource_quantity"
+              label={t('app.kuaizhizao.outsourceOrder.fieldOutsourceQty')}
+              placeholder={t('app.kuaizhizao.outsourceOrder.placeholderOutsourceQty')}
+              rules={[
+                { required: true, message: t('app.kuaizhizao.outsourceOrder.ruleEnterOutsourceQty') },
+                {
+                  validator: async (_, value) => {
+                    if (value == null || value === '') return;
+                    const qty = Number(value);
+                    if (!Number.isFinite(qty) || qty <= 0) {
+                      throw new Error(t('app.kuaizhizao.outsourceOrder.ruleEnterOutsourceQty'));
+                    }
+                    if (qty > createMaxOutsourceQty) {
+                      throw new Error(t('app.kuaizhizao.outsourceOrder.ruleEnterOutsourceQty'));
+                    }
+                  },
+                },
+              ]}
+              min={0}
+              max={createMaxOutsourceQty > 0 ? createMaxOutsourceQty : undefined}
+              fieldProps={{ precision: 2 }}
+              extra={t('app.kuaizhizao.salesOrder.colPushableQty') + `: ${createMaxOutsourceQty}`}
+            />
+            <ProFormDigit
+              name="unit_price"
+              label={t('app.kuaizhizao.outsourceOrder.fieldUnitPrice')}
+              placeholder={t('app.kuaizhizao.outsourceOrder.placeholderUnitPrice')}
+              min={0}
+              fieldProps={{ precision: 2 }}
+            />
+            <ProFormDatePicker
+              name="planned_start_date"
+              label={t('app.kuaizhizao.outsourceOrder.fieldPlannedStart')}
+              placeholder={t('app.kuaizhizao.outsourceOrder.placeholderPlannedStart')}
+              fieldProps={{ showTime: true }}
+            />
+            <ProFormDatePicker
+              name="planned_end_date"
+              label={t('app.kuaizhizao.outsourceOrder.fieldPlannedEnd')}
+              placeholder={t('app.kuaizhizao.outsourceOrder.placeholderPlannedEnd')}
+              fieldProps={buildFutureDateShortcutFieldProps({
+                showTime: true,
+              })}
+            />
+            <ProFormTextArea
+              name="remarks"
+              label={t('app.kuaizhizao.common.fieldNotes')}
+              placeholder={t('app.kuaizhizao.outsourceOrder.placeholderRemarks')}
+              fieldProps={{ rows: 3 }}
+            />
+          </>
+        ) : null}
+      </FormModalTemplate>
+
       {/* 表单Modal（主要用于编辑） */}
       {isEdit && (
         <FormModalTemplate

@@ -12,14 +12,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormTextArea, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Tag, Button, Space, Divider, Typography } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, SearchOutlined, ToolOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { App, Tag, Button, Divider, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { getQualityExceptionLifecycle } from '../../../utils/qualityExceptionLifecycle';
+import { renderRowActionsOverflow, rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
+import { ExceptionListPage } from '../../../services/production';
+import { ACTIVE_QUALITY_EXCEPTION_STATUSES } from '../../../constants/exceptionStatuses';
 import { qualityImprovementApi } from '../../../services/quality-improvement';
 import { buildInspectionDetailPath } from '../../quality-management/components/inspectionTemplateUtils';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -261,27 +261,6 @@ const QualityExceptionsPage: React.FC = () => {
       },
     },
     {
-      title: t(`${P}.col.lifecycle`),
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getQualityExceptionLifecycle(record as Record<string, unknown>, t);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      },
-    },
-    {
       title: t(`${P}.col.responsiblePerson`),
       dataIndex: 'responsible_person_name',
       width: 100,
@@ -294,83 +273,82 @@ const QualityExceptionsPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
+      valueType: 'option',
       width: 250,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            {t('common.detail')}
-          </Button>
-          {record.status === 'pending' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<SearchOutlined />}
-              onClick={() => openHandleModal(record, 'investigate')}
-            >
-              {t(`${P}.action.investigate`)}
-            </Button>
-          )}
-          {record.status === 'investigating' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<ToolOutlined />}
-              onClick={() => openHandleModal(record, 'correct')}
-            >
-              {t(`${P}.action.correct`)}
-            </Button>
-          )}
-          {record.status === 'correcting' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => openHandleModal(record, 'close')}
-            >
-              {t(`${P}.action.close`)}
-            </Button>
-          )}
-          {(record.status === 'pending' || record.status === 'investigating' || record.status === 'correcting') && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CloseCircleOutlined />}
-              onClick={() => openHandleModal(record, 'cancel')}
-              danger
-            >
-              {t(`${P}.action.cancel`)}
-            </Button>
-          )}
-          {canCreate8D && (
-            <Button
-              type="link"
-              size="small"
-              onClick={async () => {
-                try {
-                  const report = await qualityImprovementApi.eightD.startFromException(
-                    Number(record.id),
-                    `${record.work_order_code || t(`${Q}.defaultReportTitle`)}-${record.problem_description || t(`${Q}.defaultReportSuffix`)}`
-                  );
-                  messageApi.success(t(`${Q}.message.start8DSuccess`));
-                  if (report?.id) {
-                    navigate(`/apps/kuaizhizao/quality-management/eight-d-reports?report_id=${report.id}`);
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+              {t('common.detail')}
+            </Button>,
+            record.status === 'pending' ? (
+              <Button
+                key="investigate"
+                {...rowActionKind('audit')}
+                {...rowActionLabelKeep()}
+                onClick={() => openHandleModal(record, 'investigate')}
+              >
+                {t(`${P}.action.investigate`)}
+              </Button>
+            ) : null,
+            record.status === 'investigating' ? (
+              <Button
+                key="correct"
+                {...rowActionKind('update')}
+                {...rowActionLabelKeep()}
+                onClick={() => openHandleModal(record, 'correct')}
+              >
+                {t(`${P}.action.correct`)}
+              </Button>
+            ) : null,
+            record.status === 'correcting' ? (
+              <Button
+                key="close"
+                {...rowActionKind('complete')}
+                {...rowActionLabelKeep()}
+                onClick={() => openHandleModal(record, 'close')}
+              >
+                {t(`${P}.action.close`)}
+              </Button>
+            ) : null,
+            (record.status === 'pending' ||
+              record.status === 'investigating' ||
+              record.status === 'correcting') ? (
+              <Button
+                key="cancel"
+                {...rowActionKind('reject')}
+                onClick={() => openHandleModal(record, 'cancel')}
+              >
+                {t(`${P}.action.cancel`)}
+              </Button>
+            ) : null,
+            canCreate8D ? (
+              <Button
+                key="start8d"
+                {...rowActionKind('create')}
+                {...rowActionLabelKeep()}
+                onClick={async () => {
+                  try {
+                    const report = await qualityImprovementApi.eightD.startFromException(
+                      Number(record.id),
+                      `${record.work_order_code || t(`${Q}.defaultReportTitle`)}-${record.problem_description || t(`${Q}.defaultReportSuffix`)}`,
+                    );
+                    messageApi.success(t(`${Q}.message.start8DSuccess`));
+                    if (report?.id) {
+                      navigate(`/apps/kuaizhizao/quality-management/eight-d-reports?report_id=${report.id}`);
+                    }
+                  } catch (error: any) {
+                    messageApi.error(error?.message || t(`${Q}.message.start8DFailed`));
                   }
-                } catch (error: any) {
-                  messageApi.error(error?.message || t(`${Q}.message.start8DFailed`));
-                }
-              }}
-            >
-              {t(`${Q}.action.start8D`)}
-            </Button>
-          )}
-        </Space>
-      ),
+                }}
+              >
+                {t(`${Q}.action.start8D`)}
+              </Button>
+            ) : null,
+          ],
+          { keyPrefix: `quality-exception-actions-${record.id ?? 'row'}` },
+        ),
     },
   ], [t, canCreate8D, navigate, messageApi]);
 
@@ -382,29 +360,34 @@ const QualityExceptionsPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.production-execution.quality-exceptions"
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           try {
             const pageSize = params.pageSize || 20;
             const skip = (params.current! - 1) * pageSize;
-            const result = await apiRequest('/apps/kuaizhizao/exceptions/quality', {
-              method: 'GET',
-              params: {
-                skip,
-                limit: pageSize,
-                exception_type: params.exception_type,
-                status: params.status,
-                severity: params.severity,
-                inspection_record_id: initialInspectionRecordId || undefined,
-                inspection_source_type: initialInspectionSourceType || undefined,
+            const queryParams: Record<string, unknown> = {
+              skip,
+              limit: pageSize,
+              exception_type: searchFormValues?.exception_type ?? params.exception_type,
+              severity: searchFormValues?.severity ?? params.severity,
+              inspection_record_id: initialInspectionRecordId || undefined,
+              inspection_source_type: initialInspectionSourceType || undefined,
+            };
+            if (searchFormValues?.status) {
+              queryParams.status = searchFormValues.status;
+            } else {
+              queryParams.statuses = ACTIVE_QUALITY_EXCEPTION_STATUSES;
+            }
+            const result = await apiRequest<ExceptionListPage<QualityException>>(
+              '/apps/kuaizhizao/exceptions/quality',
+              {
+                method: 'GET',
+                params: queryParams,
               },
-            });
-            const rows = Array.isArray(result) ? result : (result as { items?: QualityException[] })?.items ?? [];
-            const total =
-              rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
+            );
             return {
-              data: rows,
+              data: result.items,
               success: true,
-              total,
+              total: result.total,
             };
           } catch {
             messageApi.error(t(`${P}.message.fetchListFailed`));

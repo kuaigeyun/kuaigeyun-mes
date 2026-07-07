@@ -18,12 +18,13 @@ import {
   ProFormTextArea,
   ProFormDigit,
   ProFormItem,
-  ProFormDependency,
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import {
   App,
+  Alert,
   Button,
+  Modal,
   Space,
   Card,
   Row,
@@ -32,6 +33,7 @@ import {
   Typography,
   Spin,
   Empty,
+  Table,
   theme as AntdTheme,
 } from 'antd';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -57,17 +59,14 @@ import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectio
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
-import { qualityApi, workOrderApi } from '../../../services/production';
+import { qualityApi } from '../../../services/production';
+import type { DocumentPushPreview } from '../../../services/purchase-requisition';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
 import InspectionTemplateConductResultsTable from '../components/InspectionTemplateConductResultsTable';
 import InspectionDetailQualityActions from '../components/InspectionDetailQualityActions';
 import { pickInspectionConductExtras } from '../components/inspectionTemplateUtils';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import {
-  fetchWorkOrdersForInspection,
-  type InspectionDropdownOption,
-} from '../components/inspectionCreateSourceUtils';
 import { downloadFile } from '../../../services/common';
 import { countWithPagedRequests } from '../../../../../utils/pagedCount';
 import dayjs from 'dayjs';
@@ -77,7 +76,7 @@ import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImpo
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
-import { qualityInspectionRowGates } from '../../../../../hooks/useDocumentCapabilities';
+import { qualityInspectionCapabilityReasonMessage, qualityInspectionRowGates } from '../../../../../hooks/useDocumentCapabilities';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
@@ -100,6 +99,12 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 const PROCESS_RESOURCE = 'kuaizhizao:quality-management-process-inspection';
 const PROCESS_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_process_inspections';
 const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
+
+type ProcessPullWorkOrderCandidate = {
+  id: number;
+  code: string;
+  capabilities?: { pull_process_inspection?: { allowed?: boolean; reason?: string } };
+};
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -175,51 +180,6 @@ interface ProcessInspection {
     create_defect?: { allowed?: boolean; reason?: string };
   };
 }
-
-/**
- * 工序选择子组件 (Process Inspection)
- * 封装在 ProFormDependency 中使用，处理联动逻辑
- */
-const OperationSelect: React.FC<{ 
-  workOrderId?: number; 
-  value?: number; 
-  onChange?: (val: number) => void;
-  placeholder?: string;
-  disabled?: boolean;
-}> = ({ workOrderId, value, onChange, placeholder, disabled }) => {
-  const [options, setOptions] = useState<Array<{ label: string; value: number }>>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (workOrderId) {
-      setLoading(true);
-      workOrderApi.getOperations(workOrderId.toString())
-        .then(response => {
-          const data = Array.isArray(response) ? response : (response.data || []);
-          setOptions(data.map((op: any) => ({
-            label: `${op.operation_name} (${op.sequence || ''})`,
-            value: op.operation_id,
-          })));
-        })
-        .catch(() => setOptions([]))
-        .finally(() => setLoading(false));
-    } else {
-      setOptions([]);
-    }
-  }, [workOrderId]);
-
-  return (
-    <UniDropdown
-      placeholder={placeholder}
-      showSearch
-      loading={loading}
-      disabled={disabled || !workOrderId}
-      options={options}
-      value={value}
-      onChange={onChange}
-    />
-  );
-};
 
 const ProcessInspectionPage: React.FC = () => {
   const navigate = useNavigate();
@@ -351,7 +311,13 @@ const ProcessInspectionPage: React.FC = () => {
     piTrackingRefreshKey,
   );
 
-  const [pullOperationId, setPullOperationId] = useState<number | undefined>(undefined);
+  const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
+  const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
+  const [pullPreviewConfirming, setPullPreviewConfirming] = useState(false);
+  const [pullPreviewData, setPullPreviewData] = useState<DocumentPushPreview | null>(null);
+  const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
+  const [pullSelectedOperationId, setPullSelectedOperationId] = useState<number | undefined>(undefined);
+  const pullFromWorkOrderCloseRef = useRef<(() => void) | null>(null);
 
   // 创建不合格品记录Modal状态
   const [createDefectModalVisible, setCreateDefectModalVisible] = useState(false);
@@ -487,48 +453,92 @@ const ProcessInspectionPage: React.FC = () => {
     }
   };
 
-  const pullFromWorkOrderQuery = useUniPullQuery<{ id: number; code: string }>({
+  const pullFromWorkOrderQuery = useUniPullQuery<ProcessPullWorkOrderCandidate>({
     rowKey: 'id',
     selectionType: 'radio',
     loadData: async ({ keyword, page, pageSize }) => {
       try {
-        const options = await fetchWorkOrdersForInspection();
-        const kw = keyword.trim().toLowerCase();
-        const rows = options
-          .map((it) => ({ id: Number(it.value), code: String(it.label || '') }))
-          .filter((it) => (kw ? it.code.toLowerCase().includes(kw) : true));
-        const start = (page - 1) * pageSize;
-        return { data: rows.slice(start, start + pageSize), total: rows.length };
+        const res = await qualityApi.processInspection.listWorkOrderPullCandidates({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+        });
+        return {
+          data: (res.data || []) as ProcessPullWorkOrderCandidate[],
+          total: res.total ?? 0,
+        };
       } catch {
         messageApi.error(t('app.kuaizhizao.quality.process.messages.loadWorkOrderFailed'));
         return { data: [], total: 0 };
       }
     },
-    onOpen: () => setPullOperationId(undefined),
+    isRowDisabled: (row) => row.capabilities?.pull_process_inspection?.allowed === false,
     onConfirm: async (keys, rows) => {
       const selected = rows.find((x) => String(x.id) === String(keys[0]));
       if (!selected?.id) {
         messageApi.warning(t('app.kuaizhizao.quality.process.form.selectWorkOrder'));
         return;
       }
-      if (!pullOperationId) {
-        messageApi.warning(t('app.kuaizhizao.quality.process.form.selectOperation'));
-        return;
-      }
+      pullFromWorkOrderCloseRef.current?.();
+      setPullPreviewOpen(true);
+      setPullPreviewLoading(true);
+      setPullPreviewConfirming(false);
+      setPullPreviewData(null);
+      setPullPreviewSourceId(selected.id);
+      setPullSelectedOperationId(undefined);
       try {
-        await qualityApi.processInspection.createFromWorkOrder(
-          String(selected.id),
-          String(pullOperationId),
+        const data = await qualityApi.processInspection.previewPullFromWorkOrder(String(selected.id));
+        setPullPreviewData(data as DocumentPushPreview);
+        const firstPushable = (data.items || []).find(
+          (row) => Number(row.max_push_quantity ?? 0) > 0,
         );
-        messageApi.success(t('app.kuaizhizao.quality.process.messages.createSuccess'));
-        pullFromWorkOrderQuery.closeModal();
-        invalidateStats();
-        actionRef.current?.reload();
+        if (firstPushable) {
+          setPullSelectedOperationId(Number(firstPushable.item_id));
+        }
       } catch (error: any) {
-        messageApi.error(error.message || t('app.kuaizhizao.quality.process.messages.createFailed'));
+        messageApi.error(error?.message || t('app.kuaizhizao.purchaseReturn.pull.previewFailed'));
+        setPullPreviewOpen(false);
+        setPullPreviewSourceId(null);
+      } finally {
+        setPullPreviewLoading(false);
       }
     },
   });
+  pullFromWorkOrderCloseRef.current = pullFromWorkOrderQuery.closeModal;
+
+  const resetPullPreview = () => {
+    setPullPreviewOpen(false);
+    setPullPreviewSourceId(null);
+    setPullPreviewData(null);
+    setPullSelectedOperationId(undefined);
+  };
+
+  const handlePullPreviewConfirm = async () => {
+    if (!pullPreviewSourceId || !pullPreviewData) return;
+    if (pullPreviewData.has_blocking_issues) return;
+    const row = (pullPreviewData.items || []).find(
+      (item) => Number(item.item_id) === pullSelectedOperationId,
+    );
+    if (!row || Number(row.max_push_quantity ?? 0) <= 0) {
+      messageApi.warning(t('app.kuaizhizao.quality.process.pull.selectOperationFirst'));
+      return;
+    }
+    setPullPreviewConfirming(true);
+    try {
+      await qualityApi.processInspection.createFromWorkOrder(
+        String(pullPreviewSourceId),
+        String(pullSelectedOperationId),
+      );
+      messageApi.success(t('app.kuaizhizao.quality.process.messages.createSuccess'));
+      resetPullPreview();
+      invalidateStats();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.quality.process.messages.createFailed'));
+    } finally {
+      setPullPreviewConfirming(false);
+    }
+  };
   useNewShortcut(pullFromWorkOrderQuery.openModal);
 
   // 处理创建不合格品记录
@@ -1076,7 +1086,7 @@ const ProcessInspectionPage: React.FC = () => {
         />
       </FormModalTemplate>
 
-      <UniPullQueryModal<{ id: number; code: string }>
+      <UniPullQueryModal<ProcessPullWorkOrderCandidate>
         open={pullFromWorkOrderQuery.open}
         title={pullFromWorkOrderAction.label}
         onCancel={pullFromWorkOrderQuery.closeModal}
@@ -1089,6 +1099,7 @@ const ProcessInspectionPage: React.FC = () => {
         selectionType={pullFromWorkOrderQuery.selectionType}
         selectedRowKeys={pullFromWorkOrderQuery.selectedRowKeys}
         onSelectedRowKeysChange={pullFromWorkOrderQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromWorkOrderQuery.isRowDisabled}
         searchDraft={pullFromWorkOrderQuery.searchDraft}
         onSearchDraftChange={pullFromWorkOrderQuery.setSearchDraft}
         onSearchApply={pullFromWorkOrderQuery.handleSearchApply}
@@ -1099,26 +1110,81 @@ const ProcessInspectionPage: React.FC = () => {
         pageSize={pullFromWorkOrderQuery.pageSize}
         total={pullFromWorkOrderQuery.total}
         onPageChange={pullFromWorkOrderQuery.handlePageChange}
-        filterExtra={(
-          <ProFormItem
-            label={t('app.kuaizhizao.quality.process.form.selectOperation')}
-            required
-            style={{ marginBottom: 0 }}
-          >
-            <OperationSelect
-              workOrderId={Number(pullFromWorkOrderQuery.selectedRows?.[0]?.id) || undefined}
-              placeholder={
-                pullFromWorkOrderQuery.selectedRows?.[0]?.id
-                  ? t('app.kuaizhizao.quality.process.form.selectOperation')
-                  : t('app.kuaizhizao.quality.process.form.selectWorkOrderFirst')
-              }
-              value={pullOperationId}
-              onChange={(v) => setPullOperationId(v as number)}
-            />
-          </ProFormItem>
-        )}
-        okButtonProps={{ disabled: !pullFromWorkOrderQuery.selectedRows?.[0]?.id || !pullOperationId }}
       />
+
+      <Modal
+        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
+        open={pullPreviewOpen}
+        destroyOnClose
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        onCancel={resetPullPreview}
+        okText={pullFromWorkOrderAction.label}
+        cancelText={t('common.cancel')}
+        confirmLoading={pullPreviewConfirming}
+        onOk={() => void handlePullPreviewConfirm()}
+        okButtonProps={{
+          disabled:
+            pullPreviewLoading ||
+            !pullPreviewData ||
+            !!pullPreviewData?.has_blocking_issues ||
+            !pullSelectedOperationId ||
+            !(pullPreviewData?.items || []).some(
+              (row) =>
+                Number(row.item_id) === pullSelectedOperationId &&
+                Number(row.max_push_quantity ?? 0) > 0,
+            ),
+        }}
+      >
+        {pullPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+          </div>
+        ) : pullPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
+            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={qualityInspectionCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
+              />
+            ) : null}
+            {pullPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pullPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 960 }}
+                rowSelection={{
+                  type: 'radio',
+                  selectedRowKeys: pullSelectedOperationId ? [String(pullSelectedOperationId)] : [],
+                  onChange: (keys) => setPullSelectedOperationId(keys[0] ? Number(keys[0]) : undefined),
+                  getCheckboxProps: (row) => ({
+                    disabled: Number(row.max_push_quantity ?? 0) <= 0,
+                  }),
+                }}
+                columns={[
+                  { title: t('app.kuaizhizao.quality.common.columns.operationCode'), dataIndex: 'operation_code', width: 120, ellipsis: true },
+                  { title: t('app.kuaizhizao.quality.common.columns.operationName'), dataIndex: 'operation_name', width: 160, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')} />
+            )}
+            {pullPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                {pullPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
 
       {/* 过程检验详情 Drawer */}
       <DetailDrawerTemplate

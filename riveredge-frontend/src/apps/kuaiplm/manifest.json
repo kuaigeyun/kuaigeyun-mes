@@ -31,6 +31,12 @@
             "path": "/apps/kuaiplm/rd-projects",
             "permission": "kuaiplm:project:read",
             "sort_order": 2
+          },
+          {
+            "title": "app.kuaiplm.menu.gate-templates",
+            "path": "/apps/kuaiplm/gate-templates",
+            "permission": "kuaiplm:gate-template:read",
+            "sort_order": 3
           }
         ]
       },
@@ -139,6 +145,10 @@
     "kuaiplm:project:delete",
     "kuaiplm:project:update",
     "kuaiplm:project:export",
+    "kuaiplm:gate-template:read",
+    "kuaiplm:gate-template:create",
+    "kuaiplm:gate-template:update",
+    "kuaiplm:gate-template:delete",
     "kuaiplm:change:read",
     "kuaiplm:change:update",
     "kuaiplm:change:submit",

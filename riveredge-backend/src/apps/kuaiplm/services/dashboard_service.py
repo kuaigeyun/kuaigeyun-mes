@@ -9,8 +9,6 @@ from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
 from apps.kuaiplm.constants.rd_project import (
-    DEFAULT_DELIVERY_GATES,
-    DEFAULT_NPI_GATES,
     PROJECT_STATUS_LABELS,
     RdDeliverableStatus,
     RdGateStatus,
@@ -34,17 +32,19 @@ from apps.master_data.models.bom_change import BOMChange
 from apps.master_data.models.process_route_change import ProcessRouteChange
 from core.utils.timezone_utils import to_api_isoformat
 
-_GATE_NAME_MAP = {
-    **{g["gate_key"]: g["gate_name"] for g in DEFAULT_NPI_GATES},
-    **{g["gate_key"]: g["gate_name"] for g in DEFAULT_DELIVERY_GATES},
-}
-
-
 class DashboardService:
-    def _gate_display_name(self, gate_key: Optional[str]) -> Optional[str]:
+    def _gate_display_name(
+        self,
+        gate_key: Optional[str],
+        gates: Optional[List[RdProjectGate]] = None,
+    ) -> Optional[str]:
         if not gate_key:
             return None
-        return _GATE_NAME_MAP.get(gate_key, gate_key)
+        if gates:
+            for gate in gates:
+                if gate.gate_key == gate_key:
+                    return gate.gate_name
+        return gate_key
 
     def _project_progress(
         self,
@@ -117,7 +117,7 @@ class DashboardService:
                 "planned_end_date": to_api_isoformat(end),
                 "progress": self._project_progress(gates, tasks, deliverables),
                 "current_gate_key": project.current_gate_key,
-                "current_gate_name": self._gate_display_name(project.current_gate_key),
+                "current_gate_name": self._gate_display_name(project.current_gate_key, gates),
                 "owner_name": project.owner_name,
             })
         return items
@@ -223,6 +223,14 @@ class DashboardService:
         fmea_total = await RdFmeaRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True).count()
 
         recent = await RdProject.filter(tenant_id=tenant_id, deleted_at__isnull=True).order_by("-updated_at").limit(5).all()
+        recent_ids = [p.id for p in recent]
+        recent_gates = await RdProjectGate.filter(
+            tenant_id=tenant_id, project_id__in=recent_ids
+        ).all() if recent_ids else []
+        recent_gates_by_project: Dict[int, List[RdProjectGate]] = {}
+        for gate in recent_gates:
+            recent_gates_by_project.setdefault(gate.project_id, []).append(gate)
+
         recent_projects = [
             {
                 "id": p.id,
@@ -232,7 +240,9 @@ class DashboardService:
                 "status_label": PROJECT_STATUS_LABELS.get(p.status, p.status),
                 "project_type": p.project_type,
                 "current_gate_key": p.current_gate_key,
-                "current_gate_name": self._gate_display_name(p.current_gate_key),
+                "current_gate_name": self._gate_display_name(
+                    p.current_gate_key, recent_gates_by_project.get(p.id, [])
+                ),
                 "updated_at": to_api_isoformat(p.updated_at) if p.updated_at else None,
             }
             for p in recent

@@ -190,9 +190,13 @@ const ProductionControlTower: React.FC = () => {
           </Spin>
         </Col>
 
-        {/* 快捷按钮 (6 宫格) */}
+        {/* 快捷按钮 */}
         <Col span={24}>
-          <ModuleShortcutGrid items={kpiShortcuts} colProps={{ xs: 12, sm: 8, md: 4 }} />
+          <ModuleShortcutGrid
+            items={kpiShortcuts}
+            colProps={{ xs: 12, sm: 8, md: 4, lg: 4 }}
+            fillByItemCount
+          />
         </Col>
 
         {/* 执行协调 */}

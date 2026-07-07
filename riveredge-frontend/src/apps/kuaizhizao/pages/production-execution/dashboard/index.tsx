@@ -25,15 +25,11 @@ import {
   ModuleActionMasonry,
   ModuleTodoList,
   ModuleChartPanel,
+  ModuleTrendLine,
 } from '../../../components/module-center';
 import { translateWorkOrderLifecycleStatus } from '../../../utils/workOrderLifecycle';
 
 const { Text } = Typography;
-
-const MfgTrendLine = lazy(async () => {
-  const { Line } = await import('@ant-design/charts');
-  return { default: (props: React.ComponentProps<typeof Line>) => <Line {...props} /> };
-});
 
 const MfgStatusPie = lazy(async () => {
   const { Pie } = await import('@ant-design/charts');
@@ -448,17 +444,14 @@ const ManufacturingDashboard: React.FC = () => {
               onChange: (v) => setTrendType(v as 'output' | 'qualified'),
             }}
           >
-            <Suspense fallback={null}>
-              <MfgTrendLine
+            <ModuleTrendLine
                 data={trendChartData}
                 xField="date"
                 yField="value"
                 height={240}
                 autoFit
-                shapeField="smooth"
                 style={{ lineWidth: 2 }}
               />
-            </Suspense>
           </ModuleChartPanel>
           <ModuleChartPanel
             layout="masonry"

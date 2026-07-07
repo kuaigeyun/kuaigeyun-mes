@@ -12,16 +12,17 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { mesDashboardService } from '../../../services/dashboard';
-import { equipmentFaultApi, maintenancePlanApi } from '../../../services/equipment';
+import { equipmentFaultApi, maintenancePlanApi, sparePartApi } from '../../../services/equipment';
+import { spotChecksApi } from '../../../services/equipmentOps';
 import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
   ModuleShortcutGrid,
   ModuleActionPanel,
+  ModuleActionMasonry,
   ModuleTodoList,
   ModuleChartPanel,
-  ModuleChartRow,
 } from '../../../components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 
@@ -37,6 +38,14 @@ const EquipmentStatusPie = lazy(async () => {
   return { default: (props: React.ComponentProps<typeof Pie>) => <Pie {...props} /> };
 });
 
+const SPOT_CHECK_PENDING = new Set(['draft', 'pending', '待执行', '草稿', 'DRAFT', 'PENDING']);
+
+function unwrapList(res: unknown): Record<string, unknown>[] {
+  if (Array.isArray(res)) return res as Record<string, unknown>[];
+  const payload = res as { items?: Record<string, unknown>[]; data?: Record<string, unknown>[] };
+  return payload?.items ?? payload?.data ?? [];
+}
+
 const EquipmentDashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -51,12 +60,20 @@ const EquipmentDashboard: React.FC = () => {
   );
   const { data: recentFaultsResult, loading: faultsLoading } = useDashboardRequest(async () => {
     const res = await equipmentFaultApi.list({ limit: 6 });
-    return Array.isArray(res) ? res : res?.items || [];
+    return unwrapList(res);
   }, 'kz:equipment-dashboard:faults');
   const { data: recentMaintenanceResult, loading: maintenanceLoading } = useDashboardRequest(async () => {
     const res = await maintenancePlanApi.list({ limit: 6 });
-    return Array.isArray(res) ? res : res?.items || [];
+    return unwrapList(res);
   }, 'kz:equipment-dashboard:maintenance');
+  const { data: spotChecksResult, loading: spotChecksLoading } = useDashboardRequest(async () => {
+    const res = await spotChecksApi.list({ limit: 12 });
+    return unwrapList(res).filter((row) => SPOT_CHECK_PENDING.has(String(row.status ?? '')));
+  }, 'kz:equipment-dashboard:spot-checks');
+  const { data: spareAlertsResult, loading: spareAlertsLoading } = useDashboardRequest(async () => {
+    const res = await sparePartApi.getAlerts();
+    return Array.isArray(res) ? res : unwrapList(res);
+  }, 'kz:equipment-dashboard:spare-alerts');
   const { data: trendData, loading: trendLoading } = useDashboardRequest(
     mesDashboardService.getEquipmentTrend,
     'kz:equipment-dashboard:trend',
@@ -65,6 +82,8 @@ const EquipmentDashboard: React.FC = () => {
   const s = summary as Record<string, number> | undefined;
   const recentFaults = recentFaultsResult || [];
   const recentMaintenance = recentMaintenanceResult || [];
+  const spotChecks = spotChecksResult || [];
+  const spareAlerts = spareAlertsResult || [];
   const todos = todosData?.items || [];
 
   const kpis: ModuleKpiDef[] = useMemo(
@@ -181,8 +200,16 @@ const EquipmentDashboard: React.FC = () => {
       {
         title: t('app.kuaizhizao.equipmentDashboard.colFaultNo'),
         dataIndex: 'fault_no',
-        render: (text: string, record: { uuid?: string }) => (
-          <a onClick={() => navigate(`/apps/kuaizhizao/equipment-management/equipment-faults`)}>
+        render: (text: string, record: { id?: number }) => (
+          <a
+            onClick={() =>
+              navigate(
+                record.id
+                  ? `/apps/kuaizhizao/equipment-management/equipment-faults/${record.id}`
+                  : '/apps/kuaizhizao/equipment-management/equipment-faults',
+              )
+            }
+          >
             {text}
           </a>
         ),
@@ -223,16 +250,62 @@ const EquipmentDashboard: React.FC = () => {
     [t],
   );
 
+  const spotCheckColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.equipmentDashboard.colSpotCheckCode'),
+        dataIndex: 'check_code',
+        render: (text: string, record: { id?: number }) => (
+          <a onClick={() => navigate('/apps/kuaizhizao/equipment-management/spot-checks')}>
+            {text || record.id}
+          </a>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.equipmentDashboard.colEquipment'),
+        dataIndex: 'equipment_name',
+        ellipsis: true,
+      },
+    ],
+    [navigate, t],
+  );
+
+  const spareAlertColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.equipmentDashboard.colSparePart'),
+        dataIndex: 'spare_part_name',
+        ellipsis: true,
+        render: (text: string, record: Record<string, unknown>) =>
+          String(text || record.name || record.material_name || '—'),
+      },
+      {
+        title: t('app.kuaizhizao.equipmentDashboard.colStockQty'),
+        dataIndex: 'current_quantity',
+        width: 72,
+        render: (_: unknown, record: Record<string, unknown>) =>
+          String(record.current_quantity ?? record.quantity ?? '—'),
+      },
+    ],
+    [t],
+  );
+
   return (
     <ModuleCenterLayout
       loading={summaryLoading && !s}
       kpiRow={<ModuleKpiRow items={kpis} />}
-      shortcutRow={<ModuleShortcutGrid items={shortcuts} />}
+      shortcutRow={
+        <ModuleShortcutGrid
+          items={shortcuts}
+          colProps={{ xs: 12, sm: 8, md: 4, lg: 4 }}
+          fillByItemCount
+        />
+      }
       actionRow={
-        <>
+        <ModuleActionMasonry>
           <ModuleActionPanel
+            layout="masonry"
             title={t('app.kuaizhizao.equipmentDashboard.todosTitle')}
-            lg={8}
             loading={todosLoading}
           >
             <ModuleTodoList
@@ -241,8 +314,8 @@ const EquipmentDashboard: React.FC = () => {
             />
           </ModuleActionPanel>
           <ModuleActionPanel
+            layout="masonry"
             title={t('app.kuaizhizao.equipmentDashboard.pendingFaultsTitle')}
-            lg={8}
             loading={faultsLoading}
             extra={
               <a onClick={() => navigate('/apps/kuaizhizao/equipment-management/equipment-faults')}>
@@ -254,18 +327,19 @@ const EquipmentDashboard: React.FC = () => {
               size="small"
               dataSource={recentFaults
                 .filter(
-                  (f: { status?: string }) =>
+                  (f) =>
                     !String(f.status).includes('完成') && !String(f.status).includes('fixed'),
                 )
                 .slice(0, 6)}
               pagination={false}
-              rowKey="id"
+              rowKey={(r) => String(r.id ?? r.uuid)}
               columns={faultColumns}
+              locale={{ emptyText: t('app.kuaizhizao.equipmentDashboard.noPendingFaults') }}
             />
           </ModuleActionPanel>
           <ModuleActionPanel
+            layout="masonry"
             title={t('app.kuaizhizao.equipmentDashboard.maintenanceDueTitle')}
-            lg={8}
             loading={maintenanceLoading}
             extra={
               <a onClick={() => navigate('/apps/kuaizhizao/equipment-management/maintenance-plans')}>
@@ -277,15 +351,53 @@ const EquipmentDashboard: React.FC = () => {
               size="small"
               dataSource={recentMaintenance.slice(0, 6)}
               pagination={false}
-              rowKey="id"
+              rowKey={(r) => String(r.id ?? r.uuid)}
               columns={maintenanceColumns}
+              locale={{ emptyText: t('app.kuaizhizao.equipmentDashboard.noMaintenanceDue') }}
             />
           </ModuleActionPanel>
-        </>
-      }
-      chartRow={
-        <ModuleChartRow>
-          <ModuleChartPanel title={t('app.kuaizhizao.equipmentDashboard.statusDistributionTitle')} lg={10}>
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.equipmentDashboard.spotChecksTitle')}
+            loading={spotChecksLoading}
+            extra={
+              <a onClick={() => navigate('/apps/kuaizhizao/equipment-management/spot-checks')}>
+                {t('app.kuaizhizao.equipmentDashboard.all')}
+              </a>
+            }
+          >
+            <Table
+              size="small"
+              dataSource={spotChecks.slice(0, 6)}
+              pagination={false}
+              rowKey={(r) => String(r.id ?? r.uuid)}
+              columns={spotCheckColumns}
+              locale={{ emptyText: t('app.kuaizhizao.equipmentDashboard.noSpotChecks') }}
+            />
+          </ModuleActionPanel>
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.equipmentDashboard.spareLowStockTitle')}
+            loading={spareAlertsLoading}
+            extra={
+              <a onClick={() => navigate('/apps/kuaizhizao/equipment-management/spare-parts')}>
+                {t('app.kuaizhizao.equipmentDashboard.all')}
+              </a>
+            }
+          >
+            <Table
+              size="small"
+              dataSource={spareAlerts.slice(0, 6)}
+              pagination={false}
+              rowKey={(r, idx) => String(r.id ?? r.spare_part_id ?? idx)}
+              columns={spareAlertColumns}
+              locale={{ emptyText: t('app.kuaizhizao.equipmentDashboard.noSpareAlerts') }}
+            />
+          </ModuleActionPanel>
+          <ModuleChartPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.equipmentDashboard.statusDistributionTitle')}
+          >
             <Suspense fallback={null}>
               <EquipmentStatusPie
                 data={statusPieData}
@@ -297,9 +409,9 @@ const EquipmentDashboard: React.FC = () => {
             </Suspense>
           </ModuleChartPanel>
           <ModuleChartPanel
+            layout="masonry"
             title={t('app.kuaizhizao.equipmentDashboard.faultTrendTitle')}
             loading={trendLoading}
-            lg={14}
           >
             <Suspense fallback={null}>
               <EquipmentTrendColumn
@@ -310,7 +422,7 @@ const EquipmentDashboard: React.FC = () => {
               />
             </Suspense>
           </ModuleChartPanel>
-        </ModuleChartRow>
+        </ModuleActionMasonry>
       }
     />
   );

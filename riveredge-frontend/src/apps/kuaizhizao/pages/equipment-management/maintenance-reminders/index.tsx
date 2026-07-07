@@ -16,14 +16,13 @@ import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } fro
 import { App, Button, Space, Tag, notification, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
 import { CheckOutlined, EyeOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG, MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { maintenanceReminderApi, equipmentApi } from '../../../services/equipment';
 import { ProFormTextArea } from '@ant-design/pro-components';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import { getMaintenanceReminderLifecycle, getDueReminderLifecycle } from '../../../utils/equipmentLifecycle';
+import { getMaintenanceReminderLifecycle } from '../../../utils/equipmentLifecycle';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
@@ -404,16 +403,6 @@ const MaintenanceRemindersPage: React.FC = () => {
             record.reminder_date ? formatDateTime(record.reminder_date, 'YYYY-MM-DD HH:mm:ss') : '-',
         },
         {
-          title: t(`${P}.col.lifecycle`),
-          dataIndex: 'lifecycle_stage',
-          fixed: 'right',
-          align: 'left',
-          hideInSearch: true,
-          render: (_, record) => (
-            <ListUniLifecycleCell lifecycle={getMaintenanceReminderLifecycle(record as Record<string, unknown>, t)} />
-          ),
-        },
-        {
           title: t('common.actions'),
           valueType: 'option',
           width: 200,
@@ -499,27 +488,6 @@ const MaintenanceRemindersPage: React.FC = () => {
         valueEnum: {
           due_soon: { text: t(`${P}.calibration.statusDueSoon`), status: 'Warning' },
           overdue: { text: t(`${P}.calibration.statusOverdue`), status: 'Error' },
-        },
-      },
-      {
-        title: t(`${P}.col.lifecycle`),
-        dataIndex: 'lifecycle_stage',
-        fixed: 'right',
-        align: 'left',
-        hideInSearch: true,
-        render: (_, record) => {
-          const lifecycle = getDueReminderLifecycle(record as Record<string, unknown>);
-          return (
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          );
         },
       },
     ],

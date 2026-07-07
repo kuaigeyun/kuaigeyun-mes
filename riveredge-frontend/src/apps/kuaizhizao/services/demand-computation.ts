@@ -377,8 +377,21 @@ export async function getPushOptions(id: number): Promise<PushOptions> {
 }
 
 /** 下推预览 */
+export interface ComputationPushPreviewItem {
+  item_id: number
+  material_id?: number
+  material_code: string
+  material_name: string
+  quantity: number
+  pushed_quantity: number
+  max_push_quantity: number
+  source_type?: string | null
+  target_document?: 'work_order' | 'outsource_work_order' | 'purchase_requisition' | 'purchase_order'
+}
+
 export interface PushPreview {
   computation_id: number
+  computation_code?: string
   work_order_count: number
   outsource_work_order_count: number
   purchase_requisition_count: number
@@ -389,11 +402,21 @@ export interface PushPreview {
   outsource_count: number
   purchase_items_with_supplier: number
   purchase_items_without_supplier: number
+  items?: ComputationPushPreviewItem[]
+  summary?: string | null
+  tip?: string | null
+  has_blocking_issues?: boolean
+  blocking_reason?: string | null
 }
 
 export async function getPushPreview(
   id: number,
-  params?: { production?: 'work_order'; purchase?: 'requisition' | 'purchase_order'; outsource_only?: boolean }
+  params?: {
+    production?: 'work_order'
+    purchase?: 'requisition' | 'purchase_order'
+    outsource_only?: boolean
+    generate_mode?: 'work_order_only' | 'all' | 'purchase_only' | 'outsource_only'
+  },
 ): Promise<PushPreview> {
   return apiRequest<PushPreview>(`/apps/kuaizhizao/demand-computations/${id}/push-preview`, {
     method: 'GET',

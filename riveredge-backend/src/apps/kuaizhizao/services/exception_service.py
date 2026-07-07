@@ -30,11 +30,37 @@ from apps.kuaizhizao.schemas.delivery_delay_exception import (
     DeliveryDelayExceptionListResponse,
 )
 from apps.common.base_service import AppBaseService
-from apps.kuaizhizao.services.work_order_service import WorkOrderService
-from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
-from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
+from apps.kuaizhizao.services.work_order_service import WorkOrderService, WORK_ORDER_IN_PROGRESS_STATUS
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
+
+# 待处理异常状态（与模型字段一致；勿使用 open）
+ACTIVE_EXCEPTION_STATUSES = ("pending", "processing")
+ACTIVE_QUALITY_EXCEPTION_STATUSES = ("pending", "investigating", "correcting")
+
+
+def _material_shortage_alert_level(shortage_qty: Decimal, required_qty: Decimal) -> str:
+    shortage_rate = float(shortage_qty / required_qty) if required_qty > 0 else 0
+    if shortage_rate >= 0.8:
+        return "critical"
+    if shortage_rate >= 0.5:
+        return "high"
+    if shortage_rate >= 0.3:
+        return "medium"
+    return "low"
+
+
+def apply_exception_status_filter(query, *, status: Optional[str], statuses: Optional[str]):
+    if status and statuses:
+        raise ValidationError("status 与 statuses 不能同时指定")
+    if status:
+        return query.filter(status=status)
+    if statuses:
+        parts = [part.strip() for part in statuses.split(",") if part.strip()]
+        if not parts:
+            raise ValidationError("statuses 不能为空")
+        return query.filter(status__in=parts)
+    return query
 
 
 class ExceptionService:
@@ -50,86 +76,87 @@ class ExceptionService:
     async def detect_material_shortage(
         self,
         tenant_id: int,
-        work_order_id: int,
+        work_order_id: Optional[int] = None,
     ) -> List[MaterialShortageExceptionResponse]:
         """
-        检测工单缺料并创建缺料异常记录
-
-        Args:
-            tenant_id: 租户ID
-            work_order_id: 工单ID
-
-        Returns:
-            List[MaterialShortageExceptionResponse]: 缺料异常记录列表
+        检测在制工单缺料并创建/更新缺料异常记录；不再缺料的开放记录自动结案。
+        检测口径与 WorkOrderService.check_material_shortage 一致。
         """
-        work_order = await WorkOrder.get_or_none(id=work_order_id, tenant_id=tenant_id)
-        if not work_order:
-            raise NotFoundError("工单不存在")
-
-        # 获取BOM物料需求
-        try:
-            material_requirements = await calculate_material_requirements_from_bom(
+        if work_order_id is not None:
+            work_order_ids = [work_order_id]
+        else:
+            work_orders = await WorkOrder.filter(
                 tenant_id=tenant_id,
-                material_id=work_order.product_id,
-                required_quantity=float(work_order.quantity),
-                only_approved=True
-            )
-        except NotFoundError:
-            # 如果没有BOM，返回空列表
-            logger.warning(f"工单 {work_order.code} 的产品没有BOM，跳过缺料检测")
-            return []
+                status__in=list(WORK_ORDER_IN_PROGRESS_STATUS),
+                deleted_at__isnull=True,
+            ).all()
+            work_order_ids = [wo.id for wo in work_orders]
 
-        # 检测缺料
-        exceptions = []
-        for req in material_requirements:
-            material_id = req.get("material_id")
-            required_qty = Decimal(str(req.get("required_quantity", 0)))
-            
-            # 获取可用库存
-            available_qty = await get_material_available_quantity(
-                tenant_id=tenant_id,
-                material_id=material_id,
-            )
+        exceptions: List[MaterialShortageExceptionResponse] = []
+        current_shortage_keys: set[tuple[int, int]] = set()
 
-            if available_qty < required_qty:
-                shortage_qty = required_qty - available_qty
-                
-                # 计算预警级别
-                shortage_rate = float(shortage_qty / required_qty) if required_qty > 0 else 0
-                if shortage_rate >= 0.8:
-                    alert_level = "critical"
-                elif shortage_rate >= 0.5:
-                    alert_level = "high"
-                elif shortage_rate >= 0.3:
-                    alert_level = "medium"
-                else:
-                    alert_level = "low"
+        for wo_id in work_order_ids:
+            try:
+                result = await self.work_order_service.check_material_shortage(
+                    tenant_id=tenant_id,
+                    work_order_id=wo_id,
+                )
+            except NotFoundError:
+                continue
 
-                # 检查是否已存在异常记录
+            work_order_code = result.get("work_order_code", "")
+            for item in result.get("shortage_items", []):
+                material_id = int(item["material_id"])
+                current_shortage_keys.add((wo_id, material_id))
+                required_qty = Decimal(str(item["required_quantity"]))
+                available_qty = Decimal(str(item["available_quantity"]))
+                shortage_qty = Decimal(str(item["shortage_quantity"]))
+                alert_level = _material_shortage_alert_level(shortage_qty, required_qty)
+
                 existing = await MaterialShortageException.filter(
                     tenant_id=tenant_id,
-                    work_order_id=work_order_id,
+                    work_order_id=wo_id,
                     material_id=material_id,
-                    status__in=["pending", "processing"],
+                    status__in=ACTIVE_EXCEPTION_STATUSES,
+                    deleted_at__isnull=True,
                 ).first()
 
                 if not existing:
-                    # 创建缺料异常记录
                     exception = await MaterialShortageException.create(
                         tenant_id=tenant_id,
-                        work_order_id=work_order_id,
-                        work_order_code=work_order.code,
+                        work_order_id=wo_id,
+                        work_order_code=work_order_code,
                         material_id=material_id,
-                        material_code=req.get("material_code", ""),
-                        material_name=req.get("material_name", ""),
+                        material_code=item.get("material_code", ""),
+                        material_name=item.get("material_name", ""),
                         shortage_quantity=shortage_qty,
                         available_quantity=available_qty,
                         required_quantity=required_qty,
                         alert_level=alert_level,
                         status="pending",
-                        suggested_action="purchase",  # 默认建议采购
+                        suggested_action="purchase",
                     )
                     exceptions.append(MaterialShortageExceptionResponse.model_validate(exception))
+                else:
+                    existing.shortage_quantity = shortage_qty
+                    existing.available_quantity = available_qty
+                    existing.required_quantity = required_qty
+                    existing.alert_level = alert_level
+                    existing.work_order_code = work_order_code
+                    await existing.save()
+                    exceptions.append(MaterialShortageExceptionResponse.model_validate(existing))
+
+        stale_query = MaterialShortageException.filter(
+            tenant_id=tenant_id,
+            status__in=ACTIVE_EXCEPTION_STATUSES,
+            deleted_at__isnull=True,
+        )
+        if work_order_id is not None:
+            stale_query = stale_query.filter(work_order_id=work_order_id)
+        for stale in await stale_query:
+            if (stale.work_order_id, stale.material_id) not in current_shortage_keys:
+                stale.status = "resolved"
+                await stale.save()
 
         return exceptions
 
@@ -138,10 +165,11 @@ class ExceptionService:
         tenant_id: int,
         work_order_id: Optional[int] = None,
         status: Optional[str] = None,
+        statuses: Optional[str] = None,
         alert_level: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
-    ) -> List[MaterialShortageExceptionListResponse]:
+    ) -> tuple[List[MaterialShortageExceptionListResponse], int]:
         """
         获取缺料异常列表
 
@@ -154,17 +182,25 @@ class ExceptionService:
             limit: 限制数量
 
         Returns:
-            List[MaterialShortageExceptionListResponse]: 缺料异常记录列表
+            (列表, 总数)
         """
-        query = MaterialShortageException.filter(tenant_id=tenant_id)
+        await self.detect_material_shortage(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+        )
+
+        query = MaterialShortageException.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
 
         if work_order_id:
             query = query.filter(work_order_id=work_order_id)
-        if status:
-            query = query.filter(status=status)
+        query = apply_exception_status_filter(query, status=status, statuses=statuses)
         if alert_level:
             query = query.filter(alert_level=alert_level)
 
+        total = await query.count()
         exceptions = await query.order_by('-alert_level', '-created_at').offset(skip).limit(limit)
         rows = [MaterialShortageExceptionListResponse.model_validate(e) for e in exceptions]
 
@@ -191,9 +227,9 @@ class ExceptionService:
                         )
                     else:
                         enriched.append(row)
-                return enriched
+                return enriched, total
 
-        return rows
+        return rows, total
 
     async def handle_material_shortage_exception(
         self,
@@ -257,31 +293,22 @@ class ExceptionService:
         days_threshold: int = 0,
     ) -> List[DeliveryDelayExceptionResponse]:
         """
-        检测工单交期延期并创建延期异常记录
-
-        Args:
-            tenant_id: 租户ID
-            work_order_id: 工单ID（可选，如果为None则检测所有延期工单）
-            days_threshold: 延期天数阈值（默认0，即只要超过计划结束日期就算延期）
-
-        Returns:
-            List[DeliveryDelayExceptionResponse]: 延期异常记录列表
+        检测工单交期延期并创建/更新延期异常记录；不再延期的开放记录自动结案。
         """
-        # 使用工单服务的延期检测方法
         delayed_orders = await self.work_order_service.check_delayed_work_orders(
             tenant_id=tenant_id,
             days_threshold=days_threshold,
         )
 
-        # 如果指定了工单ID，只处理该工单
         if work_order_id:
             delayed_orders = [wo for wo in delayed_orders if wo["work_order_id"] == work_order_id]
 
-        exceptions = []
+        delayed_ids = {order["work_order_id"] for order in delayed_orders}
+        exceptions: List[DeliveryDelayExceptionResponse] = []
+
         for order in delayed_orders:
             delay_days = order.get("delay_days", 0)
-            
-            # 计算预警级别
+
             if delay_days >= 7:
                 alert_level = "critical"
             elif delay_days >= 3:
@@ -291,8 +318,7 @@ class ExceptionService:
             else:
                 alert_level = "low"
 
-            # 分析延期原因并生成建议操作
-            delay_reason = order.get("delay_reason", "未知原因")
+            delay_reason = order.get("delay_reason") or "计划完工日期已过"
             if "缺料" in delay_reason or "物料" in delay_reason:
                 suggested_action = "expedite"
             elif "产能" in delay_reason or "资源" in delay_reason:
@@ -300,20 +326,20 @@ class ExceptionService:
             else:
                 suggested_action = "adjust_plan"
 
-            # 检查是否已存在异常记录
             existing = await DeliveryDelayException.filter(
                 tenant_id=tenant_id,
                 work_order_id=order["work_order_id"],
-                status__in=["pending", "processing"],
+                status__in=ACTIVE_EXCEPTION_STATUSES,
+                deleted_at__isnull=True,
             ).first()
 
             if not existing:
-                # 创建延期异常记录
                 exception = await DeliveryDelayException.create(
                     tenant_id=tenant_id,
                     work_order_id=order["work_order_id"],
                     work_order_code=order.get("work_order_code", ""),
-                    planned_end_date=order.get("planned_end_date"),
+                    planned_end_date=order["planned_end_date"],
+                    actual_end_date=order.get("actual_end_date"),
                     delay_days=delay_days,
                     delay_reason=delay_reason,
                     alert_level=alert_level,
@@ -322,13 +348,26 @@ class ExceptionService:
                 )
                 exceptions.append(DeliveryDelayExceptionResponse.model_validate(exception))
             else:
-                # 更新现有记录
                 existing.delay_days = delay_days
                 existing.delay_reason = delay_reason
                 existing.alert_level = alert_level
                 existing.suggested_action = suggested_action
+                existing.planned_end_date = order["planned_end_date"]
+                existing.actual_end_date = order.get("actual_end_date")
                 await existing.save()
                 exceptions.append(DeliveryDelayExceptionResponse.model_validate(existing))
+
+        stale_query = DeliveryDelayException.filter(
+            tenant_id=tenant_id,
+            status__in=ACTIVE_EXCEPTION_STATUSES,
+            deleted_at__isnull=True,
+        )
+        if work_order_id:
+            stale_query = stale_query.filter(work_order_id=work_order_id)
+        for stale in await stale_query:
+            if stale.work_order_id not in delayed_ids:
+                stale.status = "resolved"
+                await stale.save()
 
         return exceptions
 
@@ -337,10 +376,11 @@ class ExceptionService:
         tenant_id: int,
         work_order_id: Optional[int] = None,
         status: Optional[str] = None,
+        statuses: Optional[str] = None,
         alert_level: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
-    ) -> List[DeliveryDelayExceptionListResponse]:
+    ) -> tuple[List[DeliveryDelayExceptionListResponse], int]:
         """
         获取延期异常列表
 
@@ -353,19 +393,25 @@ class ExceptionService:
             limit: 限制数量
 
         Returns:
-            List[DeliveryDelayExceptionListResponse]: 延期异常记录列表
+            (列表, 总数)
         """
-        query = DeliveryDelayException.filter(tenant_id=tenant_id)
+        await self.detect_delivery_delay(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+        )
+
+        query = DeliveryDelayException.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         if work_order_id:
             query = query.filter(work_order_id=work_order_id)
-        if status:
-            query = query.filter(status=status)
+        query = apply_exception_status_filter(query, status=status, statuses=statuses)
         if alert_level:
             query = query.filter(alert_level=alert_level)
 
+        total = await query.count()
         exceptions = await query.order_by('-alert_level', '-delay_days', '-created_at').offset(skip).limit(limit)
-        return [DeliveryDelayExceptionListResponse.model_validate(e) for e in exceptions]
+        rows = [DeliveryDelayExceptionListResponse.model_validate(e) for e in exceptions]
+        return rows, total
 
     async def handle_delivery_delay_exception(
         self,
@@ -429,12 +475,13 @@ class ExceptionService:
         exception_type: Optional[str] = None,
         work_order_id: Optional[int] = None,
         status: Optional[str] = None,
+        statuses: Optional[str] = None,
         severity: Optional[str] = None,
         inspection_record_id: Optional[int] = None,
         inspection_source_type: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
-    ) -> List[QualityExceptionListResponse]:
+    ) -> tuple[List[QualityExceptionListResponse], int]:
         """
         获取质量异常列表
 
@@ -448,16 +495,15 @@ class ExceptionService:
             limit: 限制数量
 
         Returns:
-            List[QualityExceptionListResponse]: 质量异常记录列表
+            (列表, 总数)
         """
-        query = QualityException.filter(tenant_id=tenant_id)
+        query = QualityException.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         if exception_type:
             query = query.filter(exception_type=exception_type)
         if work_order_id:
             query = query.filter(work_order_id=work_order_id)
-        if status:
-            query = query.filter(status=status)
+        query = apply_exception_status_filter(query, status=status, statuses=statuses)
         if severity:
             query = query.filter(severity=severity)
         if inspection_record_id:
@@ -465,8 +511,9 @@ class ExceptionService:
         if inspection_source_type:
             query = query.filter(inspection_source_type=inspection_source_type)
 
+        total = await query.count()
         exceptions = await query.order_by('-severity', '-created_at').offset(skip).limit(limit)
-        return [QualityExceptionListResponse.model_validate(e) for e in exceptions]
+        return [QualityExceptionListResponse.model_validate(e) for e in exceptions], total
 
     async def create_from_inspection(
         self,
