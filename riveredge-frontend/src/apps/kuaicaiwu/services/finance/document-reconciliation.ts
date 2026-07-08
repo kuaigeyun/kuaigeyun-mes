@@ -61,6 +61,8 @@ export interface PrepaymentBalanceSummary {
   total_customer_prepayment?: number;
   total_supplier_prepayment?: number;
 }
+
+export interface FinancePipelineSummary {
   open_receivable_amount?: number;
   open_payable_amount?: number;
   unsettled_receipt_amount?: number;

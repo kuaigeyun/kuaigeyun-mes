@@ -809,7 +809,6 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
             return { data: [], total: 0, success: false };
           }
         }}
-        showAdvancedSearch
         skipFuzzyPinyinClientFilter
       />
     </>
