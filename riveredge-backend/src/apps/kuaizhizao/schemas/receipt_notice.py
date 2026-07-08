@@ -71,6 +71,7 @@ class ReceiptNoticeResponse(ReceiptNoticeBase):
         None,
         description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
     )
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycle/Stepper 展示）")
 
     class Config:
         from_attributes = True

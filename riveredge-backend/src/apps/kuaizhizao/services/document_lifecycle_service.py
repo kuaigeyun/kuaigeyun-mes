@@ -1226,6 +1226,76 @@ def get_sales_delivery_lifecycle(
 
 
 # ---------------------------------------------------------------------------
+# 收货通知单生命周期（待收货→已通知→已入库）
+# ---------------------------------------------------------------------------
+RECEIPT_NOTICE_MAIN_STAGES = [
+    {"key": "pending_receive", "label": "待收货"},
+    {"key": "notified", "label": "已通知"},
+    {"key": "received", "label": "已入库"},
+]
+
+_RECEIPT_COMPLETED_STATUSES = frozenset({"已入库", "completed", "已完成"})
+
+
+def get_receipt_notice_lifecycle(
+    notice: Any,
+    milestones: Optional[List[Dict[str, Any]]] = None,
+    *,
+    purchase_receipt_status: Optional[str] = None,
+) -> Dict[str, Any]:
+    """收货通知单生命周期（待收货→已通知→已入库；已入库可来自 status 或关联采购入库单状态）。"""
+    status = _norm(getattr(notice, "status", None))
+    milestones = milestones or []
+
+    from apps.kuaizhizao.services.document_action_policy.lifecycle_suggestions import (
+        receipt_notice_capabilities_to_suggestions,
+    )
+    from apps.kuaizhizao.services.document_action_policy.receipt_notice import (
+        derive_receipt_notice_capabilities,
+    )
+
+    receipt_status = _norm(purchase_receipt_status) if purchase_receipt_status is not None else ""
+    is_received = status in _RECEIPT_COMPLETED_STATUSES or receipt_status in _RECEIPT_COMPLETED_STATUSES
+    is_notified = (
+        status in ("已通知", "notified")
+        or bool(getattr(notice, "purchase_receipt_id", None))
+        or is_received
+    )
+
+    key = "received" if is_received else ("notified" if is_notified else "pending_receive")
+    stage_name = "已入库" if key == "received" else ("已通知" if key == "notified" else "待收货")
+
+    sub_stages = [
+        {"key": "notify", "label": "通知仓库", "status": "done" if is_notified else "active"},
+        {
+            "key": "receiving",
+            "label": "仓库收货",
+            "status": "done" if is_received else ("active" if is_notified else "pending"),
+        },
+        {
+            "key": "inbound",
+            "label": "确认入库",
+            "status": "done" if is_received else ("active" if is_notified else "pending"),
+        },
+    ]
+
+    cap_suggestions = receipt_notice_capabilities_to_suggestions(
+        derive_receipt_notice_capabilities(notice),
+        current_stage_key=key,
+    )
+
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "success" if key == "received" else "normal",
+        "main_stages": _build_main_stages(RECEIPT_NOTICE_MAIN_STAGES, key),
+        "sub_stages": sub_stages,
+        "next_step_suggestions": cap_suggestions,
+        "milestones": milestones,
+    }
+
+
+# ---------------------------------------------------------------------------
 # 发货通知单生命周期（待发货→已通知→已出库）
 # ---------------------------------------------------------------------------
 SHIPMENT_NOTICE_MAIN_STAGES = [
@@ -1393,6 +1463,73 @@ def get_sales_return_lifecycle(
         "current_stage_name": stage_name,
         "status": "success" if is_completed else "normal",
         "main_stages": _build_main_stages(SALES_RETURN_MAIN_STAGES, key),
+        "sub_stages": sub_stages,
+        "next_step_suggestions": cap_suggestions,
+        "milestones": milestones,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 采购退货单生命周期（待退货→已退货）
+# ---------------------------------------------------------------------------
+PURCHASE_RETURN_MAIN_STAGES = [
+    {"key": "pending_return_goods", "label": "待退货"},
+    {"key": "done", "label": "已退货"},
+]
+
+_PURCHASE_RETURN_CANCELLED_STATUSES = frozenset({"已取消", "CANCELLED", "cancelled"})
+_PURCHASE_RETURN_COMPLETED_STATUSES = frozenset({"已退货", "completed", "已完成", "RETURNED"})
+
+
+def get_purchase_return_lifecycle(
+    purchase_return: Any,
+    milestones: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """采购退货单生命周期（待退货→已退货；已取消为异常分支）。"""
+    status = _norm(getattr(purchase_return, "status", None))
+    milestones = milestones or []
+
+    from apps.kuaizhizao.services.document_action_policy.lifecycle_suggestions import (
+        purchase_return_capabilities_to_suggestions,
+    )
+    from apps.kuaizhizao.services.document_action_policy.purchase_return import (
+        derive_purchase_return_capabilities,
+    )
+
+    if status in _PURCHASE_RETURN_CANCELLED_STATUSES:
+        cap_suggestions = purchase_return_capabilities_to_suggestions(
+            derive_purchase_return_capabilities(purchase_return),
+            current_stage_key="cancelled",
+        )
+        return {
+            "current_stage_key": "cancelled",
+            "current_stage_name": "已取消",
+            "status": "exception",
+            "main_stages": _build_main_stages(PURCHASE_RETURN_MAIN_STAGES, "pending_return_goods"),
+            "sub_stages": None,
+            "next_step_suggestions": cap_suggestions,
+            "milestones": milestones,
+        }
+
+    is_completed = status in _PURCHASE_RETURN_COMPLETED_STATUSES
+    key = "done" if is_completed else "pending_return_goods"
+    stage_name = "已退货" if is_completed else "待退货"
+
+    sub_stages = [
+        {"key": "return_pick", "label": "拣货出库", "status": "done" if is_completed else "active"},
+        {"key": "supplier_return", "label": "退回供应商", "status": "done" if is_completed else "pending"},
+    ]
+
+    cap_suggestions = purchase_return_capabilities_to_suggestions(
+        derive_purchase_return_capabilities(purchase_return),
+        current_stage_key=key,
+    )
+
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "success" if is_completed else "normal",
+        "main_stages": _build_main_stages(PURCHASE_RETURN_MAIN_STAGES, key),
         "sub_stages": sub_stages,
         "next_step_suggestions": cap_suggestions,
         "milestones": milestones,

@@ -75,6 +75,8 @@ import {
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { getDemandBusinessModeTagColor } from '../../../utils/businessMode';
 import { getDemandTypeTagProps, normalizeDemandTypeKey } from '../../../utils/demandType';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
@@ -90,6 +92,7 @@ import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 
 const DEMAND_ORIGIN_SUB_KEYS = new Set(['from_forecast', 'from_order', 'manual_plan']);
+const DEMAND_RESOURCE = 'kuaizhizao:demand';
 
 /** 根据字典 code 和 value 获取标签，无匹配时返回原值（支持大小写不敏感匹配） */
 function getDictLabel(map: Record<string, Record<string, string>>, code: string, value: string | undefined): string {
@@ -651,6 +654,16 @@ const DemandManagementPage: React.FC = () => {
     [t],
   );
   const demandAuditEnabled = useAuditRequired('demand', false);
+  const demandPerms = useResourcePermissions(DEMAND_RESOURCE);
+  const demandAuditBatchHandlers = useMemo(
+    () => createUniAuditBatchHandlers('demand'),
+    [],
+  );
+  const handleDemandAuditBatchSuccess = useCallback(() => {
+    setSelectedRowKeys([]);
+    invalidateStatistics();
+    actionRef.current?.reload();
+  }, [invalidateStatistics]);
   const demandAuditColumn = useMemo(
     () => createListAuditPhaseColumn<Demand>({ t, auditEnabled: demandAuditEnabled }),
     [t, demandAuditEnabled],
@@ -1242,6 +1255,18 @@ const DemandManagementPage: React.FC = () => {
           showEditButton={false}
           showDeleteButton={true}
           onDelete={handleDelete}
+          toolBarActionsAfterDelete={[
+            <UniAuditBatchMenuButton
+              key="demand-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedDemandsForBatch}
+              auditEnabled={demandAuditEnabled}
+              permGates={demandPerms}
+              handlers={demandAuditBatchHandlers}
+              onSuccess={handleDemandAuditBatchSuccess}
+              toolBarButtonSize="middle"
+            />,
+          ]}
           showImportButton={false}
           showExportButton
           onExport={async (type, keys, pageData) => {

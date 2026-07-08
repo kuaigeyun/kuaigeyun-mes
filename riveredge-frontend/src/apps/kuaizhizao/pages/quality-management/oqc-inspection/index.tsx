@@ -20,6 +20,7 @@ import { pickInspectionConductExtras } from '../components/inspectionTemplateUti
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { oqcInspectionCapabilityReasonMessage, oqcInspectionRowGates } from '../../../../../hooks/useDocumentCapabilities';
@@ -66,10 +67,22 @@ const OQCInspectionPage: React.FC = () => {
   );
   const oqcStatusValueEnum = useMemo(() => buildOqcInspectionStatusValueEnum(t), [t]);
   const actionRef = useRef<ActionType>(null);
+  const tableRowsRef = useRef<OQCInspection[]>([]);
   const conductFormRef = useRef<any>(null);
   const [conductVisible, setConductVisible] = useState(false);
   const [currentRow, setCurrentRow] = useState<OQCInspection | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const selectedRecordsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is OQCInspection => row != null),
+    [selectedRowKeys],
+  );
+  const oqcAuditBatchHandlers = useMemo(
+    () => createUniAuditBatchHandlers('oqc_inspection', ['approve', 'revoke']),
+    [],
+  );
   const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
   const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
   const [pullPreviewConfirming, setPullPreviewConfirming] = useState(false);
@@ -432,6 +445,21 @@ const OQCInspectionPage: React.FC = () => {
           }}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.quality.oqc.messages.deleteConfirm', { count })}
           deleteConfirmDescription={t('app.kuaizhizao.quality.oqc.messages.deleteConfirmDescription')}
+          toolBarActionsAfterDelete={[
+            <UniAuditBatchMenuButton
+              key="oqc-inspection-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedRecordsForBatch}
+              auditEnabled={oqcAuditEnabled}
+              permGates={oqcPerms}
+              handlers={oqcAuditBatchHandlers}
+              onSuccess={() => {
+                setSelectedRowKeys([]);
+                actionRef.current?.reload();
+              }}
+              toolBarButtonSize="middle"
+            />,
+          ]}
           toolBarRender={() =>
             canCreate
               ? [
@@ -465,6 +493,7 @@ const OQCInspectionPage: React.FC = () => {
               ...listParams,
             });
             const { data, total } = normalizeQualityInspectionListResponse(result);
+            tableRowsRef.current = data as OQCInspection[];
             return {
               success: true,
               data: data as OQCInspection[],

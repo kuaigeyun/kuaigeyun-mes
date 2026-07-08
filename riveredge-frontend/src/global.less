@@ -223,6 +223,14 @@
   overflow: hidden;
 }
 
+.uni-tabs-content-page-inner:has(.multi-tab-list-page-template) > .riveredge-route-transition {
+  overflow: hidden;
+}
+
+.multi-tab-list-page-container {
+  min-height: 0;
+}
+
 .multi-tab-list-page-card.ant-card {
   display: flex;
   flex-direction: column;
@@ -235,14 +243,12 @@
   > .ant-card-body {
     flex: 1 1 auto;
     min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
   }
 
   > .ant-card-body:has(.multi-tab-list-page-tab-pane) {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
   }
 }
 

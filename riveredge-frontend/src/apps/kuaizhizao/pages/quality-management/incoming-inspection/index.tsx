@@ -88,6 +88,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { qualityInspectionRowGates, qualityInspectionCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
+import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
@@ -239,6 +240,17 @@ const IncomingInspectionPage: React.FC = () => {
   const incomingAuditColumn = useMemo(
     () => createListAuditPhaseColumn<IncomingInspection>({ t, auditEnabled: incomingAuditEnabled }),
     [t, incomingAuditEnabled],
+  );
+  const selectedRecordsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is IncomingInspection => row != null),
+    [selectedRowKeys],
+  );
+  const incomingAuditBatchHandlers = useMemo(
+    () => createUniAuditBatchHandlers('incoming_inspection', ['approve']),
+    [],
   );
   const inspectionDocStatusValueEnum = useMemo(
     () => buildQualityInspectionDocStatusValueEnum(t),
@@ -1154,6 +1166,7 @@ const IncomingInspectionPage: React.FC = () => {
           />,
         ]}
         enableRowSelection={true}
+        selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         onRow={(record) => ({
           onClick: () => void handleDetail(record),
@@ -1185,6 +1198,22 @@ const IncomingInspectionPage: React.FC = () => {
             messageApi.error(error.message || t('app.kuaizhizao.quality.common.messages.deleteFailed'));
           }
         }}
+        toolBarActionsAfterDelete={[
+          <UniAuditBatchMenuButton
+            key="incoming-inspection-batch-menu"
+            selectedRowKeys={selectedRowKeys}
+            selectedRecords={selectedRecordsForBatch}
+            auditEnabled={incomingAuditEnabled}
+            permGates={incomingPerms}
+            handlers={incomingAuditBatchHandlers}
+            onSuccess={() => {
+              setSelectedRowKeys([]);
+              invalidateStats();
+              actionRef.current?.reload();
+            }}
+            toolBarButtonSize="middle"
+          />,
+        ]}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.quality.incoming.messages.deleteConfirm', { count })}
         scroll={{ x: 1800 }}
       />

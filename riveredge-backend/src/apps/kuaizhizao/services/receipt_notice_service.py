@@ -127,6 +127,32 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             result[nid] = st in ("草稿", "draft", "DRAFT", "待入库") or not st
         return result
 
+    async def _purchase_receipt_status_by_notice_id(
+        self, tenant_id: int, notices: List[ReceiptNotice]
+    ) -> dict[int, str]:
+        receipt_id_by_notice: dict[int, int] = {}
+        for n in notices:
+            rid = getattr(n, "purchase_receipt_id", None)
+            if rid:
+                receipt_id_by_notice[int(n.id)] = int(rid)
+        if not receipt_id_by_notice:
+            return {}
+
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+        receipt_ids = list(set(receipt_id_by_notice.values()))
+        status_by_id: dict[int, str] = {}
+        receipts = await PurchaseReceipt.filter(
+            tenant_id=tenant_id, id__in=receipt_ids, deleted_at__isnull=True
+        ).all()
+        for r in receipts:
+            status_by_id[int(r.id)] = str(r.status or "").strip()
+
+        return {
+            nid: status_by_id.get(rid, "")
+            for nid, rid in receipt_id_by_notice.items()
+        }
+
     async def _notice_has_items_map(self, tenant_id: int, notice_ids: List[int]) -> dict[int, bool]:
         if not notice_ids:
             return {}
@@ -247,6 +273,18 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         items = await ReceiptNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).all()
         response = ReceiptNoticeWithItemsResponse.model_validate(notice)
         response.items = [ReceiptNoticeItemResponse.model_validate(i) for i in items]
+        from apps.kuaizhizao.services.document_lifecycle_service import (
+            get_document_milestones,
+            get_receipt_notice_lifecycle,
+        )
+
+        receipt_status_map = await self._purchase_receipt_status_by_notice_id(tenant_id, [notice])
+        milestones = await get_document_milestones(tenant_id, "receipt_notice", notice_id)
+        response.lifecycle = get_receipt_notice_lifecycle(
+            notice,
+            milestones=milestones,
+            purchase_receipt_status=receipt_status_map.get(int(notice.id)),
+        )
         return await self._enrich_notice_response(tenant_id, notice, response)
 
     async def list_receipt_notices(
@@ -306,10 +344,20 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         notice_ids = [int(n.id) for n in notice_list if n.id is not None]
         items_map = await self._notice_has_items_map(tenant_id, notice_ids)
         withdraw_map = await self._receipt_withdrawable_by_notice_id(tenant_id, notice_list)
-        responses = [ReceiptNoticeListResponse.model_validate(r) for r in notice_list]
+        receipt_status_map = await self._purchase_receipt_status_by_notice_id(tenant_id, notice_list)
+        from apps.kuaizhizao.services.document_lifecycle_service import get_receipt_notice_lifecycle
+
+        list_responses: List[ReceiptNoticeListResponse] = []
+        for r in notice_list:
+            resp = ReceiptNoticeListResponse.model_validate(r)
+            resp.lifecycle = get_receipt_notice_lifecycle(
+                r,
+                purchase_receipt_status=receipt_status_map.get(int(r.id)) if r.id is not None else None,
+            )
+            list_responses.append(resp)
         enriched = enrich_receipt_notice_list_capabilities(
             notice_list,
-            responses,
+            list_responses,
             has_items_by_id=items_map,
             receipt_withdrawable_by_id=withdraw_map,
         )

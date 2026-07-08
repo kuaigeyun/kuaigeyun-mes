@@ -1591,6 +1591,8 @@ export default {
   'lifecycle.stage.pending_ship': '待發貨',
   'lifecycle.stage.pending_return_goods': '待退貨',
   'lifecycle.stage.returned_goods': '已退貨',
+  'lifecycle.stage.return_pick': '揀貨出庫',
+  'lifecycle.stage.supplier_return': '退回供應商',
   'lifecycle.stage.pending_inspection': '待檢驗',
   'lifecycle.stage.ready_to_ship': '可發貨',
   'lifecycle.stage.failed': '失敗',

@@ -540,14 +540,14 @@ async def list_sales_orders(
             list_scope=list_scope,
             current_user=current_user,
         )
-        masked_data: List[SalesOrderResponse] = []
-        for row in result.data:
-            masked_payload = await _mask_sales_order_payload(
-                tenant_id=tenant_id,
-                user_id=current_user.id,
-                payload=row.model_dump(),
-            )
-            masked_data.append(SalesOrderResponse(**masked_payload))
+        payloads = [row.model_dump() for row in result.data]
+        masked_payloads = await PermissionPolicyService.apply_field_masks_to_list(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            resource="kuaizhizao:sales-order",
+            payloads=payloads,
+        )
+        masked_data = [SalesOrderResponse(**masked) for masked in masked_payloads]
         return SalesOrderListResponse(
             data=masked_data,
             total=result.total,

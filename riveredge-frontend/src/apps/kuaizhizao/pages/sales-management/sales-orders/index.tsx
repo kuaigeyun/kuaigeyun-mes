@@ -475,12 +475,6 @@ const SalesOrdersPage: React.FC = () => {
     resetDetailFieldValues: resetSalesOrderDetailFieldValues,
   } = useCustomFieldsForList<SalesOrder>({ tableName: SALES_ORDER_CUSTOM_FIELD_TABLE });
 
-  useEffect(() => {
-    if (salesOrderListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [salesOrderListCustomFields.length]);
-
   /** 表格搜索表单 ref，用于 statCard 点击时设置筛选并刷新 */
   const tableSearchFormRef = useRef<any>(null);
   const rowKeyToOrderIdRef = useRef<Map<string, number>>(new Map());
@@ -489,8 +483,13 @@ const SalesOrdersPage: React.FC = () => {
     navigate(SALES_ORDER_LIST_PATH);
   }, [navigate]);
 
-  /** 视图切换缓存：始终请求 include_items=true，切换视图时从缓存转换，避免重复请求 */
-  const lastOrdersCacheRef = useRef<{ orders: SalesOrder[]; total: number; paramsKey: string } | null>(null);
+  /** 视图切换缓存：明细视图含 items；订单视图可复用含 items 的缓存，避免重复请求 */
+  const lastOrdersCacheRef = useRef<{
+    orders: SalesOrder[];
+    total: number;
+    baseParamsKey: string;
+    includeItems: boolean;
+  } | null>(null);
   /** 订单视图表格当前页数据（唯一源：UniTable onTableDataChange，与表格展示一致） */
   const [tableOrders, setTableOrders] = useState<SalesOrder[]>([]);
   const invalidateOrdersCache = () => {
@@ -662,9 +661,10 @@ const SalesOrdersPage: React.FC = () => {
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
 
   /**
-   * 加载产品列表（无基础资料时使用空数组，不阻塞页面）
+   * 加载产品列表（仅表单页需要，避免列表首屏并发请求）
    */
   React.useEffect(() => {
+    if (!isFormPage) return;
     const loadMaterials = async () => {
       try {
         const result = await materialApi.list({ limit: 1000, isActive: true });
@@ -674,7 +674,7 @@ const SalesOrdersPage: React.FC = () => {
       }
     };
     loadMaterials();
-  }, []);
+  }, [isFormPage]);
 
   /**
    * 加载客户列表（无基础资料时使用空数组，不阻塞页面）
@@ -4004,8 +4004,8 @@ const SalesOrdersPage: React.FC = () => {
                 ? formatDateTime(orderDateRange[1] as string | Date, 'YYYY-MM-DD')
                 : apiParams.start_date;
             }
-            apiParams.include_items = true;
-            const paramsKey = JSON.stringify({
+            apiParams.include_items = dataViewModeRef.current === 'detail';
+            const baseParamsKey = JSON.stringify({
               skip: apiParams.skip,
               limit: apiParams.limit,
               status: apiParams.status,
@@ -4020,6 +4020,7 @@ const SalesOrdersPage: React.FC = () => {
               end_date: apiParams.end_date,
               order_by: apiParams.order_by,
             });
+            const needItems = apiParams.include_items === true;
 
             const toFlatRows = (orders: SalesOrder[]) => {
               const map = new Map<string, number>();
@@ -4098,13 +4099,7 @@ const SalesOrdersPage: React.FC = () => {
               return flatRows;
             };
 
-            try {
-              const response = await listSalesOrders(apiParams);
-              const orders: SalesOrder[] = Array.isArray(response)
-                ? response
-                : (response as any).data || [];
-              const total: number = (response as any).total ?? orders.length;
-              lastOrdersCacheRef.current = { orders, total, paramsKey };
+            const formatOrdersListResponse = async (orders: SalesOrder[], total: number) => {
               const mode = dataViewModeRef.current;
               if (mode === 'order') {
                 const map = new Map<string, number>();
@@ -4116,6 +4111,29 @@ const SalesOrdersPage: React.FC = () => {
                 return { data: enriched, success: true, total };
               }
               return { data: toFlatRows(orders), success: true, total };
+            };
+
+            const cached = lastOrdersCacheRef.current;
+            if (cached && cached.baseParamsKey === baseParamsKey) {
+              const canServeFromCache = needItems ? cached.includeItems : true;
+              if (canServeFromCache) {
+                return formatOrdersListResponse(cached.orders, cached.total);
+              }
+            }
+
+            try {
+              const response = await listSalesOrders(apiParams);
+              const orders: SalesOrder[] = Array.isArray(response)
+                ? response
+                : (response as any).data || [];
+              const total: number = (response as any).total ?? orders.length;
+              lastOrdersCacheRef.current = {
+                orders,
+                total,
+                baseParamsKey,
+                includeItems: needItems,
+              };
+              return formatOrdersListResponse(orders, total);
             } catch (error: any) {
               messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.getListFailed'));
               return { data: [], success: false, total: 0 };

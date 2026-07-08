@@ -58,6 +58,13 @@ export type BulkAuditBatchHandlers = Partial<
 
 export type CapabilitiesRecord = Record<string, ActionCapability | undefined>;
 
+const AUDIT_BATCH_ACTION_BY_CAPABILITY_KEY: Partial<Record<string, AuditBatchAction>> = {
+  submit: 'submit',
+  withdraw_submit: 'withdraw',
+  approve: 'approve',
+  revoke_approval: 'revoke',
+};
+
 export function resolveBatchRecordId(
   key: React.Key,
   records: { id?: number }[],
@@ -74,17 +81,30 @@ export function resolveBatchRecordId(
 }
 
 export function pickCapability(
-  record: { capabilities?: CapabilitiesRecord | null },
+  record: {
+    capabilities?: CapabilitiesRecord | null;
+    audit?: { allowed_actions?: string[] } | null;
+  },
   key: string,
 ): ActionCapability | undefined {
-  return record.capabilities?.[key];
+  const cap = record.capabilities?.[key];
+  if (cap != null) return cap;
+
+  const auditAction = AUDIT_BATCH_ACTION_BY_CAPABILITY_KEY[key];
+  const allowedActions = record.audit?.allowed_actions;
+  if (!auditAction || !allowedActions) return undefined;
+
+  return { allowed: allowedActions.includes(auditAction) };
 }
 
 export function defaultAuditBatchAllowed<T>(
   records: T[],
   permAllowed: boolean,
   capabilityKey: string,
-  pickRecord: (r: T) => { capabilities?: CapabilitiesRecord | null },
+  pickRecord: (r: T) => {
+    capabilities?: CapabilitiesRecord | null;
+    audit?: { allowed_actions?: string[] } | null;
+  },
 ): boolean {
   return batchSomeCapabilityAllowed(records, permAllowed, (r) =>
     pickCapability(pickRecord(r), capabilityKey),
@@ -94,6 +114,7 @@ export function defaultAuditBatchAllowed<T>(
 export interface BuildAuditBatchMenuItemsOptions<T> {
   selectedRecords: T[];
   permGates: ResourcePermissionGates;
+  /** @deprecated 不再用于隐藏菜单项；保留以兼容既有页面传参 */
   auditEnabled?: boolean;
   handlers?: AuditBatchHandlers;
   bulkHandlers?: BulkAuditBatchHandlers;
@@ -255,11 +276,9 @@ export function buildAuditBatchMenuItems<T extends { id?: number }>(
     revoke: <UndoOutlined />,
   };
 
-  const auditActions: AuditBatchAction[] = ['withdraw', 'approve', 'revoke'];
-  const actionsToBuild: AuditBatchAction[] = [
-    'submit',
-    ...(auditEnabled ? auditActions : []),
-  ];
+  // 固定四项菜单（与 document-action-contract / 行级 UniWorkflowActions 对称）；
+  // 是否展示由 handlers 声明，是否可点由 capabilities + RBAC 门控，禁止用 auditEnabled 隐藏菜单项。
+  const actionsToBuild: AuditBatchAction[] = ['submit', 'withdraw', 'approve', 'revoke'];
 
   const items: UniBatchMenuItem[] = [];
 
@@ -292,6 +311,7 @@ export interface UniAuditBatchMenuButtonProps<T extends { id?: number }>
   extends Omit<BuildAuditBatchMenuItemsOptions<T>, 'onBatchComplete'> {
   selectedRowKeys: React.Key[];
   selectedRecords: T[];
+  /** @deprecated 不再用于隐藏菜单项；保留以兼容既有页面传参 */
   auditEnabled?: boolean;
   onSuccess?: () => void;
   toolBarButtonSize?: ButtonProps['size'];

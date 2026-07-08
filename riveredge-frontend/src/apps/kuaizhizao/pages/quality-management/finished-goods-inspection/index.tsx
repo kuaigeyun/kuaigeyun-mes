@@ -87,6 +87,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { qualityInspectionRowGates, qualityInspectionCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
+import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import KuaizhizaoDocumentPrintModal from '../../../components/KuaizhizaoDocumentPrintModal';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
@@ -226,6 +227,13 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<FinishedGoodsInspection[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const selectedRecordsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is FinishedGoodsInspection => row != null),
+    [selectedRowKeys],
+  );
   const [pushReworkPreviewOpen, setPushReworkPreviewOpen] = useState(false);
   const [pushReworkPreviewLoading, setPushReworkPreviewLoading] = useState(false);
   const [pushReworkPreviewConfirming, setPushReworkPreviewConfirming] = useState(false);
@@ -277,6 +285,10 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   const finishedAuditColumn = useMemo(
     () => createListAuditPhaseColumn<FinishedGoodsInspection>({ t, auditEnabled: finishedAuditEnabled }),
     [t, finishedAuditEnabled],
+  );
+  const finishedAuditBatchHandlers = useMemo(
+    () => createUniAuditBatchHandlers('finished_goods_inspection', ['approve']),
+    [],
   );
   const inspectionDocStatusValueEnum = useMemo(
     () => buildQualityInspectionDocStatusValueEnum(t),
@@ -1122,6 +1134,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           />,
         ]}
         enableRowSelection={true}
+        selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         onRow={(record) => ({
           onClick: () => void handleDetail(record),
@@ -1153,6 +1166,22 @@ const FinishedGoodsInspectionPage: React.FC = () => {
             messageApi.error(error.message || t('app.kuaizhizao.quality.common.messages.deleteFailed'));
           }
         }}
+        toolBarActionsAfterDelete={[
+          <UniAuditBatchMenuButton
+            key="finished-goods-inspection-batch-menu"
+            selectedRowKeys={selectedRowKeys}
+            selectedRecords={selectedRecordsForBatch}
+            auditEnabled={finishedAuditEnabled}
+            permGates={finishedPerms}
+            handlers={finishedAuditBatchHandlers}
+            onSuccess={() => {
+              setSelectedRowKeys([]);
+              invalidateStats();
+              actionRef.current?.reload();
+            }}
+            toolBarButtonSize="middle"
+          />,
+        ]}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.quality.finished.messages.deleteConfirm', { count })}
         scroll={{ x: 1900 }}
       />

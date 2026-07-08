@@ -207,6 +207,32 @@ async def _dispatch_sales_delivery(
     _unsupported("sales_delivery", action)
 
 
+async def _dispatch_sales_return(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.warehouse_service import SalesReturnService
+
+    svc = SalesReturnService()
+    if action == "submit":
+        return await svc.submit_sales_return(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_sales_return(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_sales_return(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_sales_return_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_sales_return_approval(tenant_id, entity_id, user_id)
+    _unsupported("sales_return", action)
+
+
 async def _dispatch_sales_contract_change(
     action: str,
     *,
@@ -503,14 +529,18 @@ async def _dispatch_receivable(
     from apps.kuaicaiwu.services.finance_service import ReceivableService
 
     svc = ReceivableService()
+    if action == "submit":
+        return await svc.submit_receivable(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        return await svc.withdraw_receivable(tenant_id, entity_id, user_id)
     if action == "approve":
         return await svc.approve_receivable(tenant_id, entity_id, user_id)
     if action == "reject":
         return await svc.approve_receivable(
             tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
         )
-    if action in ("submit", "withdraw", "revoke"):
-        _unsupported("receivable", action)
+    if action == "revoke":
+        return await svc.revoke_receivable(tenant_id, entity_id, user_id)
     _unsupported("receivable", action)
 
 
@@ -525,14 +555,18 @@ async def _dispatch_payable(
     from apps.kuaicaiwu.services.finance_service import PayableService
 
     svc = PayableService()
+    if action == "submit":
+        return await svc.submit_payable(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        return await svc.withdraw_payable(tenant_id, entity_id, user_id)
     if action == "approve":
         return await svc.approve_payable(tenant_id, entity_id, user_id)
     if action == "reject":
         return await svc.approve_payable(
             tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
         )
-    if action in ("submit", "withdraw", "revoke"):
-        _unsupported("payable", action)
+    if action == "revoke":
+        return await svc.revoke_payable(tenant_id, entity_id, user_id)
     _unsupported("payable", action)
 
 
@@ -547,14 +581,18 @@ async def _dispatch_purchase_invoice(
     from apps.kuaicaiwu.services.finance_service import PurchaseInvoiceService
 
     svc = PurchaseInvoiceService()
+    if action == "submit":
+        return await svc.submit_invoice(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        return await svc.withdraw_invoice(tenant_id, entity_id, user_id)
     if action == "approve":
         return await svc.approve_invoice(tenant_id, entity_id, user_id)
     if action == "reject":
         return await svc.approve_invoice(
             tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
         )
-    if action in ("submit", "withdraw", "revoke"):
-        _unsupported("purchase_invoice", action)
+    if action == "revoke":
+        return await svc.revoke_invoice(tenant_id, entity_id, user_id)
     _unsupported("purchase_invoice", action)
 
 
@@ -624,6 +662,7 @@ HANDLERS: Dict[str, DispatchFn] = {
     "quotation": _dispatch_quotation,
     "shipment_notice": _dispatch_shipment_notice,
     "sales_delivery": _dispatch_sales_delivery,
+    "sales_return": _dispatch_sales_return,
     "sales_contract_change": _dispatch_sales_contract_change,
     "demand": _dispatch_demand,
     "purchase_order": _dispatch_purchase_order,

@@ -54,3 +54,19 @@ def test_gate_audit_keeps_revoke_when_capability_allows():
     gated = gate_audit_allowed_actions(audit, caps)
     assert gated is not None
     assert gated["allowed_actions"] == ["revoke"]
+
+
+def test_sales_return_pending_review_from_review_status():
+    audit = derive_audit_phase("sales_return", "待退货", "待审核", enabled=True)
+    assert audit["phase"] == "pending"
+
+
+def test_sales_return_approved_review():
+    audit = derive_audit_phase("sales_return", "已退货", "审核通过", enabled=True)
+    assert audit["phase"] == "approved"
+
+
+def test_sales_return_draft_review_from_review_status():
+    audit = derive_audit_phase("sales_return", "待退货", "草稿", enabled=True)
+    assert audit["phase"] == "draft"
+    assert "submit" in audit["allowed_actions"]

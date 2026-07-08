@@ -16,7 +16,9 @@ import {
 import { PurchaseInvoice } from '../../../types/finance/purchase-invoice';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -43,6 +45,7 @@ import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import type { PurchaseInvoiceListParams } from '../../../types/finance/purchase-invoice';
 
 const P = 'app.kuaicaiwu.purchaseInvoice';
+const PURCHASE_INVOICE_RESOURCE = 'kuaicaiwu:purchase-invoice';
 
 const TAX_RATE_OPTIONS = [
   { label: '13%', value: 13 },
@@ -60,6 +63,7 @@ const PurchaseInvoiceList: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [pullSubmitting, setPullSubmitting] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [tableRows, setTableRows] = useState<PurchaseInvoice[]>([]);
   const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
   const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
   const [pullPreviewData, setPullPreviewData] = useState<PurchaseInvoicePullPreview | null>(null);
@@ -78,6 +82,21 @@ const PurchaseInvoiceList: React.FC = () => {
   );
   const pullFromPurchaseOrderAction = getKuaicaiwuDocumentAction('purchase_invoice.pull_from_purchase_order');
   const pullFromPurchaseReceiptAction = getKuaicaiwuDocumentAction('purchase_invoice.pull_from_purchase_receipt');
+
+  const purchaseInvoiceAuditEnabled = useAuditRequired('purchase_invoice', false);
+  const purchaseInvoicePerms = useResourcePermissions(PURCHASE_INVOICE_RESOURCE);
+  const purchaseInvoiceAuditBatchHandlers = useMemo(
+    () => createUniAuditBatchHandlers('purchase_invoice'),
+    [],
+  );
+  const selectedRecordsForBatch = useMemo(
+    () => tableRows.filter((row) => row.id != null && selectedRowKeys.includes(row.id)),
+    [tableRows, selectedRowKeys],
+  );
+  const handlePurchaseInvoiceAuditBatchSuccess = () => {
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -304,19 +323,6 @@ const PurchaseInvoiceList: React.FC = () => {
     }
   };
 
-  const handleBatchApprove = async (keys: React.Key[]) => {
-    try {
-      for (const id of keys) {
-        await purchaseInvoiceService.approve(Number(id));
-      }
-      messageApi.success(t(`${P}.batchApproveSuccess`, { count: keys.length }));
-      setSelectedRowKeys([]);
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaicaiwu.common.batchApproveFailed'));
-    }
-  };
-
   const reviewStatusEnum = useMemo(() => buildReviewStatusEnum(t), [t]);
 
   const columns: ProColumns<PurchaseInvoice>[] = useMemo(
@@ -514,6 +520,7 @@ const PurchaseInvoiceList: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
+        onTableDataChange={setTableRows}
         columns={columns}
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices"
         scroll={{ x: 1600 }}
@@ -545,20 +552,15 @@ const PurchaseInvoiceList: React.FC = () => {
         createButtonText={t(`${P}.createButton`)}
         onCreate={() => setCreateModalVisible(true)}
         toolBarActionsAfterBatch={[
-          <UniBatchMenuButton
-            key="purchase-invoice-batch-actions"
+          <UniAuditBatchMenuButton
+            key="purchase-invoice-batch-audit"
             selectedRowKeys={selectedRowKeys}
-            buttonText={t('components.uniBatch.batchActions')}
-            menuItems={[
-              {
-                key: 'batch-approve',
-                label: t('app.kuaicaiwu.common.batchApprove'),
-                requireConfirm: true,
-                confirmTitle: (count) => t(`${P}.batchApproveTitle`, { count }),
-                confirmDescription: t('app.kuaicaiwu.common.batchOnlyPendingApprove'),
-                onClick: handleBatchApprove,
-              },
-            ]}
+            selectedRecords={selectedRecordsForBatch}
+            auditEnabled={purchaseInvoiceAuditEnabled}
+            permGates={purchaseInvoicePerms}
+            handlers={purchaseInvoiceAuditBatchHandlers}
+            onSuccess={handlePurchaseInvoiceAuditBatchSuccess}
+            toolBarButtonSize="middle"
           />,
         ]}
         toolBarRender={() => [

@@ -1243,6 +1243,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       width: 320,
       minWidth: 320,
       uniTableKeepWidth: true,
+      sorter: true,
       hideInSearch: false,
       onCell: () => ({
         style: {

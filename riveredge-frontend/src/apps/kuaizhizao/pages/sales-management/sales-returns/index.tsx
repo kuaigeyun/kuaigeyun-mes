@@ -27,7 +27,7 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import { UniCapabilityBatchButton, UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, MODAL_CONFIG, FormModalTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
@@ -57,6 +57,10 @@ import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-sele
 import dayjs from 'dayjs';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { getSalesReturnLifecycle, buildSalesReturnLifecycleValueEnum, resolveSalesReturnListLifecycleParams } from '../../../utils/salesReturnLifecycle';
+import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { isManualAuditEnabled } from '../../../../../utils/auditMode';
 import { listSalesOrders } from '../../../services/sales-order';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
@@ -82,6 +86,12 @@ import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 
 const SALES_RETURN_RESOURCE = 'kuaizhizao:sales-return';
 const SALES_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_returns';
+
+/** 与后端 review_status / status 对齐，供 UniWorkflowActions 识别 */
+const SR_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft'];
+const SR_WORKFLOW_PENDING_STATUSES = ['待审核', 'pending_review', 'pending_approval', 'PENDING'];
+const SR_WORKFLOW_APPROVED_STATUSES = ['审核通过', '已通过', 'approved', 'APPROVED'];
+const SR_WORKFLOW_REJECTED_STATUSES = ['审核驳回', '已驳回', 'rejected', 'REJECTED'];
 
 interface SalesReturnDetail extends SalesReturn {
   items?: SalesReturnItem[];
@@ -225,6 +235,30 @@ const SalesReturnsPage: React.FC = () => {
   const salesReturnLifecycleValueEnum = useMemo(
     () => buildSalesReturnLifecycleValueEnum(t),
     [t],
+  );
+  const salesReturnAuditEnabled = useAuditRequired('sales_return', false);
+  const salesReturnAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<SalesReturn>({ t, auditEnabled: salesReturnAuditEnabled }),
+    [t, salesReturnAuditEnabled],
+  );
+
+  const handleSalesReturnAuditSuccess = async () => {
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+    if (returnDetail?.id != null) {
+      try {
+        const updated = await warehouseApi.salesReturn.get(String(returnDetail.id));
+        setReturnDetail(updated as SalesReturnDetail);
+        setTrackingRefreshKey((k) => k + 1);
+      } catch {
+        /* 详情刷新失败不影响列表 */
+      }
+    }
+  };
+
+  const salesReturnAuditBatchHandlers = useMemo(
+    () => createUniAuditBatchHandlers('sales_return'),
+    [],
   );
 
   useEffect(() => {
@@ -467,11 +501,14 @@ const SalesReturnsPage: React.FC = () => {
       },
       formItemProps: formDateRangeFormItemProps,
     },
+    ...(salesReturnAuditColumn ? [salesReturnAuditColumn] : []),
     {
       title: t('app.kuaizhizao.salesReturn.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-      align: 'center',
+      width: 170,
+      align: 'left',
       fixed: 'right',
+      uniTableKeepWidth: true,
       valueType: 'select',
       valueEnum: salesReturnLifecycleValueEnum,
       render: (_, record) => (
@@ -489,6 +526,29 @@ const SalesReturnsPage: React.FC = () => {
         record.capabilities?.update?.allowed && salesReturnPerms.canUpdate ? (
           <Button {...rowActionKind('update')} key="edit" onClick={() => void handleEdit(record)}>{t('common.edit')}</Button>
         ) : null,
+        <UniWorkflowActions {...rowActionKind('skip')}
+          key="workflow-actions"
+          record={record}
+          entityName={t('app.kuaizhizao.salesReturn.entityName')}
+          entityType="sales_return"
+          auditNodeKey="sales_return"
+          unifiedAudit
+          resourcePrefix={SALES_RETURN_RESOURCE}
+          statusField="status"
+          reviewStatusField="review_status"
+          draftStatuses={SR_WORKFLOW_DRAFT_STATUSES}
+          pendingStatuses={SR_WORKFLOW_PENDING_STATUSES}
+          approvedStatuses={SR_WORKFLOW_APPROVED_STATUSES}
+          rejectedStatuses={SR_WORKFLOW_REJECTED_STATUSES}
+          theme="link"
+          size="small"
+          onSuccess={() => { void handleSalesReturnAuditSuccess(); }}
+          confirmMessages={{
+            submit: isManualAuditEnabled(record.audit)
+              ? t('app.kuaizhizao.salesReturn.submitConfirmAudit')
+              : t('app.kuaizhizao.salesReturn.submitConfirmAuto'),
+          }}
+        />,
       ].filter(Boolean), `sr-${record.id ?? 'row'}`),
     },
   ],
@@ -498,6 +558,7 @@ const SalesReturnsPage: React.FC = () => {
       salesReturnCustomerSearchOptions,
       salesReturnCustomFieldColumns,
       salesReturnLifecycleValueEnum,
+      salesReturnAuditColumn,
       salesReturnPerms.canUpdate,
     ],
   );
@@ -1057,6 +1118,21 @@ const SalesReturnsPage: React.FC = () => {
           showDeleteButton={true}
           onDelete={handleDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.salesReturn.confirmBatchDelete', { count })}
+          toolBarActionsAfterDelete={[
+            <UniAuditBatchMenuButton
+              key="sales-return-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedReturnsForBatch}
+              auditEnabled={salesReturnAuditEnabled}
+              permGates={salesReturnPerms}
+              handlers={salesReturnAuditBatchHandlers}
+              onSuccess={() => {
+                setSelectedRowKeys([]);
+                void handleSalesReturnAuditSuccess();
+              }}
+              toolBarButtonSize="middle"
+            />,
+          ]}
           toolBarActionsAfterBatch={[
             <UniCapabilityBatchButton
               key="sales-return-confirm"
@@ -1555,18 +1631,39 @@ const SalesReturnsPage: React.FC = () => {
         columns={[]}
         dataSource={returnDetail || undefined}
         extra={
-          returnDetail?.id != null &&
-          !(
-            returnDetail.capabilities?.print?.allowed === false ||
-            !salesReturnPerms.canPrint
-          ) ? (
+          returnDetail?.id != null ? (
             <Space size="small">
-              <Button
-                icon={<PrinterOutlined />}
-                onClick={() => openPrint({ documentType: 'sales_return', documentId: returnDetail.id! })}
-              >
-                {t('components.uniAction.print')}
-              </Button>
+              <UniWorkflowActions {...rowActionKind('skip')}
+                record={returnDetail}
+                entityName={t('app.kuaizhizao.salesReturn.entityName')}
+                entityType="sales_return"
+                auditNodeKey="sales_return"
+                unifiedAudit
+                resourcePrefix={SALES_RETURN_RESOURCE}
+                statusField="status"
+                reviewStatusField="review_status"
+                draftStatuses={SR_WORKFLOW_DRAFT_STATUSES}
+                pendingStatuses={SR_WORKFLOW_PENDING_STATUSES}
+                approvedStatuses={SR_WORKFLOW_APPROVED_STATUSES}
+                rejectedStatuses={SR_WORKFLOW_REJECTED_STATUSES}
+                onSuccess={() => { void handleSalesReturnAuditSuccess(); }}
+                confirmMessages={{
+                  submit: isManualAuditEnabled(returnDetail.audit)
+                    ? t('app.kuaizhizao.salesReturn.submitConfirmAudit')
+                    : t('app.kuaizhizao.salesReturn.submitConfirmAuto'),
+                }}
+              />
+              {!(
+                returnDetail.capabilities?.print?.allowed === false ||
+                !salesReturnPerms.canPrint
+              ) ? (
+                <Button
+                  icon={<PrinterOutlined />}
+                  onClick={() => openPrint({ documentType: 'sales_return', documentId: returnDetail.id! })}
+                >
+                  {t('components.uniAction.print')}
+                </Button>
+              ) : null}
             </Space>
           ) : null
         }

@@ -772,6 +772,7 @@ const PurchaseOrdersPage: React.FC = () => {
       dataIndex: 'order_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
+      sorter: true,
       render: (_, r) => (
         <UniTableStackedPrimaryCell
           primary={String(r.supplier_name ?? '')}

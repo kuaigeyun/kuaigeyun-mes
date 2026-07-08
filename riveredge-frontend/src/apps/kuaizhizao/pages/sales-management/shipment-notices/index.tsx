@@ -26,7 +26,7 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import { UniCapabilityBatchButton, UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
@@ -238,6 +238,17 @@ const ShipmentNoticesPage: React.FC = () => {
         .filter((row): row is ShipmentNotice => row != null),
     [selectedRowKeys],
   );
+
+  const shipmentNoticeAuditBatchHandlers = useMemo(
+    () => createUniAuditBatchHandlers('shipment_notice'),
+    [],
+  );
+
+  const handleShipmentNoticeAuditBatchSuccess = useCallback(() => {
+    setSelectedRowKeys([]);
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+  }, [invalidateMenuBadgeCounts]);
 
   useEffect(() => {
     const load = async () => {
@@ -1355,6 +1366,18 @@ const ShipmentNoticesPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.shipmentNotice.confirmBatchDelete', { count })}
+          toolBarActionsAfterDelete={[
+            <UniAuditBatchMenuButton
+              key="shipment-notice-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedNoticesForBatch}
+              auditEnabled={shipmentNoticeAuditEnabled}
+              permGates={shipmentNoticePerms}
+              handlers={shipmentNoticeAuditBatchHandlers}
+              onSuccess={handleShipmentNoticeAuditBatchSuccess}
+              toolBarButtonSize="middle"
+            />,
+          ]}
           toolBarActionsAfterBatch={[
             <UniCapabilityBatchButton
               key="shipment-notice-withdraw"

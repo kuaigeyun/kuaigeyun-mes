@@ -1590,6 +1590,8 @@ export default {
   'lifecycle.stage.pending_ship': 'Lô hàng chờ xử lý xử lý',
   'lifecycle.stage.pending_return_goods': 'Đang chờ trả lại',
   'lifecycle.stage.returned_goods': 'Đã trả lại',
+  'lifecycle.stage.return_pick': 'Xuất kho lấy hàng',
+  'lifecycle.stage.supplier_return': 'Trả lại nhà cung cấp',
   'lifecycle.stage.pending_inspection': 'Đang chờ kiểm tra',
   'lifecycle.stage.ready_to_ship': 'Sẵn sàng vận chuyển',
   'lifecycle.stage.failed': 'Thất bại',

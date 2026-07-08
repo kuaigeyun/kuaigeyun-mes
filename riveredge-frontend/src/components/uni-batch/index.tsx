@@ -267,6 +267,9 @@ export const UniBatchSplitToolbar: React.FC<UniBatchSplitToolbarProps> = ({
 };
 
 export {
+  createUniAuditBatchHandlers,
+} from './createUniAuditBatchHandlers';
+export {
   UniAuditBatchMenuButton,
   DEFAULT_AUDIT_BATCH_CAPABILITY_KEYS,
   DEFAULT_AUDIT_BATCH_PERMISSION_ACTIONS,

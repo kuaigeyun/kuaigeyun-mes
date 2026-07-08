@@ -46,3 +46,15 @@ def test_confirm_requires_items():
 def test_assert_delete_returned_raises():
     with pytest.raises(BusinessLogicError):
         assert_sales_return_capability(_r(status="已退货"), "delete")
+
+
+def test_confirm_requires_audit_when_enabled():
+    caps = derive_sales_return_capabilities(_r(review_status="草稿"), has_items=True, audit_required=True)
+    assert not caps.confirm.allowed
+    assert caps.confirm.reason == "sales_return.confirm.not_audited"
+
+
+def test_submit_from_draft_review():
+    caps = derive_sales_return_capabilities(_r(review_status="草稿"), has_items=True, audit_required=True)
+    assert caps.submit.allowed
+    assert caps.update.allowed

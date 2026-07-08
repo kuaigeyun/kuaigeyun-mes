@@ -973,16 +973,20 @@ const PurchaseReturnsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.purchaseReturn.colPurchaseReceiptCode'),
         dataIndex: 'purchase_receipt_code',
-        render: (_, entity) => (
-          <Typography.Text copyable={{ text: String(entity.purchase_receipt_code ?? '') }}>{entity.purchase_receipt_code ?? '-'}</Typography.Text>
-        ),
+        render: (_, entity) => {
+          const code = String(entity.purchase_receipt_code ?? '').trim();
+          if (!code) return '-';
+          return <Typography.Text copyable={{ text: code }}>{code}</Typography.Text>;
+        },
       },
       {
         title: t('app.kuaizhizao.purchaseReturn.colPurchaseOrderCode'),
         dataIndex: 'purchase_order_code',
-        render: (_, entity) => (
-          <Typography.Text copyable={{ text: String(entity.purchase_order_code ?? '') }}>{entity.purchase_order_code ?? '-'}</Typography.Text>
-        ),
+        render: (_, entity) => {
+          const code = String(entity.purchase_order_code ?? '').trim();
+          if (!code) return '-';
+          return <Typography.Text copyable={{ text: code }}>{code}</Typography.Text>;
+        },
       },
       { title: t('app.kuaizhizao.purchaseReturn.supplier'), dataIndex: 'supplier_name' },
       { title: t('app.kuaizhizao.purchaseReturn.colWarehouse'), dataIndex: 'warehouse_name' },
@@ -1099,6 +1103,7 @@ const PurchaseReturnsPage: React.FC = () => {
         dataIndex: 'return_code',
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         fixed: 'left',
+        sorter: true,
         render: (_, r) => (
           <UniTableStackedPrimaryCell
             primary={String(r.supplier_name ?? '')}
@@ -1128,11 +1133,15 @@ const PurchaseReturnsPage: React.FC = () => {
         sorter: true,
         hideInSearch: false,
         ellipsis: true,
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.purchase_receipt_code ?? '') }} ellipsis>
-            {r.purchase_receipt_code ?? '-'}
-          </Typography.Text>
-        ),
+        render: (_, r) => {
+          const code = String(r.purchase_receipt_code ?? '').trim();
+          if (!code) return '-';
+          return (
+            <Typography.Text copyable={{ text: code }} ellipsis>
+              {code}
+            </Typography.Text>
+          );
+        },
       },
       {
         title: t('app.kuaizhizao.purchaseReturn.colPurchaseOrderCode'),
@@ -1142,23 +1151,17 @@ const PurchaseReturnsPage: React.FC = () => {
         sorter: true,
         hideInSearch: false,
         ellipsis: true,
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.purchase_order_code ?? '') }} ellipsis>
-            {r.purchase_order_code ?? '-'}
-          </Typography.Text>
-        ),
-      },
-      { title: t('app.kuaizhizao.purchaseReturn.colWarehouse'), dataIndex: 'warehouse_name', width: 120, sorter: true, hideInSearch: true, ellipsis: true },
-      {
-        title: t('app.kuaizhizao.purchaseReturn.reviewStatus'),
-        dataIndex: 'review_status',
-        width: 100,
-        hideInSearch: true,
-        render: (status: any) => {
-          const config = reviewStatusMap[status as keyof typeof reviewStatusMap] || reviewStatusMap['待审核'];
-          return <Tag color={config.color}>{config.text}</Tag>;
+        render: (_, r) => {
+          const code = String(r.purchase_order_code ?? '').trim();
+          if (!code) return '-';
+          return (
+            <Typography.Text copyable={{ text: code }} ellipsis>
+              {code}
+            </Typography.Text>
+          );
         },
       },
+      { title: t('app.kuaizhizao.purchaseReturn.colWarehouse'), dataIndex: 'warehouse_name', width: 120, sorter: true, hideInSearch: true, ellipsis: true },
       {
         title: t('app.kuaizhizao.purchaseReturn.totalQuantity'),
         dataIndex: 'total_quantity',
@@ -1204,6 +1207,18 @@ const PurchaseReturnsPage: React.FC = () => {
           placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
         },
         formItemProps: formDateRangeFormItemProps,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.reviewStatus'),
+        dataIndex: 'review_status',
+        width: 96,
+        fixed: 'right',
+        align: 'center',
+        hideInSearch: true,
+        render: (status: any) => {
+          const config = reviewStatusMap[status as keyof typeof reviewStatusMap] || reviewStatusMap['待审核'];
+          return <Tag color={config.color}>{config.text}</Tag>;
+        },
       },
       {
         title: t('app.kuaizhizao.purchaseReturn.colLifecycle'),

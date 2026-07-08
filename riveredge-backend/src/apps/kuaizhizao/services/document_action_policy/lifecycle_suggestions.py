@@ -10,8 +10,14 @@ from apps.kuaizhizao.services.document_action_policy.purchase_inquiry import (
 from apps.kuaizhizao.services.document_action_policy.purchase_order import (
     PurchaseOrderCapabilities,
 )
+from apps.kuaizhizao.services.document_action_policy.purchase_return import (
+    PurchaseReturnCapabilities,
+)
 from apps.kuaizhizao.services.document_action_policy.purchase_requisition import (
     PurchaseRequisitionCapabilities,
+)
+from apps.kuaizhizao.services.document_action_policy.receipt_notice import (
+    ReceiptNoticeCapabilities,
 )
 from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
     QualityInspectionCapabilities,
@@ -164,6 +170,22 @@ def sales_order_change_capabilities_to_suggestions(
     return suggestions
 
 
+def receipt_notice_capabilities_to_suggestions(
+    caps: ReceiptNoticeCapabilities,
+    *,
+    current_stage_key: Optional[str] = None,
+) -> List[str]:
+    suggestions: List[str] = []
+    _append_if_allowed(suggestions, caps.notify, "通知仓库")
+    _append_if_allowed(suggestions, caps.update, "编辑通知明细")
+    _append_if_allowed(suggestions, caps.withdraw, "撤回通知（回到待收货）")
+    if current_stage_key == "pending_receive" and not suggestions:
+        return ["通知仓库", "编辑通知明细"]
+    if current_stage_key == "notified" and not suggestions:
+        return ["撤回通知（回到待收货）", "前往采购入库确认"]
+    return suggestions
+
+
 def shipment_notice_capabilities_to_suggestions(
     caps: ShipmentNoticeCapabilities,
     *,
@@ -177,6 +199,19 @@ def shipment_notice_capabilities_to_suggestions(
         return ["通知仓库", "编辑通知明细"]
     if current_stage_key == "notified" and not suggestions:
         return ["撤回通知（回到待发货）", "执行出库"]
+    return suggestions
+
+
+def purchase_return_capabilities_to_suggestions(
+    caps: PurchaseReturnCapabilities,
+    *,
+    current_stage_key: Optional[str] = None,
+) -> List[str]:
+    suggestions: List[str] = []
+    _append_if_allowed(suggestions, caps.confirm, "确认退货")
+    _append_if_allowed(suggestions, caps.withdraw, "撤回确认（回到待退货）")
+    if current_stage_key == "pending_return_goods":
+        return suggestions or ["确认退货"]
     return suggestions
 
 

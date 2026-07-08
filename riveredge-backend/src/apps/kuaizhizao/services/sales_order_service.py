@@ -390,20 +390,28 @@ class SalesOrderService:
 
         inventory_map = await batch_get_material_inventory(tenant_id, list(material_ids))
 
-        notice_ids = await ShipmentNotice.filter(
+        notice_items = await ShipmentNoticeItem.filter(
             tenant_id=tenant_id,
-            status="已通知",
-            deleted_at__isnull=True,
-        ).values_list("id", flat=True)
+            material_id__in=list(material_ids),
+        ).values("notice_id", "sales_order_item_id", "material_id", "notice_quantity")
 
         reserved_by_so_item: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
         reserved_by_material: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
-        if notice_ids:
-            notice_items = await ShipmentNoticeItem.filter(
-                tenant_id=tenant_id,
-                notice_id__in=list(notice_ids),
-            ).values("sales_order_item_id", "material_id", "notice_quantity")
+        if notice_items:
+            notice_ids = list({int(ni["notice_id"]) for ni in notice_items if ni.get("notice_id")})
+            active_notice_ids: set[int] = set()
+            if notice_ids:
+                active_notice_ids = set(
+                    await ShipmentNotice.filter(
+                        tenant_id=tenant_id,
+                        id__in=notice_ids,
+                        status="已通知",
+                        deleted_at__isnull=True,
+                    ).values_list("id", flat=True)
+                )
             for ni in notice_items:
+                if int(ni.get("notice_id") or 0) not in active_notice_ids:
+                    continue
                 qty = Decimal(str(ni.get("notice_quantity") or 0))
                 if qty <= 0:
                     continue
@@ -1616,14 +1624,27 @@ class SalesOrderService:
             for it in all_items:
                 items_by_order.setdefault(it.sales_order_id, []).append(it)
         else:
-            # 仅需 delivery_progress：批量查询 order_quantity, delivered_quantity
+            # 列表头 + capabilities 所需最小明细字段（不拉完整 items）
             items_agg_rows = await SalesOrderItem.filter(
                 tenant_id=tenant_id,
                 sales_order_id__in=order_ids,
-            ).values_list("sales_order_id", "order_quantity", "delivered_quantity")
-            for oid, qty, delivered in items_agg_rows:
+            ).values_list(
+                "sales_order_id",
+                "order_quantity",
+                "delivered_quantity",
+                "work_order_id",
+            )
+            for oid, qty, delivered, work_order_id in items_agg_rows:
                 items_by_order.setdefault(oid, []).append(
-                    type("_AggItem", (), {"order_quantity": qty, "delivered_quantity": delivered})()
+                    type(
+                        "_AggItem",
+                        (),
+                        {
+                            "order_quantity": qty,
+                            "delivered_quantity": delivered,
+                            "work_order_id": work_order_id,
+                        },
+                    )()
                 )
 
         # 4. 批量 Material 补全（仅 include_items 时）

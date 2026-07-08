@@ -626,6 +626,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       dataIndex: 'inquiry_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
+      sorter: true,
       render: (_, r) => (
         <UniTableStackedPrimaryCell
           primary={String(r.inquiry_name ?? '')}
@@ -670,6 +671,10 @@ const PurchaseInquiriesPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.purchaseInquiry.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+      width: 170,
+      fixed: 'right',
+      uniTableKeepWidth: true,
+      align: 'left',
       valueType: 'select',
       valueEnum: purchaseInquiryLifecycleValueEnum,
       render: (_, record) => (

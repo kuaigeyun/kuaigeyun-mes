@@ -261,6 +261,45 @@ class PayableService(AppBaseService[Payable]):
             )
             return await self.get_payable_by_id(tenant_id, payable_id)
 
+    async def submit_payable(self, tenant_id: int, payable_id: int, submitted_by: int) -> PayableResponse:
+        from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
+
+        async with in_transaction():
+            await submit_finance_review(
+                model=Payable,
+                tenant_id=tenant_id,
+                doc_id=payable_id,
+                updated_by=submitted_by,
+                doc_label="应付单",
+            )
+            return await self.get_payable_by_id(tenant_id, payable_id)
+
+    async def withdraw_payable(self, tenant_id: int, payable_id: int, withdrawn_by: int) -> PayableResponse:
+        from apps.kuaicaiwu.services.finance_audit_workflow import withdraw_finance_review
+
+        async with in_transaction():
+            await withdraw_finance_review(
+                model=Payable,
+                tenant_id=tenant_id,
+                doc_id=payable_id,
+                updated_by=withdrawn_by,
+                doc_label="应付单",
+            )
+            return await self.get_payable_by_id(tenant_id, payable_id)
+
+    async def revoke_payable(self, tenant_id: int, payable_id: int, revoked_by: int) -> PayableResponse:
+        from apps.kuaicaiwu.services.finance_audit_workflow import revoke_finance_review
+
+        async with in_transaction():
+            await revoke_finance_review(
+                model=Payable,
+                tenant_id=tenant_id,
+                doc_id=payable_id,
+                updated_by=revoked_by,
+                doc_label="应付单",
+            )
+            return await self.get_payable_by_id(tenant_id, payable_id)
+
     async def get_payable_aging_analysis(self, tenant_id: int) -> Dict[str, Any]:
         """获取应付账龄分析"""
         payables = await Payable.filter(tenant_id=tenant_id, remaining_amount__gt=0, deleted_at__isnull=True).all()
@@ -565,6 +604,45 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
 
             return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
 
+    async def submit_invoice(self, tenant_id: int, invoice_id: int, submitted_by: int) -> PurchaseInvoiceResponse:
+        from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
+
+        async with in_transaction():
+            await submit_finance_review(
+                model=PurchaseInvoice,
+                tenant_id=tenant_id,
+                doc_id=invoice_id,
+                updated_by=submitted_by,
+                doc_label="采购发票",
+            )
+            return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
+
+    async def withdraw_invoice(self, tenant_id: int, invoice_id: int, withdrawn_by: int) -> PurchaseInvoiceResponse:
+        from apps.kuaicaiwu.services.finance_audit_workflow import withdraw_finance_review
+
+        async with in_transaction():
+            await withdraw_finance_review(
+                model=PurchaseInvoice,
+                tenant_id=tenant_id,
+                doc_id=invoice_id,
+                updated_by=withdrawn_by,
+                doc_label="采购发票",
+            )
+            return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
+
+    async def revoke_invoice(self, tenant_id: int, invoice_id: int, revoked_by: int) -> PurchaseInvoiceResponse:
+        from apps.kuaicaiwu.services.finance_audit_workflow import revoke_finance_review
+
+        async with in_transaction():
+            await revoke_finance_review(
+                model=PurchaseInvoice,
+                tenant_id=tenant_id,
+                doc_id=invoice_id,
+                updated_by=revoked_by,
+                doc_label="采购发票",
+            )
+            return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
+
 
 class ReceivableService(AppBaseService[Receivable]):
     """应收单服务"""
@@ -766,6 +844,45 @@ class ReceivableService(AppBaseService[Receivable]):
                 review_status=review_status,
                 review_remarks=rejection_reason,
                 updated_by=approved_by
+            )
+            return await self.get_receivable_by_id(tenant_id, receivable_id)
+
+    async def submit_receivable(self, tenant_id: int, receivable_id: int, submitted_by: int) -> ReceivableResponse:
+        from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
+
+        async with in_transaction():
+            await submit_finance_review(
+                model=Receivable,
+                tenant_id=tenant_id,
+                doc_id=receivable_id,
+                updated_by=submitted_by,
+                doc_label="应收单",
+            )
+            return await self.get_receivable_by_id(tenant_id, receivable_id)
+
+    async def withdraw_receivable(self, tenant_id: int, receivable_id: int, withdrawn_by: int) -> ReceivableResponse:
+        from apps.kuaicaiwu.services.finance_audit_workflow import withdraw_finance_review
+
+        async with in_transaction():
+            await withdraw_finance_review(
+                model=Receivable,
+                tenant_id=tenant_id,
+                doc_id=receivable_id,
+                updated_by=withdrawn_by,
+                doc_label="应收单",
+            )
+            return await self.get_receivable_by_id(tenant_id, receivable_id)
+
+    async def revoke_receivable(self, tenant_id: int, receivable_id: int, revoked_by: int) -> ReceivableResponse:
+        from apps.kuaicaiwu.services.finance_audit_workflow import revoke_finance_review
+
+        async with in_transaction():
+            await revoke_finance_review(
+                model=Receivable,
+                tenant_id=tenant_id,
+                doc_id=receivable_id,
+                updated_by=revoked_by,
+                doc_label="应收单",
             )
             return await self.get_receivable_by_id(tenant_id, receivable_id)
 

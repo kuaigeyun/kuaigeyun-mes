@@ -82,6 +82,7 @@ import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { qualityInspectionCapabilityReasonMessage, qualityInspectionRowGates } from '../../../../../hooks/useDocumentCapabilities';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -246,7 +247,19 @@ const ProcessInspectionPage: React.FC = () => {
   const ncPerms = useResourcePermissions(NC_RESOURCE);
   const { canRead: canReadNcLedger } = useResourcePermissions(NC_RESOURCE);
   const actionRef = useRef<ActionType>(null);
+  const tableRowsRef = useRef<ProcessInspection[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const selectedRecordsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is ProcessInspection => row != null),
+    [selectedRowKeys],
+  );
+  const processAuditBatchHandlers = useMemo(
+    () => createUniAuditBatchHandlers('process_inspection', ['approve']),
+    [],
+  );
   const createButtonLabel = useMemo(
     () => withSingleNewShortcutHint(pullFromWorkOrderAction.label),
     [pullFromWorkOrderAction.label],
@@ -973,6 +986,7 @@ const ProcessInspectionPage: React.FC = () => {
             });
             const { data: raw, total } = normalizeQualityInspectionListResponse(response);
             const data = await enrichInspectionRecordsWithCustomFields(raw as ProcessInspection[]);
+            tableRowsRef.current = data;
             return {
               data,
               success: true,
@@ -991,6 +1005,7 @@ const ProcessInspectionPage: React.FC = () => {
         createButtonText={createButtonLabel}
         onCreate={pullFromWorkOrderQuery.openModal}
         enableRowSelection={true}
+        selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         onRow={(record) => ({
           onClick: () => void handleDetail(record),
@@ -1022,6 +1037,22 @@ const ProcessInspectionPage: React.FC = () => {
             messageApi.error(error.message || t('app.kuaizhizao.quality.common.messages.deleteFailed'));
           }
         }}
+        toolBarActionsAfterDelete={[
+          <UniAuditBatchMenuButton
+            key="process-inspection-batch-menu"
+            selectedRowKeys={selectedRowKeys}
+            selectedRecords={selectedRecordsForBatch}
+            auditEnabled={processAuditEnabled}
+            permGates={processPerms}
+            handlers={processAuditBatchHandlers}
+            onSuccess={() => {
+              setSelectedRowKeys([]);
+              invalidateStats();
+              actionRef.current?.reload();
+            }}
+            toolBarButtonSize="middle"
+          />,
+        ]}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.quality.process.messages.deleteConfirm', { count })}
         scroll={{ x: 1800 }}
       />

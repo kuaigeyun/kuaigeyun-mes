@@ -37,6 +37,11 @@ export interface SalesReturn {
   attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   lifecycle?: Record<string, unknown>;
   capabilities?: SalesReturnCapabilities;
+  audit?: {
+    phase?: string;
+    enabled?: boolean;
+    mode?: string;
+  } | null;
   items?: SalesReturnItem[];
 }
 

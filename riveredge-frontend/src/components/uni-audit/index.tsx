@@ -115,6 +115,7 @@ function inferResourceByNodeKey(nodeKey?: string): string {
     oqc_inspection: 'kuaizhizao:oqc-inspection',
     shipment_notice: 'kuaizhizao:shipment-notice',
     sales_delivery: 'kuaizhizao:outbound',
+    sales_return: 'kuaizhizao:sales-return',
     receivable: 'kuaicaiwu:receivable',
     payable: 'kuaicaiwu:payable',
     bom_change: 'kuaiplm:change',

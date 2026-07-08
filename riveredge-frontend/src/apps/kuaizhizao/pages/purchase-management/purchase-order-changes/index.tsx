@@ -471,10 +471,21 @@ const PurchaseOrderChangesPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) => (r.applied_at ? formatDateTime(r.applied_at, 'YYYY-MM-DD HH:mm') : '-'),
       },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.colChangeReason'),
+        dataIndex: 'change_reason',
+        minWidth: 180,
+        ellipsis: true,
+        hideInSearch: true,
+        uniTablePrimaryFlex: true,
+      },
       ...(purchaseOrderChangeAuditColumn ? [purchaseOrderChangeAuditColumn] : []),
       {
         title: t('app.kuaizhizao.purchaseOrderChange.colLifecycle'),
         dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+        width: 170,
+        fixed: 'right',
+        uniTableKeepWidth: true,
         valueType: 'select',
         valueEnum: orderChangeLifecycleValueEnum,
         render: (_, record) => (
@@ -483,7 +494,6 @@ const PurchaseOrderChangesPage: React.FC = () => {
           />
         ),
       },
-      { title: t('app.kuaizhizao.purchaseOrderChange.colChangeReason'), dataIndex: 'change_reason', ellipsis: true, hideInSearch: true },
       {
         title: t('common.actions'),
         valueType: 'option',

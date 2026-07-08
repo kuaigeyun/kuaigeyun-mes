@@ -24,7 +24,9 @@ import {
 } from '../../../../../utils/spreadsheetImportTemplate';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -47,6 +49,7 @@ import {
 import type { PayableListParams } from '../../../types/finance/payable';
 
 const P = 'app.kuaicaiwu.payable';
+const PAYABLE_RESOURCE = 'kuaicaiwu:payable';
 
 type PullPreviewKind = 'purchase_order' | 'purchase_receipt';
 
@@ -68,12 +71,28 @@ const PayableList: React.FC = () => {
     const pullFromPurchaseOrderCloseRef = useRef<(() => void) | null>(null);
     const pullFromPurchaseReceiptCloseRef = useRef<(() => void) | null>(null);
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+    const [tableRows, setTableRows] = useState<Payable[]>([]);
     const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
     const { message: messageApi } = App.useApp();
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const pullFromPurchaseOrderAction = getKuaicaiwuDocumentAction('payable.pull_from_purchase_order');
     const pullFromPurchaseReceiptAction = getKuaicaiwuDocumentAction('payable.pull_from_purchase_receipt');
+
+    const payableAuditEnabled = useAuditRequired('payable', false);
+    const payablePerms = useResourcePermissions(PAYABLE_RESOURCE);
+    const payableAuditBatchHandlers = useMemo(
+        () => createUniAuditBatchHandlers('payable'),
+        [],
+    );
+    const selectedRecordsForBatch = useMemo(
+        () => tableRows.filter((row) => row.id != null && selectedRowKeys.includes(row.id)),
+        [tableRows, selectedRowKeys],
+    );
+    const handlePayableAuditBatchSuccess = () => {
+        setSelectedRowKeys([]);
+        actionRef.current?.reload();
+    };
 
     const payableImportTemplate = useMemo(
         () =>
@@ -336,19 +355,6 @@ const PayableList: React.FC = () => {
         }
     };
 
-    const handleBatchApprove = async (keys: React.Key[]) => {
-        try {
-            for (const id of keys) {
-                await payableService.approvePayable(Number(id));
-            }
-            messageApi.success(t('app.kuaicaiwu.common.batchApproveSuccess', { count: keys.length, entity: t(`${P}.entityName`) }));
-            setSelectedRowKeys([]);
-            actionRef.current?.reload();
-        } catch (error: any) {
-            messageApi.error(error?.message || t('app.kuaicaiwu.common.batchApproveFailed'));
-        }
-    };
-
     const columns: ProColumns<Payable>[] = useMemo(() => [
         ...financeDocCodePartnerSearchColumns({
             docCodeLabel: t('app.kuaicaiwu.common.code'),
@@ -524,17 +530,6 @@ const PayableList: React.FC = () => {
         },
     ], [t, navigate, supplierOptions]);
 
-    const batchMenuItems = useMemo(() => [
-        {
-            key: 'batch-approve',
-            label: t('app.kuaicaiwu.common.batchApprove'),
-            requireConfirm: true,
-            confirmTitle: (count: number) => t(`${P}.batchApproveTitle`, { count }),
-            confirmDescription: t('app.kuaicaiwu.common.batchOnlyPendingApprove'),
-            onClick: handleBatchApprove,
-        },
-    ], [t]);
-
     return (
         <ListPageTemplate>
             <UniTable<Payable>
@@ -598,17 +593,22 @@ const PayableList: React.FC = () => {
                 enableRowSelection
                 selectedRowKeys={selectedRowKeys}
                 onRowSelectionChange={setSelectedRowKeys}
+                onTableDataChange={setTableRows}
                 showDeleteButton
                 deleteButtonText={t('common.batchDelete')}
                 onDelete={handleBatchDelete}
                 deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
                 deleteConfirmDescription={(count) => t(`${P}.deleteConfirm`, { count })}
                 toolBarActionsAfterDelete={[
-                    <UniBatchMenuButton
-                        key="payable-batch-actions"
+                    <UniAuditBatchMenuButton
+                        key="payable-batch-audit"
                         selectedRowKeys={selectedRowKeys}
-                        buttonText={t('components.uniBatch.batchActions')}
-                        menuItems={batchMenuItems}
+                        selectedRecords={selectedRecordsForBatch}
+                        auditEnabled={payableAuditEnabled}
+                        permGates={payablePerms}
+                        handlers={payableAuditBatchHandlers}
+                        onSuccess={handlePayableAuditBatchSuccess}
+                        toolBarButtonSize="middle"
                     />,
                 ]}
                 showAdvancedSearch={true}

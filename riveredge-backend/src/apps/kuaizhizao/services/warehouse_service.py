@@ -6112,6 +6112,8 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         tenant_id: int,
         return_obj: SalesReturn,
         response: SalesReturnResponse,
+        *,
+        audit_required: bool = False,
     ) -> SalesReturnResponse:
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_sales_return_capabilities_on_response,
@@ -6122,6 +6124,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             return_obj,
             response,
             has_items=item_count > 0,
+            audit_required=audit_required,
         )
 
     async def create_sales_return(self, tenant_id: int, return_data: SalesReturnCreate, created_by: int) -> SalesReturnResponse:
@@ -6175,7 +6178,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 reviewer_id=return_data.reviewer_id,
                 reviewer_name=return_data.reviewer_name,
                 review_time=return_data.review_time,
-                review_status=return_data.review_status,
+                review_status="草稿",
                 review_remarks=return_data.review_remarks,
                 return_reason=return_data.return_reason,
                 return_type=return_data.return_type,
@@ -6460,6 +6463,215 @@ class SalesReturnService(AppBaseService[SalesReturn]):
 
         return created
 
+    async def submit_sales_return(
+        self,
+        tenant_id: int,
+        return_id: int,
+        submitted_by: int,
+    ) -> SalesReturnResponse:
+        from apps.kuaizhizao.services.document_action_policy.sales_return import assert_sales_return_capability
+
+        return_obj = await SalesReturn.get_or_none(
+            id=return_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not return_obj:
+            raise NotFoundError(f"销售退货单不存在: {return_id}")
+
+        item_count = await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_id).count()
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "sales_return")
+        assert_sales_return_capability(
+            return_obj,
+            "submit",
+            has_items=item_count > 0,
+            audit_required=audit_required,
+        )
+
+        review = str(return_obj.review_status or "").strip()
+        if review == "待审核":
+            from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+            status = await ApprovalInstanceService.get_approval_status(
+                tenant_id=tenant_id,
+                entity_type="sales_return",
+                entity_id=return_id,
+            )
+            if status.get("has_flow"):
+                return await self.get_sales_return_by_id(tenant_id, return_id)
+
+        if not audit_required:
+            submitter_name = await self.get_user_name(submitted_by)
+            await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
+                review_status="审核通过",
+                reviewer_id=submitted_by,
+                reviewer_name=submitter_name,
+                review_time=datetime.now(),
+                updated_by=submitted_by,
+            )
+            return await self.get_sales_return_by_id(tenant_id, return_id)
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        instance = await ApprovalInstanceService.start_approval_for_node(
+            tenant_id=tenant_id,
+            user_id=submitted_by,
+            node_key="sales_return",
+            entity_type="sales_return",
+            entity_id=return_obj.id,
+            entity_uuid=str(return_obj.uuid),
+            title=f"销售退货审批: {return_obj.return_code}",
+            content=f"客户: {return_obj.customer_name}, 金额: {return_obj.total_amount}",
+        )
+        if not instance:
+            raise BusinessLogicError(
+                "销售退货审核已开启但未找到可用的审批流程，请在配置中心检查 sales_return 审批流程是否已激活"
+            )
+        await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
+            review_status="待审核",
+            updated_by=submitted_by,
+        )
+        return await self.get_sales_return_by_id(tenant_id, return_id)
+
+    async def approve_sales_return(
+        self,
+        tenant_id: int,
+        return_id: int,
+        approver_id: int,
+    ) -> SalesReturnResponse:
+        from apps.kuaizhizao.services.document_action_policy.sales_return import assert_sales_return_capability
+
+        return_obj = await SalesReturn.get_or_none(
+            id=return_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not return_obj:
+            raise NotFoundError(f"销售退货单不存在: {return_id}")
+
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "sales_return")
+        assert_sales_return_capability(return_obj, "approve", audit_required=audit_required)
+
+        approver_name = await self.get_user_name(approver_id)
+        await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
+            review_status="审核通过",
+            reviewer_id=approver_id,
+            reviewer_name=approver_name,
+            review_time=datetime.now(),
+            updated_by=approver_id,
+        )
+        return await self.get_sales_return_by_id(tenant_id, return_id)
+
+    async def reject_sales_return(
+        self,
+        tenant_id: int,
+        return_id: int,
+        approver_id: int,
+        *,
+        rejection_reason: Optional[str] = None,
+    ) -> SalesReturnResponse:
+        from apps.kuaizhizao.services.document_action_policy.sales_return import assert_sales_return_capability
+
+        return_obj = await SalesReturn.get_or_none(
+            id=return_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not return_obj:
+            raise NotFoundError(f"销售退货单不存在: {return_id}")
+
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "sales_return")
+        assert_sales_return_capability(return_obj, "reject", audit_required=audit_required)
+
+        await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
+            review_status="审核驳回",
+            review_remarks=rejection_reason,
+            reviewer_id=approver_id,
+            review_time=datetime.now(),
+            updated_by=approver_id,
+        )
+        return await self.get_sales_return_by_id(tenant_id, return_id)
+
+    async def withdraw_sales_return_submit(
+        self,
+        tenant_id: int,
+        return_id: int,
+        operator_id: int,
+    ) -> SalesReturnResponse:
+        from apps.kuaizhizao.services.document_action_policy.sales_return import assert_sales_return_capability
+
+        return_obj = await SalesReturn.get_or_none(
+            id=return_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not return_obj:
+            raise NotFoundError(f"销售退货单不存在: {return_id}")
+
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "sales_return")
+        assert_sales_return_capability(return_obj, "withdraw_submit", audit_required=audit_required)
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        await ApprovalInstanceService.cancel_approval(
+            tenant_id=tenant_id,
+            entity_type="sales_return",
+            entity_id=return_id,
+            operator_id=operator_id,
+        )
+        await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
+            review_status="草稿",
+            reviewer_id=None,
+            reviewer_name=None,
+            review_time=None,
+            review_remarks=None,
+            updated_by=operator_id,
+        )
+        return await self.get_sales_return_by_id(tenant_id, return_id)
+
+    async def revoke_sales_return_approval(
+        self,
+        tenant_id: int,
+        return_id: int,
+        operator_id: int,
+    ) -> SalesReturnResponse:
+        from apps.kuaizhizao.services.document_action_policy.sales_return import assert_sales_return_capability
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
+        from core.services.approval.uni_audit_service import UniAuditService
+
+        return_obj = await SalesReturn.get_or_none(
+            id=return_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not return_obj:
+            raise NotFoundError(f"销售退货单不存在: {return_id}")
+
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "sales_return")
+        assert_sales_return_capability(return_obj, "revoke_approval", audit_required=audit_required)
+
+        landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+        target_review = "待审核" if landing == "pending" else "草稿"
+
+        async def _do_revoke() -> SalesReturnResponse:
+            await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
+                review_status=target_review,
+                reviewer_id=None,
+                reviewer_name=None,
+                review_time=None,
+                review_remarks=None,
+                updated_by=operator_id,
+            )
+            return await self.get_sales_return_by_id(tenant_id, return_id)
+
+        return await UniAuditService.revoke_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="sales_return",
+            entity_id=return_id,
+            operator_id=operator_id,
+            flow_revoke=_do_revoke,
+        )
+
     async def get_sales_return_by_id(self, tenant_id: int, return_id: int) -> SalesReturnResponse:
         """根据ID获取销售退货单"""
         return_obj = await SalesReturn.get_or_none(tenant_id=tenant_id, id=return_id)
@@ -6469,7 +6681,15 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_return_lifecycle, get_document_milestones
         milestones = await get_document_milestones(tenant_id, "sales_return", return_id)
         response.lifecycle = get_sales_return_lifecycle(return_obj, milestones=milestones)
-        return await self._enrich_return_response(tenant_id, return_obj, response)
+        from core.services.approval.audit_record_enricher import audit_enabled_for, enrich_record
+
+        audit_required = await audit_enabled_for(tenant_id, "sales_return")
+        response = await enrich_record(
+            tenant_id, "sales_return", response, audit_enabled=audit_required
+        )
+        return await self._enrich_return_response(
+            tenant_id, return_obj, response, audit_required=audit_required
+        )
 
     async def list_sales_returns(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取销售退货单列表"""
@@ -6536,14 +6756,29 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             resp = SalesReturnResponse.model_validate(return_obj)
             resp.lifecycle = get_sales_return_lifecycle(return_obj)
             list_responses.append(resp)
-        enriched = enrich_sales_return_list_capabilities(
-            returns,
-            list_responses,
-            has_items_by_id=has_items_by_id,
-            item_counts_by_id=item_counts_by_id,
+        from core.services.approval.audit_record_enricher import audit_enabled_for, enrich_items
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_sales_return_capabilities_on_response,
         )
+
+        audit_required = await audit_enabled_for(tenant_id, "sales_return")
+        audited = await enrich_items(
+            tenant_id, "sales_return", list_responses, audit_enabled=audit_required
+        )
+        gated: List[SalesReturnResponse] = []
+        for return_obj, resp in zip(returns, audited):
+            rid = int(return_obj.id)
+            with_items = resp.model_copy(update={"total_items": item_counts_by_id.get(rid, 0)})
+            gated.append(
+                enrich_sales_return_capabilities_on_response(
+                    return_obj,
+                    with_items,
+                    has_items=has_items_by_id.get(rid, True),
+                    audit_required=audit_required,
+                )
+            )
         return {
-            'data': enriched,
+            'data': [item.model_dump() for item in gated],
             'total': total,
             'success': True,
         }
@@ -6564,7 +6799,13 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             from apps.kuaizhizao.services.document_action_policy.sales_return import assert_sales_return_capability
 
             item_count = await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_id).count()
-            assert_sales_return_capability(return_obj, "confirm", has_items=item_count > 0)
+            audit_required = await BusinessConfigService().check_audit_required(tenant_id, "sales_return")
+            assert_sales_return_capability(
+                return_obj,
+                "confirm",
+                has_items=item_count > 0,
+                audit_required=audit_required,
+            )
 
             # 1. 更新确认数据
             if confirmation_data:
@@ -7221,6 +7462,13 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         if not return_obj:
             raise NotFoundError(f"采购退货单不存在: {return_id}")
         response = PurchaseReturnResponse.model_validate(return_obj)
+        from apps.kuaizhizao.services.document_lifecycle_service import (
+            get_document_milestones,
+            get_purchase_return_lifecycle,
+        )
+
+        milestones = await get_document_milestones(tenant_id, "purchase_return", return_id)
+        response.lifecycle = get_purchase_return_lifecycle(return_obj, milestones=milestones)
         return await self._enrich_purchase_return_response(tenant_id, return_obj, response)
 
     async def get_purchase_return_statistics(self, tenant_id: int) -> Dict[str, Any]:
@@ -7321,11 +7569,16 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         return_ids = [int(r.id) for r in return_list if r.id is not None]
         has_items_by_id = await self._purchase_return_has_items_map(tenant_id, return_ids)
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_purchase_return_list_capabilities
+        from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_return_lifecycle
 
-        responses = [PurchaseReturnResponse.model_validate(r) for r in return_list]
+        list_responses: List[PurchaseReturnResponse] = []
+        for return_obj in return_list:
+            resp = PurchaseReturnResponse.model_validate(return_obj)
+            resp.lifecycle = get_purchase_return_lifecycle(return_obj)
+            list_responses.append(resp)
         enriched = enrich_purchase_return_list_capabilities(
             return_list,
-            responses,
+            list_responses,
             has_items_by_id=has_items_by_id,
         )
         return {

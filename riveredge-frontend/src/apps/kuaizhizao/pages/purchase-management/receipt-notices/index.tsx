@@ -646,6 +646,7 @@ const ReceiptNoticesPage: React.FC = () => {
         dataIndex: 'notice_code',
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         fixed: 'left',
+        sorter: true,
         render: (_, r) => (
           <UniTableStackedPrimaryCell
             primary={String(r.supplier_name ?? '')}

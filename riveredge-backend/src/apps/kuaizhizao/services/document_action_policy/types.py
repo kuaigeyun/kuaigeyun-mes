@@ -108,6 +108,10 @@ class SalesReturnCapabilities(BaseModel):
     confirm: ActionCapability
     withdraw: ActionCapability
     print: ActionCapability
+    submit: ActionCapability
+    withdraw_submit: ActionCapability
+    approve: ActionCapability
+    revoke_approval: ActionCapability
 
 
 class DemandComputationCapabilities(BaseModel):
@@ -405,6 +409,12 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "sales_return.confirm.already_returned": "销售退货单已确认退货",
     "sales_return.confirm.cancelled": "已取消的销售退货单不能确认退货",
     "sales_return.withdraw.not_returned": "只有已退货状态的销售退货单才能撤回",
+    "sales_return.submit.not_draft": "仅未提交审核的销售退货单可提交审核",
+    "sales_return.submit.no_items": "销售退货单无明细，无法提交审核",
+    "sales_return.withdraw_submit.not_pending": "仅待审核状态的销售退货单可撤回提交",
+    "sales_return.approve.not_pending": "仅待审核状态的销售退货单可审核",
+    "sales_return.revoke_approval.not_allowed": "当前状态不可撤销审核",
+    "sales_return.confirm.not_audited": "销售退货单须审核通过后才能确认退货",
     "demand_computation.execute.not_allowed": "只能执行进行中或失败状态的计算",
     "demand_computation.recompute.not_allowed": "只能对已完成或失败的计算执行重新计算",
     "demand_computation.compare.not_completed": "只能对比已完成的需求计算",

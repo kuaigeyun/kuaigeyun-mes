@@ -472,7 +472,7 @@ const CustomerFollowUpsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.customerFollowUp.colNextFollowUp'),
       dataIndex: 'next_follow_up_at',
-      width: 132,
+      width: 168,
       uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: true,
@@ -480,9 +480,25 @@ const CustomerFollowUpsPage: React.FC = () => {
         const text = row.next_follow_up_at ? formatDateTime(row.next_follow_up_at, 'YYYY-MM-DD HH:mm') : '—';
         const overdue = isCustomerFollowUpRevisitOverdue(row);
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              flexWrap: 'nowrap',
+              whiteSpace: 'nowrap',
+            }}
+          >
             <span>{text}</span>
-            {overdue ? <Tag color="error">{t('app.kuaizhizao.customerFollowUp.tagOverdue')}</Tag> : null}
+            {overdue ? (
+              <Tag
+                color="error"
+                bordered={false}
+                style={{ marginInlineEnd: 0, paddingInline: 4, lineHeight: '18px', flexShrink: 0 }}
+              >
+                {t('app.kuaizhizao.customerFollowUp.tagOverdue')}
+              </Tag>
+            ) : null}
           </span>
         );
       },

@@ -16,17 +16,39 @@ export function useMultiTabPageContainerHeight(deps: DependencyList = []) {
     const updateHeight = () => {
       const el = containerRef.current;
       if (!el) return;
+
+      const parent = el.parentElement;
+      const parentHeight = parent?.clientHeight ?? 0;
+      if (parentHeight > 0) {
+        setContainerHeight(
+          Math.max(MULTI_TAB_PAGE_CONTAINER.MIN_HEIGHT_PX, Math.floor(parentHeight)),
+        );
+        return;
+      }
+
       const top = el.getBoundingClientRect().top;
-      const next = Math.max(
-        MULTI_TAB_PAGE_CONTAINER.MIN_HEIGHT_PX,
-        Math.floor(window.innerHeight - top - MULTI_TAB_PAGE_CONTAINER.BOTTOM_GAP_PX),
+      setContainerHeight(
+        Math.max(
+          MULTI_TAB_PAGE_CONTAINER.MIN_HEIGHT_PX,
+          Math.floor(window.innerHeight - top - MULTI_TAB_PAGE_CONTAINER.BOTTOM_GAP_PX),
+        ),
       );
-      setContainerHeight(next);
     };
 
     updateHeight();
+
+    const parent = containerRef.current?.parentElement;
+    const ro =
+      parent && typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(updateHeight)
+        : undefined;
+    ro?.observe(parent);
+
     window.addEventListener('resize', updateHeight);
-    return () => window.removeEventListener('resize', updateHeight);
+    return () => {
+      window.removeEventListener('resize', updateHeight);
+      ro?.disconnect();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 由调用方传入 Tab 切换等需重算高度的依赖
   }, deps);
 

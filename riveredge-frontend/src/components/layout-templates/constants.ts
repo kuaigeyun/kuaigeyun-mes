@@ -324,7 +324,7 @@ export const LIST_PAGE_TABLE_SCROLL = {
 /** MultiTabListPageTemplate 视口高度容器：与业务配置页同一套计算方式 */
 export const MULTI_TAB_PAGE_CONTAINER = {
   MIN_HEIGHT_PX: 400,
-  /** 容器底与视口底留白 */
+  /** 视口回退计算时容器底与视口底留白（主路径优先用父级 clientHeight，避免与 UniTabs 限高重复扣减导致外层滚动） */
   BOTTOM_GAP_PX: 16,
 } as const;
 

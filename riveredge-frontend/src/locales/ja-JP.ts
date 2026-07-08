@@ -1590,6 +1590,8 @@ export default {
   'lifecycle.stage.pending_ship': '出荷保留',
   'lifecycle.stage.pending_return_goods': '返品保留',
   'lifecycle.stage.returned_goods': '返されました',
+  'lifecycle.stage.return_pick': 'ピッキング出庫',
+  'lifecycle.stage.supplier_return': 'サプライヤー返品',
   'lifecycle.stage.pending_inspection': '検査保留',
   'lifecycle.stage.ready_to_ship': '出荷準備完了',
   'lifecycle.stage.failed': '失敗した',
