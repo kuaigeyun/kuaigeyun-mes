@@ -150,20 +150,38 @@ class PayableService(AppBaseService[Payable]):
 
     async def list_payables(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> tuple[List[PayableResponse], int]:
         """获取应付单列表"""
+        from apps.kuaicaiwu.services.finance_list_core import apply_finance_ar_ap_list_filters
+
         query = Payable.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if filters.get('status'):
             query = query.filter(status=filters['status'])
         if filters.get('supplier_id'):
             query = query.filter(supplier_id=filters['supplier_id'])
-        if filters.get('due_date_start'):
-            query = query.filter(due_date__gte=filters['due_date_start'])
-        if filters.get('due_date_end'):
-            query = query.filter(due_date__lte=filters['due_date_end'])
         if filters.get('pending_settlement'):
             query = query.filter(remaining_amount__gt=0)
 
+        query, order_expr = apply_finance_ar_ap_list_filters(
+            query,
+            doc_code_field='payable_code',
+            partner_name_field='supplier_name',
+            keyword=filters.get('keyword'),
+            doc_code=filters.get('payable_code'),
+            partner_name=filters.get('supplier_name'),
+            review_status=filters.get('review_status'),
+            business_date_start=filters.get('business_date_start'),
+            business_date_end=filters.get('business_date_end'),
+            due_date_start=filters.get('due_date_start'),
+            due_date_end=filters.get('due_date_end'),
+            created_start_date=filters.get('created_start_date'),
+            created_end_date=filters.get('created_end_date'),
+            updated_start_date=filters.get('updated_start_date'),
+            updated_end_date=filters.get('updated_end_date'),
+            sort_field=filters.get('sort_field'),
+            sort_order=filters.get('sort_order'),
+        )
+
         total = await query.count()
-        payables = await query.offset(skip).limit(limit).order_by('-created_at')
+        payables = await query.offset(skip).limit(limit).order_by(order_expr)
         from core.services.approval.audit_record_enricher import enrich_items
 
         rows = [PayableResponse.model_validate(payable) for payable in payables]
@@ -476,9 +494,13 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
 
         return await enrich_record(tenant_id, "purchase_invoice", resp)
 
-    async def list_purchase_invoices(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[PurchaseInvoiceResponse]:
+    async def list_purchase_invoices(
+        self, tenant_id: int, skip: int = 0, limit: int = 20, **filters
+    ) -> tuple[List[PurchaseInvoiceResponse], int]:
         """获取采购发票列表"""
-        query = PurchaseInvoice.filter(tenant_id=tenant_id)
+        from apps.kuaicaiwu.services.finance_list_core import apply_finance_invoice_list_filters
+
+        query = PurchaseInvoice.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if filters.get('status'):
             query = query.filter(status=filters['status'])
         if filters.get('supplier_id'):
@@ -486,11 +508,33 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
         if filters.get('purchase_order_id'):
             query = query.filter(purchase_order_id=filters['purchase_order_id'])
 
-        invoices = await query.offset(skip).limit(limit).order_by('-created_at')
+        query, order_expr = apply_finance_invoice_list_filters(
+            query,
+            doc_code_field='invoice_code',
+            partner_name_field='supplier_name',
+            keyword=filters.get('keyword'),
+            doc_code=filters.get('invoice_code'),
+            partner_name=filters.get('supplier_name'),
+            invoice_number=filters.get('invoice_number'),
+            keyword_fields=['invoice_code', 'supplier_name', 'invoice_number', 'purchase_order_code'],
+            review_status=filters.get('review_status'),
+            review_status_mode='column',
+            doc_date_start=filters.get('start_date'),
+            doc_date_end=filters.get('end_date'),
+            created_start_date=filters.get('created_start_date'),
+            created_end_date=filters.get('created_end_date'),
+            updated_start_date=filters.get('updated_start_date'),
+            updated_end_date=filters.get('updated_end_date'),
+            sort_field=filters.get('sort_field'),
+            sort_order=filters.get('sort_order'),
+        )
+
+        total = await query.count()
+        invoices = await query.offset(skip).limit(limit).order_by(order_expr)
         from core.services.approval.audit_record_enricher import enrich_items
 
         rows = [PurchaseInvoiceResponse.model_validate(invoice) for invoice in invoices]
-        return await enrich_items(tenant_id, "purchase_invoice", rows)
+        return await enrich_items(tenant_id, "purchase_invoice", rows), total
 
     async def approve_invoice(self, tenant_id: int, invoice_id: int, approved_by: int, rejection_reason: Optional[str] = None) -> PurchaseInvoiceResponse:
         """审核采购发票"""
@@ -623,20 +667,38 @@ class ReceivableService(AppBaseService[Receivable]):
 
     async def list_receivables(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> tuple[List[ReceivableResponse], int]:
         """获取应收单列表"""
+        from apps.kuaicaiwu.services.finance_list_core import apply_finance_ar_ap_list_filters
+
         query = Receivable.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if filters.get('status'):
             query = query.filter(status=filters['status'])
         if filters.get('customer_id'):
             query = query.filter(customer_id=filters['customer_id'])
-        if filters.get('due_date_start'):
-            query = query.filter(due_date__gte=filters['due_date_start'])
-        if filters.get('due_date_end'):
-            query = query.filter(due_date__lte=filters['due_date_end'])
         if filters.get('pending_settlement'):
             query = query.filter(remaining_amount__gt=0)
 
+        query, order_expr = apply_finance_ar_ap_list_filters(
+            query,
+            doc_code_field='receivable_code',
+            partner_name_field='customer_name',
+            keyword=filters.get('keyword'),
+            doc_code=filters.get('receivable_code'),
+            partner_name=filters.get('customer_name'),
+            review_status=filters.get('review_status'),
+            business_date_start=filters.get('business_date_start'),
+            business_date_end=filters.get('business_date_end'),
+            due_date_start=filters.get('due_date_start'),
+            due_date_end=filters.get('due_date_end'),
+            created_start_date=filters.get('created_start_date'),
+            created_end_date=filters.get('created_end_date'),
+            updated_start_date=filters.get('updated_start_date'),
+            updated_end_date=filters.get('updated_end_date'),
+            sort_field=filters.get('sort_field'),
+            sort_order=filters.get('sort_order'),
+        )
+
         total = await query.count()
-        receivables = await query.offset(skip).limit(limit).order_by('-created_at')
+        receivables = await query.offset(skip).limit(limit).order_by(order_expr)
         from core.services.approval.audit_record_enricher import enrich_items
 
         rows = [ReceivableResponse.model_validate(receivable) for receivable in receivables]

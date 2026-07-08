@@ -81,6 +81,9 @@ export async function listPurchaseRequisitions(params: {
   requisition_name?: string;
   required_date_from?: string;
   required_date_to?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  order_by?: string;
 } = {}): Promise<{ data: PurchaseRequisition[]; total: number; success: boolean }> {
   return apiRequest('/apps/kuaizhizao/purchase-requisitions', { method: 'GET', params });
 }

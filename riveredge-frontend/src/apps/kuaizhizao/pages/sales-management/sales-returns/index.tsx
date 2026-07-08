@@ -50,13 +50,13 @@ import { UniMaterialBatchPicker } from '../../../../../components/uni-material-b
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import type { Material } from '../../../../master-data/types/material';
 import { warehouseApi } from '../../../services/production';
-import type { SalesReturn, SalesReturnItem } from '../../../services/sales-return';
+import type { SalesReturn, SalesReturnItem, SalesReturnListParams } from '../../../services/sales-return';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import dayjs from 'dayjs';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { getSalesReturnLifecycle } from '../../../utils/salesReturnLifecycle';
+import { getSalesReturnLifecycle, buildSalesReturnLifecycleValueEnum, resolveSalesReturnListLifecycleParams } from '../../../utils/salesReturnLifecycle';
 import { listSalesOrders } from '../../../services/sales-order';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
@@ -77,6 +77,8 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { formatDateTime } from '../../../../../utils/format';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 
 const SALES_RETURN_RESOURCE = 'kuaizhizao:sales-return';
 const SALES_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_returns';
@@ -210,6 +212,31 @@ const SalesReturnsPage: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const tableRowsRef = useRef<SalesReturn[]>([]);
+  const [customerList, setCustomerList] = useState<any[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const salesReturnCustomerSearchOptions = useMemo(
+    () =>
+      customerList.map((c: { id?: number; customer_id?: number; name?: string; customer_name?: string; code?: string }) => ({
+        value: Number(c.id ?? c.customer_id),
+        label: String(c.name ?? c.customer_name ?? c.code ?? ''),
+      })),
+    [customerList],
+  );
+  const salesReturnLifecycleValueEnum = useMemo(
+    () => buildSalesReturnLifecycleValueEnum(t),
+    [t],
+  );
+
+  useEffect(() => {
+    setCustomersLoading(true);
+    customerApi
+      .list({ limit: 1000, isActive: true })
+      .then((res) => {
+        setCustomerList(Array.isArray(res) ? res : (res as any)?.data || (res as any)?.items || []);
+      })
+      .catch(() => setCustomerList([]))
+      .finally(() => setCustomersLoading(false));
+  }, []);
 
   const selectedReturnsForBatch = useMemo(
     () =>
@@ -328,14 +355,16 @@ const SalesReturnsPage: React.FC = () => {
 
   const salesReturnCustomFieldColumns = generateSalesReturnCustomFieldColumns();
 
-  // 表格列定义
-  const columns: ProColumns<SalesReturn>[] = [
+  const columns: ProColumns<SalesReturn>[] = useMemo(
+    () => [
     {
       title: t('app.kuaizhizao.salesReturn.colCustomerReturnCode'),
       key: 'return_code',
       dataIndex: 'return_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
+      sorter: true,
+      fieldProps: { placeholder: t('app.kuaizhizao.salesReturn.colReturnCode') },
       render: (_, record) => (
         <UniTableStackedPrimaryCell
           primary={String(record.customer_name ?? '')}
@@ -343,56 +372,108 @@ const SalesReturnsPage: React.FC = () => {
         />
       ),
     },
-    { title: t('app.kuaizhizao.salesReturn.colReturnCode'), dataIndex: 'return_code', hideInTable: true },
-    { title: t('app.kuaizhizao.salesReturn.customer'), dataIndex: 'customer_name', hideInTable: true },
+    {
+      title: t('app.kuaizhizao.salesReturn.customer'),
+      dataIndex: 'customer_id',
+      hideInTable: true,
+      valueType: 'select',
+      fieldProps: {
+        showSearch: true,
+        optionFilterProp: 'label',
+        loading: customersLoading,
+        options: salesReturnCustomerSearchOptions,
+        placeholder: t('app.kuaizhizao.salesReturn.customer'),
+      },
+    },
     {
       title: t('app.kuaizhizao.salesReturn.colSalesDeliveryCode'),
       dataIndex: 'sales_delivery_code',
       width: 140,
       ellipsis: true,
+      sorter: true,
+      fieldProps: { placeholder: t('app.kuaizhizao.salesReturn.colSalesDeliveryCode') },
     },
     {
       title: t('app.kuaizhizao.salesReturn.colSalesOrderCode'),
       dataIndex: 'sales_order_code',
       width: 140,
       ellipsis: true,
+      sorter: true,
+      fieldProps: { placeholder: t('app.kuaizhizao.salesReturn.colSalesOrderCode') },
     },
     {
       title: t('app.kuaizhizao.salesReturn.colWarehouse'),
       dataIndex: 'warehouse_name',
       width: 120,
       ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.salesReturn.totalQuantity'),
       dataIndex: 'total_quantity',
       width: 100,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.salesReturn.totalAmount'),
       dataIndex: 'total_amount',
       width: 120,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
       render: (text: any) => `¥${Number(text || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
     },
     {
       title: t('app.kuaizhizao.salesReturn.returnTime'),
       dataIndex: 'return_time',
-      valueType: 'dateTime',
-      width: 160,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, record) =>
+        record.return_time ? formatDateTime(record.return_time, 'YYYY-MM-DD HH:mm') : '-',
+    },
+    {
+      title: t('app.kuaizhizao.salesReturn.returnTime'),
+      dataIndex: 'return_time_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
     },
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at',
-      valueType: 'dateTime',
-      width: 160,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      defaultSortOrder: 'descend',
+      hideInSearch: true,
+      render: (_, record) =>
+        record.created_at ? formatDateTime(record.created_at, 'YYYY-MM-DD HH:mm') : '-',
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
     },
     {
       title: t('app.kuaizhizao.salesReturn.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       align: 'center',
       fixed: 'right',
+      valueType: 'select',
+      valueEnum: salesReturnLifecycleValueEnum,
       render: (_, record) => (
         <ListUniLifecycleCell lifecycle={getSalesReturnLifecycle(record as any, t)} />
       ),
@@ -402,6 +483,7 @@ const SalesReturnsPage: React.FC = () => {
       title: t('common.actions'),
       width: 220,
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => renderSalesReturnRowActions([
         <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)}>{t('common.detail')}</Button>,
         record.capabilities?.update?.allowed && salesReturnPerms.canUpdate ? (
@@ -409,7 +491,16 @@ const SalesReturnsPage: React.FC = () => {
         ) : null,
       ].filter(Boolean), `sr-${record.id ?? 'row'}`),
     },
-  ];
+  ],
+    [
+      t,
+      customersLoading,
+      salesReturnCustomerSearchOptions,
+      salesReturnCustomFieldColumns,
+      salesReturnLifecycleValueEnum,
+      salesReturnPerms.canUpdate,
+    ],
+  );
 
   // 处理详情查看
   const handleDetail = async (record: SalesReturn) => {
@@ -880,6 +971,9 @@ const SalesReturnsPage: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showAdvancedSearch={true}
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
+          pinnedTabsValueEnum={salesReturnLifecycleValueEnum}
           showCreateButton={false}
           createButtonText={t('app.kuaizhizao.salesReturn.create')}
           onCreate={handleCreate}
@@ -898,23 +992,59 @@ const SalesReturnsPage: React.FC = () => {
               ])}
             />,
           ]}
-          request={async (params) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
-              const response = await warehouseApi.salesReturn.list({
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-                status: params.status,
-                sales_delivery_id: params.sales_delivery_id,
-                customer_id: params.customer_id,
-              });
-              const list = Array.isArray(response) ? response : response.data || [];
+              const sf = searchFormValues ?? {};
+              const lifecycleParams = resolveSalesReturnListLifecycleParams(sf, params);
+              const { sortBy, sortOrder } = extractProTableSort(sort);
+              const orderBy =
+                sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+              const fuzzyKeyword =
+                typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
+              const returnCode = sf.return_code != null ? String(sf.return_code).trim() : '';
+              const apiParams: SalesReturnListParams = {
+                skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+                limit: params.pageSize || 20,
+                ...lifecycleParams,
+                order_by: orderBy,
+              };
+              if (fuzzyKeyword) {
+                apiParams.keyword = fuzzyKeyword;
+              } else if (returnCode) {
+                apiParams.return_code = returnCode;
+              }
+              if (sf.customer_id != null && sf.customer_id !== '') {
+                apiParams.customer_id = Number(sf.customer_id);
+              }
+              const deliveryCode =
+                sf.sales_delivery_code != null ? String(sf.sales_delivery_code).trim() : '';
+              if (deliveryCode) apiParams.sales_delivery_code = deliveryCode;
+              const orderCode =
+                sf.sales_order_code != null ? String(sf.sales_order_code).trim() : '';
+              if (orderCode) apiParams.sales_order_code = orderCode;
+              const returnRange = sf.return_time_range as [unknown, unknown] | undefined;
+              if (returnRange && Array.isArray(returnRange) && returnRange[0]) {
+                apiParams.return_start_date = formatDateTime(returnRange[0] as string | Date, 'YYYY-MM-DD');
+                apiParams.return_end_date = returnRange[1]
+                  ? formatDateTime(returnRange[1] as string | Date, 'YYYY-MM-DD')
+                  : apiParams.return_start_date;
+              }
+              const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
+              if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+                apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
+                apiParams.created_end_date = createdRange[1]
+                  ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+                  : apiParams.created_start_date;
+              }
+              const response = await warehouseApi.salesReturn.list(apiParams);
+              const list = response?.data ?? [];
               const enriched = await enrichSalesReturnRecordsWithCustomFields(list);
               return {
                 data: enriched,
                 success: true,
-                total: Array.isArray(response) ? enriched.length : response.total || enriched.length,
+                total: response?.total ?? enriched.length,
               };
-            } catch (error) {
+            } catch {
               messageApi.error(t('app.kuaizhizao.salesReturn.listFailed'));
               return {
                 data: [],
@@ -1170,6 +1300,7 @@ const SalesReturnsPage: React.FC = () => {
                           }}
                           sourceType={materialSourceType}
                           showAdvancedSearch
+                        skipFuzzyPinyinClientFilter
                         />
                       ),
                     },

@@ -78,21 +78,20 @@ async def list_cost_rules(
     cost_type: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
     search: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None),
+    code: Optional[str] = Query(None),
+    name: Optional[str] = Query(None),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     service = CostRuleService()
-    count_query = CostRule.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-    if rule_type:
-        count_query = count_query.filter(rule_type=rule_type)
-    if cost_type:
-        count_query = count_query.filter(cost_type=cost_type)
-    if is_active is not None:
-        count_query = count_query.filter(is_active=is_active)
-    if search:
-        count_query = count_query.filter(Q(code__icontains=search) | Q(name__icontains=search))
-    total = await count_query.count()
-    rules = await service.list_cost_rules(
+    rules, total = await service.list_cost_rules(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -100,6 +99,15 @@ async def list_cost_rules(
         cost_type=cost_type,
         is_active=is_active,
         search=search,
+        keyword=keyword,
+        code=code,
+        name=name,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+        sort_field=sort_field,
+        sort_order=sort_order,
     )
     return CostRuleListResponse(items=rules, total=total, skip=skip, limit=limit)
 

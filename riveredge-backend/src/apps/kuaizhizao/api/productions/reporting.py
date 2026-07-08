@@ -5,7 +5,7 @@
 """
 
 from datetime import datetime, time
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from decimal import Decimal
 import uuid
 from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body, Request
@@ -21,7 +21,7 @@ from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
 from infra.services.business_config_service import BusinessConfigService
 
-from apps.kuaizhizao.services.reporting_service import ReportingService
+from apps.kuaizhizao.services.reporting_service import ReportingService, REPORTING_SORTABLE_FIELDS
 from apps.kuaizhizao.services.scrap_record_service import ScrapRecordService
 from apps.kuaizhizao.services.defect_record_service import DefectRecordService
 from apps.kuaizhizao.services.material_binding_service import MaterialBindingService
@@ -302,7 +302,7 @@ async def create_quick_reporting_record(
         raise _http_exception_with_trace(400, str(e), "/reporting/quick", tenant_id)
 
 
-@router.get("/reporting", response_model=List[ReportingRecordListResponse], summary="List reporting records")
+@router.get("/reporting", summary="List reporting records")
 async def list_reporting_records(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -311,11 +311,13 @@ async def list_reporting_records(
     operation_name: Optional[str] = Query(None, description="工序名称（模糊搜索）"),
     worker_name: Optional[str] = Query(None, description="操作工姓名（模糊搜索）"),
     status: Optional[str] = Query(None, description="审核状态"),
+    keyword: Optional[str] = Query(None, description="关键词（工单/工序/操作工等）"),
     reported_at_start: Optional[str] = Query(None, description="报工开始时间（ISO格式）"),
     reported_at_end: Optional[str] = Query(None, description="报工结束时间（ISO格式）"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 reported_at、-created_at"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[ReportingRecordListResponse]:
+) -> Dict[str, Any]:
     """
     获取报工记录列表
 
@@ -323,6 +325,11 @@ async def list_reporting_records(
     """
     reported_at_start_dt = _parse_iso_datetime_or_400(reported_at_start, "reported_at_start")
     reported_at_end_dt = _parse_iso_datetime_or_400(reported_at_end, "reported_at_end")
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in REPORTING_SORTABLE_FIELDS:
+            safe_order_by = order_by
 
     return await reporting_service.list_reporting_records(
         tenant_id=tenant_id,
@@ -333,8 +340,10 @@ async def list_reporting_records(
         operation_name=operation_name,
         worker_name=worker_name,
         status=status,
+        keyword=keyword,
         reported_at_start=reported_at_start_dt,
         reported_at_end=reported_at_end_dt,
+        order_by=safe_order_by,
     )
 
 
@@ -875,7 +884,7 @@ async def list_defect_records(
     date_start_dt = _parse_iso_datetime_or_400(date_start, "date_start")
     date_end_dt = _parse_iso_datetime_or_400(date_end, "date_end")
 
-    return await defect_record_service.list_defect_records(
+    result = await defect_record_service.list_defect_records(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -887,6 +896,7 @@ async def list_defect_records(
         date_start=date_start_dt,
         date_end=date_end_dt
     )
+    return result.get("data", [])
 
 
 @router.get("/defect/statistics", summary="Defect statistics")

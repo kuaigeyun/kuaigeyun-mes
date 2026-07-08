@@ -68,11 +68,39 @@ class BankAccountService:
         skip: int = 0,
         limit: int = 50,
         is_active: Optional[bool] = None,
-    ) -> List[BankAccount]:
+        keyword: Optional[str] = None,
+        account_code: Optional[str] = None,
+        account_name: Optional[str] = None,
+        bank_name: Optional[str] = None,
+        account_number: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> tuple[List[BankAccount], int]:
+        from apps.kuaicaiwu.services.finance_list_core import apply_finance_bank_account_list_filters
+
         q = BankAccount.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if is_active is not None:
-            q = q.filter(is_active=is_active)
-        return await q.offset(skip).limit(limit).order_by("account_code")
+        q, order_expr = apply_finance_bank_account_list_filters(
+            q,
+            keyword=keyword,
+            account_code=account_code,
+            account_name=account_name,
+            bank_name=bank_name,
+            account_number=account_number,
+            is_active=is_active,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_field,
+            sort_order=sort_order,
+        )
+        total = await q.count()
+        rows = await q.offset(skip).limit(limit).order_by(order_expr)
+        return rows, total
 
     async def update(
         self,
@@ -150,13 +178,33 @@ class BankAccountService:
         bank_account_id: Optional[int] = None,
         skip: int = 0,
         limit: int = 50,
+        keyword: Optional[str] = None,
+        source_doc_code: Optional[str] = None,
+        direction: Optional[str] = None,
+        transaction_date_start: Optional[str] = None,
+        transaction_date_end: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ):
         from apps.kuaicaiwu.models.bank_transaction import BankTransaction
+        from apps.kuaicaiwu.services.finance_list_core import apply_finance_bank_transaction_list_filters
 
         q = BankTransaction.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if bank_account_id is not None:
             q = q.filter(bank_account_id=bank_account_id)
-        return await q.offset(skip).limit(limit).order_by("-transaction_date", "-id")
+        q, order_expr = apply_finance_bank_transaction_list_filters(
+            q,
+            keyword=keyword,
+            source_doc_code=source_doc_code,
+            direction=direction,
+            transaction_date_start=transaction_date_start,
+            transaction_date_end=transaction_date_end,
+            sort_field=sort_field,
+            sort_order=sort_order,
+        )
+        total = await q.count()
+        rows = await q.offset(skip).limit(limit).order_by(order_expr, "-id")
+        return rows, total
 
     async def sync_from_confirmed_voucher(
         self,

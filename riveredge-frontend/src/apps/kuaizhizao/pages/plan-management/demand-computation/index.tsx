@@ -102,7 +102,12 @@ import {
   ComputationSnapshotItem,
   type PushRecordItem,
 } from '../../../services/demand-computation'
-import { getDemandComputationLifecycle } from '../../../utils/demandComputationLifecycle'
+import {
+  getDemandComputationLifecycle,
+  buildDemandComputationLifecycleValueEnum,
+  resolveDemandComputationListLifecycleParams,
+  LIST_LIFECYCLE_STAGE_FIELD,
+} from '../../../utils/demandComputationLifecycle'
 import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../../../utils/businessMode'
 import { getDemandTypeLabel, getDemandTypeTagProps } from '../../../utils/demandType'
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag'
@@ -120,6 +125,8 @@ import { warehouseApi } from '../../../../master-data/services/warehouse'
 import ComputationHistoryTab from './ComputationHistoryTab'
 import { MrpParametersCustomerGuideTrigger } from './MrpParametersCustomerGuide'
 import { formatDateBySiteSetting, formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format'
+import { extractProTableSort } from '../../../../../utils/tableQueryKey'
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate'
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select'
 import {
   getMaterialSourceTypeLabel,
@@ -1777,17 +1784,45 @@ const DemandComputationPage: React.FC = () => {
   }
 
 
+  const demandComputationLifecycleValueEnum = useMemo(
+    () => buildDemandComputationLifecycleValueEnum(t),
+    [t],
+  )
+
   /**
    * 表格列定义
    */
   const columns: ProColumns<DemandComputation>[] = useMemo(
     () => [
     {
+      title: t('app.kuaizhizao.demandComputation.colStartTime'),
+      dataIndex: 'computation_start_time_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      hideInSearch: false,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      hideInSearch: false,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
+    },
+    {
       title: t('app.kuaizhizao.demandComputation.colComputationCode'),
       dataIndex: 'computation_code',
       width: 168,
       fixed: 'left',
       hideInSearch: false,
+      sorter: true,
       render: (_: unknown, record: DemandComputation) => (
         <Space size={4} wrap={false} style={{ whiteSpace: 'nowrap' }}>
           <span style={{ whiteSpace: 'nowrap' }}>{record.computation_code ?? '-'}</span>
@@ -1815,6 +1850,7 @@ const DemandComputationPage: React.FC = () => {
       dataIndex: 'demand_code',
       width: 168,
       hideInSearch: false,
+      sorter: true,
       render: (_: unknown, record: DemandComputation) => (
         <Space size={4}>
           <span>{record.demand_code ?? '-'}</span>
@@ -1842,6 +1878,7 @@ const DemandComputationPage: React.FC = () => {
       dataIndex: 'demand_type',
       width: 110,
       valueType: 'select',
+      sorter: true,
       valueEnum: {
         sales_forecast: { text: getDemandTypeLabel('sales_forecast'), status: 'Processing' },
         sales_order: { text: getDemandTypeLabel('sales_order'), status: 'Success' },
@@ -1859,6 +1896,7 @@ const DemandComputationPage: React.FC = () => {
       dataIndex: 'business_mode',
       width: 100,
       valueType: 'select',
+      sorter: true,
       valueEnum: {
         MTS: { text: getDemandBusinessModeLabel('MTS'), status: 'Processing' },
         MTO: { text: getDemandBusinessModeLabel('MTO'), status: 'Success' },
@@ -1874,31 +1912,40 @@ const DemandComputationPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.demandComputation.colStartTime'),
       dataIndex: 'computation_start_time',
-      width: 160,
-      hideInSearch: false,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      defaultSortOrder: 'descend',
+      hideInSearch: true,
       render: (_, record) => formatDateTimeBySiteSetting(record.computation_start_time),
     },
     {
       title: t('app.kuaizhizao.demandComputation.colEndTime'),
       dataIndex: 'computation_end_time',
-      width: 160,
-      hideInTable: false,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
       hideInSearch: true,
       render: (_, record) => formatDateTimeBySiteSetting(record.computation_end_time),
     },
     {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, record) =>
+        record.created_at ? formatDateTime(record.created_at, 'YYYY-MM-DD HH:mm') : '-',
+    },
+    {
       title: t('app.kuaizhizao.demandComputation.colLifecycle'),
-      dataIndex: 'lifecycle_stage',
+      dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       fixed: 'right',
       align: 'center',
       hideInSearch: false,
       valueType: 'select',
-      valueEnum: {
-        进行中: { text: t('app.kuaizhizao.demandComputation.statusInProgress') },
-        计算中: { text: t('app.kuaizhizao.demandComputation.statusComputing') },
-        完成: { text: t('app.kuaizhizao.demandComputation.statusCompleted') },
-        失败: { text: t('app.kuaizhizao.demandComputation.statusFailed') },
-      },
+      valueEnum: demandComputationLifecycleValueEnum,
       fieldProps: { allowClear: true },
       render: (_, record) => {
         const lifecycle = getDemandComputationLifecycle(record, t)
@@ -1957,7 +2004,7 @@ const DemandComputationPage: React.FC = () => {
       },
     },
   ],
-    [computationPerms.canAction, computationPerms.canDelete, computationPerms.canUpdate, handleDelete, handleDetail, handleExecute, handleRecompute, messageApi, t],
+    [computationPerms.canAction, computationPerms.canDelete, computationPerms.canUpdate, handleDelete, handleDetail, handleExecute, handleRecompute, messageApi, demandComputationLifecycleValueEnum, t],
   )
 
   const selectedComputationForToolbar = useMemo(() => {
@@ -2106,45 +2153,51 @@ const DemandComputationPage: React.FC = () => {
         actionRef={actionRef}
         columns={columns}
         showAdvancedSearch={true}
-        request={async (params, _sort, _filter, searchFormValues) => {
-          const apiParams: any = {
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
+        pinnedTabsValueEnum={demandComputationLifecycleValueEnum}
+        request={async (params, sort, _filter, searchFormValues) => {
+          const s = (searchFormValues ?? {}) as Record<string, unknown>
+          const lifecycleParams = resolveDemandComputationListLifecycleParams(s, params as Record<string, unknown>)
+          const { sortBy, sortOrder } = extractProTableSort(sort)
+          const orderBy =
+            sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined
+          const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : ''
+
+          const apiParams: Parameters<typeof listDemandComputations>[0] = {
             skip: (params.current! - 1) * params.pageSize!,
             limit: params.pageSize!,
+            ...lifecycleParams,
+            order_by: orderBy,
+            business_mode: s.business_mode as DemandComputation['business_mode'],
+            demand_type: s.demand_type as DemandComputation['demand_type'],
           }
 
-          // 处理搜索参数
-          if (searchFormValues?.computation_code) {
-            apiParams.computation_code = searchFormValues.computation_code
-          }
-          if (searchFormValues?.demand_code) {
-            apiParams.demand_code = searchFormValues.demand_code
-          }
-          if (searchFormValues?.computation_type) {
-            apiParams.computation_type = searchFormValues.computation_type
-          }
-          if (searchFormValues?.lifecycle ?? searchFormValues?.computation_status) {
-            apiParams.computation_status = searchFormValues?.lifecycle ?? searchFormValues?.computation_status
-          }
-          if (searchFormValues?.business_mode) {
-            apiParams.business_mode = searchFormValues.business_mode
-          }
-          if (searchFormValues?.demand_id) {
-            apiParams.demand_id = searchFormValues.demand_id
-          }
-
-          // 处理时间范围搜索
-          if (searchFormValues?.computation_start_time) {
-            if (Array.isArray(searchFormValues.computation_start_time)) {
-              if (searchFormValues.computation_start_time[0]) {
-                apiParams.start_date = formatDateTime(searchFormValues.computation_start_time[0], 'YYYY-MM-DD')
-              }
-              if (searchFormValues.computation_start_time[1]) {
-                apiParams.end_date = formatDateTime(searchFormValues.computation_start_time[1], 'YYYY-MM-DD')
-              }
-            } else if (searchFormValues.computation_start_time) {
-              // 单个日期值
-              apiParams.start_date = formatDateTime(searchFormValues.computation_start_time, 'YYYY-MM-DD')
+          if (fuzzyKeyword) {
+            apiParams.keyword = fuzzyKeyword
+          } else {
+            if (s.computation_code != null && String(s.computation_code).trim()) {
+              apiParams.computation_code = String(s.computation_code).trim()
             }
+            if (s.demand_code != null && String(s.demand_code).trim()) {
+              apiParams.demand_code = String(s.demand_code).trim()
+            }
+          }
+
+          const startRange = s.computation_start_time_range as [unknown, unknown] | undefined
+          if (startRange && Array.isArray(startRange) && startRange[0]) {
+            apiParams.start_date = formatDateTime(startRange[0] as string | Date, 'YYYY-MM-DD')
+            apiParams.end_date = startRange[1]
+              ? formatDateTime(startRange[1] as string | Date, 'YYYY-MM-DD')
+              : apiParams.start_date
+          }
+
+          const createdRange = s.created_at_range as [unknown, unknown] | undefined
+          if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+            apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD')
+            apiParams.created_end_date = createdRange[1]
+              ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+              : apiParams.created_start_date
           }
 
           const result = await listDemandComputations(apiParams)

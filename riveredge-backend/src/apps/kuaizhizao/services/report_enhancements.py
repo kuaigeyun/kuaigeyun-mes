@@ -464,9 +464,19 @@ async def build_production_delay_warning(
     date_end: Optional[datetime] = None,
     skip: int = 0,
     limit: int = 100,
+    keyword: Optional[str] = None,
+    order_by: Optional[str] = None,
+    status: Optional[str] = None,
+    order_code: Optional[str] = None,
+    product_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     from datetime import time as dt_time
+    from tortoise.expressions import Q
     from apps.kuaizhizao.models.work_order import WorkOrder
+    from apps.kuaizhizao.services.report_service import (
+        PRODUCTION_DELAY_WARNING_SORT,
+        _resolve_production_report_order_by,
+    )
 
     today = date.today()
     today_start = datetime.combine(today, dt_time.min)
@@ -480,10 +490,27 @@ async def build_production_delay_warning(
     if date_end:
         q = q.filter(planned_end_date__lte=date_end)
     q = q.filter(planned_end_date__lt=today_start)
+    if status:
+        q = q.filter(status=status)
+    oc = (order_code or "").strip()
+    if oc:
+        q = q.filter(code__icontains=oc)
+    pn = (product_name or "").strip()
+    if pn:
+        q = q.filter(product_name__icontains=pn)
+    kw = (keyword or "").strip()
+    if kw:
+        q = q.filter(Q(code__icontains=kw) | Q(product_name__icontains=kw))
     total = await q.count()
     lim = max(1, min(int(limit or 100), 500))
     sk = max(0, int(skip or 0))
-    rows = await q.order_by("planned_end_date").offset(sk).limit(lim).values(
+    order_clause = _resolve_production_report_order_by(
+        order_by,
+        PRODUCTION_DELAY_WARNING_SORT,
+        "planned_end_date",
+        field_aliases={"material_name": "product_name", "overdue_days": "planned_end_date"},
+    )
+    rows = await q.order_by(order_clause).offset(sk).limit(lim).values(
         "code", "product_name", "planned_end_date", "status", "quantity", "completed_quantity"
     )
     items = []
@@ -508,27 +535,70 @@ async def build_outsource_work_order_query(
     *,
     skip: int = 0,
     limit: int = 100,
+    date_start: Optional[datetime] = None,
+    date_end: Optional[datetime] = None,
+    keyword: Optional[str] = None,
+    order_by: Optional[str] = None,
+    status: Optional[str] = None,
+    order_code: Optional[str] = None,
+    product_name: Optional[str] = None,
+    supplier_name: Optional[str] = None,
 ) -> Dict[str, Any]:
+    from tortoise.expressions import Q
     from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
+    from apps.kuaizhizao.services.report_service import (
+        PRODUCTION_OUTSOURCE_QUERY_SORT,
+        _resolve_production_report_order_by,
+    )
 
     q = OutsourceWorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    if date_start:
+        q = q.filter(created_at__gte=date_start)
+    if date_end:
+        q = q.filter(created_at__lte=date_end)
+    if status:
+        q = q.filter(status=status)
+    oc = (order_code or "").strip()
+    if oc:
+        q = q.filter(code__icontains=oc)
+    pn = (product_name or "").strip()
+    if pn:
+        q = q.filter(product_name__icontains=pn)
+    sn = (supplier_name or "").strip()
+    if sn:
+        q = q.filter(supplier_name__icontains=sn)
+    kw = (keyword or "").strip()
+    if kw:
+        q = q.filter(
+            Q(code__icontains=kw) | Q(product_name__icontains=kw) | Q(supplier_name__icontains=kw)
+        )
     total = await q.count()
     lim = max(1, min(int(limit or 100), 500))
     sk = max(0, int(skip or 0))
-    rows = await q.order_by("-created_at").offset(sk).limit(lim).values(
-        "code", "supplier_name", "product_name", "quantity", "status", "planned_end_date", "total_amount"
+    order_clause = _resolve_production_report_order_by(
+        order_by,
+        PRODUCTION_OUTSOURCE_QUERY_SORT,
+        "-created_at",
+        field_aliases={"order_code": "code", "order_qty": "quantity", "plan_qty": "quantity", "order_date": "created_at"},
+    )
+    rows = await q.order_by(order_clause).offset(sk).limit(lim).values(
+        "code", "supplier_name", "product_name", "quantity", "status", "planned_end_date", "created_at", "total_amount"
     )
     items = []
     for r in rows:
         ped = r.get("planned_end_date")
+        created = r.get("created_at")
         items.append({
             "order_code": r.get("code"),
             "supplier_name": r.get("supplier_name"),
             "product_name": r.get("product_name"),
             "plan_qty": float(r.get("quantity") or 0),
+            "order_qty": float(r.get("quantity") or 0),
             "amount": float(r.get("total_amount") or 0),
             "status": r.get("status"),
             "planned_end_date": to_api_isoformat(ped.date()) if ped and hasattr(ped, "date") else (to_api_isoformat(ped) if ped else None),
+            "order_date": created,
+            "created_at": created,
         })
     return {"data": items, "total": total, "success": True}
 
@@ -538,14 +608,42 @@ async def build_outsource_material_reconciliation(
     *,
     skip: int = 0,
     limit: int = 100,
+    keyword: Optional[str] = None,
+    order_by: Optional[str] = None,
+    status: Optional[str] = None,
+    work_order_code: Optional[str] = None,
 ) -> Dict[str, Any]:
+    from tortoise.expressions import Q
     from apps.kuaizhizao.models.outsource_work_order import OutsourceMaterialIssue, OutsourceMaterialReturn
+    from apps.kuaizhizao.services.report_service import (
+        PRODUCTION_OUTSOURCE_RECON_SORT,
+        _resolve_production_report_order_by,
+    )
 
     q = OutsourceMaterialIssue.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    if status:
+        q = q.filter(status=status)
+    woc = (work_order_code or "").strip()
+    if woc:
+        q = q.filter(outsource_work_order_code__icontains=woc)
+    kw = (keyword or "").strip()
+    if kw:
+        q = q.filter(
+            Q(code__icontains=kw)
+            | Q(outsource_work_order_code__icontains=kw)
+            | Q(material_code__icontains=kw)
+            | Q(material_name__icontains=kw)
+        )
     total = await q.count()
     lim = max(1, min(int(limit or 100), 500))
     sk = max(0, int(skip or 0))
-    rows = await q.order_by("-created_at").offset(sk).limit(lim).values(
+    order_clause = _resolve_production_report_order_by(
+        order_by,
+        PRODUCTION_OUTSOURCE_RECON_SORT,
+        "-created_at",
+        field_aliases={"issue_code": "code", "issued_qty": "quantity"},
+    )
+    rows = await q.order_by(order_clause).offset(sk).limit(lim).values(
         "id",
         "code",
         "outsource_work_order_code",

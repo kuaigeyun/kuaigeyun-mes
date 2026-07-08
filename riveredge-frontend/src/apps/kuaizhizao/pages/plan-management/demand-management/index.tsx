@@ -66,7 +66,12 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { getDemandLifecycle } from '../../../utils/demandLifecycle';
+import {
+  getDemandLifecycle,
+  buildDemandPlanLifecycleValueEnum,
+  resolveDemandPlanListLifecycleParams,
+  LIST_LIFECYCLE_STAGE_FIELD,
+} from '../../../utils/demandLifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
@@ -81,6 +86,8 @@ import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/Wa
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 
 const DEMAND_ORIGIN_SUB_KEYS = new Set(['from_forecast', 'from_order', 'manual_plan']);
 
@@ -648,15 +655,53 @@ const DemandManagementPage: React.FC = () => {
     () => createListAuditPhaseColumn<Demand>({ t, auditEnabled: demandAuditEnabled }),
     [t, demandAuditEnabled],
   );
+  const demandPlanLifecycleValueEnum = useMemo(
+    () => buildDemandPlanLifecycleValueEnum(t),
+    [t],
+  );
 
   const columns: ProColumns<Demand>[] = useMemo(
     () => [
+    {
+      title: t('app.kuaizhizao.salesForecast.startDate'),
+      dataIndex: 'start_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      hideInSearch: false,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
+      search: {
+        transform: (value: unknown) => {
+          if (!value || !Array.isArray(value)) return {};
+          const [a, b] = value;
+          return {
+            start_date_from: a ? formatDateTimeValue(a, 'YYYY-MM-DD') : undefined,
+            start_date_to: b ? formatDateTimeValue(b, 'YYYY-MM-DD') : undefined,
+          };
+        },
+      },
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      hideInSearch: false,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
+    },
     {
       title: t('app.kuaizhizao.demandManagement.colDemandPrimary'),
       key: 'demand_code',
       dataIndex: 'demand_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
+      sorter: true,
+      hideInSearch: false,
       render: (_: unknown, record: Demand) => (
         <UniTableStackedPrimaryCell
           primary={String(record.demand_name ?? '')}
@@ -668,17 +713,21 @@ const DemandManagementPage: React.FC = () => {
       title: t('app.kuaizhizao.demandManagement.demandCode'),
       dataIndex: 'demand_code',
       hideInTable: true,
+      hideInSearch: false,
     },
     {
       title: t('app.kuaizhizao.demandManagement.demandName'),
       dataIndex: 'demand_name',
       hideInTable: true,
+      hideInSearch: false,
       ellipsis: true,
     },
     {
       title: t('app.kuaizhizao.demandManagement.demandType'),
       dataIndex: 'demand_type',
       width: 120,
+      hideInSearch: true,
+      sorter: true,
       render: (_: unknown, record: Demand) => (
         <Tag {...getDemandTypeTagProps(record.demand_type)}>{formatDemandTypeLabel(record.demand_type)}</Tag>
       ),
@@ -688,24 +737,78 @@ const DemandManagementPage: React.FC = () => {
       dataIndex: 'total_quantity',
       width: 100,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
+      dataIndex: 'total_amount',
+      width: 120,
+      align: 'right',
+      sorter: true,
+      hideInSearch: true,
+      render: (_, record) =>
+        record.total_amount != null ? `¥${Number(record.total_amount).toFixed(2)}` : '-',
     },
     {
       title: t('app.kuaizhizao.demandManagement.businessMode'),
       dataIndex: 'business_mode',
       width: 100,
+      sorter: true,
+      hideInSearch: false,
       valueEnum: {
         MTS: { text: t('app.kuaizhizao.demandManagement.businessModeMtsShort'), status: 'Processing' },
         MTO: { text: t('app.kuaizhizao.demandManagement.businessModeMtoShort'), status: 'Success' },
         ATO: { text: t('app.kuaizhizao.demandManagement.businessModeAtoShort'), status: 'Warning' },
       },
     },
+    {
+      title: t('app.kuaizhizao.salesForecast.startDate'),
+      dataIndex: 'start_date',
+      valueType: 'date',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.salesForecast.endDate'),
+      dataIndex: 'end_date',
+      valueType: 'date',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      defaultSortOrder: 'descend',
+      hideInSearch: true,
+      render: (_, record) =>
+        record.created_at ? formatDateTimeValue(record.created_at, 'YYYY-MM-DD HH:mm') : '-',
+    },
+    {
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, record) =>
+        record.updated_at ? formatDateTimeValue(record.updated_at, 'YYYY-MM-DD HH:mm') : '-',
+    },
     ...(demandAuditColumn ? [demandAuditColumn] : []),
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
-      dataIndex: 'lifecycle_stage',
+      dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       align: 'center' as const,
       fixed: 'right' as const,
-      hideInSearch: true,
+      hideInSearch: false,
+      valueEnum: demandPlanLifecycleValueEnum,
       render: (_, record) => (
         <ListUniLifecycleCell lifecycle={getDemandLifecycle(record as Record<string, unknown>, t)} />
       ),
@@ -795,7 +898,7 @@ const DemandManagementPage: React.FC = () => {
       },
     },
   ],
-    [t, formatDemandTypeLabel, handleDelete, handleDetail, handleEdit, demandCanWithdrawComputation, handleWithdrawFromComputation, demandAuditColumn]
+    [t, formatDemandTypeLabel, handleDelete, handleDetail, handleEdit, demandCanWithdrawComputation, handleWithdrawFromComputation, demandAuditColumn, demandPlanLifecycleValueEnum]
   );
 
   const statCards: StatCard[] = useMemo(
@@ -810,7 +913,9 @@ const DemandManagementPage: React.FC = () => {
           onClick:
             statistics.pending_review_count > 0
               ? () => {
-                  tableSearchFormRef.current?.setFieldsValue?.({ status: DemandStatus.PENDING_REVIEW });
+                  tableSearchFormRef.current?.setFieldsValue?.({
+                    [LIST_LIFECYCLE_STAGE_FIELD]: '待审核',
+                  });
                   actionRef.current?.reload?.();
                 }
               : undefined,
@@ -1051,34 +1156,44 @@ const DemandManagementPage: React.FC = () => {
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
-            const apiParams: any = {
+            const s = (searchFormValues ?? {}) as Record<string, unknown>;
+            const lifecycleParams = resolveDemandPlanListLifecycleParams(s, params as Record<string, unknown>);
+            const { sortBy, sortOrder } = extractProTableSort(sort);
+            const orderBy =
+              sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+            const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
+
+            const apiParams: Parameters<typeof listDemands>[0] = {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
+              demand_type: 'demand_plan',
+              ...lifecycleParams,
+              order_by: orderBy,
+              business_mode: s.business_mode as Demand['business_mode'],
+              start_date_from: s.start_date_from as string | undefined,
+              start_date_to: s.start_date_to as string | undefined,
             };
 
-            apiParams.demand_type = 'demand_plan';
-            if (searchFormValues?.lifecycle) {
-              const lifecycleToStatus: Record<string, string> = {
-                草稿: 'DRAFT',
-                待审核: 'PENDING_REVIEW',
-                已驳回: 'REJECTED',
-                已审核: 'AUDITED',
-                已下推计算: 'AUDITED',
-              };
-              apiParams.status = lifecycleToStatus[searchFormValues.lifecycle] ?? searchFormValues.lifecycle;
-              if (searchFormValues.lifecycle === '已下推计算') {
-                apiParams.pushed_to_computation = true;
+            if (fuzzyKeyword) {
+              apiParams.keyword = fuzzyKeyword;
+            } else {
+              if (s.demand_code != null && String(s.demand_code).trim()) {
+                apiParams.demand_code = String(s.demand_code).trim();
               }
-            } else if (searchFormValues?.status) {
-              apiParams.status = searchFormValues.status;
+              if (s.demand_name != null && String(s.demand_name).trim()) {
+                apiParams.demand_name = String(s.demand_name).trim();
+              }
             }
 
-            if (sort) {
-              const sortKeys = Object.keys(sort);
-              if (sortKeys.length > 0) {
-                const key = sortKeys[0];
-                apiParams.order_by = sort[key] === 'ascend' ? key : `-${key}`;
-              }
+            const createdRange = s.created_at_range as [unknown, unknown] | undefined;
+            if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+              apiParams.created_start_date = formatDateTimeValue(
+                createdRange[0] as string | Date,
+                'YYYY-MM-DD',
+              );
+              apiParams.created_end_date = createdRange[1]
+                ? formatDateTimeValue(createdRange[1] as string | Date, 'YYYY-MM-DD')
+                : apiParams.created_start_date;
             }
 
             try {
@@ -1103,6 +1218,9 @@ const DemandManagementPage: React.FC = () => {
           }}
           rowKey="id"
           showAdvancedSearch={true}
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
+          pinnedTabsValueEnum={demandPlanLifecycleValueEnum}
           selectedRowKeys={selectedRowKeys}
           showCreateButton={false}
           toolBarRender={() => [

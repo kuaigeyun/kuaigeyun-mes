@@ -61,6 +61,11 @@ async def list_maintenance_reminders(
     is_read: Optional[bool] = Query(None, description="是否已读（可选）"),
     is_handled: Optional[bool] = Query(None, description="是否已处理（可选）"),
     equipment_uuid: Optional[str] = Query(None, description="设备UUID（可选）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    reminder_start_date: Optional[str] = Query(None, description="提醒日期起"),
+    reminder_end_date: Optional[str] = Query(None, description="提醒日期止"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -79,6 +84,11 @@ async def list_maintenance_reminders(
             is_read=is_read,
             is_handled=is_handled,
             equipment_uuid=equipment_uuid,
+            keyword=keyword,
+            search=search,
+            order_by=order_by,
+            reminder_start_date=reminder_start_date,
+            reminder_end_date=reminder_end_date,
         )
         
         # 获取未读数量

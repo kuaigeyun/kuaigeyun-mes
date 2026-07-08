@@ -41,7 +41,14 @@ import { equipmentFaultApi, equipmentApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  buildEquipmentFaultStatusValueEnum,
+  EQUIPMENT_FAULT_PINNED_STATUS_FIELD,
+  normalizeEquipmentListResponse,
+  resolveEquipmentFaultListParams,
+} from '../../../utils/equipmentListCore';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
@@ -483,13 +490,47 @@ const EquipmentFaultsPage: React.FC = () => {
   /**
    * 表格列定义
    */
+  const faultStatusValueEnum = useMemo(() => buildEquipmentFaultStatusValueEnum(t), [t]);
+
   const columns: ProColumns<EquipmentFault>[] = useMemo(() => [
+    {
+      title: t(`${P}.col.faultDate`),
+      dataIndex: 'fault_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 10 } as ProColumns['search'],
+    },
+    {
+      title: t('common.updatedAt'),
+      dataIndex: 'created_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 11 } as ProColumns['search'],
+    },
+    {
+      title: t(`${P}.col.status`),
+      dataIndex: 'status',
+      valueType: 'select',
+      valueEnum: faultStatusValueEnum,
+      hideInTable: true,
+      search: { order: 20 } as ProColumns['search'],
+    },
+    {
+      title: t(`${P}.col.faultType`),
+      dataIndex: 'fault_type',
+      hideInTable: true,
+      search: { order: 21 } as ProColumns['search'],
+    },
     {
       title: t(`${P}.col.faultNo`),
       dataIndex: 'fault_no',
       width: 140,
       ellipsis: true,
       fixed: 'left',
+      sorter: true,
+      search: { order: 30 } as ProColumns['search'],
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.fault_no ?? '') }} ellipsis>
           {r.fault_no ?? '-'}
@@ -500,6 +541,8 @@ const EquipmentFaultsPage: React.FC = () => {
       title: t(`${P}.col.equipmentCode`),
       dataIndex: 'equipment_code',
       width: 140,
+      sorter: true,
+      hideInSearch: true,
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }} ellipsis>
           {r.equipment_code ?? '-'}
@@ -511,22 +554,31 @@ const EquipmentFaultsPage: React.FC = () => {
       dataIndex: 'equipment_name',
       width: 200,
       ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t(`${P}.col.faultDate`),
       dataIndex: 'fault_date',
       valueType: 'date',
-      width: 120,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t(`${P}.col.faultType`),
       dataIndex: 'fault_type',
       width: 120,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t(`${P}.col.faultLevel`),
       dataIndex: 'fault_level',
       width: 100,
+      sorter: true,
+      hideInSearch: true,
       render: (_, record) => {
         const level = record.fault_level;
         const config = level ? FAULT_LEVEL_KEYS[level] : undefined;
@@ -538,6 +590,8 @@ const EquipmentFaultsPage: React.FC = () => {
       title: t(`${P}.col.repairRequired`),
       dataIndex: 'repair_required',
       width: 100,
+      sorter: true,
+      hideInSearch: true,
       render: (_, record) => (
         <Tag color={record.repair_required ? 'warning' : 'success'}>
           {record.repair_required ? t(`${P}.yes`) : t(`${P}.no`)}
@@ -547,8 +601,10 @@ const EquipmentFaultsPage: React.FC = () => {
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
+      sorter: true,
       defaultSortOrder: 'descend',
       render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
@@ -571,7 +627,7 @@ const EquipmentFaultsPage: React.FC = () => {
       render: (_, record) =>
         renderFaultRowActions(renderFaultRowNodes(record), `flt-${record.uuid ?? 'row'}`),
     },
-  ], [t]);
+  ], [t, faultStatusValueEnum]);
 
   return (
     <>
@@ -583,18 +639,21 @@ const EquipmentFaultsPage: React.FC = () => {
           rowKey="uuid"
           columns={columns}
           showAdvancedSearch={true}
-          request={async (params) => {
+          pinnedTabsField={EQUIPMENT_FAULT_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const listParams = resolveEquipmentFaultListParams(searchFormValues, sort);
               const response = await equipmentFaultApi.list({
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
-                ...params,
-                keyword: (params as any).keyword,
+                ...listParams,
               });
+              const { data, total } = normalizeEquipmentListResponse(response);
               return {
-                data: response.items || [],
+                data: data as EquipmentFault[],
                 success: true,
-                total: response.total || 0,
+                total,
               };
             } catch (error) {
               messageApi.error(t(`${P}.listFailed`));

@@ -6,6 +6,7 @@ Date: 2026-05-28
 """
 
 import uuid
+from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTTPException, status
@@ -28,7 +29,10 @@ from apps.kuaizhizao.schemas.purchase_inquiry import (
     PurchaseSupplierQuoteResponse,
     UpsertSupplierQuoteRequest,
 )
-from apps.kuaizhizao.services.purchase_inquiry_service import PurchaseInquiryService
+from apps.kuaizhizao.services.purchase_inquiry_service import (
+    PurchaseInquiryService,
+    PURCHASE_INQUIRY_SORTABLE_FIELDS,
+)
 
 router = APIRouter(tags=["App · Kuaige Zhizao · Purchase Inquiry"])
 
@@ -60,16 +64,41 @@ async def create_inquiry(
 )
 async def list_inquiries(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=1000),
     lifecycle_stage: Optional[str] = Query(None),
-    keyword: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None, description="模糊：编号/名称/来源编码/采购员"),
+    inquiry_code: Optional[str] = Query(None),
+    inquiry_name: Optional[str] = Query(None),
+    source_code: Optional[str] = Query(None),
+    quote_deadline_from: Optional[date] = Query(None),
+    quote_deadline_to: Optional[date] = Query(None),
+    created_start_date: Optional[date] = Query(None),
+    created_end_date: Optional[date] = Query(None),
     source_id: Optional[int] = Query(None),
+    order_by: Optional[str] = Query(None, description="排序字段，如 created_at、-quote_deadline"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows = await PurchaseInquiryService().list_inquiries(
-        tenant_id, skip=skip, limit=limit, lifecycle_stage=lifecycle_stage, keyword=keyword, source_id=source_id
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in PURCHASE_INQUIRY_SORTABLE_FIELDS:
+            safe_order_by = order_by
+    return await PurchaseInquiryService().list_inquiries(
+        tenant_id,
+        skip=skip,
+        limit=limit,
+        lifecycle_stage=lifecycle_stage,
+        keyword=keyword,
+        inquiry_code=inquiry_code,
+        inquiry_name=inquiry_name,
+        source_code=source_code,
+        quote_deadline_from=quote_deadline_from,
+        quote_deadline_to=quote_deadline_to,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        source_id=source_id,
+        order_by=safe_order_by,
     )
-    return {"data": rows, "total": len(rows), "success": True}
 
 
 @router.get(

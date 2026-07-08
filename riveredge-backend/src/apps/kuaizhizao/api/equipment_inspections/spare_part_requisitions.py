@@ -61,9 +61,28 @@ async def list_spare_part_requisitions(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     status_filter: Optional[str] = Query(None, alias="status"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await service.list(tenant_id, skip, limit, status_filter)
+    rows, total = await service.list(
+        tenant_id,
+        skip,
+        limit,
+        status_filter,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     items = []
     for row in rows:
         lines = await service._load_lines(tenant_id, row.id)

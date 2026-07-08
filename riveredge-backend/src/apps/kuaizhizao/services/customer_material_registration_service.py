@@ -7,7 +7,7 @@ import re
 import json
 import logging
 from datetime import datetime, date
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Tuple, Dict, Any
 from decimal import Decimal
 
 from tortoise.queryset import Q
@@ -90,14 +90,40 @@ class BarcodeMappingRuleService(AppBaseService[BarcodeMappingRule]):
         limit: int = 100,
         customer_id: Optional[int] = None,
         is_enabled: Optional[bool] = None,
-    ) -> List[BarcodeMappingRuleListResponse]:
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+    ) -> Tuple[List[BarcodeMappingRuleListResponse], int]:
         query = BarcodeMappingRule.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if customer_id:
             query = query.filter(customer_id=customer_id)
         if is_enabled is not None:
             query = query.filter(is_enabled=is_enabled)
-        rules = await query.order_by("-priority", "-created_at").offset(skip).limit(limit)
-        return [BarcodeMappingRuleListResponse.model_validate(rule) for rule in rules]
+
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            BARCODE_MAPPING_RULE_KEYWORD_FIELDS,
+            BARCODE_MAPPING_RULE_SORTABLE_FIELDS,
+            apply_warehouse_doc_list_filters,
+        )
+        query, order_clause = apply_warehouse_doc_list_filters(
+            query,
+            keyword=keyword,
+            order_by=order_by,
+            allowed_fields=BARCODE_MAPPING_RULE_SORTABLE_FIELDS,
+            default_order="-priority",
+            keyword_fields=BARCODE_MAPPING_RULE_KEYWORD_FIELDS,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
+
+        total = await query.count()
+        rules = await query.order_by(order_clause).offset(skip).limit(limit)
+        return [BarcodeMappingRuleListResponse.model_validate(rule) for rule in rules], total
 
 
 def _parse_serial_numbers(serial_numbers: Any) -> List[str]:
@@ -423,25 +449,44 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
         limit: int = 100,
         customer_id: Optional[int] = None,
         status: Optional[str] = None,
-        registration_date_start: Optional[datetime] = None,
-        registration_date_end: Optional[datetime] = None,
-    ) -> List[CustomerMaterialRegistrationListResponse]:
+        registration_date_start: Optional[str] = None,
+        registration_date_end: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+    ) -> tuple[List[CustomerMaterialRegistrationListResponse], int]:
+        from apps.kuaizhizao.services.warehouse_list_core import apply_warehouse_registration_list_filters
+
         query = CustomerMaterialRegistration.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if customer_id:
             query = query.filter(customer_id=customer_id)
         if status:
             query = query.filter(status=status)
-        if registration_date_start:
-            query = query.filter(registration_date__gte=registration_date_start)
-        if registration_date_end:
-            query = query.filter(registration_date__lte=registration_date_end)
 
-        registrations = await query.order_by("-registration_date").offset(skip).limit(limit)
+        query, order_clause = apply_warehouse_registration_list_filters(
+            query,
+            keyword=keyword,
+            search=search,
+            order_by=order_by,
+            registration_start_date=registration_date_start,
+            registration_end_date=registration_date_end,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
+        total = await query.count()
+        registrations = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_customer_material_registration_list_capabilities,
         )
         responses = [CustomerMaterialRegistrationListResponse.model_validate(reg) for reg in registrations]
-        return enrich_customer_material_registration_list_capabilities(registrations, responses)
+        enriched = enrich_customer_material_registration_list_capabilities(registrations, responses)
+        return enriched, total
 
     async def get_registration_by_id(
         self,

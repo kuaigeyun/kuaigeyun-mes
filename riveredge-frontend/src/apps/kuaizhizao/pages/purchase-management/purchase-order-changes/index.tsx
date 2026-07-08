@@ -46,13 +46,16 @@ import {
   getOrderChangeLifecycle,
   resolveOrderChangeListLifecycleParams,
 } from '../../../utils/orderChangeLifecycle';
-import { formatOrderChangeCategory } from '../../../utils/orderChangeCategory';
+import { formatOrderChangeCategory, ORDER_CHANGE_CATEGORY_LABELS } from '../../../utils/orderChangeCategory';
+import { formatDateTime } from '../../../../../utils/format';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { OrderChangeItemsTable } from '../../../components/order-change/OrderChangeItemsTable';
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import { formatDateTime } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { purchaseOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 
@@ -332,6 +335,45 @@ const PurchaseOrderChangesPage: React.FC = () => {
     () => buildOrderChangeLifecycleValueEnum(t),
     [t],
   );
+  const [suppliers, setSuppliers] = useState<Array<{ id: number; name?: string; code?: string }>>([]);
+  const [suppliersLoading, setSuppliersLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setSuppliersLoading(true);
+      try {
+        const res = await supplierApi.list({ limit: 1000, isActive: true });
+        const list = Array.isArray(res) ? res : (res as { data?: typeof suppliers })?.data ?? [];
+        if (!cancelled) setSuppliers(Array.isArray(list) ? list : []);
+      } catch {
+        if (!cancelled) setSuppliers([]);
+      } finally {
+        if (!cancelled) setSuppliersLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const changeSupplierSearchOptions = useMemo(
+    () =>
+      suppliers.map((s) => ({
+        value: Number(s.id),
+        label: [s.name, s.code].filter(Boolean).join(' · ') || String(s.id),
+      })),
+    [suppliers],
+  );
+
+  const changeCategoryValueEnum = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(ORDER_CHANGE_CATEGORY_LABELS).map(([key, label]) => [key, { text: label }]),
+      ),
+    [],
+  );
+
   const purchaseOrderChangeAuditColumn = useMemo(
     () => createListAuditPhaseColumn<PurchaseOrderChange>({ t, auditEnabled }),
     [t, auditEnabled],
@@ -345,6 +387,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
         dataIndex: 'change_code',
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         fixed: 'left',
+        sorter: true,
         render: (_, record) => (
           <UniTableStackedPrimaryCell
             primary={String(record.supplier_name ?? '')}
@@ -352,21 +395,81 @@ const PurchaseOrderChangesPage: React.FC = () => {
           />
         ),
       },
-      { title: t('app.kuaizhizao.purchaseOrderChange.colChangeCode'), dataIndex: 'change_code', hideInTable: true, copyable: true },
-      { title: t('app.kuaizhizao.purchaseOrderChange.supplier'), dataIndex: 'supplier_name', hideInTable: true, ellipsis: true },
-      { title: t('app.kuaizhizao.purchaseOrderChange.colSourceOrder'), dataIndex: 'source_order_code', width: 140 },
-      { title: t('app.kuaizhizao.purchaseOrderChange.colVersion'), dataIndex: 'change_version', width: 70 },
+      { title: t('app.kuaizhizao.purchaseOrderChange.colChangeCode'), dataIndex: 'change_code', hideInTable: true, hideInSearch: false },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.supplier'),
+        dataIndex: 'supplier_id',
+        hideInTable: true,
+        valueType: 'select',
+        fieldProps: {
+          showSearch: true,
+          optionFilterProp: 'label',
+          loading: suppliersLoading,
+          options: changeSupplierSearchOptions,
+          placeholder: t('app.kuaizhizao.purchaseOrderChange.supplier'),
+        },
+      },
+      { title: t('app.kuaizhizao.purchaseOrderChange.supplier'), dataIndex: 'supplier_name', hideInTable: true, hideInSearch: true, ellipsis: true },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.colSourceOrder'),
+        dataIndex: 'source_order_code',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: false,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.colVersion'),
+        dataIndex: 'change_version',
+        width: 72,
+        sorter: true,
+        hideInSearch: true,
+      },
       {
         title: t('app.kuaizhizao.purchaseOrderChange.colCategory'),
         dataIndex: 'change_category',
         width: 100,
+        sorter: true,
+        valueType: 'select',
+        valueEnum: changeCategoryValueEnum,
         render: (_, r) => formatOrderChangeCategory(r.change_category),
       },
       {
         title: t('app.kuaizhizao.purchaseOrderChange.colDeltaAmount'),
         dataIndex: 'delta_amount',
         width: 100,
+        sorter: true,
+        hideInSearch: true,
         render: (_, r) => (r.delta_amount != null ? Number(r.delta_amount).toFixed(2) : '-'),
+      },
+      {
+        title: t('common.createdAt'),
+        dataIndex: 'created_at',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        defaultSortOrder: 'descend',
+        hideInSearch: true,
+        render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm') : '-'),
+      },
+      {
+        title: t('common.createdAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.colAppliedAt'),
+        dataIndex: 'applied_at',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.applied_at ? formatDateTime(r.applied_at, 'YYYY-MM-DD HH:mm') : '-'),
       },
       ...(purchaseOrderChangeAuditColumn ? [purchaseOrderChangeAuditColumn] : []),
       {
@@ -419,19 +522,56 @@ const PurchaseOrderChangesPage: React.FC = () => {
         ],
       },
     ],
-    [message, modal, orderChangeLifecycleValueEnum, purchaseOrderChangeAuditColumn, purchaseOrderChangePerms.canDelete, purchaseOrderChangePerms.canUpdate, t],
+    [message, modal, orderChangeLifecycleValueEnum, purchaseOrderChangeAuditColumn, purchaseOrderChangePerms.canDelete, purchaseOrderChangePerms.canUpdate, changeCategoryValueEnum, changeSupplierSearchOptions, suppliersLoading, t],
   );
 
-  const request = useCallback(async (params: Record<string, unknown>) => {
-    const apiParams = resolveOrderChangeListLifecycleParams(params, params);
-    const list = await listPurchaseOrderChanges({
-      skip: ((params.current as number) - 1) * (params.pageSize as number),
-      limit: params.pageSize as number,
-      source_order_id: params.source_order_id as number | undefined,
-      lifecycle_stage: apiParams.lifecycle_stage,
-    });
-    return { data: list, success: true, total: list.length };
-  }, []);
+  const request = useCallback(
+    async (
+      params: Record<string, unknown>,
+      sort?: Record<string, 'ascend' | 'descend' | null>,
+      _filter?: unknown,
+      searchFormValues?: Record<string, unknown>,
+    ) => {
+      const sf = searchFormValues ?? {};
+      const lifecycleParams = resolveOrderChangeListLifecycleParams(sf, params);
+      const { sortBy, sortOrder } = extractProTableSort(sort);
+      const orderBy =
+        sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+      const fuzzyKeyword = typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
+      const changeCode = sf.change_code != null ? String(sf.change_code).trim() : '';
+      const apiParams: import('../../../services/purchase-order-change').PurchaseOrderChangeListParams = {
+        skip: ((Number(params.current) || 1) - 1) * (Number(params.pageSize) || 20),
+        limit: Number(params.pageSize) || 20,
+        ...lifecycleParams,
+        order_by: orderBy,
+        source_order_id: params.source_order_id as number | undefined,
+      };
+      if (fuzzyKeyword) {
+        apiParams.keyword = fuzzyKeyword;
+      } else if (changeCode) {
+        apiParams.change_code = changeCode;
+      }
+      if (sf.supplier_id != null && sf.supplier_id !== '') {
+        apiParams.supplier_id = Number(sf.supplier_id);
+      }
+      if (sf.change_category != null && sf.change_category !== '') {
+        apiParams.change_category = String(sf.change_category);
+      }
+      const sourceOrderCode =
+        sf.source_order_code != null ? String(sf.source_order_code).trim() : '';
+      if (sourceOrderCode) apiParams.source_order_code = sourceOrderCode;
+      const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
+      if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+        apiParams.start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
+        apiParams.end_date = createdRange[1]
+          ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+          : apiParams.start_date;
+      }
+      const res = await listPurchaseOrderChanges(apiParams);
+      return { data: res.items ?? [], success: true, total: res.total ?? 0 };
+    },
+    [],
+  );
 
   const handleBatchDelete = useCallback(async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
@@ -475,6 +615,8 @@ const PurchaseOrderChangesPage: React.FC = () => {
         columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-order-changes"
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
         pinnedTabsValueEnum={orderChangeLifecycleValueEnum}
+        showAdvancedSearch={true}
+        skipFuzzyPinyinClientFilter
         toolBarRender={() => [
           <Button {...rowActionKind('create')}
             key="create"

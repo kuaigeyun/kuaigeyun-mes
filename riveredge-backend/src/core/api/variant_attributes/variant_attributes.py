@@ -15,6 +15,7 @@ from core.schemas.material_variant_attribute import (
     MaterialVariantAttributeDefinitionCreate,
     MaterialVariantAttributeDefinitionUpdate,
     MaterialVariantAttributeDefinitionResponse,
+    MaterialVariantAttributeDefinitionListResponse,
     MaterialVariantAttributeHistoryResponse,
     VariantAttributeValidationRequest,
     VariantAttributeValidationResponse,
@@ -112,12 +113,20 @@ async def create_attribute_definition(
         )
 
 
-@router.get("", response_model=List[MaterialVariantAttributeDefinitionResponse])
+@router.get("", response_model=MaterialVariantAttributeDefinitionListResponse)
 async def list_attribute_definitions(
     tenant_id: int = Depends(get_current_tenant),
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     is_active: Optional[bool] = Query(None, description="是否启用（用于筛选）"),
     attribute_type: Optional[str] = Query(None, description="属性类型（用于筛选）"),
     keyword: Optional[str] = Query(None, description="模糊匹配属性名、显示名、备注"),
+    attribute_name: Optional[str] = Query(None, description="属性名（模糊匹配）"),
+    display_name: Optional[str] = Query(None, description="显示名（模糊匹配）"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
     sort_by: Optional[str] = Query(
         None,
         description="排序字段：display_order,attribute_name,display_name,created_at,updated_at",
@@ -125,25 +134,28 @@ async def list_attribute_definitions(
     sort_order: Optional[str] = Query(None, description="asc 或 desc"),
 ):
     """
-    列出属性定义
-    
-    Args:
-        tenant_id: 当前组织ID（依赖注入）
-        is_active: 是否启用（可选，用于筛选）
-        attribute_type: 属性类型（可选，用于筛选）
-        
-    Returns:
-        List[MaterialVariantAttributeDefinitionResponse]: 属性定义列表
+    列出属性定义（分页）
     """
-    attributes = await MaterialVariantAttributeService.list_attribute_definitions(
+    attributes, total = await MaterialVariantAttributeService.list_attribute_definitions(
         tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
         is_active=is_active,
         attribute_type=attribute_type,
         keyword=keyword,
+        attribute_name=attribute_name,
+        display_name=display_name,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
         sort_by=sort_by,
         sort_order=sort_order,
     )
-    return [MaterialVariantAttributeDefinitionResponse.model_validate(attr) for attr in attributes]
+    return MaterialVariantAttributeDefinitionListResponse(
+        items=[MaterialVariantAttributeDefinitionResponse.model_validate(attr) for attr in attributes],
+        total=total,
+    )
 
 
 @router.get("/{uuid}", response_model=MaterialVariantAttributeDefinitionResponse)

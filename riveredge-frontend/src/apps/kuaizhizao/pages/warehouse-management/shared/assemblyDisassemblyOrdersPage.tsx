@@ -33,6 +33,13 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  WAREHOUSE_DOC_PINNED_STATUS_FIELD,
+  buildWarehouseWorkflowStatusValueEnum,
+  normalizeWarehouseListResponse,
+  resolveAssemblyDisassemblyOrderListParams,
+} from '../../../utils/warehouseListCore';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
@@ -447,32 +454,98 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     });
   };
 
+  const workflowStatusValueEnum = useMemo(() => buildWarehouseWorkflowStatusValueEnum(t), [t]);
+
   const columns: ProColumns<OrderLike>[] = useMemo(
     () => [
+    {
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 10 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      dataIndex: 'status',
+      valueType: 'select',
+      valueEnum: workflowStatusValueEnum,
+      hideInTable: true,
+      search: { order: 20 } as ProColumns['search'],
+    },
+    {
+      title: config.dateLabel,
+      dataIndex: `${config.dateField}_range`,
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 30 } as ProColumns['search'],
+    },
     {
       title: config.orderCodeLabel,
       dataIndex: 'code',
       width: 150,
       ellipsis: true,
       fixed: 'left',
+      sorter: true,
+      search: { order: 40 } as ProColumns['search'],
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
           {r.code ?? '-'}
         </Typography.Text>
       ),
     },
-    { title: t('app.kuaizhizao.warehouseCommon.colWarehouse'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
-    { title: config.dateLabel, dataIndex: config.dateField, valueType: 'date', width: 120 },
-    { title: t('app.kuaizhizao.warehouseCommon.colProductMaterial'), dataIndex: 'product_material_name', width: 160, ellipsis: true },
-    { title: config.quantityLabel, dataIndex: 'total_quantity', width: 110, align: 'right' },
-    { title: t('app.kuaizhizao.warehouseCommon.colComponentCount'), dataIndex: 'total_items', width: 90, align: 'right' },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colWarehouse'),
+      dataIndex: 'warehouse_name',
+      width: 120,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: config.dateLabel,
+      dataIndex: config.dateField,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      valueType: 'date',
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colProductMaterial'),
+      dataIndex: 'product_material_name',
+      width: 160,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: config.quantityLabel,
+      dataIndex: 'total_quantity',
+      width: 110,
+      align: 'right',
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colComponentCount'),
+      dataIndex: 'total_items',
+      width: 90,
+      align: 'right',
+      sorter: true,
+      hideInSearch: true,
+    },
     {
       title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
       defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
+      sorter: true,
+      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
@@ -522,7 +595,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       ),
     },
   ],
-    [config, t],
+    [config, t, workflowStatusValueEnum],
   );
 
   const detailColumns: ProDescriptionsItemProps<OrderLike>[] = useMemo(
@@ -563,6 +636,8 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         rowKey="id"
         columns={columns}
         showAdvancedSearch
+        pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
+        skipFuzzyPinyinClientFilter
         showCreateButton
         createButtonText={createButtonLabel}
         onCreate={openCreateModal}
@@ -586,21 +661,19 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
             },
           });
         }}
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           const lifecycleStage = resolveListLifecycleStageFromSearch(searchFormValues, params);
+          const listParams = resolveAssemblyDisassemblyOrderListParams(searchFormValues, sort, {
+            dateField: config.dateField as 'assembly_date' | 'disassembly_date',
+          });
           const result = await api.list({
             skip: (params.current! - 1) * params.pageSize!,
             limit: params.pageSize,
-            code: params.code,
-            warehouse_id: params.warehouse_id,
-            status: lifecycleStage ?? params.status,
-            keyword: (params as any).keyword,
+            ...listParams,
+            status: lifecycleStage ?? listParams.status,
           });
-          return {
-            data: result.items || result.data || [],
-            success: true,
-            total: result.total || 0,
-          };
+          const { data, total } = normalizeWarehouseListResponse(result);
+          return { data, success: true, total };
         }}
         locale={{ emptyText: config.listEmptyText }}
         scroll={{ x: 1800 }}

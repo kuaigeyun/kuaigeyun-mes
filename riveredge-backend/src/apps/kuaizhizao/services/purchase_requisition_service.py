@@ -7,7 +7,7 @@ Author: RiverEdge Team
 Date: 2025-02-01
 """
 
-from datetime import datetime, date
+from datetime import datetime, date, time
 from typing import List, Optional, Dict, Any, Tuple
 
 from tortoise.expressions import Q
@@ -43,6 +43,20 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
 from apps.kuaizhizao.services.document_action_policy.purchase_requisition import (
     assert_purchase_requisition_capability,
 )
+
+PURCHASE_REQUISITION_SORTABLE_FIELDS = frozenset({
+    "requisition_code",
+    "requisition_name",
+    "source_type",
+    "source_code",
+    "requisition_date",
+    "required_date",
+    "status",
+    "review_status",
+    "applicant_name",
+    "created_at",
+    "updated_at",
+})
 
 
 class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
@@ -359,6 +373,37 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 matched.append(req)
         return matched
 
+    @staticmethod
+    def _resolve_list_order_by(order_by: Optional[str]) -> tuple[str, str]:
+        if order_by:
+            field = order_by.lstrip("-")
+            if field in PURCHASE_REQUISITION_SORTABLE_FIELDS:
+                descending = order_by.startswith("-")
+                primary = f"-{field}" if descending else field
+                secondary = "-id" if descending else "id"
+                return primary, secondary
+        return "-updated_at", "-id"
+
+    @staticmethod
+    def _sort_requisitions_in_memory(
+        reqs: List[PurchaseRequisition],
+        primary: str,
+        secondary: str,
+    ) -> List[PurchaseRequisition]:
+        def field_key(field_name: str, req: PurchaseRequisition):
+            val = getattr(req, field_name.lstrip("-"), None)
+            if val is None:
+                return (1, "")
+            return (0, val)
+
+        def sort_key(req: PurchaseRequisition):
+            p_field = primary.lstrip("-")
+            s_field = secondary.lstrip("-")
+            return (field_key(p_field, req), field_key(s_field, req))
+
+        reverse = primary.startswith("-")
+        return sorted(reqs, key=sort_key, reverse=reverse)
+
     async def list_requisitions(
         self,
         tenant_id: int,
@@ -372,6 +417,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         requisition_name: Optional[str] = None,
         required_date_from: Optional[date] = None,
         required_date_to: Optional[date] = None,
+        created_start_date: Optional[date] = None,
+        created_end_date: Optional[date] = None,
+        order_by: Optional[str] = None,
     ) -> Dict[str, Any]:
         """列表查询，返回 { data, total, success }"""
         query = PurchaseRequisition.filter(
@@ -388,6 +436,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 Q(requisition_code__icontains=kw)
                 | Q(requisition_name__icontains=kw)
                 | Q(source_code__icontains=kw)
+                | Q(applicant_name__icontains=kw)
             )
         rc = (requisition_code or "").strip()
         if rc:
@@ -403,24 +452,37 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             query = query.filter(
                 required_date__isnull=False, required_date__lte=required_date_to
             )
+        if created_start_date is not None:
+            query = query.filter(
+                created_at__gte=datetime.combine(created_start_date, time.min)
+            )
+        if created_end_date is not None:
+            query = query.filter(
+                created_at__lte=datetime.combine(created_end_date, time(23, 59, 59))
+            )
 
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "purchase_request"
         )
 
+        primary_order, secondary_order = self._resolve_list_order_by(order_by)
+
         if lifecycle_filter:
-            candidate_reqs = await query.order_by("-updated_at", "-id").all()
+            candidate_reqs = await query.order_by(primary_order, secondary_order).all()
             matched_reqs = await self._filter_requisitions_by_lifecycle_stage(
                 tenant_id,
                 candidate_reqs,
                 lifecycle_filter,
                 audit_required=audit_required,
             )
-            total = len(matched_reqs)
-            reqs = matched_reqs[skip : skip + limit]
+            sorted_reqs = self._sort_requisitions_in_memory(
+                matched_reqs, primary_order, secondary_order
+            )
+            total = len(sorted_reqs)
+            reqs = sorted_reqs[skip : skip + limit]
         else:
             total = await query.count()
-            reqs = await query.offset(skip).limit(limit).order_by("-updated_at", "-id")
+            reqs = await query.offset(skip).limit(limit).order_by(primary_order, secondary_order)
 
         req_ids = [req.id for req in reqs if req.id is not None]
 

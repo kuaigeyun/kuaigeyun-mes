@@ -10,7 +10,7 @@ Date: 2026-02-22
 import logging
 from collections import defaultdict
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
@@ -45,6 +45,20 @@ from apps.kuaizhizao.services.inspection_policy_service import assert_oqc_for_ou
 from infra.services.business_config_service import BusinessConfigService
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
 from core.services.approval.audit_record_enricher import enrich_items
+
+SHIPMENT_NOTICE_SORTABLE_FIELDS = frozenset({
+    "notice_code",
+    "sales_order_code",
+    "customer_name",
+    "warehouse_name",
+    "planned_ship_date",
+    "notified_at",
+    "total_quantity",
+    "total_amount",
+    "status",
+    "created_at",
+    "updated_at",
+})
 
 
 async def _resolve_warehouse_name_by_id(
@@ -442,17 +456,42 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         if filters.get("sales_order_id"):
             query = query.filter(sales_order_id=filters["sales_order_id"])
         if filters.get("customer_id"):
-            query = query.filter(customer_id=filters["customer_id"])
+            query = query.filter(customer_id=int(filters["customer_id"]))
+        if filters.get("warehouse_id"):
+            query = query.filter(warehouse_id=int(filters["warehouse_id"]))
+        if filters.get("planned_start_date"):
+            query = query.filter(planned_ship_date__gte=filters["planned_start_date"])
+        if filters.get("planned_end_date"):
+            query = query.filter(planned_ship_date__lte=filters["planned_end_date"])
+        if filters.get("created_start_date"):
+            query = query.filter(
+                created_at__gte=datetime.combine(filters["created_start_date"], time.min)
+            )
+        if filters.get("created_end_date"):
+            query = query.filter(
+                created_at__lte=datetime.combine(filters["created_end_date"], time(23, 59, 59))
+            )
         keyword = str(filters.get("keyword") or "").strip()
         if keyword:
             query = query.filter(
                 Q(notice_code__icontains=keyword)
                 | Q(sales_order_code__icontains=keyword)
                 | Q(customer_name__icontains=keyword)
+                | Q(warehouse_name__icontains=keyword)
+                | Q(sales_delivery_code__icontains=keyword)
             )
+        if filters.get("notice_code"):
+            code = str(filters["notice_code"]).strip()
+            if code:
+                query = query.filter(notice_code__icontains=code)
+        if filters.get("sales_order_code"):
+            order_code = str(filters["sales_order_code"]).strip()
+            if order_code:
+                query = query.filter(sales_order_code__icontains=order_code)
 
         total = await query.count()
-        notices = await query.offset(skip).limit(limit).order_by("-created_at")
+        order_clause = filters.get("order_by") or "-created_at"
+        notices = await query.offset(skip).limit(limit).order_by(order_clause, "-id")
         notice_list = list(notices)
         notice_ids = [int(n.id) for n in notice_list]
         has_items_by_id = await self._notice_has_items_map(tenant_id, notice_ids)

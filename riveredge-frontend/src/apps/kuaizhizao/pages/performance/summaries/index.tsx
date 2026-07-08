@@ -26,6 +26,11 @@ import { employeePerformanceApi } from '../../../services/performance';
 import type { PerformanceSummary, PerformanceDetail, PerformanceDetailItem } from '../../../types/performance';
 import { getPerformanceSummaryLifecycle } from '../../../utils/performanceLifecycle';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  normalizePerformanceListResponse,
+  PERFORMANCE_SUMMARY_PINNED_STATUS_FIELD,
+  resolvePerformanceSummaryListParams,
+} from '../../../utils/performanceListCore';
 
 const SummariesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -187,20 +192,21 @@ const SummariesPage: React.FC = () => {
         dataIndex: 'employee_name',
         width: 120,
         fixed: 'left',
+        sorter: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.employee_name ?? '') }} ellipsis>
             {r.employee_name ?? '-'}
           </Typography.Text>
         ),
       },
-      { title: t('app.kuaizhizao.performance.common.columns.period'), dataIndex: 'period', width: 100 },
-      { title: t('app.kuaizhizao.performance.common.columns.totalHours'), dataIndex: 'total_hours', width: 100, align: 'right' },
-      { title: t('app.kuaizhizao.performance.common.columns.totalPieces'), dataIndex: 'total_pieces', width: 100, align: 'right' },
-      { title: t('app.kuaizhizao.performance.common.columns.timeAmount'), dataIndex: 'time_amount', width: 110, align: 'right' },
-      { title: t('app.kuaizhizao.performance.common.columns.pieceAmount'), dataIndex: 'piece_amount', width: 110, align: 'right' },
-      { title: t('app.kuaizhizao.performance.common.columns.totalAmount'), dataIndex: 'total_amount', width: 110, align: 'right' },
-      { title: t('app.kuaizhizao.performance.common.columns.kpiScore'), dataIndex: 'kpi_score', width: 100, align: 'right' },
-      { title: t('app.kuaizhizao.performance.common.columns.kpiCoefficient'), dataIndex: 'kpi_coefficient', width: 90, align: 'right' },
+      { title: t('app.kuaizhizao.performance.common.columns.period'), dataIndex: 'period', width: 100, sorter: true },
+      { title: t('app.kuaizhizao.performance.common.columns.totalHours'), dataIndex: 'total_hours', width: 100, align: 'right', sorter: true },
+      { title: t('app.kuaizhizao.performance.common.columns.totalPieces'), dataIndex: 'total_pieces', width: 100, align: 'right', sorter: true },
+      { title: t('app.kuaizhizao.performance.common.columns.timeAmount'), dataIndex: 'time_amount', width: 110, align: 'right', sorter: true },
+      { title: t('app.kuaizhizao.performance.common.columns.pieceAmount'), dataIndex: 'piece_amount', width: 110, align: 'right', sorter: true },
+      { title: t('app.kuaizhizao.performance.common.columns.totalAmount'), dataIndex: 'total_amount', width: 110, align: 'right', sorter: true },
+      { title: t('app.kuaizhizao.performance.common.columns.kpiScore'), dataIndex: 'kpi_score', width: 100, align: 'right', sorter: true },
+      { title: t('app.kuaizhizao.performance.common.columns.kpiCoefficient'), dataIndex: 'kpi_coefficient', width: 90, align: 'right', sorter: true },
       {
         title: t('app.kuaizhizao.performance.common.columns.status'),
         dataIndex: 'status',
@@ -210,8 +216,10 @@ const SummariesPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.performance.common.columns.updatedAt'),
         dataIndex: 'updated_at',
-        width: 168,
+        width: 132,
+        uniTableKeepWidth: true,
         hideInSearch: true,
+        sorter: true,
         render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
@@ -250,19 +258,23 @@ const SummariesPage: React.FC = () => {
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.performance.summaries"
           showAdvancedSearch
-          request={async (params) => {
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={PERFORMANCE_SUMMARY_PINNED_STATUS_FIELD}
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
               const pageSize = params.pageSize || 20;
               const skip = ((params.current || 1) - 1) * pageSize;
-              const result = await employeePerformanceApi.listSummaries({
-                period,
+              const listParams = resolvePerformanceSummaryListParams(searchFormValues, sort, {
+                period: period || undefined,
                 employee_id: employeeId,
+              });
+              const response = await employeePerformanceApi.listSummaries({
                 skip,
                 limit: pageSize,
+                ...listParams,
               });
-              const rows = Array.isArray(result) ? result : [];
-              const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
-              return { data: rows, success: true, total };
+              const { data, total } = normalizePerformanceListResponse(response);
+              return { data: data as PerformanceSummary[], success: true, total };
             } catch (e: any) {
               messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
               return { data: [], success: false, total: 0 };

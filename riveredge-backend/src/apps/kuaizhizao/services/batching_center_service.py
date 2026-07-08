@@ -154,13 +154,17 @@ class BatchingCenterService:
         task_type: Optional[str] = None,
         status: Optional[str] = None,
         work_order_code: Optional[str] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
         priority: Optional[str] = None,
         include_completed_batching: bool = False,
         include_proactive_prep: bool = False,
     ) -> BatchingCenterTaskListResponse:
         filters = {
-            "work_order_code": work_order_code,
+            "keyword": keyword,
+            "work_order_code": work_order_code or keyword,
             "priority": priority,
+            "order_by": order_by,
         }
 
         if task_type == "material_call":
@@ -217,13 +221,7 @@ class BatchingCenterService:
             )
             tasks.extend(pp_items)
 
-        tasks.sort(
-            key=lambda t: (
-                0 if t.sla_overdue else 1,
-                -(t.picking_score or 0),
-                t.created_at or datetime.max,
-            )
-        )
+        self._sort_tasks_by_order(tasks, filters.get("order_by"))
         total = len(tasks)
         page = tasks[skip : skip + limit]
         return BatchingCenterTaskListResponse(items=page, total=total)
@@ -232,21 +230,47 @@ class BatchingCenterService:
     def _apply_task_filters(
         tasks: List[BatchingCenterTaskItem],
         *,
+        keyword: Optional[str] = None,
         work_order_code: Optional[str] = None,
         priority: Optional[str] = None,
     ) -> List[BatchingCenterTaskItem]:
         result = tasks
-        if work_order_code:
-            q = work_order_code.strip().lower()
+        search_text = (keyword or work_order_code or "").strip().lower()
+        if search_text:
             result = [
                 t
                 for t in result
-                if (t.work_order_code or "").lower().find(q) >= 0
-                or (t.doc_code or "").lower().find(q) >= 0
+                if search_text in (t.work_order_code or "").lower()
+                or search_text in (t.doc_code or "").lower()
+                or search_text in (t.material_code or "").lower()
+                or search_text in (t.material_name or "").lower()
+                or search_text in (t.product_name or "").lower()
             ]
         if priority:
             result = [t for t in result if (t.priority or "normal") == priority]
         return result
+
+    @staticmethod
+    def _sort_tasks_by_order(tasks: List[BatchingCenterTaskItem], order_by: Optional[str]) -> None:
+        if not order_by:
+            BatchingCenterService._sort_tasks(tasks)
+            return
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            BATCHING_CENTER_TASK_SORTABLE_FIELDS,
+            sort_inventory_report_rows,
+        )
+        task_map = {(t.task_type, t.task_id): t for t in tasks}
+        sorted_rows = sort_inventory_report_rows(
+            [t.model_dump() for t in tasks],
+            order_by,
+            BATCHING_CENTER_TASK_SORTABLE_FIELDS,
+            "-created_at",
+        )
+        tasks[:] = [
+            task_map[(row["task_type"], row["task_id"])]
+            for row in sorted_rows
+            if (row.get("task_type"), row.get("task_id")) in task_map
+        ]
 
     @staticmethod
     def _sort_tasks(tasks: List[BatchingCenterTaskItem]) -> None:

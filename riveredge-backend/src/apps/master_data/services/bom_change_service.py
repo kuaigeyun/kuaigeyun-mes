@@ -10,6 +10,8 @@ Date: 2026-03-16
 from typing import List, Optional
 from datetime import datetime
 
+from tortoise.expressions import Q
+
 from apps.master_data.models.bom_change import BOMChange
 from apps.master_data.models.material import Material
 from apps.master_data.schemas.bom_change_schemas import (
@@ -223,6 +225,9 @@ class BOMChangeService:
         material_uuid: Optional[str] = None,
         change_type: Optional[str] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        change_code: Optional[str] = None,
+        target_name: Optional[str] = None,
         page: int = 1,
         page_size: int = 20,
     ) -> BOMChangeListResponse:
@@ -245,6 +250,22 @@ class BOMChangeService:
             query = query.filter(change_type=change_type)
         if status:
             query = query.filter(status=status)
+
+        kw = (keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(change_reason__icontains=kw)
+                | Q(change_content__icontains=kw)
+                | Q(material__code__icontains=kw)
+                | Q(material__name__icontains=kw)
+            )
+        else:
+            code = (change_code or "").strip()
+            name = (target_name or "").strip()
+            if code:
+                query = query.filter(material__code__icontains=code)
+            if name:
+                query = query.filter(material__name__icontains=name)
 
         total = await query.count()
         changes = await query.prefetch_related("material").offset(

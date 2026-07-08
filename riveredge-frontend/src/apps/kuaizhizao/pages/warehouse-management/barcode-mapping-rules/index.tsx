@@ -23,6 +23,10 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import {
+  normalizeWarehouseListResponse,
+  resolveBarcodeMappingRuleListParams,
+} from '../../../utils/warehouseListCore';
 
 /**
  * 条码映射规则接口定义
@@ -299,21 +303,18 @@ const BarcodeMappingRulesPage: React.FC = () => {
           }
         }}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.barcodeMapping.deleteBatchConfirm', { count })}
-        request={async (params) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           try {
             const pageSize = params.pageSize || 20;
             const skip = (params.current! - 1) * pageSize;
+            const listParams = resolveBarcodeMappingRuleListParams(searchFormValues, sort);
             const result = await warehouseApi.barcodeMappingRule.list({
               skip,
               limit: pageSize,
+              ...listParams,
             });
-            const rows = Array.isArray(result) ? result : [];
-            const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
-            return {
-              data: rows,
-              success: true,
-              total,
-            };
+            const { data, total } = normalizeWarehouseListResponse(result);
+            return { data, success: true, total };
           } catch (error) {
             messageApi.error(t('app.kuaizhizao.barcodeMapping.loadListFailed'));
             return {
@@ -323,6 +324,8 @@ const BarcodeMappingRulesPage: React.FC = () => {
             };
           }
         }}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         scroll={{ x: 1400 }}
       />
 

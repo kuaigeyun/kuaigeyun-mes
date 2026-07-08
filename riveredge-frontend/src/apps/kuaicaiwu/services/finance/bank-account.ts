@@ -1,4 +1,5 @@
 import { apiRequest } from '../../../../services/api';
+import { normalizeFinanceListResponse } from '../../utils/financeListCore';
 
 export interface BankAccount {
   id: number;
@@ -12,14 +13,50 @@ export interface BankAccount {
   current_balance: number;
   is_active: boolean;
   notes?: string;
+  created_at?: string;
+  updated_at?: string;
   attachments?: Array<{ uid?: string; name?: string; status?: string; url?: string }>;
+}
+
+export interface BankAccountListParams {
+  skip?: number;
+  limit?: number;
+  is_active?: boolean;
+  keyword?: string;
+  account_code?: string;
+  account_name?: string;
+  bank_name?: string;
+  account_number?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
+  sort_field?: string;
+  sort_order?: string;
+}
+
+export interface BankTransactionListParams {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  source_doc_code?: string;
+  direction?: string;
+  transaction_date_start?: string;
+  transaction_date_end?: string;
+  sort_field?: string;
+  sort_order?: string;
 }
 
 const API = '/apps/kuaicaiwu/bank-accounts';
 
 export const bankAccountService = {
-  list: (params?: { skip?: number; limit?: number; is_active?: boolean }) =>
-    apiRequest<BankAccount[]>(API, { method: 'GET', params }),
+  list: async (params?: BankAccountListParams) => {
+    const res = await apiRequest<{ items?: BankAccount[]; total?: number } | BankAccount[]>(API, {
+      method: 'GET',
+      params,
+    });
+    return normalizeFinanceListResponse(res);
+  },
 
   get: (id: number) =>
     apiRequest<BankAccount>(`${API}/${id}`, { method: 'GET' }),
@@ -33,8 +70,13 @@ export const bankAccountService = {
   delete: (id: number) =>
     apiRequest<void>(`${API}/${id}`, { method: 'DELETE' }),
 
-  listTransactions: (accountId: number, params?: { skip?: number; limit?: number }) =>
-    apiRequest<Array<Record<string, unknown>>>(`${API}/${accountId}/transactions`, { method: 'GET', params }),
+  listTransactions: async (accountId: number, params?: BankTransactionListParams) => {
+    const res = await apiRequest<{ items?: Array<Record<string, unknown>>; total?: number } | Array<Record<string, unknown>>>(
+      `${API}/${accountId}/transactions`,
+      { method: 'GET', params },
+    );
+    return normalizeFinanceListResponse(res);
+  },
 
   importStatement: (accountId: number, csvContent: string) =>
     apiRequest<{ imported_count: number; current_balance: number }>(`${API}/${accountId}/import-statement`, {

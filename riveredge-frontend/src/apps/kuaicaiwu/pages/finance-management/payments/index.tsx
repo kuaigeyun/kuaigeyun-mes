@@ -24,6 +24,8 @@ import {
   paymentService,
   type PaymentPullCandidate,
   type PaymentPullPreview,
+  type PaymentVoucher,
+  type PaymentListParams,
 } from '../../../services/finance/payment';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
 import {
@@ -39,24 +41,13 @@ import { bankAccountService, type BankAccount } from '../../../services/finance/
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
 import { paymentCapabilityReasonMessage } from '../../../utils/paymentCapabilityMessages';
 import { formatDateTime } from '../../../../../utils/format';
-
-interface PaymentVoucher {
-  id: number;
-  payment_code: string;
-  supplier_id: number;
-  supplier_name: string;
-  total_amount: number;
-  settled_amount: number;
-  unsettled_amount: number;
-  payment_date: string;
-  payment_method: string;
-  bank_account?: string;
-  bank_account_id?: number;
-  settlement_type?: string;
-  status: string;
-  notes?: string;
-  created_at: string;
-}
+import {
+  FINANCE_DOC_PINNED_STATUS_FIELD,
+  financeDocCodePartnerSearchColumns,
+  financeDocCreatedUpdatedColumns,
+  resolvePaymentListParams,
+} from '../../../utils/financeListCore';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 
 type PullPayableCandidate = PaymentPullCandidate;
 
@@ -64,6 +55,7 @@ const P = 'app.kuaicaiwu.payment';
 
 const PaymentsPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
   const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
@@ -108,7 +100,7 @@ const PaymentsPage: React.FC = () => {
       }
     };
     load();
-    bankAccountService.list({ limit: 200, is_active: true }).then(setBankAccounts).catch(() => setBankAccounts([]));
+    bankAccountService.list({ limit: 200, is_active: true }).then((res) => setBankAccounts(res.data)).catch(() => setBankAccounts([]));
   }, []);
 
   const bankAccountOptions = bankAccounts.map((a) => ({
@@ -389,11 +381,21 @@ const PaymentsPage: React.FC = () => {
   ], [t]);
 
   const columns: ProColumns<PaymentVoucher>[] = useMemo(() => [
+    ...financeDocCodePartnerSearchColumns({
+      docCodeLabel: t(`${P}.col.code`),
+      docCodeField: 'payment_code',
+      partnerLabel: t('app.kuaicaiwu.common.supplier'),
+      partnerIdField: 'supplier_id',
+      partnerNameField: 'supplier_name',
+      partnerOptions: supplierOptions,
+    }),
     {
       title: t(`${P}.col.code`),
       dataIndex: 'payment_code',
       width: 168,
       fixed: 'left',
+      hideInSearch: true,
+      sorter: true,
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.payment_code ?? '') }} ellipsis>
           {r.payment_code ?? '-'}
@@ -404,6 +406,8 @@ const PaymentsPage: React.FC = () => {
       title: t('app.kuaicaiwu.common.supplier'),
       dataIndex: 'supplier_name',
       width: 200,
+      hideInSearch: true,
+      sorter: true,
     },
     {
       title: t(`${P}.col.totalAmount`),
@@ -411,6 +415,8 @@ const PaymentsPage: React.FC = () => {
       valueType: 'money',
       align: 'right',
       width: 130,
+      hideInSearch: true,
+      sorter: true,
     },
     {
       title: t(`${P}.col.settledAmount`),
@@ -418,12 +424,16 @@ const PaymentsPage: React.FC = () => {
       valueType: 'money',
       align: 'right',
       width: 120,
+      hideInSearch: true,
+      sorter: true,
     },
     {
       title: t(`${P}.col.unsettledAmount`),
       dataIndex: 'unsettled_amount',
       align: 'right',
       width: 120,
+      hideInSearch: true,
+      sorter: true,
       render: (_, record) => (
         <span style={{ color: record.unsettled_amount > 0 ? '#1677ff' : 'inherit', fontWeight: 'bold' }}>
           ¥{Number(record.unsettled_amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
@@ -435,26 +445,44 @@ const PaymentsPage: React.FC = () => {
       dataIndex: 'payment_date',
       valueType: 'date',
       width: 110,
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: t(`${P}.col.paymentDate`),
+      dataIndex: 'payment_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      order: 20,
+      formItemProps: formDateRangeFormItemProps,
     },
     {
       title: t(`${P}.col.paymentMethod`),
       dataIndex: 'payment_method',
       width: 110,
+      hideInSearch: true,
+      sorter: true,
       render: (_, record) => formatPaymentMethod(record.payment_method, t),
+    },
+    {
+      title: t(`${P}.settlementType`, '结算类型'),
+      dataIndex: 'settlement_type',
+      hideInTable: true,
+      order: 15,
+      valueType: 'select',
+      fieldProps: {
+        options: paymentSettlementTypeOptions,
+        allowClear: true,
+      },
     },
     {
       title: t('common.status'),
       dataIndex: 'status',
       hideInTable: true,
+      order: 22,
       valueEnum: buildVoucherStatusEnum(t),
     },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-    },
+    ...financeDocCreatedUpdatedColumns<PaymentVoucher>(t),
     {
       title: t('app.kuaicaiwu.common.lifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -502,7 +530,7 @@ const PaymentsPage: React.FC = () => {
             ) : null,
           ].filter(Boolean) as React.ReactNode[],
     },
-  ], [t, navigate]);
+  ], [t, navigate, supplierOptions, paymentSettlementTypeOptions]);
 
   return (
     <ListPageTemplate>
@@ -543,21 +571,23 @@ const PaymentsPage: React.FC = () => {
             ])}
           />,
         ]}
-        request={async (params) => {
-          const { current, pageSize, ...rest } = params;
-          const res = await apiRequest<any>('/apps/kuaicaiwu/payments', {
-            params: {
-              skip: ((current || 1) - 1) * (pageSize || 20),
-              limit: pageSize || 20,
-              ...rest,
-            },
-          });
+        request={async (params, sort, _filter, searchFormValues) => {
+          const listParams = resolvePaymentListParams(searchFormValues, sort);
+          lastListParamsRef.current = listParams;
+          const apiParams: PaymentListParams = {
+            skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+            limit: params.pageSize || 20,
+            ...listParams,
+          };
+          const res = await paymentService.listPayments(apiParams);
           return {
             data: res?.items || [],
             total: res?.total || 0,
             success: true,
           };
         }}
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
         columns={columns}
       />
 

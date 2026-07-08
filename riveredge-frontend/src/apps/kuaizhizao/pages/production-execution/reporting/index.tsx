@@ -64,8 +64,7 @@ import {
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { reportingApi, workOrderApi, materialBindingApi, getReportingStatistics } from '../../../services/production';
-import { getReportingLifecycle, reportingRecordUniAuditProps } from '../../../utils/reportingLifecycle';
-import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
+import { getReportingLifecycle, reportingRecordUniAuditProps, buildReportingStatusValueEnum, resolveReportingListStatusParams } from '../../../utils/reportingLifecycle';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -86,12 +85,13 @@ import {
   resolveIsLastOperation,
   resolveLastInboundHint,
 } from '../../../utils/reportingLastOperation';
-import { countWithPagedRequests } from '../../../../../utils/pagedCount';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { formatDateTime } from '../../../../../utils/format';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
@@ -295,6 +295,7 @@ const ReportingPage: React.FC = () => {
     () => createListAuditPhaseColumn<ReportingRecord>({ t, auditEnabled: reportingAuditEnabled }),
     [t, reportingAuditEnabled],
   );
+  const reportingStatusValueEnum = useMemo(() => buildReportingStatusValueEnum(t), [t]);
 
   const reportingAuditBatchHandlers = useMemo(
     () => ({
@@ -1171,11 +1172,24 @@ const ReportingPage: React.FC = () => {
    */
   const columns: ProColumns<ReportingRecord>[] = useMemo(() => [
     {
+      title: t('app.kuaizhizao.workReporting.colReportedAt'),
+      dataIndex: 'reported_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      hideInSearch: false,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
+    },
+    {
       title: t('app.kuaizhizao.workReporting.colWorkOrderStacked'),
       key: 'workOrderStacked',
       dataIndex: 'work_order_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
+      sorter: true,
+      hideInSearch: false,
       render: (_, record) => (
         <UniTableStackedPrimaryCell
           primary={getReportingWorkOrderName(record)}
@@ -1187,11 +1201,13 @@ const ReportingPage: React.FC = () => {
       title: t('app.kuaizhizao.workReporting.colWorkOrderCode'),
       dataIndex: 'work_order_code',
       hideInTable: true,
+      hideInSearch: false,
     },
     {
       title: t('app.kuaizhizao.workReporting.colWorkOrderName'),
       dataIndex: 'work_order_name',
       hideInTable: true,
+      hideInSearch: false,
       ellipsis: true,
     },
     {
@@ -1199,12 +1215,16 @@ const ReportingPage: React.FC = () => {
       dataIndex: 'operation_name',
       width: 120,
       ellipsis: true,
+      sorter: true,
+      hideInSearch: false,
     },
     {
       title: t('app.kuaizhizao.workReporting.colWorker'),
       dataIndex: 'worker_name',
       width: 100,
       ellipsis: true,
+      sorter: true,
+      hideInSearch: false,
     },
     {
       title: t('app.kuaizhizao.workReporting.colRecordedBy'),
@@ -1223,12 +1243,16 @@ const ReportingPage: React.FC = () => {
       dataIndex: 'reported_quantity',
       width: 100,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.workReporting.colQualifiedQty'),
       dataIndex: 'qualified_quantity',
       width: 100,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
       render: (_, record) => {
         const val = Number(record.qualified_quantity ?? record.qualifiedQuantity ?? 0);
         return <Typography.Text type="success">{val.toFixed(2)}</Typography.Text>;
@@ -1239,6 +1263,8 @@ const ReportingPage: React.FC = () => {
       dataIndex: 'unqualified_quantity',
       width: 100,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
       render: (_, record) => {
         const val = Number(record.unqualified_quantity ?? record.unqualifiedQuantity ?? 0);
         return <Typography.Text type="danger">{val.toFixed(2)}</Typography.Text>;
@@ -1249,25 +1275,38 @@ const ReportingPage: React.FC = () => {
       dataIndex: 'work_hours',
       width: 100,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.workReporting.colReportedAt'),
       dataIndex: 'reported_at',
-      valueType: 'dateTime',
-      width: 160,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
       defaultSortOrder: 'descend',
+      hideInSearch: true,
+      render: (_, record) =>
+        record.reported_at ? formatDateTime(record.reported_at, 'YYYY-MM-DD HH:mm') : '-',
+    },
+    {
+      title: t('app.kuaizhizao.workReporting.colReviewStatus'),
+      dataIndex: 'status',
+      width: 100,
+      hideInSearch: false,
+      valueType: 'select',
+      valueEnum: reportingStatusValueEnum,
+      render: (s) => {
+        const m: Record<string, { text: string; color: string }> = {
+          pending: { text: t('app.kuaizhizao.workReporting.statusPending'), color: 'default' },
+          approved: { text: t('app.kuaizhizao.workReporting.statusApproved'), color: 'success' },
+          rejected: { text: t('app.kuaizhizao.workReporting.statusRejected'), color: 'error' },
+        };
+        const x = m[String(s)] || { text: String(s ?? '-'), color: 'default' };
+        return <Tag color={x.color}>{x.text}</Tag>;
+      },
     },
     ...(reportingAuditColumn ? [reportingAuditColumn] : []),
-    {
-      title: t('app.kuaizhizao.workReporting.colLifecycle'),
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => (
-        <ListUniLifecycleCell lifecycle={getReportingLifecycle(record as Record<string, unknown>, t)} />
-      ),
-    },
     {
       title: t('common.actions'),
       width: 200,
@@ -1276,7 +1315,7 @@ const ReportingPage: React.FC = () => {
       render: (_, record) =>
         renderReportingRowActions(renderReportingRowActionNodes(record), `rr-${record.id}`),
     },
-  ], [t, reportingAuditColumn]);
+  ], [t, reportingAuditColumn, reportingStatusValueEnum]);
 
 
   const reportingDetailBaseColumns: ProDescriptionsItemProps<ReportingRecord>[] = useMemo(
@@ -1338,34 +1377,51 @@ const ReportingPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         showAdvancedSearch={true}
-        request={async (params) => {
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField="status"
+        pinnedTabsValueEnum={reportingStatusValueEnum}
+        request={async (params, sort, _filter, searchFormValues) => {
           try {
-            const skip = ((params.current ?? 1) - 1) * (params.pageSize ?? 20);
-            const limit = params.pageSize ?? 20;
-            const filters = {
-              work_order_code: params.keyword || params.work_order_code,
-              work_order_name: params.work_order_name,
-              operation_name: params.operation_name,
-              worker_name: params.worker_name,
-              status: params.status,
-              reported_at_start: params.reported_at?.[0],
-              reported_at_end: params.reported_at?.[1],
+            const s = (searchFormValues ?? {}) as Record<string, unknown>;
+            const statusParams = resolveReportingListStatusParams(s);
+            const { sortBy, sortOrder } = extractProTableSort(sort);
+            const orderBy =
+              sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+            const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
+
+            const apiParams: Parameters<typeof reportingApi.list>[0] = {
+              skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+              limit: params.pageSize ?? 20,
+              ...statusParams,
+              order_by: orderBy,
+              operation_name: s.operation_name as string | undefined,
+              worker_name: s.worker_name as string | undefined,
             };
-            const readList = async (query: { skip?: number; limit?: number }) => {
-              const list = await reportingApi.list({
-                ...filters,
-                ...query,
-              });
-              return Array.isArray(list) ? list : (list as any)?.items ?? [];
-            };
-            const [data, total] = await Promise.all([
-              readList({ skip, limit }),
-              countWithPagedRequests(readList, {}, { chunkSize: 100 }),
-            ]);
+
+            if (fuzzyKeyword) {
+              apiParams.keyword = fuzzyKeyword;
+            } else {
+              if (s.work_order_code != null && String(s.work_order_code).trim()) {
+                apiParams.work_order_code = String(s.work_order_code).trim();
+              }
+              if (s.work_order_name != null && String(s.work_order_name).trim()) {
+                apiParams.work_order_name = String(s.work_order_name).trim();
+              }
+            }
+
+            const reportedRange = s.reported_at_range as [unknown, unknown] | undefined;
+            if (reportedRange && Array.isArray(reportedRange) && reportedRange[0]) {
+              apiParams.reported_at_start = formatDateTime(reportedRange[0] as string | Date, 'YYYY-MM-DD HH:mm:ss');
+              apiParams.reported_at_end = reportedRange[1]
+                ? formatDateTime(reportedRange[1] as string | Date, 'YYYY-MM-DD HH:mm:ss')
+                : apiParams.reported_at_start;
+            }
+
+            const result = await reportingApi.list(apiParams);
             return {
-              data,
-              success: true,
-              total,
+              data: result.data || [],
+              success: result.success,
+              total: result.total || 0,
             };
           } catch (error: any) {
             messageApi.error(error.message || t('app.kuaizhizao.workReporting.listLoadFailed'));

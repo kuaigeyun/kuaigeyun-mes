@@ -7,6 +7,7 @@ Author: Luigi Lu
 Date: 2025-01-14
 """
 
+from datetime import date
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query, Path, Body, HTTPException, status
 from loguru import logger
@@ -16,8 +17,12 @@ from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
-from apps.kuaizhizao.services.demand_computation_service import DemandComputationService
-from apps.kuaizhizao.services.demand_change_event_service import DemandChangeEventService
+from apps.kuaizhizao.services.demand_computation_service import DemandComputationService, DEMAND_COMPUTATION_SORTABLE_FIELDS
+from apps.kuaizhizao.services.demand_change_event_service import (
+    DemandChangeEventService,
+    DEMAND_CHANGE_EVENT_SORTABLE_FIELDS,
+    DEMAND_REPLAN_TASK_SORTABLE_FIELDS,
+)
 from apps.kuaizhizao.services.demand_replanning_orchestrator_service import DemandReplanningOrchestratorService
 from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
@@ -133,8 +138,13 @@ async def list_computations(
     ),
     computation_status: Optional[str] = Query(None, description="计算状态"),
     business_mode: Optional[str] = Query(None, description="业务模式（MTS/MTO/ATO）"),
-    start_date: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
-    end_date: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    demand_type: Optional[str] = Query(None, description="需求类型"),
+    keyword: Optional[str] = Query(None, description="关键词（计算编码、需求编码、备注）"),
+    start_date: Optional[str] = Query(None, description="计算开始时间起（YYYY-MM-DD）"),
+    end_date: Optional[str] = Query(None, description="计算开始时间止（YYYY-MM-DD）"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 computation_code、-created_at"),
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(20, ge=1, le=100, description="限制数量"),
     current_user: User = Depends(get_current_user),
@@ -146,6 +156,11 @@ async def list_computations(
     支持按需求ID、需求编码、计算编码、计算类型、计算状态、业务模式、时间范围筛选。
     """
     try:
+        safe_order_by = None
+        if order_by:
+            field = order_by.lstrip("-")
+            if field in DEMAND_COMPUTATION_SORTABLE_FIELDS:
+                safe_order_by = order_by
         return await computation_service.list_computations(
             tenant_id=tenant_id,
             demand_id=demand_id,
@@ -154,8 +169,13 @@ async def list_computations(
             computation_type=computation_type,
             computation_status=computation_status,
             business_mode=business_mode,
+            demand_type=demand_type,
+            keyword=keyword,
             start_date=start_date,
             end_date=end_date,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            order_by=safe_order_by,
             skip=skip,
             limit=limit
         )
@@ -304,11 +324,31 @@ async def create_change_event(
 
 @router.get("/change-events/pending", summary="List pending demand change events")
 async def list_pending_change_events(
+    skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    keyword: Optional[str] = Query(None, description="关键词（事件编码、来源编码/名称、触发原因）"),
+    event_type: Optional[str] = Query(None, description="事件类型"),
+    source_type: Optional[str] = Query(None, description="来源类型"),
+    event_status: Optional[str] = Query(None, description="事件状态"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 -created_at"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    return await change_event_service.list_pending_events(tenant_id=tenant_id, limit=limit)
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in DEMAND_CHANGE_EVENT_SORTABLE_FIELDS:
+            safe_order_by = order_by
+    return await change_event_service.list_pending_events(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+        event_type=event_type,
+        source_type=source_type,
+        event_status=event_status,
+        order_by=safe_order_by,
+    )
 
 
 @router.get("/change-events/{event_id}/impact", summary="Get change impact details")
@@ -373,11 +413,39 @@ async def get_replan_dashboard(
 
 @router.get("/replan-tasks", summary="List replan tasks")
 async def list_replan_tasks(
-    limit: int = Query(100, ge=1, le=200),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=200),
+    event_id: Optional[int] = Query(None, description="关联变更事件ID"),
+    keyword: Optional[str] = Query(None, description="关键词（任务编码、失败原因）"),
+    status: Optional[str] = Query(None, description="任务状态"),
+    mode: Optional[str] = Query(None, description="重算模式"),
+    risk_level: Optional[str] = Query(None, description="风险级别"),
+    approval_status: Optional[str] = Query(None, description="审批状态"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 -created_at"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    return await change_event_service.list_replan_tasks(tenant_id=tenant_id, limit=limit)
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in DEMAND_REPLAN_TASK_SORTABLE_FIELDS:
+            safe_order_by = order_by
+    return await change_event_service.list_replan_tasks(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        event_id=event_id,
+        keyword=keyword,
+        status=status,
+        mode=mode,
+        risk_level=risk_level,
+        approval_status=approval_status,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        order_by=safe_order_by,
+    )
 
 
 @router.get("/{computation_id:int}/recalc-history", summary="Demand computation recalc history")
@@ -719,62 +787,49 @@ async def push_to_purchase_requisition(
 @router.get("/history", summary="List demand computation history")
 async def list_computation_history(
     demand_id: Optional[int] = Query(None, description="需求ID"),
+    demand_code: Optional[str] = Query(None, description="需求编码"),
+    computation_code: Optional[str] = Query(None, description="计算编码"),
     computation_type: Optional[str] = Query(
         None,
         description="兼容筛选：MRP≈MTS、LRP≈MTO（新数据 computation_type 均为 MRP）",
     ),
-    start_date: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
-    end_date: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    computation_status: Optional[str] = Query(None, description="计算状态"),
+    business_mode: Optional[str] = Query(None, description="业务模式（MTS/MTO/ATO）"),
+    keyword: Optional[str] = Query(None, description="关键词（计算编码、需求编码、备注）"),
+    start_date: Optional[str] = Query(None, description="计算开始时间起（YYYY-MM-DD）"),
+    end_date: Optional[str] = Query(None, description="计算开始时间止（YYYY-MM-DD）"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 computation_code、-created_at"),
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(20, ge=1, le=100, description="限制数量"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """
-    查询需求计算历史记录
-    
-    支持按需求ID、计算类型、时间范围筛选。
-    """
+    """查询需求计算历史记录（与主列表共用筛选/排序能力）。"""
     try:
-        from datetime import datetime, timedelta
-        
-        # DemandComputation 模型不包含 deleted_at，不能按软删除字段过滤
-        query = DemandComputation.filter(tenant_id=tenant_id)
-        
-        if demand_id:
-            query = query.filter(demand_id=demand_id)
-        if computation_type:
-            if computation_type == "LRP":
-                query = query.filter(business_mode="MTO")
-            elif computation_type == "MRP":
-                query = query.filter(business_mode="MTS")
-            else:
-                query = query.filter(computation_type=computation_type)
-        if start_date:
-            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-            query = query.filter(computation_start_time__gte=start_dt)
-        if end_date:
-            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-            # 结束日期按整天包含（23:59:59）
-            end_dt = end_dt + timedelta(days=1) - timedelta(seconds=1)
-            query = query.filter(computation_start_time__lte=end_dt)
-        
-        total = await query.count()
-        computations = await query.offset(skip).limit(limit).order_by('-computation_start_time')
-        
-        result = []
-        for computation in computations:
-            items = await DemandComputationItem.filter(
-                tenant_id=tenant_id,
-                computation_id=computation.id
-            ).all()
-            result.append(await computation_service._build_computation_response(computation, items))
-        
-        return {
-            "data": [r.model_dump() for r in result],
-            "total": total,
-            "success": True
-        }
+        safe_order_by = None
+        if order_by:
+            field = order_by.lstrip("-")
+            if field in DEMAND_COMPUTATION_SORTABLE_FIELDS:
+                safe_order_by = order_by
+        return await computation_service.list_computations(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+            demand_code=demand_code,
+            computation_code=computation_code,
+            computation_type=computation_type,
+            computation_status=computation_status,
+            business_mode=business_mode,
+            keyword=keyword,
+            start_date=start_date,
+            end_date=end_date,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            order_by=safe_order_by,
+            skip=skip,
+            limit=limit,
+        )
     except Exception:
         logger.exception("查询需求计算历史记录失败")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="查询需求计算历史记录失败")

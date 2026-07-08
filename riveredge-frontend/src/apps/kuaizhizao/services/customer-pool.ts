@@ -32,15 +32,32 @@ export interface CustomerPoolRule {
   updated_by?: number | null;
 }
 
+export interface CustomerPoolListParams {
+  scope?: 'pool' | 'mine' | 'all';
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  code?: string;
+  name?: string;
+  contact_person?: string;
+  phone?: string;
+  salesmanId?: number;
+  poolStatus?: 'pool' | 'owned';
+  last_follow_up_from?: string;
+  last_follow_up_to?: string;
+  recycle_from?: string;
+  recycle_to?: string;
+  assigned_from?: string;
+  assigned_to?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
+  order_by?: string;
+}
+
 export const customerPoolApi = {
-  list: async (params?: {
-    scope?: 'pool' | 'mine' | 'all';
-    skip?: number;
-    limit?: number;
-    keyword?: string;
-    salesmanId?: number;
-    poolStatus?: 'pool' | 'owned';
-  }): Promise<CustomerPoolListResult> =>
+  list: async (params?: CustomerPoolListParams): Promise<CustomerPoolListResult> =>
     apiRequest('/apps/kuaizhizao/customer-pool', { method: 'GET', params }),
 
   claim: async (customerId: number, reason?: string): Promise<CustomerPoolItem> =>

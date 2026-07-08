@@ -10,7 +10,7 @@ Date: 2025-01-14
 """
 
 from typing import List, Optional, Dict, Any
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time
 from decimal import Decimal
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
@@ -34,6 +34,25 @@ from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, LEGACY_AUDITED
 from apps.common.base_service import AppBaseService
 from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+
+DEMAND_SORTABLE_FIELDS = frozenset({
+    "demand_code",
+    "demand_name",
+    "demand_type",
+    "business_mode",
+    "start_date",
+    "end_date",
+    "total_quantity",
+    "total_amount",
+    "status",
+    "review_status",
+    "priority",
+    "source_code",
+    "customer_name",
+    "pushed_to_computation",
+    "created_at",
+    "updated_at",
+})
 
 
 class DemandService(AppBaseService[Demand]):
@@ -317,16 +336,50 @@ class DemandService(AppBaseService[Demand]):
             query = query.filter(review_status=filters['review_status'])
         if filters.get('pushed_to_computation') is not None:
             query = query.filter(pushed_to_computation=filters['pushed_to_computation'])
+        kw = (filters.get('keyword') or '').strip()
+        if kw:
+            query = query.filter(
+                Q(demand_code__icontains=kw)
+                | Q(demand_name__icontains=kw)
+                | Q(source_code__icontains=kw)
+                | Q(customer_name__icontains=kw)
+                | Q(computation_code__icontains=kw)
+            )
+        dc = (filters.get('demand_code') or '').strip()
+        if dc:
+            query = query.filter(demand_code__icontains=dc)
+        dn = (filters.get('demand_name') or '').strip()
+        if dn:
+            query = query.filter(demand_name__icontains=dn)
+        start_from = filters.get('start_date_from')
+        if start_from is not None:
+            query = query.filter(start_date__gte=start_from)
+        start_to = filters.get('start_date_to')
+        if start_to is not None:
+            query = query.filter(start_date__lte=start_to)
+        end_from = filters.get('end_date_from')
+        if end_from is not None:
+            query = query.filter(end_date__isnull=False, end_date__gte=end_from)
+        end_to = filters.get('end_date_to')
+        if end_to is not None:
+            query = query.filter(end_date__isnull=False, end_date__lte=end_to)
         if filters.get('start_date'):
             query = query.filter(start_date__gte=filters['start_date'])
         if filters.get('end_date'):
             query = query.filter(end_date__lte=filters['end_date'])
+        created_start = filters.get('created_start_date')
+        if created_start is not None:
+            query = query.filter(created_at__gte=datetime.combine(created_start, time.min))
+        created_end = filters.get('created_end_date')
+        if created_end is not None:
+            query = query.filter(created_at__lte=datetime.combine(created_end, time.max))
 
         # 获取总数
         total = await query.count()
-        
+
+        order_clause = filters.get('order_by') if filters.get('order_by') else '-created_at'
         # 获取分页数据
-        demands = await query.offset(skip).limit(limit).order_by('-created_at')
+        demands = await query.offset(skip).limit(limit).order_by(order_clause)
         
         # 批量拉取上游单据，保证需求展示与销售订单/销售预测一致
         order_ids = [d.source_id for d in demands if getattr(d, "source_type", None) == "sales_order" and getattr(d, "source_id", None)]

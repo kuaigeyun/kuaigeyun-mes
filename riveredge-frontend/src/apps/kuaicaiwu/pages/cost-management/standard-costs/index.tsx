@@ -16,11 +16,19 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { standardCostService, type StandardCost } from '../../../services/cost/standard-cost';
 import { formatCostItemType, formatTargetType } from '../../../utils/financeUiLabels';
+import {
+  COST_CRUD_PINNED_ACTIVE_FIELD,
+  costDocCreatedUpdatedColumns,
+  resolveStandardCostListParams,
+  standardCostSearchColumns,
+} from '../../../utils/costListCore';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 
 const StandardCostsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>();
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState<StandardCost | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -49,27 +57,59 @@ const StandardCostsPage: React.FC = () => {
 
   const columns: ProColumns<StandardCost>[] = useMemo(
     () => [
+      ...standardCostSearchColumns({
+        targetCode: t('app.kuaicaiwu.standardCost.col.targetCode'),
+        targetName: t('app.kuaicaiwu.standardCost.col.targetName'),
+      }),
       {
         title: t('app.kuaicaiwu.standardCost.col.targetType'),
         dataIndex: 'target_type',
         width: 100,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => formatTargetType(r.target_type, t),
       },
-      { title: t('app.kuaicaiwu.standardCost.col.targetCode'), dataIndex: 'target_code', width: 120, ellipsis: true },
-      { title: t('app.kuaicaiwu.standardCost.col.targetName'), dataIndex: 'target_name', ellipsis: true },
+      { title: t('app.kuaicaiwu.standardCost.col.targetCode'), dataIndex: 'target_code', width: 120, ellipsis: true, hideInSearch: true, sorter: true },
+      { title: t('app.kuaicaiwu.standardCost.col.targetName'), dataIndex: 'target_name', ellipsis: true, hideInSearch: true, sorter: true },
       {
         title: t('app.kuaicaiwu.standardCost.col.costItemType'),
         dataIndex: 'cost_item_type',
         width: 100,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => formatCostItemType(r.cost_item_type, t),
       },
-      { title: t('app.kuaicaiwu.standardCost.col.standardValue'), dataIndex: 'standard_value', valueType: 'money', align: 'right' },
-      { title: t('app.kuaicaiwu.standardCost.col.unit'), dataIndex: 'unit', width: 80 },
-      { title: t('app.kuaicaiwu.standardCost.col.version'), dataIndex: 'version', width: 80 },
+      { title: t('app.kuaicaiwu.standardCost.col.standardValue'), dataIndex: 'standard_value', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
+      { title: t('app.kuaicaiwu.standardCost.col.unit'), dataIndex: 'unit', width: 80, hideInSearch: true, sorter: true },
+      { title: t('app.kuaicaiwu.standardCost.col.version'), dataIndex: 'version', width: 80, hideInSearch: true, sorter: true },
+      {
+        title: t('app.kuaicaiwu.standardCost.field.effectiveDate'),
+        dataIndex: 'effective_date',
+        valueType: 'date',
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.standardCost.field.effectiveDate'),
+        dataIndex: 'effective_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        order: 12,
+        formItemProps: formDateRangeFormItemProps,
+      },
       {
         title: t('app.kuaicaiwu.standardCost.col.status'),
         dataIndex: 'is_active',
         width: 80,
+        hideInSearch: true,
+        sorter: true,
+        valueType: 'select',
+        valueEnum: {
+          true: { text: t('app.kuaicaiwu.standardCost.status.active') },
+          false: { text: t('app.kuaicaiwu.standardCost.status.inactive') },
+        },
         render: (_, r) =>
           r.is_active ? (
             <Tag color="success">{t('app.kuaicaiwu.standardCost.status.active')}</Tag>
@@ -77,6 +117,7 @@ const StandardCostsPage: React.FC = () => {
             <Tag>{t('app.kuaicaiwu.standardCost.status.inactive')}</Tag>
           ),
       },
+      ...costDocCreatedUpdatedColumns<StandardCost>(t),
       {
         title: t('app.kuaicaiwu.costCommon.action'),
         valueType: 'option',
@@ -126,13 +167,25 @@ const StandardCostsPage: React.FC = () => {
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.cost-management.standard-costs"
         columns={columns}
-        request={async (params) => {
-          const res = await standardCostService.list({
-            skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
-            limit: params.pageSize ?? 20,
-            search: params.keyword as string | undefined,
-          });
-          return { data: res.items, success: true, total: res.total };
+        scroll={{ x: 1480 }}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={COST_CRUD_PINNED_ACTIVE_FIELD}
+        request={async (params, sort, _filter, searchFormValues) => {
+          const listParams = resolveStandardCostListParams(searchFormValues, sort);
+          lastListParamsRef.current = listParams;
+          try {
+            const res = await standardCostService.list({
+              skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+              limit: params.pageSize ?? 20,
+              ...listParams,
+            });
+            return { data: res.items, success: true, total: res.total };
+          } catch (error: unknown) {
+            const err = error as { message?: string };
+            messageApi.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+            return { data: [], success: false, total: 0 };
+          }
         }}
         showCreateButton
         createButtonText={t('app.kuaicaiwu.standardCost.create')}

@@ -29,8 +29,10 @@ from apps.kuaizhizao.schemas.quality_improvement import (
     SPCChartResponse,
     SPCPoint,
     SPCSampleCreate,
+    SPCSampleListResponse,
     SPCSampleResponse,
 )
+from apps.kuaizhizao.services.spc_list_core import apply_spc_sample_list_filters
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from tortoise.transactions import in_transaction
 from datetime import timezone
@@ -245,18 +247,55 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         skip: int = 0,
         limit: int = 100,
         status: Optional[str] = None,
+        severity: Optional[str] = None,
         owner_id: Optional[int] = None,
         overdue_only: bool = False,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        due_start_date: Optional[str] = None,
+        due_end_date: Optional[str] = None,
     ) -> Quality8DListResponse:
+        from apps.kuaizhizao.services.quality_service import (
+            EIGHT_D_REPORT_SORTABLE_FIELDS,
+            _apply_quality_inspection_list_filters,
+            _parse_optional_api_date,
+            _resolve_quality_list_order_by,
+        )
+        from datetime import time as dt_time
+
         query = Quality8DReport.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if status:
             query = query.filter(status=status)
+        if severity:
+            query = query.filter(severity=severity)
         if owner_id:
             query = query.filter(owner_id=owner_id)
         if overdue_only:
             query = query.filter(due_date__lt=datetime.now()).exclude(status="closed")
+        query = _apply_quality_inspection_list_filters(
+            query,
+            {
+                "keyword": keyword,
+                "created_start_date": created_start_date,
+                "created_end_date": created_end_date,
+            },
+            keyword_fields=["report_code", "title", "owner_name"],
+        )
+        due_start = _parse_optional_api_date(due_start_date)
+        due_end = _parse_optional_api_date(due_end_date)
+        if due_start is not None:
+            query = query.filter(due_date__gte=datetime.combine(due_start, dt_time.min))
+        if due_end is not None:
+            query = query.filter(due_date__lte=datetime.combine(due_end, dt_time.max))
         total = await query.count()
-        rows = await query.order_by("-created_at").offset(skip).limit(limit)
+        order_clause = _resolve_quality_list_order_by(
+            order_by,
+            EIGHT_D_REPORT_SORTABLE_FIELDS,
+            "-created_at",
+        )
+        rows = await query.order_by(order_clause).offset(skip).limit(limit)
         return Quality8DListResponse(items=[self._build_response(row) for row in rows], total=total)
 
     async def get_report(self, tenant_id: int, report_id: int) -> Quality8DResponse:
@@ -348,7 +387,27 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         )
         return OQCInspectionResponse.model_validate(row)
 
-    async def list(self, tenant_id: int, skip: int = 0, limit: int = 100, status: Optional[str] = None, shipment_notice_id: Optional[int] = None, sales_delivery_id: Optional[int] = None) -> Dict[str, Any]:
+    async def list(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        status: Optional[str] = None,
+        shipment_notice_id: Optional[int] = None,
+        sales_delivery_id: Optional[int] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        inspection_start_date: Optional[str] = None,
+        inspection_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.services.quality_service import (
+            OQC_INSPECTION_SORTABLE_FIELDS,
+            _apply_quality_inspection_list_filters,
+            _resolve_quality_list_order_by,
+        )
+
         query = OQCInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if status:
             query = query.filter(status=status)
@@ -356,8 +415,31 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             query = query.filter(shipment_notice_id=shipment_notice_id)
         if sales_delivery_id:
             query = query.filter(source_type="sales_delivery", source_id=sales_delivery_id)
+        query = _apply_quality_inspection_list_filters(
+            query,
+            {
+                "keyword": keyword,
+                "inspection_start_date": inspection_start_date,
+                "inspection_end_date": inspection_end_date,
+                "created_start_date": created_start_date,
+                "created_end_date": created_end_date,
+            },
+            keyword_fields=[
+                "inspection_code",
+                "customer_name",
+                "material_code",
+                "material_name",
+                "shipment_notice_code",
+                "sales_delivery_code",
+            ],
+        )
         total = await query.count()
-        rows = await query.order_by("-created_at").offset(skip).limit(limit)
+        order_clause = _resolve_quality_list_order_by(
+            order_by,
+            OQC_INSPECTION_SORTABLE_FIELDS,
+            "-created_at",
+        )
+        rows = await query.order_by(order_clause).offset(skip).limit(limit)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_oqc_inspection_list_capabilities,
         )
@@ -368,8 +450,10 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             [OQCInspectionResponse.model_validate(row) for row in rows],
         )
         payload = {
+            "data": responses,
             "items": responses,
             "total": total,
+            "success": True,
         }
         return await enrich_items_payload(tenant_id, "oqc_inspection", payload)
 
@@ -1101,14 +1185,28 @@ class SPCService(AppBaseService[SPCSample]):
         self,
         tenant_id: int,
         characteristic_name: Optional[str] = None,
+        keyword: Optional[str] = None,
+        sample_time_from: Optional[datetime] = None,
+        sample_time_to: Optional[datetime] = None,
+        order_by: Optional[str] = None,
         skip: int = 0,
         limit: int = 200,
-    ) -> List[SPCSampleResponse]:
-        query = Q(tenant_id=tenant_id, deleted_at__isnull=True)
-        if characteristic_name:
-            query &= Q(characteristic_name=characteristic_name)
-        rows = await SPCSample.filter(query).order_by("-sample_time").offset(skip).limit(limit)
-        return [SPCSampleResponse.model_validate(row) for row in rows]
+    ) -> SPCSampleListResponse:
+        query = SPCSample.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        query, primary_order, secondary_order = apply_spc_sample_list_filters(
+            query,
+            keyword=keyword,
+            characteristic_name=characteristic_name,
+            sample_time_from=sample_time_from,
+            sample_time_to=sample_time_to,
+            order_by=order_by,
+        )
+        total = await query.count()
+        rows = await query.order_by(primary_order, secondary_order).offset(skip).limit(limit)
+        return SPCSampleListResponse(
+            items=[SPCSampleResponse.model_validate(row) for row in rows],
+            total=total,
+        )
 
     async def build_imr_chart(
         self,

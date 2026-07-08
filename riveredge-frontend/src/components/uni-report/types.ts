@@ -110,6 +110,7 @@ export type UniReportProps<T = Record<string, unknown>> = {
   summaryFields?: string[];
   showPrintButton?: boolean;
   showExportButton?: boolean;
+  skipFuzzyPinyinClientFilter?: boolean;
 };
 
 export type SummaryFieldMeta = {

@@ -15,8 +15,16 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { getCurrencySelectOptions, formatBankDirection, formatCurrency } from '../../../utils/financeUiLabels';
+import {
+  bankAccountSearchColumns,
+  FINANCE_CRUD_PINNED_ACTIVE_FIELD,
+  financeDocCreatedUpdatedColumns,
+  resolveBankAccountListParams,
+  resolveBankTransactionListParams,
+} from '../../../utils/financeListCore';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 
 type BankTx = Record<string, unknown>;
 
@@ -27,6 +35,7 @@ const BankAccountsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>();
   const txRef = useRef<ActionType>();
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState<BankAccount | null>(null);
   const [txDrawerOpen, setTxDrawerOpen] = useState(false);
@@ -35,21 +44,40 @@ const BankAccountsPage: React.FC = () => {
   const [importOpen, setImportOpen] = useState(false);
   const [importAccount, setImportAccount] = useState<BankAccount | null>(null);
 
+  const activeValueEnum = useMemo(
+    () => ({
+      true: { text: t(`${BA}.status.enabled`) },
+      false: { text: t(`${BA}.status.disabled`) },
+    }),
+    [t],
+  );
+
   const columns: ProColumns<BankAccount>[] = useMemo(() => [
-    { title: t(`${BA}.col.accountCode`), dataIndex: 'account_code', width: 120 },
-    { title: t(`${BA}.col.accountName`), dataIndex: 'account_name', ellipsis: true },
-    { title: t(`${BA}.col.bankName`), dataIndex: 'bank_name', ellipsis: true },
-    { title: t(`${BA}.col.accountNumber`), dataIndex: 'account_number', width: 180, ellipsis: true },
-    { title: t(`${BA}.col.currency`), dataIndex: 'currency', width: 100, render: (_, r) => formatCurrency(String(r.currency ?? ''), t) },
-    { title: t(`${BA}.col.balance`), dataIndex: 'current_balance', valueType: 'money', align: 'right' },
+    ...bankAccountSearchColumns({
+      accountCode: t(`${BA}.col.accountCode`),
+      accountName: t(`${BA}.col.accountName`),
+      bankName: t(`${BA}.col.bankName`),
+      accountNumber: t(`${BA}.col.accountNumber`),
+    }),
+    { title: t(`${BA}.col.accountCode`), dataIndex: 'account_code', width: 120, hideInSearch: true, sorter: true },
+    { title: t(`${BA}.col.accountName`), dataIndex: 'account_name', ellipsis: true, hideInSearch: true, sorter: true },
+    { title: t(`${BA}.col.bankName`), dataIndex: 'bank_name', ellipsis: true, hideInSearch: true, sorter: true },
+    { title: t(`${BA}.col.accountNumber`), dataIndex: 'account_number', width: 180, ellipsis: true, hideInSearch: true, sorter: true },
+    { title: t(`${BA}.col.currency`), dataIndex: 'currency', width: 100, hideInSearch: true, sorter: true, render: (_, r) => formatCurrency(String(r.currency ?? ''), t) },
+    { title: t(`${BA}.col.balance`), dataIndex: 'current_balance', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
     {
       title: t(`${BA}.col.status`),
       dataIndex: 'is_active',
       width: 80,
+      hideInSearch: true,
+      sorter: true,
+      valueType: 'select',
+      valueEnum: activeValueEnum,
       render: (_, r) => (r.is_active
         ? <Tag color="success">{t(`${BA}.status.enabled`)}</Tag>
         : <Tag>{t(`${BA}.status.disabled`)}</Tag>),
     },
+    ...financeDocCreatedUpdatedColumns<BankAccount>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -71,14 +99,51 @@ const BankAccountsPage: React.FC = () => {
         </Popconfirm>,
       ],
     },
-  ], [t, messageApi]);
+  ], [t, messageApi, activeValueEnum]);
 
   const txColumns: ProColumns<BankTx>[] = useMemo(() => [
-    { title: t(`${BA}.col.date`), dataIndex: 'transaction_date', valueType: 'date', width: 120 },
+    {
+      title: t(`${BA}.col.sourceCode`),
+      dataIndex: 'source_doc_code',
+      hideInTable: true,
+      order: 10,
+      fieldProps: { allowClear: true },
+    },
+    {
+      title: t(`${BA}.col.direction`),
+      dataIndex: 'direction',
+      hideInTable: true,
+      order: 11,
+      valueType: 'select',
+      fieldProps: { allowClear: true },
+      valueEnum: {
+        in: { text: formatBankDirection('in', t) },
+        out: { text: formatBankDirection('out', t) },
+      },
+    },
+    {
+      title: t(`${BA}.col.date`),
+      dataIndex: 'transaction_date',
+      valueType: 'date',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t(`${BA}.col.date`),
+      dataIndex: 'transaction_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      order: 12,
+      formItemProps: formDateRangeFormItemProps,
+    },
     {
       title: t(`${BA}.col.direction`),
       dataIndex: 'direction',
       width: 80,
+      hideInSearch: true,
+      sorter: true,
       render: (_, r) => {
         const direction = String(r.direction ?? '');
         const label = formatBankDirection(direction, t);
@@ -87,10 +152,10 @@ const BankAccountsPage: React.FC = () => {
         return <Tag>{label}</Tag>;
       },
     },
-    { title: t('app.kuaicaiwu.invoice.line.amount'), dataIndex: 'amount', valueType: 'money', align: 'right' },
-    { title: t(`${BA}.col.balance`), dataIndex: 'balance_after', valueType: 'money', align: 'right' },
-    { title: t(`${BA}.col.sourceCode`), dataIndex: 'source_doc_code', width: 140, ellipsis: true },
-    { title: t(`${BA}.col.summary`), dataIndex: 'summary', ellipsis: true },
+    { title: t('app.kuaicaiwu.invoice.line.amount'), dataIndex: 'amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
+    { title: t(`${BA}.col.balance`), dataIndex: 'balance_after', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
+    { title: t(`${BA}.col.sourceCode`), dataIndex: 'source_doc_code', width: 140, ellipsis: true, hideInSearch: true, sorter: true },
+    { title: t(`${BA}.col.summary`), dataIndex: 'summary', ellipsis: true, hideInSearch: true, sorter: true },
   ], [t]);
 
   const handleBatchDelete = async (keys: React.Key[]) => {
@@ -121,11 +186,27 @@ const BankAccountsPage: React.FC = () => {
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.bank-accounts"
         columns={columns}
-        request={async () => {
-          const list = await bankAccountService.list({ limit: 200 });
-          return { data: list, success: true, total: list.length };
+        scroll={{ x: 1480 }}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={FINANCE_CRUD_PINNED_ACTIVE_FIELD}
+        request={async (params, sort, _filter, searchFormValues) => {
+          const { current, pageSize } = params;
+          const listParams = resolveBankAccountListParams(searchFormValues, sort);
+          lastListParamsRef.current = listParams;
+          try {
+            const res = await bankAccountService.list({
+              skip: ((current || 1) - 1) * (pageSize || 20),
+              limit: pageSize || 20,
+              ...listParams,
+            });
+            return { data: res.data, total: res.total, success: true };
+          } catch (error: unknown) {
+            const err = error as { message?: string };
+            messageApi.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+            return { data: [], total: 0, success: false };
+          }
         }}
-        search={false}
         showCreateButton
         createButtonText={t(`${BA}.createButton`)}
         onCreate={() => { setEditing(null); setModalVisible(true); }}
@@ -168,12 +249,25 @@ const BankAccountsPage: React.FC = () => {
             rowKey="id"
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.bank-accounts.transactions"
             columns={txColumns}
-            request={async () => {
+            showAdvancedSearch
+            skipFuzzyPinyinClientFilter
+            request={async (params, sort, _filter, searchFormValues) => {
               if (!txAccount) return { data: [], success: true, total: 0 };
-              const list = await bankAccountService.listTransactions(txAccount.id, { limit: 200 });
-              return { data: list, success: true, total: list.length };
+              const { current, pageSize } = params;
+              const listParams = resolveBankTransactionListParams(searchFormValues, sort);
+              try {
+                const res = await bankAccountService.listTransactions(txAccount.id, {
+                  skip: ((current || 1) - 1) * (pageSize || 20),
+                  limit: pageSize || 20,
+                  ...listParams,
+                });
+                return { data: res.data, total: res.total, success: true };
+              } catch (error: unknown) {
+                const err = error as { message?: string };
+                messageApi.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+                return { data: [], total: 0, success: false };
+              }
             }}
-            search={false}
             pagination={{ pageSize: 20 }}
             toolBarRender={false}
           />

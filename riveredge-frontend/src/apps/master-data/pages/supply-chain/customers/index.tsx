@@ -24,7 +24,13 @@ import { UniDetail, detailDrawerDescriptionItems } from '../../../../../componen
 
 import { customerApi, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
 import { getDictionaryLabelMapSync } from '../../../../../services/dataDictionaryCache';
-import { extractProTableSort, mapSupplyChainSortField } from '../../../../../utils/tableQueryKey';
+import {
+  buildMasterCrudActiveValueEnum,
+  MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  masterCrudCodeNameSearchColumns,
+  masterCrudCreatedUpdatedColumns,
+  resolveCustomerListParams,
+} from '../../../utils/supplyChainListCore';
 import { CustomerFormModal } from '../../../components/CustomerFormModal';
 import type { Customer, CustomerCreate } from '../../../types/supply-chain';
 import {
@@ -63,7 +69,13 @@ const CustomersPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const customerActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
+    [t],
+  );
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -562,7 +574,7 @@ const CustomersPage: React.FC = () => {
         exportData = currentPageData;
         filename = `${t('app.master-data.customers.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
-        const exportRes = await customerApi.list({ skip: 0, limit: 10000 });
+        const exportRes = await customerApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
         exportData = Array.isArray(exportRes) ? exportRes : exportRes?.data ?? [];
         filename = `${t('app.master-data.customers.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
@@ -639,6 +651,10 @@ const CustomersPage: React.FC = () => {
   const columns: ProColumns<Customer>[] = useMemo(() => {
     const customFieldColumns = generateCustomFieldColumns();
     return [
+    ...masterCrudCodeNameSearchColumns({
+      code: t('field.customer.code'),
+      name: t('field.customer.name'),
+    }),
     {
       title: t('field.customer.code'),
       dataIndex: 'code',
@@ -646,12 +662,14 @@ const CustomersPage: React.FC = () => {
       width: 150,
       fixed: 'left',
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('field.customer.name'),
       dataIndex: 'name',
       width: 200,
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('field.customer.shortName'),
@@ -749,12 +767,18 @@ const CustomersPage: React.FC = () => {
     {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
-      width: 100,
+      hideInTable: true,
+      order: 20,
       valueType: 'select',
-      valueEnum: {
-        true: { text: t('common.enabled'), status: 'Success' },
-        false: { text: t('common.disabled'), status: 'Default' },
-      },
+      valueEnum: customerActiveValueEnum,
+      fieldProps: { allowClear: true },
+    },
+    {
+      title: t('app.master-data.warehouses.status'),
+      dataIndex: 'isActive',
+      width: 100,
+      hideInSearch: true,
+      valueEnum: customerActiveValueEnum,
       render: (_, record) => (
         <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
           {(record?.isActive ?? (record as any)?.is_active) ? t('common.enabled') : t('common.disabled')}
@@ -763,14 +787,7 @@ const CustomersPage: React.FC = () => {
       sorter: true,
     },
     ...customFieldColumns,
-    {
-      title: t('app.master-data.warehouses.createTime'),
-      dataIndex: 'createdAt',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
+    ...masterCrudCreatedUpdatedColumns<Customer>(t),
     {
       title: t('app.master-data.warehouses.action'),
       valueType: 'option',
@@ -807,7 +824,7 @@ const CustomersPage: React.FC = () => {
       ),
     },
     ];
-  }, [customFields, t, dictLabel, salesmanValueEnum, salesmanOptions, renderPoolStatus]);
+  }, [customFields, t, dictLabel, salesmanValueEnum, salesmanOptions, renderPoolStatus, customerActiveValueEnum]);
 
   /** 详情列：与表单 Tab「基本信息 / 开票资料 / 业务与扩展」一致 */
   const detailColumnsBasic: ProDescriptionsItemProps<Customer>[] = [
@@ -953,45 +970,25 @@ const CustomersPage: React.FC = () => {
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, __filter, searchFormValues) => {
-          // 处理搜索参数
-          const apiParams: any = {
+          const listParams = resolveCustomerListParams(searchFormValues, sort);
+          lastListParamsRef.current = listParams;
+          const apiParams = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
+            isActive: listParams.isActive as boolean | undefined,
+            category: listParams.category as string | undefined,
+            salesmanId: listParams.salesmanId as number | undefined,
+            keyword: listParams.keyword as string | undefined,
+            code: listParams.code as string | undefined,
+            name: listParams.name as string | undefined,
+            created_start_date: listParams.created_start_date as string | undefined,
+            created_end_date: listParams.created_end_date as string | undefined,
+            updated_start_date: listParams.updated_start_date as string | undefined,
+            updated_end_date: listParams.updated_end_date as string | undefined,
+            sortBy: listParams.sortBy as string | undefined,
+            sortOrder: listParams.sortOrder as 'asc' | 'desc' | undefined,
           };
-          
-          // 启用状态筛选
-          if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.isActive = searchFormValues.isActive;
-          }
-          
-          // 分类筛选
-          if (searchFormValues?.category !== undefined && searchFormValues.category !== '' && searchFormValues.category !== null) {
-            apiParams.category = searchFormValues.category;
-          }
-          
-          // 业务员筛选
-          if (searchFormValues?.salesmanId !== undefined && searchFormValues.salesmanId !== '' && searchFormValues.salesmanId !== null) {
-            apiParams.salesmanId = searchFormValues.salesmanId;
-          }
 
-          const fuzzyKw = String(searchFormValues?.keyword ?? '').trim();
-          const fallbackKw =
-            fuzzyKw ||
-            String(searchFormValues?.code ?? '').trim() ||
-            String(searchFormValues?.name ?? '').trim();
-          if (fallbackKw) apiParams.keyword = fallbackKw;
-
-          const { sortBy: rawSortBy, sortOrder } = extractProTableSort(sort);
-          const sortField = mapSupplyChainSortField(rawSortBy);
-          if (sortField) {
-            apiParams.sortBy = sortField;
-            apiParams.sortOrder = sortOrder;
-          } else {
-            // 默认按创建时间倒序（最新创建的客户优先）
-            apiParams.sortBy = 'created_at';
-            apiParams.sortOrder = 'desc';
-          }
-          
           try {
             const result = await customerApi.list(apiParams);
             const listData = Array.isArray(result) ? result : result?.data ?? [];
@@ -1012,7 +1009,9 @@ const CustomersPage: React.FC = () => {
           }
         }}
         rowKey="uuid"
-        showAdvancedSearch={true}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={MASTER_CRUD_PINNED_ACTIVE_FIELD}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,

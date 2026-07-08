@@ -126,3 +126,8 @@ class InspectionPlanResponse(InspectionPlanBase):
 class InspectionPlanListResponse(InspectionPlanResponse):
     """质检方案列表响应 schema（简化版）"""
     steps: Optional[List[InspectionPlanStepResponse]] = Field(None, description="检验步骤列表（列表页可省略）")
+
+
+class InspectionPlanListEnvelope(BaseSchema):
+    items: List[InspectionPlanListResponse]
+    total: int

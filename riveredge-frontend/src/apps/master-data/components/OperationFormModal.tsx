@@ -19,7 +19,7 @@ import {
   factoryListItems,
 } from '../services/factory';
 import { equipmentApi } from '../../kuaizhizao/services/equipment';
-import { inspectionPlanApi } from '../../kuaizhizao/services/production';
+import { inspectionPlanApi, unwrapInspectionPlanList } from '../../kuaizhizao/services/quality-execution';
 import { QualityMasterDataHint } from '../../kuaizhizao/pages/quality-management/components/QualityMasterDataHint';
 import { useGlobalStore } from '../../../stores';
 import { searchUserDisplay } from '../../../services/user';
@@ -213,7 +213,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
         label: `${e.code || ''} ${e.name || ''}`.trim() || String(e.id),
         value: e.id,
       }));
-      const plans = Array.isArray(plansRes) ? plansRes : plansRes?.data ?? [];
+      const plans = unwrapInspectionPlanList(plansRes);
       let planOpts = plans.map((p: any) => ({
         label: `${p.plan_code || p.planCode || ''} ${p.plan_name || p.planName || ''}`.trim() || String(p.id),
         value: p.id,

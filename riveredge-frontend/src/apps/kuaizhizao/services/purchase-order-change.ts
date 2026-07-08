@@ -39,6 +39,7 @@ export interface PurchaseOrderChange {
   delta_amount?: number;
   applied_at?: string;
   created_at?: string;
+  updated_at?: string;
   items?: OrderChangeItem[];
   lifecycle?: Record<string, unknown>;
   header_changes?: Record<string, unknown>;
@@ -46,13 +47,30 @@ export interface PurchaseOrderChange {
   capabilities?: PurchaseOrderChangeCapabilities;
 }
 
-export async function listPurchaseOrderChanges(params: {
+export interface PurchaseOrderChangeListParams {
   skip?: number;
   limit?: number;
   source_order_id?: number;
   status?: string;
   lifecycle_stage?: string;
-} = {}): Promise<PurchaseOrderChange[]> {
+  supplier_id?: number;
+  change_category?: string;
+  keyword?: string;
+  change_code?: string;
+  source_order_code?: string;
+  start_date?: string;
+  end_date?: string;
+  order_by?: string;
+}
+
+export interface PurchaseOrderChangeListResult {
+  items: PurchaseOrderChange[];
+  total: number;
+}
+
+export async function listPurchaseOrderChanges(
+  params: PurchaseOrderChangeListParams = {},
+): Promise<PurchaseOrderChangeListResult> {
   return apiRequest('/apps/kuaizhizao/purchase-order-change-orders', { method: 'GET', params });
 }
 

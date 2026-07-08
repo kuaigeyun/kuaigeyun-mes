@@ -25,6 +25,13 @@ import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { warehouseApi } from '../../../services/production';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  WAREHOUSE_DOC_PINNED_STATUS_FIELD,
+  buildReplenishmentSuggestionStatusValueEnum,
+  normalizeWarehouseListResponse,
+  resolveReplenishmentSuggestionListParams,
+} from '../../../utils/warehouseListCore';
+import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 
 interface ReplenishmentSuggestion {
   id?: number;
@@ -130,6 +137,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       dataIndex: 'current_quantity',
       width: 100,
       align: 'right',
+      sorter: true,
     },
     {
       title: t('app.kuaizhizao.replenishmentSuggestions.colSafetyStock'),
@@ -142,6 +150,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       dataIndex: 'suggested_quantity',
       width: 120,
       align: 'right',
+      sorter: true,
       render: (_, record) => (
         <span style={{ fontWeight: 'bold', color: '#1890ff' }}>{record.suggested_quantity}</span>
       ),
@@ -166,30 +175,34 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       dataIndex: 'status',
       hideInTable: true,
       valueType: 'select',
-      valueEnum: {
-        pending: { text: t('app.kuaizhizao.warehouseCommon.statusPending') },
-        processed: { text: t('app.kuaizhizao.replenishmentSuggestions.statusProcessed') },
-        ignored: { text: t('app.kuaizhizao.warehouseCommon.statusIgnored') },
-      },
+      valueEnum: buildReplenishmentSuggestionStatusValueEnum(t),
     },
     {
       title: t('app.kuaizhizao.replenishmentSuggestions.colSuggestedOrderDate'),
       dataIndex: 'suggested_order_date',
       valueType: 'dateTime',
-      width: 160,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      render: (_, record) => formatDateTime(record.suggested_order_date),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colCreatedAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
-      width: 160,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      render: (_, record) => formatDateTime(record.created_at),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
       hideInSearch: true,
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colActions'),
@@ -369,23 +382,20 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.replenishment-suggestions"
           showAdvancedSearch={true}
-          request={async (params) => {
+          pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const lifecycleStage = resolveListLifecycleStageFromSearch(searchFormValues, params);
+              const listParams = resolveReplenishmentSuggestionListParams(searchFormValues, sort);
               const response = await warehouseApi.replenishmentSuggestion.list({
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
-                status: params.status,
-                priority: params.priority,
-                suggestion_type: params.suggestion_type,
-                material_id: params.material_id,
-                warehouse_id: params.warehouse_id,
+                ...listParams,
+                status: lifecycleStage ?? listParams.status,
               });
-              const data = Array.isArray(response) ? response : response.data || [];
-              return {
-                data,
-                success: true,
-                total: Array.isArray(response) ? response.length : response.total || 0,
-              };
+              const { data, total } = normalizeWarehouseListResponse(response);
+              return { data, success: true, total };
             } catch (error) {
               messageApi.error(t('app.kuaizhizao.replenishmentSuggestions.msgListFailed'));
               return {

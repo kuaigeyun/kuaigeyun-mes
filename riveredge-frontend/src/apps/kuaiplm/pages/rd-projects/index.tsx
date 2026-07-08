@@ -31,9 +31,13 @@ import { listGateTemplates } from '../../services/gate-template';
 import {
   buildRdProjectLifecycleValueEnum,
   getRdProjectLifecycle,
-  resolveRdProjectListLifecycleParams,
   LIST_LIFECYCLE_STAGE_FIELD,
 } from '../../utils/rdProjectLifecycle';
+import {
+  plmCodeTitleSearchColumns,
+  plmCreatedUpdatedColumns,
+  resolveRdProjectListParams,
+} from '../../utils/plmListCore';
 import {
   buildKuaiplmProjectStatusValueEnum,
   getKuaiplmProjectStatusText,
@@ -51,6 +55,7 @@ const RdProjectsListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [createProjectType, setCreateProjectType] = useState<ProjectType>('RD');
@@ -205,11 +210,19 @@ const RdProjectsListPage: React.FC = () => {
 
   const columns: ProColumns<RdProject>[] = useMemo(
     () => [
+      ...plmCodeTitleSearchColumns({
+        codeLabel: t('app.kuaiplm.common.columns.projectCode'),
+        titleLabel: t('app.kuaiplm.common.columns.projectName'),
+        codeField: 'project_code',
+        titleField: 'project_name',
+      }),
       {
         title: t('app.kuaiplm.common.columns.projectCode'),
         dataIndex: 'project_code',
         width: 160,
         fixed: 'left',
+        sorter: true,
+        hideInSearch: true,
         render: (_, row) => (
           <Typography.Text copyable={{ text: String(row.project_code ?? '') }} ellipsis>
             <a onClick={() => navigate(`/apps/kuaiplm/rd-projects/detail/${row.id}`)}>{row.project_code}</a>
@@ -220,6 +233,7 @@ const RdProjectsListPage: React.FC = () => {
         title: t('app.kuaiplm.common.columns.projectType'),
         dataIndex: 'project_type',
         width: 100,
+        sorter: true,
         valueEnum: {
           RD: { text: getKuaiplmProjectTypeText(t, 'RD') },
           DELIVERY: { text: getKuaiplmProjectTypeText(t, 'DELIVERY') },
@@ -237,7 +251,9 @@ const RdProjectsListPage: React.FC = () => {
         title: t('app.kuaiplm.common.columns.projectName'),
         dataIndex: 'project_name',
         width: 200,
+        sorter: true,
         ellipsis: true,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaiplm.common.columns.productMaterial'),
@@ -275,17 +291,13 @@ const RdProjectsListPage: React.FC = () => {
       {
         title: t('app.kuaiplm.common.columns.plannedCompletion'),
         dataIndex: 'planned_end_date',
-        width: 120,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
         hideInSearch: true,
         render: (_, row) => (row.planned_end_date ? formatDateTime(row.planned_end_date, 'YYYY-MM-DD') : '-'),
       },
-      {
-        title: t('app.kuaiplm.common.columns.updatedAt'),
-        dataIndex: 'updated_at',
-        width: 168,
-        hideInSearch: true,
-        render: (_, row) => (row.updated_at ? formatDateTime(row.updated_at, 'YYYY-MM-DD HH:mm') : '-'),
-      },
+      ...plmCreatedUpdatedColumns<RdProject>(t),
       {
         title: t('app.kuaiplm.common.columns.lifecycle'),
         dataIndex: 'lifecycle_stage',
@@ -339,6 +351,9 @@ const RdProjectsListPage: React.FC = () => {
         columns={columns}
         columnPersistenceId="apps.kuaiplm.pages.rd-projects"
         scroll={{ x: 1400 }}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
         showCreateButton
         createButtonText={t('app.kuaiplm.rdProjects.createButton') + NEW_SHORTCUT_HINT}
         onCreate={handleCreate}
@@ -402,16 +417,15 @@ const RdProjectsListPage: React.FC = () => {
             ]}
           />,
         ]}
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           const { current, pageSize } = params;
-          const lifecycleParams = resolveRdProjectListLifecycleParams(searchFormValues, params);
+          const listParams = resolveRdProjectListParams(searchFormValues, sort, params);
+          lastListParamsRef.current = listParams;
           try {
             const res = await listRdProjects({
               skip: ((current || 1) - 1) * (pageSize || 20),
               limit: pageSize || 20,
-              keyword: searchFormValues?.project_name as string | undefined,
-              project_type: (searchFormValues?.project_type ?? params?.project_type) as ProjectType | undefined,
-              ...lifecycleParams,
+              ...listParams,
             });
             return { data: res.items, total: res.total, success: true };
           } catch (e: any) {

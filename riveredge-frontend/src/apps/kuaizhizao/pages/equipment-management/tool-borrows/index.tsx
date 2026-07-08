@@ -23,6 +23,12 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { toolApi } from '../../../services/equipment';
 import { borrowsApi } from '../../../services/toolOps';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  EQUIPMENT_OPS_PINNED_STATUS_FIELD,
+  normalizeEquipmentListResponse,
+  resolveAssetWorkflowListParams,
+} from '../../../utils/equipmentListCore';
 
 const P = 'app.kuaizhizao.toolOps.borrow';
 const RESOURCE = 'kuaizhizao:tool-borrow';
@@ -131,25 +137,77 @@ const ToolBorrowsPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
+  const borrowStatusValueEnum = useMemo(
+    () => ({
+      领用中: { text: '领用中' },
+      已归还: { text: '已归还' },
+    }),
+    [],
+  );
+
   const columns: ProColumns<ToolBorrow>[] = useMemo(
     () => [
-      { title: t(`${P}.col.borrowNo`), dataIndex: 'borrow_no', width: 140, fixed: 'left' },
-      { title: t(`${P}.col.tool`), dataIndex: 'tool_name', width: 160, ellipsis: true },
-      { title: t(`${P}.col.workOrderNo`), dataIndex: 'work_order_no', width: 130 },
-      { title: t(`${P}.col.borrower`), dataIndex: 'borrower_name', width: 100 },
-      { title: t(`${P}.col.borrowDate`), dataIndex: 'borrow_date', width: 110, valueType: 'date' },
-      { title: t(`${P}.col.plannedQty`), dataIndex: 'planned_qty', width: 90 },
+      {
+        title: t(`${P}.col.borrowDate`),
+        dataIndex: 'doc_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 10 } as ProColumns['search'],
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 11 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        valueType: 'select',
+        valueEnum: borrowStatusValueEnum,
+        hideInTable: true,
+        search: { order: 20 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.borrowNo`),
+        dataIndex: 'borrow_no',
+        width: 140,
+        fixed: 'left',
+        sorter: true,
+        search: { order: 30 } as ProColumns['search'],
+      },
+      { title: t(`${P}.col.tool`), dataIndex: 'tool_name', width: 160, ellipsis: true, sorter: true, hideInSearch: true },
+      { title: t(`${P}.col.workOrderNo`), dataIndex: 'work_order_no', width: 130, sorter: true, hideInSearch: true },
+      { title: t(`${P}.col.borrower`), dataIndex: 'borrower_name', width: 100, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.borrowDate`),
+        dataIndex: 'borrow_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        valueType: 'date',
+        sorter: true,
+        hideInSearch: true,
+      },
+      { title: t(`${P}.col.plannedQty`), dataIndex: 'planned_qty', width: 90, sorter: true, hideInSearch: true },
       {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
         width: 90,
+        sorter: true,
+        hideInSearch: true,
         render: (_, r) => <Tag>{r.status ?? '-'}</Tag>,
       },
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 168,
+        width: 132,
+        uniTableKeepWidth: true,
         hideInSearch: true,
+        defaultSortOrder: 'descend',
+        sorter: true,
         render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
       {
@@ -208,7 +266,7 @@ const ToolBorrowsPage: React.FC = () => {
         ),
       },
     ],
-    [t, perms],
+    [t, perms, borrowStatusValueEnum],
   );
 
   return (
@@ -220,14 +278,19 @@ const ToolBorrowsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          request={async (params) => {
+          showAdvancedSearch
+          pinnedTabsField={EQUIPMENT_OPS_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const listParams = resolveAssetWorkflowListParams(searchFormValues, sort);
               const res = await borrowsApi.list({
                 skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
                 limit: params.pageSize,
-                search: (params as { keyword?: string }).keyword,
+                ...listParams,
               });
-              return { data: res.items ?? [], success: true, total: res.total ?? 0 };
+              const { data, total } = normalizeEquipmentListResponse(res);
+              return { data: data as ToolBorrow[], success: true, total };
             } catch {
               messageApi.error(t(`${P}.listFailed`));
               return { data: [], success: false, total: 0 };

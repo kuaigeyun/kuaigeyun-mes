@@ -26,6 +26,13 @@ async def list_open_gaps(
     start_date: date = Query(...),
     end_date: date = Query(...),
     only_gaps: bool = Query(True, description="仅返回未关联业财链或仍有未结清金额的单据"),
+    keyword: Optional[str] = Query(None),
+    doc_type: Optional[str] = Query(None),
+    doc_code: Optional[str] = Query(None),
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=200),
     current_user: Any = Depends(get_current_user),
 ):
     return await service.list_open_finance_gaps(
@@ -35,6 +42,13 @@ async def list_open_gaps(
         start_date=start_date,
         end_date=end_date,
         only_gaps=only_gaps,
+        keyword=keyword,
+        doc_type=doc_type,
+        doc_code=doc_code,
+        sort_field=sort_field,
+        sort_order=sort_order,
+        skip=skip,
+        limit=limit,
     )
 
 
@@ -61,8 +75,26 @@ async def get_standard_chain(
 
 
 @router.get("/prepayment-balances", summary="Prepayment balance summary")
-async def get_prepayment_balances(current_user: Any = Depends(get_current_user)):
-    return await service.get_prepayment_balances(current_user.tenant_id)
+async def get_prepayment_balances(
+    partner_type: Optional[str] = Query(None, description="customer 或 supplier；传入时分页返回 items"),
+    keyword: Optional[str] = Query(None),
+    partner_name: Optional[str] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=200),
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None),
+    current_user: Any = Depends(get_current_user),
+):
+    return await service.get_prepayment_balances(
+        current_user.tenant_id,
+        partner_type=partner_type,
+        keyword=keyword,
+        partner_name=partner_name,
+        skip=skip,
+        limit=limit,
+        sort_field=sort_field,
+        sort_order=sort_order,
+    )
 
 
 @router.get("/{document_type}/{document_id}", summary="Reconcile single document chain")

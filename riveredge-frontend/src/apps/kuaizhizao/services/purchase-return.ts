@@ -69,3 +69,27 @@ export interface PurchaseReturnItem {
   serial_numbers?: string[];
   notes?: string;
 }
+
+export interface PurchaseReturnListParams {
+  skip?: number;
+  limit?: number;
+  status?: string;
+  purchase_receipt_id?: number;
+  supplier_id?: number;
+  warehouse_id?: number;
+  keyword?: string;
+  return_code?: string;
+  purchase_receipt_code?: string;
+  purchase_order_code?: string;
+  return_start_date?: string;
+  return_end_date?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  order_by?: string;
+}
+
+export interface PurchaseReturnListResult {
+  data: PurchaseReturn[];
+  total: number;
+  success: boolean;
+}

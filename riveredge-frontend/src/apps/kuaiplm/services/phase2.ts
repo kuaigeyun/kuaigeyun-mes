@@ -65,6 +65,16 @@ export async function listRequirements(params?: {
   limit?: number;
   keyword?: string;
   project_id?: number;
+  status?: string;
+  priority?: string;
+  requirement_code?: string;
+  title?: string;
+  sort_field?: string;
+  sort_order?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
 }) {
   const res = await apiRequest<unknown>(`${BASE}/requirements`, { method: 'GET', params });
   return unwrapList<RdRequirement>(res);
@@ -82,7 +92,21 @@ export async function deleteRequirement(id: number | string) {
   return apiRequest<void>(`${BASE}/requirements/${id}`, { method: 'DELETE' });
 }
 
-export async function listDesignReviews(params?: { skip?: number; limit?: number; keyword?: string }) {
+export async function listDesignReviews(params?: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  project_id?: number;
+  status?: string;
+  review_code?: string;
+  title?: string;
+  sort_field?: string;
+  sort_order?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
+}) {
   const res = await apiRequest<unknown>(`${BASE}/design-reviews`, { method: 'GET', params });
   return unwrapList<RdDesignReview>(res);
 }
@@ -104,6 +128,16 @@ export async function listFmeaRecords(params?: {
   limit?: number;
   keyword?: string;
   project_id?: number;
+  status?: string;
+  fmea_type?: string;
+  fmea_code?: string;
+  title?: string;
+  sort_field?: string;
+  sort_order?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
 }) {
   const res = await apiRequest<unknown>(`${BASE}/fmea`, { method: 'GET', params });
   return unwrapList<RdFmeaRecord>(res);

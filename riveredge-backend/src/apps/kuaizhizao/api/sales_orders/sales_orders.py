@@ -244,6 +244,7 @@ async def extract_sales_order_from_image(
 SALES_ORDER_SORTABLE_FIELDS = frozenset({
     "order_code", "customer_name", "order_date", "delivery_date",
     "total_quantity", "total_amount", "status", "review_status",
+    "salesman_name", "contract_code",
     "created_at", "updated_at",
 })
 
@@ -494,9 +495,12 @@ async def list_sales_orders(
     lifecycle_stage: Optional[str] = Query(None, description="生命周期阶段（与列表展示一致，如 执行中、已生效）"),
     start_date: Optional[date] = Query(None, description="开始日期"),
     end_date: Optional[date] = Query(None, description="结束日期"),
+    customer_id: Optional[int] = Query(None, description="客户 ID"),
     customer_name: Optional[str] = Query(None, description="客户名称（模糊匹配）"),
     order_code: Optional[str] = Query(None, description="订单编码（模糊匹配）"),
-    keyword: Optional[str] = Query(None, description="关键词搜索（订单编码、客户名称）"),
+    contract_code: Optional[str] = Query(None, description="关联合同编码（模糊匹配）"),
+    salesman_id: Optional[int] = Query(None, description="销售员 ID"),
+    keyword: Optional[str] = Query(None, description="关键词搜索（订单编码、客户、销售员、合同编码）"),
     order_by: Optional[str] = Query(None, description="排序字段，如 order_code、-created_at（前缀-表示降序）"),
     include_items: bool = Query(False, description="是否包含订单明细"),
     list_scope: Optional[str] = Query(None, description="列表范围：all/mine/department"),
@@ -525,8 +529,11 @@ async def list_sales_orders(
             lifecycle_stage=lifecycle_stage,
             start_date=start_date,
             end_date=end_date,
+            customer_id=customer_id,
             customer_name=customer_name,
             order_code=order_code,
+            contract_code=contract_code,
+            salesman_id=salesman_id,
             keyword=keyword,
             order_by=safe_order_by,
             include_items=include_items,

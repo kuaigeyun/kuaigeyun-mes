@@ -91,7 +91,7 @@ import {
 import { getSalesOrder, type SalesOrder } from '../../../services/sales-order';
 import { salesContractApi } from '../../../services/sales-contract';
 import { SalesOrderDetailBody } from '../sales-orders/components/SalesOrderDetailBody';
-import { getQuotationLifecycle } from '../../../utils/quotationLifecycle';
+import { getQuotationLifecycle, buildQuotationLifecycleValueEnum, resolveQuotationListLifecycleParams } from '../../../utils/quotationLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import {
   DocumentTrackingTimelineBody,
@@ -108,6 +108,7 @@ import { batchImport } from '../../../../../utils/batchOperations';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { formDateFormItemProps, formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { useTranslation } from 'react-i18next';
 import {
@@ -484,6 +485,7 @@ const QuotationMaterialSelectCell: React.FC<{
           formItemProps={{ style: { margin: 0 } }}
           showQuickCreate
           showAdvancedSearch
+          skipFuzzyPinyinClientFilter
           sourceType={sourceType}
           onChange={onMaterialPicked}
         />
@@ -561,7 +563,10 @@ const QuotationsPage: React.FC = () => {
   const pushToSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_quotation');
   const pushToSalesContractAction = resolveKuaizhizaoDocumentAction(t, 'sales_contract.pull_from_quotation');
   const salesCommonFormLabels = useMemo(() => getSalesCommonFormLabels(t), [t]);
-  const quotationStatusFilterEnum = useMemo(() => getQuotationStatusFilterEnum(t), [t]);
+  const quotationLifecycleValueEnum = useMemo(
+    () => buildQuotationLifecycleValueEnum(t),
+    [t, i18n.language],
+  );
   const { token } = AntdTheme.useToken();
   const quotationDetailDrawerZIndex = token.zIndexPopupBase;
   const linkedSalesOrderDrawerZIndex = token.zIndexPopupBase + 50;
@@ -706,6 +711,24 @@ const QuotationsPage: React.FC = () => {
   const [customersLoading, setCustomersLoading] = useState(false);
   const [userList, setUserList] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const quotationSalesmanSearchOptions = useMemo(
+    () =>
+      userList.map((u) => ({
+        label: normalizeUserDisplayName(u.full_name || u.username) || String(u.id),
+        value: u.id,
+      })),
+    [userList],
+  );
+  const quotationCustomerSearchOptions = useMemo(
+    () =>
+      customerList
+        .map((c: any) => ({
+          label: String(c.name ?? c.customer_name ?? '').trim() || String(c.id ?? ''),
+          value: Number(c.id ?? c.customer_id),
+        }))
+        .filter((o) => Number.isFinite(o.value) && o.value > 0),
+    [customerList],
+  );
   const [materialList, setMaterialList] = useState<any[]>([]);
   const [productScope, setProductScope] = useState<'make' | 'all'>('make');
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
@@ -937,7 +960,8 @@ const QuotationsPage: React.FC = () => {
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       order: 10,
-      fieldProps: { placeholder: t('app.kuaizhizao.quotation.fuzzyMatchPlaceholder') },
+      sorter: true,
+      fieldProps: { placeholder: t('app.kuaizhizao.quotation.colQuotationCode') },
       render: (_, r) => (
         <UniTableStackedPrimaryCell
           primary={String(r.customer_name ?? '')}
@@ -950,25 +974,45 @@ const QuotationsPage: React.FC = () => {
       dataIndex: 'quotation_series_code',
       width: 140,
       ellipsis: true,
-      hideInSearch: true,
       hideInTable: true,
       order: 12,
+      fieldProps: { placeholder: t('app.kuaizhizao.quotation.colSeries') },
       render: (_, r) => r.quotation_series_code || r.quotation_code || '-',
     },
     {
       title: t('app.kuaizhizao.customerFollowUp.colCustomer'),
-      dataIndex: 'customer_name',
-      width: 260,
-      ellipsis: true,
+      dataIndex: 'customer_id',
       hideInTable: true,
       order: 20,
-      fieldProps: { placeholder: t('field.customer.name') },
+      valueType: 'select',
+      fieldProps: {
+        showSearch: true,
+        optionFilterProp: 'label',
+        loading: customersLoading,
+        options: quotationCustomerSearchOptions,
+        placeholder: t('field.customer.name'),
+      },
+    },
+    {
+      title: t('app.kuaizhizao.quotation.colSalesman'),
+      dataIndex: 'salesman_id',
+      hideInTable: true,
+      order: 21,
+      valueType: 'select',
+      fieldProps: {
+        showSearch: true,
+        optionFilterProp: 'label',
+        loading: usersLoading,
+        options: quotationSalesmanSearchOptions,
+        placeholder: t('field.customer.salesmanPlaceholder'),
+      },
     },
     {
       title: t('app.kuaizhizao.quotation.colSalesman'),
       dataIndex: 'salesman_name',
       width: 100,
       ellipsis: true,
+      sorter: true,
       hideInSearch: true,
       render: (_, r) => normalizeUserDisplayName(r.salesman_name) || '-',
     },
@@ -976,6 +1020,7 @@ const QuotationsPage: React.FC = () => {
       title: t('app.kuaizhizao.quotation.colVersion'),
       dataIndex: 'version_no',
       width: 88,
+      sorter: true,
       hideInSearch: true,
       order: 13,
       render: (_, r) => t('app.kuaizhizao.quotation.versionDisplay', { n: r.version_no ?? 1 }),
@@ -983,8 +1028,10 @@ const QuotationsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.quotation.colQuotationDate'),
       dataIndex: 'quotation_date',
-      width: 110,
+      width: 132,
+      uniTableKeepWidth: true,
       valueType: 'date',
+      sorter: true,
       hideInSearch: true,
     },
     {
@@ -1001,23 +1048,17 @@ const QuotationsPage: React.FC = () => {
       dataIndex: 'total_amount',
       width: 110,
       align: 'right',
+      sorter: true,
       hideInSearch: true,
       render: (_, r) => <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="total_amount" value={r.total_amount} />,
-    },
-    {
-      title: t('common.status'),
-      dataIndex: 'status',
-      valueType: 'select',
-      hideInTable: true,
-      valueEnum: quotationStatusFilterEnum,
-      order: 40,
     },
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       valueType: 'dateTime',
-      width: 168,
+      width: 132,
       uniTableKeepWidth: true,
+      sorter: true,
       hideInSearch: true,
       defaultSortOrder: 'descend',
     },
@@ -1027,7 +1068,9 @@ const QuotationsPage: React.FC = () => {
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       fixed: 'right',
       align: 'left',
-      hideInSearch: true,
+      order: 40,
+      valueType: 'select',
+      valueEnum: quotationLifecycleValueEnum,
       render: (_, record) => (
         <ListUniLifecycleCell
           lifecycle={getQuotationLifecycle(record, quotationAuditRequired, t)}
@@ -3320,6 +3363,7 @@ const QuotationsPage: React.FC = () => {
           columns={alignedListColumns}
           onTableDataChange={handleTableDataChange}
           showAdvancedSearch
+          skipFuzzyPinyinClientFilter
           beforeSearchButtons={
             <ThemedSegmented
               key="quotation-list-scope"
@@ -3475,7 +3519,7 @@ const QuotationsPage: React.FC = () => {
           }}
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
-          request={async (params, _sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
               const dr = searchFormValues?.date_range as [unknown, unknown] | undefined;
               let startDate: string | undefined;
@@ -3484,15 +3528,28 @@ const QuotationsPage: React.FC = () => {
                 startDate = formatDateTime(dr[0] as string | Date, 'YYYY-MM-DD');
                 endDate = dr[1] ? formatDateTime(dr[1] as string | Date, 'YYYY-MM-DD') : startDate;
               }
+              const { sortBy, sortOrder } = extractProTableSort(sort);
+              const lifecycleParams = resolveQuotationListLifecycleParams(searchFormValues, params);
+              const orderBy =
+                sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
               const response = await listQuotations({
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
-                status: searchFormValues?.status,
+                ...lifecycleParams,
                 keyword: searchFormValues?.keyword,
                 quotation_code: searchFormValues?.quotation_code,
-                customer_name: searchFormValues?.customer_name,
+                quotation_series_code: searchFormValues?.quotation_series_code,
+                customer_id:
+                  searchFormValues?.customer_id != null && searchFormValues.customer_id !== ''
+                    ? Number(searchFormValues.customer_id)
+                    : undefined,
+                salesman_id:
+                  searchFormValues?.salesman_id != null && searchFormValues.salesman_id !== ''
+                    ? Number(searchFormValues.salesman_id)
+                    : undefined,
                 start_date: startDate,
                 end_date: endDate,
+                order_by: orderBy,
                 list_scope: listScopeFilterRef.current,
               });
               setListTotal(response.total ?? 0);

@@ -336,6 +336,15 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         to_warehouse_id: Optional[int] = None,
         status: Optional[str] = None,
         transfer_mode: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        transfer_date_start: Optional[str] = None,
+        transfer_date_end: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> InventoryTransferListResponse:
         """
         获取库存调拨单列表
@@ -357,8 +366,13 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
             deleted_at__isnull=True
         )
 
-        if code:
-            query = query.filter(code__icontains=code)
+        from apps.kuaizhizao.services.equipment_list_core import pick_search_keyword
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            INVENTORY_TRANSFER_KEYWORD_FIELDS,
+            INVENTORY_TRANSFER_SORTABLE_FIELDS,
+            apply_warehouse_doc_list_filters,
+        )
+
         if from_warehouse_id:
             query = query.filter(from_warehouse_id=from_warehouse_id)
         if to_warehouse_id:
@@ -371,11 +385,25 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         elif transfer_mode == "transfer":
             query = query.exclude(from_warehouse_id=F("to_warehouse_id"))
 
-        # 获取总数
-        total = await query.count()
+        merged_keyword = pick_search_keyword(keyword, search) or (code.strip() if code and code.strip() else None)
+        query, order_clause = apply_warehouse_doc_list_filters(
+            query,
+            keyword=merged_keyword,
+            order_by=order_by,
+            allowed_fields=INVENTORY_TRANSFER_SORTABLE_FIELDS,
+            default_order="-updated_at",
+            keyword_fields=INVENTORY_TRANSFER_KEYWORD_FIELDS,
+            doc_date_field="transfer_date",
+            doc_start_date=transfer_date_start,
+            doc_end_date=transfer_date_end,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
 
-        # 获取列表
-        transfers = await query.order_by('-created_at').offset(skip).limit(limit)
+        total = await query.count()
+        transfers = await query.order_by(order_clause).offset(skip).limit(limit)
 
         # 返回分页响应
         return InventoryTransferListResponse(

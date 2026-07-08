@@ -38,6 +38,12 @@ import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  FINANCE_DOC_PINNED_STATUS_FIELD,
+  financeDocCodePartnerSearchColumns,
+  financeDocCreatedUpdatedColumns,
+  resolveReceivableListParams,
+} from '../../../utils/financeListCore';
 
 const P = 'app.kuaicaiwu.receivable';
 
@@ -48,6 +54,7 @@ const formatPullMoney = (value: number) =>
 
 const ReceivableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
+    const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
     const createFormRef = useRef<ProFormInstance>(null);
     const pullFormRef = useRef<ProFormInstance>(null);
     const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -342,11 +349,21 @@ const ReceivableList: React.FC = () => {
     };
 
     const columns: ProColumns<Receivable>[] = useMemo(() => [
+        ...financeDocCodePartnerSearchColumns({
+            docCodeLabel: t('app.kuaicaiwu.common.code'),
+            docCodeField: 'receivable_code',
+            partnerLabel: t('app.kuaicaiwu.common.customer'),
+            partnerIdField: 'customer_id',
+            partnerNameField: 'customer_name',
+            partnerOptions: customerOptions,
+        }),
         {
             title: t('app.kuaicaiwu.common.code'),
             dataIndex: 'receivable_code',
             width: 168,
             fixed: 'left',
+            hideInSearch: true,
+            sorter: true,
             render: (_, entity) => (
                 <Typography.Text copyable={{ text: String(entity.receivable_code ?? '') }} ellipsis>
                     <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/receivables/${entity.id}`)}>{entity.receivable_code}</a>
@@ -357,6 +374,8 @@ const ReceivableList: React.FC = () => {
             title: t(`${P}.col.customerName`),
             dataIndex: 'customer_name',
             width: 200,
+            hideInSearch: true,
+            sorter: true,
         },
         {
             title: t(`${P}.col.totalAmount`),
@@ -364,6 +383,8 @@ const ReceivableList: React.FC = () => {
             valueType: 'money',
             align: 'right',
             width: 120,
+            hideInSearch: true,
+            sorter: true,
         },
         {
             title: t(`${P}.col.receivedAmount`),
@@ -371,6 +392,8 @@ const ReceivableList: React.FC = () => {
             valueType: 'money',
             align: 'right',
             width: 120,
+            hideInSearch: true,
+            sorter: true,
         },
         {
             title: t(`${P}.col.remainingAmount`),
@@ -378,6 +401,8 @@ const ReceivableList: React.FC = () => {
             valueType: 'money',
             align: 'right',
             width: 120,
+            hideInSearch: true,
+            sorter: true,
             render: (_, record) => (
                 <span style={{ color: record.remaining_amount > 0 ? 'red' : 'inherit', fontWeight: 'bold' }}>
                     {record.remaining_amount != null
@@ -387,30 +412,50 @@ const ReceivableList: React.FC = () => {
             ),
         },
         {
+            title: t('app.kuaicaiwu.common.businessDate', '业务日期'),
+            dataIndex: 'business_date',
+            valueType: 'date',
+            width: 120,
+            hideInSearch: true,
+            sorter: true,
+        },
+        {
+            title: t('app.kuaicaiwu.common.businessDate', '业务日期'),
+            dataIndex: 'business_date_range',
+            valueType: 'dateRange',
+            hideInTable: true,
+            order: 20,
+        },
+        {
             title: t('app.kuaicaiwu.common.dueDate'),
             dataIndex: 'due_date',
             valueType: 'date',
             width: 120,
+            hideInSearch: true,
+            sorter: true,
+        },
+        {
+            title: t('app.kuaicaiwu.common.dueDate'),
+            dataIndex: 'due_date_range',
+            valueType: 'dateRange',
+            hideInTable: true,
+            order: 21,
         },
         {
             title: t('common.status'),
             dataIndex: 'status',
             hideInTable: true,
+            order: 22,
             valueEnum: buildReceivableStatusEnum(t),
         },
         {
             title: t('app.kuaicaiwu.common.reviewStatus'),
             dataIndex: 'review_status',
             hideInTable: true,
+            order: 23,
             valueEnum: buildReviewStatusEnum(t),
         },
-        {
-            title: t('common.updatedAt'),
-            dataIndex: 'updated_at',
-            width: 168,
-            hideInSearch: true,
-            render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-        },
+        ...financeDocCreatedUpdatedColumns<Receivable>(t),
         {
             title: t('app.kuaicaiwu.common.lifecycle'),
             dataIndex: 'lifecycle_stage',
@@ -476,7 +521,7 @@ const ReceivableList: React.FC = () => {
                         ) : null,
                     ].filter(Boolean) as React.ReactNode[],
         },
-    ], [t, navigate]);
+    ], [t, navigate, customerOptions]);
 
     const batchMenuItems = useMemo(() => [
         {
@@ -497,14 +542,15 @@ const ReceivableList: React.FC = () => {
                 columns={columns}
                 columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receivables"
                 scroll={{ x: 1680 }}
-                request={async (params, _sort, _filter, searchFormValues) => {
+                request={async (params, sort, _filter, searchFormValues) => {
                     const { current, pageSize } = params;
+                    const listParams = resolveReceivableListParams(searchFormValues, sort);
+                    lastListParamsRef.current = listParams;
                     const apiParams: ReceivableListParams = {
                         skip: ((current || 1) - 1) * (pageSize || 20),
                         limit: pageSize || 20,
+                        ...listParams,
                     };
-                    if (searchFormValues?.status) apiParams.status = searchFormValues.status;
-                    if (searchFormValues?.customer_id) apiParams.customer_id = searchFormValues.customer_id;
 
                     try {
                         const res = await receivableService.listReceivables(apiParams);
@@ -518,6 +564,8 @@ const ReceivableList: React.FC = () => {
                         return { data: [], total: 0, success: false };
                     }
                 }}
+                skipFuzzyPinyinClientFilter
+                pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
                 rowKey="id"
                 showCreateButton={false}
                 createButtonText={t(`${P}.createTitle`)}
@@ -636,12 +684,23 @@ const ReceivableList: React.FC = () => {
                 showExportButton
                 onExport={async (type, keys, pageData) => {
                     try {
-                        const res = await receivableService.listReceivables({ skip: 0, limit: 10000 });
-                        let items = res.items || [];
+                        let items: Receivable[] = [];
                         if (type === 'currentPage' && pageData?.length) {
                             items = pageData;
                         } else if (type === 'selected' && keys?.length) {
-                            items = items.filter((d: Receivable) => d.id != null && keys.includes(d.id));
+                            const res = await receivableService.listReceivables({
+                                skip: 0,
+                                limit: 10000,
+                                ...lastListParamsRef.current,
+                            });
+                            items = (res.items || []).filter((d: Receivable) => d.id != null && keys.includes(d.id));
+                        } else {
+                            const res = await receivableService.listReceivables({
+                                skip: 0,
+                                limit: 10000,
+                                ...lastListParamsRef.current,
+                            });
+                            items = res.items || [];
                         }
                         if (items.length === 0) {
                             messageApi.warning(t('common.exportNoData'));

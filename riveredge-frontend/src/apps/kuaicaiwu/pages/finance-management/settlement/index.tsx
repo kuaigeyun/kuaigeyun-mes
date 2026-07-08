@@ -12,6 +12,18 @@ import { receivableService } from '../../../services/finance/receivable';
 import { receiptService } from '../../../services/finance/receipt';
 import { payableService } from '../../../services/finance/payable';
 import { paymentService } from '../../../services/finance/payment';
+import type { ReceivableListParams } from '../../../types/finance/receivable';
+import type { PayableListParams } from '../../../types/finance/payable';
+import type { ReceiptListParams } from '../../../services/finance/receipt';
+import type { PaymentListParams } from '../../../services/finance/payment';
+import {
+  financeDocCodePartnerSearchColumns,
+  resolvePayableListParams,
+  resolvePaymentListParams,
+  resolveReceiptListParams,
+  resolveReceivableListParams,
+} from '../../../utils/financeListCore';
+import { apiRequest } from '../../../../../services/api';
 import { settlementCapabilityReasonMessage } from '../../../utils/settlementCapabilityMessages';
 
 const P = 'app.kuaicaiwu.settlement';
@@ -38,6 +50,38 @@ const SettlementPage: React.FC = () => {
   const [apPreviewData, setApPreviewData] = useState<SettlementPreview | null>(null);
   const [settleSubmitting, setSettleSubmitting] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
+  const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [customerRes, supplierRes] = await Promise.all([
+          apiRequest<unknown>('/apps/master-data/supply-chain/customers', { params: { limit: 1000, is_active: true } }),
+          apiRequest<unknown>('/apps/master-data/supply-chain/suppliers', { params: { limit: 1000, is_active: true } }),
+        ]);
+        if (cancelled) return;
+        const mapOptions = (res: unknown) => {
+          const list = Array.isArray(res) ? res : (res as { data?: unknown[]; items?: unknown[] })?.data ?? (res as { items?: unknown[] })?.items ?? [];
+          return (Array.isArray(list) ? list : []).map((row: { id: number; name?: string; customer_name?: string; supplier_name?: string; code?: string }) => ({
+            label: row.name || row.customer_name || row.supplier_name || row.code || String(row.id),
+            value: row.id,
+          }));
+        };
+        setCustomerOptions(mapOptions(customerRes));
+        setSupplierOptions(mapOptions(supplierRes));
+      } catch {
+        if (!cancelled) {
+          setCustomerOptions([]);
+          setSupplierOptions([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const tableOnlyViewTypes = ['table'] as const;
 
@@ -275,18 +319,28 @@ const SettlementPage: React.FC = () => {
 
   const receivableColumns: ProColumns<Record<string, unknown>>[] = useMemo(
     () => [
+      ...financeDocCodePartnerSearchColumns({
+        docCodeLabel: t(`${C}.code`),
+        docCodeField: 'receivable_code',
+        partnerLabel: t('app.kuaicaiwu.common.customer'),
+        partnerIdField: 'customer_id',
+        partnerNameField: 'customer_name',
+        partnerOptions: customerOptions,
+      }),
       {
         title: t(`${C}.code`),
         dataIndex: 'receivable_code',
         width: 160,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.receivable_code ?? '') }} ellipsis>
             {String(r.receivable_code ?? '-')}
           </Typography.Text>
         ),
       },
-      { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', ellipsis: true },
-      { title: t(`${P}.col.pendingReceive`), dataIndex: 'remaining_amount', valueType: 'money', align: 'right' },
+      { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', ellipsis: true, hideInSearch: true, sorter: true },
+      { title: t(`${P}.col.pendingReceive`), dataIndex: 'remaining_amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
       {
         title: t('common.actions'),
         valueType: 'option',
@@ -306,22 +360,32 @@ const SettlementPage: React.FC = () => {
         ],
       },
     ],
-    [t],
+    [t, customerOptions],
   );
 
   const receiptColumns: ProColumns<Record<string, unknown>>[] = useMemo(
     () => [
+      ...financeDocCodePartnerSearchColumns({
+        docCodeLabel: t(`${C}.code`),
+        docCodeField: 'receipt_code',
+        partnerLabel: t('app.kuaicaiwu.common.customer'),
+        partnerIdField: 'customer_id',
+        partnerNameField: 'customer_name',
+        partnerOptions: customerOptions,
+      }),
       {
         title: t(`${C}.code`),
         dataIndex: 'receipt_code',
         width: 160,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.receipt_code ?? '') }} ellipsis>
             {String(r.receipt_code ?? '-')}
           </Typography.Text>
         ),
       },
-      { title: t(`${P}.col.balance`), dataIndex: 'unsettled_amount', valueType: 'money', align: 'right' },
+      { title: t(`${P}.col.balance`), dataIndex: 'unsettled_amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
       {
         title: t('common.actions'),
         valueType: 'option',
@@ -342,23 +406,33 @@ const SettlementPage: React.FC = () => {
         ],
       },
     ],
-    [t, selectedReceivable],
+    [t, selectedReceivable, customerOptions],
   );
 
   const payableColumns: ProColumns<Record<string, unknown>>[] = useMemo(
     () => [
+      ...financeDocCodePartnerSearchColumns({
+        docCodeLabel: t(`${C}.code`),
+        docCodeField: 'payable_code',
+        partnerLabel: t('app.kuaicaiwu.common.supplier'),
+        partnerIdField: 'supplier_id',
+        partnerNameField: 'supplier_name',
+        partnerOptions: supplierOptions,
+      }),
       {
         title: t(`${C}.code`),
         dataIndex: 'payable_code',
         width: 160,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.payable_code ?? '') }} ellipsis>
             {String(r.payable_code ?? '-')}
           </Typography.Text>
         ),
       },
-      { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', ellipsis: true },
-      { title: t(`${P}.col.pendingPay`), dataIndex: 'remaining_amount', valueType: 'money', align: 'right' },
+      { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', ellipsis: true, hideInSearch: true, sorter: true },
+      { title: t(`${P}.col.pendingPay`), dataIndex: 'remaining_amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
       {
         title: t('common.actions'),
         valueType: 'option',
@@ -378,22 +452,32 @@ const SettlementPage: React.FC = () => {
         ],
       },
     ],
-    [t],
+    [t, supplierOptions],
   );
 
   const paymentColumns: ProColumns<Record<string, unknown>>[] = useMemo(
     () => [
+      ...financeDocCodePartnerSearchColumns({
+        docCodeLabel: t(`${C}.code`),
+        docCodeField: 'payment_code',
+        partnerLabel: t('app.kuaicaiwu.common.supplier'),
+        partnerIdField: 'supplier_id',
+        partnerNameField: 'supplier_name',
+        partnerOptions: supplierOptions,
+      }),
       {
         title: t(`${C}.code`),
         dataIndex: 'payment_code',
         width: 160,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.payment_code ?? '') }} ellipsis>
             {String(r.payment_code ?? '-')}
           </Typography.Text>
         ),
       },
-      { title: t(`${P}.col.balance`), dataIndex: 'unsettled_amount', valueType: 'money', align: 'right' },
+      { title: t(`${P}.col.balance`), dataIndex: 'unsettled_amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
       {
         title: t('common.actions'),
         valueType: 'option',
@@ -414,8 +498,20 @@ const SettlementPage: React.FC = () => {
         ],
       },
     ],
-    [t, selectedPayable],
+    [t, selectedPayable, supplierOptions],
   );
+
+  useEffect(() => {
+    if (activeTab === 'receivable' && selectedReceivable?.id) {
+      receiptActionRef.current?.reload();
+    }
+  }, [activeTab, selectedReceivable?.id]);
+
+  useEffect(() => {
+    if (activeTab === 'payable' && selectedPayable?.id) {
+      paymentActionRef.current?.reload();
+    }
+  }, [activeTab, selectedPayable?.id]);
 
   const receivableSettlement = (
     <>
@@ -439,20 +535,29 @@ const SettlementPage: React.FC = () => {
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
+            skipFuzzyPinyinClientFilter
             scroll={{ x: 720 }}
-            request={async (params) => {
-              const { current, pageSize, ...rest } = params;
-              const res = await receivableService.listReceivables({
+            request={async (params, sort, _filter, searchFormValues) => {
+              const { current, pageSize } = params;
+              const listParams = resolveReceivableListParams(searchFormValues, sort);
+              const apiParams: ReceivableListParams = {
                 skip: ((current || 1) - 1) * (pageSize || 20),
                 limit: pageSize || 20,
                 pending_settlement: true,
-                ...rest,
-              });
-              return {
-                data: (res?.items || []) as any[],
-                total: res?.total || 0,
-                success: true,
+                ...listParams,
               };
+              try {
+                const res = await receivableService.listReceivables(apiParams);
+                return {
+                  data: (res?.items || []) as Record<string, unknown>[],
+                  total: res?.total || 0,
+                  success: true,
+                };
+              } catch (error: unknown) {
+                const err = error as { message?: string };
+                message.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+                return { data: [], total: 0, success: false };
+              }
             }}
             columns={receivableColumns}
           />
@@ -465,21 +570,34 @@ const SettlementPage: React.FC = () => {
             rowKey="id"
             viewTypes={[...tableOnlyViewTypes]}
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:2"
-            search={false}
+            search={{ labelWidth: 'auto' }}
+            showAdvancedSearch
+            skipFuzzyPinyinClientFilter
             scroll={{ x: 560 }}
-            request={async (params) => {
-              const { current, pageSize, ...rest } = params;
-              const res = await receiptService.listReceipts({
+            request={async (params, sort, _filter, searchFormValues) => {
+              const { current, pageSize } = params;
+              const listParams = resolveReceiptListParams(searchFormValues, sort);
+              const apiParams: ReceiptListParams = {
                 skip: ((current || 1) - 1) * (pageSize || 20),
                 limit: pageSize || 20,
                 unsettled_only: true,
-                ...rest,
-              });
-              return {
-                data: (res?.items || []) as any[],
-                total: res?.total || 0,
-                success: true,
+                ...(selectedReceivable?.customer_id
+                  ? { customer_id: Number(selectedReceivable.customer_id) }
+                  : {}),
+                ...listParams,
               };
+              try {
+                const res = await receiptService.listReceipts(apiParams);
+                return {
+                  data: (res?.items || []) as Record<string, unknown>[],
+                  total: res?.total || 0,
+                  success: true,
+                };
+              } catch (error: unknown) {
+                const err = error as { message?: string };
+                message.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+                return { data: [], total: 0, success: false };
+              }
             }}
             columns={receiptColumns}
           />
@@ -530,20 +648,29 @@ const SettlementPage: React.FC = () => {
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payable"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
+            skipFuzzyPinyinClientFilter
             scroll={{ x: 720 }}
-            request={async (params) => {
-              const { current, pageSize, ...rest } = params;
-              const res = await payableService.listPayables({
+            request={async (params, sort, _filter, searchFormValues) => {
+              const { current, pageSize } = params;
+              const listParams = resolvePayableListParams(searchFormValues, sort);
+              const apiParams: PayableListParams = {
                 skip: ((current || 1) - 1) * (pageSize || 20),
                 limit: pageSize || 20,
                 pending_settlement: true,
-                ...rest,
-              });
-              return {
-                data: (res?.items || []) as any[],
-                total: res?.total || 0,
-                success: true,
+                ...listParams,
               };
+              try {
+                const res = await payableService.listPayables(apiParams);
+                return {
+                  data: (res?.items || []) as Record<string, unknown>[],
+                  total: res?.total || 0,
+                  success: true,
+                };
+              } catch (error: unknown) {
+                const err = error as { message?: string };
+                message.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+                return { data: [], total: 0, success: false };
+              }
             }}
             columns={payableColumns}
           />
@@ -556,21 +683,34 @@ const SettlementPage: React.FC = () => {
             rowKey="id"
             viewTypes={[...tableOnlyViewTypes]}
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payment"
-            search={false}
+            search={{ labelWidth: 'auto' }}
+            showAdvancedSearch
+            skipFuzzyPinyinClientFilter
             scroll={{ x: 560 }}
-            request={async (params) => {
-              const { current, pageSize, ...rest } = params;
-              const res = await paymentService.listPayments({
+            request={async (params, sort, _filter, searchFormValues) => {
+              const { current, pageSize } = params;
+              const listParams = resolvePaymentListParams(searchFormValues, sort);
+              const apiParams: PaymentListParams = {
                 skip: ((current || 1) - 1) * (pageSize || 20),
                 limit: pageSize || 20,
                 unsettled_only: true,
-                ...rest,
-              });
-              return {
-                data: (res?.items || []) as any[],
-                total: res?.total || 0,
-                success: true,
+                ...(selectedPayable?.supplier_id
+                  ? { supplier_id: Number(selectedPayable.supplier_id) }
+                  : {}),
+                ...listParams,
               };
+              try {
+                const res = await paymentService.listPayments(apiParams);
+                return {
+                  data: (res?.items || []) as Record<string, unknown>[],
+                  total: res?.total || 0,
+                  success: true,
+                };
+              } catch (error: unknown) {
+                const err = error as { message?: string };
+                message.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+                return { data: [], total: 0, success: false };
+              }
             }}
             columns={paymentColumns}
           />

@@ -10,8 +10,8 @@ Date: 2026-01-16
 """
 
 import uuid
-from datetime import datetime
-from typing import List, Optional
+from datetime import date, datetime, time
+from typing import Any, Dict, List, Optional
 from decimal import Decimal
 
 from tortoise.queryset import Q
@@ -48,6 +48,27 @@ from apps.kuaizhizao.utils.material_source_helper import (
 )
 from core.services.business.code_generation_service import CodeGenerationService
 from loguru import logger
+
+OUTSOURCE_WORK_ORDER_SORTABLE_FIELDS = frozenset({
+    "code",
+    "name",
+    "product_code",
+    "product_name",
+    "quantity",
+    "supplier_name",
+    "outsource_operation",
+    "unit_price",
+    "total_amount",
+    "priority",
+    "status",
+    "planned_start_date",
+    "planned_end_date",
+    "issued_quantity",
+    "received_quantity",
+    "qualified_quantity",
+    "created_at",
+    "updated_at",
+})
 
 
 class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
@@ -340,6 +361,16 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
         supplier_id: Optional[int] = None,
         product_id: Optional[int] = None,
         keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None,
+        product_name: Optional[str] = None,
+        supplier_name: Optional[str] = None,
+        priority: Optional[str] = None,
+        planned_start_from: Optional[date] = None,
+        planned_start_to: Optional[date] = None,
+        created_start_date: Optional[date] = None,
+        created_end_date: Optional[date] = None,
+        order_by: Optional[str] = None,
     ) -> OutsourceWorkOrderListResponse:
         """
         获取委外工单列表
@@ -364,12 +395,40 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
             query &= Q(supplier_id=supplier_id)
         if product_id:
             query &= Q(product_id=product_id)
-        if keyword:
-            query &= (Q(code__icontains=keyword) | Q(name__icontains=keyword) | 
-                     Q(product_name__icontains=keyword) | Q(supplier_name__icontains=keyword))
+        kw = (keyword or "").strip()
+        if kw:
+            query &= (
+                Q(code__icontains=kw)
+                | Q(name__icontains=kw)
+                | Q(product_name__icontains=kw)
+                | Q(supplier_name__icontains=kw)
+            )
+        c = (code or "").strip()
+        if c:
+            query &= Q(code__icontains=c)
+        n = (name or "").strip()
+        if n:
+            query &= Q(name__icontains=n)
+        pn = (product_name or "").strip()
+        if pn:
+            query &= Q(product_name__icontains=pn)
+        sn = (supplier_name or "").strip()
+        if sn:
+            query &= Q(supplier_name__icontains=sn)
+        if priority:
+            query &= Q(priority=priority)
+        if planned_start_from is not None:
+            query &= Q(planned_start_date__gte=planned_start_from)
+        if planned_start_to is not None:
+            query &= Q(planned_start_date__lte=planned_start_to)
+        if created_start_date is not None:
+            query &= Q(created_at__gte=datetime.combine(created_start_date, time.min))
+        if created_end_date is not None:
+            query &= Q(created_at__lte=datetime.combine(created_end_date, time.max))
 
         total = await OutsourceWorkOrder.filter(query).count()
-        work_orders = await OutsourceWorkOrder.filter(query).order_by("-created_at").offset(skip).limit(limit).all()
+        order_clause = order_by if order_by else "-created_at"
+        work_orders = await OutsourceWorkOrder.filter(query).order_by(order_clause).offset(skip).limit(limit).all()
 
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_outsource_work_order_list_capabilities,

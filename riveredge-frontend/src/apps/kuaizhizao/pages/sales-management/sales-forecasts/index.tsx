@@ -108,6 +108,7 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments'
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { formatDateTime } from '../../../../../utils/format';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 
 export default function SalesForecastsPage() {
   const { t } = useTranslation();
@@ -975,6 +976,7 @@ export default function SalesForecastsPage() {
       dataIndex: 'forecast_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
+      sorter: true,
       fieldProps: { placeholder: t('app.kuaizhizao.salesForecast.enterForecastCode') },
       ...orderLevelCellProps((_text, record) => (
         <UniTableStackedPrimaryCell
@@ -988,13 +990,14 @@ export default function SalesForecastsPage() {
       dataIndex: 'forecast_name',
       ellipsis: true,
       hideInTable: true,
-      hideInSearch: true,
+      fieldProps: { placeholder: t('app.kuaizhizao.salesForecast.forecastName') },
     },
     {
       title: t('app.kuaizhizao.salesForecast.forecastPeriod'),
       dataIndex: 'forecast_period',
       valueType: 'select',
       width: 100,
+      sorter: true,
       valueEnum: {
         WEEKLY: { text: t('app.kuaizhizao.salesForecast.period.weekly') },
         MONTHLY: { text: t('app.kuaizhizao.salesForecast.period.monthly') },
@@ -1007,6 +1010,7 @@ export default function SalesForecastsPage() {
       dataIndex: 'forecast_type',
       width: 100,
       hideInSearch: true,
+      sorter: true,
       ...orderLevelCellProps((_text, record) => record.forecast_type || '-'),
     },
     {
@@ -1016,6 +1020,8 @@ export default function SalesForecastsPage() {
       width: 132,
       uniTableKeepWidth: true,
       resizable: false,
+      sorter: true,
+      defaultSortOrder: 'descend',
       hideInSearch: true,
       ...orderLevelCellProps((_text, record) => {
         const startDateText = record.start_date ? formatDateTime(record.start_date, 'YYYY-MM-DD') : '-';
@@ -1034,7 +1040,8 @@ export default function SalesForecastsPage() {
       title: t('app.kuaizhizao.salesForecast.endDate'),
       dataIndex: 'end_date',
       valueType: 'date',
-      width: 120,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
       hideInTable: true,
       ...orderLevelCellProps((_text, record) =>
@@ -1107,7 +1114,8 @@ export default function SalesForecastsPage() {
     {
       title: t('app.kuaizhizao.salesForecast.forecastDate'),
       dataIndex: ['item', 'forecast_date'],
-      width: 120,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
       hideInTable: dataViewMode === 'order',
       render: (_, record) =>
@@ -1126,18 +1134,24 @@ export default function SalesForecastsPage() {
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at',
-      valueType: 'dateTime',
-      width: 160,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
       hideInSearch: true,
-      ...orderLevelCellProps(),
+      ...orderLevelCellProps((_text, record) =>
+        record.created_at ? formatDateTime(record.created_at, 'YYYY-MM-DD HH:mm') : '',
+      ),
     },
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      valueType: 'dateTime',
-      width: 160,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
       hideInSearch: true,
-      ...orderLevelCellProps(),
+      ...orderLevelCellProps((_text, record) =>
+        record.updated_at ? formatDateTime(record.updated_at, 'YYYY-MM-DD HH:mm') : '',
+      ),
     },
     ...(salesForecastAuditColumn ? [salesForecastAuditColumn] : []),
     {
@@ -1472,6 +1486,7 @@ export default function SalesForecastsPage() {
                         sourceType={materialSourceType}
                         formItemProps={{ style: { margin: 0 } }}
                         showAdvancedSearch
+                      skipFuzzyPinyinClientFilter
                       />
                     ),
                   },
@@ -1779,16 +1794,28 @@ export default function SalesForecastsPage() {
             setViewTypeState(v as 'table' | 'detailTable' | 'help');
             setTimeout(() => actionRef.current?.reload(), 0);
           }}
-          request={async (params, _sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             const sf = searchFormValues ?? {};
+            const { sortBy, sortOrder } = extractProTableSort(sort);
+            const orderBy =
+              sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
             const apiParams: SalesForecastListParams = {
               skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
               limit: params.pageSize ?? 20,
               include_items: true,
+              order_by: orderBy,
             };
             if (sf.forecast_period) apiParams.forecast_period = sf.forecast_period as string;
+            const fuzzyKeyword =
+              typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
             const fc = sf.forecast_code != null ? String(sf.forecast_code).trim() : '';
-            if (fc) apiParams.keyword = fc;
+            if (fuzzyKeyword) {
+              apiParams.keyword = fuzzyKeyword;
+            } else if (fc) {
+              apiParams.forecast_code = fc;
+            }
+            const fn = sf.forecast_name != null ? String(sf.forecast_name).trim() : '';
+            if (fn) apiParams.forecast_name = fn;
             if (sf.lifecycle) {
               const lifecycleToStatus: Record<string, string> = {
                 草稿: 'DRAFT',
@@ -1833,6 +1860,7 @@ export default function SalesForecastsPage() {
             }
           }}
           showAdvancedSearch={true}
+          skipFuzzyPinyinClientFilter
           enableRowSelection={viewTypeState !== 'detailTable'}
           toolBarButtonSize="middle"
           selectedRowKeys={selectedRowKeys}

@@ -4,6 +4,7 @@
 包含：8D、不合格品台账、OQC、SPC。
 """
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, Path, Query, Request
@@ -22,8 +23,10 @@ from apps.kuaizhizao.schemas.quality_improvement import (
     Quality8DUpdate,
     SPCChartResponse,
     SPCSampleCreate,
+    SPCSampleListResponse,
     SPCSampleResponse,
 )
+from apps.kuaizhizao.services.spc_list_core import SPC_SAMPLE_SORTABLE_FIELDS
 from apps.kuaizhizao.services.defect_record_service import DefectRecordService
 from apps.kuaizhizao.services.quality_improvement_service import OQCInspectionService, Quality8DService, SPCService
 from core.api.deps.access import require_access, get_auth_context, ensure_permission_codes, AuthContext
@@ -145,8 +148,15 @@ async def list_quality_8d_reports(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     status: Optional[str] = Query(None),
+    severity: Optional[str] = Query(None, description="严重程度"),
     owner_id: Optional[int] = Query(None),
     overdue_only: bool = Query(False),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    due_start_date: Optional[str] = Query(None, description="计划完成开始日期 YYYY-MM-DD"),
+    due_end_date: Optional[str] = Query(None, description="计划完成结束日期 YYYY-MM-DD"),
     _auth= _8D_READ,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -156,8 +166,15 @@ async def list_quality_8d_reports(
         skip=skip,
         limit=limit,
         status=status,
+        severity=severity,
         owner_id=owner_id,
         overdue_only=overdue_only,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        due_start_date=due_start_date,
+        due_end_date=due_end_date,
     )
 
 
@@ -294,7 +311,7 @@ async def start_8d_from_defect(
     )
 
 
-@router.get("/nonconforming-ledger", response_model=List[DefectRecordListResponse], summary="List nonconforming ledger")
+@router.get("/nonconforming-ledger", summary="List nonconforming ledger")
 async def list_nonconforming_ledger(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -305,10 +322,14 @@ async def list_nonconforming_ledger(
     process_inspection_id: Optional[int] = Query(None),
     finished_goods_inspection_id: Optional[int] = Query(None),
     defect_id: Optional[int] = Query(None, description="台账ID"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
     _auth= _NC_READ,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[DefectRecordListResponse]:
+) -> Dict[str, Any]:
     return await defect_record_service.list_defect_records(
         tenant_id=tenant_id,
         skip=skip,
@@ -320,6 +341,10 @@ async def list_nonconforming_ledger(
         process_inspection_id=process_inspection_id,
         finished_goods_inspection_id=finished_goods_inspection_id,
         defect_id=defect_id,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
     )
 
 
@@ -350,13 +375,29 @@ async def list_oqc_inspections(
     status: Optional[str] = Query(None),
     shipment_notice_id: Optional[int] = Query(None, description="发货通知单ID"),
     sales_delivery_id: Optional[int] = Query(None, description="销售出库单ID"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    inspection_start_date: Optional[str] = Query(None, description="检验开始日期 YYYY-MM-DD"),
+    inspection_end_date: Optional[str] = Query(None, description="检验结束日期 YYYY-MM-DD"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
     _auth= _OQC_READ,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await oqc_service.list(
-        tenant_id=tenant_id, skip=skip, limit=limit, status=status,
-        shipment_notice_id=shipment_notice_id, sales_delivery_id=sales_delivery_id,
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        shipment_notice_id=shipment_notice_id,
+        sales_delivery_id=sales_delivery_id,
+        keyword=keyword,
+        order_by=order_by,
+        inspection_start_date=inspection_start_date,
+        inspection_end_date=inspection_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
     )
 
 
@@ -575,18 +616,31 @@ async def create_spc_sample(
     return await spc_service.create_sample(tenant_id=tenant_id, user_id=current_user.id, payload=payload)
 
 
-@router.get("/spc/samples", response_model=List[SPCSampleResponse], summary="List SPC samples")
+@router.get("/spc/samples", response_model=SPCSampleListResponse, summary="List SPC samples")
 async def list_spc_samples(
-    characteristic_name: Optional[str] = Query(None),
+    characteristic_name: Optional[str] = Query(None, description="特性名称（模糊）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（特性名称）"),
+    sample_time_from: Optional[datetime] = Query(None),
+    sample_time_to: Optional[datetime] = Query(None),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     _auth= _SPC_READ,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[SPCSampleResponse]:
+) -> SPCSampleListResponse:
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in SPC_SAMPLE_SORTABLE_FIELDS:
+            safe_order_by = order_by
     return await spc_service.list_samples(
         tenant_id=tenant_id,
         characteristic_name=characteristic_name,
+        keyword=keyword,
+        sample_time_from=sample_time_from,
+        sample_time_to=sample_time_to,
+        order_by=safe_order_by,
         skip=skip,
         limit=limit,
     )

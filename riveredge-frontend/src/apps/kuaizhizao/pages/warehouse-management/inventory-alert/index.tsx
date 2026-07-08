@@ -28,6 +28,13 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { formatDateTime } from '../../../../../utils/format';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import {
+  WAREHOUSE_DOC_PINNED_STATUS_FIELD,
+  normalizeWarehouseListResponse,
+  resolveInventoryAlertListParams,
+  resolveInventoryAlertRuleListParams,
+} from '../../../utils/warehouseListCore';
+import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 
 interface InventoryAlert {
   id?: number;
@@ -400,7 +407,10 @@ const InventoryAlertPage: React.FC = () => {
       title: t('app.kuaizhizao.inventoryAlert.colTriggeredAt'),
       dataIndex: 'triggered_at',
       valueType: 'dateTime',
-      width: 160,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      render: (_, r) => (r.triggered_at ? formatDateTime(r.triggered_at) : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
@@ -596,32 +606,24 @@ const InventoryAlertPage: React.FC = () => {
                 columns={alertColumns}
                 columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-alert"
                 showAdvancedSearch
-                request={async (params) => {
+                pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
+                skipFuzzyPinyinClientFilter
+                request={async (params, sort, _filter, searchFormValues) => {
                   try {
                     const pageSize = params.pageSize || 20;
                     const skip = (params.current! - 1) * pageSize;
+                    const lifecycleStage = resolveListLifecycleStageFromSearch(searchFormValues, params);
+                    const listParams = resolveInventoryAlertListParams(searchFormValues, sort);
                     const result = await inventoryAlertApi.list({
                       skip,
                       limit: pageSize,
-                      alert_type: params.alert_type,
-                      status: params.status,
-                      alert_level: params.alert_level,
-                      material_id: params.material_id,
-                      warehouse_id: params.warehouse_id,
+                      ...listParams,
+                      status: lifecycleStage ?? listParams.status,
                     });
-                    const rows = Array.isArray(result) ? result : [];
-                    const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
-                    return {
-                      data: rows,
-                      success: true,
-                      total,
-                    };
+                    const { data, total } = normalizeWarehouseListResponse(result);
+                    return { data, success: true, total };
                   } catch {
-                    return {
-                      data: [],
-                      success: false,
-                      total: 0,
-                    };
+                    return { data: [], success: false, total: 0 };
                   }
                 }}
               />
@@ -637,32 +639,24 @@ const InventoryAlertPage: React.FC = () => {
                 columns={ruleColumns}
                 columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-alert:2"
                 showAdvancedSearch
+                skipFuzzyPinyinClientFilter
                 showCreateButton
                 createButtonText={createRuleButtonLabel}
                 onCreate={handleCreateRule}
-                request={async (params) => {
+                request={async (params, sort, _filter, searchFormValues) => {
                   try {
                     const pageSize = params.pageSize || 20;
                     const skip = (params.current! - 1) * pageSize;
+                    const listParams = resolveInventoryAlertRuleListParams(searchFormValues, sort);
                     const result = await inventoryAlertApi.listRules({
                       skip,
                       limit: pageSize,
-                      alert_type: params.alert_type,
-                      is_enabled: params.is_enabled,
+                      ...listParams,
                     });
-                    const rows = Array.isArray(result) ? result : [];
-                    const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
-                    return {
-                      data: rows,
-                      success: true,
-                      total,
-                    };
+                    const { data, total } = normalizeWarehouseListResponse(result);
+                    return { data, success: true, total };
                   } catch {
-                    return {
-                      data: [],
-                      success: false,
-                      total: 0,
-                    };
+                    return { data: [], success: false, total: 0 };
                   }
                 }}
               />

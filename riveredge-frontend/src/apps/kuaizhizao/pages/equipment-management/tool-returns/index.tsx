@@ -20,6 +20,11 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { rowActionKind } from '../../../../../components/uni-action';
 import { borrowsApi, returnsApi } from '../../../services/toolOps';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  normalizeEquipmentListResponse,
+  resolveAssetWorkflowListParams,
+} from '../../../utils/equipmentListCore';
 
 const P = 'app.kuaizhizao.toolOps.return';
 const RESOURCE = 'kuaizhizao:tool-return';
@@ -120,17 +125,51 @@ const ToolReturnsPage: React.FC = () => {
 
   const columns: ProColumns<ToolReturn>[] = useMemo(
     () => [
-      { title: t(`${P}.col.returnNo`), dataIndex: 'return_no', width: 140, fixed: 'left' },
-      { title: t(`${P}.col.borrowNo`), dataIndex: 'borrow_no', width: 130 },
-      { title: t(`${P}.col.tool`), dataIndex: 'tool_name', width: 160, ellipsis: true },
-      { title: t(`${P}.col.returnDate`), dataIndex: 'return_date', width: 110, valueType: 'date' },
-      { title: t(`${P}.col.manufactureQty`), dataIndex: 'manufacture_qty', width: 100 },
-      { title: t(`${P}.col.usageCount`), dataIndex: 'usage_count', width: 90 },
+      {
+        title: t(`${P}.col.returnDate`),
+        dataIndex: 'doc_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 10 } as ProColumns['search'],
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 11 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.returnNo`),
+        dataIndex: 'return_no',
+        width: 140,
+        fixed: 'left',
+        sorter: true,
+        search: { order: 30 } as ProColumns['search'],
+      },
+      { title: t(`${P}.col.borrowNo`), dataIndex: 'borrow_no', width: 130, sorter: true, hideInSearch: true },
+      { title: t(`${P}.col.tool`), dataIndex: 'tool_name', width: 160, ellipsis: true, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.returnDate`),
+        dataIndex: 'return_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        valueType: 'date',
+        sorter: true,
+        hideInSearch: true,
+      },
+      { title: t(`${P}.col.manufactureQty`), dataIndex: 'manufacture_qty', width: 100, sorter: true, hideInSearch: true },
+      { title: t(`${P}.col.usageCount`), dataIndex: 'usage_count', width: 90, sorter: true, hideInSearch: true },
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 168,
+        width: 132,
+        uniTableKeepWidth: true,
         hideInSearch: true,
+        defaultSortOrder: 'descend',
+        sorter: true,
         render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
       {
@@ -201,14 +240,18 @@ const ToolReturnsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          request={async (params) => {
+          showAdvancedSearch
+          skipFuzzyPinyinClientFilter
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const listParams = resolveAssetWorkflowListParams(searchFormValues, sort);
               const res = await returnsApi.list({
                 skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
                 limit: params.pageSize,
-                search: (params as { keyword?: string }).keyword,
+                ...listParams,
               });
-              return { data: res.items ?? [], success: true, total: res.total ?? 0 };
+              const { data, total } = normalizeEquipmentListResponse(res);
+              return { data: data as ToolReturn[], success: true, total };
             } catch {
               messageApi.error(t(`${P}.listFailed`));
               return { data: [], success: false, total: 0 };

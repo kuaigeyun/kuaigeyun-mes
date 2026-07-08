@@ -1,5 +1,8 @@
 import { apiRequest } from '../../../../services/api';
 import type { DocumentPushPreview } from '../../../kuaizhizao/services/purchase-requisition';
+import type { SalesInvoice, SalesInvoiceListParams } from '../../types/finance/sales-invoice';
+
+export type { SalesInvoice, SalesInvoiceListParams };
 
 export type SalesInvoicePullPreview = DocumentPushPreview & {
   source_type?: 'sales_order' | 'sales_delivery';
@@ -22,6 +25,12 @@ export type SalesInvoicePullCandidate = {
 };
 
 export const salesInvoiceService = {
+  list: (params: SalesInvoiceListParams) =>
+    apiRequest<{ items: SalesInvoice[]; total: number }>('/apps/kuaicaiwu/sales-invoices', {
+      method: 'GET',
+      params,
+    }),
+
   listSalesOrderPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
     apiRequest<{ data: SalesInvoicePullCandidate[]; total: number; success: boolean }>(
       '/apps/kuaicaiwu/sales-invoices/pull-candidates/sales-orders',

@@ -66,6 +66,8 @@ import {
 import { listPurchaseRequisitions, previewPushToInquiry, type PurchaseRequisition, type DocumentPushPreview } from '../../../services/purchase-requisition';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { formatDateTime } from '../../../../../utils/format';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   purchaseInquiryCapabilityReasonMessage,
@@ -609,6 +611,16 @@ const PurchaseInquiriesPage: React.FC = () => {
   const columns: ProColumns<PurchaseInquiry>[] = useMemo(
     () => [
     {
+      title: t('app.kuaizhizao.purchaseInquiry.colQuoteDeadline'),
+      dataIndex: 'quote_deadline_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
+    },
+    {
       title: t('app.kuaizhizao.purchaseInquiry.colNameInquiryCode'),
       key: 'inquiry_code',
       dataIndex: 'inquiry_code',
@@ -621,15 +633,38 @@ const PurchaseInquiriesPage: React.FC = () => {
         />
       ),
     },
-    { title: t('app.kuaizhizao.purchaseInquiry.colInquiryCode'), dataIndex: 'inquiry_code', hideInTable: true, copyable: true },
-    { title: t('app.kuaizhizao.purchaseInquiry.colName'), dataIndex: 'inquiry_name', hideInTable: true, ellipsis: true },
-    { title: t('app.kuaizhizao.purchaseInquiry.colSourceCode'), dataIndex: 'source_code', width: 140 },
-    { title: t('app.kuaizhizao.purchaseInquiry.colBuyer'), dataIndex: 'buyer_name', width: 100 },
+    { title: t('app.kuaizhizao.purchaseInquiry.colInquiryCode'), dataIndex: 'inquiry_code', hideInTable: true, hideInSearch: false },
+    { title: t('app.kuaizhizao.purchaseInquiry.colName'), dataIndex: 'inquiry_name', hideInTable: true, hideInSearch: false, ellipsis: true },
+    { title: t('app.kuaizhizao.purchaseInquiry.colSourceCode'), dataIndex: 'source_code', width: 132, uniTableKeepWidth: true, sorter: true, hideInSearch: false, ellipsis: true },
+    { title: t('app.kuaizhizao.purchaseInquiry.colBuyer'), dataIndex: 'buyer_name', width: 100, sorter: true, hideInSearch: true },
     {
       title: t('app.kuaizhizao.purchaseInquiry.colQuoteDeadline'),
       dataIndex: 'quote_deadline',
-      width: 120,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
       render: (_, r) => (r.quote_deadline ? formatDateTime(r.quote_deadline, 'YYYY-MM-DD') : '-'),
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      defaultSortOrder: 'descend',
+      hideInSearch: true,
+      render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm') : '-'),
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
     },
     ...(purchaseInquiryAuditColumn ? [purchaseInquiryAuditColumn] : []),
     {
@@ -766,17 +801,58 @@ const PurchaseInquiriesPage: React.FC = () => {
     [auditEnabled, message, modal, openCompare, purchaseInquiryAuditColumn, purchaseInquiryLifecycleValueEnum, purchaseInquiryPerms.canDelete, purchaseInquiryPerms.canUpdate, t],
   );
 
-  const request = useCallback(async (params: Record<string, unknown>) => {
-    const apiParams = resolvePurchaseInquiryListLifecycleParams(params, params);
-    const list = await listPurchaseInquiries({
-      skip: ((params.current as number) - 1) * (params.pageSize as number),
-      limit: params.pageSize as number,
-      lifecycle_stage: apiParams.lifecycle_stage,
-      keyword: params.keyword as string | undefined,
-    });
-    tableRowsRef.current = list.data ?? [];
-    return { data: list.data ?? [], success: true, total: list.total ?? list.data?.length ?? 0 };
-  }, []);
+  const request = useCallback(
+    async (
+      params: Record<string, unknown>,
+      sort?: Record<string, 'ascend' | 'descend' | null>,
+      _filter?: Record<string, unknown>,
+      searchFormValues?: Record<string, unknown>,
+    ) => {
+      const sf = searchFormValues ?? {};
+      const lifecycleParams = resolvePurchaseInquiryListLifecycleParams(sf, params);
+      const { sortBy, sortOrder } = extractProTableSort(sort);
+      const orderBy =
+        sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+      const fuzzyKeyword = typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
+      const apiParams: Parameters<typeof listPurchaseInquiries>[0] = {
+        skip: (((params.current as number) || 1) - 1) * ((params.pageSize as number) || 20),
+        limit: (params.pageSize as number) || 20,
+        ...lifecycleParams,
+        order_by: orderBy,
+      };
+      if (fuzzyKeyword) {
+        apiParams.keyword = fuzzyKeyword;
+      } else {
+        if (sf.inquiry_code != null && String(sf.inquiry_code).trim()) {
+          apiParams.inquiry_code = String(sf.inquiry_code).trim();
+        }
+        if (sf.inquiry_name != null && String(sf.inquiry_name).trim()) {
+          apiParams.inquiry_name = String(sf.inquiry_name).trim();
+        }
+        if (sf.source_code != null && String(sf.source_code).trim()) {
+          apiParams.source_code = String(sf.source_code).trim();
+        }
+      }
+      const deadlineRange = sf.quote_deadline_range as [unknown, unknown] | undefined;
+      if (deadlineRange && Array.isArray(deadlineRange) && deadlineRange[0]) {
+        apiParams.quote_deadline_from = formatDateTime(deadlineRange[0] as string | Date, 'YYYY-MM-DD');
+        apiParams.quote_deadline_to = deadlineRange[1]
+          ? formatDateTime(deadlineRange[1] as string | Date, 'YYYY-MM-DD')
+          : apiParams.quote_deadline_from;
+      }
+      const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
+      if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+        apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
+        apiParams.created_end_date = createdRange[1]
+          ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+          : apiParams.created_start_date;
+      }
+      const list = await listPurchaseInquiries(apiParams);
+      tableRowsRef.current = list.data ?? [];
+      return { data: list.data ?? [], success: true, total: list.total ?? list.data?.length ?? 0 };
+    },
+    [],
+  );
 
   const addEditItem = () => {
     setEditItems((prev) => {
@@ -1121,6 +1197,8 @@ const PurchaseInquiriesPage: React.FC = () => {
         columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-inquiries"
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
         pinnedTabsValueEnum={purchaseInquiryLifecycleValueEnum}
+        showAdvancedSearch={true}
+        skipFuzzyPinyinClientFilter
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}

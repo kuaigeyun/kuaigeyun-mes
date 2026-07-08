@@ -24,7 +24,13 @@ import { generateCode } from '../../../../../services/codeRule';
 import { downloadFile } from '../../../../../utils';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImportParsedRows } from '../../../../../utils/import';
-import { extractProTableSort, mapProcessListSortField } from '../../../../../utils/tableQueryKey';
+import {
+  buildMasterCrudActiveValueEnum,
+  MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  masterCrudCodeNameSearchColumns,
+  masterCrudCreatedUpdatedColumns,
+  resolveProcessListParams,
+} from '../../../utils/processListCore';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
@@ -46,7 +52,13 @@ const DefectTypesPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const defectTypeActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+    [t],
+  );
 
   const defectTypeImportTemplate = useMemo(
     () =>
@@ -401,7 +413,7 @@ const DefectTypesPage: React.FC = () => {
       } else if (type === 'currentPage' && currentPageData) {
         exportData = currentPageData;
       } else {
-        const result = await defectTypeApi.list({ skip: 0, limit: 10000 });
+        const result = await defectTypeApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
         const list = result?.data ?? result;
         exportData = Array.isArray(list) ? list : [];
       }
@@ -424,18 +436,24 @@ const DefectTypesPage: React.FC = () => {
   const columns: ProColumns<DefectType>[] = useMemo(() => {
     const customFieldColumns = generateCustomFieldColumns();
     return [
+    ...masterCrudCodeNameSearchColumns({
+      code: t('app.master-data.defectTypes.code'),
+      name: t('app.master-data.defectTypes.name'),
+    }),
     {
       title: t('app.master-data.defectTypes.code'),
       dataIndex: 'code',
       copyable: true,width: 150,
       fixed: 'left',
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.master-data.defectTypes.name'),
       dataIndex: 'name',
       width: 200,
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('field.defectType.description'),
@@ -446,12 +464,18 @@ const DefectTypesPage: React.FC = () => {
     {
       title: t('app.master-data.defectTypes.status'),
       dataIndex: 'isActive',
-      width: 100,
+      hideInTable: true,
+      order: 20,
       valueType: 'select',
-      valueEnum: {
-        true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
-        false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
-      },
+      valueEnum: defectTypeActiveValueEnum,
+      fieldProps: { allowClear: true },
+    },
+    {
+      title: t('app.master-data.defectTypes.status'),
+      dataIndex: 'isActive',
+      width: 100,
+      hideInSearch: true,
+      valueEnum: defectTypeActiveValueEnum,
       render: (_: any, record: DefectType) => {
         const isActive = record?.isActive ?? false;
         return (
@@ -463,18 +487,7 @@ const DefectTypesPage: React.FC = () => {
       sorter: true,
     },
     ...customFieldColumns,
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'createdAt',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-      render: (_: any, record: DefectType) => {
-        const val = record.createdAt;
-        return val ? (typeof val === 'string' ? new Date(val).toLocaleString() : val) : '-';
-      },
-    },
+    ...masterCrudCreatedUpdatedColumns<DefectType>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -517,7 +530,7 @@ const DefectTypesPage: React.FC = () => {
       ),
     },
     ];
-  }, [customFields, generateCustomFieldColumns, t]);
+  }, [customFields, generateCustomFieldColumns, t, defectTypeActiveValueEnum]);
 
   return (
     <ListPageTemplate>
@@ -526,31 +539,23 @@ const DefectTypesPage: React.FC = () => {
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
-          // 处理搜索参数
-          const apiParams: any = {
+          const listParams = resolveProcessListParams(searchFormValues, sort);
+          lastListParamsRef.current = listParams;
+          const apiParams = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
+            isActive: listParams.isActive as boolean | undefined,
+            keyword: listParams.keyword as string | undefined,
+            code: listParams.code as string | undefined,
+            name: listParams.name as string | undefined,
+            created_start_date: listParams.created_start_date as string | undefined,
+            created_end_date: listParams.created_end_date as string | undefined,
+            updated_start_date: listParams.updated_start_date as string | undefined,
+            updated_end_date: listParams.updated_end_date as string | undefined,
+            sortBy: listParams.sortBy as string | undefined,
+            sortOrder: listParams.sortOrder as 'asc' | 'desc' | undefined,
           };
-          
-          // 启用状态筛选
-          if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.isActive = searchFormValues.isActive;
-          }
 
-          const fuzzyKw = String(searchFormValues?.keyword ?? '').trim();
-          const fallbackKw =
-            fuzzyKw ||
-            String(searchFormValues?.code ?? '').trim() ||
-            String(searchFormValues?.name ?? '').trim();
-          if (fallbackKw) apiParams.keyword = fallbackKw;
-
-          const { sortBy: rawSortBy, sortOrder } = extractProTableSort(sort);
-          const sortField = mapProcessListSortField(rawSortBy);
-          if (sortField) {
-            apiParams.sortBy = sortField;
-            apiParams.sortOrder = sortOrder;
-          }
-          
           try {
             const result = await defectTypeApi.list(apiParams);
             const list = result?.data ?? result;
@@ -573,7 +578,9 @@ const DefectTypesPage: React.FC = () => {
           }
         }}
         rowKey="uuid"
-        showAdvancedSearch={true}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={MASTER_CRUD_PINNED_ACTIVE_FIELD}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,

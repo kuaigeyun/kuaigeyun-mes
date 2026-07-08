@@ -113,7 +113,7 @@ export const OrderLineVariantAttributesCell: React.FC<OrderLineVariantAttributes
     (async () => {
       setDefsLoading(true);
       try {
-        const list = await variantAttributeApi.list({ is_active: true });
+        const { items: list } = await variantAttributeApi.list({ is_active: true, limit: 10000 });
         list.sort((a, b) => a.display_order - b.display_order);
         if (!cancelled) setDefinitions(list);
       } finally {

@@ -47,6 +47,10 @@ export interface PlantListParams {
   keyword?: string;
   code?: string;
   name?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
   sort_field?: string;
   sort_order?: string;
 }

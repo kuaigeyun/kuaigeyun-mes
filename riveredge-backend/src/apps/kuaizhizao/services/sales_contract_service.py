@@ -48,6 +48,22 @@ from apps.kuaizhizao.services.document_action_policy.sales_contract import (
 )
 from apps.kuaizhizao.services.sales_contract_term_service import SalesContractTermService
 from core.utils.timezone_utils import to_api_isoformat
+
+SALES_CONTRACT_SORTABLE_FIELDS = frozenset({
+    "contract_code",
+    "contract_type",
+    "customer_name",
+    "contract_date",
+    "valid_to",
+    "total_amount",
+    "released_amount",
+    "status",
+    "review_status",
+    "salesman_name",
+    "quotation_code",
+    "created_at",
+    "updated_at",
+})
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.services.business_config_service import BusinessConfigService
 
@@ -476,18 +492,35 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract_type: Optional[str] = None,
         keyword: Optional[str] = None,
         customer_id: Optional[int] = None,
+        contract_code: Optional[str] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        order_by: Optional[str] = None,
     ) -> SalesContractListResponse:
         qs = SalesContract.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if status:
             qs = qs.filter(status=status)
         if contract_type:
             qs = qs.filter(contract_type=contract_type)
-        if customer_id:
-            qs = qs.filter(customer_id=customer_id)
-        if keyword:
-            qs = qs.filter(Q(contract_code__icontains=keyword) | Q(customer_name__icontains=keyword))
+        if customer_id is not None and int(customer_id) > 0:
+            qs = qs.filter(customer_id=int(customer_id))
+        if start_date:
+            qs = qs.filter(contract_date__gte=start_date)
+        if end_date:
+            qs = qs.filter(contract_date__lte=end_date)
+        if keyword and str(keyword).strip():
+            kw = str(keyword).strip()
+            qs = qs.filter(
+                Q(contract_code__icontains=kw)
+                | Q(customer_name__icontains=kw)
+                | Q(quotation_code__icontains=kw)
+                | Q(salesman_name__icontains=kw)
+            )
+        if contract_code and contract_code.strip():
+            qs = qs.filter(contract_code__icontains=contract_code.strip())
         total = await qs.count()
-        rows = await qs.order_by("-contract_date", "-id").offset(skip).limit(limit)
+        order_clause = order_by if order_by else "-contract_date"
+        rows = await qs.order_by(order_clause, "-id").offset(skip).limit(limit)
         capability_ctx_by_contract_id: dict[int, dict[str, Any]] = {}
         if rows:
             contract_ids = [int(r.id) for r in rows if r.id is not None]

@@ -27,6 +27,17 @@ export interface StandardCostListParams {
   target_id?: number;
   cost_item_type?: string;
   is_active?: boolean;
+  keyword?: string;
+  target_code?: string;
+  target_name?: string;
+  effective_date_start?: string;
+  effective_date_end?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
+  sort_field?: string;
+  sort_order?: string;
   search?: string;
 }
 

@@ -2,14 +2,17 @@
  * 异常统计分析页面
  *
  * 提供异常统计分析功能，包括缺料异常、延期异常、质量异常的统计信息。
- *
- * @author Luigi Lu
- * @date 2025-01-15
  */
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { App, Card, Statistic, Row, Col, DatePicker, Space, Button } from 'antd';
-import { WarningOutlined, ClockCircleOutlined, BugOutlined, CheckCircleOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { App, Card, Statistic, Row, Col, DatePicker, Space, Button, Spin } from 'antd';
+import {
+  WarningOutlined,
+  ClockCircleOutlined,
+  BugOutlined,
+  CheckCircleOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
@@ -20,9 +23,6 @@ const { RangePicker } = DatePicker;
 
 const P = 'app.kuaizhizao.productionException';
 
-/**
- * 异常统计接口定义
- */
 interface ExceptionStatistics {
   summary?: {
     total_exceptions?: number;
@@ -50,15 +50,16 @@ interface ExceptionStatistics {
   };
 }
 
-/**
- * 异常统计分析页面组件
- */
 const ExceptionStatisticsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [statistics, setStatistics] = useState<ExceptionStatistics>({});
   const [loading, setLoading] = useState(false);
-  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
+  const [detecting, setDetecting] = useState(false);
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
+    dayjs().subtract(30, 'day'),
+    dayjs(),
+  ]);
 
   const alertLevelLabel = useCallback(
     (level: string) => {
@@ -85,18 +86,15 @@ const ExceptionStatisticsPage: React.FC = () => {
     [t],
   );
 
-  /**
-   * 加载统计数据
-   */
   const loadStatistics = useCallback(async () => {
     setLoading(true);
     try {
       const params: Record<string, string> = {};
-      if (dateRange && dateRange[0] && dateRange[1]) {
+      if (dateRange[0] && dateRange[1]) {
         params.date_start = dateRange[0].format('YYYY-MM-DD');
         params.date_end = dateRange[1].format('YYYY-MM-DD');
       }
-      const result = await apiRequest('/apps/kuaizhizao/exceptions/statistics', {
+      const result = await apiRequest<ExceptionStatistics>('/apps/kuaizhizao/exceptions/statistics', {
         method: 'GET',
         params,
       });
@@ -109,33 +107,24 @@ const ExceptionStatisticsPage: React.FC = () => {
   }, [dateRange, messageApi, t]);
 
   useEffect(() => {
-    loadStatistics();
-  }, [loadStatistics]);
+    void loadStatistics();
+    // 仅首屏加载；改日期后点「查询」
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  /**
-   * 处理刷新
-   */
-  const handleRefresh = () => {
-    loadStatistics();
-  };
-
-  /**
-   * 处理手动触发异常检测
-   */
   const handleTriggerDetection = async () => {
     try {
-      setLoading(true);
+      setDetecting(true);
       await apiRequest('/apps/kuaizhizao/exceptions/detect', {
         method: 'POST',
       });
       messageApi.success(t(`${P}.statistics.message.triggerSuccess`));
-      setTimeout(() => {
-        loadStatistics();
-      }, 2000);
-    } catch (error: any) {
-      messageApi.error(error.message || t(`${P}.statistics.message.triggerFailed`));
+      await loadStatistics();
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : t(`${P}.statistics.message.triggerFailed`);
+      messageApi.error(msg);
     } finally {
-      setLoading(false);
+      setDetecting(false);
     }
   };
 
@@ -175,28 +164,30 @@ const ExceptionStatisticsPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <div>
+      <Spin spinning={loading || detecting}>
         <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <Card>
-            <Space>
+            <Space wrap>
               <span>{t(`${P}.statistics.dateRange`)}</span>
               <RangePicker
                 value={dateRange}
-                onChange={(dates) => setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs] | null)}
+                onChange={(dates) => {
+                  if (dates?.[0] && dates[1]) {
+                    setDateRange([dates[0], dates[1]]);
+                  }
+                }}
                 format="YYYY-MM-DD"
               />
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={handleRefresh}
-                loading={loading}
-              >
+              <Button type="primary" icon={<SearchOutlined />} onClick={() => void loadStatistics()} loading={loading}>
+                {t('common.search')}
+              </Button>
+              <Button icon={<ReloadOutlined />} onClick={() => void loadStatistics()} loading={loading}>
                 {t('common.refresh')}
               </Button>
               <Button
-                type="primary"
                 icon={<SearchOutlined />}
-                onClick={handleTriggerDetection}
-                loading={loading}
+                onClick={() => void handleTriggerDetection()}
+                loading={detecting}
               >
                 {t(`${P}.statistics.triggerDetection`)}
               </Button>
@@ -238,7 +229,7 @@ const ExceptionStatisticsPage: React.FC = () => {
             </Row>
           </Card>
 
-          <Card title={t(`${P}.statistics.materialShortageTitle`)} loading={loading}>
+          <Card title={t(`${P}.statistics.materialShortageTitle`)}>
             <Row gutter={16}>
               <Col span={6}>
                 <Statistic
@@ -268,37 +259,36 @@ const ExceptionStatisticsPage: React.FC = () => {
                 />
               </Col>
             </Row>
-            {statistics.material_shortage?.by_level && Object.keys(statistics.material_shortage.by_level).length > 0 && (
-              <>
-                <Row gutter={16} style={{ marginTop: 12 }}>
-                  {Object.entries(statistics.material_shortage.by_level).map(([level, count]) => (
-                    <Col span={6} key={level}>
-                      <Statistic
-                        title={t(`${P}.label.levelSuffix`, { level: alertLevelLabel(level) })}
-                        value={count}
-                      />
-                    </Col>
-                  ))}
-                </Row>
-                <div style={{ marginTop: 16 }}>
-                  <Column
-                    data={Object.entries(statistics.material_shortage.by_level).map(([level, count]) => ({
-                      level: alertLevelLabel(level),
-                      count,
-                    }))}
-                    xField="level"
-                    yField="count"
-                    label={{
-                      position: 'top',
-                    }}
-                    height={300}
-                  />
-                </div>
-              </>
-            )}
+            {statistics.material_shortage?.by_level &&
+              Object.keys(statistics.material_shortage.by_level).length > 0 && (
+                <>
+                  <Row gutter={16} style={{ marginTop: 12 }}>
+                    {Object.entries(statistics.material_shortage.by_level).map(([level, count]) => (
+                      <Col span={6} key={level}>
+                        <Statistic
+                          title={t(`${P}.label.levelSuffix`, { level: alertLevelLabel(level) })}
+                          value={count}
+                        />
+                      </Col>
+                    ))}
+                  </Row>
+                  <div style={{ marginTop: 16 }}>
+                    <Column
+                      data={Object.entries(statistics.material_shortage.by_level).map(([level, count]) => ({
+                        level: alertLevelLabel(level),
+                        count,
+                      }))}
+                      xField="level"
+                      yField="count"
+                      label={{ position: 'top' }}
+                      height={300}
+                    />
+                  </div>
+                </>
+              )}
           </Card>
 
-          <Card title={t(`${P}.statistics.deliveryDelayTitle`)} loading={loading}>
+          <Card title={t(`${P}.statistics.deliveryDelayTitle`)}>
             <Row gutter={16}>
               <Col span={6}>
                 <Statistic
@@ -328,37 +318,36 @@ const ExceptionStatisticsPage: React.FC = () => {
                 />
               </Col>
             </Row>
-            {statistics.delivery_delay?.by_level && Object.keys(statistics.delivery_delay.by_level).length > 0 && (
-              <>
-                <Row gutter={16} style={{ marginTop: 12 }}>
-                  {Object.entries(statistics.delivery_delay.by_level).map(([level, count]) => (
-                    <Col span={6} key={level}>
-                      <Statistic
-                        title={t(`${P}.label.levelSuffix`, { level: alertLevelLabel(level) })}
-                        value={count}
-                      />
-                    </Col>
-                  ))}
-                </Row>
-                <div style={{ marginTop: 16 }}>
-                  <Column
-                    data={Object.entries(statistics.delivery_delay.by_level).map(([level, count]) => ({
-                      level: alertLevelLabel(level),
-                      count,
-                    }))}
-                    xField="level"
-                    yField="count"
-                    label={{
-                      position: 'top',
-                    }}
-                    height={300}
-                  />
-                </div>
-              </>
-            )}
+            {statistics.delivery_delay?.by_level &&
+              Object.keys(statistics.delivery_delay.by_level).length > 0 && (
+                <>
+                  <Row gutter={16} style={{ marginTop: 12 }}>
+                    {Object.entries(statistics.delivery_delay.by_level).map(([level, count]) => (
+                      <Col span={6} key={level}>
+                        <Statistic
+                          title={t(`${P}.label.levelSuffix`, { level: alertLevelLabel(level) })}
+                          value={count}
+                        />
+                      </Col>
+                    ))}
+                  </Row>
+                  <div style={{ marginTop: 16 }}>
+                    <Column
+                      data={Object.entries(statistics.delivery_delay.by_level).map(([level, count]) => ({
+                        level: alertLevelLabel(level),
+                        count,
+                      }))}
+                      xField="level"
+                      yField="count"
+                      label={{ position: 'top' }}
+                      height={300}
+                    />
+                  </div>
+                </>
+              )}
           </Card>
 
-          <Card title={t(`${P}.statistics.qualityTitle`)} loading={loading}>
+          <Card title={t(`${P}.statistics.qualityTitle`)}>
             <Row gutter={16}>
               <Col span={6}>
                 <Statistic
@@ -393,10 +382,7 @@ const ExceptionStatisticsPage: React.FC = () => {
                 <Row gutter={16} style={{ marginTop: 12 }}>
                   {Object.entries(statistics.quality.by_severity).map(([severity, count]) => (
                     <Col span={6} key={severity}>
-                      <Statistic
-                        title={severityLabel(severity)}
-                        value={count}
-                      />
+                      <Statistic title={severityLabel(severity)} value={count} />
                     </Col>
                   ))}
                 </Row>
@@ -408,9 +394,7 @@ const ExceptionStatisticsPage: React.FC = () => {
                     }))}
                     xField="severity"
                     yField="count"
-                    label={{
-                      position: 'top',
-                    }}
+                    label={{ position: 'top' }}
                     height={300}
                   />
                 </div>
@@ -418,7 +402,7 @@ const ExceptionStatisticsPage: React.FC = () => {
             )}
           </Card>
 
-          <Card title={t(`${P}.statistics.typeDistributionTitle`)} loading={loading}>
+          <Card title={t(`${P}.statistics.typeDistributionTitle`)}>
             <Row gutter={16}>
               <Col span={12}>
                 <Pie
@@ -449,7 +433,7 @@ const ExceptionStatisticsPage: React.FC = () => {
             </Row>
           </Card>
         </Space>
-      </div>
+      </Spin>
     </ListPageTemplate>
   );
 };

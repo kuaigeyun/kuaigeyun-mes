@@ -99,8 +99,13 @@ export interface DemandComputationListParams {
   computation_type?: 'MRP' | 'LRP';
   computation_status?: string;
   business_mode?: 'MTS' | 'MTO' | 'ATO';
+  demand_type?: 'sales_forecast' | 'sales_order' | 'demand_plan';
   start_date?: string;
   end_date?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  keyword?: string;
+  order_by?: string;
 }
 
 /**
@@ -447,10 +452,18 @@ export interface ComputationHistoryParams {
   skip?: number;
   limit?: number;
   demand_id?: number;
+  demand_code?: string;
+  computation_code?: string;
   /** 兼容后端筛选：MRP≈MTS、LRP≈MTO */
-  computation_type?: 'MRP' | 'LRP';
+  computation_type?: 'MRP' | 'LRP' | string;
+  computation_status?: string;
+  business_mode?: 'MTS' | 'MTO' | 'ATO' | string;
+  keyword?: string;
   start_date?: string;
   end_date?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  order_by?: string;
 }
 
 /**
@@ -721,6 +734,42 @@ export interface DemandReplanTaskItem {
   finished_at?: string;
 }
 
+export interface DemandChangeEventListParams {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  event_type?: string;
+  source_type?: string;
+  event_status?: string;
+  order_by?: string;
+}
+
+export interface DemandChangeEventListResponse {
+  data: DemandChangeEventItem[];
+  total: number;
+  success: boolean;
+}
+
+export interface DemandReplanTaskListParams {
+  skip?: number;
+  limit?: number;
+  event_id?: number;
+  keyword?: string;
+  status?: string;
+  mode?: string;
+  risk_level?: string;
+  approval_status?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  order_by?: string;
+}
+
+export interface DemandReplanTaskListResponse {
+  data: DemandReplanTaskItem[];
+  total: number;
+  success: boolean;
+}
+
 export interface DemandChangeImpactDetail {
   event: {
     id: number;
@@ -768,11 +817,16 @@ export async function getDemandReplanDashboard(): Promise<DemandReplanDashboard>
 }
 
 /** 待处理变更事件 */
-export async function listPendingDemandChangeEvents(limit: number = 200): Promise<DemandChangeEventItem[]> {
-  return apiRequest<DemandChangeEventItem[]>('/apps/kuaizhizao/demand-computations/change-events/pending', {
-    method: 'GET',
-    params: { limit },
-  });
+export async function listPendingDemandChangeEvents(
+  params: DemandChangeEventListParams = {},
+): Promise<DemandChangeEventListResponse> {
+  return apiRequest<DemandChangeEventListResponse>(
+    '/apps/kuaizhizao/demand-computations/change-events/pending',
+    {
+      method: 'GET',
+      params,
+    },
+  );
 }
 
 /** 变更事件影响详情 */
@@ -802,10 +856,12 @@ export async function ensureReplanTaskForEvent(eventId: number): Promise<EnsureR
 }
 
 /** 重算任务列表 */
-export async function listDemandReplanTasks(limit: number = 200): Promise<DemandReplanTaskItem[]> {
-  return apiRequest<DemandReplanTaskItem[]>('/apps/kuaizhizao/demand-computations/replan-tasks', {
+export async function listDemandReplanTasks(
+  params: DemandReplanTaskListParams = {},
+): Promise<DemandReplanTaskListResponse> {
+  return apiRequest<DemandReplanTaskListResponse>('/apps/kuaizhizao/demand-computations/replan-tasks', {
     method: 'GET',
-    params: { limit },
+    params,
   });
 }
 

@@ -26,6 +26,24 @@ from core.services.authorization.user_permission_service import UserPermissionSe
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
+from apps.master_data.services.master_data_list_core import (
+    apply_master_crud_created_date_range,
+    apply_master_crud_updated_date_range,
+    apply_master_crud_list_filters,
+    resolve_master_crud_order_clause,
+)
+
+_CUSTOMER_SUPPLIER_KEYWORD_FIELDS = [
+    "code",
+    "name",
+    "short_name",
+    "contact_person",
+    "phone",
+    "email",
+    "tax_registration_no",
+    "invoice_title",
+]
+
 RESOURCE_SUPPLIER = "master-data:supply-chain:supplier"
 RESOURCE_CUSTOMER = "master-data:supply-chain:customer"
 
@@ -332,9 +350,15 @@ class SupplyChainService:
         category: Optional[str] = None,
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None,
         salesman_id: Optional[int] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
         current_user: Optional[User] = None,
     ) -> Tuple[List[CustomerResponse], int]:
         """
@@ -368,18 +392,20 @@ class SupplyChainService:
         if salesman_id is not None:
             query = query.filter(salesman_id=salesman_id)
 
-        if keyword and keyword.strip():
-            kw = keyword.strip()
-            query = query.filter(
-                Q(code__icontains=kw)
-                | Q(name__icontains=kw)
-                | Q(short_name__icontains=kw)
-                | Q(contact_person__icontains=kw)
-                | Q(phone__icontains=kw)
-                | Q(email__icontains=kw)
-                | Q(tax_registration_no__icontains=kw)
-                | Q(invoice_title__icontains=kw)
-            )
+        query, order_expr = apply_master_crud_list_filters(
+            query,
+            keyword=keyword,
+            code=code,
+            name=name,
+            keyword_fields=_CUSTOMER_SUPPLIER_KEYWORD_FIELDS,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_by,
+            sort_order=sort_order,
+            default_sort_col="code",
+        )
 
         # 客户行级范围：统一走 DataScopeService（含公海 + 业务员默认解析器）
         if current_user:
@@ -391,10 +417,6 @@ class SupplyChainService:
             )
 
         total = await query.count()
-        allowed_sort = {"code", "name", "category", "created_at", "is_active", "salesman_name", "short_name"}
-        field = sort_by if sort_by in allowed_sort else "code"
-        desc = (sort_order or "asc").lower() == "desc"
-        order_expr = f"-{field}" if desc else field
 
         customers = await query.offset(skip).limit(limit).order_by(order_expr).all()
 
@@ -621,6 +643,10 @@ class SupplyChainService:
         buyer_id: Optional[int] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
         current_user: Optional[User] = None,
     ) -> Tuple[List[SupplierResponse], int]:
         """
@@ -656,27 +682,20 @@ class SupplyChainService:
         if buyer_id is not None:
             query = query.filter(buyer_id=buyer_id)
 
-        # 添加搜索条件
-        if keyword and keyword.strip():
-            kw = keyword.strip()
-            query = query.filter(
-                Q(code__icontains=kw)
-                | Q(name__icontains=kw)
-                | Q(short_name__icontains=kw)
-                | Q(contact_person__icontains=kw)
-                | Q(phone__icontains=kw)
-                | Q(email__icontains=kw)
-                | Q(tax_registration_no__icontains=kw)
-                | Q(invoice_title__icontains=kw)
-            )
-
-        if code:
-            # 精确匹配供应商编码
-            query = query.filter(code__icontains=code)
-
-        if name:
-            # 模糊匹配供应商名称
-            query = query.filter(name__icontains=name)
+        query, order_expr = apply_master_crud_list_filters(
+            query,
+            keyword=keyword,
+            code=code,
+            name=name,
+            keyword_fields=_CUSTOMER_SUPPLIER_KEYWORD_FIELDS,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_by,
+            sort_order=sort_order,
+            default_sort_col="code",
+        )
 
         if current_user:
             query = await DataScopeService.apply(
@@ -687,10 +706,6 @@ class SupplyChainService:
             )
 
         total = await query.count()
-        allowed_sort = {"code", "name", "category", "created_at", "is_active", "buyer_name", "short_name"}
-        field = sort_by if sort_by in allowed_sort else "code"
-        desc = (sort_order or "asc").lower() == "desc"
-        order_expr = f"-{field}" if desc else field
 
         suppliers = await query.offset(skip).limit(limit).order_by(order_expr).all()
 

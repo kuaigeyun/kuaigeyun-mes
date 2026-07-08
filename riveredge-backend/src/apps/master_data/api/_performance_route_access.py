@@ -13,7 +13,6 @@ _PATH_MODULE_RULES: tuple[tuple[str, str], ...] = (
     ("/skills", "performance-skills"),
     ("/employee-configs", "performance-employee-configs"),
     ("/employees", "performance-employee-configs"),
-    ("/piece-rates", "performance-piece-rates"),
     ("/hourly-rates", "performance-hourly-rates"),
     ("/departments", "performance-hourly-rates"),
     ("/positions", "performance-hourly-rates"),

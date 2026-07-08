@@ -1,9 +1,11 @@
 import { apiRequest } from '../../../services/api';
-import { 
-  FinancialKPIs, 
-  QualityLossAnalysis, 
-  LaborEfficiencyAnalysis, 
-  WIPValuation 
+import {
+  FinancialKPIs,
+  QualityLossAnalysis,
+  LaborEfficiencyAnalysis,
+  WIPValuation,
+  MarginReportListParams,
+  MarginReportListResponse,
 } from '../types/management-report';
 
 const REPORT_API = '/apps/kuaicaiwu/management-report';
@@ -48,24 +50,24 @@ export const managementReportService = {
     });
   },
 
-  getMarginByProduct: (days: number = 30) => {
-    return apiRequest<any[]>(`${REPORT_API}/margin-by-product`, {
+  getMarginByProduct: (params: MarginReportListParams = {}) => {
+    return apiRequest<MarginReportListResponse>(`${REPORT_API}/margin-by-product`, {
       method: 'GET',
-      params: { days },
+      params: { days: 30, ...params },
     });
   },
 
-  getMarginByCustomer: (days: number = 30) => {
-    return apiRequest<any[]>(`${REPORT_API}/margin-by-customer`, {
+  getMarginByCustomer: (params: MarginReportListParams = {}) => {
+    return apiRequest<MarginReportListResponse>(`${REPORT_API}/margin-by-customer`, {
       method: 'GET',
-      params: { days },
+      params: { days: 30, ...params },
     });
   },
 
-  getMarginByOrder: (days: number = 30) => {
-    return apiRequest<any[]>(`${REPORT_API}/margin-by-order`, {
+  getMarginByOrder: (params: MarginReportListParams = {}) => {
+    return apiRequest<MarginReportListResponse>(`${REPORT_API}/margin-by-order`, {
       method: 'GET',
-      params: { days },
+      params: { days: 30, ...params },
     });
   },
 };

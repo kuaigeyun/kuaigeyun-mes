@@ -5,7 +5,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import type { ReactText } from 'react'
 import dayjs from 'dayjs'
 import { formatDateTime } from '../../../../../utils/format'
-import { stableJsonForQueryKey } from '../../../../../utils/tableQueryKey'
+import { stableJsonForQueryKey, extractProTableSort } from '../../../../../utils/tableQueryKey'
 import { resolveWorkOrderListStatusFilter } from '../../../utils/workOrderLifecycle'
 import { workOrderApi } from '../../../services/production'
 import {
@@ -421,10 +421,9 @@ function buildWorkOrderListApiParams(
     if (end) apiParams.planned_end_to = formatDateTime(end, 'YYYY-MM-DD')
   }
   if (sort && Object.keys(sort).length > 0) {
-    const key = Object.keys(sort)[0]
-    const order = sort[key]
-    if (order) {
-      apiParams.order_by = order === 'ascend' ? key : `-${key}`
+    const { sortBy, sortOrder } = extractProTableSort(sort)
+    if (sortBy && sortOrder) {
+      apiParams.order_by = sortOrder === 'desc' ? `-${sortBy}` : sortBy
     }
   }
   return apiParams

@@ -48,6 +48,103 @@ from apps.kuaizhizao.services.inspection_policy_service import (
 )
 from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+
+from datetime import date, time as dt_time
+
+INCOMING_INSPECTION_SORTABLE_FIELDS = frozenset({
+    "inspection_code", "material_code", "material_name", "supplier_name",
+    "purchase_receipt_code", "customer_material_registration_code",
+    "inspection_quantity", "qualified_quantity", "unqualified_quantity",
+    "inspector_name", "inspection_result", "quality_status", "status",
+    "inspection_time", "created_at", "updated_at",
+})
+PROCESS_INSPECTION_SORTABLE_FIELDS = frozenset({
+    "inspection_code", "work_order_code", "operation_name", "material_code",
+    "material_name", "inspection_quantity", "qualified_quantity",
+    "unqualified_quantity", "inspector_name", "inspection_result",
+    "quality_status", "status", "inspection_time", "created_at", "updated_at",
+})
+FINISHED_GOODS_INSPECTION_SORTABLE_FIELDS = frozenset({
+    "inspection_code", "work_order_code", "material_code", "material_name",
+    "inspection_quantity", "qualified_quantity", "unqualified_quantity",
+    "inspector_name", "inspection_result", "quality_status", "status",
+    "inspection_time", "created_at", "updated_at",
+})
+OQC_INSPECTION_SORTABLE_FIELDS = frozenset({
+    "inspection_code", "customer_name", "material_code", "material_name",
+    "shipment_notice_code", "sales_delivery_code", "inspection_quantity",
+    "qualified_quantity", "unqualified_quantity", "inspector_name",
+    "inspection_result", "quality_status", "status", "release_decision",
+    "inspection_time", "created_at", "updated_at",
+})
+NONCONFORMING_LEDGER_SORTABLE_FIELDS = frozenset({
+    "code", "work_order_code", "operation_name", "product_code", "product_name",
+    "defect_quantity", "defect_type", "defect_reason", "disposition", "status",
+    "created_at", "updated_at",
+})
+EIGHT_D_REPORT_SORTABLE_FIELDS = frozenset({
+    "report_code", "title", "severity", "owner_name", "status",
+    "due_date", "created_at", "updated_at",
+})
+
+
+def _resolve_quality_list_order_by(
+    order_by: Optional[str],
+    allowed: frozenset,
+    default: str,
+    *,
+    field_aliases: Optional[Dict[str, str]] = None,
+) -> str:
+    if not order_by:
+        return default
+    descending = str(order_by).startswith("-")
+    field = str(order_by).lstrip("-")
+    if field_aliases and field in field_aliases:
+        field = field_aliases[field]
+    if field not in allowed:
+        return default
+    return f"-{field}" if descending else field
+
+
+def _parse_optional_api_date(value: Any) -> Optional[date]:
+    if value is None or value == "":
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    try:
+        return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _apply_quality_inspection_list_filters(
+    query,
+    filters: Dict[str, Any],
+    *,
+    keyword_fields: List[str],
+    time_field: str = "inspection_time",
+) -> Any:
+    kw = (filters.get("keyword") or "").strip()
+    if kw:
+        q = Q()
+        for field in keyword_fields:
+            q |= Q(**{f"{field}__icontains": kw})
+        query = query.filter(q)
+    inspection_start = _parse_optional_api_date(filters.get("inspection_start_date"))
+    inspection_end = _parse_optional_api_date(filters.get("inspection_end_date"))
+    if inspection_start is not None:
+        query = query.filter(**{f"{time_field}__gte": datetime.combine(inspection_start, dt_time.min)})
+    if inspection_end is not None:
+        query = query.filter(**{f"{time_field}__lte": datetime.combine(inspection_end, dt_time.max)})
+    created_start = _parse_optional_api_date(filters.get("created_start_date"))
+    created_end = _parse_optional_api_date(filters.get("created_end_date"))
+    if created_start is not None:
+        query = query.filter(created_at__gte=datetime.combine(created_start, dt_time.min))
+    if created_end is not None:
+        query = query.filter(created_at__lte=datetime.combine(created_end, dt_time.max))
+    return query
 from datetime import timedelta
 from decimal import Decimal
 
@@ -572,7 +669,6 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         """获取来料检验单列表"""
         query = IncomingInspection.filter(tenant_id=tenant_id)
 
-        # 应用过滤条件
         if filters.get('status'):
             query = query.filter(status=filters['status'])
         if filters.get('quality_status'):
@@ -589,12 +685,26 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             )
         if filters.get("scoped_purchase_receipt_ids") is not None:
             query = query.filter(purchase_receipt_id__in=filters["scoped_purchase_receipt_ids"])
+        query = _apply_quality_inspection_list_filters(
+            query,
+            filters,
+            keyword_fields=[
+                "inspection_code",
+                "material_code",
+                "material_name",
+                "supplier_name",
+                "purchase_receipt_code",
+                "customer_material_registration_code",
+            ],
+        )
 
-        # 获取总数
         total = await query.count()
-        
-        # 获取分页数据
-        inspections = await query.offset(skip).limit(limit).order_by('-created_at')
+        order_clause = _resolve_quality_list_order_by(
+            filters.get("order_by"),
+            INCOMING_INSPECTION_SORTABLE_FIELDS,
+            "-created_at",
+        )
+        inspections = await query.offset(skip).limit(limit).order_by(order_clause)
 
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_quality_inspection_list_capabilities,
@@ -2203,11 +2313,10 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         resp = enrich_quality_inspection_capabilities_on_response(inspection, resp)
         return await enrich_record(tenant_id, "process_inspection", resp)
 
-    async def list_process_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[ProcessInspectionListResponse]:
+    async def list_process_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取过程检验单列表"""
         query = ProcessInspection.filter(tenant_id=tenant_id)
 
-        # 应用过滤条件
         if filters.get('status'):
             query = query.filter(status=filters['status'])
         if filters.get('quality_status'):
@@ -2218,19 +2327,40 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             query = query.filter(operation_id=filters['operation_id'])
         if filters.get("scoped_work_order_ids") is not None:
             query = query.filter(work_order_id__in=filters["scoped_work_order_ids"])
+        query = _apply_quality_inspection_list_filters(
+            query,
+            filters,
+            keyword_fields=[
+                "inspection_code",
+                "work_order_code",
+                "operation_name",
+                "material_code",
+                "material_name",
+            ],
+        )
 
-        inspections = await query.offset(skip).limit(limit).order_by('-created_at')
+        total = await query.count()
+        order_clause = _resolve_quality_list_order_by(
+            filters.get("order_by"),
+            PROCESS_INSPECTION_SORTABLE_FIELDS,
+            "-created_at",
+        )
+        inspections = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_quality_inspection_list_capabilities,
         )
-        from core.services.approval.audit_record_enricher import enrich_items
+        from core.services.approval.audit_record_enricher import enrich_data_payload
 
         inspection_models = list(inspections)
         rows = enrich_quality_inspection_list_capabilities(
             inspection_models,
             [ProcessInspectionListResponse.model_validate(i) for i in inspection_models],
         )
-        return await enrich_items(tenant_id, "process_inspection", rows)
+        return await enrich_data_payload(tenant_id, "process_inspection", {
+            "data": [r.model_dump() for r in rows],
+            "total": total,
+            "success": True,
+        })
 
     async def conduct_inspection(self, tenant_id: int, inspection_id: int, inspection_data: dict, inspected_by: int) -> ProcessInspectionResponse:
         """执行过程检验"""
@@ -3200,11 +3330,10 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         )
         return await enrich_record(tenant_id, "finished_goods_inspection", resp)
 
-    async def list_finished_goods_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[FinishedGoodsInspectionListResponse]:
+    async def list_finished_goods_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取成品检验单列表"""
         query = FinishedGoodsInspection.filter(tenant_id=tenant_id)
 
-        # 应用过滤条件
         if filters.get('status'):
             query = query.filter(status=filters['status'])
         if filters.get('quality_status'):
@@ -3215,12 +3344,28 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             query = query.filter(source_type=filters['source_type'])
         if filters.get("scoped_work_order_ids") is not None:
             query = query.filter(work_order_id__in=filters["scoped_work_order_ids"])
+        query = _apply_quality_inspection_list_filters(
+            query,
+            filters,
+            keyword_fields=[
+                "inspection_code",
+                "work_order_code",
+                "material_code",
+                "material_name",
+            ],
+        )
 
-        inspections = await query.offset(skip).limit(limit).order_by('-created_at')
+        total = await query.count()
+        order_clause = _resolve_quality_list_order_by(
+            filters.get("order_by"),
+            FINISHED_GOODS_INSPECTION_SORTABLE_FIELDS,
+            "-created_at",
+        )
+        inspections = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_quality_inspection_list_capabilities,
         )
-        from core.services.approval.audit_record_enricher import enrich_items
+        from core.services.approval.audit_record_enricher import enrich_data_payload
 
         inspection_models = list(inspections)
         pushed_map = await self._pushed_rework_qty_by_inspection_ids(
@@ -3235,7 +3380,11 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 int(k): float(v) for k, v in pushed_map.items()
             },
         )
-        return await enrich_items(tenant_id, "finished_goods_inspection", rows)
+        return await enrich_data_payload(tenant_id, "finished_goods_inspection", {
+            "data": [r.model_dump() for r in rows],
+            "total": total,
+            "success": True,
+        })
 
     async def conduct_inspection(self, tenant_id: int, inspection_id: int, inspection_data: dict, inspected_by: int) -> FinishedGoodsInspectionResponse:
         """执行成品检验"""

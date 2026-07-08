@@ -7,9 +7,8 @@ Date: 2026-05-28
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
-from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from apps.common.base_service import AppBaseService
@@ -60,6 +59,10 @@ from apps.kuaiplm.schemas.rd_project import (
     RdProjectWorkbenchResponse,
     RelatedArticleSummary,
     SpawnDeliveryProjectRequest,
+)
+from apps.kuaiplm.services.plm_list_core import (
+    RD_PROJECT_SORT_DB_COLS,
+    apply_plm_list_filters,
 )
 from apps.kuaiplm.utils.gate_template_seed import load_template_gate_defs
 from apps.kuaiplm.utils.rd_project_progress import compute_project_progress
@@ -314,21 +317,44 @@ class RdProjectService(AppBaseService[RdProject]):
         status: Optional[str] = None,
         keyword: Optional[str] = None,
         project_type: Optional[str] = None,
-    ) -> List[RdProjectResponse]:
+        project_code: Optional[str] = None,
+        project_name: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+    ) -> Tuple[List[RdProjectResponse], int]:
         qs = RdProject.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if status:
             qs = qs.filter(status=status)
         if project_type:
             qs = qs.filter(project_type=project_type)
-        if keyword:
-            qs = qs.filter(
-                Q(project_code__icontains=keyword)
-                | Q(project_name__icontains=keyword)
-                | Q(material_code__icontains=keyword)
-            )
-        rows = await qs.order_by("-created_at").offset(skip).limit(limit).all()
+        exact_fields = None
+        if not (keyword or "").strip():
+            exact_fields = {
+                "project_code": project_code,
+                "project_name": project_name,
+            }
+        qs, order_expr = apply_plm_list_filters(
+            qs,
+            keyword=keyword,
+            keyword_fields=["project_code", "project_name", "material_code", "material_name", "owner_name"],
+            exact_fields=exact_fields,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_field,
+            sort_order=sort_order,
+            allowed_sort_cols=RD_PROJECT_SORT_DB_COLS,
+            default_sort_col="created_at",
+        )
+        total = await qs.count()
+        rows = await qs.order_by(order_expr).offset(skip).limit(limit).all()
         source_codes = await self._load_source_project_codes(tenant_id, rows)
-        return [self._to_project_response(r, source_codes) for r in rows]
+        return [self._to_project_response(r, source_codes) for r in rows], total
 
     async def get_project(self, tenant_id: int, project_id: int) -> RdProjectResponse:
         project = await self._get_project_or_404(tenant_id, project_id)

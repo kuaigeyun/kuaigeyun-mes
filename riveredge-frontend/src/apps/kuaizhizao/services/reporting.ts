@@ -60,8 +60,59 @@ export interface ReportingDetailedStatistics {
   };
 }
 
+export interface ReportingRecord {
+  id?: number;
+  work_order_code?: string;
+  work_order_name?: string;
+  operation_name?: string;
+  worker_name?: string;
+  recorded_by_name?: string;
+  reported_quantity?: number;
+  qualified_quantity?: number;
+  unqualified_quantity?: number;
+  work_hours?: number;
+  status?: string;
+  reported_at?: string;
+  created_at?: string;
+  [key: string]: unknown;
+}
+
+export interface ReportingListParams {
+  skip?: number;
+  limit?: number;
+  work_order_code?: string;
+  work_order_name?: string;
+  operation_name?: string;
+  worker_name?: string;
+  status?: string;
+  keyword?: string;
+  reported_at_start?: string;
+  reported_at_end?: string;
+  order_by?: string;
+}
+
+export interface ReportingListResponse {
+  data: ReportingRecord[];
+  total: number;
+  success: boolean;
+}
+
 export const reportingApi = {
-  list: async (params?: any) => apiRequest('/apps/kuaizhizao/reporting', { method: 'GET', params }),
+  list: async (params?: ReportingListParams): Promise<ReportingListResponse> => {
+    const raw = await apiRequest<ReportingListResponse | ReportingRecord[]>('/apps/kuaizhizao/reporting', {
+      method: 'GET',
+      params,
+    });
+    if (Array.isArray(raw)) {
+      return { data: raw, total: raw.length, success: true };
+    }
+    const rows = raw?.data ?? [];
+    return {
+      data: rows,
+      total: raw?.total ?? rows.length,
+      success: raw?.success !== false,
+    };
+  },
   create: async (data: any) => apiRequest('/apps/kuaizhizao/reporting', { method: 'POST', data }),
   quickCreate: async (data: any) => apiRequest('/apps/kuaizhizao/reporting/quick', { method: 'POST', data }),
   update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/reporting/${id}`, { method: 'PUT', data }),

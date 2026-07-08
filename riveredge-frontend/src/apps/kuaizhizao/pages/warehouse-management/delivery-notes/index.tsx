@@ -53,6 +53,13 @@ import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
 import { resolveDeliveryNoticeQualityCertificates } from '../../../services/print';
 import { SafetyCertificateOutlined } from '@ant-design/icons';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  WAREHOUSE_DOC_PINNED_STATUS_FIELD,
+  buildDeliveryNoticeStatusValueEnum,
+  normalizeWarehouseListResponse,
+  resolveDeliveryNoticeListParams,
+} from '../../../utils/warehouseListCore';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { salesDeliveryCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -91,6 +98,8 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
   已发送: { text: '已发送', color: 'processing' },
   已签收: { text: '已签收', color: 'success' },
 };
+
+const deliveryNoticeStatusValueEnum = buildDeliveryNoticeStatusValueEnum();
 
 const DeliveryNotesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -157,11 +166,45 @@ const DeliveryNotesPage: React.FC = () => {
 
   const columns: ProColumns<DeliveryNotice>[] = useMemo(() => [
     {
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 10 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.warehouseOutbound.col.status'),
+      dataIndex: 'status',
+      valueType: 'select',
+      valueEnum: deliveryNoticeStatusValueEnum,
+      hideInTable: true,
+      search: { order: 20 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.plannedDelivery'),
+      dataIndex: 'planned_delivery_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 30 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.sentAt'),
+      dataIndex: 'sent_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 40 } as ProColumns['search'],
+    },
+    {
       title: t('app.kuaizhizao.deliveryNote.col.customerNotice'),
       key: 'notice_code',
       dataIndex: 'notice_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
+      sorter: true,
+      search: { order: 50 } as ProColumns['search'],
       render: (_, r) => (
         <UniTableStackedPrimaryCell
           primary={String(r.customer_name ?? '')}
@@ -169,30 +212,63 @@ const DeliveryNotesPage: React.FC = () => {
         />
       ),
     },
-    { title: t('app.kuaizhizao.deliveryNote.col.noticeCode'), dataIndex: 'notice_code', hideInTable: true },
-    { title: t('app.kuaizhizao.deliveryNote.field.customer'), dataIndex: 'customer_name', hideInTable: true },
+    { title: t('app.kuaizhizao.deliveryNote.col.noticeCode'), dataIndex: 'notice_code', hideInTable: true, hideInSearch: true },
+    { title: t('app.kuaizhizao.deliveryNote.field.customer'), dataIndex: 'customer_name', hideInTable: true, hideInSearch: true },
     {
       title: t('app.kuaizhizao.deliveryNote.col.salesDeliveryCode'),
       dataIndex: 'sales_delivery_code',
       width: 140,
       ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.sales_delivery_code ?? '') }} ellipsis>
           {r.sales_delivery_code ?? '-'}
         </Typography.Text>
       ),
     },
-    { title: t('app.kuaizhizao.deliveryNote.col.carrier'), dataIndex: 'carrier', width: 100 },
-    { title: t('app.kuaizhizao.deliveryNote.col.trackingNumber'), dataIndex: 'tracking_number', width: 120, ellipsis: true },
-    { title: t('app.kuaizhizao.deliveryNote.col.plannedDelivery'), dataIndex: 'planned_delivery_date', valueType: 'date', width: 110 },
-    { title: t('app.kuaizhizao.deliveryNote.col.sentAt'), dataIndex: 'sent_at', valueType: 'dateTime', width: 160 },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.carrier'),
+      dataIndex: 'carrier',
+      width: 100,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.trackingNumber'),
+      dataIndex: 'tracking_number',
+      width: 120,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.plannedDelivery'),
+      dataIndex: 'planned_delivery_date',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      valueType: 'date',
+    },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.sentAt'),
+      dataIndex: 'sent_at',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, r) => (r.sent_at ? formatDateTime(r.sent_at) : '-'),
+    },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.updatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
       defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
+      sorter: true,
+      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
@@ -974,6 +1050,8 @@ const DeliveryNotesPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
+          pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
           showCreateButton={false}
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
@@ -1039,17 +1117,15 @@ const DeliveryNotesPage: React.FC = () => {
           }}
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
-          request={async (params) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const listParams = resolveDeliveryNoticeListParams(searchFormValues, sort);
               const response = await deliveryNoticeApi.list({
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
-                status: params.status,
-                customer_id: params.customer_id,
-                keyword: (params as any).keyword,
+                ...listParams,
               });
-              const data = Array.isArray(response) ? response : response?.items || response?.data || [];
-              const total = Array.isArray(response) ? response.length : response?.total ?? data.length;
+              const { data, total } = normalizeWarehouseListResponse(response);
               return { data, success: true, total };
             } catch {
               messageApi.error(t('app.kuaizhizao.deliveryNote.msg.loadListFailed'));

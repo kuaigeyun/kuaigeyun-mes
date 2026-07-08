@@ -162,6 +162,11 @@ class MaintenanceReminderService:
         is_read: Optional[bool] = None,
         is_handled: Optional[bool] = None,
         equipment_uuid: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        reminder_start_date: Optional[str] = None,
+        reminder_end_date: Optional[str] = None,
     ) -> tuple[List[MaintenanceReminder], int]:
         """
         获取维护提醒列表
@@ -192,8 +197,33 @@ class MaintenanceReminderService:
         if equipment_uuid:
             query = query.filter(equipment_uuid=equipment_uuid)
 
+        from apps.kuaizhizao.services.equipment_list_core import (
+            MAINTENANCE_REMINDER_SORTABLE_FIELDS,
+            apply_equipment_document_date_range,
+            apply_equipment_keyword_filter,
+            pick_search_keyword,
+            resolve_equipment_list_order_by,
+        )
+
+        query = apply_equipment_keyword_filter(
+            query,
+            pick_search_keyword(keyword, search),
+            ["equipment_name", "plan_name", "plan_no"],
+        )
+        query = apply_equipment_document_date_range(
+            query,
+            date_field="reminder_date",
+            start_date=reminder_start_date,
+            end_date=reminder_end_date,
+        )
+
         total = await query.count()
-        items = await query.offset(skip).limit(limit).order_by("-reminder_date", "-created_at")
+        order_clause = resolve_equipment_list_order_by(
+            order_by,
+            MAINTENANCE_REMINDER_SORTABLE_FIELDS,
+            "-reminder_date",
+        )
+        items = await query.offset(skip).limit(limit).order_by(order_clause)
 
         return items, total
 

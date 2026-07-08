@@ -307,8 +307,10 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         skip: int = 0,
         limit: int = 20,
         **filters
-    ) -> List[DeliveryNoticeListResponse]:
+    ) -> tuple[List[DeliveryNoticeListResponse], int]:
         """获取送货单列表"""
+        from apps.kuaizhizao.services.warehouse_list_core import apply_delivery_notice_list_filters
+
         query = DeliveryNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if filters.get("status"):
             query = query.filter(status=filters["status"])
@@ -319,8 +321,23 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         if filters.get("customer_id"):
             query = query.filter(customer_id=filters["customer_id"])
 
-        notices = await query.offset(skip).limit(limit).order_by("-created_at")
-        return [DeliveryNoticeListResponse.model_validate(r) for r in notices]
+        query, order_clause = apply_delivery_notice_list_filters(
+            query,
+            keyword=filters.get("keyword"),
+            search=filters.get("search"),
+            order_by=filters.get("order_by"),
+            sent_start_date=filters.get("sent_start_date"),
+            sent_end_date=filters.get("sent_end_date"),
+            planned_delivery_start_date=filters.get("planned_delivery_start_date"),
+            planned_delivery_end_date=filters.get("planned_delivery_end_date"),
+            created_start_date=filters.get("created_start_date"),
+            created_end_date=filters.get("created_end_date"),
+            updated_start_date=filters.get("updated_start_date"),
+            updated_end_date=filters.get("updated_end_date"),
+        )
+        total = await query.count()
+        notices = await query.offset(skip).limit(limit).order_by(order_clause)
+        return [DeliveryNoticeListResponse.model_validate(r) for r in notices], total
 
     async def update_delivery_notice(
         self,

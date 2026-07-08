@@ -3,11 +3,10 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * FMEA 记录（Phase2）
  */
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useMemo } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { useSearchParams } from 'react-router-dom';
 import { App, Button, Tag, Alert } from 'antd';
-import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
@@ -21,7 +20,12 @@ import {
 } from '../../../services/phase2';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { formatDateTime } from '../../../../../utils/format';
+import {
+  plmCodeTitleSearchColumns,
+  plmCreatedUpdatedColumns,
+  PLM_PHASE2_PINNED_STATUS_FIELD,
+  resolvePhase2FmeaListParams,
+} from '../../../utils/plmListCore';
 
 const RISK_COLOR: Record<string, string> = {
   高: 'red',
@@ -37,6 +41,7 @@ const FmeaPage: React.FC = () => {
     ? Number(searchParams.get('project_id'))
     : undefined;
   const actionRef = useRef<ActionType>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<RdFmeaRecord | null>(null);
@@ -109,40 +114,64 @@ const FmeaPage: React.FC = () => {
     低: t('app.kuaiplm.phase2.common.risk.low'),
   };
 
-  const columns: ProColumns<RdFmeaRecord>[] = [
-    { title: t('app.kuaiplm.phase2.fmea.columns.code'), dataIndex: 'fmea_code', width: 140 },
-    { title: t('app.kuaiplm.phase2.fmea.columns.title'), dataIndex: 'title', ellipsis: true },
-    { title: t('app.kuaiplm.phase2.fmea.columns.type'), dataIndex: 'fmea_type', width: 100 },
-    {
-      title: t('app.kuaiplm.phase2.fmea.columns.status'),
-      dataIndex: 'status',
-      width: 90,
-      valueEnum: Object.fromEntries(
-        Object.entries(fmeaStatusLabelMap).map(([value, label]) => [value, { text: label }]),
-      ),
-      render: (_, row) => fmeaStatusLabelMap[row.status || ''] || row.status || '-',
-    },
-    {
-      title: t('app.kuaiplm.phase2.fmea.columns.riskLevel'),
-      dataIndex: 'risk_level',
-      width: 100,
-      render: (_, row) =>
-        row.risk_level ? (
-          <Tag color={RISK_COLOR[row.risk_level] ?? 'default'}>
-            {riskLevelLabelMap[row.risk_level] || row.risk_level}
-          </Tag>
-        ) : (
-          '-'
+  const columns: ProColumns<RdFmeaRecord>[] = useMemo(
+    () => [
+      ...plmCodeTitleSearchColumns({
+        codeLabel: t('app.kuaiplm.phase2.fmea.columns.code'),
+        titleLabel: t('app.kuaiplm.phase2.fmea.columns.title'),
+        codeField: 'fmea_code',
+        titleField: 'title',
+      }),
+      {
+        title: t('app.kuaiplm.phase2.fmea.columns.code'),
+        dataIndex: 'fmea_code',
+        width: 140,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaiplm.phase2.fmea.columns.title'),
+        dataIndex: 'title',
+        sorter: true,
+        ellipsis: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaiplm.phase2.fmea.columns.type'),
+        dataIndex: 'fmea_type',
+        width: 100,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaiplm.phase2.fmea.columns.status'),
+        dataIndex: 'status',
+        width: 90,
+        valueEnum: Object.fromEntries(
+          Object.entries(fmeaStatusLabelMap).map(([value, label]) => [value, { text: label }]),
         ),
-    },
-    { title: t('app.kuaiplm.phase2.fmea.columns.owner'), dataIndex: 'owner_name', width: 100, hideInSearch: true },
-    {
-      title: t('app.kuaiplm.phase2.fmea.columns.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, row) => (row.updated_at ? formatDateTime(row.updated_at, 'YYYY-MM-DD HH:mm') : '-'),
-    },
+        render: (_, row) => fmeaStatusLabelMap[row.status || ''] || row.status || '-',
+      },
+      {
+        title: t('app.kuaiplm.phase2.fmea.columns.riskLevel'),
+        dataIndex: 'risk_level',
+        width: 100,
+        hideInSearch: true,
+        render: (_, row) =>
+          row.risk_level ? (
+            <Tag color={RISK_COLOR[row.risk_level] ?? 'default'}>
+              {riskLevelLabelMap[row.risk_level] || row.risk_level}
+            </Tag>
+          ) : (
+            '-'
+          ),
+      },
+      {
+        title: t('app.kuaiplm.phase2.fmea.columns.owner'),
+        dataIndex: 'owner_name',
+        width: 100,
+        hideInSearch: true,
+      },
+      ...plmCreatedUpdatedColumns<RdFmeaRecord>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -186,7 +215,9 @@ const FmeaPage: React.FC = () => {
             </Button>,
           ],
     },
-  ];
+    ],
+    [fmeaStatusLabelMap, messageApi, modalApi, riskLevelLabelMap, t],
+  );
 
   return (
     <ListPageTemplate>
@@ -207,13 +238,20 @@ const FmeaPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         columns={columns}
         columnPersistenceId="apps.kuaiplm.pages.phase2.fmea"
-        request={async (params) => {
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={PLM_PHASE2_PINNED_STATUS_FIELD}
+        request={async (params, sort, _filter, searchFormValues) => {
           const { current, pageSize } = params;
+          const listParams = resolvePhase2FmeaListParams(searchFormValues, sort, {
+            projectId: filterProjectId,
+          });
+          lastListParamsRef.current = listParams;
           try {
             const res = await listFmeaRecords({
               skip: ((current || 1) - 1) * (pageSize || 20),
               limit: pageSize || 20,
-              project_id: filterProjectId,
+              ...listParams,
             });
             return { data: res.items, total: res.total, success: true };
           } catch (e: any) {

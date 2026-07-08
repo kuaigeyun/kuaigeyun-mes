@@ -40,7 +40,7 @@ import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, Fo
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
-import { shipmentNoticeApi, type ShipmentNotice, type ShipmentNoticeItem, type ShipmentNoticeNotifyPreviewResponse } from '../../../services/shipment-notice';
+import { shipmentNoticeApi, type ShipmentNotice, type ShipmentNoticeItem, type ShipmentNoticeNotifyPreviewResponse, type ShipmentNoticeListParams } from '../../../services/shipment-notice';
 import {
   previewPushSalesOrderToShipmentNotice,
   pushSalesOrderToShipmentNotice,
@@ -55,7 +55,7 @@ import {
   salesOrderCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities';
 import { LinkedOqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
-import { getShipmentNoticeLifecycle } from '../../../utils/shipmentNoticeLifecycle';
+import { getShipmentNoticeLifecycle, buildShipmentNoticeLifecycleValueEnum, resolveShipmentNoticeListLifecycleParams } from '../../../utils/shipmentNoticeLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
@@ -72,6 +72,8 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { formatDateTime } from '../../../../../utils/format';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 
 const SHIPMENT_NOTICE_RESOURCE = 'kuaizhizao:shipment-notice';
 
@@ -176,6 +178,19 @@ const ShipmentNoticesPage: React.FC = () => {
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [productScope, setProductScope] = useState<'make' | 'all'>('make');
   const [customerList, setCustomerList] = useState<any[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const shipmentNoticeCustomerSearchOptions = useMemo(
+    () =>
+      customerList.map((c: { id?: number; customer_id?: number; name?: string; customer_name?: string; code?: string }) => ({
+        value: Number(c.id ?? c.customer_id),
+        label: String(c.name ?? c.customer_name ?? c.code ?? ''),
+      })),
+    [customerList],
+  );
+  const shipmentNoticeLifecycleValueEnum = useMemo(
+    () => buildShipmentNoticeLifecycleValueEnum(t),
+    [t],
+  );
   const materialSourceType = productScope === 'make' ? 'Make' : undefined;
   const productColumnTitle = (
     <Space size={8} align="center">
@@ -226,6 +241,7 @@ const ShipmentNoticesPage: React.FC = () => {
 
   useEffect(() => {
     const load = async () => {
+      setCustomersLoading(true);
       try {
         const [cust, ordersRes] = await Promise.all([
           customerApi.list({ limit: 1000, isActive: true }),
@@ -235,6 +251,8 @@ const ShipmentNoticesPage: React.FC = () => {
         setSalesOrderList(ordersRes?.data || []);
       } catch (e) {
         console.error(t('app.kuaizhizao.shipmentNotice.loadCustomersFailed'), e);
+      } finally {
+        setCustomersLoading(false);
       }
     };
     load();
@@ -274,13 +292,16 @@ const ShipmentNoticesPage: React.FC = () => {
     return renderRowActionsOverflow(actions, keyPrefix);
   };
 
-  const columns: ProColumns<ShipmentNotice>[] = [
+  const columns: ProColumns<ShipmentNotice>[] = useMemo(
+    () => [
     {
       title: t('app.kuaizhizao.shipmentNotice.colCustomerNotice'),
       key: 'notice_code',
       dataIndex: 'notice_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
+      sorter: true,
+      fieldProps: { placeholder: t('app.kuaizhizao.shipmentNotice.colNoticeCode') },
       render: (_, record) => (
         <UniTableStackedPrimaryCell
           primary={String(record.customer_name ?? '')}
@@ -288,19 +309,93 @@ const ShipmentNoticesPage: React.FC = () => {
         />
       ),
     },
-    { title: t('app.kuaizhizao.shipmentNotice.colNoticeCode'), dataIndex: 'notice_code', hideInTable: true },
-    { title: t('app.kuaizhizao.quotation.form.customer'), dataIndex: 'customer_name', hideInTable: true },
-    { title: t('app.kuaizhizao.shipmentNotice.salesOrderCode'), dataIndex: 'sales_order_code', width: 140, ellipsis: true },
-    { title: t('app.kuaizhizao.shipmentNotice.outboundWarehouse'), dataIndex: 'warehouse_name', width: 120 },
-    { title: t('app.kuaizhizao.shipmentNotice.plannedShipDate'), dataIndex: 'planned_ship_date', valueType: 'date', width: 120 },
-    { title: t('app.kuaizhizao.shipmentNotice.notifiedAt'), dataIndex: 'notified_at', valueType: 'dateTime', width: 160 },
-    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
+    {
+      title: t('app.kuaizhizao.quotation.form.customer'),
+      dataIndex: 'customer_id',
+      hideInTable: true,
+      valueType: 'select',
+      fieldProps: {
+        showSearch: true,
+        optionFilterProp: 'label',
+        loading: customersLoading,
+        options: shipmentNoticeCustomerSearchOptions,
+        placeholder: t('app.kuaizhizao.quotation.form.customer'),
+      },
+    },
+    {
+      title: t('app.kuaizhizao.shipmentNotice.salesOrderCode'),
+      dataIndex: 'sales_order_code',
+      width: 140,
+      ellipsis: true,
+      sorter: true,
+      fieldProps: { placeholder: t('app.kuaizhizao.shipmentNotice.salesOrderCode') },
+    },
+    {
+      title: t('app.kuaizhizao.shipmentNotice.outboundWarehouse'),
+      dataIndex: 'warehouse_name',
+      width: 120,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.shipmentNotice.plannedShipDate'),
+      dataIndex: 'planned_ship_date',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, record) =>
+        record.planned_ship_date ? formatDateTime(record.planned_ship_date, 'YYYY-MM-DD') : '-',
+    },
+    {
+      title: t('app.kuaizhizao.shipmentNotice.plannedShipDate'),
+      dataIndex: 'planned_ship_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
+    },
+    {
+      title: t('app.kuaizhizao.shipmentNotice.notifiedAt'),
+      dataIndex: 'notified_at',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, record) =>
+        record.notified_at ? formatDateTime(record.notified_at, 'YYYY-MM-DD HH:mm') : '-',
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      defaultSortOrder: 'descend',
+      hideInSearch: true,
+      render: (_, record) =>
+        record.created_at ? formatDateTime(record.created_at, 'YYYY-MM-DD HH:mm') : '-',
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
+    },
     shipmentNoticeAuditColumn,
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       align: 'center',
       fixed: 'right',
+      valueType: 'select',
+      valueEnum: shipmentNoticeLifecycleValueEnum,
       render: (_, record) => (
         <ListUniLifecycleCell lifecycle={getShipmentNoticeLifecycle(record as any, t)} />
       ),
@@ -309,6 +404,7 @@ const ShipmentNoticesPage: React.FC = () => {
       title: t('common.actions'),
       width: 240,
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => renderShipmentNoticeRowActions([
         <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)}>{t('common.detail')}</Button>,
         record.capabilities?.update?.allowed && shipmentNoticePerms.canUpdate ? (
@@ -327,7 +423,18 @@ const ShipmentNoticesPage: React.FC = () => {
         ) : null,
       ].filter(Boolean), `sn-${record.id ?? 'row'}`),
     },
-  ];
+  ],
+    [
+      t,
+      customersLoading,
+      shipmentNoticeAuditColumn,
+      shipmentNoticeCustomerSearchOptions,
+      shipmentNoticeLifecycleValueEnum,
+      shipmentNoticePerms.canDelete,
+      shipmentNoticePerms.canUpdate,
+      shipmentNoticePerms,
+    ],
+  );
 
   const handleDetail = async (record: ShipmentNotice) => {
     try {
@@ -1063,6 +1170,7 @@ const ShipmentNoticesPage: React.FC = () => {
                               formItemProps={{ style: { margin: 0 } }}
                               showQuickCreate
                               showAdvancedSearch
+                              skipFuzzyPinyinClientFilter
                               sourceType={materialSourceType}
                             />
                           </div>
@@ -1215,7 +1323,10 @@ const ShipmentNoticesPage: React.FC = () => {
           onTableDataChange={(rows) => {
             tableRowsRef.current = rows;
           }}
-          showAdvancedSearch={true}
+          pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
+          pinnedTabsValueEnum={shipmentNoticeLifecycleValueEnum}
+          showAdvancedSearch
+          skipFuzzyPinyinClientFilter
           showCreateButton={false}
           createButtonText={t('app.kuaizhizao.shipmentNotice.create')}
           onCreate={handleCreate}
@@ -1298,7 +1409,7 @@ const ShipmentNoticesPage: React.FC = () => {
           onExport={async (type, keys, pageData) => {
             try {
               const response = await shipmentNoticeApi.list({ skip: 0, limit: 10000 });
-              const rawData = Array.isArray(response) ? response : response?.items || response?.data || [];
+              const rawData = response?.data ?? [];
               let items: ShipmentNotice[] = rawData;
               if (type === 'currentPage' && pageData?.length) {
                 items = pageData as ShipmentNotice[];
@@ -1321,17 +1432,50 @@ const ShipmentNoticesPage: React.FC = () => {
               messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
-          request={async (params) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
-              const response = await shipmentNoticeApi.list({
+              const sf = searchFormValues ?? {};
+              const lifecycleParams = resolveShipmentNoticeListLifecycleParams(sf, params);
+              const { sortBy, sortOrder } = extractProTableSort(sort);
+              const orderBy =
+                sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+              const fuzzyKeyword =
+                typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
+              const noticeCode = sf.notice_code != null ? String(sf.notice_code).trim() : '';
+              const apiParams: ShipmentNoticeListParams = {
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
-                status: params.status,
-                customer_id: params.customer_id,
-                sales_order_id: params.sales_order_id,
-              });
-              const data = Array.isArray(response) ? response : response?.items || response?.data || [];
-              const total = Array.isArray(response) ? response.length : response?.total ?? data.length;
+                ...lifecycleParams,
+                order_by: orderBy,
+              };
+              if (fuzzyKeyword) {
+                apiParams.keyword = fuzzyKeyword;
+              } else if (noticeCode) {
+                apiParams.notice_code = noticeCode;
+              }
+              if (sf.customer_id != null && sf.customer_id !== '') {
+                apiParams.customer_id = Number(sf.customer_id);
+              }
+              const salesOrderCode =
+                sf.sales_order_code != null ? String(sf.sales_order_code).trim() : '';
+              if (salesOrderCode) apiParams.sales_order_code = salesOrderCode;
+              const plannedRange = sf.planned_ship_date_range as [unknown, unknown] | undefined;
+              if (plannedRange && Array.isArray(plannedRange) && plannedRange[0]) {
+                apiParams.planned_start_date = formatDateTime(plannedRange[0] as string | Date, 'YYYY-MM-DD');
+                apiParams.planned_end_date = plannedRange[1]
+                  ? formatDateTime(plannedRange[1] as string | Date, 'YYYY-MM-DD')
+                  : apiParams.planned_start_date;
+              }
+              const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
+              if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+                apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
+                apiParams.created_end_date = createdRange[1]
+                  ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+                  : apiParams.created_start_date;
+              }
+              const response = await shipmentNoticeApi.list(apiParams);
+              const data = response?.data ?? [];
+              const total = response?.total ?? data.length;
               return { data, success: true, total };
             } catch {
               messageApi.error(t('app.kuaizhizao.shipmentNotice.listFailed'));

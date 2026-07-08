@@ -1,7 +1,7 @@
 """
 员工绩效服务模块
 
-提供员工绩效配置、计件单价、工时单价、KPI 定义的 CRUD 及绩效汇总查询。
+提供员工绩效配置、工时单价、KPI 定义的 CRUD 及绩效汇总查询；计件单价查价由产品工艺同步维护。
 """
 
 from datetime import date, datetime
@@ -20,9 +20,6 @@ from apps.master_data.schemas.employee_performance_schemas import (
     EmployeePerformanceConfigCreate,
     EmployeePerformanceConfigUpdate,
     EmployeePerformanceConfigResponse,
-    PieceRateCreate,
-    PieceRateUpdate,
-    PieceRateResponse,
     HourlyRateCreate,
     HourlyRateUpdate,
     HourlyRateResponse,
@@ -81,12 +78,34 @@ class EmployeePerformanceConfigService:
         skip: int = 0,
         limit: int = 100,
         employee_id: Optional[int] = None,
-    ) -> List[EmployeePerformanceConfigResponse]:
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        calc_mode: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+    ) -> dict:
+        from apps.master_data.services.performance_list_core import apply_employee_config_list_filters
+
         query = EmployeePerformanceConfig.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if employee_id is not None:
-            query = query.filter(employee_id=employee_id)
-        configs = await query.offset(skip).limit(limit).all()
-        return [EmployeePerformanceConfigResponse.model_validate(c) for c in configs]
+        query, order_clause = apply_employee_config_list_filters(
+            query,
+            keyword=keyword,
+            order_by=order_by,
+            employee_id=employee_id,
+            calc_mode=calc_mode,
+            is_active=is_active,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
+        total = await query.count()
+        configs = await query.order_by(order_clause).offset(skip).limit(limit).all()
+        items = [EmployeePerformanceConfigResponse.model_validate(c) for c in configs]
+        return {"items": items, "total": total}
 
     @staticmethod
     async def update(tenant_id: int, config_id: int, data: EmployeePerformanceConfigUpdate) -> EmployeePerformanceConfigResponse:
@@ -115,24 +134,7 @@ class EmployeePerformanceConfigService:
 
 
 class PieceRateService:
-    """计件单价服务"""
-
-    @staticmethod
-    async def create(tenant_id: int, data: PieceRateCreate) -> PieceRateResponse:
-        import uuid as uuid_mod
-        rate = await PieceRate.create(
-            tenant_id=tenant_id,
-            uuid=str(uuid_mod.uuid4()),
-            **data.model_dump(exclude_unset=True),
-        )
-        return PieceRateResponse.model_validate(rate)
-
-    @staticmethod
-    async def get_by_id(tenant_id: int, rate_id: int) -> PieceRateResponse:
-        rate = await PieceRate.filter(id=rate_id, tenant_id=tenant_id, deleted_at__isnull=True).first()
-        if not rate:
-            raise NotFoundError(f"计件单价 {rate_id} 不存在")
-        return PieceRateResponse.model_validate(rate)
+    """计件单价查价（数据由产品工艺维护，不提供独立 CRUD API）"""
 
     @staticmethod
     async def get_rate_for_operation(
@@ -173,35 +175,6 @@ class PieceRateService:
         if rate:
             return rate.rate
         return None
-
-    @staticmethod
-    async def list_rates(
-        tenant_id: int,
-        skip: int = 0,
-        limit: int = 100,
-        operation_id: Optional[int] = None,
-    ) -> List[PieceRateResponse]:
-        query = PieceRate.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if operation_id is not None:
-            query = query.filter(operation_id=operation_id)
-        rates = await query.offset(skip).limit(limit).all()
-        return [PieceRateResponse.model_validate(r) for r in rates]
-
-    @staticmethod
-    async def update(tenant_id: int, rate_id: int, data: PieceRateUpdate) -> PieceRateResponse:
-        rate = await PieceRate.filter(id=rate_id, tenant_id=tenant_id, deleted_at__isnull=True).first()
-        if not rate:
-            raise NotFoundError(f"计件单价 {rate_id} 不存在")
-        await rate.update_from_dict(data.model_dump(exclude_unset=True))
-        rate = await PieceRate.get(id=rate_id)
-        return PieceRateResponse.model_validate(rate)
-
-    @staticmethod
-    async def delete(tenant_id: int, rate_id: int) -> None:
-        rate = await PieceRate.filter(id=rate_id, tenant_id=tenant_id, deleted_at__isnull=True).first()
-        if not rate:
-            raise NotFoundError(f"计件单价 {rate_id} 不存在")
-        await rate.update_from_dict({"deleted_at": datetime.now()})
 
 
 class HourlyRateService:
@@ -264,9 +237,31 @@ class HourlyRateService:
         tenant_id: int,
         skip: int = 0,
         limit: int = 100,
-    ) -> List[HourlyRateResponse]:
-        rates = await HourlyRate.filter(tenant_id=tenant_id, deleted_at__isnull=True).offset(skip).limit(limit).all()
-        return [HourlyRateResponse.model_validate(r) for r in rates]
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+    ) -> dict:
+        from apps.master_data.services.performance_list_core import apply_hourly_rate_list_filters
+
+        query = HourlyRate.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        query, order_clause = apply_hourly_rate_list_filters(
+            query,
+            keyword=keyword,
+            order_by=order_by,
+            is_active=is_active,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
+        total = await query.count()
+        rates = await query.order_by(order_clause).offset(skip).limit(limit).all()
+        items = [HourlyRateResponse.model_validate(r) for r in rates]
+        return {"items": items, "total": total}
 
     @staticmethod
     async def get_by_id(tenant_id: int, rate_id: int) -> HourlyRateResponse:
@@ -313,9 +308,37 @@ class KPIDefinitionService:
         return KPIDefinitionResponse.model_validate(kpi)
 
     @staticmethod
-    async def list(tenant_id: int, skip: int = 0, limit: int = 100) -> List[KPIDefinitionResponse]:
-        kpis = await KPIDefinition.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True).offset(skip).limit(limit).all()
-        return [KPIDefinitionResponse.model_validate(k) for k in kpis]
+    async def list(
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        calc_type: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+    ) -> dict:
+        from apps.master_data.services.performance_list_core import apply_kpi_definition_list_filters
+
+        query = KPIDefinition.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        query, order_clause = apply_kpi_definition_list_filters(
+            query,
+            keyword=keyword,
+            order_by=order_by,
+            calc_type=calc_type,
+            is_active=is_active,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
+        total = await query.count()
+        kpis = await query.order_by(order_clause).offset(skip).limit(limit).all()
+        items = [KPIDefinitionResponse.model_validate(k) for k in kpis]
+        return {"items": items, "total": total}
 
     @staticmethod
     async def get_by_id(tenant_id: int, kpi_id: int) -> KPIDefinitionResponse:

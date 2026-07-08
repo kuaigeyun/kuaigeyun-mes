@@ -14,7 +14,15 @@ import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
-import { workGroupApi, applyFactoryKeyword, applyFactoryTableSort } from '../../../services/factory';
+import { workGroupApi } from '../../../services/factory';
+import {
+  buildMasterCrudActiveValueEnum,
+  MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  masterCrudCodeNameSearchColumns,
+  masterCrudCreatedUpdatedColumns,
+  normalizeMasterListResponse,
+  resolveMasterCrudListParams,
+} from '../../../utils/masterListCore';
 import { WorkGroupFormModal } from '../../../components/WorkGroupFormModal';
 import type { WorkGroup, WorkGroupCreate } from '../../../types/factory';
 import { downloadFile } from '../../../../../utils';
@@ -33,6 +41,7 @@ const WorkGroupsPage: React.FC = () => {
 
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
 
   const { batchActiveMenuItems } = useMasterDataBatchSetActive({
     update: workGroupApi.update,
@@ -355,8 +364,9 @@ const WorkGroupsPage: React.FC = () => {
           date: new Date().toISOString().slice(0, 10),
         })}.csv`;
       } else {
-        const allData = await workGroupApi.list({ skip: 0, limit: 10000 });
-        exportData = allData.items;
+        const allData = await workGroupApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
+        const { data: exportItems } = normalizeMasterListResponse(allData);
+        exportData = exportItems;
         filename = `${t('app.master-data.workGroups.exportFilenameAll', {
           date: new Date().toISOString().slice(0, 10),
         })}.csv`;
@@ -413,7 +423,16 @@ const WorkGroupsPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
+  const workGroupActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
+    [t],
+  );
+
   const columns: ProColumns<WorkGroup>[] = React.useMemo(() => [
+    ...masterCrudCodeNameSearchColumns({
+      code: t('field.workGroup.code'),
+      name: t('field.workGroup.name'),
+    }),
     {
       title: t('field.workGroup.code'),
       dataIndex: 'code',
@@ -422,6 +441,7 @@ const WorkGroupsPage: React.FC = () => {
       ellipsis: true,
       copyable: true,
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('field.workGroup.name'),
@@ -429,6 +449,7 @@ const WorkGroupsPage: React.FC = () => {
       width: 200,
       ellipsis: true,
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('field.workGroup.members'),
@@ -451,26 +472,26 @@ const WorkGroupsPage: React.FC = () => {
     {
       title: t('field.workGroup.isActive'),
       dataIndex: 'isActive',
-      width: 100,
+      hideInTable: true,
+      order: 20,
       valueType: 'select',
-      valueEnum: {
-        true: { text: t('common.enabled'), status: 'Success' },
-        false: { text: t('common.disabled'), status: 'Default' },
-      },
+      valueEnum: workGroupActiveValueEnum,
+      fieldProps: { allowClear: true },
+    },
+    {
+      title: t('field.workGroup.isActive'),
+      dataIndex: 'isActive',
+      width: 100,
+      hideInSearch: true,
+      sorter: true,
+      valueEnum: workGroupActiveValueEnum,
       render: (_, record) => (
         <Tag color={record?.isActive ? 'success' : 'default'}>
           {record?.isActive ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'createdAt',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
+    ...masterCrudCreatedUpdatedColumns<WorkGroup>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -501,7 +522,7 @@ const WorkGroupsPage: React.FC = () => {
         </Space>
       ),
     },
-  ], [t]);
+  ], [t, workGroupActiveValueEnum]);
 
   const detailColumns: ProDescriptionsItemProps<WorkGroup>[] = [
     { title: t('field.workGroup.code'), dataIndex: 'code' },
@@ -549,28 +570,23 @@ const WorkGroupsPage: React.FC = () => {
           defaultViewType="table"
           loadingDelay={200}
           request={async (params, sort, _filter, searchFormValues) => {
-            const apiParams: any = {
-              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-              limit: params.pageSize || 20,
-            };
-
-            if (
-              searchFormValues?.isActive !== undefined &&
-              searchFormValues.isActive !== '' &&
-              searchFormValues.isActive !== null
-            ) {
-              apiParams.is_active = searchFormValues.isActive;
-            }
-            applyFactoryKeyword(apiParams, searchFormValues);
-            applyFactoryTableSort(apiParams, sort);
+            const pageSize = params.pageSize || 20;
+            const skip = ((params.current || 1) - 1) * pageSize;
+            const listParams = resolveMasterCrudListParams(searchFormValues, sort);
+            lastListParamsRef.current = listParams;
 
             try {
-              const result = await workGroupApi.list(apiParams);
+              const result = await workGroupApi.list({
+                skip,
+                limit: pageSize,
+                ...listParams,
+              });
+              const { data, total } = normalizeMasterListResponse(result);
 
               return {
-                data: result.items,
+                data,
                 success: true,
-                total: result.total,
+                total,
               };
             } catch (error: any) {
               console.error('获取工作小组列表失败:', error);
@@ -583,7 +599,9 @@ const WorkGroupsPage: React.FC = () => {
             }
           }}
           rowKey="uuid"
-          showAdvancedSearch={true}
+          showAdvancedSearch
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={MASTER_CRUD_PINNED_ACTIVE_FIELD}
           pagination={{
             defaultPageSize: 20,
             showSizeChanger: true,

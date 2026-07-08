@@ -877,6 +877,8 @@ export const materialBatchApi = {
           ...(params.keyword?.trim() ? { keyword: params.keyword.trim() } : {}),
           ...(params.sortBy ? { sort_by: params.sortBy } : {}),
           ...(params.sortOrder ? { sort_order: params.sortOrder } : {}),
+          ...(params.created_start_date ? { created_start_date: params.created_start_date } : {}),
+          ...(params.created_end_date ? { created_end_date: params.created_end_date } : {}),
         }
       : undefined;
     return api.get('/apps/master-data/materials/batches', { params: backendParams });
@@ -990,6 +992,8 @@ export const materialSerialApi = {
           ...(params.keyword?.trim() ? { keyword: params.keyword.trim() } : {}),
           ...(params.sortBy ? { sort_by: params.sortBy } : {}),
           ...(params.sortOrder ? { sort_order: params.sortOrder } : {}),
+          ...(params.created_start_date ? { created_start_date: params.created_start_date } : {}),
+          ...(params.created_end_date ? { created_end_date: params.created_end_date } : {}),
         }
       : undefined;
     return api.get('/apps/master-data/materials/serials', { params: backendParams });

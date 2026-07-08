@@ -65,11 +65,11 @@ function buildSchedulingGanttToolbar({
   onScrollToToday,
 }: SchedulingGanttToolbarProps): SchedulingGanttToolbarNodes {
   const title = (
-    <Space wrap>
-      <ReloadOutlined onClick={onRefresh} style={{ cursor: 'pointer' }} />
-      {t('app.kuaizhizao.scheduling.ganttToolbar.title')}
+    <Space wrap align="center" size={[8, 8]} className="scheduling-gantt-toolbar__title">
+      <ReloadOutlined onClick={onRefresh} className="scheduling-gantt-toolbar__icon-btn" />
+      <Typography.Text strong>{t('app.kuaizhizao.scheduling.ganttToolbar.title')}</Typography.Text>
       <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.fullscreenTip')}>
-        <QuestionCircleOutlined style={{ color: '#8c8c8c', cursor: 'help' }} />
+        <QuestionCircleOutlined className="scheduling-gantt-toolbar__help-icon" />
       </Tooltip>
       <Typography.Text type="secondary">
         {t('app.kuaizhizao.scheduling.ganttToolbar.stationOpStats', {
@@ -90,7 +90,7 @@ function buildSchedulingGanttToolbar({
       {canUpdate ? (
         <>
           <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.draftTooltip')}>
-            <Space size={4}>
+            <Space size={4} align="center">
               <Switch size="small" checked={draftMode} onChange={onDraftModeChange} />
               <Typography.Text type="secondary">{t('app.kuaizhizao.scheduling.ganttToolbar.draft')}</Typography.Text>
             </Space>
@@ -165,7 +165,7 @@ function buildSchedulingGanttToolbar({
   );
 
   const extra = (
-    <Space>
+    <Space align="center" className="scheduling-gantt-toolbar__extra">
       <Button size="small" onClick={onScrollToToday}>
         {t('app.kuaizhizao.scheduling.ganttToolbar.today')}
       </Button>

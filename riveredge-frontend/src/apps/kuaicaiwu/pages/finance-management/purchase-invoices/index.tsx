@@ -32,6 +32,15 @@ import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatu
 import { buildReviewStatusEnum, getChineseInvoiceTypeOptions } from '../../../utils/financeSharedOptions';
 import { purchaseInvoiceCapabilityReasonMessage } from '../../../utils/purchaseInvoiceCapabilityMessages';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  FINANCE_INVOICE_PINNED_REVIEW_FIELD,
+  financeDocCodePartnerSearchColumns,
+  financeDocCreatedUpdatedColumns,
+  financeInvoiceNumberSearchColumn,
+  resolvePurchaseInvoiceListParams,
+} from '../../../utils/financeListCore';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import type { PurchaseInvoiceListParams } from '../../../types/finance/purchase-invoice';
 
 const P = 'app.kuaicaiwu.purchaseInvoice';
 
@@ -47,6 +56,7 @@ type PullPreviewKind = 'purchase_order' | 'purchase_receipt';
 
 const PurchaseInvoiceList: React.FC = () => {
   const actionRef = useRef<ActionType>();
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [pullSubmitting, setPullSubmitting] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -307,13 +317,26 @@ const PurchaseInvoiceList: React.FC = () => {
     }
   };
 
+  const reviewStatusEnum = useMemo(() => buildReviewStatusEnum(t), [t]);
+
   const columns: ProColumns<PurchaseInvoice>[] = useMemo(
     () => [
+      ...financeDocCodePartnerSearchColumns({
+        docCodeLabel: t(`${P}.col.code`),
+        docCodeField: 'invoice_code',
+        partnerLabel: t('app.kuaicaiwu.common.supplier'),
+        partnerIdField: 'supplier_id',
+        partnerNameField: 'supplier_name',
+        partnerOptions: supplierOptions,
+      }),
+      financeInvoiceNumberSearchColumn(t(`${P}.col.invoiceNumber`)),
       {
         title: t(`${P}.col.code`),
         dataIndex: 'invoice_code',
         width: 168,
         fixed: 'left',
+        hideInSearch: true,
+        sorter: true,
         render: (_, entity) => (
           <Typography.Text copyable={{ text: String(entity.invoice_code ?? '') }} ellipsis>
             <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${entity.id}`)}>
@@ -326,16 +349,22 @@ const PurchaseInvoiceList: React.FC = () => {
         title: t(`${P}.col.purchaseOrder`),
         dataIndex: 'purchase_order_code',
         width: 150,
+        hideInSearch: true,
+        sorter: true,
       },
       {
         title: t('app.kuaicaiwu.common.supplier'),
         dataIndex: 'supplier_name',
         width: 200,
+        hideInSearch: true,
+        sorter: true,
       },
       {
         title: t(`${P}.col.invoiceNumber`),
         dataIndex: 'invoice_number',
         width: 120,
+        hideInSearch: true,
+        sorter: true,
       },
       {
         title: t(`${P}.col.totalAmount`),
@@ -343,24 +372,39 @@ const PurchaseInvoiceList: React.FC = () => {
         valueType: 'money',
         align: 'right',
         width: 120,
+        hideInSearch: true,
+        sorter: true,
       },
       {
         title: t('app.kuaicaiwu.common.invoiceDate'),
         dataIndex: 'invoice_date',
         valueType: 'date',
         width: 120,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.common.invoiceDate'),
+        dataIndex: 'invoice_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        order: 20,
+        formItemProps: formDateRangeFormItemProps,
       },
       {
         title: t('common.status'),
         dataIndex: 'status',
         hideInTable: true,
+        order: 21,
       },
       {
         title: t('app.kuaicaiwu.common.reviewStatus'),
         dataIndex: 'review_status',
         hideInTable: true,
-        valueEnum: buildReviewStatusEnum(t),
+        order: 22,
+        valueEnum: reviewStatusEnum,
       },
+      ...financeDocCreatedUpdatedColumns<PurchaseInvoice>(t),
       {
         title: t('app.kuaicaiwu.common.lifecycle'),
         dataIndex: 'lifecycle_stage',
@@ -420,7 +464,7 @@ const PurchaseInvoiceList: React.FC = () => {
           ].filter(Boolean) as React.ReactNode[],
       },
     ],
-    [t, navigate],
+    [t, navigate, supplierOptions, reviewStatusEnum],
   );
 
   const pullTableColumns = useMemo(
@@ -474,14 +518,16 @@ const PurchaseInvoiceList: React.FC = () => {
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices"
         scroll={{ x: 1600 }}
         showAdvancedSearch
-        request={async (params) => {
-          const { current, pageSize, ...rest } = params;
+        request={async (params, sort, _filter, searchFormValues) => {
+          const listParams = resolvePurchaseInvoiceListParams(searchFormValues, sort);
+          lastListParamsRef.current = listParams;
+          const apiParams: PurchaseInvoiceListParams = {
+            skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+            limit: params.pageSize || 20,
+            ...listParams,
+          };
           try {
-            const res = await purchaseInvoiceService.list({
-              skip: ((current || 1) - 1) * (pageSize || 20),
-              limit: pageSize || 20,
-              ...rest,
-            });
+            const res = await purchaseInvoiceService.list(apiParams);
             return {
               data: res.items || [],
               total: res.total || 0,
@@ -492,6 +538,8 @@ const PurchaseInvoiceList: React.FC = () => {
             return { data: [], total: 0, success: false };
           }
         }}
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={FINANCE_INVOICE_PINNED_REVIEW_FIELD}
         rowKey="id"
         showCreateButton={false}
         createButtonText={t(`${P}.createButton`)}

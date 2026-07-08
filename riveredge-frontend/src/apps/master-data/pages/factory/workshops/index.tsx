@@ -23,9 +23,17 @@ import {
   workshopApi,
   plantApi,
   factoryListItems,
-  applyFactoryKeyword,
-  applyFactoryTableSort,
 } from '../../../services/factory';
+import {
+  buildMasterCrudActiveValueEnum,
+  formatMasterDateTimeCell,
+  MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  masterCrudCodeNameSearchColumns,
+  masterCrudCreatedUpdatedColumns,
+  normalizeMasterListResponse,
+  pickOptionalId,
+  resolveMasterCrudListParams,
+} from '../../../utils/masterListCore';
 import type { Workshop, WorkshopCreate, Plant } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
@@ -51,6 +59,7 @@ const WorkshopsPage: React.FC = () => {
 
     const actionRef = useRef<ActionType>(null);
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+    const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
 
     const [drawerVisible, setDrawerVisible] = useState(false);
     const [workshopDetail, setWorkshopDetail] = useState<Workshop | null>(null);
@@ -490,8 +499,9 @@ const WorkshopsPage: React.FC = () => {
         filename = `${t('app.master-data.workshops.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
         // 导出全部数据
-        const allData = await workshopApi.list({ skip: 0, limit: 10000 });
-        exportData = allData.items;
+        const allData = await workshopApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
+        const { data: exportItems } = normalizeMasterListResponse(allData);
+        exportData = exportItems;
         filename = `${t('app.master-data.workshops.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
@@ -548,9 +558,18 @@ const WorkshopsPage: React.FC = () => {
   /**
    * 表格列定义（使用 useMemo 确保 customFields 和 plants 变化时重新计算）
    */
+  const workshopActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
+    [t],
+  );
+
   const columns: ProColumns<Workshop>[] = useMemo(() => {
     const customFieldColumns = generateCustomFieldColumns();
-    const fixedColumns = [
+    return [
+      ...masterCrudCodeNameSearchColumns({
+        code: t('app.master-data.workshops.code'),
+        name: t('app.master-data.workshops.name'),
+      }),
       {
         title: t('app.master-data.workshops.code'),
         dataIndex: 'code',
@@ -559,23 +578,27 @@ const WorkshopsPage: React.FC = () => {
         ellipsis: true,
         copyable: true,
         sorter: true,
+        hideInSearch: true,
       },
       {
         title: t('app.master-data.workshops.name'),
         dataIndex: 'name',
         width: 200,
+        ellipsis: true,
         sorter: true,
+        hideInSearch: true,
       },
       {
         title: t('app.master-data.workshops.plantName'),
         dataIndex: 'plantId',
         width: 150,
-        valueType: 'select' as any,
+        order: 15,
+        valueType: 'select' as const,
         valueEnum: plants.reduce((acc, plant) => {
           acc[plant.id] = { text: plant.name };
           return acc;
         }, {} as Record<number, { text: string }>),
-        render: (_text: any, record: Workshop) => formatPlantDisplay(record),
+        render: (_text, record) => formatPlantDisplay(record),
       },
       {
         title: t('app.master-data.workshops.description'),
@@ -586,13 +609,20 @@ const WorkshopsPage: React.FC = () => {
       {
         title: t('app.master-data.workshops.statusLabel'),
         dataIndex: 'isActive',
+        hideInTable: true,
+        order: 20,
+        valueType: 'select',
+        valueEnum: workshopActiveValueEnum,
+        fieldProps: { allowClear: true },
+      },
+      {
+        title: t('app.master-data.workshops.statusLabel'),
+        dataIndex: 'isActive',
         width: 100,
-        valueType: 'select' as any,
-        valueEnum: {
-          true: { text: t('common.enabled'), status: 'Success' },
-          false: { text: t('common.disabled'), status: 'Default' },
-        },
-        render: (_text: any, record: Workshop) => {
+        sorter: true,
+        hideInSearch: true,
+        valueEnum: workshopActiveValueEnum,
+        render: (_text, record) => {
           const isActive = record?.isActive ?? (record as any)?.is_active;
           return (
             <Tag color={isActive ? 'success' : 'default'}>
@@ -601,22 +631,14 @@ const WorkshopsPage: React.FC = () => {
           );
         },
       },
-      // 插入自定义字段列
       ...customFieldColumns,
-      {
-        title: t('common.createdAt'),
-        dataIndex: 'createdAt',
-        width: 180,
-        valueType: 'dateTime' as any,
-        hideInSearch: true,
-        sorter: true,
-      },
+      ...masterCrudCreatedUpdatedColumns<Workshop>(t),
       {
         title: t('common.actions'),
         valueType: 'option',
         width: 150,
         fixed: 'right' as const,
-        render: (_text: any, record: Workshop) => (
+        render: (_text, record) => (
           <Space>
             <Button key="view" {...rowActionKind('read')}
               size="small"
@@ -645,12 +667,10 @@ const WorkshopsPage: React.FC = () => {
               </Button>
             </Popconfirm>
           </Space>
-        ),
-      },
+      ),
+    },
     ];
-
-    return fixedColumns as ProColumns<Workshop>[];
-  }, [customFields, plants, t, formatPlantDisplay]);
+  }, [customFields, plants, t, formatPlantDisplay, workshopActiveValueEnum]);
 
   /**
    * 详情 Drawer 的列定义
@@ -719,31 +739,28 @@ const WorkshopsPage: React.FC = () => {
         showExportButton={true}
         onExport={handleExport}
         request={async (params, sort, _filter, searchFormValues) => {
-          // 处理搜索参数
-          const apiParams: any = {
-            skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-            limit: params.pageSize || 20,
-          };
-
-          // 启用状态筛选
-          if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.is_active = searchFormValues.isActive;
-          }
-
-          if (searchFormValues?.plantId !== undefined && searchFormValues.plantId !== '' && searchFormValues.plantId !== null) {
-            apiParams.plant_id = searchFormValues.plantId;
-          }
-
-          applyFactoryKeyword(apiParams, searchFormValues);
-          applyFactoryTableSort(apiParams, sort);
+          const pageSize = params.pageSize || 20;
+          const skip = ((params.current || 1) - 1) * pageSize;
+          const listParams = resolveMasterCrudListParams(searchFormValues, sort, {
+            extra: (search) => {
+              const plant_id = pickOptionalId(search, 'plantId');
+              return plant_id != null ? { plant_id } : {};
+            },
+          });
+          lastListParamsRef.current = listParams;
 
           try {
-            const result = await workshopApi.list(apiParams);
-            const enrichedData = await enrichRecordsWithCustomFields(result.items);
+            const result = await workshopApi.list({
+              skip,
+              limit: pageSize,
+              ...listParams,
+            });
+            const { data, total } = normalizeMasterListResponse(result);
+            const enrichedData = await enrichRecordsWithCustomFields(data);
             return {
               data: enrichedData,
               success: true,
-              total: result.total,
+              total,
             };
           } catch (error: any) {
             console.error('获取车间列表失败:', error);
@@ -756,7 +773,9 @@ const WorkshopsPage: React.FC = () => {
           }
         }}
         rowKey="uuid"
-        showAdvancedSearch={true}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={MASTER_CRUD_PINNED_ACTIVE_FIELD}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,

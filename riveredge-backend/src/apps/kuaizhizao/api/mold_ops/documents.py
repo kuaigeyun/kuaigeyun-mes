@@ -106,9 +106,29 @@ async def list_mold_trials(
     limit: int = Query(100, ge=1, le=1000),
     mold_id: Optional[int] = Query(None, ge=1),
     status_filter: Optional[str] = Query(None, alias="status"),
+
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    doc_start_date: Optional[str] = Query(None, description="单据日期起"),
+    doc_end_date: Optional[str] = Query(None, description="单据日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.trial_service.list(tenant_id, skip, limit, mold_id, status_filter)
+    rows, total = await svc.trial_service.list(tenant_id, skip, limit, mold_id, status_filter,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        doc_start_date=doc_start_date,
+        doc_end_date=doc_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return MoldTrialListResponse(
         items=[MoldTrialResponse.model_validate(r) for r in rows],
         total=total,
@@ -193,6 +213,16 @@ async def list_outstanding_mold_borrows(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     mold_id: Optional[int] = Query(None, ge=1),
+
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    doc_start_date: Optional[str] = Query(None, description="单据日期起"),
+    doc_end_date: Optional[str] = Query(None, description="单据日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows, total = await svc.borrow_service.list_outstanding(tenant_id, skip, limit, mold_id)
@@ -214,9 +244,29 @@ async def list_mold_borrows(
     limit: int = Query(100, ge=1, le=1000),
     mold_id: Optional[int] = Query(None, ge=1),
     status_filter: Optional[str] = Query(None, alias="status"),
+
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    doc_start_date: Optional[str] = Query(None, description="单据日期起"),
+    doc_end_date: Optional[str] = Query(None, description="单据日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.borrow_service.list(tenant_id, skip, limit, mold_id, status_filter)
+    rows, total = await svc.borrow_service.list(tenant_id, skip, limit, mold_id, status_filter,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        doc_start_date=doc_start_date,
+        doc_end_date=doc_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return MoldBorrowListResponse(
         items=[MoldBorrowResponse.model_validate(r) for r in rows],
         total=total,
@@ -301,9 +351,29 @@ async def list_mold_returns(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     mold_id: Optional[int] = Query(None, ge=1),
+
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    doc_start_date: Optional[str] = Query(None, description="单据日期起"),
+    doc_end_date: Optional[str] = Query(None, description="单据日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.return_service.list(tenant_id, skip, limit, mold_id)
+    rows, total = await svc.return_service.list(tenant_id, skip, limit, mold_id,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        doc_start_date=doc_start_date,
+        doc_end_date=doc_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return MoldReturnListResponse(
         items=[MoldReturnResponse.model_validate(r) for r in rows],
         total=total,
@@ -406,9 +476,29 @@ async def list_mold_maintenances(
     limit: int = Query(100, ge=1, le=1000),
     mold_id: Optional[int] = Query(None, ge=1),
     status_filter: Optional[str] = Query(None, alias="status"),
+
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    doc_start_date: Optional[str] = Query(None, description="单据日期起"),
+    doc_end_date: Optional[str] = Query(None, description="单据日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.maintenance_service.list(tenant_id, skip, limit, mold_id, status_filter)
+    rows, total = await svc.maintenance_service.list(tenant_id, skip, limit, mold_id, status_filter,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        doc_start_date=doc_start_date,
+        doc_end_date=doc_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return MoldMaintenanceListResponse(
         items=[MoldMaintenanceResponse.model_validate(r) for r in rows],
         total=total,
@@ -585,9 +675,29 @@ async def list_mold_repairs(
     limit: int = Query(100, ge=1, le=1000),
     mold_id: Optional[int] = Query(None, ge=1),
     status_filter: Optional[str] = Query(None, alias="status"),
+
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    doc_start_date: Optional[str] = Query(None, description="单据日期起"),
+    doc_end_date: Optional[str] = Query(None, description="单据日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.repair_service.list(tenant_id, skip, limit, mold_id, status_filter)
+    rows, total = await svc.repair_service.list(tenant_id, skip, limit, mold_id, status_filter,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        doc_start_date=doc_start_date,
+        doc_end_date=doc_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return MoldRepairListResponse(
         items=[MoldRepairResponse.model_validate(r) for r in rows],
         total=total,
@@ -747,10 +857,31 @@ async def list_mold_scrap_applications(
     limit: int = Query(100, ge=1, le=1000),
     mold_id: Optional[int] = Query(None, ge=1),
     status_filter: Optional[str] = Query(None, alias="status"),
+
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    doc_start_date: Optional[str] = Query(None, description="单据日期起"),
+    doc_end_date: Optional[str] = Query(None, description="单据日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows, total = await svc.scrap_application_service.list(
         tenant_id, skip, limit, mold_id, status_filter
+    ,
+
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        doc_start_date=doc_start_date,
+        doc_end_date=doc_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
     return MoldScrapApplicationListResponse(
         items=[MoldScrapApplicationResponse.model_validate(r) for r in rows],

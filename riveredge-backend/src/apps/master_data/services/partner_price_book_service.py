@@ -24,6 +24,11 @@ from apps.master_data.schemas.partner_price_book_schemas import (
     PartnerPriceResolveResponse,
 )
 from apps.master_data.services.material_code_service import MaterialCodeService
+from apps.master_data.services.master_data_list_core import (
+    apply_master_crud_created_date_range,
+    apply_master_crud_updated_date_range,
+    resolve_master_crud_order_clause,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -472,6 +477,12 @@ class PartnerPriceBookService:
         keyword: Optional[str] = None,
         active_only: Optional[bool] = None,
         effective_on: Optional[date] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> Tuple[List[PartnerPriceBookResponse], int]:
         query = PartnerPriceBook.filter(
             tenant_id=tenant_id,
@@ -528,8 +539,26 @@ class PartnerPriceBookService:
                 | Q(remark__icontains=kw)
             )
 
+        query = apply_master_crud_created_date_range(
+            query,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
+        query = apply_master_crud_updated_date_range(
+            query,
+            start_date=updated_start_date,
+            end_date=updated_end_date,
+        )
+
         total = await query.count()
-        rows = await query.order_by("-updated_at", "-id").offset(skip).limit(limit)
+        order_expr = resolve_master_crud_order_clause(
+            sort_by,
+            sort_order,
+            default_col="updated_at",
+        )
+        if not sort_by:
+            order_expr = "-updated_at"
+        rows = await query.order_by(order_expr, "-id").offset(skip).limit(limit)
 
         partner_cache: Dict[int, Any] = {}
         material_cache: Dict[int, Material] = {}

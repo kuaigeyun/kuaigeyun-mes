@@ -11,6 +11,10 @@ import { apiRequest } from '../../../../../services/api';
 import { documentReconciliationService, type DocumentReconciliationGapItem } from '../../../services/finance/document-reconciliation';
 import { formatSettlementType } from '../../../utils/financeUiLabels';
 import { documentReconciliationGapReasonMessage } from '../../../utils/documentReconciliationCapabilityMessages';
+import {
+  documentReconciliationGapSearchColumns,
+  resolveDocumentReconciliationGapListParams,
+} from '../../../utils/financeListCore';
 
 type GapRow = DocumentReconciliationGapItem;
 type GapSummary = {
@@ -52,11 +56,19 @@ const formatDocType = (docType: string | undefined, t: TFunction): string => {
   return key ? t(key) : docType;
 };
 
+type GapQueryContext = {
+  partner_type: 'Customer' | 'Supplier';
+  partner_id: number;
+  start_date: string;
+  end_date: string;
+};
+
 const DocumentReconciliationPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>();
-  const gapRowsRef = useRef<GapRow[]>([]);
+  const gapQueryContextRef = useRef<GapQueryContext | null>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [gapForm] = Form.useForm();
   const [chainForm] = Form.useForm();
   const [activeTab, setActiveTab] = useState('gaps');
@@ -86,26 +98,17 @@ const DocumentReconciliationPage: React.FC = () => {
   const handleSearch = async () => {
     try {
       const values = await gapForm.validateFields();
-      setLoading(true);
-      const result = await documentReconciliationService.listOpenGaps({
+      gapQueryContextRef.current = {
         partner_type: values.partner_type,
         partner_id: values.partner_id,
         start_date: values.period[0].format('YYYY-MM-DD'),
         end_date: values.period[1].format('YYYY-MM-DD'),
-        only_gaps: true,
-      });
-      const items = result?.items ?? [];
-      const nextRows = Array.isArray(items) ? items : [];
-      gapRowsRef.current = nextRows;
-      setGapSummary({
-        gap_count: result?.gap_count ?? nextRows.length,
-        open_balance_total: result?.open_balance_total,
-      });
+      };
+      setLoading(true);
       actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || t(`${D}.queryFailed`));
-    } finally {
-      setLoading(false);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      messageApi.error(err.message || t(`${D}.queryFailed`));
     }
   };
 
@@ -147,27 +150,41 @@ const DocumentReconciliationPage: React.FC = () => {
     await loadChain(flowType, docType, row.doc_id);
   };
 
+  const docTypeEnum = useMemo(
+    () => ({
+      receivable: { text: t(`${D}.docType.receivable`) },
+      receipt: { text: t(`${D}.docType.receipt`) },
+      payable: { text: t(`${D}.docType.payable`) },
+      payment: { text: t(`${D}.docType.payment`) },
+    }),
+    [t],
+  );
+
   const columns: ProColumns<GapRow>[] = useMemo(() => [
+    ...documentReconciliationGapSearchColumns({
+      docTypeLabel: t(`${D}.col.docType`),
+      docCodeLabel: t(`${D}.col.docCode`),
+      docTypeEnum,
+    }),
     {
       title: t(`${D}.col.docType`),
       dataIndex: 'doc_type',
       width: 120,
+      hideInSearch: true,
+      sorter: true,
       valueType: 'select',
-      valueEnum: {
-        receivable: { text: t(`${D}.docType.receivable`) },
-        receipt: { text: t(`${D}.docType.receipt`) },
-        payable: { text: t(`${D}.docType.payable`) },
-        payment: { text: t(`${D}.docType.payment`) },
-      },
+      valueEnum: docTypeEnum,
       render: (_, r) => formatDocType(r.doc_type, t),
     },
-    { title: t(`${D}.col.docCode`), dataIndex: 'doc_code', width: 160, ellipsis: true },
+    { title: t(`${D}.col.docCode`), dataIndex: 'doc_code', width: 160, ellipsis: true, hideInSearch: true, sorter: true },
     {
       title: t(`${S}.preview.col.docAmount`),
       dataIndex: 'quantity',
       valueType: 'money',
       align: 'right',
       width: 120,
+      hideInSearch: true,
+      sorter: true,
     },
     {
       title: t(`${S}.preview.col.settledAmount`),
@@ -175,6 +192,8 @@ const DocumentReconciliationPage: React.FC = () => {
       valueType: 'money',
       align: 'right',
       width: 120,
+      hideInSearch: true,
+      sorter: true,
     },
     {
       title: t(`${S}.preview.col.settleableAmount`),
@@ -182,6 +201,8 @@ const DocumentReconciliationPage: React.FC = () => {
       valueType: 'money',
       align: 'right',
       width: 120,
+      hideInSearch: true,
+      sorter: true,
     },
     {
       title: t(`${D}.col.gapReason`),
@@ -211,7 +232,7 @@ const DocumentReconciliationPage: React.FC = () => {
         </Button>
       ),
     },
-  ], [t]);
+  ], [t, docTypeEnum]);
 
   useEffect(() => {
     loadPartners('Customer');
@@ -268,57 +289,47 @@ const DocumentReconciliationPage: React.FC = () => {
   const gapRequest = useCallback(
     async (
       params: { current?: number; pageSize?: number },
-      _sort: Record<string, 'ascend' | 'descend' | null>,
+      sort: Record<string, 'ascend' | 'descend' | null>,
       _filter: Record<string, React.ReactText[] | null>,
       searchFormValues?: Record<string, unknown>,
     ) => {
+      const context = gapQueryContextRef.current;
+      if (!context) {
+        return { data: [], success: true, total: 0 };
+      }
+
       const current = params.current ?? 1;
       const pageSize = params.pageSize ?? 20;
-      let filtered = [...gapRowsRef.current];
+      const listParams = resolveDocumentReconciliationGapListParams(searchFormValues, sort);
+      lastListParamsRef.current = listParams;
 
-      const keyword =
-        typeof searchFormValues?.keyword === 'string' ? searchFormValues.keyword.trim().toLowerCase() : '';
-      if (keyword) {
-        filtered = filtered.filter((row) => {
-          const docTypeLabel = formatDocType(row.doc_type, t);
-          const settlementLabel = row.settlement_type ? formatSettlementType(String(row.settlement_type), t) : '';
-          const hay = [
-            docTypeLabel,
-            row.doc_code,
-            settlementLabel,
-            row.amount,
-            row.quantity,
-            row.pushed_quantity,
-            row.max_push_quantity,
-            row.remaining_amount ?? row.unsettled_amount,
-          ]
-            .filter((v) => v != null && v !== '')
-            .join('\n')
-            .toLowerCase();
-          return hay.includes(keyword);
+      try {
+        setLoading(true);
+        const result = await documentReconciliationService.listOpenGaps({
+          ...context,
+          only_gaps: true,
+          skip: (current - 1) * pageSize,
+          limit: pageSize,
+          ...listParams,
         });
+        setGapSummary({
+          gap_count: result?.gap_count ?? result?.total ?? 0,
+          open_balance_total: result?.open_balance_total,
+        });
+        return {
+          data: result?.items ?? [],
+          success: true,
+          total: result?.total ?? 0,
+        };
+      } catch (error: unknown) {
+        const err = error as { message?: string };
+        messageApi.error(err.message || t(`${D}.queryFailed`));
+        return { data: [], success: false, total: 0 };
+      } finally {
+        setLoading(false);
       }
-
-      const docType = searchFormValues?.doc_type;
-      if (typeof docType === 'string' && docType) {
-        filtered = filtered.filter((row) => row.doc_type === docType);
-      }
-
-      const docCode = searchFormValues?.doc_code;
-      if (typeof docCode === 'string' && docCode.trim()) {
-        const codeKeyword = docCode.trim().toLowerCase();
-        filtered = filtered.filter((row) => String(row.doc_code ?? '').toLowerCase().includes(codeKeyword));
-      }
-
-      const total = filtered.length;
-      const start = (current - 1) * pageSize;
-      return {
-        data: filtered.slice(start, start + pageSize),
-        success: true,
-        total,
-      };
     },
-    [t],
+    [messageApi, t],
   );
 
   const chainStartDocOptions = useMemo(() => [
@@ -350,7 +361,9 @@ const DocumentReconciliationPage: React.FC = () => {
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.document-reconciliation.gaps"
         columns={columns}
         loading={loading}
-        search={false}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        scroll={{ x: 1280 }}
         pagination={{ pageSize: 20 }}
       />
     </>

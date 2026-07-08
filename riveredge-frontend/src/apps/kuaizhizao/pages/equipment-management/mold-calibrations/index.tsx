@@ -20,6 +20,12 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { moldApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  normalizeEquipmentListResponse,
+  resolveAssetWorkflowListParams,
+} from '../../../utils/equipmentListCore';
 
 interface MoldCalibration {
   uuid?: string;
@@ -96,21 +102,49 @@ const MoldCalibrationsPage: React.FC = () => {
   const columns: ProColumns<MoldCalibration>[] = useMemo(
     () => [
       {
+        title: t('app.kuaizhizao.moldCalibration.colCalibrationDate'),
+        dataIndex: 'calibration_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 10 } as ProColumns['search'],
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 11 } as ProColumns['search'],
+      },
+      {
         title: t('app.kuaizhizao.moldCalibration.colMoldCode'),
         dataIndex: 'mold_code',
         width: 120,
+        sorter: true,
+        search: { order: 30 } as ProColumns['search'],
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.mold_code ?? '') }} ellipsis>
             {r.mold_code ?? '-'}
           </Typography.Text>
         ),
       },
-      { title: t('app.kuaizhizao.moldCalibration.colMoldName'), dataIndex: 'mold_name', width: 180, ellipsis: true },
-      { title: t('app.kuaizhizao.moldCalibration.colCalibrationDate'), dataIndex: 'calibration_date', valueType: 'date', width: 120 },
+      { title: t('app.kuaizhizao.moldCalibration.colMoldName'), dataIndex: 'mold_name', width: 180, ellipsis: true, sorter: true, hideInSearch: true },
+      {
+        title: t('app.kuaizhizao.moldCalibration.colCalibrationDate'),
+        dataIndex: 'calibration_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.calibration_date ? formatDateTime(r.calibration_date, 'YYYY-MM-DD') : '-'),
+      },
       {
         title: t('app.kuaizhizao.moldCalibration.colResult'),
         dataIndex: 'result',
         width: 100,
+        sorter: true,
+        hideInSearch: true,
         render: (_, r) => {
           const color = r.result === '合格' ? 'success' : r.result === '不合格' ? 'error' : 'warning';
           const labelKey = r.result ? CALIBRATION_RESULT_LABEL_KEYS[r.result] : undefined;
@@ -121,13 +155,23 @@ const MoldCalibrationsPage: React.FC = () => {
         title: t('app.kuaizhizao.moldCalibration.colCertificateNo'),
         dataIndex: 'certificate_no',
         width: 140,
+        sorter: true,
+        hideInSearch: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.certificate_no ?? '') }} ellipsis>
             {r.certificate_no ?? '-'}
           </Typography.Text>
         ),
       },
-      { title: t('app.kuaizhizao.moldCalibration.colExpiryDate'), dataIndex: 'expiry_date', valueType: 'date', width: 120 },
+      {
+        title: t('app.kuaizhizao.moldCalibration.colExpiryDate'),
+        dataIndex: 'expiry_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.expiry_date ? formatDateTime(r.expiry_date, 'YYYY-MM-DD') : '-'),
+      },
       {
         title: t('app.kuaizhizao.moldCalibration.colLifecycle'),
         dataIndex: 'lifecycle_stage',
@@ -165,14 +209,21 @@ const MoldCalibrationsPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="uuid"
         columns={columns}
-        request={async (params) => {
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        request={async (params, sort, _filter, searchFormValues) => {
+          const listParams = resolveAssetWorkflowListParams(searchFormValues, sort, {
+            docDateRangeKeys: ['calibration_date_range', 'calibrationDateRange'],
+            docDateParamPrefix: 'calibration',
+          });
           const res = await moldApi.listCalibrations({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
             mold_uuid: params.mold_uuid,
-            keyword: (params as any).keyword,
+            ...listParams,
           });
-          return { data: res.items || [], success: true, total: res.total || 0 };
+          const { data, total } = normalizeEquipmentListResponse(res);
+          return { data: data as MoldCalibration[], success: true, total };
         }}
         toolBarRender={() => [
           <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>

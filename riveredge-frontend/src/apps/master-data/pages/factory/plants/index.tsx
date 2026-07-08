@@ -21,7 +21,15 @@ import {
   ListPageTemplate,
 } from '../../../../../components/layout-templates';
 
-import { plantApi, applyFactoryKeyword, applyFactoryTableSort } from '../../../services/factory';
+import { plantApi } from '../../../services/factory';
+import {
+  buildMasterCrudActiveValueEnum,
+  formatMasterDateTimeCell,
+  MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  normalizeMasterListResponse,
+  resolveMasterCrudListParams,
+} from '../../../utils/masterListCore';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { PlantFormModal } from '../../../components/PlantFormModal';
 import type { Plant, PlantCreate } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -49,6 +57,7 @@ const PlantsPage: React.FC = () => {
 
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
 
   // Modal 相关状态（创建/编辑厂区）
   const [modalVisible, setModalVisible] = useState(false);
@@ -426,7 +435,7 @@ const PlantsPage: React.FC = () => {
         filename = `${t('app.master-data.plants.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
         // 导出全部数据
-        const allData = await plantApi.list({ skip: 0, limit: 10000 });
+        const allData = await plantApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
         exportData = allData.items;
         filename = `${t('app.master-data.plants.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
@@ -478,9 +487,33 @@ const PlantsPage: React.FC = () => {
   /**
    * 表格列定义
    */
+  const plantActiveValueEnum = useMemo(
+    () =>
+      buildMasterCrudActiveValueEnum(
+        t,
+        'app.master-data.plants.enabled',
+        'app.master-data.plants.disabled',
+      ),
+    [t],
+  );
+
   const columns: ProColumns<Plant>[] = useMemo(() => {
     const customFieldColumns = generateCustomFieldColumns();
     return [
+      {
+        title: t('app.master-data.plants.code'),
+        dataIndex: 'code',
+        hideInTable: true,
+        order: 10,
+        fieldProps: { allowClear: true },
+      },
+      {
+        title: t('app.master-data.plants.name'),
+        dataIndex: 'name',
+        hideInTable: true,
+        order: 11,
+        fieldProps: { allowClear: true },
+      },
       {
         title: t('app.master-data.plants.code'),
         dataIndex: 'code',
@@ -489,6 +522,7 @@ const PlantsPage: React.FC = () => {
         ellipsis: true,
         copyable: true,
         sorter: true,
+        hideInSearch: true,
       },
       {
         title: t('app.master-data.plants.name'),
@@ -496,6 +530,7 @@ const PlantsPage: React.FC = () => {
         width: 200,
         ellipsis: true,
         sorter: true,
+        hideInSearch: true,
       },
       {
         title: t('app.master-data.plants.address'),
@@ -514,12 +549,19 @@ const PlantsPage: React.FC = () => {
       {
         title: t('app.master-data.plants.status'),
         dataIndex: 'isActive',
-        width: 100,
+        hideInTable: true,
+        order: 20,
         valueType: 'select',
-        valueEnum: {
-          true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
-          false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
-        },
+        valueEnum: plantActiveValueEnum,
+        fieldProps: { allowClear: true },
+      },
+      {
+        title: t('app.master-data.plants.status'),
+        dataIndex: 'isActive',
+        width: 100,
+        sorter: true,
+        hideInSearch: true,
+        valueEnum: plantActiveValueEnum,
         render: (_, record) => {
           return (
             <Tag color={record?.isActive ? 'success' : 'default'}>
@@ -532,10 +574,36 @@ const PlantsPage: React.FC = () => {
       {
         title: t('common.createdAt'),
         dataIndex: 'createdAt',
-        width: 180,
-        valueType: 'dateTime',
-        hideInSearch: true,
+        width: 132,
+        uniTableKeepWidth: true,
         sorter: true,
+        hideInSearch: true,
+        render: (_, record) => formatMasterDateTimeCell(record.createdAt),
+      },
+      {
+        title: t('common.createdAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        order: 30,
+        formItemProps: formDateRangeFormItemProps,
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updatedAt',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, record) => formatMasterDateTimeCell(record.updatedAt),
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        order: 31,
+        formItemProps: formDateRangeFormItemProps,
       },
       {
         title: t('common.actions'),
@@ -576,7 +644,7 @@ const PlantsPage: React.FC = () => {
       ),
     },
     ];
-  }, [customFields, t]);
+  }, [customFields, plantActiveValueEnum, t]);
 
   /**
    * 详情 Drawer 的列定义
@@ -610,27 +678,23 @@ const PlantsPage: React.FC = () => {
           defaultViewType="table"
           loadingDelay={200}
           request={async (params, sort, _filter, searchFormValues) => {
-            // 处理搜索参数
-            const apiParams: any = {
-              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-              limit: params.pageSize || 20,
-            };
-
-            // 启用状态筛选
-            if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-              apiParams.is_active = searchFormValues.isActive;
-            }
-
-            applyFactoryKeyword(apiParams, searchFormValues);
-            applyFactoryTableSort(apiParams, sort);
+            const pageSize = params.pageSize || 20;
+            const skip = ((params.current || 1) - 1) * pageSize;
+            const listParams = resolveMasterCrudListParams(searchFormValues, sort);
+            lastListParamsRef.current = listParams;
 
             try {
-              const result = await plantApi.list(apiParams);
-              const enrichedData = await enrichRecordsWithCustomFields(result.items);
+              const result = await plantApi.list({
+                skip,
+                limit: pageSize,
+                ...listParams,
+              });
+              const { data, total } = normalizeMasterListResponse(result);
+              const enrichedData = await enrichRecordsWithCustomFields(data);
               return {
                 data: enrichedData,
                 success: true,
-                total: result.total,
+                total,
               };
             } catch (error: any) {
               console.error('Failed to fetch plant list:', error);
@@ -643,7 +707,9 @@ const PlantsPage: React.FC = () => {
             }
           }}
           rowKey="uuid"
-          showAdvancedSearch={true}
+          showAdvancedSearch
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={MASTER_CRUD_PINNED_ACTIVE_FIELD}
           pagination={{
             defaultPageSize: 20,
             showSizeChanger: true,

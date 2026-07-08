@@ -3,6 +3,7 @@
  */
 
 import { apiRequest } from '../../../services/api';
+import type { SalesReturnListParams, SalesReturnListResult } from './sales-return';
 
 export const warehouseApi = {
   productionPicking: {
@@ -219,7 +220,8 @@ export const warehouseApi = {
       apiRequest('/apps/kuaizhizao/wave-pickings/generate', { method: 'POST', data }),
   },
   salesReturn: {
-    list: async (params?: any) => apiRequest('/apps/kuaizhizao/sales-returns', { method: 'GET', params }),
+    list: async (params?: SalesReturnListParams) =>
+      apiRequest<SalesReturnListResult>('/apps/kuaizhizao/sales-returns', { method: 'GET', params }),
     create: async (data: any) => apiRequest('/apps/kuaizhizao/sales-returns', { method: 'POST', data }),
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-returns/${id}`, { method: 'DELETE' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-returns/${id}`, { method: 'GET' }),
@@ -241,7 +243,8 @@ export const warehouseApi = {
       }),
   },
   purchaseReturn: {
-    list: async (params?: any) => apiRequest('/apps/kuaizhizao/purchase-returns', { method: 'GET', params }),
+    list: async (params?: import('./purchase-return').PurchaseReturnListParams): Promise<import('./purchase-return').PurchaseReturnListResult> =>
+      apiRequest('/apps/kuaizhizao/purchase-returns', { method: 'GET', params }),
     statistics: async () =>
       apiRequest<{
         total_count: number;

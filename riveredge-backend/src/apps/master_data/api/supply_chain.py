@@ -105,9 +105,15 @@ async def list_customers(
     category: Optional[str] = Query(None, description="客户分类（过滤）"),
     is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
     keyword: Optional[str] = Query(None, description="搜索关键词（编号、名称、联系人等）"),
+    code: Optional[str] = Query(None, description="客户编号（模糊）"),
+    name: Optional[str] = Query(None, description="客户名称（模糊）"),
     salesman_id: Optional[int] = Query(None, alias="salesmanId", description="归属业务员"),
     sort_by: Optional[str] = Query(None, alias="sortBy", description="排序字段"),
     sort_order: Optional[str] = Query(None, alias="sortOrder", description="asc 或 desc"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
 ):
     """
     获取客户列表
@@ -126,9 +132,15 @@ async def list_customers(
             category,
             is_active,
             keyword,
+            code,
+            name,
             salesman_id,
             sort_by,
             sort_order,
+            created_start_date,
+            created_end_date,
+            updated_start_date,
+            updated_end_date,
             current_user,
         )
         return CustomerListResponse(data=items, total=total)
@@ -279,6 +291,10 @@ async def list_suppliers(
     buyer_id: Optional[int] = Query(None, alias="buyerId", description="归属采购员"),
     sort_by: Optional[str] = Query(None, alias="sortBy", description="排序字段"),
     sort_order: Optional[str] = Query(None, alias="sortOrder", description="asc 或 desc"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
 ):
     """
     获取供应商列表
@@ -303,6 +319,10 @@ async def list_suppliers(
         buyer_id,
         sort_by,
         sort_order,
+        created_start_date,
+        created_end_date,
+        updated_start_date,
+        updated_end_date,
         current_user,
     )
     return SupplierListResponse(data=items, total=total)

@@ -82,6 +82,7 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
   summaryFields: summaryFieldsProp,
   showPrintButton = true,
   showExportButton = true,
+  skipFuzzyPinyinClientFilter,
 }: UniReportProps<T>) {
   const { t } = useTranslation();
   const internalActionRef = useRef<ActionType>();
@@ -249,6 +250,7 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
           bordered={template.bordered ?? true}
           size={template.tableSize ?? 'small'}
           summary={tableSummary}
+          skipFuzzyPinyinClientFilter={skipFuzzyPinyinClientFilter}
         />
       </div>
     </ListPageTemplate>

@@ -68,7 +68,14 @@ import { pickInspectionConductExtras } from '../components/inspectionTemplateUti
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { downloadFile } from '../../../services/common';
-import { countWithPagedRequests } from '../../../../../utils/pagedCount';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  buildQualityInspectionDocStatusValueEnum,
+  buildQualityInspectionQualityStatusValueEnum,
+  normalizeQualityInspectionListResponse,
+  QUALITY_INSPECTION_PINNED_STATUS_FIELD,
+  resolveQualityInspectionListParams,
+} from '../../../utils/qualityInspectionListCore';
 import dayjs from 'dayjs';
 import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { useTranslation } from 'react-i18next';
@@ -227,6 +234,14 @@ const ProcessInspectionPage: React.FC = () => {
   const processAuditColumn = useMemo(
     () => createListAuditPhaseColumn<ProcessInspection>({ t, auditEnabled: processAuditEnabled }),
     [t, processAuditEnabled],
+  );
+  const inspectionDocStatusValueEnum = useMemo(
+    () => buildQualityInspectionDocStatusValueEnum(t),
+    [t],
+  );
+  const inspectionQualityStatusValueEnum = useMemo(
+    () => buildQualityInspectionQualityStatusValueEnum(t),
+    [t],
   );
   const ncPerms = useResourcePermissions(NC_RESOURCE);
   const { canRead: canReadNcLedger } = useResourcePermissions(NC_RESOURCE);
@@ -750,11 +765,45 @@ const ProcessInspectionPage: React.FC = () => {
   const columns: ProColumns<ProcessInspection>[] = useMemo(
     () => [
     {
+      title: t('app.kuaizhizao.quality.common.columns.inspectionTime'),
+      dataIndex: 'inspection_time_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 10 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
+      dataIndex: 'created_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 11 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.status'),
+      dataIndex: 'status',
+      valueType: 'select',
+      valueEnum: inspectionDocStatusValueEnum,
+      hideInTable: true,
+      search: { order: 20 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.qualityStatus'),
+      dataIndex: 'quality_status',
+      valueType: 'select',
+      valueEnum: inspectionQualityStatusValueEnum,
+      hideInTable: true,
+      search: { order: 21 } as ProColumns['search'],
+    },
+    {
       title: t('app.kuaizhizao.quality.common.columns.inspectionCode'),
       dataIndex: 'inspection_code',
       width: 140,
       ellipsis: true,
       fixed: 'left',
+      sorter: true,
+      search: { order: 30 } as ProColumns['search'],
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.inspection_code ?? '') }} ellipsis>
           {r.inspection_code ?? '-'}
@@ -795,35 +844,48 @@ const ProcessInspectionPage: React.FC = () => {
       dataIndex: 'inspection_quantity',
       width: 100,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
       render: (text) => text || 0,
     },
     {
       title: t('app.kuaizhizao.quality.common.columns.qualifiedQty'),
       dataIndex: 'qualified_quantity',
+      sorter: true,
+      hideInSearch: true,
       ...qualifiedQuantityColumnProps,
     },
     {
       title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'),
       dataIndex: 'unqualified_quantity',
+      sorter: true,
+      hideInSearch: true,
       ...unqualifiedQuantityColumnProps,
     },
     {
       title: t('app.kuaizhizao.quality.common.columns.inspectionResult'),
       dataIndex: 'inspection_result',
       width: 100,
+      sorter: true,
+      hideInSearch: true,
       render: (_, r) => renderQualityResultTag(t, r.inspection_result),
     },
     {
       title: t('app.kuaizhizao.quality.common.columns.inspectionTime'),
       dataIndex: 'inspection_time',
-      width: 160,
+      width: 132,
+      uniTableKeepWidth: true,
       valueType: 'dateTime',
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
+      sorter: true,
       defaultSortOrder: 'descend',
       render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
@@ -860,7 +922,7 @@ const ProcessInspectionPage: React.FC = () => {
         renderProcessRowActions(renderProcessRowNodes(record), `proc-${record.id ?? 'row'}`),
     },
   ],
-    [t, processAuditColumn, inspectionCustomFieldColumns],
+    [t, processAuditColumn, inspectionCustomFieldColumns, inspectionDocStatusValueEnum, inspectionQualityStatusValueEnum],
   );
 
   return (
@@ -899,30 +961,18 @@ const ProcessInspectionPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         showAdvancedSearch={true}
-        request={async (params: any) => {
+        pinnedTabsField={QUALITY_INSPECTION_PINNED_STATUS_FIELD}
+        skipFuzzyPinyinClientFilter
+        request={async (params, sort, _filter, searchFormValues) => {
           try {
-            const filters = {
-              status: params.status,
-              quality_status: params.quality_status,
-              work_order_id: params.work_order_id,
-              operation_id: params.operation_id,
-              keyword: params.keyword,
-            };
-            const [response, total] = await Promise.all([
-              qualityApi.processInspection.list({
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-                ...filters,
-              }),
-              countWithPagedRequests(
-                (p) => qualityApi.processInspection.list(p),
-                filters,
-                { chunkSize: 100 },
-              ),
-            ]);
-            // 后端返回的是数组
-            const raw = Array.isArray(response) ? response : (response.data || []);
-            const data = await enrichInspectionRecordsWithCustomFields(raw);
+            const listParams = resolveQualityInspectionListParams(searchFormValues, sort);
+            const response = await qualityApi.processInspection.list({
+              skip: (params.current! - 1) * params.pageSize!,
+              limit: params.pageSize,
+              ...listParams,
+            });
+            const { data: raw, total } = normalizeQualityInspectionListResponse(response);
+            const data = await enrichInspectionRecordsWithCustomFields(raw as ProcessInspection[]);
             return {
               data,
               success: true,

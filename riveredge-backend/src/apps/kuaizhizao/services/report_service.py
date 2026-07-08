@@ -18,6 +18,44 @@ from core.utils.timezone_utils import to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
+PRODUCTION_WO_QUERY_SORT = frozenset({"code", "product_name", "quantity", "status", "created_at"})
+PRODUCTION_WO_TRACKING_SORT = frozenset({
+    "code", "product_name", "quantity", "completed_quantity", "status",
+    "planned_start_date", "planned_end_date",
+})
+PRODUCTION_MATERIAL_USAGE_SORT = frozenset({"work_order_code", "material_name", "quantity", "created_at"})
+PRODUCTION_LABOR_DETAIL_SORT = frozenset({
+    "work_order_code", "operation_name", "worker_name", "qualified_quantity", "work_hours", "reported_at",
+})
+PRODUCTION_SCRAP_ANALYSIS_SORT = frozenset({"defect_reason", "count"})
+PRODUCTION_DELAY_WARNING_SORT = frozenset({
+    "code", "product_name", "planned_end_date", "status", "quantity", "completed_quantity",
+})
+PRODUCTION_OUTSOURCE_QUERY_SORT = frozenset({
+    "code", "supplier_name", "product_name", "quantity", "status", "planned_end_date", "created_at",
+})
+PRODUCTION_OUTSOURCE_RECON_SORT = frozenset({
+    "code", "outsource_work_order_code", "material_code", "material_name", "quantity", "status", "created_at",
+})
+
+
+def _resolve_production_report_order_by(
+    order_by: Optional[str],
+    allowed: frozenset,
+    default: str,
+    *,
+    field_aliases: Optional[Dict[str, str]] = None,
+) -> str:
+    if not order_by:
+        return default
+    descending = str(order_by).startswith("-")
+    field = str(order_by).lstrip("-")
+    if field_aliases and field in field_aliases:
+        field = field_aliases[field]
+    if field not in allowed:
+        return default
+    return f"-{field}" if descending else field
+
 
 class ReportService:
     """
@@ -354,6 +392,13 @@ class ReportService:
         *,
         skip: int = 0,
         limit: int = 100,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        status: Optional[str] = None,
+        order_code: Optional[str] = None,
+        product_name: Optional[str] = None,
+        supplier_name: Optional[str] = None,
+        work_order_code: Optional[str] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.models.work_order import WorkOrder
         from apps.kuaizhizao.models.reporting_record import ReportingRecord
@@ -361,6 +406,7 @@ class ReportService:
         from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
         from apps.kuaizhizao.models.defect_record import DefectRecord
         from tortoise.functions import Sum, Count
+        from tortoise.expressions import Q
         from datetime import date
 
         prod_aliases = {
@@ -376,6 +422,8 @@ class ReportService:
 
         lim = max(1, min(int(limit or 100), 500))
         sk = max(0, int(skip or 0))
+        kw = (keyword or "").strip()
+        wo_aliases = {"order_code": "code", "plan_qty": "quantity", "overall_progress": "completed_quantity"}
 
         if report_type in ["work-order-query", "wo_query"]:
             wo_q = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
@@ -385,14 +433,200 @@ class ReportService:
                 wo_q = wo_q.filter(created_at__lte=date_end)
             if work_center_id:
                 wo_q = wo_q.filter(work_center_id=work_center_id)
+            if status:
+                wo_q = wo_q.filter(status=status)
+            oc = (order_code or "").strip()
+            if oc:
+                wo_q = wo_q.filter(code__icontains=oc)
+            pn = (product_name or "").strip()
+            if pn:
+                wo_q = wo_q.filter(product_name__icontains=pn)
+            if kw:
+                wo_q = wo_q.filter(Q(code__icontains=kw) | Q(product_name__icontains=kw))
             total = await wo_q.count()
-            items = await wo_q.order_by("-created_at").offset(sk).limit(lim).values(
+            order_clause = _resolve_production_report_order_by(
+                order_by, PRODUCTION_WO_QUERY_SORT, "-created_at", field_aliases=wo_aliases,
+            )
+            items = await wo_q.order_by(order_clause).offset(sk).limit(lim).values(
                 "code", "product_name", "quantity", "status", "created_at"
             )
             for it in items:
                 it["order_code"] = it.get("code")
                 it["plan_qty"] = float(it.get("quantity") or 0)
             return self._wrap_report_payload({"data": items, "success": True, "total": total})
+
+        if report_type in ["work-order-execution-report", "efficiency", "wo_tracking"]:
+            wo_q = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if date_start:
+                wo_q = wo_q.filter(planned_start_date__gte=date_start)
+            if date_end:
+                wo_q = wo_q.filter(planned_end_date__lte=date_end)
+            if work_center_id:
+                wo_q = wo_q.filter(work_center_id=work_center_id)
+            if status:
+                wo_q = wo_q.filter(status=status)
+            oc = (order_code or work_order_code or "").strip()
+            if oc:
+                wo_q = wo_q.filter(code__icontains=oc)
+            pn = (product_name or "").strip()
+            if pn:
+                wo_q = wo_q.filter(product_name__icontains=pn)
+            if kw:
+                wo_q = wo_q.filter(Q(code__icontains=kw) | Q(product_name__icontains=kw))
+            total = await wo_q.count()
+            order_clause = _resolve_production_report_order_by(
+                order_by, PRODUCTION_WO_TRACKING_SORT, "-planned_end_date", field_aliases=wo_aliases,
+            )
+            items = await wo_q.order_by(order_clause).offset(sk).limit(lim).values(
+                "code", "product_name", "quantity", "completed_quantity", "status",
+                "planned_start_date", "planned_end_date",
+            )
+            for it in items:
+                planned = float(it.get("quantity") or 0)
+                actual = float(it.get("completed_quantity") or 0)
+                it["order_code"] = it.get("code")
+                it["planned_qty"] = planned
+                it["actual_qty"] = actual
+                it["overall_progress"] = round((actual / planned * 100) if planned > 0 else 0, 2)
+            return self._wrap_report_payload({"data": items, "success": True, "total": total})
+
+        if report_type == "work-order-material-usage":
+            q = MaterialBinding.filter(tenant_id=tenant_id, binding_type="feeding", deleted_at__isnull=True)
+            if date_start:
+                q = q.filter(created_at__gte=date_start)
+            if date_end:
+                q = q.filter(created_at__lte=date_end)
+            woc = (work_order_code or order_code or "").strip()
+            if woc:
+                q = q.filter(work_order_code__icontains=woc)
+            pn = (product_name or "").strip()
+            if pn:
+                q = q.filter(material_name__icontains=pn)
+            if kw:
+                q = q.filter(Q(work_order_code__icontains=kw) | Q(material_name__icontains=kw))
+            total = await q.count()
+            order_clause = _resolve_production_report_order_by(
+                order_by, PRODUCTION_MATERIAL_USAGE_SORT, "-created_at",
+                field_aliases={"order_code": "work_order_code", "actual_qty": "quantity"},
+            )
+            rows = await q.order_by(order_clause).offset(sk).limit(lim).values(
+                "work_order_code", "material_name", "quantity", "created_at",
+            )
+            items = []
+            for it in rows:
+                qty = float(it.get("quantity") or 0)
+                items.append({
+                    "order_code": it.get("work_order_code"),
+                    "material_name": it.get("material_name"),
+                    "actual_qty": qty,
+                    "consumed_quantity": qty,
+                    "created_at": it.get("created_at"),
+                })
+            return self._wrap_report_payload({"data": items, "success": True, "total": total})
+
+        if report_type == "process-completion-report":
+            q = ReportingRecord.filter(tenant_id=tenant_id, status="approved", deleted_at__isnull=True)
+            if date_start:
+                q = q.filter(reported_at__gte=date_start)
+            if date_end:
+                q = q.filter(reported_at__lte=date_end)
+            woc = (work_order_code or order_code or "").strip()
+            if woc:
+                q = q.filter(work_order_code__icontains=woc)
+            if kw:
+                q = q.filter(
+                    Q(work_order_code__icontains=kw)
+                    | Q(operation_name__icontains=kw)
+                    | Q(worker_name__icontains=kw)
+                )
+            total = await q.count()
+            order_clause = _resolve_production_report_order_by(
+                order_by, PRODUCTION_LABOR_DETAIL_SORT, "-reported_at",
+                field_aliases={"process_name": "operation_name", "report_date": "reported_at", "qualified_qty": "qualified_quantity", "hours": "work_hours"},
+            )
+            rows = await q.order_by(order_clause).offset(sk).limit(lim).values(
+                "id", "work_order_code", "operation_name", "worker_name",
+                "qualified_quantity", "work_hours", "reported_at",
+            )
+            items = []
+            for it in rows:
+                reported_at = it.get("reported_at")
+                record_id = it.get("id")
+                items.append({
+                    "report_code": str(record_id) if record_id is not None else None,
+                    "order_code": it.get("work_order_code"),
+                    "work_order_code": it.get("work_order_code"),
+                    "process_name": it.get("operation_name"),
+                    "worker_name": it.get("worker_name"),
+                    "qualified_qty": float(it.get("qualified_quantity") or 0),
+                    "hours": float(it.get("work_hours") or 0),
+                    "report_date": reported_at,
+                    "reported_at": reported_at,
+                })
+            return self._wrap_report_payload({"data": items, "success": True, "total": total})
+
+        if report_type == "scrap-reason-analysis":
+            q = DefectRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if date_start:
+                q = q.filter(created_at__gte=date_start)
+            if date_end:
+                q = q.filter(created_at__lte=date_end)
+            if kw:
+                q = q.filter(defect_reason__icontains=kw)
+            stats = await q.annotate(count=Count("id")).group_by("defect_reason").values("defect_reason", "count")
+            items = [{"defect_reason": s.get("defect_reason") or "-", "count": int(s.get("count") or 0)} for s in stats]
+            if kw:
+                items = [it for it in items if kw.lower() in str(it.get("defect_reason") or "").lower()]
+            order_clause = _resolve_production_report_order_by(order_by, PRODUCTION_SCRAP_ANALYSIS_SORT, "-count")
+            descending = order_clause.startswith("-")
+            sort_key = order_clause.lstrip("-")
+            items.sort(key=lambda x: x.get(sort_key) or 0, reverse=descending)
+            total = len(items)
+            page = items[sk : sk + lim]
+            return self._wrap_report_payload({"data": page, "success": True, "total": total})
+
+        if report_type == "production-delay-warning":
+            from apps.kuaizhizao.services.report_enhancements import build_production_delay_warning
+            return self._wrap_report_payload(await build_production_delay_warning(
+                tenant_id,
+                date_start=date_start,
+                date_end=date_end,
+                skip=sk,
+                limit=lim,
+                keyword=keyword,
+                order_by=order_by,
+                status=status,
+                order_code=order_code or work_order_code,
+                product_name=product_name,
+            ))
+
+        if report_type in ["outsource-work-order-query", "outsource_query"]:
+            from apps.kuaizhizao.services.report_enhancements import build_outsource_work_order_query
+            return self._wrap_report_payload(await build_outsource_work_order_query(
+                tenant_id,
+                skip=sk,
+                limit=lim,
+                date_start=date_start,
+                date_end=date_end,
+                keyword=keyword,
+                order_by=order_by,
+                status=status,
+                order_code=order_code,
+                product_name=product_name,
+                supplier_name=supplier_name,
+            ))
+
+        if report_type in ["outsource-material-reconciliation", "outsource_recon"]:
+            from apps.kuaizhizao.services.report_enhancements import build_outsource_material_reconciliation
+            return self._wrap_report_payload(await build_outsource_material_reconciliation(
+                tenant_id,
+                skip=sk,
+                limit=lim,
+                keyword=keyword,
+                order_by=order_by,
+                status=status,
+                work_order_code=work_order_code or order_code,
+            ))
 
         # 计算概览统计 (Summary) — 仅复杂生产报表需要
         all_orders = await WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True).all()
@@ -435,27 +669,6 @@ class ReportService:
                     "status": it["status"]
                 })
             return {"data": res, "summary": summary, "success": True}
-        elif report_type in ["work-order-execution-report", "efficiency"]:
-            items = await WorkOrder.filter(tenant_id=tenant_id, status__in=["released", "in_progress"]).limit(100).values("code", "product_name", "quantity", "completed_quantity", "status", "planned_start_date", "planned_end_date")
-            res = []
-            for it in items:
-                planned = float(it["quantity"] or 0)
-                actual = float(it["completed_quantity"] or 0)
-                res.append({
-                    "workOrderCode": it["code"],
-                    "productName": it["product_name"],
-                    "plannedQuantity": planned,
-                    "actualQuantity": actual,
-                    "progress": (actual / planned * 100) if planned > 0 else 0,
-                    "completionRate": (actual / planned * 100) if planned > 0 else 0,
-                    "status": it["status"],
-                    "plannedStartDate": it["planned_start_date"].strftime("%Y-%m-%d") if it["planned_start_date"] else None,
-                    "plannedEndDate": it["planned_end_date"].strftime("%Y-%m-%d") if it["planned_end_date"] else None,
-                    "qualifiedQuantity": actual, # 简化处理
-                    "qualifiedRate": 100.0,
-                    "efficiency": 95.0
-                })
-            return {"data": res, "summary": summary, "success": True}
         elif report_type == "production-progress-tracking":
             items = await WorkOrderOperation.filter(tenant_id=tenant_id).limit(100).values("work_order_code", "operation_name", "completed_quantity", "status")
             res = []
@@ -465,16 +678,6 @@ class ReportService:
                     "process_name": it["operation_name"],
                     "actual_quantity": float(it["completed_quantity"] or 0),
                     "status": it["status"]
-                })
-            return {"data": res, "success": True}
-        elif report_type == "work-order-material-usage":
-            items = await MaterialBinding.filter(tenant_id=tenant_id, binding_type="feeding").limit(100).values("work_order_code", "material_name", "quantity")
-            res = []
-            for it in items:
-                res.append({
-                    "work_order_code": it["work_order_code"],
-                    "material_name": it["material_name"],
-                    "consumed_quantity": float(it["quantity"] or 0)
                 })
             return {"data": res, "success": True}
         elif report_type == "production-yield-analysis":
@@ -494,34 +697,10 @@ class ReportService:
                     "actual_quantity": float(it["completed_quantity"] or 0)
                 })
             return {"data": res, "success": True}
-        elif report_type == "scrap-reason-analysis":
-            stats = await DefectRecord.filter(tenant_id=tenant_id).annotate(count=Count("id")).group_by("defect_reason").values("defect_reason", "count")
-            return {"data": stats, "success": True}
         elif report_type == "worker-efficiency-ranking":
             stats = await ReportingRecord.filter(tenant_id=tenant_id, status="approved").annotate(total_qty=Sum("qualified_quantity")).group_by("worker_name").order_by("-total_qty").values("worker_name", "total_qty")
             for s in stats: s["total_qty"] = float(s["total_qty"] or 0)
             return {"data": stats, "success": True}
-        elif report_type == "process-completion-report":
-            items = await ReportingRecord.filter(tenant_id=tenant_id, status="approved").limit(100).values("work_order_code", "operation_name", "worker_name", "qualified_quantity", "reported_at")
-            for it in items:
-                it["process_name"] = it["operation_name"]
-                it["report_time"] = it["reported_at"].strftime("%Y-%m-%d %H:%M") if it["reported_at"] else None
-            return {"data": items, "success": True}
-        elif report_type == "production-delay-warning":
-            from apps.kuaizhizao.services.report_enhancements import build_production_delay_warning
-            return self._wrap_report_payload(await build_production_delay_warning(
-                tenant_id, date_start=date_start, date_end=date_end, skip=sk, limit=lim,
-            ))
-        elif report_type in ["outsource-work-order-query", "outsource_query"]:
-            from apps.kuaizhizao.services.report_enhancements import build_outsource_work_order_query
-            return self._wrap_report_payload(await build_outsource_work_order_query(
-                tenant_id, skip=sk, limit=lim,
-            ))
-        elif report_type in ["outsource-material-reconciliation", "outsource_recon"]:
-            from apps.kuaizhizao.services.report_enhancements import build_outsource_material_reconciliation
-            return self._wrap_report_payload(await build_outsource_material_reconciliation(
-                tenant_id, skip=sk, limit=lim,
-            ))
         return self._wrap_report_payload({"data": [], "success": True})
 
     async def get_sales_report(
@@ -1916,6 +2095,7 @@ class ReportService:
         aging_bucket: Optional[str] = None,
         status_filter: Optional[str] = None,
         keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
         current: int = 1,
         page_size: int = 20,
     ) -> Dict[str, Any]:
@@ -1934,7 +2114,16 @@ class ReportService:
             aging_bucket=aging_bucket,
             keyword=keyword,
         )
-        rows.sort(key=lambda x: (str(x.get("material_code") or ""), str(x.get("batch_no") or ""), str(x.get("warehouse_name") or "")))
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            INVENTORY_BATCH_LINE_SORTABLE_FIELDS,
+            sort_inventory_report_rows,
+        )
+        rows = sort_inventory_report_rows(
+            rows,
+            order_by,
+            INVENTORY_BATCH_LINE_SORTABLE_FIELDS,
+            "material_code",
+        )
         return self._paginate(rows, current=current, page_size=page_size)
 
     async def get_inventory_batch_lines_summary(
@@ -1978,6 +2167,7 @@ class ReportService:
         include_zero_stock: bool = True,
         status_filter: Optional[str] = None,
         keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
         current: int = 1,
         page_size: int = 20,
     ) -> Dict[str, Any]:
@@ -2013,7 +2203,16 @@ class ReportService:
             status_filter=status_filter,
             keyword=keyword,
         )
-        balances.sort(key=lambda x: (str(x.get("material_code") or ""), str(x.get("warehouse_name") or "")))
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            INVENTORY_MATERIAL_BALANCE_SORTABLE_FIELDS,
+            sort_inventory_report_rows,
+        )
+        balances = sort_inventory_report_rows(
+            balances,
+            order_by,
+            INVENTORY_MATERIAL_BALANCE_SORTABLE_FIELDS,
+            "material_code",
+        )
         return self._paginate(balances, current=current, page_size=page_size)
 
     async def get_inventory_material_balances_summary(

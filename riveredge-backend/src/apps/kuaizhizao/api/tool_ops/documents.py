@@ -112,6 +112,16 @@ async def list_outstanding_tool_borrows(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     tool_id: Optional[int] = Query(None, ge=1),
+
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    doc_start_date: Optional[str] = Query(None, description="单据日期起"),
+    doc_end_date: Optional[str] = Query(None, description="单据日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows, total = await svc.borrow_service.list_outstanding(tenant_id, skip, limit, tool_id)
@@ -133,9 +143,29 @@ async def list_tool_borrows(
     limit: int = Query(100, ge=1, le=1000),
     tool_id: Optional[int] = Query(None, ge=1),
     status_filter: Optional[str] = Query(None, alias="status"),
+
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    doc_start_date: Optional[str] = Query(None, description="单据日期起"),
+    doc_end_date: Optional[str] = Query(None, description="单据日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.borrow_service.list(tenant_id, skip, limit, tool_id, status_filter)
+    rows, total = await svc.borrow_service.list(tenant_id, skip, limit, tool_id, status_filter,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        doc_start_date=doc_start_date,
+        doc_end_date=doc_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return ToolBorrowListResponse(
         items=[ToolBorrowResponse.model_validate(r) for r in rows],
         total=total,
@@ -220,9 +250,29 @@ async def list_tool_returns(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     tool_id: Optional[int] = Query(None, ge=1),
+
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    doc_start_date: Optional[str] = Query(None, description="单据日期起"),
+    doc_end_date: Optional[str] = Query(None, description="单据日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.return_service.list(tenant_id, skip, limit, tool_id)
+    rows, total = await svc.return_service.list(tenant_id, skip, limit, tool_id,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        doc_start_date=doc_start_date,
+        doc_end_date=doc_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return ToolReturnListResponse(
         items=[ToolReturnResponse.model_validate(r) for r in rows],
         total=total,
@@ -325,9 +375,29 @@ async def list_tool_maintenances(
     limit: int = Query(100, ge=1, le=1000),
     tool_id: Optional[int] = Query(None, ge=1),
     status_filter: Optional[str] = Query(None, alias="status"),
+
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    doc_start_date: Optional[str] = Query(None, description="单据日期起"),
+    doc_end_date: Optional[str] = Query(None, description="单据日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.maintenance_service.list(tenant_id, skip, limit, tool_id, status_filter)
+    rows, total = await svc.maintenance_service.list(tenant_id, skip, limit, tool_id, status_filter,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        doc_start_date=doc_start_date,
+        doc_end_date=doc_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return ToolMaintenanceListResponse(
         items=[ToolMaintenanceResponse.model_validate(r) for r in rows],
         total=total,
@@ -498,9 +568,29 @@ async def list_tool_calibrations(
     limit: int = Query(100, ge=1, le=1000),
     tool_id: Optional[int] = Query(None, ge=1),
     status_filter: Optional[str] = Query(None, alias="status"),
+
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    doc_start_date: Optional[str] = Query(None, description="单据日期起"),
+    doc_end_date: Optional[str] = Query(None, description="单据日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.calibration_service.list(tenant_id, skip, limit, tool_id, status_filter)
+    rows, total = await svc.calibration_service.list(tenant_id, skip, limit, tool_id, status_filter,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        doc_start_date=doc_start_date,
+        doc_end_date=doc_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return ToolOpsCalibrationListResponse(
         items=[ToolOpsCalibrationResponse.model_validate(r) for r in rows],
         total=total,
@@ -599,10 +689,31 @@ async def list_tool_scrap_applications(
     limit: int = Query(100, ge=1, le=1000),
     tool_id: Optional[int] = Query(None, ge=1),
     status_filter: Optional[str] = Query(None, alias="status"),
+
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    doc_start_date: Optional[str] = Query(None, description="单据日期起"),
+    doc_end_date: Optional[str] = Query(None, description="单据日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows, total = await svc.scrap_application_service.list(
         tenant_id, skip, limit, tool_id, status_filter
+    ,
+
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        doc_start_date=doc_start_date,
+        doc_end_date=doc_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
     return ToolScrapApplicationListResponse(
         items=[ToolScrapApplicationResponse.model_validate(r) for r in rows],
@@ -764,9 +875,29 @@ async def list_tool_repairs(
     limit: int = Query(100, ge=1, le=1000),
     tool_id: Optional[int] = Query(None, ge=1),
     status_filter: Optional[str] = Query(None, alias="status"),
+
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    doc_start_date: Optional[str] = Query(None, description="单据日期起"),
+    doc_end_date: Optional[str] = Query(None, description="单据日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.repair_service.list(tenant_id, skip, limit, tool_id, status_filter)
+    rows, total = await svc.repair_service.list(tenant_id, skip, limit, tool_id, status_filter,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        doc_start_date=doc_start_date,
+        doc_end_date=doc_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return ToolRepairListResponse(
         items=[ToolRepairResponse.model_validate(r) for r in rows],
         total=total,

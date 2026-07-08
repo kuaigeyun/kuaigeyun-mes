@@ -23,7 +23,13 @@ import { UniDetail, detailDrawerDescriptionItems } from '../../../../../componen
 
 import { supplierApi, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
 import { getDictionaryLabelMapSync } from '../../../../../services/dataDictionaryCache';
-import { extractProTableSort, mapSupplyChainSortField } from '../../../../../utils/tableQueryKey';
+import {
+  buildMasterCrudActiveValueEnum,
+  MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  masterCrudCodeNameSearchColumns,
+  masterCrudCreatedUpdatedColumns,
+  resolveSupplierListParams,
+} from '../../../utils/supplyChainListCore';
 import { SupplierFormModal } from '../../../components/SupplierFormModal';
 import type { Supplier, SupplierCreate } from '../../../types/supply-chain';
 import {
@@ -56,7 +62,13 @@ const SuppliersPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const supplierActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
+    [t],
+  );
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -473,7 +485,7 @@ const SuppliersPage: React.FC = () => {
         exportData = currentPageData;
         filename = `${t('app.master-data.suppliers.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
-        const exportRes = await supplierApi.list({ skip: 0, limit: 10000 });
+        const exportRes = await supplierApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
         exportData = Array.isArray(exportRes) ? exportRes : exportRes?.data ?? [];
         filename = `${t('app.master-data.suppliers.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
@@ -542,6 +554,10 @@ const SuppliersPage: React.FC = () => {
   const columns: ProColumns<Supplier>[] = useMemo(() => {
     const customFieldColumns = generateCustomFieldColumns();
     return [
+    ...masterCrudCodeNameSearchColumns({
+      code: t('field.supplier.code'),
+      name: t('field.supplier.name'),
+    }),
     {
       title: t('field.supplier.code'),
       dataIndex: 'code',
@@ -549,12 +565,14 @@ const SuppliersPage: React.FC = () => {
       width: 150,
       fixed: 'left',
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('field.supplier.name'),
       dataIndex: 'name',
       width: 250,
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('field.supplier.shortName'),
@@ -604,14 +622,23 @@ const SuppliersPage: React.FC = () => {
     },
     {
       title: t('field.supplier.buyer'),
-      dataIndex: 'buyerName',
-      width: 120,
+      dataIndex: 'buyerId',
+      hideInTable: true,
+      order: 15,
       valueType: 'select',
       request: getUserOptions,
-      sorter: true,
       fieldProps: {
-        name: 'buyerId',
+        showSearch: true,
+        optionFilterProp: 'label',
+        allowClear: true,
       },
+    },
+    {
+      title: t('field.supplier.buyer'),
+      dataIndex: 'buyerName',
+      width: 120,
+      hideInSearch: true,
+      sorter: true,
     },
     {
       title: t('field.supplier.payableRecognitionOverride'),
@@ -624,12 +651,18 @@ const SuppliersPage: React.FC = () => {
     {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
-      width: 100,
+      hideInTable: true,
+      order: 20,
       valueType: 'select',
-      valueEnum: {
-        true: { text: t('common.enabled'), status: 'Success' },
-        false: { text: t('common.disabled'), status: 'Default' },
-      },
+      valueEnum: supplierActiveValueEnum,
+      fieldProps: { allowClear: true },
+    },
+    {
+      title: t('app.master-data.warehouses.status'),
+      dataIndex: 'isActive',
+      width: 100,
+      hideInSearch: true,
+      valueEnum: supplierActiveValueEnum,
       render: (_, record) => (
         <Tag color={record?.isActive ? 'success' : 'default'}>
           {record?.isActive ? t('common.enabled') : t('common.disabled')}
@@ -638,14 +671,7 @@ const SuppliersPage: React.FC = () => {
       sorter: true,
     },
     ...customFieldColumns,
-    {
-      title: t('app.master-data.warehouses.createTime'),
-      dataIndex: 'createdAt',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
+    ...masterCrudCreatedUpdatedColumns<Supplier>(t),
     {
       title: t('app.master-data.warehouses.action'),
       valueType: 'option',
@@ -682,7 +708,7 @@ const SuppliersPage: React.FC = () => {
       ),
     },
     ];
-  }, [customFields, t, dictLabel]);
+  }, [customFields, t, dictLabel, supplierActiveValueEnum]);
 
   /** 详情列：与表单 Tab「基本信息 / 开票资料 / 业务与扩展」一致 */
   const detailColumnsBasic: ProDescriptionsItemProps<Supplier>[] = [
@@ -798,46 +824,25 @@ const SuppliersPage: React.FC = () => {
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, __filter, searchFormValues) => {
-          // 处理搜索参数
-          const apiParams: any = {
+          const listParams = resolveSupplierListParams(searchFormValues, sort);
+          lastListParamsRef.current = listParams;
+          const apiParams = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
+            isActive: listParams.isActive as boolean | undefined,
+            category: listParams.category as string | undefined,
+            buyerId: listParams.buyerId as number | undefined,
+            keyword: listParams.keyword as string | undefined,
+            code: listParams.code as string | undefined,
+            name: listParams.name as string | undefined,
+            created_start_date: listParams.created_start_date as string | undefined,
+            created_end_date: listParams.created_end_date as string | undefined,
+            updated_start_date: listParams.updated_start_date as string | undefined,
+            updated_end_date: listParams.updated_end_date as string | undefined,
+            sortBy: listParams.sortBy as string | undefined,
+            sortOrder: listParams.sortOrder as 'asc' | 'desc' | undefined,
           };
 
-          // 启用状态筛选
-          if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.isActive = searchFormValues.isActive;
-          }
-
-          // 分类筛选
-          if (searchFormValues?.category !== undefined && searchFormValues.category !== '' && searchFormValues.category !== null) {
-            apiParams.category = searchFormValues.category;
-          }
-          
-          // 采购员筛选
-          if (searchFormValues?.buyerId !== undefined && searchFormValues.buyerId !== '' && searchFormValues.buyerId !== null) {
-            apiParams.buyerId = searchFormValues.buyerId;
-          }
-
-          // 搜索参数处理
-          if (searchFormValues?.code && searchFormValues.code.trim()) {
-            apiParams.code = searchFormValues.code.trim();
-          }
-
-          if (searchFormValues?.name && searchFormValues.name.trim()) {
-            apiParams.name = searchFormValues.name.trim();
-          }
-
-          const fuzzyKw = String(searchFormValues?.keyword ?? '').trim();
-          if (fuzzyKw) apiParams.keyword = fuzzyKw;
-
-          const { sortBy: rawSortBy, sortOrder } = extractProTableSort(sort);
-          const sortField = mapSupplyChainSortField(rawSortBy);
-          if (sortField) {
-            apiParams.sortBy = sortField;
-            apiParams.sortOrder = sortOrder;
-          }
-          
           try {
             const result = await supplierApi.list(apiParams);
             const listData = Array.isArray(result) ? result : result?.data ?? [];
@@ -858,7 +863,9 @@ const SuppliersPage: React.FC = () => {
           }
         }}
         rowKey="uuid"
-        showAdvancedSearch={true}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={MASTER_CRUD_PINNED_ACTIVE_FIELD}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,

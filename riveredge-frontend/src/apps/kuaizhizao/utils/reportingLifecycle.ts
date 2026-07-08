@@ -27,3 +27,40 @@ export function reportingRecordUniAuditProps(record: Record<string, unknown> | n
     capabilities: (record as { capabilities?: Record<string, unknown> }).capabilities,
   };
 }
+
+const REPORTING_STATUS_KEYS = ['pending', 'approved', 'rejected'] as const;
+
+const REPORTING_STATUS_I18N: Record<string, string> = {
+  pending: `${P}.statusPending`,
+  approved: `${P}.statusApproved`,
+  rejected: `${P}.statusRejected`,
+};
+
+/** 列表审核状态筛选 / 钉住 Tab */
+export function buildReportingStatusValueEnum(
+  t: (key: string) => string,
+): Record<string, { text: string; status?: 'Default' | 'Processing' | 'Success' | 'Error' }> {
+  const statusByKey: Record<string, 'Default' | 'Processing' | 'Success' | 'Error'> = {
+    pending: 'Processing',
+    approved: 'Success',
+    rejected: 'Error',
+  };
+  return Object.fromEntries(
+    REPORTING_STATUS_KEYS.map((key) => [
+      key,
+      { text: t(REPORTING_STATUS_I18N[key]!), status: statusByKey[key] },
+    ]),
+  );
+}
+
+export function resolveReportingListStatusParams(
+  searchFormValues?: Record<string, unknown> | null,
+): { status?: string } {
+  const raw = searchFormValues?.status;
+  if (raw == null || String(raw).trim() === '') return {};
+  const status = String(raw).trim();
+  if (REPORTING_STATUS_KEYS.includes(status as (typeof REPORTING_STATUS_KEYS)[number])) {
+    return { status };
+  }
+  return {};
+}

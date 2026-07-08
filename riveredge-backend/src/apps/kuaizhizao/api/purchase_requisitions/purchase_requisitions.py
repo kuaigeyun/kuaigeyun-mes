@@ -26,7 +26,10 @@ from apps.kuaizhizao.schemas.purchase_inquiry import (
     CreateFromRequisitionRequest,
     PurchaseInquiryResponse,
 )
-from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
+from apps.kuaizhizao.services.purchase_requisition_service import (
+    PurchaseRequisitionService,
+    PURCHASE_REQUISITION_SORTABLE_FIELDS,
+)
 from apps.kuaizhizao.services.purchase_inquiry_service import PurchaseInquiryService
 
 router = APIRouter(
@@ -77,7 +80,7 @@ async def create_requisition(
 @router.get("/purchase-requisitions", summary="List purchase requisitions")
 async def list_requisitions(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=1000),
     status: Optional[str] = Query(
         None,
         description="已废弃：列表请用 lifecycle_stage。status 为库表字段，勿与生命周期钉住 Tab 混用。",
@@ -86,14 +89,22 @@ async def list_requisitions(
         None, description="生命周期阶段（与列表展示一致，如 草稿、已通过）"
     ),
     source_type: Optional[str] = Query(None),
-    keyword: Optional[str] = Query(None, description="模糊：编号/名称/来源编码"),
+    keyword: Optional[str] = Query(None, description="模糊：编号/名称/来源编码/申请人"),
     requisition_code: Optional[str] = Query(None),
     requisition_name: Optional[str] = Query(None),
     required_date_from: Optional[date] = Query(None),
     required_date_to: Optional[date] = Query(None),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 updated_at、-created_at"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """获取采购申请列表"""
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in PURCHASE_REQUISITION_SORTABLE_FIELDS:
+            safe_order_by = order_by
     return await PurchaseRequisitionService().list_requisitions(
         tenant_id=tenant_id,
         skip=skip,
@@ -106,6 +117,9 @@ async def list_requisitions(
         requisition_name=requisition_name,
         required_date_from=required_date_from,
         required_date_to=required_date_to,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        order_by=safe_order_by,
     )
 
 

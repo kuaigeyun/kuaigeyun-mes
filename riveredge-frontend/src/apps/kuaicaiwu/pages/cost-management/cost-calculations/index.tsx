@@ -82,14 +82,20 @@ import PurchaseCostPage from '../purchase-cost';
 import QualityCostPage from '../quality-cost';
 import CostOptimizationPanel from '../CostOptimizationPanel';
 import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
-import {
-  formatCalculationType,
+import { formatCalculationType,
   formatSourceType,
   formatVarianceType,
   getSourceTypeTag,
   getVarianceTypeTag,
 } from '../../../utils/costUiLabels';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  COST_CALCULATION_PINNED_STATUS_FIELD,
+  costCalculationSearchColumns,
+  costDocCreatedUpdatedColumns,
+  resolveCostCalculationListParams,
+} from '../../../utils/costListCore';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 
 type TopCat = 'ledger' | 'compare' | 'analyze' | 'optimization' | 'trial';
 
@@ -242,6 +248,7 @@ const CostCalculationPage: React.FC = () => {
   const cat = rawCat;
   const sub = defaultSubForCat(cat, rawSub);
   const actionRef = useRef<ActionType>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
 
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [costCalculationDetail, setCostCalculationDetail] = useState<CostCalculation | null>(null);
@@ -464,14 +471,31 @@ const CostCalculationPage: React.FC = () => {
     实际成本: 'red',
   };
 
+  const calculationStatusEnum = useMemo(
+    () => ({
+      草稿: { text: t('app.kuaicaiwu.costCalculation.lifecycle.draft') },
+      已核算: { text: t('app.kuaicaiwu.costCalculation.lifecycle.calculated') },
+      已审核: { text: t('app.kuaicaiwu.costCalculation.lifecycle.audited') },
+    }),
+    [t],
+  );
+
   const columns: ProColumns<CostCalculation>[] = useMemo(
     () => [
+      ...costCalculationSearchColumns({
+        calculationNo: t('app.kuaicaiwu.costCalculation.col.calculationNo'),
+        workOrderCode: t('app.kuaicaiwu.costCalculation.col.workOrderCode'),
+        productCode: t('app.kuaicaiwu.costCalculation.col.productCode'),
+        productName: t('app.kuaicaiwu.costCalculation.col.productName'),
+      }),
       {
         title: t('app.kuaicaiwu.costCalculation.col.calculationNo'),
         dataIndex: 'calculation_no',
         key: 'calculation_no',
         width: 150,
         fixed: 'left',
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.calculation_no ?? '') }} ellipsis>
             {r.calculation_no ?? '-'}
@@ -483,6 +507,8 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'calculation_type',
         key: 'calculation_type',
         width: 120,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => {
           const text = r.calculation_type || '';
           return <Tag color={calcTypeColor[text] || 'default'}>{formatCalculationType(text, t)}</Tag>;
@@ -493,6 +519,8 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'work_order_code',
         key: 'work_order_code',
         width: 150,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) =>
           r.work_order_code ? (
             <Typography.Text copyable={{ text: String(r.work_order_code) }} ellipsis>{r.work_order_code}</Typography.Text>
@@ -505,6 +533,8 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'product_code',
         key: 'product_code',
         width: 150,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) =>
           r.product_code ? (
             <Typography.Text copyable={{ text: String(r.product_code) }} ellipsis>{r.product_code}</Typography.Text>
@@ -512,12 +542,14 @@ const CostCalculationPage: React.FC = () => {
             '-'
           ),
       },
-      { title: t('app.kuaicaiwu.costCalculation.col.productName'), dataIndex: 'product_name', key: 'product_name', width: 200 },
+      { title: t('app.kuaicaiwu.costCalculation.col.productName'), dataIndex: 'product_name', key: 'product_name', width: 200, hideInSearch: true, sorter: true },
       {
         title: t('app.kuaicaiwu.costCommon.col.quantity'),
         dataIndex: 'quantity',
         key: 'quantity',
         width: 100,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => (r.quantity != null ? Number(r.quantity).toFixed(2) : '0.00'),
       },
       {
@@ -525,6 +557,8 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'material_cost',
         key: 'material_cost',
         width: 120,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => `¥${r.material_cost != null ? Number(r.material_cost).toFixed(2) : '0.00'}`,
       },
       {
@@ -532,6 +566,8 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'labor_cost',
         key: 'labor_cost',
         width: 120,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => `¥${r.labor_cost != null ? Number(r.labor_cost).toFixed(2) : '0.00'}`,
       },
       {
@@ -539,6 +575,8 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'manufacturing_cost',
         key: 'manufacturing_cost',
         width: 120,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => `¥${r.manufacturing_cost != null ? Number(r.manufacturing_cost).toFixed(2) : '0.00'}`,
       },
       {
@@ -546,6 +584,8 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'total_cost',
         key: 'total_cost',
         width: 120,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => `¥${r.total_cost != null ? Number(r.total_cost).toFixed(2) : '0.00'}`,
       },
       {
@@ -553,24 +593,37 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'unit_cost',
         key: 'unit_cost',
         width: 120,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => `¥${r.unit_cost != null ? Number(r.unit_cost).toFixed(2) : '0.00'}`,
       },
       {
         title: t('app.kuaicaiwu.costCommon.col.calculationDate'),
         dataIndex: 'calculation_date',
         key: 'calculation_date',
-        width: 120,
-        search: false,
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => (r.calculation_date ? formatDateTime(r.calculation_date as string, 'YYYY-MM-DD') : '-'),
       },
       {
-        title: t('app.kuaicaiwu.costCommon.col.updatedAt'),
-        dataIndex: 'updated_at',
-        key: 'updated_at',
-        width: 180,
-        search: false,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at as string, 'YYYY-MM-DD HH:mm:ss') : '-'),
+        title: t('app.kuaicaiwu.costCommon.col.calculationDate'),
+        dataIndex: 'calculation_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        order: 20,
+        formItemProps: formDateRangeFormItemProps,
       },
+      {
+        title: t('app.kuaicaiwu.costCalculation.col.calculationStatus'),
+        dataIndex: 'calculation_status',
+        hideInTable: true,
+        order: 22,
+        valueType: 'select',
+        valueEnum: calculationStatusEnum,
+      },
+      ...costDocCreatedUpdatedColumns<CostCalculation>(t),
       {
         title: t('app.kuaicaiwu.costCommon.section.lifecycle'),
         dataIndex: 'lifecycle_stage',
@@ -595,7 +648,7 @@ const CostCalculationPage: React.FC = () => {
         ),
       },
     ],
-    [t],
+    [t, calculationStatusEnum],
   );
 
   const detailItems: ProDescriptionsItemProps<CostCalculation>[] = useMemo(
@@ -760,13 +813,28 @@ const CostCalculationPage: React.FC = () => {
         actionRef={actionRef}
         columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-calculations"
         scroll={{ x: 'max-content' }}
-        request={async (params) => {
-          const response = await costCalculationApi.list(params);
-          return {
-            data: response.items || [],
-            success: true,
-            total: response.total || 0,
-          };
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={COST_CALCULATION_PINNED_STATUS_FIELD}
+        request={async (params, sort, _filter, searchFormValues) => {
+          const listParams = resolveCostCalculationListParams(searchFormValues, sort);
+          lastListParamsRef.current = listParams;
+          try {
+            const response = await costCalculationApi.list({
+              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+              limit: params.pageSize || 20,
+              ...listParams,
+            });
+            return {
+              data: response.items || [],
+              success: true,
+              total: response.total || 0,
+            };
+          } catch (error: unknown) {
+            const err = error as { message?: string };
+            messageApi.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+            return { data: [], success: false, total: 0 };
+          }
         }}
         columns={columns}
         rowKey="uuid"

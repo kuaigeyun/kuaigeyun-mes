@@ -14,6 +14,7 @@ import type { EmployeeOption, Shift, ShiftAssignment, ShiftRoster } from '../../
 import { factoryListItems, workGroupApi } from '../../../../master-data/services/factory';
 import type { WorkGroup } from '../../../../master-data/types/factory';
 import { formatDateTime } from '../../../../../utils/format';
+import { normalizePerformanceListResponse } from '../../../utils/performanceListCore';
 
 dayjs.extend(isoWeek);
 
@@ -76,13 +77,14 @@ const ShiftRostersPage: React.FC = () => {
 
   const loadBase = useCallback(async () => {
     try {
-      const [wgRes, shiftList, employeeRes] = await Promise.all([
+      const [wgRes, shiftRes, employeeRes] = await Promise.all([
         workGroupApi.list({ limit: 500, is_active: true }),
         shiftApi.list({ limit: 200, is_active: true }),
         employeePerformanceApi.listEmployees({ limit: 500 }),
       ]);
       const wgItems = factoryListItems(wgRes);
       const employeeItems = employeeRes.items ?? [];
+      const shiftList = normalizePerformanceListResponse(shiftRes).data as Shift[];
       setWorkGroups(wgItems);
       setEmployees(employeeItems);
       setShifts(shiftList);

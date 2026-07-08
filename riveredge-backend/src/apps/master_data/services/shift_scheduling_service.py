@@ -50,12 +50,30 @@ class ShiftSchedulingService:
         skip: int = 0,
         limit: int = 200,
         is_active: Optional[bool] = None,
-    ) -> List[ShiftResponse]:
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+    ) -> dict:
+        from apps.master_data.services.performance_list_core import apply_shift_list_filters
+
         q = Shift.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if is_active is not None:
-            q = q.filter(is_active=is_active)
-        rows = await q.offset(skip).limit(limit).order_by("code")
-        return [ShiftResponse.model_validate(r) for r in rows]
+        q, order_clause = apply_shift_list_filters(
+            q,
+            keyword=keyword,
+            order_by=order_by,
+            is_active=is_active,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
+        total = await q.count()
+        rows = await q.order_by(order_clause).offset(skip).limit(limit)
+        items = [ShiftResponse.model_validate(r) for r in rows]
+        return {"items": items, "total": total}
 
     @staticmethod
     async def get_shift_by_uuid(tenant_id: int, shift_uuid: str) -> ShiftResponse:

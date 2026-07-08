@@ -25,7 +25,12 @@ from apps.kuaizhizao.schemas.sales_contract import (
     SalesContractAlertItem,
     SalesContractExecutionSummary,
 )
-from apps.kuaizhizao.services.sales_contract_service import SalesContractService
+from datetime import date
+
+from apps.kuaizhizao.services.sales_contract_service import (
+    SalesContractService,
+    SALES_CONTRACT_SORTABLE_FIELDS,
+)
 from apps.kuaizhizao.services.contract_milestone_billing_service import ContractMilestoneBillingService
 
 service = SalesContractService()
@@ -59,13 +64,31 @@ async def list_contracts(
     limit: int = Query(100, ge=1, le=1000),
     status: Optional[str] = Query(None),
     contract_type: Optional[str] = Query(None),
-    keyword: Optional[str] = Query(None),
-    customer_id: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None, description="关键词（合同编号、客户、来源报价、销售员）"),
+    customer_id: Optional[int] = Query(None, description="客户 ID"),
+    contract_code: Optional[str] = Query(None, description="合同编号（模糊）"),
+    start_date: Optional[date] = Query(None, description="签订日期起"),
+    end_date: Optional[date] = Query(None, description="签订日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 contract_date、-updated_at（前缀-表示降序）"),
     tenant_id: int = Depends(get_current_tenant),
 ):
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in SALES_CONTRACT_SORTABLE_FIELDS:
+            safe_order_by = order_by
     return await service.list_contracts(
-        tenant_id, skip=skip, limit=limit, status=status,
-        contract_type=contract_type, keyword=keyword, customer_id=customer_id,
+        tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        contract_type=contract_type,
+        keyword=keyword,
+        customer_id=customer_id,
+        contract_code=contract_code,
+        start_date=start_date,
+        end_date=end_date,
+        order_by=safe_order_by,
     )
 
 

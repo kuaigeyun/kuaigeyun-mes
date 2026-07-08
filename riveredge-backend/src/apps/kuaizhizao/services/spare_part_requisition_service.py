@@ -129,12 +129,48 @@ class SparePartRequisitionService:
         skip: int,
         limit: int,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[SparePartRequisition], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            SPARE_PART_REQUISITION_SORTABLE_FIELDS,
+            apply_equipment_created_date_range,
+            apply_equipment_keyword_filter,
+            apply_equipment_updated_date_range,
+            pick_search_keyword,
+            resolve_equipment_list_order_by,
+        )
+
         qs = SparePartRequisition.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if status:
             qs = qs.filter(status=status)
+        qs = apply_equipment_keyword_filter(
+            qs,
+            pick_search_keyword(keyword, search),
+            ["requisition_no", "equipment_name", "purpose", "applicant_name"],
+        )
+        qs = apply_equipment_created_date_range(
+            qs,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
+        qs = apply_equipment_updated_date_range(
+            qs,
+            start_date=updated_start_date,
+            end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        order_clause = resolve_equipment_list_order_by(
+            order_by,
+            SPARE_PART_REQUISITION_SORTABLE_FIELDS,
+            "-updated_at",
+        )
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def update(

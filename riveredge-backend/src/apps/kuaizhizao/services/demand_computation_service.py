@@ -11,7 +11,7 @@ Date: 2025-01-14
 
 import asyncio
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta, date, timezone
+from datetime import datetime, timedelta, date, timezone, time
 from decimal import Decimal, ROUND_CEILING
 from tortoise.transactions import in_transaction
 from loguru import logger
@@ -388,6 +388,20 @@ def _compute_supply_and_net(
     return supply, net_requirement, calc_detail
 
 
+DEMAND_COMPUTATION_SORTABLE_FIELDS = frozenset({
+    "computation_code",
+    "demand_code",
+    "demand_type",
+    "business_mode",
+    "computation_type",
+    "computation_status",
+    "computation_start_time",
+    "computation_end_time",
+    "created_at",
+    "updated_at",
+})
+
+
 class DemandComputationService:
     """统一需求计算服务"""
     
@@ -669,8 +683,13 @@ class DemandComputationService:
         computation_type: Optional[str] = None,
         computation_status: Optional[str] = None,
         business_mode: Optional[str] = None,
+        demand_type: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        created_start_date: Optional[date] = None,
+        created_end_date: Optional[date] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
         skip: int = 0,
         limit: int = 20
     ) -> Dict[str, Any]:
@@ -716,6 +735,21 @@ class DemandComputationService:
             query = query.filter(computation_status=computation_status)
         if business_mode:
             query = query.filter(business_mode=business_mode)
+        if demand_type:
+            query = query.filter(demand_type=demand_type)
+        kw = (keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(computation_code__icontains=kw)
+                | Q(demand_code__icontains=kw)
+                | Q(notes__icontains=kw)
+            )
+        cc = (computation_code or "").strip()
+        if cc:
+            query = query.filter(computation_code__icontains=cc)
+        dc = (demand_code or "").strip()
+        if dc:
+            query = query.filter(demand_code__icontains=dc)
         if start_date:
             try:
                 start_dt = datetime.strptime(start_date, "%Y-%m-%d")
@@ -731,9 +765,14 @@ class DemandComputationService:
                 query = query.filter(computation_start_time__lte=end_dt)
             except ValueError:
                 pass  # 忽略无效的日期格式
-        
+        if created_start_date is not None:
+            query = query.filter(created_at__gte=datetime.combine(created_start_date, time.min))
+        if created_end_date is not None:
+            query = query.filter(created_at__lte=datetime.combine(created_end_date, time.max))
+
         total = await query.count()
-        computations = await query.offset(skip).limit(limit).order_by('-computation_start_time')
+        order_clause = order_by if order_by else "-computation_start_time"
+        computations = await query.offset(skip).limit(limit).order_by(order_clause)
         
         result = []
         for computation in computations:

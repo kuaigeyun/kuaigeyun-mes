@@ -60,10 +60,12 @@ import { qrcodeApi } from '../../../../../services/qrcode';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
-import { getPackingBindingLifecycle } from '../../../utils/packingBindingLifecycle';
+import { getPackingBindingLifecycle, buildPackingBindingMethodValueEnum, resolvePackingBindingListMethodParams, buildPackingBindingSourceValueEnum, resolvePackingBindingListSourceParams } from '../../../utils/packingBindingLifecycle';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '../../../../../utils/format';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 
 interface PackingBinding {
   id?: number;
@@ -96,8 +98,9 @@ interface PackingBinding {
 }
 
 interface PackingBindingPageResult {
-  items: PackingBinding[];
+  data: PackingBinding[];
   total: number;
+  success: boolean;
 }
 
 interface PackingTaskPoolItem {
@@ -586,14 +589,41 @@ const PackingBindingPage: React.FC = () => {
     [handleDetail, handleEdit, t],
   );
 
+  const packingBindingMethodValueEnum = useMemo(() => buildPackingBindingMethodValueEnum(t), [t]);
+  const packingBindingSourceValueEnum = useMemo(() => buildPackingBindingSourceValueEnum(t), [t]);
+
   const columns: ProColumns<PackingBinding>[] = useMemo(
     () => [
+      {
+        title: t('app.kuaizhizao.packingBinding.colBoundAt'),
+        dataIndex: 'bound_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        hideInSearch: false,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
+      },
+      {
+        title: t('common.createdAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        hideInSearch: false,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
+      },
       {
         title: t('app.kuaizhizao.packingBinding.colBoxNo'),
         dataIndex: 'box_no',
         width: 168,
         ellipsis: true,
         fixed: 'left',
+        sorter: true,
+        hideInSearch: false,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.box_no ?? '') }} ellipsis>
             {r.box_no ?? '-'}
@@ -605,6 +635,8 @@ const PackingBindingPage: React.FC = () => {
         dataIndex: 'product_code',
         width: 128,
         ellipsis: true,
+        sorter: true,
+        hideInSearch: false,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.product_code ?? '') }} ellipsis>
             {r.product_code ?? '-'}
@@ -616,12 +648,16 @@ const PackingBindingPage: React.FC = () => {
         dataIndex: 'product_name',
         width: 160,
         ellipsis: true,
+        sorter: true,
+        hideInSearch: false,
       },
       {
         title: t('app.kuaizhizao.packingBinding.colProductSerialNo'),
         dataIndex: 'product_serial_no',
         width: 140,
         ellipsis: true,
+        sorter: true,
+        hideInSearch: false,
         render: (_, r) => r.product_serial_no || '-',
       },
       {
@@ -629,25 +665,33 @@ const PackingBindingPage: React.FC = () => {
         dataIndex: 'packing_quantity',
         width: 100,
         align: 'right',
+        sorter: true,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.packingBinding.colPackingMaterial'),
         dataIndex: 'packing_material_name',
         width: 140,
         ellipsis: true,
+        hideInSearch: false,
         render: (_, r) => r.packing_material_name || '-',
       },
       {
         title: t('app.kuaizhizao.packingBinding.colBindingMethod'),
         dataIndex: 'binding_method',
         width: 100,
+        hideInSearch: false,
+        valueType: 'select',
+        valueEnum: packingBindingMethodValueEnum,
         render: (_, r) => bindingMethodTag(r.binding_method),
       },
       {
         title: t('app.kuaizhizao.packingBinding.colSource'),
         dataIndex: 'source_type',
         width: 110,
-        hideInSearch: true,
+        hideInSearch: false,
+        valueType: 'select',
+        valueEnum: packingBindingSourceValueEnum,
         render: (_, r) => <Tag>{getBindingSourceLabel(r)}</Tag>,
       },
       {
@@ -662,22 +706,30 @@ const PackingBindingPage: React.FC = () => {
         dataIndex: 'bound_by_name',
         width: 100,
         ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.packingBinding.colBoundAt'),
         dataIndex: 'bound_at',
         valueType: 'dateTime',
-        width: 168,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        defaultSortOrder: 'descend',
+        hideInSearch: true,
+        render: (_, r) => (r.bound_at ? formatDateTime(r.bound_at, 'YYYY-MM-DD HH:mm') : '-'),
       },
       {
         title: t('app.kuaizhizao.packingBinding.colUpdatedAt'),
         dataIndex: 'updated_at',
-        width: 168,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
         hideInSearch: true,
-        defaultSortOrder: 'descend',
         render: (_, r) => {
           const d = r.updated_at;
-          return d ? formatDateTime(d, 'YYYY-MM-DD HH:mm:ss') : '-';
+          return d ? formatDateTime(d, 'YYYY-MM-DD HH:mm') : '-';
         },
       },
       {
@@ -710,25 +762,77 @@ const PackingBindingPage: React.FC = () => {
           renderPbRowActions(renderPbRowActionNodes(record), `pb-${record.id ?? 'row'}`),
       },
     ],
-    [bindingMethodTag, getBindingSourceLabel, renderPbRowActionNodes, t],
+    [bindingMethodTag, getBindingSourceLabel, packingBindingMethodValueEnum, packingBindingSourceValueEnum, renderPbRowActionNodes, t],
   );
 
-  const handleRequest = async (params: any) => {
+  const handleRequest = async (
+    params: any,
+    sort: Record<string, 'ascend' | 'descend' | null>,
+    _filter: Record<string, React.ReactText[] | null>,
+    searchFormValues?: Record<string, unknown>,
+  ) => {
     try {
-      const searchBoxNo = params.box_no || params.keyword;
-      const result = (await packingBindingApi.listPage({
-        skip: (params.current! - 1) * params.pageSize!,
-        limit: params.pageSize,
+      const s = searchFormValues ?? {};
+      const methodParams = resolvePackingBindingListMethodParams(s);
+      const sourceParams = resolvePackingBindingListSourceParams(s);
+      const { sortBy, sortOrder } = extractProTableSort(sort);
+      const orderBy =
+        sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+      const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
+
+      const apiParams: Parameters<typeof packingBindingApi.listPage>[0] = {
+        skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+        limit: params.pageSize ?? 20,
+        ...methodParams,
+        ...sourceParams,
+        order_by: orderBy,
         receipt_id: params.receipt_id,
         product_id: params.product_id,
-        box_no: searchBoxNo,
-        uuid: params.uuid,
-      })) as PackingBindingPageResult;
-      const data = Array.isArray(result?.items) ? result.items : [];
+        uuid: params.uuid as string | undefined,
+      };
+
+      if (fuzzyKeyword) {
+        apiParams.keyword = fuzzyKeyword;
+      } else {
+        if (s.box_no != null && String(s.box_no).trim()) {
+          apiParams.box_no = String(s.box_no).trim();
+        }
+        if (s.product_code != null && String(s.product_code).trim()) {
+          apiParams.product_code = String(s.product_code).trim();
+        }
+        if (s.product_name != null && String(s.product_name).trim()) {
+          apiParams.product_name = String(s.product_name).trim();
+        }
+        if (s.product_serial_no != null && String(s.product_serial_no).trim()) {
+          apiParams.product_serial_no = String(s.product_serial_no).trim();
+        }
+        if (s.packing_material_name != null && String(s.packing_material_name).trim()) {
+          apiParams.packing_material_name = String(s.packing_material_name).trim();
+        }
+      }
+
+      const boundRange = s.bound_at_range as [unknown, unknown] | undefined;
+      if (boundRange && Array.isArray(boundRange) && boundRange[0]) {
+        apiParams.bound_at_start_date = formatDateTime(boundRange[0] as string | Date, 'YYYY-MM-DD');
+        apiParams.bound_at_end_date = boundRange[1]
+          ? formatDateTime(boundRange[1] as string | Date, 'YYYY-MM-DD')
+          : apiParams.bound_at_start_date;
+      }
+
+      const createdRange = s.created_at_range as [unknown, unknown] | undefined;
+      if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+        apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
+        apiParams.created_end_date = createdRange[1]
+          ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+          : apiParams.created_start_date;
+      }
+
+      const result = (await packingBindingApi.listPage(apiParams)) as PackingBindingPageResult;
+      const data = Array.isArray(result?.data) ? result.data : [];
       tableRowsRef.current = data;
       return {
         data,
-        success: true,
+        success: result.success !== false,
         total: Number(result?.total || 0),
       };
     } catch (error: any) {
@@ -796,6 +900,9 @@ const PackingBindingPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField="binding_method"
+          pinnedTabsValueEnum={packingBindingMethodValueEnum}
           request={handleRequest}
           enableRowSelection={true}
           selectedRowKeys={selectedRowKeys}

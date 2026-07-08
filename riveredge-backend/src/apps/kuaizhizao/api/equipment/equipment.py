@@ -89,6 +89,12 @@ async def list_equipment(
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
     workstation_id: Optional[int] = Query(None, description="工位ID（可选）"),
     search: Optional[str] = Query(None, description="搜索关键词（可选，搜索编码、名称）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（与 search 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -121,7 +127,13 @@ async def list_equipment(
         status=status,
         is_active=is_active,
         workstation_id=workstation_id,
-        search=search
+        search=search,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
     
     items = [EquipmentResponse.model_validate(eq) for eq in equipment_list]

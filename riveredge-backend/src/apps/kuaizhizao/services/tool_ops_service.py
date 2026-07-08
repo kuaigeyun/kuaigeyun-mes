@@ -153,15 +153,29 @@ class _MasterCRUDMixin:
         limit: int,
         search: Optional[str] = None,
         is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[T], int]:
+        from apps.kuaizhizao.services.equipment_list_core import apply_master_crud_list_filters
+
         qs = self.model.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if is_active is not None:
-            qs = qs.filter(is_active=is_active)
-        if search and search.strip():
-            k = search.strip()
-            qs = qs.filter(Q(code__icontains=k) | Q(name__icontains=k))
+        qs, order_clause = apply_master_crud_list_filters(
+            qs,
+            keyword=keyword,
+            search=search,
+            is_active=is_active,
+            order_by=order_by,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def _get(self, tenant_id: int, row_id: int) -> T:
@@ -555,14 +569,44 @@ class ToolBorrowService:
         limit: int,
         tool_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        doc_start_date: Optional[str] = None,
+        doc_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[ToolBorrow], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            TOOL_WORKFLOW_DOC_SORTABLE_FIELDS,
+            TOOL_WORKFLOW_KEYWORD_FIELDS,
+            apply_asset_workflow_list_filters,
+        )
+
         qs = ToolBorrow.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if tool_id is not None:
             qs = qs.filter(tool_id=tool_id)
         if status:
             qs = qs.filter(status=status)
+        qs, order_clause = apply_asset_workflow_list_filters(
+            qs,
+            keyword=keyword,
+            search=search,
+            order_by=order_by,
+            allowed_fields=TOOL_WORKFLOW_DOC_SORTABLE_FIELDS,
+            keyword_fields=TOOL_WORKFLOW_KEYWORD_FIELDS,
+            date_field="borrow_date",
+            date_start=doc_start_date,
+            date_end=doc_end_date,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def list_outstanding(
@@ -689,12 +733,42 @@ class ToolReturnService:
         skip: int,
         limit: int,
         tool_id: Optional[int] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        doc_start_date: Optional[str] = None,
+        doc_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[ToolReturn], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            TOOL_WORKFLOW_DOC_SORTABLE_FIELDS,
+            TOOL_WORKFLOW_KEYWORD_FIELDS,
+            apply_asset_workflow_list_filters,
+        )
+
         qs = ToolReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if tool_id is not None:
             qs = qs.filter(tool_id=tool_id)
+        qs, order_clause = apply_asset_workflow_list_filters(
+            qs,
+            keyword=keyword,
+            search=search,
+            order_by=order_by,
+            allowed_fields=TOOL_WORKFLOW_DOC_SORTABLE_FIELDS,
+            keyword_fields=TOOL_WORKFLOW_KEYWORD_FIELDS,
+            date_field="return_date",
+            date_start=doc_start_date,
+            date_end=doc_end_date,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def update(
@@ -881,14 +955,44 @@ class ToolMaintenanceService:
         limit: int,
         tool_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        doc_start_date: Optional[str] = None,
+        doc_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[ToolMaintenance], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            TOOL_WORKFLOW_DOC_SORTABLE_FIELDS,
+            TOOL_WORKFLOW_KEYWORD_FIELDS,
+            apply_asset_workflow_list_filters,
+        )
+
         qs = ToolMaintenance.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if tool_id is not None:
             qs = qs.filter(tool_id=tool_id)
         if status:
             qs = qs.filter(status=status)
+        qs, order_clause = apply_asset_workflow_list_filters(
+            qs,
+            keyword=keyword,
+            search=search,
+            order_by=order_by,
+            allowed_fields=TOOL_WORKFLOW_DOC_SORTABLE_FIELDS,
+            keyword_fields=TOOL_WORKFLOW_KEYWORD_FIELDS,
+            date_field="maintenance_date",
+            date_start=doc_start_date,
+            date_end=doc_end_date,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def update(
@@ -1135,14 +1239,44 @@ class ToolRepairService:
         limit: int,
         tool_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        doc_start_date: Optional[str] = None,
+        doc_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[ToolRepair], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            TOOL_WORKFLOW_DOC_SORTABLE_FIELDS,
+            TOOL_WORKFLOW_KEYWORD_FIELDS,
+            apply_asset_workflow_list_filters,
+        )
+
         qs = ToolRepair.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if tool_id is not None:
             qs = qs.filter(tool_id=tool_id)
         if status:
             qs = qs.filter(status=status)
+        qs, order_clause = apply_asset_workflow_list_filters(
+            qs,
+            keyword=keyword,
+            search=search,
+            order_by=order_by,
+            allowed_fields=TOOL_WORKFLOW_DOC_SORTABLE_FIELDS,
+            keyword_fields=TOOL_WORKFLOW_KEYWORD_FIELDS,
+            date_field="repair_date",
+            date_start=doc_start_date,
+            date_end=doc_end_date,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def update(
@@ -1335,14 +1469,44 @@ class ToolOpsCalibrationService:
         limit: int,
         tool_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        doc_start_date: Optional[str] = None,
+        doc_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[ToolOpsCalibration], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            EQUIPMENT_CALIBRATION_SORTABLE_FIELDS,
+            TOOL_WORKFLOW_KEYWORD_FIELDS,
+            apply_asset_workflow_list_filters,
+        )
+
         qs = ToolOpsCalibration.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if tool_id is not None:
             qs = qs.filter(tool_id=tool_id)
         if status:
             qs = qs.filter(status=status)
+        qs, order_clause = apply_asset_workflow_list_filters(
+            qs,
+            keyword=keyword,
+            search=search,
+            order_by=order_by,
+            allowed_fields=EQUIPMENT_CALIBRATION_SORTABLE_FIELDS,
+            keyword_fields=TOOL_WORKFLOW_KEYWORD_FIELDS,
+            date_field="calibration_date",
+            date_start=doc_start_date,
+            date_end=doc_end_date,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def update(
@@ -1434,14 +1598,38 @@ class ToolScrapApplicationService:
         limit: int,
         tool_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[ToolScrapApplication], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            TOOL_SCRAP_SORTABLE_FIELDS,
+            apply_asset_workflow_list_filters,
+        )
+
         qs = ToolScrapApplication.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if tool_id is not None:
             qs = qs.filter(tool_id=tool_id)
         if status:
             qs = qs.filter(status=status)
+        qs, order_clause = apply_asset_workflow_list_filters(
+            qs,
+            keyword=keyword,
+            search=search,
+            order_by=order_by,
+            allowed_fields=TOOL_SCRAP_SORTABLE_FIELDS,
+            keyword_fields=["application_no", "tool_code", "tool_name", "reason"],
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def update(

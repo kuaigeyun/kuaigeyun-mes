@@ -101,7 +101,7 @@ async def create_delivery_notice(
         )
 
 
-@router.get("", response_model=List[DeliveryNoticeListResponse], summary="List delivery notices")
+@router.get("", summary="List delivery notices")
 async def list_delivery_notices(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -109,11 +109,22 @@ async def list_delivery_notices(
     sales_delivery_id: Optional[int] = Query(None),
     sales_order_id: Optional[int] = Query(None),
     customer_id: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    sent_start_date: Optional[str] = Query(None, description="发送时间起"),
+    sent_end_date: Optional[str] = Query(None, description="发送时间止"),
+    planned_delivery_start_date: Optional[str] = Query(None, description="预计送达日期起"),
+    planned_delivery_end_date: Optional[str] = Query(None, description="预计送达日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """获取送货单列表"""
-    return await delivery_notice_service.list_delivery_notices(
+    items, total = await delivery_notice_service.list_delivery_notices(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -121,7 +132,19 @@ async def list_delivery_notices(
         sales_delivery_id=sales_delivery_id,
         sales_order_id=sales_order_id,
         customer_id=customer_id,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        sent_start_date=sent_start_date,
+        sent_end_date=sent_end_date,
+        planned_delivery_start_date=planned_delivery_start_date,
+        planned_delivery_end_date=planned_delivery_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 
 @router.get("/{notice_id}", response_model=DeliveryNoticeWithItemsResponse, summary="Get delivery notice")

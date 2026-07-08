@@ -27,6 +27,14 @@ import PermissionGuard from '../../../../../components/permission/PermissionGuar
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useTranslation } from 'react-i18next';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formatDateTime } from '../../../../../utils/format';
+import {
+  buildOqcInspectionStatusValueEnum,
+  normalizeQualityInspectionListResponse,
+  QUALITY_INSPECTION_PINNED_STATUS_FIELD,
+  resolveQualityInspectionListParams,
+} from '../../../utils/qualityInspectionListCore';
 import {
   getQualityInspectionResultValueEnum,
   getQualityQualityStatusValueEnum,
@@ -56,6 +64,7 @@ const OQCInspectionPage: React.FC = () => {
     () => createListAuditPhaseColumn<OQCInspection>({ t, auditEnabled: oqcAuditEnabled }),
     [t, oqcAuditEnabled],
   );
+  const oqcStatusValueEnum = useMemo(() => buildOqcInspectionStatusValueEnum(t), [t]);
   const actionRef = useRef<ActionType>(null);
   const conductFormRef = useRef<any>(null);
   const [conductVisible, setConductVisible] = useState(false);
@@ -202,10 +211,36 @@ const OQCInspectionPage: React.FC = () => {
   const columns: ProColumns<OQCInspection>[] = useMemo(
     () => [
       {
+        title: t('app.kuaizhizao.quality.common.columns.inspectionTime'),
+        dataIndex: 'inspection_time_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 10 } as ProColumns['search'],
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.createdAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 11 } as ProColumns['search'],
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.status'),
+        dataIndex: 'status',
+        valueType: 'select',
+        valueEnum: oqcStatusValueEnum,
+        hideInTable: true,
+        search: { order: 20 } as ProColumns['search'],
+      },
+      {
         title: t('app.kuaizhizao.quality.common.columns.inspectionCode'),
         dataIndex: 'inspection_code',
         width: 150,
         fixed: 'left',
+        sorter: true,
+        search: { order: 30 } as ProColumns['search'],
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.inspection_code ?? '') }} ellipsis>
             {r.inspection_code ?? '-'}
@@ -221,8 +256,8 @@ const OQCInspectionPage: React.FC = () => {
       ),
       { title: t('app.kuaizhizao.quality.oqc.columns.shipmentNotice'), dataIndex: 'shipment_notice_code', hideInTable: true },
       { title: t('app.kuaizhizao.quality.oqc.columns.salesOrder'), dataIndex: 'sales_order_code', hideInTable: true },
-      { title: t('app.kuaizhizao.quality.oqc.columns.customer'), dataIndex: 'customer_name', width: 140, ellipsis: true },
-      { title: t('app.kuaizhizao.quality.oqc.columns.sourceCode'), dataIndex: 'source_code', width: 130 },
+      { title: t('app.kuaizhizao.quality.oqc.columns.customer'), dataIndex: 'customer_name', width: 140, ellipsis: true, sorter: true, hideInSearch: true },
+      { title: t('app.kuaizhizao.quality.oqc.columns.sourceCode'), dataIndex: 'source_code', width: 130, sorter: true, hideInSearch: true },
       {
         title: t('app.kuaizhizao.quality.common.columns.material'),
         key: 'material',
@@ -240,26 +275,49 @@ const OQCInspectionPage: React.FC = () => {
         valueType: 'digit',
         width: 100,
         align: 'right',
+        sorter: true,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.quality.common.columns.qualifiedQty'),
         dataIndex: 'qualified_quantity',
+        sorter: true,
+        hideInSearch: true,
         ...qualifiedQuantityColumnProps,
       },
       {
         title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'),
         dataIndex: 'unqualified_quantity',
+        sorter: true,
+        hideInSearch: true,
         ...unqualifiedQuantityColumnProps,
       },
       {
         title: t('app.kuaizhizao.quality.oqc.columns.releaseDecision'),
         dataIndex: 'release_decision',
         width: 100,
+        sorter: true,
+        hideInSearch: true,
         render: (_, row) => renderReleaseDecisionTag(t, row.release_decision),
       },
       ...(oqcAuditColumn ? [oqcAuditColumn] : []),
-      { title: t('app.kuaizhizao.quality.common.columns.status'), dataIndex: 'status', width: 90 },
-      { title: t('app.kuaizhizao.quality.common.columns.createdAt'), dataIndex: 'created_at', valueType: 'dateTime', width: 170 },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.status'),
+        dataIndex: 'status',
+        width: 90,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.createdAt'),
+        dataIndex: 'created_at',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        defaultSortOrder: 'descend',
+        render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
+      },
       {
         title: t('app.kuaizhizao.quality.common.columns.actions'),
         valueType: 'option',
@@ -315,7 +373,7 @@ const OQCInspectionPage: React.FC = () => {
         },
       },
     ],
-    [t, oqcPerms, oqcAuditColumn],
+    [t, oqcPerms, oqcAuditColumn, oqcStatusValueEnum],
   );
 
   return (
@@ -334,6 +392,9 @@ const OQCInspectionPage: React.FC = () => {
           permissionResource={OQC_RESOURCE}
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.quality-management.oqc-inspection"
+          showAdvancedSearch
+          pinnedTabsField={QUALITY_INSPECTION_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
           showExportButton
           onExport={async () => {
             try {
@@ -394,14 +455,20 @@ const OQCInspectionPage: React.FC = () => {
                 ]
               : []
           }
-          request={async (params) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
-            const result = await qualityImprovementApi.oqc.list({ skip, limit: pageSize, status: params.status });
+            const listParams = resolveQualityInspectionListParams(searchFormValues, sort);
+            const result = await qualityImprovementApi.oqc.list({
+              skip,
+              limit: pageSize,
+              ...listParams,
+            });
+            const { data, total } = normalizeQualityInspectionListResponse(result);
             return {
               success: true,
-              data: result?.items || [],
-              total: result?.total || 0,
+              data: data as OQCInspection[],
+              total,
             };
           }}
         />

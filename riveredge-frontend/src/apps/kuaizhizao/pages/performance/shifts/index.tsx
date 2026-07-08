@@ -17,6 +17,11 @@ import {
   renderActiveTag,
   renderYesNoTag,
 } from '../components/performanceMeta';
+import {
+  normalizePerformanceListResponse,
+  PERFORMANCE_PINNED_ACTIVE_FIELD,
+  resolveShiftListParams,
+} from '../../../utils/performanceListCore';
 
 const ShiftsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -50,13 +55,14 @@ const ShiftsPage: React.FC = () => {
         dataIndex: 'code',
         width: 120,
         fixed: 'left',
+        sorter: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
             {r.code ?? '-'}
           </Typography.Text>
         ),
       },
-      { title: t('app.kuaizhizao.performance.shifts.columns.shiftName'), dataIndex: 'name', width: 160, ellipsis: true },
+      { title: t('app.kuaizhizao.performance.shifts.columns.shiftName'), dataIndex: 'name', width: 160, ellipsis: true, sorter: true },
       {
         title: t('app.kuaizhizao.performance.shifts.columns.timeRange'),
         key: 'timeRange',
@@ -77,6 +83,7 @@ const ShiftsPage: React.FC = () => {
         width: 100,
         align: 'right',
         hideInSearch: true,
+        sorter: true,
       },
       {
         title: t('app.kuaizhizao.performance.common.columns.status'),
@@ -84,6 +91,7 @@ const ShiftsPage: React.FC = () => {
         width: 90,
         valueType: 'select',
         valueEnum: getPerformanceInactiveActiveValueEnum(t),
+        sorter: true,
         render: (_, r) => renderActiveTag(t, r.isActive, 'inactive'),
       },
       {
@@ -134,15 +142,23 @@ const ShiftsPage: React.FC = () => {
         showDeleteButton
         onDelete={handleBatchDelete}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.performance.shifts.messages.deleteBatchConfirm', { count })}
-        request={async () => {
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={PERFORMANCE_PINNED_ACTIVE_FIELD}
+        request={async (params, sort, _filter, searchFormValues) => {
           try {
-            const data = await shiftApi.list({ limit: 500 });
-            return { data, success: true, total: data.length };
+            const pageSize = params.pageSize || 20;
+            const skip = ((params.current || 1) - 1) * pageSize;
+            const listParams = resolveShiftListParams(searchFormValues, sort);
+            const response = await shiftApi.list({ skip, limit: pageSize, ...listParams });
+            const { data, total } = normalizePerformanceListResponse(response);
+            return { data: data as Shift[], success: true, total };
           } catch (e: any) {
             messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
             return { data: [], success: false, total: 0 };
           }
         }}
+        pagination={{ defaultPageSize: 20, showSizeChanger: true }}
       />
       <ShiftFormModal
         open={modalVisible}

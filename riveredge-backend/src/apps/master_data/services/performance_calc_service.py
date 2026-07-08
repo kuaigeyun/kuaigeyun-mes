@@ -347,14 +347,33 @@ class PerformanceCalcService:
         employee_id: Optional[int] = None,
         skip: int = 0,
         limit: int = 100,
-    ) -> List[PerformanceSummaryResponse]:
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        status: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+    ) -> dict:
+        from apps.master_data.services.performance_list_core import apply_performance_summary_list_filters
+
         query = PerformanceSummary.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if period:
-            query = query.filter(period=period)
-        if employee_id is not None:
-            query = query.filter(employee_id=employee_id)
-        summaries = await query.offset(skip).limit(limit).order_by("-period", "employee_id").all()
-        return [PerformanceSummaryResponse.model_validate(s) for s in summaries]
+        query, order_clause = apply_performance_summary_list_filters(
+            query,
+            keyword=keyword,
+            order_by=order_by,
+            period=period,
+            employee_id=employee_id,
+            status=status,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
+        total = await query.count()
+        summaries = await query.order_by(order_clause).offset(skip).limit(limit).all()
+        items = [PerformanceSummaryResponse.model_validate(s) for s in summaries]
+        return {"items": items, "total": total}
 
     @staticmethod
     async def get_detail(

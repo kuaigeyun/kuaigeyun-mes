@@ -317,8 +317,45 @@ export const workOrderApi = {
     apiRequest<WorkOrderGroup>(`/apps/kuaizhizao/work-order-groups/${groupId}`, { method: 'GET' }),
 };
 
+export interface ReworkOrderListParams {
+  skip?: number;
+  limit?: number;
+  code?: string;
+  status?: string;
+  original_work_order_id?: number;
+  original_work_order_code?: string;
+  product_name?: string;
+  rework_type?: string;
+  keyword?: string;
+  planned_start_from?: string;
+  planned_start_to?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  order_by?: string;
+}
+
+export interface ReworkOrderListResponse {
+  data: Record<string, unknown>[];
+  total: number;
+  success: boolean;
+}
+
 export const reworkOrderApi = {
-  list: async (params?: any) => apiRequest('/apps/kuaizhizao/rework-orders', { method: 'GET', params }),
+  list: async (params?: ReworkOrderListParams): Promise<ReworkOrderListResponse> => {
+    const raw = await apiRequest<ReworkOrderListResponse | Record<string, unknown>[]>(
+      '/apps/kuaizhizao/rework-orders',
+      { method: 'GET', params },
+    );
+    if (Array.isArray(raw)) {
+      return { data: raw, total: raw.length, success: true };
+    }
+    const rows = raw?.data ?? [];
+    return {
+      data: rows,
+      total: raw?.total ?? rows.length,
+      success: raw?.success !== false,
+    };
+  },
   create: async (data: any) => apiRequest('/apps/kuaizhizao/rework-orders', { method: 'POST', data }),
   update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/rework-orders/${id}`, { method: 'PUT', data }),
   delete: async (id: string) => apiRequest(`/apps/kuaizhizao/rework-orders/${id}`, { method: 'DELETE' }),

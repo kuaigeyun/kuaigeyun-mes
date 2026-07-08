@@ -8,6 +8,12 @@ import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG, TwoColumnLayout } fr
 import { qualityImprovementApi, SPCSample } from '../../../services/quality-improvement';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  formatQualityDateTimeCell,
+  normalizeQualityImprovementListResponse,
+  resolveSpcSampleListParams,
+} from '../../../utils/qualityImprovementListCore';
 import SpcImrChart from './SpcImrChart';
 
 const SPC_RESOURCE = 'kuaizhizao:quality-management-spc-monitor';
@@ -40,11 +46,62 @@ const SPCMonitorPage: React.FC = () => {
 
   const columns: ProColumns<SPCSample>[] = useMemo(
     () => [
-      { title: t('app.kuaizhizao.quality.spc.characteristicName'), dataIndex: 'characteristic_name', width: 180 },
-      { title: t('app.kuaizhizao.quality.spc.chartType'), dataIndex: 'chart_type', width: 120, valueEnum: { imr: 'I-MR' } },
-      { title: t('app.kuaizhizao.quality.spc.sampleValue'), dataIndex: 'sample_value', width: 88, valueType: 'digit' },
-      { title: t('app.kuaizhizao.quality.spc.sampleSize'), dataIndex: 'sample_size', width: 72, valueType: 'digit' },
-      { title: t('app.kuaizhizao.quality.spc.sampleTime'), dataIndex: 'sample_time', width: 180, valueType: 'dateTime' },
+      {
+        title: t('app.kuaizhizao.quality.spc.characteristicName'),
+        dataIndex: 'characteristic_name',
+        hideInTable: true,
+        order: 10,
+        fieldProps: { allowClear: true },
+      },
+      {
+        title: t('app.kuaizhizao.quality.spc.characteristicName'),
+        dataIndex: 'characteristic_name',
+        width: 180,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.quality.spc.chartType'),
+        dataIndex: 'chart_type',
+        width: 120,
+        sorter: true,
+        hideInSearch: true,
+        valueEnum: { imr: 'I-MR' },
+      },
+      {
+        title: t('app.kuaizhizao.quality.spc.sampleValue'),
+        dataIndex: 'sample_value',
+        width: 88,
+        sorter: true,
+        hideInSearch: true,
+        valueType: 'digit',
+      },
+      {
+        title: t('app.kuaizhizao.quality.spc.sampleSize'),
+        dataIndex: 'sample_size',
+        width: 72,
+        sorter: true,
+        hideInSearch: true,
+        valueType: 'digit',
+      },
+      {
+        title: t('app.kuaizhizao.quality.spc.sampleTime'),
+        dataIndex: 'sample_time',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        defaultSortOrder: 'descend',
+        hideInSearch: true,
+        render: (_, row) => formatQualityDateTimeCell(row.sample_time),
+      },
+      {
+        title: t('app.kuaizhizao.quality.spc.sampleTime'),
+        dataIndex: 'sample_time_range',
+        valueType: 'dateTimeRange',
+        hideInTable: true,
+        order: 20,
+        formItemProps: formDateRangeFormItemProps,
+      },
     ],
     [t],
   );
@@ -109,6 +166,8 @@ const SPCMonitorPage: React.FC = () => {
                 actionRef={actionRef}
                 rowKey="id"
                 columns={columns}
+                showAdvancedSearch
+                skipFuzzyPinyinClientFilter
                 columnPersistenceId="apps.kuaizhizao.pages.quality-management.spc-monitor"
                 toolBarRender={() => [
                   ...(canCreate
@@ -119,21 +178,24 @@ const SPCMonitorPage: React.FC = () => {
                       ]
                     : []),
                 ]}
-                request={async (params) => {
+                request={async (params, sort, _filter, searchFormValues) => {
                   const pageSize = params.pageSize || 20;
                   const skip = ((params.current || 1) - 1) * pageSize;
-                  const rows = await qualityImprovementApi.spc.listSamples({
+                  const listParams = resolveSpcSampleListParams(searchFormValues, sort);
+                  const response = await qualityImprovementApi.spc.listSamples({
                     skip,
                     limit: pageSize,
-                    characteristic_name: params.characteristic_name,
+                    ...listParams,
                   });
+                  const { data, total } = normalizeQualityImprovementListResponse(response);
+                  const rows = (data as SPCSample[]) || [];
                   if (!characteristicName && rows.length > 0) {
                     void loadChart(rows[0].characteristic_name);
                   }
                   return {
                     success: true,
-                    data: rows || [],
-                    total: rows.length < pageSize ? skip + rows.length : skip + rows.length + 1,
+                    data: rows,
+                    total,
                   };
                 }}
                 onRow={(record) => ({

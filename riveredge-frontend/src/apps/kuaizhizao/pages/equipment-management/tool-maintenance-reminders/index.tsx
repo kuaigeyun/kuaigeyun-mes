@@ -14,6 +14,10 @@ import { MultiTabListPageTemplate } from '../../../../../components/layout-templ
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { toolApi } from '../../../services/equipment';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  normalizeEquipmentListResponse,
+  resolveReminderListParams,
+} from '../../../utils/equipmentListCore';
 
 const RESOURCE = 'kuaizhizao:tool-maintenance-reminder';
 
@@ -187,6 +191,8 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
             <UniTable<ToolMaintenanceReminder>
               columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders.maintenance"
               actionRef={maintenanceActionRef}
+              showAdvancedSearch
+              skipFuzzyPinyinClientFilter
               enableRowSelection
               selectedRowKeys={maintenanceSelectedRowKeys}
               onRowSelectionChange={setMaintenanceSelectedRowKeys}
@@ -205,13 +211,15 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
                     ]
                   : []
               }
-              request={async (params) => {
+              request={async (params, sort, _filter, searchFormValues) => {
+                const listParams = resolveReminderListParams(searchFormValues, sort);
                 const res = await toolApi.listMaintenanceReminders({
                   skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                   limit: params.pageSize || 20,
-                  reminder_type: params.reminder_type as string | undefined,
+                  ...listParams,
                 });
-                return { data: res.items || [], success: true, total: res.total || 0 };
+                const { data, total } = normalizeEquipmentListResponse(res);
+                return { data: data as ToolMaintenanceReminder[], success: true, total };
               }}
               search={{ labelWidth: 'auto' }}
               pagination={{ defaultPageSize: 20 }}
@@ -223,10 +231,12 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
           key: 'calibration',
           label: t('app.kuaizhizao.toolMaintenanceReminder.tabCalibration'),
           children: (
-            <UniTable<ToolCalibrationReminder>
-              columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders.calibration"
-              actionRef={calibrationActionRef}
-              enableRowSelection
+              <UniTable<ToolCalibrationReminder>
+                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders.calibration"
+                actionRef={calibrationActionRef}
+                showAdvancedSearch
+                skipFuzzyPinyinClientFilter
+                enableRowSelection
               selectedRowKeys={calibrationSelectedRowKeys}
               onRowSelectionChange={setCalibrationSelectedRowKeys}
               rowKey={(record) =>

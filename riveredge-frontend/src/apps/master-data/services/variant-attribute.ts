@@ -29,14 +29,29 @@ export const variantAttributeApi = {
   /**
    * 获取属性定义列表
    */
-  list: async (params?: VariantAttributeDefinitionListParams): Promise<VariantAttributeDefinition[]> => {
+  list: async (params?: VariantAttributeDefinitionListParams): Promise<{ items: VariantAttributeDefinition[]; total: number }> => {
     const q: Record<string, unknown> = {};
+    if (params?.skip != null) q.skip = params.skip;
+    if (params?.limit != null) q.limit = params.limit;
     if (params?.is_active !== undefined) q.is_active = params.is_active;
     if (params?.attribute_type) q.attribute_type = params.attribute_type;
     if (params?.keyword?.trim()) q.keyword = params.keyword.trim();
+    if (params?.attribute_name?.trim()) q.attribute_name = params.attribute_name.trim();
+    if (params?.display_name?.trim()) q.display_name = params.display_name.trim();
+    if (params?.created_start_date) q.created_start_date = params.created_start_date;
+    if (params?.created_end_date) q.created_end_date = params.created_end_date;
+    if (params?.updated_start_date) q.updated_start_date = params.updated_start_date;
+    if (params?.updated_end_date) q.updated_end_date = params.updated_end_date;
     if (params?.sort_by) q.sort_by = params.sort_by;
     if (params?.sort_order) q.sort_order = params.sort_order;
-    return api.get('/core/variant-attributes', { params: q });
+    const res = await api.get<{ items: VariantAttributeDefinition[]; total: number }>(
+      '/core/variant-attributes',
+      { params: q },
+    );
+    if (Array.isArray(res)) {
+      return { items: res, total: res.length };
+    }
+    return { items: res.items ?? [], total: res.total ?? 0 };
   },
 
   /**

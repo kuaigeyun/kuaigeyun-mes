@@ -379,6 +379,12 @@ async def list_incoming_inspections(
     material_id: Optional[int] = Query(None, description="物料ID"),
     purchase_receipt_id: Optional[int] = Query(None, description="采购入库单ID"),
     customer_material_registration_id: Optional[int] = Query(None, description="代工来料单ID"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    inspection_start_date: Optional[str] = Query(None, description="检验开始日期 YYYY-MM-DD"),
+    inspection_end_date: Optional[str] = Query(None, description="检验结束日期 YYYY-MM-DD"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, Any]:
@@ -398,6 +404,12 @@ async def list_incoming_inspections(
         material_id=material_id,
         purchase_receipt_id=purchase_receipt_id,
         customer_material_registration_id=customer_material_registration_id,
+        keyword=keyword,
+        order_by=order_by,
+        inspection_start_date=inspection_start_date,
+        inspection_end_date=inspection_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
     )
 
 
@@ -902,7 +914,7 @@ async def get_process_inspection_statistics(
     }
 
 
-@router.get("/process-inspections", response_model=List[ProcessInspectionListResponse], summary="List in-process inspections")
+@router.get("/process-inspections", summary="List in-process inspections")
 async def list_process_inspections(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -910,9 +922,15 @@ async def list_process_inspections(
     quality_status: Optional[str] = Query(None, description="质量状态"),
     work_order_id: Optional[int] = Query(None, description="工单ID"),
     operation_id: Optional[int] = Query(None, description="工序ID"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    inspection_start_date: Optional[str] = Query(None, description="检验开始日期 YYYY-MM-DD"),
+    inspection_end_date: Optional[str] = Query(None, description="检验结束日期 YYYY-MM-DD"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[ProcessInspectionListResponse]:
+) -> Dict[str, Any]:
     """
     获取过程检验单列表
 
@@ -926,6 +944,12 @@ async def list_process_inspections(
         quality_status=quality_status,
         work_order_id=work_order_id,
         operation_id=operation_id,
+        keyword=keyword,
+        order_by=order_by,
+        inspection_start_date=inspection_start_date,
+        inspection_end_date=inspection_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
     )
 
 
@@ -1224,7 +1248,7 @@ async def get_finished_goods_inspection_statistics(
     }
 
 
-@router.get("/finished-goods-inspections", response_model=List[FinishedGoodsInspectionListResponse], summary="List finished goods inspections")
+@router.get("/finished-goods-inspections", summary="List finished goods inspections")
 async def list_finished_goods_inspections(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -1232,9 +1256,15 @@ async def list_finished_goods_inspections(
     quality_status: Optional[str] = Query(None, description="质量状态"),
     work_order_id: Optional[int] = Query(None, description="工单ID"),
     source_type: Optional[str] = Query(None, description="来源单据类型"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    inspection_start_date: Optional[str] = Query(None, description="检验开始日期 YYYY-MM-DD"),
+    inspection_end_date: Optional[str] = Query(None, description="检验结束日期 YYYY-MM-DD"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[FinishedGoodsInspectionListResponse]:
+) -> Dict[str, Any]:
     """
     获取成品检验单列表
 
@@ -1249,6 +1279,12 @@ async def list_finished_goods_inspections(
         quality_status=quality_status,
         work_order_id=work_order_id,
         source_type=source_type,
+        keyword=keyword,
+        order_by=order_by,
+        inspection_start_date=inspection_start_date,
+        inspection_end_date=inspection_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
     )
 
 

@@ -244,7 +244,11 @@ class PurchaseOrderListParams(BaseModel):
     order_date_to: Optional[date] = None
     delivery_date_from: Optional[date] = None
     delivery_date_to: Optional[date] = None
+    created_start_date: Optional[date] = None
+    created_end_date: Optional[date] = None
+    order_code: Optional[str] = None
     keyword: Optional[str] = None
+    order_by: Optional[str] = None
     skip: int = 0
     limit: int = 20
 

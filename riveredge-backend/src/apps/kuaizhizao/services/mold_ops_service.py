@@ -152,15 +152,29 @@ class _MasterCRUDMixin:
         limit: int,
         search: Optional[str] = None,
         is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[T], int]:
+        from apps.kuaizhizao.services.equipment_list_core import apply_master_crud_list_filters
+
         qs = self.model.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if is_active is not None:
-            qs = qs.filter(is_active=is_active)
-        if search and search.strip():
-            k = search.strip()
-            qs = qs.filter(Q(code__icontains=k) | Q(name__icontains=k))
+        qs, order_clause = apply_master_crud_list_filters(
+            qs,
+            keyword=keyword,
+            search=search,
+            is_active=is_active,
+            order_by=order_by,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def _get(self, tenant_id: int, row_id: int) -> T:
@@ -537,14 +551,44 @@ class MoldTrialService:
         limit: int,
         mold_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        doc_start_date: Optional[str] = None,
+        doc_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[MoldTrial], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            MOLD_WORKFLOW_DOC_SORTABLE_FIELDS,
+            MOLD_WORKFLOW_KEYWORD_FIELDS,
+            apply_asset_workflow_list_filters,
+        )
+
         qs = MoldTrial.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if mold_id is not None:
             qs = qs.filter(mold_id=mold_id)
         if status:
             qs = qs.filter(status=status)
+        qs, order_clause = apply_asset_workflow_list_filters(
+            qs,
+            keyword=keyword,
+            search=search,
+            order_by=order_by,
+            allowed_fields=MOLD_WORKFLOW_DOC_SORTABLE_FIELDS,
+            keyword_fields=MOLD_WORKFLOW_KEYWORD_FIELDS,
+            date_field="trial_date",
+            date_start=doc_start_date,
+            date_end=doc_end_date,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def update(
@@ -634,14 +678,44 @@ class MoldBorrowService:
         limit: int,
         mold_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        doc_start_date: Optional[str] = None,
+        doc_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[MoldBorrow], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            MOLD_WORKFLOW_DOC_SORTABLE_FIELDS,
+            MOLD_WORKFLOW_KEYWORD_FIELDS,
+            apply_asset_workflow_list_filters,
+        )
+
         qs = MoldBorrow.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if mold_id is not None:
             qs = qs.filter(mold_id=mold_id)
         if status:
             qs = qs.filter(status=status)
+        qs, order_clause = apply_asset_workflow_list_filters(
+            qs,
+            keyword=keyword,
+            search=search,
+            order_by=order_by,
+            allowed_fields=MOLD_WORKFLOW_DOC_SORTABLE_FIELDS,
+            keyword_fields=MOLD_WORKFLOW_KEYWORD_FIELDS,
+            date_field="borrow_date",
+            date_start=doc_start_date,
+            date_end=doc_end_date,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def list_outstanding(
@@ -768,12 +842,42 @@ class MoldReturnService:
         skip: int,
         limit: int,
         mold_id: Optional[int] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        doc_start_date: Optional[str] = None,
+        doc_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[MoldReturn], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            MOLD_WORKFLOW_DOC_SORTABLE_FIELDS,
+            MOLD_WORKFLOW_KEYWORD_FIELDS,
+            apply_asset_workflow_list_filters,
+        )
+
         qs = MoldReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if mold_id is not None:
             qs = qs.filter(mold_id=mold_id)
+        qs, order_clause = apply_asset_workflow_list_filters(
+            qs,
+            keyword=keyword,
+            search=search,
+            order_by=order_by,
+            allowed_fields=MOLD_WORKFLOW_DOC_SORTABLE_FIELDS,
+            keyword_fields=MOLD_WORKFLOW_KEYWORD_FIELDS,
+            date_field="return_date",
+            date_start=doc_start_date,
+            date_end=doc_end_date,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def update(
@@ -960,14 +1064,44 @@ class MoldMaintenanceService:
         limit: int,
         mold_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        doc_start_date: Optional[str] = None,
+        doc_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[MoldMaintenance], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            MOLD_WORKFLOW_DOC_SORTABLE_FIELDS,
+            MOLD_WORKFLOW_KEYWORD_FIELDS,
+            apply_asset_workflow_list_filters,
+        )
+
         qs = MoldMaintenance.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if mold_id is not None:
             qs = qs.filter(mold_id=mold_id)
         if status:
             qs = qs.filter(status=status)
+        qs, order_clause = apply_asset_workflow_list_filters(
+            qs,
+            keyword=keyword,
+            search=search,
+            order_by=order_by,
+            allowed_fields=MOLD_WORKFLOW_DOC_SORTABLE_FIELDS,
+            keyword_fields=MOLD_WORKFLOW_KEYWORD_FIELDS,
+            date_field="maintenance_date",
+            date_start=doc_start_date,
+            date_end=doc_end_date,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def update(
@@ -1214,14 +1348,44 @@ class MoldRepairService:
         limit: int,
         mold_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        doc_start_date: Optional[str] = None,
+        doc_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[MoldRepair], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            MOLD_WORKFLOW_DOC_SORTABLE_FIELDS,
+            MOLD_WORKFLOW_KEYWORD_FIELDS,
+            apply_asset_workflow_list_filters,
+        )
+
         qs = MoldRepair.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if mold_id is not None:
             qs = qs.filter(mold_id=mold_id)
         if status:
             qs = qs.filter(status=status)
+        qs, order_clause = apply_asset_workflow_list_filters(
+            qs,
+            keyword=keyword,
+            search=search,
+            order_by=order_by,
+            allowed_fields=MOLD_WORKFLOW_DOC_SORTABLE_FIELDS,
+            keyword_fields=MOLD_WORKFLOW_KEYWORD_FIELDS,
+            date_field="repair_date",
+            date_start=doc_start_date,
+            date_end=doc_end_date,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def update(
@@ -1365,14 +1529,38 @@ class MoldScrapApplicationService:
         limit: int,
         mold_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[MoldScrapApplication], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            MOLD_SCRAP_SORTABLE_FIELDS,
+            apply_asset_workflow_list_filters,
+        )
+
         qs = MoldScrapApplication.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if mold_id is not None:
             qs = qs.filter(mold_id=mold_id)
         if status:
             qs = qs.filter(status=status)
+        qs, order_clause = apply_asset_workflow_list_filters(
+            qs,
+            keyword=keyword,
+            search=search,
+            order_by=order_by,
+            allowed_fields=MOLD_SCRAP_SORTABLE_FIELDS,
+            keyword_fields=["application_no", "mold_code", "mold_name", "reason"],
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def update(

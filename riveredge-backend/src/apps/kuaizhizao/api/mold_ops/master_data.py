@@ -85,9 +85,22 @@ async def list_mold_maintenance_items(
     limit: int = Query(100, ge=1, le=1000),
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.maintenance_item_service._list(tenant_id, skip, limit, search, is_active)
+    rows, total = await svc.maintenance_item_service._list(tenant_id, skip, limit, search, is_active,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return MoldMaintenanceItemListResponse(
         items=[MoldMaintenanceItemResponse.model_validate(r) for r in rows],
         total=total,
@@ -170,9 +183,22 @@ async def list_mold_maintenance_schemes(
     limit: int = Query(100, ge=1, le=1000),
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.maintenance_scheme_service._list(tenant_id, skip, limit, search, is_active)
+    rows, total = await svc.maintenance_scheme_service._list(tenant_id, skip, limit, search, is_active,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return MoldMaintenanceSchemeListResponse(
         items=[MoldMaintenanceSchemeResponse.model_validate(r) for r in rows],
         total=total,
@@ -255,9 +281,22 @@ async def list_mold_repair_items(
     limit: int = Query(100, ge=1, le=1000),
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.repair_item_service._list(tenant_id, skip, limit, search, is_active)
+    rows, total = await svc.repair_item_service._list(tenant_id, skip, limit, search, is_active,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return MoldRepairItemListResponse(
         items=[MoldRepairItemResponse.model_validate(r) for r in rows],
         total=total,
@@ -340,9 +379,22 @@ async def list_mold_repair_schemes(
     limit: int = Query(100, ge=1, le=1000),
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.repair_scheme_service._list(tenant_id, skip, limit, search, is_active)
+    rows, total = await svc.repair_scheme_service._list(tenant_id, skip, limit, search, is_active,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return MoldRepairSchemeListResponse(
         items=[MoldRepairSchemeResponse.model_validate(r) for r in rows],
         total=total,

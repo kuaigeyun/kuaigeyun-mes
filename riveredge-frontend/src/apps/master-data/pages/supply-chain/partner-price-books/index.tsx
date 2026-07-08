@@ -55,6 +55,13 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { convertUnitPriceByPriceType } from '../../../utils/resolve-partner-material-price';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  buildMasterCrudActiveValueEnum,
+  MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  masterCrudCreatedUpdatedColumns,
+  partnerPriceBookPartnerSearchColumn,
+  resolvePartnerPriceBookListParams,
+} from '../../../utils/supplyChainListCore';
 
 function getMaterialAllowedUnits(material?: Material | null): string[] {
   if (!material) return [];
@@ -119,8 +126,14 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const priceBookApi = useMemo(() => createPartnerPriceBookApi(partnerType), [partnerType]);
   const isCustomer = partnerType === 'customer';
+
+  const priceBookActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+    [t],
+  );
 
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detail, setDetail] = useState<PartnerPriceBook | null>(null);
@@ -461,11 +474,17 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
 
   const columns: ProColumns<PartnerPriceBook>[] = useMemo(
     () => [
+      partnerPriceBookPartnerSearchColumn(
+        isCustomer ? t('field.customer.code', '客户') : t('field.supplier.code', '供应商'),
+        partnerOptions,
+      ),
       {
         title: isCustomer ? t('field.customer.code', '客户') : t('field.supplier.code', '供应商'),
         dataIndex: 'partnerName',
         width: 160,
         ellipsis: true,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => `${r.partnerCode ?? ''} ${r.partnerName ?? ''}`.trim() || '—',
       },
       {
@@ -492,7 +511,8 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         dataIndex: 'unitPrice',
         width: 100,
         align: 'right',
-        search: false,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => (r.unitPrice != null ? Number(r.unitPrice).toFixed(4) : '—'),
       },
       {
@@ -513,25 +533,39 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         title: t('app.master-data.priceBook.effectiveFrom', '生效起始'),
         dataIndex: 'effectiveFrom',
         width: 110,
-        search: false,
+        hideInSearch: true,
+        sorter: true,
       },
       {
         title: t('app.master-data.priceBook.effectiveTo', '生效截止'),
         dataIndex: 'effectiveTo',
         width: 110,
-        search: false,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('field.defectType.isActive', '状态'),
+        dataIndex: 'isActive',
+        hideInTable: true,
+        order: 20,
+        valueType: 'select',
+        valueEnum: priceBookActiveValueEnum,
+        fieldProps: { allowClear: true },
       },
       {
         title: t('field.defectType.isActive', '状态'),
         dataIndex: 'isActive',
         width: 80,
-        search: false,
+        hideInSearch: true,
+        sorter: true,
+        valueEnum: priceBookActiveValueEnum,
         render: (_, r) => (
           <Tag color={r.isActive ? 'success' : 'default'}>
             {r.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
           </Tag>
         ),
       },
+      ...masterCrudCreatedUpdatedColumns<PartnerPriceBook>(t),
       {
         title: t('common.actions', '操作'),
         valueType: 'option',
@@ -575,7 +609,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         ],
       },
     ],
-    [handleDelete, handleEdit, isCustomer, t],
+    [handleDelete, handleEdit, isCustomer, t, partnerOptions, priceBookActiveValueEnum],
   );
 
   const createButtonLabel = isCustomer
@@ -622,15 +656,29 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
               ]}
             />,
           ]}
-          request={async (params) => {
+          request={async (params, sort, _filter, searchFormValues) => {
+            const listParams = resolvePartnerPriceBookListParams(searchFormValues, sort);
+            lastListParamsRef.current = listParams;
             const res = await priceBookApi.list({
               skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
               limit: params.pageSize ?? 20,
-              keyword: params.keyword as string | undefined,
-              activeOnly: params.isActive === 'true' ? true : params.isActive === 'false' ? false : undefined,
+              partnerId: listParams.partnerId as number | undefined,
+              materialId: listParams.materialId as number | undefined,
+              keyword: listParams.keyword as string | undefined,
+              activeOnly: listParams.activeOnly as boolean | undefined,
+              effectiveOn: listParams.effectiveOn as string | undefined,
+              created_start_date: listParams.created_start_date as string | undefined,
+              created_end_date: listParams.created_end_date as string | undefined,
+              updated_start_date: listParams.updated_start_date as string | undefined,
+              updated_end_date: listParams.updated_end_date as string | undefined,
+              sortBy: listParams.sortBy as string | undefined,
+              sortOrder: listParams.sortOrder as 'asc' | 'desc' | undefined,
             });
             return { data: res.data ?? [], success: true, total: res.total ?? 0 };
           }}
+          showAdvancedSearch
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={MASTER_CRUD_PINNED_ACTIVE_FIELD}
         />
       </ListPageTemplate>
 

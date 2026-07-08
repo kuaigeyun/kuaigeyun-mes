@@ -150,6 +150,8 @@ class MaterialSerialService:
         keyword: Optional[str] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
     ) -> MaterialSerialListResponse:
         """
         获取序列号列表
@@ -198,25 +200,36 @@ class MaterialSerialService:
         # 状态筛选
         if status:
             query = query.filter(status=status)
-        
-        # 总数
+
+        from apps.master_data.services.master_data_list_core import (
+            apply_master_crud_created_date_range,
+            resolve_master_crud_order_clause,
+        )
+
+        query = apply_master_crud_created_date_range(
+            query,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
+
         total = await query.count()
 
-        sort_field_map = {
-            "serial_no": "serial_no",
-            "status": "status",
-            "production_date": "production_date",
-            "factory_date": "factory_date",
-            "created_at": "created_at",
+        material_sort_map = {
             "material_name": "material__name",
             "material_code": "material__main_code",
             "material_model": "material__model",
         }
-        db_sort = sort_field_map.get(sort_by or "", "created_at")
-        desc = (sort_order or "desc").lower() == "desc"
-        order_expr = f"-{db_sort}" if desc else db_sort
-        
-        # 分页查询
+        if sort_by in material_sort_map:
+            db_sort = material_sort_map[sort_by]
+            desc = (sort_order or "desc").lower() == "desc"
+            order_expr = f"-{db_sort}" if desc else db_sort
+        else:
+            order_expr = resolve_master_crud_order_clause(
+                sort_by,
+                sort_order,
+                default_col="created_at",
+            )
+
         serials = await query.prefetch_related("material").offset(
             (page - 1) * page_size
         ).limit(page_size).order_by(order_expr).all()

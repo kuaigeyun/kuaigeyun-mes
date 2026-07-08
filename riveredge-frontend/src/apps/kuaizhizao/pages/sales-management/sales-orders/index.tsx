@@ -146,6 +146,7 @@ import {
   SalesOrderItem,
   SalesOrderStatus,
   ReviewStatus,
+  type SalesOrderListParams,
   type PushPreviewResponse,
 } from '../../../services/sales-order';
 import { listQuotations, type Quotation, type QuotationCapabilities } from '../../../services/quotation';
@@ -177,7 +178,7 @@ import dayjs from 'dayjs';
 import { formatApiErrorDetail } from '../../../../../services/api';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
-import { coerceFormDate, toApiDateString } from '../../../../../utils/formDate';
+import { coerceFormDate, toApiDateString, formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getFileDownloadUrl } from '../../../../../services/file';
@@ -201,6 +202,7 @@ import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } f
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { formatDateTime } from '../../../../../utils/format';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 
 /** API 异常 detail 可能是字符串或 { message, trace_id }，不能直接交给 message.error 渲染 */
 function salesOrderCatchMessage(error: unknown, fallback: string): string {
@@ -633,6 +635,14 @@ const SalesOrdersPage: React.FC = () => {
   // 客户列表（对接技术数据管理-供应链-客户）
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
+  const salesOrderCustomerSearchOptions = useMemo(
+    () =>
+      customers.map((c) => ({
+        value: Number(c.id),
+        label: String(c.name ?? c.code ?? ''),
+      })),
+    [customers],
+  );
   // 用户列表（系统管理-用户管理-帐户管理，用于销售员选择）
   const [users, setUsers] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -2689,12 +2699,16 @@ const SalesOrdersPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.salesOrder.customerName'),
-      dataIndex: 'customer_name',
-      ellipsis: true,
-      sorter: true,
+      dataIndex: 'customer_id',
       hideInTable: true,
-      hideInSearch: false,
-      fieldProps: { placeholder: t('app.kuaizhizao.salesOrder.customerName') },
+      valueType: 'select',
+      fieldProps: {
+        showSearch: true,
+        optionFilterProp: 'label',
+        loading: customersLoading,
+        options: salesOrderCustomerSearchOptions,
+        placeholder: t('app.kuaizhizao.salesOrder.customerName'),
+      },
     },
     {
       title: t('app.kuaizhizao.salesOrder.orderDate'),
@@ -2705,6 +2719,7 @@ const SalesOrdersPage: React.FC = () => {
       resizable: false,
       ellipsis: false,
       sorter: true,
+      defaultSortOrder: 'descend',
       hideInSearch: true,
       render: (_: unknown, record: SalesOrder) => {
         const orderDateText = record.order_date ? formatDateTime(record.order_date, 'YYYY-MM-DD') : '-';
@@ -2727,8 +2742,22 @@ const SalesOrdersPage: React.FC = () => {
         );
       },
     },
-    // 订单日期范围（仅搜索）
-    { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'dateRange', width: 120, hideInTable: true, hideInSearch: false, fieldProps: { placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')] } },
+    {
+      title: t('app.kuaizhizao.salesOrder.orderDate'),
+      dataIndex: 'order_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
+    },
+    {
+      title: t('app.kuaizhizao.salesContract.contractCode'),
+      dataIndex: 'contract_code',
+      hideInTable: true,
+      fieldProps: { placeholder: t('app.kuaizhizao.salesContract.contractCode') },
+    },
     {
       title: t('app.kuaizhizao.salesOrder.salesman'),
       dataIndex: 'salesman_id',
@@ -2736,20 +2765,25 @@ const SalesOrdersPage: React.FC = () => {
       valueType: 'select',
       fieldProps: {
         showSearch: true,
+        optionFilterProp: 'label',
+        loading: usersLoading,
         options: users.map(u => ({ label: u.full_name || u.username, value: u.id })),
+        placeholder: t('app.kuaizhizao.salesOrder.salesman'),
       },
     },
     {
       title: t('app.kuaizhizao.salesOrder.salesman'),
       dataIndex: 'salesman_name',
       width: 100,
+      sorter: true,
       hideInSearch: true,
       render: (_: unknown, record: SalesOrder) => normalizeUserDisplayName(record.salesman_name) || '-',
     },
     {
       title: t('app.kuaizhizao.salesOrder.deliveryDate'),
       dataIndex: 'delivery_date',
-      width: 120,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInTable: true,
       sorter: true,
       render: (_: unknown, record: SalesOrder) => {
@@ -2869,11 +2903,16 @@ const SalesOrdersPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.salesOrder.customerName'),
-      dataIndex: 'customer_name',
-      ellipsis: true,
+      dataIndex: 'customer_id',
       hideInTable: true,
-      hideInSearch: false,
-      fieldProps: { placeholder: t('app.kuaizhizao.salesOrder.customerName') },
+      valueType: 'select',
+      fieldProps: {
+        showSearch: true,
+        optionFilterProp: 'label',
+        loading: customersLoading,
+        options: salesOrderCustomerSearchOptions,
+        placeholder: t('app.kuaizhizao.salesOrder.customerName'),
+      },
     },
     {
       title: t('app.kuaizhizao.salesOrder.material'),
@@ -2929,7 +2968,9 @@ const SalesOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrder.deliveryDate'),
       dataIndex: 'delivery_date',
-      width: 150,
+      width: 132,
+      uniTableKeepWidth: true,
+      hideInSearch: true,
       render: (_: unknown, row: SalesOrderItemRow) => {
         const raw = row.delivery_date;
         const text = raw ? formatDateTime(raw, 'YYYY-MM-DD') : '-';
@@ -3370,6 +3411,7 @@ const SalesOrdersPage: React.FC = () => {
                                     formItemProps={{ style: { margin: 0 } }}
                                     showQuickCreate
                                     showAdvancedSearch
+                                    skipFuzzyPinyinClientFilter
                                     sourceType={materialSourceType}
                                     onChange={(_val, material) => {
                                       if (!material) return;
@@ -3929,30 +3971,39 @@ const SalesOrdersPage: React.FC = () => {
               : '';
           }}
           request={async (params: any, sort: any, _filter: any, searchFormValues: any): Promise<any> => {
-            const apiParams: any = {
+            const sf = searchFormValues ?? {};
+            const { sortBy, sortOrder } = extractProTableSort(sort);
+            const orderBy =
+              sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+            const apiParams: SalesOrderListParams = {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
+              order_by: orderBy,
             };
-            // 以 lifecycle 为唯一展示入口：搜索时按 lifecycle 阶段映射到后端 status / review_status
-            Object.assign(apiParams, resolveSalesOrderListLifecycleParams(searchFormValues, params));
-            if (searchFormValues?.customer_name) apiParams.customer_name = searchFormValues.customer_name;
-            if (searchFormValues?.order_code) apiParams.order_code = searchFormValues.order_code;
-            if (searchFormValues?.keyword) apiParams.keyword = searchFormValues.keyword;
-            // 订单日期范围
-            if (searchFormValues?.order_date && Array.isArray(searchFormValues.order_date) && searchFormValues.order_date.length === 2) {
-              const [start, end] = searchFormValues.order_date;
-              if (start) apiParams.start_date = formatDateTime(start, 'YYYY-MM-DD');
-              if (end) apiParams.end_date = formatDateTime(end, 'YYYY-MM-DD');
+            Object.assign(apiParams, resolveSalesOrderListLifecycleParams(sf, params));
+            const fuzzyKeyword =
+              typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
+            const orderCode = sf.order_code != null ? String(sf.order_code).trim() : '';
+            if (fuzzyKeyword) {
+              apiParams.keyword = fuzzyKeyword;
+            } else if (orderCode) {
+              apiParams.order_code = orderCode;
             }
-            // 排序
-            if (sort && Object.keys(sort).length > 0) {
-              const key = Object.keys(sort)[0];
-              const order = sort[key];
-              if (order) {
-                apiParams.order_by = order === 'ascend' ? key : `-${key}`;
-              }
+            if (sf.customer_id != null && sf.customer_id !== '') {
+              apiParams.customer_id = Number(sf.customer_id);
             }
-            // 始终请求 include_items=true，切换视图时从缓存转换，避免重复请求
+            if (sf.salesman_id != null && sf.salesman_id !== '') {
+              apiParams.salesman_id = Number(sf.salesman_id);
+            }
+            const contractCode = sf.contract_code != null ? String(sf.contract_code).trim() : '';
+            if (contractCode) apiParams.contract_code = contractCode;
+            const orderDateRange = sf.order_date_range as [unknown, unknown] | undefined;
+            if (orderDateRange && Array.isArray(orderDateRange) && orderDateRange[0]) {
+              apiParams.start_date = formatDateTime(orderDateRange[0] as string | Date, 'YYYY-MM-DD');
+              apiParams.end_date = orderDateRange[1]
+                ? formatDateTime(orderDateRange[1] as string | Date, 'YYYY-MM-DD')
+                : apiParams.start_date;
+            }
             apiParams.include_items = true;
             const paramsKey = JSON.stringify({
               skip: apiParams.skip,
@@ -3960,8 +4011,10 @@ const SalesOrdersPage: React.FC = () => {
               status: apiParams.status,
               review_status: apiParams.review_status,
               lifecycle_stage: apiParams.lifecycle_stage,
-              customer_name: apiParams.customer_name,
+              customer_id: apiParams.customer_id,
               order_code: apiParams.order_code,
+              contract_code: apiParams.contract_code,
+              salesman_id: apiParams.salesman_id,
               keyword: apiParams.keyword,
               start_date: apiParams.start_date,
               end_date: apiParams.end_date,
@@ -4069,6 +4122,7 @@ const SalesOrdersPage: React.FC = () => {
             }
           }}
           showAdvancedSearch={true}
+          skipFuzzyPinyinClientFilter
           enableRowSelection={viewTypeState !== 'detailTable'}
           showCreateButton={false}
           createButtonText={t('app.kuaizhizao.salesOrder.create')}

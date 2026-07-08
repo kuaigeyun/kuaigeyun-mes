@@ -17,6 +17,16 @@ import PermissionGuard from '../../../../../components/permission/PermissionGuar
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useTranslation } from 'react-i18next';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formatDateTime } from '../../../../../utils/format';
+import {
+  buildNcDefectTypeValueEnum,
+  buildNcDispositionValueEnum,
+  buildNcLedgerStatusValueEnum,
+  NC_LEDGER_PINNED_STATUS_FIELD,
+  normalizeQualityImprovementListResponse,
+  resolveNonconformingLedgerListParams,
+} from '../../../utils/qualityImprovementListCore';
 import {
   getQualityDispositionValueEnum,
   getQualityNcLedgerStatusValueEnum,
@@ -72,6 +82,10 @@ const NonconformingLedgerPage: React.FC = () => {
     [searchParams],
   );
 
+  const ncStatusValueEnum = useMemo(() => buildNcLedgerStatusValueEnum(t), [t]);
+  const ncDefectTypeValueEnum = useMemo(() => buildNcDefectTypeValueEnum(t), [t]);
+  const ncDispositionValueEnum = useMemo(() => buildNcDispositionValueEnum(t), [t]);
+
   const handleStart8d = (row: DefectLedgerItem) => {
     Modal.confirm({
       title: t('app.kuaizhizao.quality.nc.modal.start8dTitle'),
@@ -89,10 +103,49 @@ const NonconformingLedgerPage: React.FC = () => {
 
   const columns: ProColumns<DefectLedgerItem>[] = useMemo(
     () => [
-      { title: t('app.kuaizhizao.quality.nc.columns.ledgerCode'), dataIndex: 'code', width: 150 },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.createdAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 10 } as ProColumns['search'],
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.status'),
+        dataIndex: 'status',
+        valueType: 'select',
+        valueEnum: ncStatusValueEnum,
+        hideInTable: true,
+        search: { order: 20 } as ProColumns['search'],
+      },
+      {
+        title: t('app.kuaizhizao.quality.nc.columns.defectType'),
+        dataIndex: 'defect_type',
+        valueType: 'select',
+        valueEnum: ncDefectTypeValueEnum,
+        hideInTable: true,
+        search: { order: 21 } as ProColumns['search'],
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.form.disposition'),
+        dataIndex: 'disposition',
+        valueType: 'select',
+        valueEnum: ncDispositionValueEnum,
+        hideInTable: true,
+        search: { order: 22 } as ProColumns['search'],
+      },
+      {
+        title: t('app.kuaizhizao.quality.nc.columns.ledgerCode'),
+        dataIndex: 'code',
+        width: 150,
+        sorter: true,
+        search: { order: 30 } as ProColumns['search'],
+      },
       {
         title: t('app.kuaizhizao.quality.nc.columns.sourceInspection'),
         width: 150,
+        hideInSearch: true,
         render: (_, row) => {
           const label = sourceInspectionLabel(row);
           const path = sourceInspectionPath(row);
@@ -118,6 +171,7 @@ const NonconformingLedgerPage: React.FC = () => {
         key: 'product',
         dataIndex: 'product_name',
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        hideInSearch: true,
         render: (_, row) => (
           <MaterialStackedCell
             material_name={row.product_name}
@@ -131,72 +185,102 @@ const NonconformingLedgerPage: React.FC = () => {
         dataIndex: 'defect_quantity',
         width: 100,
         align: 'right',
+        sorter: true,
+        hideInSearch: true,
         render: (_, row) => renderUnqualifiedQuantity(row.defect_quantity),
       },
-      { title: t('app.kuaizhizao.quality.nc.columns.defectType'), dataIndex: 'defect_type', width: 120 },
-      { title: t('app.kuaizhizao.quality.nc.columns.defectReason'), dataIndex: 'defect_reason', width: 240, ellipsis: true },
+      {
+        title: t('app.kuaizhizao.quality.nc.columns.defectType'),
+        dataIndex: 'defect_type',
+        width: 120,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.quality.nc.columns.defectReason'),
+        dataIndex: 'defect_reason',
+        width: 240,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+      },
       {
         title: t('app.kuaizhizao.quality.common.form.disposition'),
         dataIndex: 'disposition',
         width: 120,
+        sorter: true,
+        hideInSearch: true,
         valueEnum: getQualityDispositionValueEnum(t),
       },
       {
         title: t('app.kuaizhizao.quality.common.columns.status'),
         dataIndex: 'status',
         width: 100,
+        sorter: true,
+        hideInSearch: true,
         render: (_, row) => renderNcLedgerStatusTag(t, row.status),
       },
-      { title: t('app.kuaizhizao.quality.common.columns.createdAt'), dataIndex: 'created_at', valueType: 'dateTime', width: 180 },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.createdAt'),
+        dataIndex: 'created_at',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        defaultSortOrder: 'descend',
+        render: (_, row) =>
+          row.created_at ? formatDateTime(row.created_at, 'YYYY-MM-DD HH:mm:ss') : '-',
+      },
       {
         title: t('app.kuaizhizao.quality.common.columns.actions'),
         valueType: 'option',
         width: 180,
+        hideInSearch: true,
         render: (_, row) => {
           const gates = nonconformingLedgerRowGates(row, ncPerms, canStart8d, t);
           return (
-          <Space>
-            {gates.updateDisposition.allowed && (
-              <Button
-                {...rowActionKind('execute')}
-                key="execute"
-                type="link"
-                disabled={gates.updateDisposition.disabled}
-                title={gates.updateDisposition.title}
-                onClick={() => {
-                  setCurrentRow(row);
-                  setOpen(true);
-                  setTimeout(
-                    () =>
-                      formRef.current?.setFieldsValue({
-                        disposition: row.disposition,
-                        status: row.status,
-                        attachments: mapAttachmentsToUploadList(row.attachments),
-                      }),
-                    50,
-                  );
-                }}
-              >
-                {t('app.kuaizhizao.quality.nc.actions.updateDisposition')}
-              </Button>
-            )}
-            {gates.start8d.allowed && (
-              <Button
-                key="start8d"
-                {...rowActionKind('execute')}
-                disabled={gates.start8d.disabled}
-                title={gates.start8d.title}
-                onClick={() => handleStart8d(row)}
-              >
-                {t('app.kuaizhizao.quality.nc.actions.start8d')}
-              </Button>
-            )}
-          </Space>
+            <Space>
+              {gates.updateDisposition.allowed && (
+                <Button
+                  {...rowActionKind('execute')}
+                  key="execute"
+                  type="link"
+                  disabled={gates.updateDisposition.disabled}
+                  title={gates.updateDisposition.title}
+                  onClick={() => {
+                    setCurrentRow(row);
+                    setOpen(true);
+                    setTimeout(
+                      () =>
+                        formRef.current?.setFieldsValue({
+                          disposition: row.disposition,
+                          status: row.status,
+                          attachments: mapAttachmentsToUploadList(row.attachments),
+                        }),
+                      50,
+                    );
+                  }}
+                >
+                  {t('app.kuaizhizao.quality.nc.actions.updateDisposition')}
+                </Button>
+              )}
+              {gates.start8d.allowed && (
+                <Button
+                  key="start8d"
+                  {...rowActionKind('execute')}
+                  disabled={gates.start8d.disabled}
+                  title={gates.start8d.title}
+                  onClick={() => handleStart8d(row)}
+                >
+                  {t('app.kuaizhizao.quality.nc.actions.start8d')}
+                </Button>
+              )}
+            </Space>
           );
         },
       },
     ],
-    [t, ncPerms, canStart8d, navigate],
+    [t, ncPerms, canStart8d, navigate, ncStatusValueEnum, ncDefectTypeValueEnum, ncDispositionValueEnum],
   );
 
   return (
@@ -214,30 +298,27 @@ const NonconformingLedgerPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.quality-management.nonconforming-ledger"
-          request={async (params) => {
+          showAdvancedSearch
+          pinnedTabsField={NC_LEDGER_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
+          request={async (params, sort, _filter, searchFormValues) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
-            const rows = await qualityImprovementApi.nonconformingLedger.list({
+            const listParams = resolveNonconformingLedgerListParams(
+              searchFormValues,
+              sort,
+              initialFilter,
+            );
+            const response = await qualityImprovementApi.nonconformingLedger.list({
               skip,
               limit: pageSize,
-              disposition: params.disposition,
-              status: params.status,
-              defect_type: params.defect_type,
-              defect_id: initialFilter.defect_id ? Number(initialFilter.defect_id) : undefined,
-              incoming_inspection_id: initialFilter.incoming_inspection_id
-                ? Number(initialFilter.incoming_inspection_id)
-                : undefined,
-              process_inspection_id: initialFilter.process_inspection_id
-                ? Number(initialFilter.process_inspection_id)
-                : undefined,
-              finished_goods_inspection_id: initialFilter.finished_goods_inspection_id
-                ? Number(initialFilter.finished_goods_inspection_id)
-                : undefined,
+              ...listParams,
             });
+            const { data, total } = normalizeQualityImprovementListResponse(response);
             return {
               success: true,
-              data: rows || [],
-              total: rows.length < pageSize ? skip + rows.length : skip + rows.length + 1,
+              data: data as DefectLedgerItem[],
+              total,
             };
           }}
         />

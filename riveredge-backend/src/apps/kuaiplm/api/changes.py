@@ -42,13 +42,23 @@ def _err(status_code: int, message: str, route: str) -> HTTPException:
 async def list_changes(
     status: Optional[str] = Query(None),
     change_type: Optional[str] = Query(None, description="bom | process_route"),
+    keyword: Optional[str] = Query(None),
+    change_code: Optional[str] = Query(None),
+    target_name: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     _auth=Depends(require_access("kuaiplm.change", "read", required_permissions=["kuaiplm:change:read"])),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await service.list_changes(
-        tenant_id, status=status, change_type=change_type, page=page, page_size=page_size
+        tenant_id,
+        status=status,
+        change_type=change_type,
+        keyword=keyword,
+        change_code=change_code,
+        target_name=target_name,
+        page=page,
+        page_size=page_size,
     )
 
 

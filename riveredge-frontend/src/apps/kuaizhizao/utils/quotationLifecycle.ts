@@ -2,6 +2,10 @@
  * 报价单生命周期：后端 record.lifecycle 为唯一真源（模式 B，主轴不含审核节点）。
  */
 
+import {
+  resolveListLifecycleStageFromSearch,
+  toListLifecycleStageApiParams,
+} from '../../../utils/listLifecycleStage';
 import { createLifecycleResolver } from './createLifecycleResolver';
 import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { LifecycleTranslateFn } from './lifecycleI18n';
@@ -15,6 +19,43 @@ export const QUOTATION_LIFECYCLE_STAGE_KEYS = [
   'customer_confirmed',
   'converted',
 ] as const;
+
+const QUOTATION_LIFECYCLE_STAGE_I18N: Record<string, string> = {
+  草稿: `${P}.statusFilter.draft`,
+  已报价: `${P}.statusFilter.sent`,
+  客户确认: `${P}.statusFilter.accepted`,
+  已转订单: `${P}.statusFilter.converted`,
+  已驳回: `${P}.statusFilter.rejected`,
+  下推单据已删除: `${P}.lifecycleDownstreamDeleted`,
+};
+
+/** 列表筛选 / 高级搜索：与生命周期主轴及异常态展示一致 */
+export function getQuotationLifecycleStageLabels(): string[] {
+  return ['草稿', '已报价', '客户确认', '已转订单', '已驳回', '下推单据已删除'];
+}
+
+export function buildQuotationLifecycleValueEnum(
+  t: LifecycleTranslateFn,
+): Record<string, { text: string }> {
+  return Object.fromEntries(
+    getQuotationLifecycleStageLabels().map((stage) => [
+      stage,
+      { text: requireI18nText(t, QUOTATION_LIFECYCLE_STAGE_I18N[stage]!) },
+    ]),
+  );
+}
+
+/** 从搜索表单 / 钉住条件解析列表筛选；仅 lifecycle_stage */
+export function resolveQuotationListLifecycleParams(
+  searchFormValues?: Record<string, unknown> | null,
+  params?: Record<string, unknown> | null,
+): { lifecycle_stage?: string } {
+  const stage = resolveListLifecycleStageFromSearch(searchFormValues, params, {
+    allowedStages: getQuotationLifecycleStageLabels(),
+  });
+  if (!stage) return {};
+  return toListLifecycleStageApiParams(stage);
+}
 
 const baseResolver = createLifecycleResolver({
   stageDefs: [

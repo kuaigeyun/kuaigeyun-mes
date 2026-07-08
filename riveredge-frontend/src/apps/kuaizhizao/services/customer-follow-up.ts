@@ -37,10 +37,14 @@ export interface CustomerFollowUpListParams {
   skip?: number;
   limit?: number;
   customer_id?: number;
+  activity_type_code?: string;
   keyword?: string;
+  quotation_code?: string;
+  sales_order_code?: string;
   occurred_from?: string;
   occurred_to?: string;
   pending_only?: boolean;
+  order_by?: string;
 }
 
 export const customerFollowUpApi = {

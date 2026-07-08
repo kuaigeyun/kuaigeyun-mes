@@ -7,8 +7,9 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDigit, ProFormDatePicker, ProFormTextArea, ProForm } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Tabs, Card, Statistic, Row, Col, Typography, Descriptions } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
@@ -19,6 +20,13 @@ import { costCalculationApi } from '../../../services/cost';
 import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  COST_CALCULATION_PINNED_STATUS_FIELD,
+  costCalculationSearchColumns,
+  costDocCreatedUpdatedColumns,
+  resolveCostCalculationListParams,
+} from '../../../../kuaicaiwu/utils/costListCore';
 
 interface CostCalculation {
   id?: number;
@@ -49,10 +57,19 @@ interface CostCalculation {
   updated_by_name?: string;
 }
 
+const CALC_TYPE_COLOR: Record<string, string> = {
+  工单成本: 'blue',
+  产品成本: 'green',
+  标准成本: 'orange',
+  实际成本: 'red',
+};
+
 const CostCalculationPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -193,134 +210,192 @@ const CostCalculationPage: React.FC = () => {
     }
   };
 
-  /**
-   * 表格列定义
-   */
-  const columns: ProColumns<CostCalculation>[] = [
-    {
-      title: '核算单号',
-      dataIndex: 'calculation_no',
-      key: 'calculation_no',
-      width: 150,
-      fixed: 'left',
-    },
-    {
-      title: '核算类型',
-      dataIndex: 'calculation_type',
-      key: 'calculation_type',
-      width: 120,
-      render: (_, r) => {
-        const text = r.calculation_type;
-        const typeMap: Record<string, { color: string; text: string }> = {
-          工单成本: { color: 'blue', text: '工单成本' },
-          产品成本: { color: 'green', text: '产品成本' },
-          标准成本: { color: 'orange', text: '标准成本' },
-          实际成本: { color: 'red', text: '实际成本' },
-        };
-        const type = typeMap[text || ''] || { color: 'default', text: text || '-' };
-        return <Tag color={type.color}>{type.text}</Tag>;
+  const calculationStatusEnum = useMemo(
+    () => ({
+      草稿: { text: t('app.kuaicaiwu.costCalculation.lifecycle.draft') },
+      已核算: { text: t('app.kuaicaiwu.costCalculation.lifecycle.calculated') },
+      已审核: { text: t('app.kuaicaiwu.costCalculation.lifecycle.audited') },
+    }),
+    [t],
+  );
+
+  const columns: ProColumns<CostCalculation>[] = useMemo(
+    () => [
+      ...costCalculationSearchColumns({
+        calculationNo: t('app.kuaicaiwu.costCalculation.col.calculationNo'),
+        workOrderCode: t('app.kuaicaiwu.costCalculation.col.workOrderCode'),
+        productCode: t('app.kuaicaiwu.costCalculation.col.productCode'),
+        productName: t('app.kuaicaiwu.costCalculation.col.productName'),
+      }),
+      {
+        title: t('app.kuaicaiwu.costCalculation.col.calculationNo'),
+        dataIndex: 'calculation_no',
+        key: 'calculation_no',
+        width: 150,
+        fixed: 'left',
+        hideInSearch: true,
+        sorter: true,
       },
-    },
-    {
-      title: '工单编号',
-      dataIndex: 'work_order_code',
-      key: 'work_order_code',
-      width: 150,
-    },
-    {
-      title: '产品编号',
-      dataIndex: 'product_code',
-      key: 'product_code',
-      width: 150,
-    },
-    {
-      title: '产品名称',
-      dataIndex: 'product_name',
-      key: 'product_name',
-      width: 200,
-    },
-    {
-      title: '数量',
-      dataIndex: 'quantity',
-      key: 'quantity',
-      width: 100,
-      render: (_, r) => (r.quantity != null ? Number(r.quantity).toFixed(2) : '0.00'),
-    },
-    {
-      title: '材料成本',
-      dataIndex: 'material_cost',
-      key: 'material_cost',
-      width: 120,
-      render: (_, r) => `¥${r.material_cost != null ? Number(r.material_cost).toFixed(2) : '0.00'}`,
-    },
-    {
-      title: '人工成本',
-      dataIndex: 'labor_cost',
-      key: 'labor_cost',
-      width: 120,
-      render: (_, r) => `¥${r.labor_cost != null ? Number(r.labor_cost).toFixed(2) : '0.00'}`,
-    },
-    {
-      title: '制造费用',
-      dataIndex: 'manufacturing_cost',
-      key: 'manufacturing_cost',
-      width: 120,
-      render: (_, r) => `¥${r.manufacturing_cost != null ? Number(r.manufacturing_cost).toFixed(2) : '0.00'}`,
-    },
-    {
-      title: '总成本',
-      dataIndex: 'total_cost',
-      key: 'total_cost',
-      width: 120,
-      render: (_, r) => `¥${r.total_cost != null ? Number(r.total_cost).toFixed(2) : '0.00'}`,
-    },
-    {
-      title: '单位成本',
-      dataIndex: 'unit_cost',
-      key: 'unit_cost',
-      width: 120,
-      render: (_, r) => `¥${r.unit_cost != null ? Number(r.unit_cost).toFixed(2) : '0.00'}`,
-    },
-    {
-      title: '核算状态',
-      dataIndex: 'calculation_status',
-      key: 'calculation_status',
-      width: 100,
-      render: (_, r) => {
-        const text = r.calculation_status;
-        const statusMap: Record<string, { color: string; text: string }> = {
-          草稿: { color: 'default', text: '草稿' },
-          已核算: { color: 'processing', text: '已核算' },
-          已审核: { color: 'success', text: '已审核' },
-        };
-        const status = statusMap[text || ''] || { color: 'default', text: text || '-' };
-        return <Tag color={status.color}>{status.text}</Tag>;
+      {
+        title: t('app.kuaicaiwu.costCalculation.col.calculationType'),
+        dataIndex: 'calculation_type',
+        key: 'calculation_type',
+        width: 120,
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => {
+          const text = r.calculation_type || '';
+          return <Tag color={CALC_TYPE_COLOR[text] || 'default'}>{text || '-'}</Tag>;
+        },
       },
-    },
-    {
-      title: '核算日期',
-      dataIndex: 'calculation_date',
-      key: 'calculation_date',
-      width: 120,
-      render: (_, r) => (r.calculation_date ? formatDateTime(r.calculation_date as string, 'YYYY-MM-DD') : '-'),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 100,
-      fixed: 'right',
-      render: (_: any, record: CostCalculation) => (
-        <Button
-          type="link"
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={() => handleDetail(record)}
-        >
-          详情
-        </Button>
-      ),
-    },
-  ];
+      {
+        title: t('app.kuaicaiwu.costCalculation.col.workOrderCode'),
+        dataIndex: 'work_order_code',
+        key: 'work_order_code',
+        width: 150,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.costCalculation.col.productCode'),
+        dataIndex: 'product_code',
+        key: 'product_code',
+        width: 150,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.costCalculation.col.productName'),
+        dataIndex: 'product_name',
+        key: 'product_name',
+        width: 200,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.quantity'),
+        dataIndex: 'quantity',
+        key: 'quantity',
+        width: 100,
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => (r.quantity != null ? Number(r.quantity).toFixed(2) : '0.00'),
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.materialCost'),
+        dataIndex: 'material_cost',
+        key: 'material_cost',
+        width: 120,
+        align: 'right',
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => `¥${r.material_cost != null ? Number(r.material_cost).toFixed(2) : '0.00'}`,
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.laborCost'),
+        dataIndex: 'labor_cost',
+        key: 'labor_cost',
+        width: 120,
+        align: 'right',
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => `¥${r.labor_cost != null ? Number(r.labor_cost).toFixed(2) : '0.00'}`,
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.manufacturingCost'),
+        dataIndex: 'manufacturing_cost',
+        key: 'manufacturing_cost',
+        width: 120,
+        align: 'right',
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => `¥${r.manufacturing_cost != null ? Number(r.manufacturing_cost).toFixed(2) : '0.00'}`,
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.totalCost'),
+        dataIndex: 'total_cost',
+        key: 'total_cost',
+        width: 120,
+        align: 'right',
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => `¥${r.total_cost != null ? Number(r.total_cost).toFixed(2) : '0.00'}`,
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.unitCost'),
+        dataIndex: 'unit_cost',
+        key: 'unit_cost',
+        width: 120,
+        align: 'right',
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => `¥${r.unit_cost != null ? Number(r.unit_cost).toFixed(2) : '0.00'}`,
+      },
+      {
+        title: t('app.kuaicaiwu.costCalculation.col.calculationStatus'),
+        dataIndex: 'calculation_status',
+        key: 'calculation_status',
+        width: 100,
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => {
+          const text = r.calculation_status;
+          const statusMap: Record<string, { color: string; text: string }> = {
+            草稿: { color: 'default', text: t('app.kuaicaiwu.costCalculation.lifecycle.draft') },
+            已核算: { color: 'processing', text: t('app.kuaicaiwu.costCalculation.lifecycle.calculated') },
+            已审核: { color: 'success', text: t('app.kuaicaiwu.costCalculation.lifecycle.audited') },
+          };
+          const status = statusMap[text || ''] || { color: 'default', text: text || '-' };
+          return <Tag color={status.color}>{status.text}</Tag>;
+        },
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.calculationDate'),
+        dataIndex: 'calculation_date',
+        key: 'calculation_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => (r.calculation_date ? formatDateTime(r.calculation_date as string, 'YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.calculationDate'),
+        dataIndex: 'calculation_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        order: 20,
+        formItemProps: formDateRangeFormItemProps,
+      },
+      {
+        title: t('app.kuaicaiwu.costCalculation.col.calculationStatus'),
+        dataIndex: 'calculation_status',
+        hideInTable: true,
+        order: 22,
+        valueType: 'select',
+        valueEnum: calculationStatusEnum,
+      },
+      ...costDocCreatedUpdatedColumns<CostCalculation>(t),
+      {
+        title: t('app.kuaicaiwu.costCommon.action'),
+        key: 'action',
+        width: 100,
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_: unknown, record: CostCalculation) => (
+          <Button
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => handleDetail(record)}
+          >
+            {t('app.kuaicaiwu.costCommon.detail')}
+          </Button>
+        ),
+      },
+    ],
+    [t, calculationStatusEnum],
+  );
 
   /**
    * 详情描述项
@@ -439,19 +514,31 @@ const CostCalculationPage: React.FC = () => {
         columnPersistenceId="apps.kuaizhizao.pages.cost-management.cost-calculations"
         actionRef={actionRef}
         headerActions={costToolbarActions}
-        request={async (params) => {
-          const response = await costCalculationApi.list(params);
-          return {
-            data: response.items || [],
-            success: true,
-            total: response.total || 0,
-          };
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={COST_CALCULATION_PINNED_STATUS_FIELD}
+        request={async (params, sort, _filter, searchFormValues) => {
+          const listParams = resolveCostCalculationListParams(searchFormValues, sort);
+          lastListParamsRef.current = listParams;
+          try {
+            const response = await costCalculationApi.list({
+              skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+              limit: params.pageSize ?? 20,
+              ...listParams,
+            });
+            return {
+              data: response.items || [],
+              success: true,
+              total: response.total || 0,
+            };
+          } catch (error: unknown) {
+            const err = error as { message?: string };
+            messageApi.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+            return { data: [], success: false, total: 0 };
+          }
         }}
         columns={columns}
         rowKey="uuid"
-        search={{
-          labelWidth: 'auto',
-        }}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,

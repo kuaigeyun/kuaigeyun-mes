@@ -37,6 +37,13 @@ import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocation
 import { getDepartmentTree } from '../../../../../services/department';
 import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  WAREHOUSE_DOC_PINNED_STATUS_FIELD,
+  buildMaterialBorrowStatusValueEnum,
+  normalizeWarehouseListResponse,
+  resolveWarehouseDocListParams,
+} from '../../../utils/warehouseListCore';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
@@ -160,31 +167,96 @@ const MaterialBorrowsPage: React.FC = () => {
     void loadDepartments();
   }, []);
 
+  const materialBorrowStatusValueEnum = useMemo(() => buildMaterialBorrowStatusValueEnum(t), [t]);
+
   const columns: ProColumns<MaterialBorrow>[] = useMemo(() => [
+    {
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 10 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.warehouseOutbound.col.status'),
+      dataIndex: 'status',
+      valueType: 'select',
+      valueEnum: materialBorrowStatusValueEnum,
+      hideInTable: true,
+      search: { order: 20 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.materialBorrow.col.borrowTime'),
+      dataIndex: 'doc_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 30 } as ProColumns['search'],
+    },
     {
       title: t('app.kuaizhizao.materialBorrow.col.borrowCode'),
       dataIndex: 'borrow_code',
       width: 140,
       ellipsis: true,
       fixed: 'left',
+      sorter: true,
+      search: { order: 40 } as ProColumns['search'],
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.borrow_code ?? '') }} ellipsis>
           {r.borrow_code ?? '-'}
         </Typography.Text>
       ),
     },
-    { title: t('app.kuaizhizao.warehouseReports.colWarehouse'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
-    { title: t('app.kuaizhizao.materialBorrow.col.borrower'), dataIndex: 'borrower_name', width: 100 },
-    { title: t('app.kuaizhizao.materialBorrow.col.department'), dataIndex: 'department', width: 100 },
-    { title: t('app.kuaizhizao.materialBorrow.col.expectedReturnDate'), dataIndex: 'expected_return_date', valueType: 'date', width: 120 },
-    { title: t('app.kuaizhizao.materialBorrow.col.borrowTime'), dataIndex: 'borrow_time', valueType: 'dateTime', width: 160 },
+    {
+      title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
+      dataIndex: 'warehouse_name',
+      width: 120,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.materialBorrow.col.borrower'),
+      dataIndex: 'borrower_name',
+      width: 100,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.materialBorrow.col.department'),
+      dataIndex: 'department',
+      width: 100,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.materialBorrow.col.expectedReturnDate'),
+      dataIndex: 'expected_return_date',
+      valueType: 'date',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.materialBorrow.col.borrowTime'),
+      dataIndex: 'borrow_time',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, r) => (r.borrow_time ? formatDateTime(r.borrow_time) : '-'),
+    },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.updatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
       defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
+      sorter: true,
+      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
@@ -259,7 +331,7 @@ const MaterialBorrowsPage: React.FC = () => {
         );
       },
     },
-  ], [t]);
+  ], [t, materialBorrowStatusValueEnum]);
 
   const handleDetail = async (record: MaterialBorrow) => {
     try {
@@ -455,6 +527,8 @@ const MaterialBorrowsPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
+          pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
           showCreateButton
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
@@ -488,17 +562,17 @@ const MaterialBorrowsPage: React.FC = () => {
           }}
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
-          request={async (params) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const listParams = resolveWarehouseDocListParams(searchFormValues, sort, {
+                docDateParamPrefix: 'borrow',
+              });
               const response = await warehouseApi.materialBorrow.list({
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
-                status: params.status,
-                warehouse_id: params.warehouse_id,
-                keyword: (params as any).keyword,
+                ...listParams,
               });
-              const data = Array.isArray(response) ? response : response?.items || response?.data || [];
-              const total = Array.isArray(response) ? response.length : response?.total ?? data.length;
+              const { data, total } = normalizeWarehouseListResponse(response);
               return { data, success: true, total };
             } catch {
               messageApi.error(t('app.kuaizhizao.materialBorrow.msg.loadListFailed'));

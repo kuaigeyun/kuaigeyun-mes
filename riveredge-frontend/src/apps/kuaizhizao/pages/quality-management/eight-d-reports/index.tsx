@@ -1,5 +1,5 @@
 import { rowActionKind } from '../../../../../components/uni-action';
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDateTimePicker, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Empty, Space, Tag } from 'antd';
 import { EditOutlined, PlusOutlined } from '@ant-design/icons';
@@ -19,14 +19,20 @@ import { EightDDetailDrawer } from './components/EightDDetailDrawer';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import {
-  EIGHT_D_SEVERITY_I18N_KEY,
-  EIGHT_D_STATUS_I18N_KEY,
   getEightDSeverityText,
   getEightDStatusText,
 } from './components/eightDMeta';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formatDateTime } from '../../../../../utils/format';
+import {
+  buildEightDSeverityValueEnum,
+  buildEightDStatusValueEnum,
+  EIGHT_D_PINNED_STATUS_FIELD,
+  resolveEightDReportListParams,
+} from '../../../utils/qualityImprovementListCore';
 
 const EIGHT_D_RESOURCE = 'kuaizhizao:quality-management-eight-d-reports';
 
@@ -43,6 +49,8 @@ const EightDReportsPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const { canCreate, canUpdate, canDelete } = useResourcePermissions(EIGHT_D_RESOURCE);
   const canClose = hasModulePermission(currentUser ?? undefined, EIGHT_D_RESOURCE, 'close');
+  const eightDStatusValueEnum = useMemo(() => buildEightDStatusValueEnum(t), [t]);
+  const eightDSeverityValueEnum = useMemo(() => buildEightDSeverityValueEnum(t), [t]);
   const openDetail = (row: Quality8DReport) => {
     if (!row.id) return;
     setActiveReportId(row.id);
@@ -71,11 +79,61 @@ const EightDReportsPage: React.FC = () => {
     }
   }, [searchParams]);
 
-  const columns: ProColumns<Quality8DReport>[] = [
+  const columns: ProColumns<Quality8DReport>[] = useMemo(
+    () => [
+    {
+      title: t('app.kuaizhizao.eightD.columns.createdAt'),
+      dataIndex: 'created_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 10 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.eightD.columns.dueDate'),
+      dataIndex: 'due_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 11 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.eightD.columns.stage'),
+      dataIndex: 'status',
+      valueType: 'select',
+      valueEnum: eightDStatusValueEnum,
+      hideInTable: true,
+      search: { order: 20 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.eightD.columns.severity'),
+      dataIndex: 'severity',
+      valueType: 'select',
+      valueEnum: eightDSeverityValueEnum,
+      hideInTable: true,
+      search: { order: 21 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.eightD.columns.overdueFilter'),
+      dataIndex: 'overdue_only',
+      valueType: 'select',
+      hideInTable: true,
+      valueEnum: {
+        true: { text: t('app.kuaizhizao.eightD.columns.overdueOnly') },
+      },
+      search: { order: 22 } as ProColumns['search'],
+    },
     {
       title: t('app.kuaizhizao.eightD.columns.reportCode'),
       dataIndex: 'report_code',
       hideInTable: true,
+      search: { order: 30 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.eightD.columns.title'),
+      dataIndex: 'title',
+      hideInTable: true,
+      search: { order: 31 } as ProColumns['search'],
     },
     stackedPrimarySecondaryColumn<Quality8DReport>(
       t('app.kuaizhizao.eightD.columns.titleAndCode'),
@@ -85,21 +143,20 @@ const EightDReportsPage: React.FC = () => {
       { dataIndex: 'title', fixed: 'left' },
     ),
     {
-      title: t('app.kuaizhizao.eightD.columns.title'),
-      dataIndex: 'title',
-      hideInTable: true,
-      ellipsis: true,
-    },
-    {
       title: t('app.kuaizhizao.eightD.columns.severity'),
       dataIndex: 'severity',
       width: 90,
-      valueEnum: Object.fromEntries(
-        Object.entries(EIGHT_D_SEVERITY_I18N_KEY).map(([value, key]) => [value, { text: t(key) }]),
-      ),
+      sorter: true,
+      hideInSearch: true,
       render: (_, row) => <Tag>{getEightDSeverityText(t, row.severity)}</Tag>,
     },
-    { title: t('app.kuaizhizao.eightD.columns.owner'), dataIndex: 'owner_name', width: 120 },
+    {
+      title: t('app.kuaizhizao.eightD.columns.owner'),
+      dataIndex: 'owner_name',
+      width: 120,
+      sorter: true,
+      hideInSearch: true,
+    },
     {
       title: t('app.kuaizhizao.eightD.columns.source'),
       key: 'source',
@@ -146,33 +203,30 @@ const EightDReportsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.eightD.columns.dueDate'),
       dataIndex: 'due_date',
-      valueType: 'dateTime',
-      width: 180,
-    },
-    {
-      title: t('app.kuaizhizao.eightD.columns.overdueFilter'),
-      dataIndex: 'overdue_only',
-      width: 80,
-      hideInSearch: false,
-      hideInTable: true,
-      valueEnum: {
-        true: { text: t('app.kuaizhizao.eightD.columns.overdueOnly') },
-      },
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, row) =>
+        row.due_date ? formatDateTime(row.due_date, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: t('app.kuaizhizao.eightD.columns.createdAt'),
       dataIndex: 'created_at',
-      valueType: 'dateTime',
-      width: 180,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      render: (_, row) =>
+        row.created_at ? formatDateTime(row.created_at, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: t('app.kuaizhizao.eightD.columns.stage'),
       dataIndex: 'status',
       width: 220,
       fixed: 'right',
-      valueEnum: Object.fromEntries(
-        Object.entries(EIGHT_D_STATUS_I18N_KEY).map(([k, v]) => [k, { text: t(v) }]),
-      ),
+      hideInSearch: true,
       render: (_, row) => {
         const lifecycleStages = row.lifecycle_stages || [];
         const activeIndex = lifecycleStages.findIndex((stage) => stage.status === 'active');
@@ -201,6 +255,7 @@ const EightDReportsPage: React.FC = () => {
       valueType: 'option',
       width: 260,
       fixed: 'right',
+      hideInSearch: true,
       render: (_, row) => {
         const gates = eightDReportRowGates(row, canUpdate, canDelete, canClose, t);
         return (
@@ -269,7 +324,9 @@ const EightDReportsPage: React.FC = () => {
         );
       },
     },
-  ];
+  ],
+    [t, canUpdate, canDelete, canClose, eightDStatusValueEnum, eightDSeverityValueEnum, messageApi, modalApi],
+  );
 
   return (
     <PermissionGuard
@@ -287,6 +344,9 @@ const EightDReportsPage: React.FC = () => {
           permissionResource={EIGHT_D_RESOURCE}
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports"
+          showAdvancedSearch
+          pinnedTabsField={EIGHT_D_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
           showDeleteButton={canDelete}
           onDelete={async (keys) => {
             try {
@@ -317,15 +377,14 @@ const EightDReportsPage: React.FC = () => {
                 ]
               : []
           }
-          request={async (params) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
+            const listParams = resolveEightDReportListParams(searchFormValues, sort);
             const result = await qualityImprovementApi.eightD.list({
               skip,
               limit: pageSize,
-              status: params.status,
-              owner_id: params.owner_id,
-              overdue_only: params.overdue_only === true || params.overdue_only === 'true',
+              ...listParams,
             });
             return {
               success: true,

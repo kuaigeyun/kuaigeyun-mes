@@ -38,6 +38,13 @@ import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  FINANCE_DOC_PINNED_STATUS_FIELD,
+  financeDocCodePartnerSearchColumns,
+  financeDocCreatedUpdatedColumns,
+  resolvePayableListParams,
+} from '../../../utils/financeListCore';
+import type { PayableListParams } from '../../../types/finance/payable';
 
 const P = 'app.kuaicaiwu.payable';
 
@@ -48,6 +55,7 @@ const formatPullMoney = (value: number) =>
 
 const PayableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
+    const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
     const createFormRef = useRef<ProFormInstance>(null);
     const pullFormRef = useRef<ProFormInstance>(null);
     const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -342,11 +350,21 @@ const PayableList: React.FC = () => {
     };
 
     const columns: ProColumns<Payable>[] = useMemo(() => [
+        ...financeDocCodePartnerSearchColumns({
+            docCodeLabel: t('app.kuaicaiwu.common.code'),
+            docCodeField: 'payable_code',
+            partnerLabel: t('app.kuaicaiwu.common.supplier', '供应商'),
+            partnerIdField: 'supplier_id',
+            partnerNameField: 'supplier_name',
+            partnerOptions: supplierOptions,
+        }),
         {
             title: t('app.kuaicaiwu.common.code'),
             dataIndex: 'payable_code',
             width: 168,
             fixed: 'left',
+            hideInSearch: true,
+            sorter: true,
             render: (_, entity) => (
                 <Typography.Text copyable={{ text: String(entity.payable_code ?? '') }} ellipsis>
                     <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/payables/${entity.id}`)}>{entity.payable_code}</a>
@@ -357,6 +375,8 @@ const PayableList: React.FC = () => {
             title: t(`${P}.col.supplierName`),
             dataIndex: 'supplier_name',
             width: 200,
+            hideInSearch: true,
+            sorter: true,
         },
         {
             title: t(`${P}.col.totalAmount`),
@@ -364,6 +384,8 @@ const PayableList: React.FC = () => {
             valueType: 'money',
             align: 'right',
             width: 120,
+            hideInSearch: true,
+            sorter: true,
         },
         {
             title: t(`${P}.col.paidAmount`),
@@ -371,6 +393,8 @@ const PayableList: React.FC = () => {
             valueType: 'money',
             align: 'right',
             width: 120,
+            hideInSearch: true,
+            sorter: true,
         },
         {
             title: t(`${P}.col.remainingAmount`),
@@ -378,6 +402,8 @@ const PayableList: React.FC = () => {
             valueType: 'money',
             align: 'right',
             width: 120,
+            hideInSearch: true,
+            sorter: true,
             render: (_, record) => (
                 <span style={{ color: record.remaining_amount > 0 ? 'red' : 'inherit', fontWeight: 'bold' }}>
                     {record.remaining_amount != null
@@ -387,30 +413,50 @@ const PayableList: React.FC = () => {
             ),
         },
         {
+            title: t('app.kuaicaiwu.common.businessDate', '业务日期'),
+            dataIndex: 'business_date',
+            valueType: 'date',
+            width: 120,
+            hideInSearch: true,
+            sorter: true,
+        },
+        {
+            title: t('app.kuaicaiwu.common.businessDate', '业务日期'),
+            dataIndex: 'business_date_range',
+            valueType: 'dateRange',
+            hideInTable: true,
+            order: 20,
+        },
+        {
             title: t('app.kuaicaiwu.common.dueDate'),
             dataIndex: 'due_date',
             valueType: 'date',
             width: 120,
+            hideInSearch: true,
+            sorter: true,
+        },
+        {
+            title: t('app.kuaicaiwu.common.dueDate'),
+            dataIndex: 'due_date_range',
+            valueType: 'dateRange',
+            hideInTable: true,
+            order: 21,
         },
         {
             title: t('common.status'),
             dataIndex: 'status',
             hideInTable: true,
+            order: 22,
             valueEnum: buildPayableStatusEnum(t),
         },
         {
             title: t('app.kuaicaiwu.common.reviewStatus'),
             dataIndex: 'review_status',
             hideInTable: true,
+            order: 23,
             valueEnum: buildReviewStatusEnum(t),
         },
-        {
-            title: t('common.updatedAt'),
-            dataIndex: 'updated_at',
-            width: 168,
-            hideInSearch: true,
-            render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-        },
+        ...financeDocCreatedUpdatedColumns<Payable>(t),
         {
             title: t('app.kuaicaiwu.common.lifecycle'),
             dataIndex: 'lifecycle_stage',
@@ -476,7 +522,7 @@ const PayableList: React.FC = () => {
                         ) : null,
                     ].filter(Boolean) as React.ReactNode[],
         },
-    ], [t, navigate]);
+    ], [t, navigate, supplierOptions]);
 
     const batchMenuItems = useMemo(() => [
         {
@@ -497,17 +543,18 @@ const PayableList: React.FC = () => {
                 columns={columns}
                 columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payables"
                 scroll={{ x: 1680 }}
-                request={async (params, _sort, _filter, searchFormValues) => {
+                request={async (params, sort, _filter, searchFormValues) => {
                     const { current, pageSize } = params;
-                    const apiParams: Record<string, unknown> = {
+                    const listParams = resolvePayableListParams(searchFormValues, sort);
+                    lastListParamsRef.current = listParams;
+                    const apiParams: PayableListParams = {
                         skip: ((current || 1) - 1) * (pageSize || 20),
                         limit: pageSize || 20,
+                        ...listParams,
                     };
-                    if (searchFormValues?.status) apiParams.status = searchFormValues.status;
-                    if (searchFormValues?.supplier_id) apiParams.supplier_id = searchFormValues.supplier_id;
 
                     try {
-                        const res = await payableService.listPayables(apiParams as any);
+                        const res = await payableService.listPayables(apiParams);
                         return {
                             data: res.items || [],
                             total: res.total || 0,
@@ -518,6 +565,8 @@ const PayableList: React.FC = () => {
                         return { data: [], total: 0, success: false };
                     }
                 }}
+                skipFuzzyPinyinClientFilter
+                pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
                 rowKey="id"
                 showCreateButton={false}
                 createButtonText={t(`${P}.createTitle`)}
@@ -636,12 +685,23 @@ const PayableList: React.FC = () => {
                 showExportButton
                 onExport={async (type, keys, pageData) => {
                     try {
-                        const res = await payableService.listPayables({ skip: 0, limit: 10000 });
-                        let items = res.items || [];
+                        let items: Payable[] = [];
                         if (type === 'currentPage' && pageData?.length) {
                             items = pageData;
                         } else if (type === 'selected' && keys?.length) {
-                            items = items.filter((d: Payable) => d.id != null && keys.includes(d.id));
+                            const res = await payableService.listPayables({
+                                skip: 0,
+                                limit: 10000,
+                                ...lastListParamsRef.current,
+                            });
+                            items = (res.items || []).filter((d: Payable) => d.id != null && keys.includes(d.id));
+                        } else {
+                            const res = await payableService.listPayables({
+                                skip: 0,
+                                limit: 10000,
+                                ...lastListParamsRef.current,
+                            });
+                            items = res.items || [];
                         }
                         if (items.length === 0) {
                             messageApi.warning(t('common.exportNoData'));

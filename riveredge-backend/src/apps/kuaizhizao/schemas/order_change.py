@@ -102,9 +102,19 @@ class SalesOrderChangeListResponse(OrderChangeListResponse):
     customer_name: str
 
 
+class SalesOrderChangePagedListResponse(BaseModel):
+    items: List[SalesOrderChangeListResponse]
+    total: int
+
+
 class PurchaseOrderChangeListResponse(OrderChangeListResponse):
     supplier_id: int
     supplier_name: str
+
+
+class PurchaseOrderChangePagedListResponse(BaseModel):
+    items: List[PurchaseOrderChangeListResponse]
+    total: int
 
 
 class SalesOrderChangeResponse(SalesOrderChangeListResponse):

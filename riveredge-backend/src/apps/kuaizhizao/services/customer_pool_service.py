@@ -4,11 +4,12 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional
 
 from tortoise import timezone
-from tortoise.expressions import Q
+
+from apps.kuaizhizao.services.customer_pool_list_core import apply_customer_pool_list_filters
 
 from apps.kuaizhizao.models.customer_pool_log import CustomerPoolLog
 from apps.kuaizhizao.models.customer_pool_rule import CustomerPoolRule
@@ -236,8 +237,23 @@ class CustomerPoolService:
         skip: int = 0,
         limit: int = 20,
         keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None,
+        contact_person: Optional[str] = None,
+        phone: Optional[str] = None,
         salesman_id: Optional[int] = None,
         pool_status: Optional[str] = None,
+        last_follow_up_from: Optional[datetime] = None,
+        last_follow_up_to: Optional[datetime] = None,
+        recycle_from: Optional[datetime] = None,
+        recycle_to: Optional[datetime] = None,
+        assigned_from: Optional[datetime] = None,
+        assigned_to: Optional[datetime] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+        order_by: Optional[str] = None,
     ) -> CustomerPoolListEnvelope:
         query = Customer.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
@@ -254,15 +270,25 @@ class CustomerPoolService:
         if salesman_id is not None:
             query = query.filter(salesman_id=salesman_id)
 
-        kw = (keyword or "").strip()
-        if kw:
-            query = query.filter(
-                Q(code__icontains=kw)
-                | Q(name__icontains=kw)
-                | Q(short_name__icontains=kw)
-                | Q(contact_person__icontains=kw)
-                | Q(phone__icontains=kw)
-            )
+        query, primary_order, secondary_order = apply_customer_pool_list_filters(
+            query,
+            keyword=keyword,
+            code=code,
+            name=name,
+            contact_person=contact_person,
+            phone=phone,
+            last_follow_up_from=last_follow_up_from,
+            last_follow_up_to=last_follow_up_to,
+            recycle_from=recycle_from,
+            recycle_to=recycle_to,
+            assigned_from=assigned_from,
+            assigned_to=assigned_to,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            order_by=order_by,
+        )
 
         query = await DataScopeService.apply(
             query,
@@ -272,8 +298,7 @@ class CustomerPoolService:
         )
 
         total = await query.count()
-        # 客户池默认按客户编号倒序（同编号时按 ID 倒序稳定排序）
-        rows = await query.order_by("-code", "-id").offset(skip).limit(limit)
+        rows = await query.order_by(primary_order, secondary_order).offset(skip).limit(limit)
         items = [CustomerPoolItem.model_validate(r) for r in rows]
         return CustomerPoolListEnvelope(items=items, total=total)
 

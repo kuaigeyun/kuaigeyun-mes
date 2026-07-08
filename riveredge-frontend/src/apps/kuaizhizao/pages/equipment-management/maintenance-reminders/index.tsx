@@ -27,6 +27,11 @@ import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  normalizeEquipmentListResponse,
+  resolveReminderListParams,
+} from '../../../utils/equipmentListCore';
 
 const P = 'app.kuaizhizao.maintenanceReminder';
 
@@ -353,10 +358,31 @@ const MaintenanceRemindersPage: React.FC = () => {
 
       return [
         {
+          title: t(`${P}.col.reminderDate`),
+          dataIndex: 'reminder_date_range',
+          valueType: 'dateRange',
+          hideInTable: true,
+          formItemProps: formDateRangeFormItemProps,
+          search: { order: 10 } as ProColumns['search'],
+        },
+        {
+          title: t(`${P}.col.reminderType`),
+          dataIndex: 'reminder_type',
+          valueType: 'select',
+          valueEnum: {
+            due_soon: { text: t(`${P}.reminderType.dueSoon`) },
+            overdue: { text: t(`${P}.reminderType.overdue`) },
+          },
+          hideInTable: true,
+          search: { order: 20 } as ProColumns['search'],
+        },
+        {
           title: t(`${P}.col.equipmentCode`),
           dataIndex: 'equipment_code',
           width: 120,
           fixed: 'left',
+          sorter: true,
+          search: { order: 30 } as ProColumns['search'],
           render: (_, r) => (
             <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }} ellipsis>
               {r.equipment_code ?? '-'}
@@ -367,17 +393,24 @@ const MaintenanceRemindersPage: React.FC = () => {
           title: t(`${P}.col.equipmentName`),
           dataIndex: 'equipment_name',
           width: 150,
+          sorter: true,
+          hideInSearch: true,
         },
         {
           title: t(`${P}.col.reminderType`),
           dataIndex: 'reminder_type',
           width: 120,
+          sorter: true,
+          hideInSearch: true,
           render: (_, record) => getReminderTypeTag(record.reminder_type || ''),
         },
         {
           title: t(`${P}.col.plannedMaintenanceDate`),
           dataIndex: 'planned_maintenance_date',
-          width: 150,
+          width: 132,
+          uniTableKeepWidth: true,
+          sorter: true,
+          hideInSearch: true,
           render: (_, record) =>
             record.planned_maintenance_date
               ? formatDateTime(record.planned_maintenance_date, 'YYYY-MM-DD HH:mm')
@@ -387,6 +420,8 @@ const MaintenanceRemindersPage: React.FC = () => {
           title: t(`${P}.col.daysUntilDue`),
           dataIndex: 'days_until_due',
           width: 100,
+          sorter: true,
+          hideInSearch: true,
           render: (_, record) => renderDaysUntilDue(record.days_until_due || 0),
         },
         {
@@ -394,11 +429,16 @@ const MaintenanceRemindersPage: React.FC = () => {
           dataIndex: 'reminder_message',
           ellipsis: true,
           width: 200,
+          sorter: true,
+          hideInSearch: true,
         },
         {
           title: t(`${P}.col.reminderDate`),
           dataIndex: 'reminder_date',
-          width: 150,
+          width: 132,
+          uniTableKeepWidth: true,
+          sorter: true,
+          hideInSearch: true,
           render: (_, record) =>
             record.reminder_date ? formatDateTime(record.reminder_date, 'YYYY-MM-DD HH:mm:ss') : '-',
         },
@@ -508,25 +548,25 @@ const MaintenanceRemindersPage: React.FC = () => {
               <UniTable<MaintenanceReminder>
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-reminders"
         actionRef={actionRef}
-        request={async (params) => {
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        request={async (params, sort, _filter, searchFormValues) => {
+          const listParams = resolveReminderListParams(searchFormValues, sort);
           const response = await maintenanceReminderApi.list({
             skip: (params.current! - 1) * params.pageSize!,
             limit: params.pageSize,
-            reminder_type: params.reminder_type,
-            is_read: params.is_read,
-            is_handled: params.is_handled,
-            keyword: (params as any).keyword,
+            ...listParams,
           });
 
-          // 更新未读数量
           if (response.unread_count !== undefined) {
             setUnreadCount(response.unread_count);
           }
 
+          const { data, total } = normalizeEquipmentListResponse(response);
           return {
-            data: response.items || [],
+            data: data as MaintenanceReminder[],
             success: true,
-            total: response.total || 0,
+            total,
           };
         }}
         columns={columns}
@@ -571,6 +611,8 @@ const MaintenanceRemindersPage: React.FC = () => {
               <UniTable<EquipmentCalibrationReminder>
                 columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-reminders.calibration"
                 actionRef={calibrationActionRef}
+                showAdvancedSearch
+                skipFuzzyPinyinClientFilter
                 rowKey={(record) =>
                   [record.equipment_uuid, record.due_date, record.due_type].filter(Boolean).join(':') ||
                   'calibration-reminder-unknown'

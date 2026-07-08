@@ -1186,42 +1186,135 @@ class QuotationService:
             resource="kuaizhizao:quotation",
         )
 
+    async def _batch_quotation_downstream_missing(
+        self,
+        tenant_id: int,
+        quotations: List[Quotation],
+    ) -> tuple[dict[int, bool], dict[int, bool]]:
+        """批量计算列表行下游缺失标记（与 list_quotations 展示一致）。"""
+        missing_by_id: dict[int, bool] = {}
+        contract_missing_by_id: dict[int, bool] = {}
+        if not quotations:
+            return missing_by_id, contract_missing_by_id
+
+        so_ids = list({q.sales_order_id for q in quotations if q.sales_order_id})
+        alive_so: Set[int] = set()
+        if so_ids:
+            alive_rows = await SalesOrder.filter(
+                tenant_id=tenant_id, id__in=so_ids, deleted_at__isnull=True
+            ).values_list("id", flat=True)
+            alive_so = set(alive_rows)
+
+        contract_ids = list({q.contract_id for q in quotations if q.contract_id})
+        alive_contract: Set[int] = set()
+        if contract_ids:
+            alive_contract_rows = await SalesContract.filter(
+                tenant_id=tenant_id, id__in=contract_ids, deleted_at__isnull=True
+            ).values_list("id", flat=True)
+            alive_contract = set(alive_contract_rows)
+
+        for q in quotations:
+            qid = int(q.id)
+            st = (q.status or "").strip()
+            so_id = q.sales_order_id
+            if st != "已转订单" and not so_id:
+                missing_by_id[qid] = False
+            elif so_id is not None:
+                missing_by_id[qid] = int(so_id) not in alive_so
+            else:
+                missing_by_id[qid] = st == "已转订单"
+            if q.contract_id:
+                contract_missing_by_id[qid] = int(q.contract_id) not in alive_contract
+            else:
+                contract_missing_by_id[qid] = False
+        return missing_by_id, contract_missing_by_id
+
+    async def _filter_quotations_by_lifecycle_stage(
+        self,
+        tenant_id: int,
+        quotations: List[Quotation],
+        lifecycle_stage: str,
+        *,
+        audit_required: bool,
+    ) -> List[Quotation]:
+        """按后端 lifecycle 计算结果筛选（与列表「当前阶段」列一致）。"""
+        from apps.kuaizhizao.services.document_lifecycle_service import (
+            get_quotation_lifecycle,
+            normalize_quotation_lifecycle_filter,
+        )
+
+        if not quotations:
+            return []
+
+        target = normalize_quotation_lifecycle_filter(lifecycle_stage)
+        missing_by_id, contract_missing_by_id = await self._batch_quotation_downstream_missing(
+            tenant_id, quotations
+        )
+        matched: List[Quotation] = []
+        for q in quotations:
+            qid = int(q.id)
+            lifecycle = get_quotation_lifecycle(
+                q,
+                converted_sales_order_missing=missing_by_id.get(qid, False),
+                contract_downstream_missing=contract_missing_by_id.get(qid, False),
+                audit_required=audit_required,
+            )
+            stage_name = normalize_quotation_lifecycle_filter(
+                lifecycle.get("current_stage_name"),
+            )
+            if stage_name == target:
+                matched.append(q)
+        return matched
+
     async def list_quotations(
         self,
         tenant_id: int,
         skip: int = 0,
         limit: int = 100,
         status: Optional[str] = None,
+        lifecycle_stage: Optional[str] = None,
+        salesman_id: Optional[int] = None,
+        customer_id: Optional[int] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         keyword: Optional[str] = None,
         quotation_code: Optional[str] = None,
         customer_name: Optional[str] = None,
         quotation_series_code: Optional[str] = None,
+        order_by: Optional[str] = None,
         list_scope: Optional[str] = None,
         pullable_only: Optional[bool] = None,
         pull_target: Optional[str] = None,
         current_user: Optional[User] = None,
     ) -> QuotationListResponse:
-        """获取报价单列表"""
+        """获取报价单列表。order_by 如 quotation_date、-updated_at（前缀-表示降序）"""
         from tortoise.expressions import Q
 
         query = Quotation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         query = await self._apply_quotation_list_scope(query, tenant_id, current_user, list_scope)
+        lifecycle_filter = (lifecycle_stage or "").strip()
         if quotation_series_code and str(quotation_series_code).strip():
             query = query.filter(
                 quotation_series_code=str(quotation_series_code).strip()
             )
-        if status:
+        if status and not lifecycle_filter:
             query = query.filter(status=status)
+        if salesman_id is not None and int(salesman_id) > 0:
+            query = query.filter(salesman_id=int(salesman_id))
+        if customer_id is not None and int(customer_id) > 0:
+            query = query.filter(customer_id=int(customer_id))
         if start_date:
             query = query.filter(quotation_date__gte=start_date)
         if end_date:
             query = query.filter(quotation_date__lte=end_date)
-        if keyword:
+        if keyword and str(keyword).strip():
+            kw = str(keyword).strip()
             query = query.filter(
-                Q(quotation_code__icontains=keyword) | Q(customer_name__icontains=keyword)
+                Q(quotation_code__icontains=kw)
+                | Q(customer_name__icontains=kw)
+                | Q(quotation_series_code__icontains=kw)
+                | Q(salesman_name__icontains=kw)
             )
         if quotation_code and quotation_code.strip():
             query = query.filter(quotation_code__icontains=quotation_code.strip())
@@ -1240,42 +1333,26 @@ class QuotationService:
                 query = query.exclude(
                     Q(status="已发送") & ~Q(review_status__in=approved_review)
                 )
-        total = await query.count()
-        quotations = await query.offset(skip).limit(limit).order_by("-updated_at")
+        order_clause = order_by if order_by else "-updated_at"
+
+        if lifecycle_filter:
+            candidate_quotations = await query.order_by(order_clause).all()
+            matched_quotations = await self._filter_quotations_by_lifecycle_stage(
+                tenant_id,
+                candidate_quotations,
+                lifecycle_filter,
+                audit_required=audit_required,
+            )
+            total = len(matched_quotations)
+            quotations = matched_quotations[skip : skip + limit]
+        else:
+            total = await query.count()
+            quotations = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_lifecycle_service import get_quotation_lifecycle
 
-        so_ids = list({q.sales_order_id for q in quotations if q.sales_order_id})
-        alive_so: Set[int] = set()
-        if so_ids:
-            alive_rows = await SalesOrder.filter(
-                tenant_id=tenant_id, id__in=so_ids, deleted_at__isnull=True
-            ).values_list("id", flat=True)
-            alive_so = set(alive_rows)
-
-        contract_ids = list({q.contract_id for q in quotations if q.contract_id})
-        alive_contract: Set[int] = set()
-        if contract_ids:
-            alive_contract_rows = await SalesContract.filter(
-                tenant_id=tenant_id, id__in=contract_ids, deleted_at__isnull=True
-            ).values_list("id", flat=True)
-            alive_contract = set(alive_contract_rows)
-
-        missing_by_id: dict[int, bool] = {}
-        contract_missing_by_id: dict[int, bool] = {}
-        for q in quotations:
-            qid = int(q.id)
-            st = (q.status or "").strip()
-            so_id = q.sales_order_id
-            if st != "已转订单" and not so_id:
-                missing_by_id[qid] = False
-            elif so_id is not None:
-                missing_by_id[qid] = int(so_id) not in alive_so
-            else:
-                missing_by_id[qid] = st == "已转订单"
-            if q.contract_id:
-                contract_missing_by_id[qid] = int(q.contract_id) not in alive_contract
-            else:
-                contract_missing_by_id[qid] = False
+        missing_by_id, contract_missing_by_id = await self._batch_quotation_downstream_missing(
+            tenant_id, quotations
+        )
         stale_contract_q_ids = [
             qid for qid, missing in contract_missing_by_id.items() if missing
         ]

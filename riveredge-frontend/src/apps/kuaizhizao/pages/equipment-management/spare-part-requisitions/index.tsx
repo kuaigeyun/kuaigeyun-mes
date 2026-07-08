@@ -17,6 +17,13 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { equipmentApi, sparePartApi } from '../../../services/equipment';
 import { sparePartRequisitionsApi } from '../../../services/equipmentOps';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  APPROVAL_DOC_PINNED_STATUS_FIELD,
+  buildApprovalDocStatusValueEnum,
+  normalizeEquipmentListResponse,
+  resolveApprovalDocListParams,
+} from '../../../utils/equipmentListCore';
 
 const P = 'app.kuaizhizao.equipmentOps.sparePartRequisition';
 const RESOURCE = 'kuaizhizao:spare-part-requisition';
@@ -159,23 +166,72 @@ const SparePartRequisitionsPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
+  const approvalStatusValueEnum = useMemo(() => buildApprovalDocStatusValueEnum(), []);
+
   const columns: ProColumns<SparePartRequisition>[] = useMemo(
     () => [
-      { title: t(`${P}.col.requisitionNo`), dataIndex: 'requisition_no', width: 140, fixed: 'left' },
-      { title: t(`${P}.col.equipment`), dataIndex: 'equipment_name', width: 160, ellipsis: true },
-      { title: t(`${P}.col.purpose`), dataIndex: 'purpose', ellipsis: true },
-      { title: t(`${P}.col.applicant`), dataIndex: 'applicant_name', width: 100 },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 10 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        valueType: 'select',
+        valueEnum: approvalStatusValueEnum,
+        hideInTable: true,
+        search: { order: 20 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.requisitionNo`),
+        dataIndex: 'requisition_no',
+        width: 140,
+        fixed: 'left',
+        sorter: true,
+        search: { order: 30 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.equipment`),
+        dataIndex: 'equipment_name',
+        width: 160,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t(`${P}.col.purpose`),
+        dataIndex: 'purpose',
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t(`${P}.col.applicant`),
+        dataIndex: 'applicant_name',
+        width: 100,
+        sorter: true,
+        hideInSearch: true,
+      },
       {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
         width: 90,
+        sorter: true,
+        hideInSearch: true,
         render: (_, r) => <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>,
       },
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 168,
+        width: 132,
+        uniTableKeepWidth: true,
         hideInSearch: true,
+        defaultSortOrder: 'descend',
+        sorter: true,
         render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
       {
@@ -246,7 +302,7 @@ const SparePartRequisitionsPage: React.FC = () => {
         ),
       },
     ],
-    [t, perms, messageApi],
+    [t, perms, messageApi, approvalStatusValueEnum],
   );
 
   return (
@@ -258,13 +314,19 @@ const SparePartRequisitionsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          request={async (params) => {
+          showAdvancedSearch={true}
+          pinnedTabsField={APPROVAL_DOC_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const listParams = resolveApprovalDocListParams(searchFormValues, sort);
               const res = await sparePartRequisitionsApi.list({
                 skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
                 limit: params.pageSize,
+                ...listParams,
               });
-              return { data: res.items ?? [], success: true, total: res.total ?? 0 };
+              const { data, total } = normalizeEquipmentListResponse(res);
+              return { data: data as SparePartRequisition[], success: true, total };
             } catch {
               messageApi.error(t(`${P}.listFailed`));
               return { data: [], success: false, total: 0 };

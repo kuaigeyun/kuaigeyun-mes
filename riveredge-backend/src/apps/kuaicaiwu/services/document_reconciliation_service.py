@@ -134,7 +134,18 @@ class DocumentReconciliationService:
             "trace": trace,
         }
 
-    async def get_prepayment_balances(self, tenant_id: int) -> Dict[str, Any]:
+    async def get_prepayment_balances(
+        self,
+        tenant_id: int,
+        *,
+        partner_type: Optional[str] = None,
+        keyword: Optional[str] = None,
+        partner_name: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """预收/预付余额汇总（未核销余额 > 0 且 settlement_type=prepayment）。"""
         from apps.kuaicaiwu.models.receipt import Receipt
         from apps.kuaicaiwu.models.payment import Payment
@@ -196,11 +207,38 @@ class DocumentReconciliationService:
 
         total_customer = sum((Decimal(str(r.unsettled_amount or 0)) for r in receipt_rows), Decimal("0"))
         total_supplier = sum((Decimal(str(p.unsettled_amount or 0)) for p in payment_rows), Decimal("0"))
-        return {
-            "customer_balances": _serialize(customer_map),
-            "supplier_balances": _serialize(supplier_map),
+        customer_balances = _serialize(customer_map)
+        supplier_balances = _serialize(supplier_map)
+        totals = {
             "total_customer_prepayment": float(total_customer.quantize(Decimal("0.01"))),
             "total_supplier_prepayment": float(total_supplier.quantize(Decimal("0.01"))),
+        }
+
+        from apps.kuaicaiwu.services.finance_list_core import filter_sort_paginate_prepayment_balance_items
+
+        pt = (partner_type or "").strip().lower()
+        if pt in ("customer", "supplier"):
+            source = customer_balances if pt == "customer" else supplier_balances
+            items, total = filter_sort_paginate_prepayment_balance_items(
+                source,
+                keyword=keyword,
+                partner_name=partner_name,
+                sort_field=sort_field,
+                sort_order=sort_order,
+                skip=skip,
+                limit=limit,
+            )
+            return {
+                **totals,
+                "partner_type": pt,
+                "items": items,
+                "total": total,
+            }
+
+        return {
+            "customer_balances": customer_balances,
+            "supplier_balances": supplier_balances,
+            **totals,
         }
 
     async def reconcile_document(
@@ -247,6 +285,13 @@ class DocumentReconciliationService:
         start_date: date,
         end_date: date,
         only_gaps: bool = True,
+        keyword: Optional[str] = None,
+        doc_type: Optional[str] = None,
+        doc_code: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20,
     ) -> Dict[str, Any]:
         """
         按往来单位列出期间内源业务单据与财务单据关联摘要。
@@ -372,13 +417,27 @@ class DocumentReconciliationService:
         if only_gaps:
             items = [i for i in items if self._is_finance_gap(i)]
 
+        from apps.kuaicaiwu.services.finance_list_core import filter_sort_paginate_finance_gap_items
+
         open_balance = sum(Decimal(str(i.get("max_push_quantity") or 0)) for i in items)
+        gap_count = len(items)
+        page_items, total = filter_sort_paginate_finance_gap_items(
+            items,
+            keyword=keyword,
+            doc_type=doc_type,
+            doc_code=doc_code,
+            sort_field=sort_field,
+            sort_order=sort_order,
+            skip=skip,
+            limit=limit,
+        )
         return {
             "partner_type": partner_type,
             "partner_id": partner_id,
             "period": {"start": to_api_isoformat(start_date), "end": to_api_isoformat(end_date)},
-            "items": items,
-            "gap_count": len(items),
+            "items": page_items,
+            "total": total,
+            "gap_count": gap_count,
             "open_balance_total": float(open_balance),
         }
 

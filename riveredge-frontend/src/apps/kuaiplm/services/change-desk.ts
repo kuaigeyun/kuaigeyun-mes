@@ -42,6 +42,8 @@ export interface ChangeListParams {
   status?: string;
   change_category?: ChangeDeskCategory;
   keyword?: string;
+  change_code?: string;
+  target_name?: string;
 }
 
 function unwrapList<T>(res: unknown): { items: T[]; total: number } {
@@ -93,6 +95,9 @@ async function listFromChangeDesk(params?: ChangeListParams, category?: ChangeDe
       page_size: pageSize,
       status: params?.status,
       change_type: deskChangeType(category),
+      keyword: params?.keyword,
+      change_code: params?.change_code,
+      target_name: params?.target_name,
     },
   });
   const { items, total } = unwrapList<Record<string, unknown>>(res);

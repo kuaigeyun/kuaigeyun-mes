@@ -69,6 +69,12 @@ def _register_price_book_routes(partner_type: str, resource: str) -> None:
         keyword: Optional[str] = Query(None),
         active_only: Optional[bool] = Query(None, alias="activeOnly"),
         effective_on: Optional[date] = Query(None, alias="effectiveOn"),
+        sort_by: Optional[str] = Query(None, alias="sortBy"),
+        sort_order: Optional[str] = Query(None, alias="sortOrder"),
+        created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+        created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+        updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+        updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
         _partner_type: str = partner_type,
     ):
         items, total = await PartnerPriceBookService.list_rows(
@@ -81,6 +87,12 @@ def _register_price_book_routes(partner_type: str, resource: str) -> None:
             keyword,
             active_only,
             effective_on,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
         )
         return PartnerPriceBookListResponse(data=items, total=total)
 

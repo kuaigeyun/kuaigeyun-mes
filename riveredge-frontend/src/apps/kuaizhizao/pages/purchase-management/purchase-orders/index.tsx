@@ -83,6 +83,8 @@ import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/
 import { setFormPriceType } from '../../../../../utils/priceTypeSwitch';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder,
   deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder,
@@ -547,6 +549,15 @@ const PurchaseOrdersPage: React.FC = () => {
     loadUsers();
   }, [currentUser]);
 
+  const purchaseOrderSupplierSearchOptions = useMemo(
+    () =>
+      supplierList.map((s: { id?: number; name?: string; code?: string; supplier_name?: string }) => ({
+        value: Number(s.id),
+        label: [s.name ?? s.supplier_name, s.code].filter(Boolean).join(' · ') || String(s.id),
+      })),
+    [supplierList],
+  );
+
   useEffect(() => {
     const loadOrderType = async () => {
       setOrderTypeLoading(true);
@@ -736,6 +747,26 @@ const PurchaseOrdersPage: React.FC = () => {
   const purchaseOrderCustomFieldColumns = generatePurchaseOrderCustomFieldColumns();
   const columns: ProColumns<PurchaseOrder>[] = useMemo(() => [
     {
+      title: t('app.kuaizhizao.purchaseOrder.col.orderDate'),
+      dataIndex: 'order_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
+    },
+    {
+      title: t('app.kuaizhizao.purchaseOrder.col.deliveryDate'),
+      dataIndex: 'delivery_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
+    },
+    {
       title: t('app.kuaizhizao.purchaseOrder.col.supplierAndOrder'),
       key: 'order_code',
       dataIndex: 'order_code',
@@ -752,35 +783,59 @@ const PurchaseOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.purchaseOrder.col.orderCode'),
       dataIndex: 'order_code',
       hideInTable: true,
+      hideInSearch: false,
+    },
+    {
+      title: t('app.kuaizhizao.purchaseOrder.col.supplier'),
+      dataIndex: 'supplier_id',
+      hideInTable: true,
+      valueType: 'select',
+      fieldProps: {
+        showSearch: true,
+        optionFilterProp: 'label',
+        options: purchaseOrderSupplierSearchOptions,
+        placeholder: t('app.kuaizhizao.purchaseOrder.col.supplier'),
+      },
     },
     {
       title: t('app.kuaizhizao.purchaseOrder.col.supplier'),
       dataIndex: 'supplier_name',
       hideInTable: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.purchaseOrder.col.buyer'),
       dataIndex: 'buyer_name',
       width: 120,
+      sorter: true,
       ellipsis: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.purchaseOrder.col.orderDate'),
       dataIndex: 'order_date',
       valueType: 'date',
-      width: 120,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.purchaseOrder.col.deliveryDate'),
       dataIndex: 'delivery_date',
       valueType: 'date',
-      width: 120,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.purchaseOrder.col.orderAmount'),
       dataIndex: 'total_amount',
       width: 120,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
       render: (text: any) => `¥${formatAmount(text)}`,
     },
     {
@@ -788,14 +843,29 @@ const PurchaseOrdersPage: React.FC = () => {
       dataIndex: 'total_quantity',
       width: 100,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      valueType: 'dateTime',
-      width: 168,
-      hideInSearch: true,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
       defaultSortOrder: 'descend',
+      hideInSearch: true,
+      render: (_, record) =>
+        record.updated_at ? formatDateTime(record.updated_at, 'YYYY-MM-DD HH:mm') : '-',
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
     },
     ...(purchaseOrderAuditColumn ? [purchaseOrderAuditColumn] : []),
     {
@@ -865,7 +935,7 @@ const PurchaseOrdersPage: React.FC = () => {
         return parts;
       },
     },
-  ], [t, purchaseOrderAuditEnabled, lifecycleValueEnum, purchaseOrderAuditColumn, purchaseOrderCustomFieldColumns, purchaseOrderPerms]);
+  ], [t, purchaseOrderAuditEnabled, lifecycleValueEnum, purchaseOrderAuditColumn, purchaseOrderCustomFieldColumns, purchaseOrderPerms, purchaseOrderSupplierSearchOptions]);
 
   const [pushToNoticeLoading, setPushToNoticeLoading] = useState(false);
   const [pushToInvoiceLoading, setPushToInvoiceLoading] = useState(false);
@@ -2635,6 +2705,7 @@ const PurchaseOrdersPage: React.FC = () => {
                               formItemProps={{ style: { margin: 0 } }}
                               showQuickCreate
                               showAdvancedSearch
+                            skipFuzzyPinyinClientFilter
                             />
                           );
                         }}
@@ -2953,6 +3024,9 @@ const PurchaseOrdersPage: React.FC = () => {
           }
           columns={columns}
           showAdvancedSearch={true}
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
+          pinnedTabsValueEnum={lifecycleValueEnum}
           showCreateButton={false}
           createButtonText={t('app.kuaizhizao.menu.purchase-management.purchase-orders.new')}
           onCreate={handleCreate}
@@ -3082,19 +3156,50 @@ const PurchaseOrdersPage: React.FC = () => {
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
           toolbar={{ actions: [purchaseOrderHighlightOverdueToolbar] }}
-          request={async (params, _sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const sf = searchFormValues ?? {};
+              const { sortBy, sortOrder } = extractProTableSort(sort);
+              const orderBy =
+                sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+              const fuzzyKeyword = typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
               const apiParams: Record<string, unknown> = {
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
-                keyword: params.keyword,
+                order_by: orderBy,
               };
-              const lifecycleMapped = resolvePurchaseOrderListLifecycleParams(
-                searchFormValues,
-                params,
-              );
+              const lifecycleMapped = resolvePurchaseOrderListLifecycleParams(sf, params);
               if (lifecycleMapped.status) apiParams.status = lifecycleMapped.status;
               if (lifecycleMapped.review_status) apiParams.review_status = lifecycleMapped.review_status;
+              if (fuzzyKeyword) {
+                apiParams.keyword = fuzzyKeyword;
+              } else if (sf.order_code != null && String(sf.order_code).trim()) {
+                apiParams.order_code = String(sf.order_code).trim();
+              }
+              if (sf.supplier_id != null && sf.supplier_id !== '') {
+                apiParams.supplier_id = Number(sf.supplier_id);
+              }
+              const orderDateRange = sf.order_date_range as [unknown, unknown] | undefined;
+              if (orderDateRange && Array.isArray(orderDateRange) && orderDateRange[0]) {
+                apiParams.order_date_from = formatDateTime(orderDateRange[0] as string | Date, 'YYYY-MM-DD');
+                apiParams.order_date_to = orderDateRange[1]
+                  ? formatDateTime(orderDateRange[1] as string | Date, 'YYYY-MM-DD')
+                  : apiParams.order_date_from;
+              }
+              const deliveryDateRange = sf.delivery_date_range as [unknown, unknown] | undefined;
+              if (deliveryDateRange && Array.isArray(deliveryDateRange) && deliveryDateRange[0]) {
+                apiParams.delivery_date_from = formatDateTime(deliveryDateRange[0] as string | Date, 'YYYY-MM-DD');
+                apiParams.delivery_date_to = deliveryDateRange[1]
+                  ? formatDateTime(deliveryDateRange[1] as string | Date, 'YYYY-MM-DD')
+                  : apiParams.delivery_date_from;
+              }
+              const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
+              if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+                apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
+                apiParams.created_end_date = createdRange[1]
+                  ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+                  : apiParams.created_start_date;
+              }
               const response = await listPurchaseOrders(apiParams as Parameters<typeof listPurchaseOrders>[0]);
               tableRowsRef.current = response.data || [];
               const enriched = await enrichPurchaseOrderRecordsWithCustomFields(response.data || []);

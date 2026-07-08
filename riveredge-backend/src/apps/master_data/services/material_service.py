@@ -1752,9 +1752,10 @@ class MaterialService:
         from core.services.business.material_variant_attribute_service import MaterialVariantAttributeService
 
         master_material = await cls._resolve_master_material(tenant_id, master_material_uuid, None)
-        definitions = await MaterialVariantAttributeService.list_attribute_definitions(
+        definitions, _ = await MaterialVariantAttributeService.list_attribute_definitions(
             tenant_id=tenant_id,
             is_active=True,
+            limit=10000,
         )
         enum_defs = [
             d
@@ -2005,6 +2006,10 @@ class MaterialService:
         no_group: Optional[bool] = None,
         tree_view: Optional[bool] = None,
         masters_only: Optional[bool] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> MaterialListResponse:
         """
         获取物料列表
@@ -2117,6 +2122,22 @@ class MaterialService:
         if model:
             # 模糊匹配型号
             query = query.filter(model__icontains=model)
+
+        from apps.master_data.services.master_data_list_core import (
+            apply_master_crud_created_date_range,
+            apply_master_crud_updated_date_range,
+        )
+
+        query = apply_master_crud_created_date_range(
+            query,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
+        query = apply_master_crud_updated_date_range(
+            query,
+            start_date=updated_start_date,
+            end_date=updated_end_date,
+        )
 
         # 下拉选择等场景：仅主物料/非属性 SKU 行（code=main_code 或未启用属性管理）
         if masters_only:

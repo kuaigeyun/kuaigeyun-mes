@@ -21,6 +21,11 @@ import {
   getPerformanceYesNoValueEnum,
 } from '../components/performanceMeta';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  normalizePerformanceListResponse,
+  PERFORMANCE_PINNED_IS_ACTIVE_FIELD,
+  resolveKpiDefinitionListParams,
+} from '../../../utils/performanceListCore';
 
 const KpiDefinitionsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -76,18 +81,22 @@ const KpiDefinitionsPage: React.FC = () => {
         dataIndex: 'code',
         width: 120,
         fixed: 'left',
+        sorter: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
             {r.code ?? '-'}
           </Typography.Text>
         ),
       },
-      { title: t('app.kuaizhizao.performance.common.columns.name'), dataIndex: 'name', width: 150, ellipsis: true },
-      { title: t('app.kuaizhizao.performance.common.columns.weight'), dataIndex: 'weight', width: 80, align: 'right' },
+      { title: t('app.kuaizhizao.performance.common.columns.name'), dataIndex: 'name', width: 150, ellipsis: true, sorter: true },
+      { title: t('app.kuaizhizao.performance.common.columns.weight'), dataIndex: 'weight', width: 80, align: 'right', sorter: true },
       {
         title: t('app.kuaizhizao.performance.common.columns.calcType'),
         dataIndex: 'calc_type',
         width: 100,
+        sorter: true,
+        valueType: 'select',
+        valueEnum: Object.fromEntries(calcTypeOptions.map((o) => [o.value, { text: o.label }])),
         render: (_, r) => getKpiCalcTypeText(t, r.calc_type),
       },
       {
@@ -99,8 +108,10 @@ const KpiDefinitionsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.performance.common.columns.updatedAt'),
         dataIndex: 'updated_at',
-        width: 168,
+        width: 132,
+        uniTableKeepWidth: true,
         hideInSearch: true,
+        sorter: true,
         render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
@@ -142,7 +153,7 @@ const KpiDefinitionsPage: React.FC = () => {
         ),
       },
     ],
-    [t],
+    [t, calcTypeOptions],
   );
 
   return (
@@ -155,17 +166,20 @@ const KpiDefinitionsPage: React.FC = () => {
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.performance.kpi-definitions"
           showAdvancedSearch
-          request={async (params) => {
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={PERFORMANCE_PINNED_IS_ACTIVE_FIELD}
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
               const pageSize = params.pageSize || 20;
               const skip = ((params.current || 1) - 1) * pageSize;
-              const result = await employeePerformanceApi.listKpiDefinitions({
+              const listParams = resolveKpiDefinitionListParams(searchFormValues, sort);
+              const response = await employeePerformanceApi.listKpiDefinitions({
                 skip,
                 limit: pageSize,
+                ...listParams,
               });
-              const rows = Array.isArray(result) ? result : [];
-              const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
-              return { data: rows, success: true, total };
+              const { data, total } = normalizePerformanceListResponse(response);
+              return { data: data as KPIDefinition[], success: true, total };
             } catch (e: any) {
               messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
               return { data: [], success: false, total: 0 };

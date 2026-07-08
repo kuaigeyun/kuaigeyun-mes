@@ -39,14 +39,17 @@ import {
   updateSalesOrderChange,
   withdrawSalesOrderChange,
   type SalesOrderChange,
+  type SalesOrderChangeListParams,
 } from '../../../services/sales-order-change';
 import { getSalesOrder, listSalesOrders, type SalesOrder } from '../../../services/sales-order';
+import { customerApi } from '../../../../master-data/services/supply-chain';
+import type { Customer } from '../../../../master-data/types/supply-chain';
 import {
   buildOrderChangeLifecycleValueEnum,
   getOrderChangeLifecycle,
   resolveOrderChangeListLifecycleParams,
 } from '../../../utils/orderChangeLifecycle';
-import { formatOrderChangeCategory } from '../../../utils/orderChangeCategory';
+import { formatOrderChangeCategory, ORDER_CHANGE_CATEGORY_LABELS } from '../../../utils/orderChangeCategory';
 import { OrderChangeItemsTable } from '../../../components/order-change/OrderChangeItemsTable';
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
 import { isSourceOrderEligibleForChange } from '../../../utils/orderChangeSourceOrder';
@@ -60,6 +63,8 @@ import {
   resolveKuaizhizaoDocumentAction,
 } from '../../../constants/documentActionRegistry';
 import { formatDateTime } from '../../../../../utils/format';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 
 const SALES_ORDER_CHANGE_RESOURCE = 'kuaizhizao:sales-order-change';
 type PullSalesOrderCandidate = {
@@ -117,6 +122,36 @@ const SalesOrderChangesPage: React.FC = () => {
   const [pendingSubmitId, setPendingSubmitId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const tableRowsRef = useRef<SalesOrderChange[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+
+  useEffect(() => {
+    setCustomersLoading(true);
+    customerApi
+      .list({ limit: 1000, isActive: true })
+      .then((result) => {
+        setCustomers(Array.isArray(result) ? result : (result as { data?: Customer[]; items?: Customer[] })?.data ?? (result as { items?: Customer[] })?.items ?? []);
+      })
+      .catch(() => setCustomers([]))
+      .finally(() => setCustomersLoading(false));
+  }, []);
+
+  const changeCustomerSearchOptions = useMemo(
+    () =>
+      customers.map((c) => ({
+        value: Number(c.id),
+        label: String(c.name ?? c.code ?? ''),
+      })),
+    [customers],
+  );
+
+  const changeCategoryValueEnum = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(ORDER_CHANGE_CATEGORY_LABELS).map(([key, label]) => [key, { text: label }]),
+      ),
+    [],
+  );
 
   const selectedChangesForBatch = useMemo(
     () =>
@@ -406,7 +441,8 @@ const SalesOrderChangesPage: React.FC = () => {
     [t, auditEnabled],
   );
 
-  const columns: ProColumns<SalesOrderChange>[] = [
+  const columns: ProColumns<SalesOrderChange>[] = useMemo(
+    () => [
     {
       title: t('app.kuaizhizao.salesOrderChange.colCustomerChangeCode'),
       key: 'change_code',
@@ -416,6 +452,8 @@ const SalesOrderChangesPage: React.FC = () => {
       width: 220,
       minWidth: 220,
       uniTableKeepWidth: true,
+      sorter: true,
+      fieldProps: { placeholder: t('app.kuaizhizao.salesOrderChange.colChangeCode') },
       render: (_, record) => (
         <UniTableStackedPrimaryCell
           primary={String(record.customer_name ?? '')}
@@ -423,14 +461,27 @@ const SalesOrderChangesPage: React.FC = () => {
         />
       ),
     },
-    { title: t('app.kuaizhizao.salesOrderChange.colChangeCode'), dataIndex: 'change_code', hideInTable: true, copyable: true },
-    { title: t('app.kuaizhizao.customerFollowUp.colCustomer'), dataIndex: 'customer_name', hideInTable: true, ellipsis: true },
+    {
+      title: t('app.kuaizhizao.customerFollowUp.colCustomer'),
+      dataIndex: 'customer_id',
+      hideInTable: true,
+      valueType: 'select',
+      fieldProps: {
+        showSearch: true,
+        optionFilterProp: 'label',
+        loading: customersLoading,
+        options: changeCustomerSearchOptions,
+        placeholder: t('app.kuaizhizao.customerFollowUp.colCustomer'),
+      },
+    },
     {
       title: t('app.kuaizhizao.salesOrderChange.colSourceOrder'),
       dataIndex: 'source_order_code',
       width: 150,
       minWidth: 150,
       uniTableKeepWidth: true,
+      sorter: true,
+      fieldProps: { placeholder: t('app.kuaizhizao.salesOrderChange.colSourceOrder') },
     },
     {
       title: t('app.kuaizhizao.salesOrderChange.colVersion'),
@@ -438,6 +489,8 @@ const SalesOrderChangesPage: React.FC = () => {
       width: 72,
       minWidth: 72,
       uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.salesOrderChange.colCategory'),
@@ -445,6 +498,9 @@ const SalesOrderChangesPage: React.FC = () => {
       width: 100,
       minWidth: 100,
       uniTableKeepWidth: true,
+      sorter: true,
+      valueType: 'select',
+      valueEnum: changeCategoryValueEnum,
       render: (_, r) => formatOrderChangeCategory(r.change_category),
     },
     {
@@ -453,7 +509,39 @@ const SalesOrderChangesPage: React.FC = () => {
       width: 100,
       minWidth: 100,
       uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      align: 'right',
       render: (_, r) => (r.delta_amount != null ? Number(r.delta_amount).toFixed(2) : '-'),
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      defaultSortOrder: 'descend',
+      hideInSearch: true,
+      render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm') : '-'),
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
+    },
+    {
+      title: t('app.kuaizhizao.salesOrderChange.colAppliedAt'),
+      dataIndex: 'applied_at',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, r) => (r.applied_at ? formatDateTime(r.applied_at, 'YYYY-MM-DD HH:mm') : '-'),
     },
     ...(orderChangeAuditColumn ? [orderChangeAuditColumn] : []),
     {
@@ -483,6 +571,7 @@ const SalesOrderChangesPage: React.FC = () => {
       valueType: 'option',
       width: 180,
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record)}>
               {t('common.detail')}
@@ -508,18 +597,68 @@ const SalesOrderChangesPage: React.FC = () => {
             ) : null,
           ],
     },
-  ];
+  ],
+    [
+      t,
+      changeCategoryValueEnum,
+      changeCustomerSearchOptions,
+      changePerms.canDelete,
+      changePerms.canUpdate,
+      customersLoading,
+      modal,
+      message,
+      orderChangeAuditColumn,
+      orderChangeLifecycleValueEnum,
+    ],
+  );
 
-  const request = useCallback(async (params: Record<string, unknown>) => {
-    const apiParams = resolveOrderChangeListLifecycleParams(params, params);
-    const list = await listSalesOrderChanges({
-      skip: ((params.current as number) - 1) * (params.pageSize as number),
-      limit: params.pageSize as number,
-      source_order_id: params.source_order_id as number | undefined,
-      lifecycle_stage: apiParams.lifecycle_stage,
-    });
-    return { data: list, success: true, total: list.length };
-  }, []);
+  const request = useCallback(
+    async (
+      params: Record<string, unknown>,
+      sort: Record<string, unknown> | undefined,
+      _filter: unknown,
+      searchFormValues?: Record<string, unknown>,
+    ) => {
+      const sf = searchFormValues ?? {};
+      const lifecycleParams = resolveOrderChangeListLifecycleParams(sf, params);
+      const { sortBy, sortOrder } = extractProTableSort(sort);
+      const orderBy =
+        sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+      const fuzzyKeyword =
+        typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
+      const changeCode = sf.change_code != null ? String(sf.change_code).trim() : '';
+      const apiParams: SalesOrderChangeListParams = {
+        skip: ((Number(params.current) || 1) - 1) * (Number(params.pageSize) || 20),
+        limit: Number(params.pageSize) || 20,
+        ...lifecycleParams,
+        order_by: orderBy,
+      };
+      if (fuzzyKeyword) {
+        apiParams.keyword = fuzzyKeyword;
+      } else if (changeCode) {
+        apiParams.change_code = changeCode;
+      }
+      if (sf.customer_id != null && sf.customer_id !== '') {
+        apiParams.customer_id = Number(sf.customer_id);
+      }
+      if (sf.change_category != null && sf.change_category !== '') {
+        apiParams.change_category = String(sf.change_category);
+      }
+      const sourceOrderCode =
+        sf.source_order_code != null ? String(sf.source_order_code).trim() : '';
+      if (sourceOrderCode) apiParams.source_order_code = sourceOrderCode;
+      const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
+      if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+        apiParams.start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
+        apiParams.end_date = createdRange[1]
+          ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+          : apiParams.start_date;
+      }
+      const res = await listSalesOrderChanges(apiParams);
+      return { data: res.items ?? [], success: true, total: res.total ?? 0 };
+    },
+    [],
+  );
 
   const handleBatchDelete = useCallback(async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
@@ -570,6 +709,8 @@ const SalesOrderChangesPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         columns={columns}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         request={request}
         onTableDataChange={(rows) => {
           tableRowsRef.current = rows;

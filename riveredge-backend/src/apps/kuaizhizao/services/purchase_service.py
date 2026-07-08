@@ -8,7 +8,7 @@ Date: 2025-12-30
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, date, time
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 
@@ -49,6 +49,20 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
 from apps.kuaizhizao.services.document_action_policy.purchase_order import (
     assert_purchase_order_capability,
 )
+
+PURCHASE_ORDER_SORTABLE_FIELDS = frozenset({
+    "order_code",
+    "supplier_name",
+    "buyer_name",
+    "order_date",
+    "delivery_date",
+    "total_quantity",
+    "total_amount",
+    "status",
+    "review_status",
+    "created_at",
+    "updated_at",
+})
 
 
 class PurchaseService(AppBaseService[PurchaseOrder]):
@@ -321,22 +335,38 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             query = query.filter(delivery_date__gte=params.delivery_date_from)
         if params.delivery_date_to:
             query = query.filter(delivery_date__lte=params.delivery_date_to)
-        if params.keyword:
-            keyword = params.keyword
-            # 使用icontains进行模糊搜索，多个条件使用OR逻辑
-            from tortoise.expressions import Q
+        if params.created_start_date:
             query = query.filter(
-                Q(order_code__icontains=keyword) |
-                Q(supplier_name__icontains=keyword) |
-                Q(notes__icontains=keyword)
+                created_at__gte=datetime.combine(params.created_start_date, time.min)
             )
+        if params.created_end_date:
+            query = query.filter(
+                created_at__lte=datetime.combine(params.created_end_date, time(23, 59, 59))
+            )
+        if params.order_code:
+            code = str(params.order_code).strip()
+            if code:
+                query = query.filter(order_code__icontains=code)
+        if params.keyword:
+            keyword = params.keyword.strip()
+            if keyword:
+                query = query.filter(
+                    Q(order_code__icontains=keyword)
+                    | Q(supplier_name__icontains=keyword)
+                    | Q(buyer_name__icontains=keyword)
+                    | Q(notes__icontains=keyword)
+                )
 
         # 分页
         skip = params.skip or 0
         limit = params.limit or 20
 
         total = await query.count()
-        orders = await query.offset(skip).limit(limit).order_by('-created_at')
+        order_clause = params.order_by or "-updated_at"
+        field = order_clause.lstrip("-")
+        if field not in PURCHASE_ORDER_SORTABLE_FIELDS:
+            order_clause = "-updated_at"
+        orders = await query.offset(skip).limit(limit).order_by(order_clause, "-id")
 
         # 为每个订单加载明细（简化版，只返回基本信息）
         # 不能直接 model_validate(order)：order.items 是 ReverseRelation，会导致 Pydantic 校验失败

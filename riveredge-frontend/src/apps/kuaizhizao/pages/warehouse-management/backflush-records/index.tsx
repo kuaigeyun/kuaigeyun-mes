@@ -16,6 +16,13 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { formatDateTime } from '../../../../../utils/format';
+import {
+  WAREHOUSE_DOC_PINNED_STATUS_FIELD,
+  buildBackflushRecordStatusValueEnum,
+  normalizeWarehouseListResponse,
+  resolveBackflushRecordListParams,
+} from '../../../utils/warehouseListCore';
 
 interface BackflushRecordItem {
   id: number;
@@ -68,6 +75,7 @@ const BackflushRecordsPage: React.FC = () => {
         width: 130,
         fixed: 'left',
         copyable: true,
+        sorter: true,
       },
       {
         title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
@@ -115,12 +123,7 @@ const BackflushRecordsPage: React.FC = () => {
         title: t('app.kuaizhizao.warehouseCommon.colStatus'),
         dataIndex: 'status',
         hideInTable: true,
-        valueEnum: {
-          pending: { text: t('app.kuaizhizao.warehouseCommon.statusPending') },
-          completed: { text: t('app.kuaizhizao.warehouseCommon.statusCompleted') },
-          failed: { text: t('app.kuaizhizao.backflushRecords.statusFailed') },
-          cancelled: { text: t('app.kuaizhizao.warehouseCommon.statusCancelled') },
-        },
+        valueEnum: buildBackflushRecordStatusValueEnum(t),
       },
       {
         title: t('app.kuaizhizao.backflushRecords.colErrorMessage'),
@@ -132,8 +135,11 @@ const BackflushRecordsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.warehouseCommon.colCreatedAt'),
         dataIndex: 'created_at',
-        width: 170,
+        width: 132,
+        uniTableKeepWidth: true,
         valueType: 'dateTime',
+        sorter: true,
+        render: (_, record) => formatDateTime(record.created_at),
       },
       {
         title: t('app.kuaizhizao.warehouseCommon.colActions'),
@@ -151,20 +157,16 @@ const BackflushRecordsPage: React.FC = () => {
     [t]
   );
 
-  const fetchRecords = async (params: any) => {
+  const fetchRecords = async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, unknown>) => {
     try {
+      const listParams = resolveBackflushRecordListParams(searchFormValues, sort);
       const res = await warehouseApi.backflushRecords.list({
-        work_order_code: params?.work_order_code,
-        material_code: params?.material_code,
-        status: params?.status,
+        ...listParams,
         skip: ((params?.current || 1) - 1) * (params?.pageSize || 20),
         limit: params?.pageSize || 20,
       });
-      return {
-        data: res?.items || [],
-        total: res?.total || 0,
-        success: true,
-      };
+      const { data, total } = normalizeWarehouseListResponse(res);
+      return { data, total, success: true };
     } catch {
       message.error(t('app.kuaizhizao.warehouseCommon.queryFailed'));
       return { data: [], total: 0, success: false };
@@ -179,6 +181,9 @@ const BackflushRecordsPage: React.FC = () => {
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.backflush-records"
         request={fetchRecords}
+        showAdvancedSearch
+        pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
+        skipFuzzyPinyinClientFilter
         rowKey="id"
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}

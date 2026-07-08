@@ -154,6 +154,13 @@ export async function fetchKuaizhizaoReport(
     domainHint?: KuaizhizaoReportDomain;
     dateRangeKeys?: string[];
     customerKeywordField?: string;
+    order_by?: string;
+    keyword?: string;
+    status?: string;
+    order_code?: string;
+    product_name?: string;
+    supplier_name?: string;
+    work_order_code?: string;
   },
 ): Promise<UniReportExecuteResult> {
   const route = resolveReportRoute(reportType, options?.domainHint);
@@ -162,6 +169,9 @@ export async function fetchKuaizhizaoReport(
   const { skip, limit } = salesReportPageParams(params);
   const customerField = options?.customerKeywordField ?? 'customer_name';
   const customer_keyword = searchFormValues?.[customerField] as string | undefined;
+  const fuzzyKeyword =
+    options?.keyword ??
+    (typeof searchFormValues?.keyword === 'string' ? searchFormValues.keyword.trim() : undefined);
 
   const base = {
     report_type: route.backendType,
@@ -170,6 +180,13 @@ export async function fetchKuaizhizaoReport(
     skip,
     limit,
     ...(customer_keyword ? { customer_keyword } : {}),
+    ...(fuzzyKeyword ? { keyword: fuzzyKeyword } : {}),
+    ...(options?.order_by ? { order_by: options.order_by } : {}),
+    ...(options?.status ? { status: options.status } : {}),
+    ...(options?.order_code ? { order_code: options.order_code } : {}),
+    ...(options?.product_name ? { product_name: options.product_name } : {}),
+    ...(options?.supplier_name ? { supplier_name: options.supplier_name } : {}),
+    ...(options?.work_order_code ? { work_order_code: options.work_order_code } : {}),
   };
 
   switch (route.api) {

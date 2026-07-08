@@ -9,7 +9,7 @@ Date: 2025-01-04
 
 import uuid
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple, Tuple
 from decimal import Decimal
 
 from tortoise.queryset import Q
@@ -104,7 +104,13 @@ class InventoryAlertRuleService(AppBaseService[InventoryAlertRule]):
         limit: int = 100,
         alert_type: Optional[str] = None,
         is_enabled: Optional[bool] = None,
-    ) -> List[InventoryAlertRuleListResponse]:
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+    ) -> Tuple[List[InventoryAlertRuleListResponse], int]:
         """
         获取库存预警规则列表
 
@@ -128,9 +134,28 @@ class InventoryAlertRuleService(AppBaseService[InventoryAlertRule]):
         if is_enabled is not None:
             query = query.filter(is_enabled=is_enabled)
 
-        rules = await query.order_by('-created_at').offset(skip).limit(limit)
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            INVENTORY_ALERT_RULE_KEYWORD_FIELDS,
+            INVENTORY_ALERT_RULE_SORTABLE_FIELDS,
+            apply_warehouse_doc_list_filters,
+        )
+        query, order_clause = apply_warehouse_doc_list_filters(
+            query,
+            keyword=keyword,
+            order_by=order_by,
+            allowed_fields=INVENTORY_ALERT_RULE_SORTABLE_FIELDS,
+            default_order="-created_at",
+            keyword_fields=INVENTORY_ALERT_RULE_KEYWORD_FIELDS,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
 
-        return [InventoryAlertRuleListResponse.model_validate(rule) for rule in rules]
+        total = await query.count()
+        rules = await query.order_by(order_clause).offset(skip).limit(limit)
+
+        return [InventoryAlertRuleListResponse.model_validate(rule) for rule in rules], total
 
     async def get_alert_rule_by_id(
         self,
@@ -270,7 +295,13 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
         alert_level: Optional[str] = None,
         material_id: Optional[int] = None,
         warehouse_id: Optional[int] = None,
-    ) -> List[InventoryAlertListResponse]:
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        triggered_start_date: Optional[str] = None,
+        triggered_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+    ) -> Tuple[List[InventoryAlertListResponse], int]:
         """
         获取库存预警记录列表
 
@@ -303,11 +334,31 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
         if warehouse_id:
             query = query.filter(warehouse_id=warehouse_id)
 
-        alerts = await query.order_by('-triggered_at').offset(skip).limit(limit)
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            INVENTORY_ALERT_KEYWORD_FIELDS,
+            INVENTORY_ALERT_SORTABLE_FIELDS,
+            apply_warehouse_doc_list_filters,
+        )
+        query, order_clause = apply_warehouse_doc_list_filters(
+            query,
+            keyword=keyword,
+            order_by=order_by,
+            allowed_fields=INVENTORY_ALERT_SORTABLE_FIELDS,
+            default_order="-triggered_at",
+            keyword_fields=INVENTORY_ALERT_KEYWORD_FIELDS,
+            doc_date_field="triggered_at",
+            doc_start_date=triggered_start_date,
+            doc_end_date=triggered_end_date,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+        )
+
+        total = await query.count()
+        alerts = await query.order_by(order_clause).offset(skip).limit(limit)
 
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inventory_alert_list_capabilities
         responses = [InventoryAlertListResponse.model_validate(alert) for alert in alerts]
-        return enrich_inventory_alert_list_capabilities(alerts, responses)
+        return enrich_inventory_alert_list_capabilities(alerts, responses), total
 
     async def get_alert_by_id(
         self,

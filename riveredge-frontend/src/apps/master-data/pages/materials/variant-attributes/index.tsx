@@ -11,7 +11,13 @@ import { App, Tag, Space, Button, Popconfirm, Modal, Table } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import {
+  buildMasterCrudActiveValueEnum,
+  masterCrudCreatedUpdatedSnakeColumns,
+  resolveVariantAttributeListParams,
+  variantAttributeCodeNameSearchColumns,
+  VARIANT_ATTRIBUTE_PINNED_ACTIVE_FIELD,
+} from '../../../utils/materialListCore';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useTrialRunMode } from '../../../../../hooks/useTrialRunMode';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -35,6 +41,12 @@ const VariantAttributesPage: React.FC = () => {
   const [presetList, setPresetList] = useState<PresetAttributeItem[]>([]);
   const [selectedPresetNames, setSelectedPresetNames] = useState<string[]>([]);
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
+
+  const attributeActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+    [t],
+  );
 
   const attributeTypeOptions = useMemo(
     () => [
@@ -62,18 +74,21 @@ const VariantAttributesPage: React.FC = () => {
    * 表格列定义
    */
   const columns: ProColumns<VariantAttributeDefinition>[] = useMemo(() => [
+    ...variantAttributeCodeNameSearchColumns(t),
     {
       title: t('app.master-data.variantAttributes.attributeName'),
       dataIndex: 'attribute_name',
       width: 150,
       fixed: 'left',
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.master-data.variantAttributes.displayName'),
       dataIndex: 'display_name',
       width: 150,
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.master-data.variantAttributes.attributeType'),
@@ -149,12 +164,19 @@ const VariantAttributesPage: React.FC = () => {
     {
       title: t('app.master-data.variantAttributes.status'),
       dataIndex: 'is_active',
-      width: 100,
+      hideInTable: true,
+      order: 20,
       valueType: 'select',
-      valueEnum: {
-        true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
-        false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
-      },
+      valueEnum: attributeActiveValueEnum,
+      fieldProps: { allowClear: true },
+    },
+    {
+      title: t('app.master-data.variantAttributes.status'),
+      dataIndex: 'is_active',
+      width: 100,
+      sorter: true,
+      hideInSearch: true,
+      valueEnum: attributeActiveValueEnum,
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
           {record.is_active ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
@@ -172,6 +194,7 @@ const VariantAttributesPage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
     },
+    ...masterCrudCreatedUpdatedSnakeColumns<VariantAttributeDefinition>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -203,7 +226,7 @@ const VariantAttributesPage: React.FC = () => {
         </Space>
       ),
     },
-  ], [t, attributeTypeLabels]);
+  ], [t, attributeTypeLabels, attributeActiveValueEnum]);
 
   /**
    * 处理新建
@@ -348,33 +371,33 @@ const VariantAttributesPage: React.FC = () => {
           headerTitle={t('app.master-data.menu.materials.variant-attributes')}
           actionRef={actionRef}
           columns={columns}
-          showAdvancedSearch={true}
+          showAdvancedSearch
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={VARIANT_ATTRIBUTE_PINNED_ACTIVE_FIELD}
           request={async (params, sort, _filter, searchFormValues) => {
             try {
-              const { sortBy: rawSort, sortOrder } = extractProTableSort(sort);
-              const sortFieldMap: Record<string, string> = {
-                display_order: 'display_order',
-                attribute_name: 'attribute_name',
-                display_name: 'display_name',
-                createdAt: 'created_at',
-                updatedAt: 'updated_at',
-              };
-              const sort_by = rawSort ? sortFieldMap[rawSort] : undefined;
-              const data = await variantAttributeApi.list({
-                is_active: searchFormValues?.is_active,
-                attribute_type: searchFormValues?.attribute_type,
-                keyword: searchFormValues?.keyword?.trim() || undefined,
-                sort_by,
-                sort_order: sortOrder,
+              const { current = 1, pageSize = 20 } = params;
+              const listParams = resolveVariantAttributeListParams(searchFormValues, sort);
+              lastListParamsRef.current = listParams;
+              const res = await variantAttributeApi.list({
+                skip: (current - 1) * pageSize,
+                limit: pageSize,
+                is_active: listParams.is_active as boolean | undefined,
+                attribute_type: listParams.attribute_type as string | undefined,
+                keyword: listParams.keyword as string | undefined,
+                attribute_name: listParams.attribute_name as string | undefined,
+                display_name: listParams.display_name as string | undefined,
+                created_start_date: listParams.created_start_date as string | undefined,
+                created_end_date: listParams.created_end_date as string | undefined,
+                updated_start_date: listParams.updated_start_date as string | undefined,
+                updated_end_date: listParams.updated_end_date as string | undefined,
+                sort_by: listParams.sort_by as string | undefined,
+                sort_order: listParams.sort_order as 'asc' | 'desc' | undefined,
               });
-              const current = params.current || 1;
-              const pageSize = params.pageSize || 20;
-              const total = data.length;
-              const start = (current - 1) * pageSize;
               return {
-                data: data.slice(start, start + pageSize),
+                data: res.items,
                 success: true,
-                total,
+                total: res.total,
               };
             } catch (error: any) {
               messageApi.error(error.message || t('app.master-data.variantAttributes.listFailed'));

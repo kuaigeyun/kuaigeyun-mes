@@ -70,25 +70,42 @@ class StandardCostService(AppBaseService[StandardCost]):
         cost_item_type: Optional[str] = None,
         is_active: Optional[bool] = None,
         search: Optional[str] = None,
+        keyword: Optional[str] = None,
+        target_code: Optional[str] = None,
+        target_name: Optional[str] = None,
+        effective_date_start: Optional[str] = None,
+        effective_date_end: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ) -> tuple[List[StandardCostResponse], int]:
-        query = StandardCost.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if target_type:
-            query = query.filter(target_type=target_type)
-        if target_id is not None:
-            query = query.filter(target_id=target_id)
-        if cost_item_type:
-            query = query.filter(cost_item_type=cost_item_type)
-        if is_active is not None:
-            query = query.filter(is_active=is_active)
-        if search:
-            query = query.filter(
-                Q(target_code__icontains=search)
-                | Q(target_name__icontains=search)
-                | Q(description__icontains=search)
-            )
+        from apps.kuaicaiwu.services.cost_list_core import apply_standard_cost_list_filters
 
+        query = StandardCost.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        kw = keyword or search
+        query, order_expr = apply_standard_cost_list_filters(
+            query,
+            keyword=kw,
+            target_code=target_code,
+            target_name=target_name,
+            target_type=target_type,
+            target_id=target_id,
+            cost_item_type=cost_item_type,
+            is_active=is_active,
+            effective_date_start=effective_date_start,
+            effective_date_end=effective_date_end,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_field,
+            sort_order=sort_order,
+        )
         total = await query.count()
-        rows = await query.offset(skip).limit(limit).order_by("-effective_date", "-id")
+        rows = await query.offset(skip).limit(limit).order_by(order_expr, "-id")
         return [StandardCostResponse.model_validate(row) for row in rows], total
 
     async def update_standard_cost(

@@ -198,6 +198,7 @@ async def get_inventory_material_balances(
     include_zero_stock: bool = Query(True, description="是否包含0库存"),
     status_filter: Optional[str] = Query(None, description="状态筛选（in_stock/zero/expired）"),
     keyword: Optional[str] = Query(None, description="关键词（物料编码/名称/仓库）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
     current: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=500, description="每页条数"),
     current_user: User = Depends(get_current_user),
@@ -210,6 +211,7 @@ async def get_inventory_material_balances(
         include_zero_stock=include_zero_stock,
         status_filter=status_filter,
         keyword=keyword,
+        order_by=order_by,
         current=current,
         page_size=page_size,
     )
@@ -247,6 +249,7 @@ async def get_inventory_batch_lines(
     aging_bucket: Optional[str] = Query(None, description="库龄筛选（expired/0-30/31-90/90+）"),
     status_filter: Optional[str] = Query(None, description="状态筛选（in_stock/zero/expired）"),
     keyword: Optional[str] = Query(None, description="关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
     current: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=500, description="每页条数"),
     current_user: User = Depends(get_current_user),
@@ -262,6 +265,7 @@ async def get_inventory_batch_lines(
         aging_bucket=aging_bucket,
         status_filter=status_filter,
         keyword=keyword,
+        order_by=order_by,
         current=current,
         page_size=page_size,
     )
@@ -547,6 +551,13 @@ async def get_production_report(
     work_center_id: Optional[int] = Query(None, description="工作中心ID"),
     skip: int = Query(0, ge=0, description="分页偏移"),
     limit: int = Query(100, ge=1, le=500, description="分页条数"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    order_code: Optional[str] = Query(None, description="单号模糊筛选"),
+    product_name: Optional[str] = Query(None, description="产品名称模糊筛选"),
+    supplier_name: Optional[str] = Query(None, description="供应商名称模糊筛选"),
+    work_order_code: Optional[str] = Query(None, description="工单号模糊筛选"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -571,6 +582,13 @@ async def get_production_report(
             work_center_id=work_center_id,
             skip=skip,
             limit=limit,
+            keyword=keyword,
+            order_by=order_by,
+            status=status,
+            order_code=order_code,
+            product_name=product_name,
+            supplier_name=supplier_name,
+            work_order_code=work_order_code,
         )
     )
 

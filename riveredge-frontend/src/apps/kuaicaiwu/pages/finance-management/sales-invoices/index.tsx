@@ -32,6 +32,8 @@ import dayjs from 'dayjs';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
 import {
   salesInvoiceService,
+  type SalesInvoice,
+  type SalesInvoiceListParams,
   type SalesInvoicePullCandidate,
   type SalesInvoicePullPreview,
 } from '../../../services/finance/sales-invoice';
@@ -40,28 +42,14 @@ import DocumentAttachmentsField from '../../../../kuaizhizao/components/Document
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
 import { formatDateTime } from '../../../../../utils/format';
-
-interface SalesInvoice {
-  id: number;
-  invoice_code: string;
-  customer_id: number;
-  customer_name: string;
-  sales_order_id?: number;
-  sales_order_code?: string;
-  invoice_number: string;
-  invoice_date: string;
-  invoice_type: string;
-  tax_rate: number;
-  invoice_amount: number;
-  tax_amount: number;
-  total_amount: number;
-  status: string;
-  review_status: string;
-  notes?: string;
-  created_at: string;
-  receivable_id?: number | null;
-  receivable_code?: string | null;
-}
+import {
+  FINANCE_INVOICE_PINNED_REVIEW_FIELD,
+  financeDocCodePartnerSearchColumns,
+  financeDocCreatedUpdatedColumns,
+  financeInvoiceNumberSearchColumn,
+  resolveSalesInvoiceListParams,
+} from '../../../utils/financeListCore';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 
 type PullPreviewKind = 'sales_order' | 'sales_delivery';
 
@@ -77,6 +65,7 @@ const P = 'app.kuaicaiwu.salesInvoice';
 
 const SalesInvoicesPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const navigate = useNavigate();
   const { t } = useTranslation();
   const invoiceTypeOptions = useMemo(() => getChineseInvoiceTypeOptions(t), [t]);
@@ -400,11 +389,22 @@ const SalesInvoicesPage: React.FC = () => {
 
   const columns: ProColumns<SalesInvoice>[] = useMemo(
     () => [
+      ...financeDocCodePartnerSearchColumns({
+        docCodeLabel: t(`${P}.col.internalCode`, '系统编号'),
+        docCodeField: 'invoice_code',
+        partnerLabel: t('app.kuaicaiwu.common.customer'),
+        partnerIdField: 'customer_id',
+        partnerNameField: 'customer_name',
+        partnerOptions: customerOptions,
+      }),
+      financeInvoiceNumberSearchColumn(t('app.kuaicaiwu.invoice.col.invoiceNumber')),
       {
         title: t('app.kuaicaiwu.invoice.col.invoiceNumber'),
         dataIndex: 'invoice_number',
         width: 160,
         fixed: 'left',
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => {
           const shown = r.invoice_number?.trim() || displaySalesInvoiceListCode(r);
           return (
@@ -418,11 +418,15 @@ const SalesInvoicesPage: React.FC = () => {
         title: t('app.kuaicaiwu.common.customer'),
         dataIndex: 'customer_name',
         width: 200,
+        hideInSearch: true,
+        sorter: true,
       },
       {
         title: t(`${P}.col.invoiceType`),
         dataIndex: 'invoice_type',
         width: 140,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => formatChineseInvoiceType(r.invoice_type, t),
       },
       {
@@ -430,11 +434,23 @@ const SalesInvoicesPage: React.FC = () => {
         dataIndex: 'invoice_date',
         valueType: 'date',
         width: 110,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.common.invoiceDate'),
+        dataIndex: 'invoice_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        order: 20,
+        formItemProps: formDateRangeFormItemProps,
       },
       {
         title: t(`${P}.col.taxRate`),
         dataIndex: 'tax_rate',
         width: 80,
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => `${r.tax_rate}%`,
       },
       {
@@ -443,6 +459,8 @@ const SalesInvoicesPage: React.FC = () => {
         valueType: 'money',
         align: 'right',
         width: 130,
+        hideInSearch: true,
+        sorter: true,
       },
       {
         title: t(`${P}.col.taxAmount`),
@@ -450,6 +468,8 @@ const SalesInvoicesPage: React.FC = () => {
         valueType: 'money',
         align: 'right',
         width: 110,
+        hideInSearch: true,
+        sorter: true,
       },
       {
         title: t('app.kuaicaiwu.invoice.col.totalAmount'),
@@ -457,6 +477,8 @@ const SalesInvoicesPage: React.FC = () => {
         valueType: 'money',
         align: 'right',
         width: 130,
+        hideInSearch: true,
+        sorter: true,
         render: (_, record) => (
           <span style={{ fontWeight: 'bold', color: '#1677ff' }}>
             ¥{Number(record.total_amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
@@ -481,20 +503,16 @@ const SalesInvoicesPage: React.FC = () => {
         title: t('common.status'),
         dataIndex: 'status',
         hideInTable: true,
+        order: 21,
       },
       {
         title: t('app.kuaicaiwu.common.reviewStatus'),
         dataIndex: 'review_status',
         hideInTable: true,
+        order: 22,
         valueEnum: reviewStatusEnum,
       },
-      {
-        title: t('common.createdAt'),
-        dataIndex: 'created_at',
-        width: 168,
-        hideInSearch: true,
-        render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-      },
+      ...financeDocCreatedUpdatedColumns<SalesInvoice>(t),
       {
         title: t('app.kuaicaiwu.common.lifecycle'),
         dataIndex: 'lifecycle_stage',
@@ -550,7 +568,7 @@ const SalesInvoicesPage: React.FC = () => {
         ].filter(Boolean) as React.ReactNode[],
       },
     ],
-    [t, navigate, reviewStatusEnum],
+    [t, navigate, reviewStatusEnum, customerOptions],
   );
 
   const pullTableColumns = useMemo(
@@ -653,21 +671,23 @@ const SalesInvoicesPage: React.FC = () => {
             ])}
           />,
         ]}
-        request={async (params) => {
-          const { current, pageSize, ...rest } = params;
-          const res = await apiRequest<any>('/apps/kuaicaiwu/sales-invoices', {
-            params: {
-              skip: ((current || 1) - 1) * (pageSize || 20),
-              limit: pageSize || 20,
-              ...rest,
-            },
-          });
+        request={async (params, sort, _filter, searchFormValues) => {
+          const listParams = resolveSalesInvoiceListParams(searchFormValues, sort);
+          lastListParamsRef.current = listParams;
+          const apiParams: SalesInvoiceListParams = {
+            skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+            limit: params.pageSize || 20,
+            ...listParams,
+          };
+          const res = await salesInvoiceService.list(apiParams);
           return {
             data: res?.items || [],
             total: res?.total || 0,
             success: true,
           };
         }}
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={FINANCE_INVOICE_PINNED_REVIEW_FIELD}
         columns={columns}
       />
 

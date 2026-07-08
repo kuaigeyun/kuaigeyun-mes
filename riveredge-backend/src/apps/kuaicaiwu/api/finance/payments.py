@@ -127,10 +127,21 @@ async def list_payments(
     settlement_type: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    keyword: Optional[str] = Query(None),
+    payment_code: Optional[str] = Query(None),
+    supplier_name: Optional[str] = Query(None),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None),
     _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:read")),
     tenant_id: int = Depends(get_current_tenant)
 ):
     """获取付款单列表"""
+    from apps.kuaicaiwu.services.finance_list_core import apply_finance_voucher_list_filters
+
     query = Payment.filter(tenant_id=tenant_id, deleted_at__isnull=True)
     if status:
         query = query.filter(status=status)
@@ -140,13 +151,31 @@ async def list_payments(
         query = query.filter(supplier_id=supplier_id)
     if settlement_type:
         query = query.filter(settlement_type=settlement_type)
-    if start_date:
-        query = query.filter(payment_date__gte=start_date)
-    if end_date:
-        query = query.filter(payment_date__lte=end_date)
+
+    doc_date_start = start_date.isoformat() if start_date else None
+    doc_date_end = end_date.isoformat() if end_date else None
+
+    query, order_expr = apply_finance_voucher_list_filters(
+        query,
+        doc_code_field="payment_code",
+        partner_name_field="supplier_name",
+        doc_date_field="payment_date",
+        keyword=keyword,
+        doc_code=payment_code,
+        partner_name=supplier_name,
+        doc_date_start=doc_date_start,
+        doc_date_end=doc_date_end,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+        sort_field=sort_field,
+        sort_order=sort_order,
+        default_sort_col="payment_date",
+    )
 
     total = await query.count()
-    items = await query.offset(skip).limit(limit).order_by("-payment_date", "-id")
+    items = await query.order_by(order_expr, "-id").offset(skip).limit(limit)
     return PaymentVoucherListResponse(
         items=[_serialize(p) for p in items],
         total=total, skip=skip, limit=limit

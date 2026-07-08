@@ -1,10 +1,18 @@
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { outsourceMaterialIssueApi } from '../../../services/production';
+import {
+  normalizeWarehouseListResponse,
+  sortOutboundHubRows,
+} from '../../../utils/warehouseListCore';
 import type { OutboundHubOrder } from './outboundHubTypes';
 import { mapOutsourceIssueToOutbound } from './outboundHubTypes';
 
-const toList = (r: unknown) =>
-  Array.isArray(r) ? r : (r as { data?: unknown[]; items?: unknown[] })?.data ?? (r as { items?: unknown[] })?.items ?? [];
+const emptyList = { items: [] as unknown[], total: 0 };
+
+const toList = (r: unknown) => {
+  const { data, total } = normalizeWarehouseListResponse(r);
+  return { items: data, total };
+};
 
 export type OutboundListEnrichers = {
   enrichProductionPickingRecordsWithCustomFields: (rows: OutboundHubOrder[]) => Promise<OutboundHubOrder[]>;
@@ -17,7 +25,6 @@ export async function fetchOutboundHubList(
 ): Promise<{ data: OutboundHubOrder[]; total: number; success: boolean }> {
   const skip = (((params.current as number) || 1) - 1) * ((params.pageSize as number) || 20);
   const limit = (params.pageSize as number) || 20;
-  const listParams = { skip, limit, ...params, keyword: params.keyword };
   const typeFilter = params.outbound_type as string | undefined;
 
   const fetchPicking = !typeFilter || typeFilter === 'production_picking';
@@ -26,64 +33,80 @@ export async function fetchOutboundHubList(
   const fetchOther = !typeFilter || typeFilter === 'other_outbound';
   const fetchBorrow = !typeFilter || typeFilter === 'material_borrow';
 
+  const listParams = {
+    skip: 0,
+    limit: Math.max(limit * 3, 60),
+    keyword: params.keyword,
+    order_by: params.order_by,
+    warehouse_id: params.warehouse_id,
+    customer_name: params.customer_name,
+    created_start_date: params.created_start_date,
+    created_end_date: params.created_end_date,
+    updated_start_date: params.updated_start_date,
+    updated_end_date: params.updated_end_date,
+  };
+
   const [pickingRes, deliveryRes, outsourceRes, otherRes, borrowRes] = await Promise.all([
-    fetchPicking ? warehouseApi.productionPicking.list(listParams) : Promise.resolve([]),
-    fetchDelivery ? warehouseApi.salesDelivery.list(listParams) : Promise.resolve([]),
-    fetchOutsource ? outsourceMaterialIssueApi.list(listParams) : Promise.resolve([]),
-    fetchOther ? warehouseApi.otherOutbound.list(listParams) : Promise.resolve([]),
-    fetchBorrow ? warehouseApi.materialBorrow.list(listParams) : Promise.resolve([]),
+    fetchPicking ? warehouseApi.productionPicking.list(listParams) : Promise.resolve(emptyList),
+    fetchDelivery ? warehouseApi.salesDelivery.list(listParams) : Promise.resolve(emptyList),
+    fetchOutsource ? outsourceMaterialIssueApi.list(listParams) : Promise.resolve(emptyList),
+    fetchOther ? warehouseApi.otherOutbound.list(listParams) : Promise.resolve(emptyList),
+    fetchBorrow ? warehouseApi.materialBorrow.list(listParams) : Promise.resolve(emptyList),
   ]);
 
   const pickingData = fetchPicking
     ? await enrichers.enrichProductionPickingRecordsWithCustomFields(
-        toList(pickingRes).map(
-          (item: Record<string, unknown>) =>
+        toList(pickingRes).items.map(
+          (item) =>
             ({
-              ...item,
+              ...(item as Record<string, unknown>),
               outbound_type: 'production_picking' as const,
-              delivery_date: item.picking_time ?? item.created_at,
-              delivered_by: item.picker_name,
+              delivery_date: (item as Record<string, unknown>).picking_time ?? (item as Record<string, unknown>).created_at,
+              delivered_by: (item as Record<string, unknown>).picker_name,
             }) as OutboundHubOrder,
         ),
       )
     : [];
   const deliveryData = fetchDelivery
     ? await enrichers.enrichSalesDeliveryRecordsWithCustomFields(
-        toList(deliveryRes).map(
-          (item: Record<string, unknown>) =>
+        toList(deliveryRes).items.map(
+          (item) =>
             ({
-              ...item,
+              ...(item as Record<string, unknown>),
               outbound_type: 'sales_delivery' as const,
-              delivery_date: item.delivery_time ?? item.delivery_date ?? item.created_at,
-              delivered_by: item.deliverer_name,
+              delivery_date:
+                (item as Record<string, unknown>).delivery_time ??
+                (item as Record<string, unknown>).delivery_date ??
+                (item as Record<string, unknown>).created_at,
+              delivered_by: (item as Record<string, unknown>).deliverer_name,
             }) as OutboundHubOrder,
         ),
       )
     : [];
   const outsourceData = fetchOutsource
-    ? toList(outsourceRes).map((item: Record<string, unknown>) => mapOutsourceIssueToOutbound(item))
+    ? toList(outsourceRes).items.map((item) => mapOutsourceIssueToOutbound(item as Record<string, unknown>))
     : [];
   const otherData = fetchOther
-    ? toList(otherRes).map(
-        (item: Record<string, unknown>) =>
+    ? toList(otherRes).items.map(
+        (item) =>
           ({
-            ...item,
+            ...(item as Record<string, unknown>),
             outbound_type: 'other_outbound' as const,
-            delivery_code: item.outbound_code,
-            delivery_date: item.delivery_time ?? item.created_at,
-            delivered_by: item.deliverer_name,
+            delivery_code: (item as Record<string, unknown>).outbound_code,
+            delivery_date: (item as Record<string, unknown>).delivery_time ?? (item as Record<string, unknown>).created_at,
+            delivered_by: (item as Record<string, unknown>).deliverer_name,
           }) as OutboundHubOrder,
       )
     : [];
   const borrowData = fetchBorrow
-    ? toList(borrowRes).map(
-        (item: Record<string, unknown>) =>
+    ? toList(borrowRes).items.map(
+        (item) =>
           ({
-            ...item,
+            ...(item as Record<string, unknown>),
             outbound_type: 'material_borrow' as const,
-            delivery_code: item.borrow_code,
-            delivery_date: item.borrow_time ?? item.created_at,
-            delivered_by: item.borrower_name,
+            delivery_code: (item as Record<string, unknown>).borrow_code,
+            delivery_date: (item as Record<string, unknown>).borrow_time ?? (item as Record<string, unknown>).created_at,
+            delivered_by: (item as Record<string, unknown>).borrower_name,
           }) as OutboundHubOrder,
       )
     : [];
@@ -107,20 +130,13 @@ export async function fetchOutboundHubList(
     );
   }
 
-  combinedData.sort(
-    (a, b) => new Date(String(b.updated_at || '')).getTime() - new Date(String(a.updated_at || '')).getTime(),
-  );
+  const sorted = sortOutboundHubRows(
+    combinedData as Record<string, unknown>[],
+    typeof params.order_by === 'string' ? params.order_by : undefined,
+  ) as OutboundHubOrder[];
 
-  const total =
-    (fetchPicking && typeof (pickingRes as { total?: number })?.total === 'number'
-      ? (pickingRes as { total: number }).total
-      : pickingData.length) +
-    (fetchDelivery && typeof (deliveryRes as { total?: number })?.total === 'number'
-      ? (deliveryRes as { total: number }).total
-      : deliveryData.length) +
-    (fetchOutsource ? outsourceData.length : 0) +
-    (fetchOther ? otherData.length : 0) +
-    (fetchBorrow ? borrowData.length : 0);
+  const total = sorted.length;
+  const page = sorted.slice(skip, skip + limit);
 
-  return { data: combinedData, success: true, total };
+  return { data: page, success: true, total };
 }

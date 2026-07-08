@@ -20,9 +20,16 @@ import {
   workshopApi,
   workCenterApi,
   factoryListItems,
-  applyFactoryKeyword,
-  applyFactoryTableSort,
 } from '../../../services/factory';
+import {
+  buildMasterCrudActiveValueEnum,
+  MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  masterCrudCodeNameSearchColumns,
+  masterCrudCreatedUpdatedColumns,
+  normalizeMasterListResponse,
+  pickOptionalString,
+  resolveMasterCrudListParams,
+} from '../../../utils/masterListCore';
 import { WarehouseFormModal } from '../../../components/WarehouseFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { Warehouse, WarehouseCreate } from '../../../types/warehouse';
@@ -52,6 +59,7 @@ const WarehousesPage: React.FC = () => {
   const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -465,8 +473,9 @@ const WarehousesPage: React.FC = () => {
         filename = t('app.master-data.warehouses.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) });
       } else {
         // 导出全部数据
-        const allData = await warehouseApi.list({ skip: 0, limit: 10000 });
-        exportData = allData.items;
+        const allData = await warehouseApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
+        const { data: exportItems } = normalizeMasterListResponse(allData);
+        exportData = exportItems;
         filename = t('app.master-data.warehouses.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) });
       }
 
@@ -568,9 +577,18 @@ const WarehousesPage: React.FC = () => {
     quarantine: { text: t('warehouse.type.quarantine') },
   };
 
+  const warehouseActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
+    [t],
+  );
+
   const columns: ProColumns<Warehouse>[] = React.useMemo(() => {
     const customFieldColumns = generateCustomFieldColumns();
     return [
+      ...masterCrudCodeNameSearchColumns({
+        code: t('app.master-data.warehouses.code'),
+        name: t('app.master-data.warehouses.name'),
+      }),
     {
       title: t('app.master-data.warehouses.code'),
       dataIndex: 'code',
@@ -578,18 +596,25 @@ const WarehousesPage: React.FC = () => {
       width: 150,
       fixed: 'left',
       ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.master-data.warehouses.name'),
       dataIndex: 'name',
       width: 200,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('field.warehouse.warehouseType'),
       dataIndex: 'warehouseType',
       width: 100,
+      order: 15,
       valueType: 'select',
       valueEnum: warehouseTypeEnum,
+      fieldProps: { allowClear: true },
+      sorter: true,
       render: (_, record) => warehouseTypeEnum[record.warehouseType || 'normal']?.text || record.warehouseType || '-',
     },
     {
@@ -619,12 +644,18 @@ const WarehousesPage: React.FC = () => {
     {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
-      width: 100,
+      hideInTable: true,
+      order: 20,
       valueType: 'select',
-      valueEnum: {
-        true: { text: t('common.enabled'), status: 'Success' },
-        false: { text: t('common.disabled'), status: 'Default' },
-      },
+      valueEnum: warehouseActiveValueEnum,
+      fieldProps: { allowClear: true },
+    },
+    {
+      title: t('app.master-data.warehouses.status'),
+      dataIndex: 'isActive',
+      width: 100,
+      hideInSearch: true,
+      valueEnum: warehouseActiveValueEnum,
       render: (_: any, record: Warehouse) => (
         <Tag color={record?.isActive ? 'success' : 'default'}>
           {record?.isActive ? t('common.enabled') : t('common.disabled')}
@@ -632,14 +663,7 @@ const WarehousesPage: React.FC = () => {
       ),
       sorter: true,
     },
-    {
-      title: t('app.master-data.warehouses.createTime'),
-      dataIndex: 'createdAt',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
+    ...masterCrudCreatedUpdatedColumns<Warehouse>(t),
     {
       title: t('app.master-data.warehouses.action'),
       valueType: 'option',
@@ -677,7 +701,7 @@ const WarehousesPage: React.FC = () => {
       ),
     },
     ];
-  }, [customFields, t]);
+  }, [customFields, t, warehouseActiveValueEnum]);
 
   /**
    * 详情 Drawer 的列定义
@@ -739,28 +763,28 @@ const WarehousesPage: React.FC = () => {
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
-          const apiParams: Record<string, unknown> = {
-            skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-            limit: params.pageSize || 20,
-          };
-
-          if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.is_active = searchFormValues.isActive;
-          }
-          if (searchFormValues?.warehouseType) {
-            apiParams.warehouse_type = searchFormValues.warehouseType;
-          }
-
-          applyFactoryKeyword(apiParams, searchFormValues);
-          applyFactoryTableSort(apiParams, sort);
+          const pageSize = params.pageSize || 20;
+          const skip = ((params.current || 1) - 1) * pageSize;
+          const listParams = resolveMasterCrudListParams(searchFormValues, sort, {
+            extra: (search) => {
+              const warehouse_type = pickOptionalString(search, 'warehouseType');
+              return warehouse_type ? { warehouse_type } : {};
+            },
+          });
+          lastListParamsRef.current = listParams;
 
           try {
-            const result = await warehouseApi.list(apiParams as any);
-            const enrichedData = await enrichRecordsWithCustomFields(result.items);
+            const result = await warehouseApi.list({
+              skip,
+              limit: pageSize,
+              ...listParams,
+            });
+            const { data, total } = normalizeMasterListResponse(result);
+            const enrichedData = await enrichRecordsWithCustomFields(data);
             return {
               data: enrichedData,
               success: true,
-              total: result.total,
+              total,
             };
           } catch (error: any) {
             console.error('获取仓库列表失败:', error);
@@ -786,7 +810,9 @@ const WarehousesPage: React.FC = () => {
         }}
         showExportButton={true}
         onExport={handleExport}
-        showAdvancedSearch={true}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={MASTER_CRUD_PINNED_ACTIVE_FIELD}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,

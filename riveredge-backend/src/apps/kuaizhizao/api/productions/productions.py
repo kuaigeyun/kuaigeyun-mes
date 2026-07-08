@@ -22,7 +22,7 @@ from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
 from apps.kuaizhizao.services.demand_source_chain_service import DemandSourceChainService
 from apps.kuaizhizao.services.outsource_service import OutsourceService
-from apps.kuaizhizao.services.outsource_work_order_service import OutsourceWorkOrderService
+from apps.kuaizhizao.services.outsource_work_order_service import OutsourceWorkOrderService, OUTSOURCE_WORK_ORDER_SORTABLE_FIELDS
 from apps.kuaizhizao.services.outsource_material_issue_service import OutsourceMaterialIssueService
 from apps.kuaizhizao.services.outsource_material_receipt_service import OutsourceMaterialReceiptService
 from apps.kuaizhizao.services.outsource_material_return_service import OutsourceMaterialReturnService
@@ -239,7 +239,9 @@ from apps.kuaizhizao.schemas.inspection_plan import (
     InspectionPlanUpdate,
     InspectionPlanResponse,
     InspectionPlanListResponse,
+    InspectionPlanListEnvelope,
 )
+from apps.kuaizhizao.services.inspection_plan_list_core import INSPECTION_PLAN_SORTABLE_FIELDS
 # 财务 schema 已迁移至 kuaicaiwu，财务 API 由 /apps/kuaicaiwu 提供
 from apps.kuaizhizao.schemas.sales import (
     # 销售预测
@@ -557,7 +559,7 @@ async def create_inspection_plan(
         raise _http_exception_with_trace(404, str(e), "/inspection-plans", tenant_id)
 
 
-@router.get("/inspection-plans", response_model=List[InspectionPlanListResponse], summary="List inspection plans")
+@router.get("/inspection-plans", response_model=InspectionPlanListEnvelope, summary="List inspection plans")
 async def list_inspection_plans(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -567,11 +569,22 @@ async def list_inspection_plans(
     is_active: Optional[bool] = Query(None, description="是否启用"),
     plan_code: Optional[str] = Query(None, description="方案编码（模糊搜索）"),
     plan_name: Optional[str] = Query(None, description="方案名称（模糊搜索）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（编码、名称）"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
     include_steps: bool = Query(False, description="是否包含检验步骤"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[InspectionPlanListResponse]:
+) -> InspectionPlanListEnvelope:
     """获取质检方案列表"""
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in INSPECTION_PLAN_SORTABLE_FIELDS:
+            safe_order_by = order_by
     try:
         return await InspectionPlanService().list_inspection_plans(
             tenant_id=tenant_id,
@@ -583,6 +596,12 @@ async def list_inspection_plans(
             is_active=is_active,
             plan_code=plan_code,
             plan_name=plan_name,
+            keyword=keyword,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            order_by=safe_order_by,
             include_steps=include_steps,
         )
     except Exception as e:
@@ -798,7 +817,10 @@ async def list_sales_forecasts(
     forecast_period: Optional[str] = Query(None, description="预测周期"),
     start_date: Optional[date] = Query(None, description="开始日期"),
     end_date: Optional[date] = Query(None, description="结束日期"),
-    keyword: Optional[str] = Query(None, description="关键词"),
+    keyword: Optional[str] = Query(None, description="关键词（编号、名称）"),
+    forecast_code: Optional[str] = Query(None, description="预测编号（模糊）"),
+    forecast_name: Optional[str] = Query(None, description="预测名称（模糊）"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 start_date、-updated_at（前缀-表示降序）"),
     include_items: bool = Query(False, description="是否包含明细"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -809,6 +831,13 @@ async def list_sales_forecasts(
     支持多种筛选条件的高级搜索。
     返回格式：{ data: [...], total: number, success: true }
     """
+    from apps.kuaizhizao.services.sales_service import SalesForecastService, SALES_FORECAST_SORTABLE_FIELDS
+
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in SALES_FORECAST_SORTABLE_FIELDS:
+            safe_order_by = order_by
     service = SalesForecastService()
     result = await service.list_sales_forecasts(
         tenant_id=tenant_id,
@@ -816,6 +845,13 @@ async def list_sales_forecasts(
         limit=limit,
         status=status,
         forecast_period=forecast_period,
+        start_date=start_date,
+        end_date=end_date,
+        keyword=keyword,
+        forecast_code=forecast_code,
+        forecast_name=forecast_name,
+        order_by=safe_order_by,
+        include_items=include_items,
     )
     return SalesForecastListResult(**result)
     
@@ -1617,6 +1653,15 @@ async def list_stocktakings(
     warehouse_id: Optional[int] = Query(None, description="仓库ID"),
     status: Optional[str] = Query(None, description="状态"),
     stocktaking_type: Optional[str] = Query(None, description="盘点类型"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    stocktaking_date_start: Optional[str] = Query(None, description="盘点日期起"),
+    stocktaking_date_end: Optional[str] = Query(None, description="盘点日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> StocktakingListResponse:
@@ -1642,6 +1687,15 @@ async def list_stocktakings(
         warehouse_id=warehouse_id,
         status=status,
         stocktaking_type=stocktaking_type,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        stocktaking_date_start=stocktaking_date_start,
+        stocktaking_date_end=stocktaking_date_end,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
 
 
@@ -2032,6 +2086,15 @@ async def list_inventory_transfers(
     to_warehouse_id: Optional[int] = Query(None, description="调入仓库ID"),
     status: Optional[str] = Query(None, description="状态"),
     transfer_mode: Optional[str] = Query(None, description="单据模式：transfer|bin_relocation"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    transfer_date_start: Optional[str] = Query(None, description="调拨日期起"),
+    transfer_date_end: Optional[str] = Query(None, description="调拨日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> InventoryTransferListResponse:
@@ -2058,6 +2121,15 @@ async def list_inventory_transfers(
         to_warehouse_id=to_warehouse_id,
         status=status,
         transfer_mode=transfer_mode,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        transfer_date_start=transfer_date_start,
+        transfer_date_end=transfer_date_end,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
 
 
@@ -2068,6 +2140,15 @@ async def list_bin_transfers(
     code: Optional[str] = Query(None, description="移位单号（模糊搜索）"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID"),
     status: Optional[str] = Query(None, description="状态"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    transfer_date_start: Optional[str] = Query(None, description="移位日期起"),
+    transfer_date_end: Optional[str] = Query(None, description="移位日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> InventoryTransferListResponse:
@@ -2080,6 +2161,15 @@ async def list_bin_transfers(
         to_warehouse_id=warehouse_id,
         status=status,
         transfer_mode="bin_relocation",
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        transfer_date_start=transfer_date_start,
+        transfer_date_end=transfer_date_end,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
 
 
@@ -2520,6 +2610,15 @@ async def list_assembly_orders(
     code: Optional[str] = Query(None, description="组装单号（模糊搜索）"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID"),
     status: Optional[str] = Query(None, description="状态"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    assembly_date_start: Optional[str] = Query(None, description="组装日期起"),
+    assembly_date_end: Optional[str] = Query(None, description="组装日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> AssemblyOrderListResponse:
@@ -2531,6 +2630,15 @@ async def list_assembly_orders(
         code=code,
         warehouse_id=warehouse_id,
         status=status,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        assembly_date_start=assembly_date_start,
+        assembly_date_end=assembly_date_end,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
 
 
@@ -2726,6 +2834,15 @@ async def list_disassembly_orders(
     code: Optional[str] = Query(None, description="拆卸单号（模糊搜索）"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID"),
     status: Optional[str] = Query(None, description="状态"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    disassembly_date_start: Optional[str] = Query(None, description="拆卸日期起"),
+    disassembly_date_end: Optional[str] = Query(None, description="拆卸日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> DisassemblyOrderListResponse:
@@ -2737,6 +2854,15 @@ async def list_disassembly_orders(
         code=code,
         warehouse_id=warehouse_id,
         status=status,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        disassembly_date_start=disassembly_date_start,
+        disassembly_date_end=disassembly_date_end,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
 
 
@@ -2910,6 +3036,16 @@ async def list_outsource_work_orders(
     supplier_id: Optional[int] = Query(None, description="供应商ID筛选"),
     product_id: Optional[int] = Query(None, description="产品ID筛选"),
     keyword: Optional[str] = Query(None, description="关键词搜索"),
+    code: Optional[str] = Query(None, description="委外工单编码（模糊搜索）"),
+    name: Optional[str] = Query(None, description="委外工单名称（模糊搜索）"),
+    product_name: Optional[str] = Query(None, description="产品名称（模糊搜索）"),
+    supplier_name: Optional[str] = Query(None, description="供应商名称（模糊搜索）"),
+    priority: Optional[str] = Query(None, description="优先级"),
+    planned_start_from: Optional[date] = Query(None, description="计划开始日期起"),
+    planned_start_to: Optional[date] = Query(None, description="计划开始日期止"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 code、-created_at"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> OutsourceWorkOrderListResponse:
@@ -2928,6 +3064,11 @@ async def list_outsource_work_orders(
     返回工单委外列表。
     """
     try:
+        safe_order_by = None
+        if order_by:
+            field = order_by.lstrip("-")
+            if field in OUTSOURCE_WORK_ORDER_SORTABLE_FIELDS:
+                safe_order_by = order_by
         return await outsource_work_order_service.list_outsource_work_orders(
             tenant_id=tenant_id,
             skip=skip,
@@ -2936,6 +3077,16 @@ async def list_outsource_work_orders(
             supplier_id=supplier_id,
             product_id=product_id,
             keyword=keyword,
+            code=code,
+            name=name,
+            product_name=product_name,
+            supplier_name=supplier_name,
+            priority=priority,
+            planned_start_from=planned_start_from,
+            planned_start_to=planned_start_to,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            order_by=safe_order_by,
         )
     except Exception as e:
         logger.error(f"获取工单委外列表失败: {e}")

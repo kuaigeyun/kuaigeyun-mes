@@ -4,43 +4,72 @@
 
 import { apiRequest } from '../../../services/api';
 
+export interface PackingBindingListParams {
+  skip?: number;
+  limit?: number;
+  receipt_id?: number;
+  sales_delivery_id?: number;
+  product_id?: number;
+  box_no?: string;
+  uuid?: string;
+  keyword?: string;
+  product_code?: string;
+  product_name?: string;
+  product_serial_no?: string;
+  packing_material_name?: string;
+  binding_method?: string;
+  source_type?: string;
+  bound_at_start_date?: string;
+  bound_at_end_date?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  order_by?: string;
+}
+
+export interface PackingBindingListResult {
+  data: Record<string, unknown>[];
+  total: number;
+  success: boolean;
+}
+
 export const packingBindingApi = {
-  // 获取装箱绑定记录列表
-  list: async (params?: any) => {
+  list: async (params?: PackingBindingListParams) => {
     return apiRequest('/apps/kuaizhizao/packing-bindings', { method: 'GET', params });
   },
 
-  // 获取装箱绑定记录分页（含总数）
-  listPage: async (params?: any) => {
-    return apiRequest('/apps/kuaizhizao/packing-bindings/page', { method: 'GET', params });
+  listPage: async (params?: PackingBindingListParams): Promise<PackingBindingListResult> => {
+    const raw = await apiRequest<PackingBindingListResult>(
+      '/apps/kuaizhizao/packing-bindings/page',
+      { method: 'GET', params },
+    );
+    const rows = raw?.data ?? [];
+    return {
+      data: rows,
+      total: raw?.total ?? rows.length,
+      success: raw?.success !== false,
+    };
   },
 
-  // 获取装箱绑定统计
   statistics: async () => {
     return apiRequest('/apps/kuaizhizao/packing-bindings/statistics', { method: 'GET' });
   },
 
-  // 获取待装箱任务池（只读）
   taskPool: async (params?: { limit?: number }) => {
     return apiRequest('/apps/kuaizhizao/packing-bindings/task-pool', { method: 'GET', params });
   },
 
-  // 获取装箱绑定记录详情
   get: async (id: string) => {
     return apiRequest(`/apps/kuaizhizao/packing-bindings/${id}`, { method: 'GET' });
   },
 
-  // 更新装箱绑定记录
   update: async (id: string, data: any) => {
     return apiRequest(`/apps/kuaizhizao/packing-bindings/${id}`, { method: 'PUT', data });
   },
 
-  // 删除装箱绑定记录
   delete: async (id: string) => {
     return apiRequest(`/apps/kuaizhizao/packing-bindings/${id}`, { method: 'DELETE' });
   },
 
-  // 从成品入库单创建装箱绑定
   createFromReceipt: async (receiptId: string, data: any) => {
     return apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${receiptId}/packing-binding`, {
       method: 'POST',
@@ -48,14 +77,12 @@ export const packingBindingApi = {
     });
   },
 
-  // 获取成品入库单的装箱绑定记录列表
   getByReceipt: async (receiptId: string) => {
     return apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${receiptId}/packing-binding`, {
       method: 'GET',
     });
   },
 
-  // 生成装箱二维码
   generateQRCode: async (boxUuid: string, boxNo: string, productName?: string): Promise<any> => {
     const { qrcodeApi } = await import('../../../services/qrcode');
     return qrcodeApi.generateBox({

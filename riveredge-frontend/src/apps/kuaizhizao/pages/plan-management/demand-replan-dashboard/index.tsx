@@ -1,11 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { App, Button, Empty, Modal, Space, Spin, Table, Tag, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import type { ProColumns } from '@ant-design/pro-components';
+import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, TwoColumnLayout, type StatCard, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formatDateTime } from '../../../../../utils/format';
 import {
   ensureReplanTaskForEvent,
   executeDemandReplanTask,
@@ -74,10 +77,10 @@ const DemandReplanDashboardPage: React.FC = () => {
   const { message, modal } = App.useApp();
   const [stats, setStats] = useState<StatCard[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
-  const [tasksLoading, setTasksLoading] = useState(false);
   const [eventKeyword, setEventKeyword] = useState('');
   const [eventRows, setEventRows] = useState<DemandChangeEventItem[]>([]);
-  const [taskRows, setTaskRows] = useState<DemandReplanTaskItem[]>([]);
+  const [actionableTaskEventIds, setActionableTaskEventIds] = useState<Set<number>>(new Set());
+  const taskTableActionRef = useRef<ActionType>(null);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [selectedEventCode, setSelectedEventCode] = useState<string>('');
   const [impactLoading, setImpactLoading] = useState(false);
@@ -173,7 +176,10 @@ const DemandReplanDashboardPage: React.FC = () => {
     return map[key] ?? key;
   };
 
-  const refreshAll = () => setRefreshSeed((v) => v + 1);
+  const refreshAll = () => {
+    setRefreshSeed((v) => v + 1);
+    taskTableActionRef.current?.reload?.();
+  };
 
   const loadStats = async () => {
     const d = await getDemandReplanDashboard();
@@ -185,11 +191,15 @@ const DemandReplanDashboardPage: React.FC = () => {
     ]);
   };
 
-  const loadEvents = async () => {
+  const loadEvents = async (keyword?: string) => {
     setEventsLoading(true);
     try {
-      const rows = await listPendingDemandChangeEvents(200);
-      setEventRows(rows || []);
+      const res = await listPendingDemandChangeEvents({
+        skip: 0,
+        limit: 200,
+        keyword: (keyword ?? eventKeyword).trim() || undefined,
+      });
+      setEventRows(res.data || []);
     } catch (e: any) {
       message.error(e?.message || t('app.kuaizhizao.demandReplan.loadEventsFailed'));
       setEventRows([]);
@@ -198,28 +208,34 @@ const DemandReplanDashboardPage: React.FC = () => {
     }
   };
 
-  const loadTasks = async () => {
-    setTasksLoading(true);
+  const loadActionableTaskIndex = async () => {
     try {
-      const rows = await listDemandReplanTasks(200);
-      setTaskRows(rows || []);
-    } catch (e: any) {
-      message.error(e?.message || t('app.kuaizhizao.demandReplan.loadTasksFailed'));
-      setTaskRows([]);
-    } finally {
-      setTasksLoading(false);
+      const res = await listDemandReplanTasks({ skip: 0, limit: 500 });
+      const ids = new Set<number>();
+      for (const row of res.data || []) {
+        if (isActionableTaskStatus(row.status)) {
+          ids.add(Number(row.event_id));
+        }
+      }
+      setActionableTaskEventIds(ids);
+    } catch {
+      setActionableTaskEventIds(new Set());
     }
   };
 
   useEffect(() => {
-    void Promise.all([loadStats(), loadEvents(), loadTasks()]);
+    void Promise.all([loadStats(), loadEvents(), loadActionableTaskIndex()]);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh on seed only
   }, [refreshSeed]);
 
+  useEffect(() => {
+    void loadEvents(eventKeyword);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyword drives server-side event search
+  }, [eventKeyword]);
+
   const eventHasActionableTask = useCallback(
-    (eventId: number) =>
-      taskRows.some((task) => Number(task.event_id) === eventId && isActionableTaskStatus(task.status)),
-    [taskRows],
+    (eventId: number) => actionableTaskEventIds.has(eventId),
+    [actionableTaskEventIds],
   );
 
   const loadImpactDetail = async (eventId: number) => {
@@ -309,19 +325,82 @@ const DemandReplanDashboardPage: React.FC = () => {
     });
   };
 
+  const taskStatusValueEnum = useMemo(
+    () =>
+      Object.fromEntries(
+        (['pending', 'running', 'completed', 'failed', 'cancelled'] as const).map((key) => [
+          key,
+          { text: taskStatusText[key] ?? key },
+        ]),
+      ),
+    [taskStatusText],
+  );
+
+  const taskModeValueEnum = useMemo(
+    () =>
+      Object.fromEntries(
+        (['net_change', 'full_regen', 'what_if'] as const).map((key) => [
+          key,
+          { text: modeText[key] ?? key },
+        ]),
+      ),
+    [modeText],
+  );
+
+  const taskRiskValueEnum = useMemo(
+    () =>
+      Object.fromEntries(
+        (['low', 'medium', 'high'] as const).map((key) => [
+          key,
+          { text: riskLevelText[key] ?? key },
+        ]),
+      ),
+    [riskLevelText],
+  );
+
+  const taskApprovalValueEnum = useMemo(
+    () =>
+      Object.fromEntries(
+        (['not_required', 'pending', 'approved', 'rejected'] as const).map((key) => [
+          key,
+          { text: approvalStatusText[key] ?? key },
+        ]),
+      ),
+    [approvalStatusText],
+  );
+
   const taskColumns: ProColumns<DemandReplanTaskItem>[] = useMemo(
     () => [
-      { title: t('app.kuaizhizao.demandReplan.col.taskCode'), dataIndex: 'task_code', width: 180, fixed: 'left' },
+      {
+        title: t('common.createdAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        hideInSearch: false,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
+      },
+      { title: t('app.kuaizhizao.demandReplan.col.taskCode'), dataIndex: 'task_code', width: 180, fixed: 'left', sorter: true, hideInSearch: false },
       {
         title: t('app.kuaizhizao.demandReplan.col.mode'),
         dataIndex: 'mode',
         width: 120,
+        sorter: true,
+        hideInSearch: false,
+        valueType: 'select',
+        valueEnum: taskModeValueEnum,
         render: (_, row) => <Tag>{modeText[row.mode as keyof typeof modeText] || row.mode}</Tag>,
       },
       {
         title: t('app.kuaizhizao.demandReplan.col.riskLevel'),
         dataIndex: 'risk_level',
         width: 110,
+        sorter: true,
+        hideInSearch: false,
+        valueType: 'select',
+        valueEnum: taskRiskValueEnum,
         render: (_, row) => (
           <Tag color={riskColor[row.risk_level] || 'default'}>
             {labelFromMap(riskLevelText, row.risk_level)}
@@ -332,6 +411,10 @@ const DemandReplanDashboardPage: React.FC = () => {
         title: t('app.kuaizhizao.demandReplan.col.approvalStatus'),
         dataIndex: 'approval_status',
         width: 130,
+        sorter: true,
+        hideInSearch: false,
+        valueType: 'select',
+        valueEnum: taskApprovalValueEnum,
         render: (_, row) => (
           <Tag color={approvalStatusColor[row.approval_status] || 'default'}>
             {labelFromMap(approvalStatusText, row.approval_status)}
@@ -342,15 +425,44 @@ const DemandReplanDashboardPage: React.FC = () => {
         title: t('app.kuaizhizao.demandReplan.col.taskStatus'),
         dataIndex: 'status',
         width: 110,
+        sorter: true,
+        hideInSearch: false,
+        valueType: 'select',
+        valueEnum: taskStatusValueEnum,
         render: (_, row) => (
           <Tag color={taskStatusColor[row.status] || 'default'}>
             {labelFromMap(taskStatusText, row.status)}
           </Tag>
         ),
       },
-      { title: t('app.kuaizhizao.demandReplan.col.createdAt'), dataIndex: 'created_at', valueType: 'dateTime', width: 180 },
-      { title: t('app.kuaizhizao.demandReplan.col.startedAt'), dataIndex: 'started_at', valueType: 'dateTime', width: 180, hideInSearch: true },
-      { title: t('app.kuaizhizao.demandReplan.col.finishedAt'), dataIndex: 'finished_at', valueType: 'dateTime', width: 180, hideInSearch: true },
+      {
+        title: t('app.kuaizhizao.demandReplan.col.createdAt'),
+        dataIndex: 'created_at',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        defaultSortOrder: 'descend',
+        hideInSearch: true,
+        render: (_, row) => (row.created_at ? formatDateTime(row.created_at, 'YYYY-MM-DD HH:mm') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.demandReplan.col.startedAt'),
+        dataIndex: 'started_at',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, row) => (row.started_at ? formatDateTime(row.started_at, 'YYYY-MM-DD HH:mm') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.demandReplan.col.finishedAt'),
+        dataIndex: 'finished_at',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, row) => (row.finished_at ? formatDateTime(row.finished_at, 'YYYY-MM-DD HH:mm') : '-'),
+      },
       {
         title: t('app.kuaizhizao.demandReplan.col.failureReason'),
         key: 'failure_reason',
@@ -393,7 +505,7 @@ const DemandReplanDashboardPage: React.FC = () => {
         ),
       },
     ],
-    [executingTaskId, modeText, riskLevelText, taskStatusText, approvalStatusText, t]
+    [executingTaskId, modeText, riskLevelText, taskStatusText, approvalStatusText, taskApprovalValueEnum, taskModeValueEnum, taskRiskValueEnum, taskStatusValueEnum, t]
   );
 
   const impactTaskColumns = useMemo(
@@ -433,38 +545,16 @@ const DemandReplanDashboardPage: React.FC = () => {
     [executingTaskId, modeText, taskStatusText, t]
   );
 
-  const filteredEventRows = useMemo(() => {
-    const kw = eventKeyword.trim().toLowerCase();
-    if (!kw) return eventRows;
-    return eventRows.filter((row) => {
-      const fullText = [
-        row.event_code,
-        row.source_code,
-        eventTypeText[row.event_type as keyof typeof eventTypeText] || row.event_type,
-        sourceTypeText[row.source_type as keyof typeof sourceTypeText] || row.source_type,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return fullText.includes(kw);
-    });
-  }, [eventRows, eventKeyword, eventTypeText, sourceTypeText]);
-
-  const filteredTaskRows = useMemo(
-    () => (selectedEventId ? taskRows.filter((x) => Number(x.event_id) === selectedEventId) : taskRows),
-    [taskRows, selectedEventId]
-  );
-
   const leftEventList = (
     <div style={{ padding: 8 }}>
       {eventsLoading ? (
         <div style={{ textAlign: 'center', padding: '40px 8px' }}>
           <Spin />
         </div>
-      ) : filteredEventRows.length === 0 ? (
+      ) : eventRows.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.demandReplan.emptyEvents')} />
       ) : (
-        filteredEventRows.map((row) => {
+        eventRows.map((row) => {
           const active = selectedEventId === row.id;
           const hasActionableTask = eventHasActionableTask(row.id);
           return (
@@ -576,7 +666,6 @@ const DemandReplanDashboardPage: React.FC = () => {
                   ) : (
                     <Tag>{t('app.kuaizhizao.demandReplan.currentDocAll')}</Tag>
                   )}
-                  {tasksLoading ? <Tag color="processing">{t('app.kuaizhizao.demandReplan.tasksLoading')}</Tag> : null}
                 </Space>
               ),
               right: selectedEventId && !eventHasActionableTask(selectedEventId) ? (
@@ -592,19 +681,49 @@ const DemandReplanDashboardPage: React.FC = () => {
             content: (
               <UniTable<DemandReplanTaskItem>
                 columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-replan-dashboard.tasks"
+                actionRef={taskTableActionRef}
                 columns={taskColumns}
                 rowKey="id"
-                request={async (params) => {
-                  const current = Number(params.current || 1);
-                  const pageSize = Number(params.pageSize || 20);
-                  const start = (current - 1) * pageSize;
+                showAdvancedSearch
+                skipFuzzyPinyinClientFilter
+                pinnedTabsField="status"
+                pinnedTabsValueEnum={taskStatusValueEnum}
+                request={async (params, sort, _filter, searchFormValues) => {
+                  const s = (searchFormValues ?? {}) as Record<string, unknown>;
+                  const { sortBy, sortOrder } = extractProTableSort(sort);
+                  const orderBy =
+                    sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+                  const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
+                  const apiParams: Parameters<typeof listDemandReplanTasks>[0] = {
+                    skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+                    limit: params.pageSize || 20,
+                    order_by: orderBy,
+                    event_id: selectedEventId ?? undefined,
+                    status: s.status as string | undefined,
+                    mode: s.mode as string | undefined,
+                    risk_level: s.risk_level as string | undefined,
+                    approval_status: s.approval_status as string | undefined,
+                  };
+                  if (fuzzyKeyword) {
+                    apiParams.keyword = fuzzyKeyword;
+                  } else if (s.task_code != null && String(s.task_code).trim()) {
+                    apiParams.keyword = String(s.task_code).trim();
+                  }
+                  const createdRange = s.created_at_range as [unknown, unknown] | undefined;
+                  if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+                    apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
+                    apiParams.created_end_date = createdRange[1]
+                      ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+                      : apiParams.created_start_date;
+                  }
+                  const res = await listDemandReplanTasks(apiParams);
                   return {
-                    data: filteredTaskRows.slice(start, start + pageSize),
-                    total: filteredTaskRows.length,
-                    success: true,
+                    data: res.data || [],
+                    total: res.total || 0,
+                    success: res.success !== false,
                   };
                 }}
-                params={{ refreshSeed, selectedEventId: selectedEventId || 0, taskRowsCount: filteredTaskRows.length }}
+                params={{ refreshSeed, selectedEventId: selectedEventId ?? 0 }}
               />
             ),
             contentPadding: 16,

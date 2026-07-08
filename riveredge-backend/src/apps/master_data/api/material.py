@@ -1198,6 +1198,8 @@ async def list_material_batches(
         description="排序字段：batch_no,quantity,status,production_date,expiry_date,created_at,material_name",
     ),
     sort_order: Optional[str] = Query(None, description="asc 或 desc，默认 desc"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     current_user: Annotated[User, Depends(get_current_user)] = None,
@@ -1219,6 +1221,8 @@ async def list_material_batches(
             keyword=keyword,
             sort_by=sort_by,
             sort_order=sort_order,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
         )
     except Exception as e:
         raise _http_error(
@@ -1363,6 +1367,8 @@ async def list_material_serials(
         description="排序字段：serial_no,status,production_date,factory_date,created_at,material_name",
     ),
     sort_order: Optional[str] = Query(None, description="asc 或 desc，默认 desc"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     current_user: Annotated[User, Depends(get_current_user)] = None,
@@ -1384,6 +1390,8 @@ async def list_material_serials(
             keyword=keyword,
             sort_by=sort_by,
             sort_order=sort_order,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
         )
     except Exception as e:
         raise _http_error(
@@ -1554,6 +1562,10 @@ async def list_materials(
         alias="mastersOnly",
         description="仅返回主物料行（排除属性 SKU，code≠main_code 的行）",
     ),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -1592,6 +1604,10 @@ async def list_materials(
         no_group,
         tree_view,
         masters_only,
+        created_start_date,
+        created_end_date,
+        updated_start_date,
+        updated_end_date,
     )
 
 

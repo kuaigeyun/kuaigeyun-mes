@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Path, Query, status as http_status
@@ -17,6 +18,7 @@ from apps.kuaizhizao.schemas.customer_pool import (
     CustomerPoolRuleResponse,
     CustomerPoolRuleUpdateBody,
 )
+from apps.kuaizhizao.services.customer_pool_list_core import CUSTOMER_POOL_SORTABLE_FIELDS
 from apps.kuaizhizao.services.customer_pool_service import CustomerPoolService
 from core.api.deps import get_current_tenant, get_current_user
 from core.api.deps.access import require_access
@@ -36,12 +38,33 @@ async def list_customer_pool(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=200),
     keyword: Optional[str] = Query(None),
+    code: Optional[str] = Query(None, description="客户编码（模糊）"),
+    name: Optional[str] = Query(None, description="客户名称（模糊）"),
+    contact_person: Optional[str] = Query(None, description="联系人（模糊）"),
+    phone: Optional[str] = Query(None, description="电话（模糊）"),
     salesman_id: Optional[int] = Query(None, alias="salesmanId", ge=1, description="归属业务员"),
     pool_status: Optional[str] = Query(None, alias="poolStatus", description="pool/owned"),
+    last_follow_up_from: Optional[datetime] = Query(None),
+    last_follow_up_to: Optional[datetime] = Query(None),
+    recycle_from: Optional[datetime] = Query(None),
+    recycle_to: Optional[datetime] = Query(None),
+    assigned_from: Optional[datetime] = Query(None),
+    assigned_to: Optional[datetime] = Query(None),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
+    order_by: Optional[str] = Query(None, description="排序字段，如 code、-last_follow_up_at"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     _auth: object = Depends(require_kuaizhizao_module_access("customer-pool")),
 ):
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in CUSTOMER_POOL_SORTABLE_FIELDS:
+            safe_order_by = order_by
+
     return await CustomerPoolService.list_customers(
         tenant_id=tenant_id,
         current_user=current_user,
@@ -49,8 +72,23 @@ async def list_customer_pool(
         skip=skip,
         limit=limit,
         keyword=keyword,
+        code=code,
+        name=name,
+        contact_person=contact_person,
+        phone=phone,
         salesman_id=salesman_id,
         pool_status=pool_status,
+        last_follow_up_from=last_follow_up_from,
+        last_follow_up_to=last_follow_up_to,
+        recycle_from=recycle_from,
+        recycle_to=recycle_to,
+        assigned_from=assigned_from,
+        assigned_to=assigned_to,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+        order_by=safe_order_by,
     )
 
 

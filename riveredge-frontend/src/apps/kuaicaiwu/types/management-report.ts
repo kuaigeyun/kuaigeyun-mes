@@ -27,3 +27,39 @@ export interface WIPValuation {
   active_work_orders_count: number;
   estimated_wip_value: number;
 }
+
+export interface MarginReportRow {
+  product_id?: number;
+  product_code?: string;
+  product_name?: string;
+  customer_id?: number;
+  customer_name?: string;
+  sales_order_id?: number;
+  sales_order_code?: string;
+  delivery_id?: number;
+  delivery_code?: string;
+  revenue: number;
+  cost: number;
+  gross_margin: number;
+  gross_margin_rate: number;
+}
+
+export interface MarginReportListResponse {
+  period_days: number;
+  items: MarginReportRow[];
+  total: number;
+}
+
+export type MarginReportListParams = {
+  days?: number;
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  product_code?: string;
+  product_name?: string;
+  customer_name?: string;
+  sales_order_code?: string;
+  delivery_code?: string;
+  sort_field?: string;
+  sort_order?: string;
+};

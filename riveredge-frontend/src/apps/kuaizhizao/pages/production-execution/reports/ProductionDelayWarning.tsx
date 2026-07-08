@@ -5,11 +5,14 @@ import React, { useMemo } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { Tag } from 'antd';
-import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { buildWorkOrderLifecycleValueEnum } from '../../../utils/workOrderLifecycle';
 import { copyableCodeColumn } from '../../../utils/reportCopyableColumn';
+import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const ProductionDelayWarning: React.FC = () => {
   const { t } = useTranslation();
+  const statusValueEnum = useMemo(() => buildWorkOrderLifecycleValueEnum(t), [t]);
   const columns: ProColumns[] = useMemo(
     () => [
       {
@@ -17,25 +20,33 @@ const ProductionDelayWarning: React.FC = () => {
         dataIndex: 'date_range',
         valueType: 'dateRange',
         hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
         search: { order: 10 } as ProColumns['search'],
       },
-      copyableCodeColumn(
-        t('app.kuaizhizao.productionExecutionReports.colWorkOrderCode'),
-        'code',
-        150,
-      ),
+      {
+        ...copyableCodeColumn(
+          t('app.kuaizhizao.productionExecutionReports.colWorkOrderCode'),
+          'code',
+          150,
+        ),
+        sorter: true,
+        search: { order: 20 } as ProColumns['search'],
+      },
       {
         title: t('app.kuaizhizao.productionExecutionReports.colProductName'),
         dataIndex: 'material_name',
         ellipsis: true,
         width: 200,
-        hideInSearch: true,
+        sorter: true,
+        search: { order: 30 } as ProColumns['search'],
       },
       {
         title: t('app.kuaizhizao.productionExecutionReports.colPlannedEndDate'),
         dataIndex: 'planned_end_date',
         valueType: 'date',
-        width: 120,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
         hideInSearch: true,
       },
       {
@@ -43,13 +54,17 @@ const ProductionDelayWarning: React.FC = () => {
         dataIndex: 'overdue_days',
         valueType: 'digit',
         width: 100,
+        sorter: true,
         hideInSearch: true,
       },
       {
         title: t('common.status'),
         dataIndex: 'status',
         width: 100,
-        hideInSearch: true,
+        valueType: 'select',
+        valueEnum: statusValueEnum,
+        sorter: true,
+        search: { order: 40 } as ProColumns['search'],
         render: (_, record) => {
           const overdue = Number(record.overdue_days || 0);
           if (overdue > 0) {
@@ -59,7 +74,7 @@ const ProductionDelayWarning: React.FC = () => {
         },
       },
     ],
-    [t],
+    [t, statusValueEnum],
   );
 
   return (
@@ -68,6 +83,7 @@ const ProductionDelayWarning: React.FC = () => {
       reportType="production-delay-warning"
       dateRangeKeys={['date_range', 'dateRange']}
       columnPersistenceId="apps.kuaizhizao.pages.production-execution.reports.ProductionDelayWarning"
+      rowKey="code"
       columns={columns}
     />
   );

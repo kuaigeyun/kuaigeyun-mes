@@ -6,6 +6,13 @@ export interface DocumentReconciliationGapParams {
   start_date: string;
   end_date: string;
   only_gaps?: boolean;
+  keyword?: string;
+  doc_type?: string;
+  doc_code?: string;
+  sort_field?: string;
+  sort_order?: string;
+  skip?: number;
+  limit?: number;
 }
 
 export interface FinanceAmountTriplet {
@@ -28,6 +35,7 @@ export interface DocumentReconciliationGapItem extends FinanceAmountTriplet {
 
 export interface DocumentReconciliationGapResult {
   items?: DocumentReconciliationGapItem[];
+  total?: number;
   gap_count?: number;
   open_balance_total?: number;
   partner_type?: string;
@@ -35,7 +43,24 @@ export interface DocumentReconciliationGapResult {
   period?: { start?: string; end?: string };
 }
 
-export interface FinancePipelineSummary {
+export interface PrepaymentBalanceListParams {
+  partner_type?: 'customer' | 'supplier';
+  keyword?: string;
+  partner_name?: string;
+  skip?: number;
+  limit?: number;
+  sort_field?: string;
+  sort_order?: string;
+}
+
+export interface PrepaymentBalanceSummary {
+  customer_balances?: Array<Record<string, unknown>>;
+  supplier_balances?: Array<Record<string, unknown>>;
+  items?: Array<Record<string, unknown>>;
+  total?: number;
+  total_customer_prepayment?: number;
+  total_supplier_prepayment?: number;
+}
   open_receivable_amount?: number;
   open_payable_amount?: number;
   unsettled_receipt_amount?: number;
@@ -63,6 +88,6 @@ export const documentReconciliationService = {
   getStandardChain: (flowType: 'sales' | 'purchase', documentType: string, documentId: number) =>
     apiRequest<Record<string, unknown>>(`${API}/chain/${flowType}/${documentType}/${documentId}`, { method: 'GET' }),
 
-  getPrepaymentBalances: () =>
-    apiRequest<Record<string, unknown>>(`${API}/prepayment-balances`, { method: 'GET' }),
+  getPrepaymentBalances: (params?: PrepaymentBalanceListParams) =>
+    apiRequest<PrepaymentBalanceSummary>(`${API}/prepayment-balances`, { method: 'GET', params }),
 };

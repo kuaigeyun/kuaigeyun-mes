@@ -34,6 +34,10 @@ import { getBatchingOrderStageName } from '../../../utils/batchingOrderLifecycle
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { getBatchingTaskTypeLabel, type BatchingTaskTabKey } from './materialCenterTabs';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import {
+  normalizeWarehouseListResponse,
+  resolveBatchingCenterTaskListParams,
+} from '../../../utils/warehouseListCore';
 
 type BatchPickOption = { value: string; label: string };
 
@@ -790,25 +794,23 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
             />
           ),
         }}
-        request={async (params) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           try {
+            const listParams = resolveBatchingCenterTaskListParams(searchFormValues, sort);
             const res = await batchingOrderApi.listTasks({
               skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
               limit: params.pageSize ?? 20,
               task_type: taskType,
-              status: params.status,
-              work_order_code: params.doc_code || params.work_order_code,
-              priority: params.priority,
+              ...listParams,
             });
-            return {
-              data: res.items ?? [],
-              total: res.total ?? 0,
-              success: true,
-            };
+            const { data, total } = normalizeWarehouseListResponse(res);
+            return { data, total, success: true };
           } catch {
             return { data: [], total: 0, success: false };
           }
         }}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
       />
     </>
   );

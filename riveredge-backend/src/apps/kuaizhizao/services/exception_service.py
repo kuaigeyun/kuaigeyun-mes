@@ -7,9 +7,11 @@ Author: Luigi Lu
 Date: 2025-01-15
 """
 
-from datetime import datetime
+from datetime import date, datetime, time
 from typing import List, Optional
 from decimal import Decimal
+
+from tortoise.queryset import Q
 
 from apps.kuaizhizao.models.material_shortage_exception import MaterialShortageException
 from apps.kuaizhizao.models.delivery_delay_exception import DeliveryDelayException
@@ -37,6 +39,46 @@ from loguru import logger
 # 待处理异常状态（与模型字段一致；勿使用 open）
 ACTIVE_EXCEPTION_STATUSES = ("pending", "processing")
 ACTIVE_QUALITY_EXCEPTION_STATUSES = ("pending", "investigating", "correcting")
+
+MATERIAL_SHORTAGE_SORTABLE_FIELDS = frozenset({
+    "work_order_code",
+    "material_code",
+    "material_name",
+    "required_quantity",
+    "available_quantity",
+    "shortage_quantity",
+    "alert_level",
+    "status",
+    "suggested_action",
+    "created_at",
+    "handled_at",
+})
+
+DELIVERY_DELAY_SORTABLE_FIELDS = frozenset({
+    "work_order_code",
+    "planned_end_date",
+    "delay_days",
+    "delay_reason",
+    "alert_level",
+    "status",
+    "suggested_action",
+    "created_at",
+    "handled_at",
+})
+
+QUALITY_EXCEPTION_SORTABLE_FIELDS = frozenset({
+    "exception_type",
+    "work_order_code",
+    "material_code",
+    "material_name",
+    "batch_no",
+    "problem_description",
+    "severity",
+    "status",
+    "responsible_person_name",
+    "created_at",
+    "handled_at",
+})
 
 
 def _material_shortage_alert_level(shortage_qty: Decimal, required_qty: Decimal) -> str:
@@ -169,6 +211,13 @@ class ExceptionService:
         alert_level: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
+        keyword: Optional[str] = None,
+        work_order_code: Optional[str] = None,
+        material_code: Optional[str] = None,
+        material_name: Optional[str] = None,
+        created_start_date: Optional[date] = None,
+        created_end_date: Optional[date] = None,
+        order_by: Optional[str] = None,
     ) -> tuple[List[MaterialShortageExceptionListResponse], int]:
         """
         获取缺料异常列表
@@ -200,8 +249,30 @@ class ExceptionService:
         if alert_level:
             query = query.filter(alert_level=alert_level)
 
+        kw = (keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(work_order_code__icontains=kw)
+                | Q(material_code__icontains=kw)
+                | Q(material_name__icontains=kw)
+            )
+        woc = (work_order_code or "").strip()
+        if woc:
+            query = query.filter(work_order_code__icontains=woc)
+        mc = (material_code or "").strip()
+        if mc:
+            query = query.filter(material_code__icontains=mc)
+        mn = (material_name or "").strip()
+        if mn:
+            query = query.filter(material_name__icontains=mn)
+        if created_start_date is not None:
+            query = query.filter(created_at__gte=datetime.combine(created_start_date, time.min))
+        if created_end_date is not None:
+            query = query.filter(created_at__lte=datetime.combine(created_end_date, time.max))
+
         total = await query.count()
-        exceptions = await query.order_by('-alert_level', '-created_at').offset(skip).limit(limit)
+        order_clause = order_by if order_by else "-created_at"
+        exceptions = await query.order_by(order_clause).offset(skip).limit(limit)
         rows = [MaterialShortageExceptionListResponse.model_validate(e) for e in exceptions]
 
         if rows:
@@ -380,6 +451,12 @@ class ExceptionService:
         alert_level: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
+        keyword: Optional[str] = None,
+        work_order_code: Optional[str] = None,
+        delay_reason: Optional[str] = None,
+        created_start_date: Optional[date] = None,
+        created_end_date: Optional[date] = None,
+        order_by: Optional[str] = None,
     ) -> tuple[List[DeliveryDelayExceptionListResponse], int]:
         """
         获取延期异常列表
@@ -408,8 +485,25 @@ class ExceptionService:
         if alert_level:
             query = query.filter(alert_level=alert_level)
 
+        kw = (keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(work_order_code__icontains=kw) | Q(delay_reason__icontains=kw)
+            )
+        woc = (work_order_code or "").strip()
+        if woc:
+            query = query.filter(work_order_code__icontains=woc)
+        dr = (delay_reason or "").strip()
+        if dr:
+            query = query.filter(delay_reason__icontains=dr)
+        if created_start_date is not None:
+            query = query.filter(created_at__gte=datetime.combine(created_start_date, time.min))
+        if created_end_date is not None:
+            query = query.filter(created_at__lte=datetime.combine(created_end_date, time.max))
+
         total = await query.count()
-        exceptions = await query.order_by('-alert_level', '-delay_days', '-created_at').offset(skip).limit(limit)
+        order_clause = order_by if order_by else "-created_at"
+        exceptions = await query.order_by(order_clause).offset(skip).limit(limit)
         rows = [DeliveryDelayExceptionListResponse.model_validate(e) for e in exceptions]
         return rows, total
 
@@ -481,6 +575,14 @@ class ExceptionService:
         inspection_source_type: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
+        keyword: Optional[str] = None,
+        work_order_code: Optional[str] = None,
+        material_code: Optional[str] = None,
+        material_name: Optional[str] = None,
+        batch_no: Optional[str] = None,
+        created_start_date: Optional[date] = None,
+        created_end_date: Optional[date] = None,
+        order_by: Optional[str] = None,
     ) -> tuple[List[QualityExceptionListResponse], int]:
         """
         获取质量异常列表
@@ -511,8 +613,35 @@ class ExceptionService:
         if inspection_source_type:
             query = query.filter(inspection_source_type=inspection_source_type)
 
+        kw = (keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(work_order_code__icontains=kw)
+                | Q(material_code__icontains=kw)
+                | Q(material_name__icontains=kw)
+                | Q(batch_no__icontains=kw)
+                | Q(problem_description__icontains=kw)
+            )
+        woc = (work_order_code or "").strip()
+        if woc:
+            query = query.filter(work_order_code__icontains=woc)
+        mc = (material_code or "").strip()
+        if mc:
+            query = query.filter(material_code__icontains=mc)
+        mn = (material_name or "").strip()
+        if mn:
+            query = query.filter(material_name__icontains=mn)
+        bn = (batch_no or "").strip()
+        if bn:
+            query = query.filter(batch_no__icontains=bn)
+        if created_start_date is not None:
+            query = query.filter(created_at__gte=datetime.combine(created_start_date, time.min))
+        if created_end_date is not None:
+            query = query.filter(created_at__lte=datetime.combine(created_end_date, time.max))
+
         total = await query.count()
-        exceptions = await query.order_by('-severity', '-created_at').offset(skip).limit(limit)
+        order_clause = order_by if order_by else "-created_at"
+        exceptions = await query.order_by(order_clause).offset(skip).limit(limit)
         return [QualityExceptionListResponse.model_validate(e) for e in exceptions], total
 
     async def create_from_inspection(

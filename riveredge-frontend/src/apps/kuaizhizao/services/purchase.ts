@@ -138,8 +138,12 @@ export interface PurchaseOrderListParams {
   order_date_to?: string;
   delivery_date_from?: string;
   delivery_date_to?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  order_code?: string;
   buyer_id?: number;
   keyword?: string;
+  order_by?: string;
 }
 
 export interface PurchaseOrderListResponse {

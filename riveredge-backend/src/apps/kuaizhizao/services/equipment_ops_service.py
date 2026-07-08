@@ -210,15 +210,29 @@ class _MasterCRUDMixin:
         limit: int,
         search: Optional[str] = None,
         is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[T], int]:
+        from apps.kuaizhizao.services.equipment_list_core import apply_master_crud_list_filters
+
         qs = self.model.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if is_active is not None:
-            qs = qs.filter(is_active=is_active)
-        if search and search.strip():
-            k = search.strip()
-            qs = qs.filter(Q(code__icontains=k) | Q(name__icontains=k))
+        qs, order_clause = apply_master_crud_list_filters(
+            qs,
+            keyword=keyword,
+            search=search,
+            is_active=is_active,
+            order_by=order_by,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def _get(self, tenant_id: int, row_id: int) -> T:
@@ -823,14 +837,52 @@ class EquipmentSpotCheckService:
         limit: int,
         equipment_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        check_start_date: Optional[str] = None,
+        check_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        has_abnormality: Optional[bool] = None,
     ) -> tuple[List[EquipmentSpotCheck], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            SPOT_CHECK_SORTABLE_FIELDS,
+            apply_equipment_created_date_range,
+            apply_equipment_document_date_range,
+            apply_equipment_keyword_filter,
+            resolve_equipment_list_order_by,
+        )
+
         qs = EquipmentSpotCheck.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if equipment_id is not None:
             qs = qs.filter(equipment_id=equipment_id)
         if status:
             qs = qs.filter(status=status)
+        if has_abnormality is not None:
+            qs = qs.filter(has_abnormality=has_abnormality)
+        qs = apply_equipment_keyword_filter(
+            qs,
+            keyword,
+            ["document_no", "equipment_code", "equipment_name", "inspector_name"],
+        )
+        qs = apply_equipment_document_date_range(
+            qs,
+            date_field="check_date",
+            start_date=check_start_date,
+            end_date=check_end_date,
+        )
+        qs = apply_equipment_created_date_range(
+            qs,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        order_clause = resolve_equipment_list_order_by(
+            order_by,
+            SPOT_CHECK_SORTABLE_FIELDS,
+            "-created_at",
+        )
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def update(self, tenant_id: int, row_id: int, data: SpotCheckUpdate) -> EquipmentSpotCheck:
@@ -1029,14 +1081,52 @@ class EquipmentRoutePatrolService:
         limit: int,
         route_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        patrol_start_date: Optional[str] = None,
+        patrol_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        has_abnormality: Optional[bool] = None,
     ) -> tuple[List[EquipmentRoutePatrol], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            ROUTE_PATROL_SORTABLE_FIELDS,
+            apply_equipment_created_date_range,
+            apply_equipment_document_date_range,
+            apply_equipment_keyword_filter,
+            resolve_equipment_list_order_by,
+        )
+
         qs = EquipmentRoutePatrol.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if route_id is not None:
             qs = qs.filter(route_id=route_id)
         if status:
             qs = qs.filter(status=status)
+        if has_abnormality is not None:
+            qs = qs.filter(has_abnormality=has_abnormality)
+        qs = apply_equipment_keyword_filter(
+            qs,
+            keyword,
+            ["document_no", "route_code", "route_name", "inspector_name"],
+        )
+        qs = apply_equipment_document_date_range(
+            qs,
+            date_field="patrol_date",
+            start_date=patrol_start_date,
+            end_date=patrol_end_date,
+        )
+        qs = apply_equipment_created_date_range(
+            qs,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        order_clause = resolve_equipment_list_order_by(
+            order_by,
+            ROUTE_PATROL_SORTABLE_FIELDS,
+            "-created_at",
+        )
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def update(self, tenant_id: int, row_id: int, data: RoutePatrolUpdate) -> EquipmentRoutePatrol:
@@ -1136,14 +1226,59 @@ class EquipmentScrapApplicationService:
         limit: int,
         equipment_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        scrap_start_date: Optional[str] = None,
+        scrap_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[EquipmentScrapApplication], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            EQUIPMENT_SCRAP_SORTABLE_FIELDS,
+            apply_equipment_created_date_range,
+            apply_equipment_document_date_range,
+            apply_equipment_keyword_filter,
+            apply_equipment_updated_date_range,
+            pick_search_keyword,
+            resolve_equipment_list_order_by,
+        )
+
         qs = EquipmentScrapApplication.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if equipment_id is not None:
             qs = qs.filter(equipment_id=equipment_id)
         if status:
             qs = qs.filter(status=status)
+        qs = apply_equipment_keyword_filter(
+            qs,
+            pick_search_keyword(keyword, search),
+            ["application_no", "equipment_name", "equipment_code", "reason", "applicant_name"],
+        )
+        qs = apply_equipment_document_date_range(
+            qs,
+            date_field="scrap_date",
+            start_date=scrap_start_date,
+            end_date=scrap_end_date,
+        )
+        qs = apply_equipment_created_date_range(
+            qs,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
+        qs = apply_equipment_updated_date_range(
+            qs,
+            start_date=updated_start_date,
+            end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        order_clause = resolve_equipment_list_order_by(
+            order_by,
+            EQUIPMENT_SCRAP_SORTABLE_FIELDS,
+            "-updated_at",
+        )
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def update(
@@ -1269,14 +1404,66 @@ class EquipmentTransferApplicationService:
         limit: int,
         equipment_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        transfer_start_date: Optional[str] = None,
+        transfer_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[EquipmentTransferApplication], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            EQUIPMENT_TRANSFER_SORTABLE_FIELDS,
+            apply_equipment_created_date_range,
+            apply_equipment_document_date_range,
+            apply_equipment_keyword_filter,
+            apply_equipment_updated_date_range,
+            pick_search_keyword,
+            resolve_equipment_list_order_by,
+        )
+
         qs = EquipmentTransferApplication.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if equipment_id is not None:
             qs = qs.filter(equipment_id=equipment_id)
         if status:
             qs = qs.filter(status=status)
+        qs = apply_equipment_keyword_filter(
+            qs,
+            pick_search_keyword(keyword, search),
+            [
+                "application_no",
+                "equipment_name",
+                "equipment_code",
+                "from_workshop_name",
+                "to_workshop_name",
+                "applicant_name",
+            ],
+        )
+        qs = apply_equipment_document_date_range(
+            qs,
+            date_field="transfer_date",
+            start_date=transfer_start_date,
+            end_date=transfer_end_date,
+        )
+        qs = apply_equipment_created_date_range(
+            qs,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
+        qs = apply_equipment_updated_date_range(
+            qs,
+            start_date=updated_start_date,
+            end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        order_clause = resolve_equipment_list_order_by(
+            order_by,
+            EQUIPMENT_TRANSFER_SORTABLE_FIELDS,
+            "-updated_at",
+        )
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def update(

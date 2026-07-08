@@ -33,6 +33,20 @@ export interface ReceivableListParams {
     status?: string;
     customer_id?: number;
     pending_settlement?: boolean;
+    keyword?: string;
+    receivable_code?: string;
+    customer_name?: string;
+    review_status?: string;
+    business_date_start?: string;
+    business_date_end?: string;
+    due_date_start?: string;
+    due_date_end?: string;
+    created_start_date?: string;
+    created_end_date?: string;
+    updated_start_date?: string;
+    updated_end_date?: string;
+    sort_field?: string;
+    sort_order?: 'asc' | 'desc';
 }
 
 export interface ReceivableCreateData {

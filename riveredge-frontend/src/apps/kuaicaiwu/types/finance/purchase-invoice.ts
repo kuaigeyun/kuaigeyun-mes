@@ -33,6 +33,19 @@ export interface PurchaseInvoiceListParams {
     status?: string;
     supplier_id?: number;
     purchase_order_id?: number;
+    start_date?: string;
+    end_date?: string;
+    keyword?: string;
+    invoice_code?: string;
+    supplier_name?: string;
+    invoice_number?: string;
+    review_status?: string;
+    created_start_date?: string;
+    created_end_date?: string;
+    updated_start_date?: string;
+    updated_end_date?: string;
+    sort_field?: string;
+    sort_order?: 'asc' | 'desc';
 }
 
 export interface PurchaseInvoiceCreateData {

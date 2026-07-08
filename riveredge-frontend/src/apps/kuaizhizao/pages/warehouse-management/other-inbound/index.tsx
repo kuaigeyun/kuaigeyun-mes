@@ -49,6 +49,13 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  WAREHOUSE_DOC_PINNED_STATUS_FIELD,
+  buildOtherInboundStatusValueEnum,
+  normalizeWarehouseListResponse,
+  resolveWarehouseDocListParams,
+} from '../../../utils/warehouseListCore';
 
 const REASON_TYPES_FALLBACK = [
   { value: '盘盈', label: '盘盈' },
@@ -233,37 +240,97 @@ const OtherInboundPage: React.FC = () => {
   }, [fallbackReasonTypeOptions]);
 
   const otherInboundCustomFieldColumns = generateOtherInboundCustomFieldColumns();
+  const otherInboundStatusValueEnum = useMemo(() => buildOtherInboundStatusValueEnum(t), [t]);
 
   const columns: ProColumns<OtherInbound>[] = useMemo(
     () => [
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 10 } as ProColumns['search'],
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOtherInbound.field.status'),
+        dataIndex: 'status',
+        valueType: 'select',
+        valueEnum: otherInboundStatusValueEnum,
+        hideInTable: true,
+        search: { order: 20 } as ProColumns['search'],
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOtherInbound.col.reasonType'),
+        dataIndex: 'reason_type',
+        valueType: 'select',
+        fieldProps: { options: reasonTypeOptions, loading: reasonTypeLoading },
+        hideInTable: true,
+        search: { order: 30 } as ProColumns['search'],
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOtherInbound.col.receiptTime'),
+        dataIndex: 'doc_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 40 } as ProColumns['search'],
+      },
       {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.inboundCode'),
         dataIndex: 'inbound_code',
         width: 140,
         ellipsis: true,
         fixed: 'left',
+        sorter: true,
+        search: { order: 50 } as ProColumns['search'],
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.inbound_code ?? '') }} ellipsis>
             {r.inbound_code ?? '-'}
           </Typography.Text>
         ),
       },
-      { title: t('app.kuaizhizao.warehouseOtherInbound.col.warehouse'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
+      {
+        title: t('app.kuaizhizao.warehouseOtherInbound.col.warehouse'),
+        dataIndex: 'warehouse_name',
+        width: 120,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+      },
       {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.reasonType'),
         dataIndex: 'reason_type',
         width: 100,
+        sorter: true,
+        hideInSearch: true,
         render: (v) => <Tag>{translateReasonTypeLabel(t, String(v || ''))}</Tag>,
       },
-      { title: t('app.kuaizhizao.warehouseOtherInbound.col.receiver'), dataIndex: 'receiver_name', width: 100 },
-      { title: t('app.kuaizhizao.warehouseOtherInbound.col.receiptTime'), dataIndex: 'receipt_time', valueType: 'dateTime', width: 160 },
+      {
+        title: t('app.kuaizhizao.warehouseOtherInbound.col.receiver'),
+        dataIndex: 'receiver_name',
+        width: 100,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOtherInbound.col.receiptTime'),
+        dataIndex: 'receipt_time',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.receipt_time ? formatDateTime(r.receipt_time) : '-'),
+      },
       {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.updatedAt'),
         dataIndex: 'updated_at',
-        width: 168,
+        width: 132,
+        uniTableKeepWidth: true,
         hideInSearch: true,
         defaultSortOrder: 'descend',
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
+        sorter: true,
+        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
       {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.lifecycle'),
@@ -335,7 +402,7 @@ const OtherInboundPage: React.FC = () => {
         },
       },
     ],
-    [t, otherInboundCustomFieldColumns, openPrint],
+    [t, otherInboundCustomFieldColumns, openPrint, otherInboundStatusValueEnum, reasonTypeOptions, reasonTypeLoading],
   );
 
   const handleDetail = async (record: OtherInbound) => {
@@ -662,22 +729,23 @@ const OtherInboundPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch
+          pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
           showCreateButton
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
-          request={async (params) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const listParams = resolveWarehouseDocListParams(searchFormValues, sort, {
+                docDateParamPrefix: 'receipt',
+              });
               const response = await warehouseApi.otherInbound.list({
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
-                status: params.status,
-                reason_type: params.reason_type,
-                warehouse_id: params.warehouse_id,
-                keyword: (params as any).keyword,
+                ...listParams,
               });
-              const raw = Array.isArray(response) ? response : response?.items || response?.data || [];
+              const { data: raw, total } = normalizeWarehouseListResponse(response);
               const data = await enrichOtherInboundRecordsWithCustomFields(raw);
-              const total = Array.isArray(response) ? response.length : response?.total ?? data.length;
               return { data, success: true, total };
             } catch {
               messageApi.error(t('app.kuaizhizao.warehouseOtherInbound.msg.loadListFailed'));

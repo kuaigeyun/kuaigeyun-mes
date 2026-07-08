@@ -30,6 +30,12 @@ import { costRuleApi } from '../../../services/cost';
 import { getRuleTypeSelectOptions, getRuleTypeTag } from '../../../utils/costUiLabels';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  COST_CRUD_PINNED_ACTIVE_FIELD,
+  costDocCreatedUpdatedColumns,
+  costRuleSearchColumns,
+  resolveCostRuleListParams,
+} from '../../../utils/costListCore';
 
 interface CostRule {
   id?: number;
@@ -59,6 +65,7 @@ const CostRulePage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
 
   // Modal 相关状态（创建/编辑规则）
   const [modalVisible, setModalVisible] = useState(false);
@@ -233,11 +240,16 @@ const CostRulePage: React.FC = () => {
    */
   const columns: ProColumns<CostRule>[] = useMemo(
     () => [
+      ...costRuleSearchColumns({
+        code: t('app.kuaicaiwu.costRule.col.code'),
+        name: t('app.kuaicaiwu.costRule.col.name'),
+      }),
       {
         title: t('app.kuaicaiwu.costRule.col.isActive'),
         dataIndex: 'is_active',
         key: 'is_active',
         hideInTable: true,
+        order: 12,
         valueType: 'select',
         fieldProps: {
           allowClear: true,
@@ -253,40 +265,29 @@ const CostRulePage: React.FC = () => {
         key: 'code',
         width: 150,
         fixed: 'left',
+        hideInSearch: true,
+        sorter: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
             {r.code ?? '-'}
           </Typography.Text>
         ),
       },
-      { title: t('app.kuaicaiwu.costRule.col.name'), dataIndex: 'name', key: 'name', width: 200 },
+      { title: t('app.kuaicaiwu.costRule.col.name'), dataIndex: 'name', key: 'name', width: 200, hideInSearch: true, sorter: true },
       {
         title: t('app.kuaicaiwu.costRule.col.ruleType'),
         dataIndex: 'rule_type',
         key: 'rule_type',
         width: 120,
+        hideInSearch: true,
+        sorter: true,
         render: (dom) => getRuleTypeTag(String(dom ?? ''), t),
       },
-      { title: t('app.kuaicaiwu.costRule.col.costType'), dataIndex: 'cost_type', key: 'cost_type', width: 120 },
-      { title: t('app.kuaicaiwu.costRule.col.calculationMethod'), dataIndex: 'calculation_method', key: 'calculation_method', width: 120 },
-      { title: t('app.kuaicaiwu.costRule.col.allocationBasis'), dataIndex: 'allocation_basis', key: 'allocation_basis', width: 120 },
-      { title: t('app.kuaicaiwu.costRule.col.sourceModule'), dataIndex: 'source_module', key: 'source_module', width: 120 },
-      {
-        title: t('app.kuaicaiwu.costCommon.col.createdAt'),
-        dataIndex: 'created_at',
-        key: 'created_at',
-        width: 180,
-        search: false,
-        render: (dom) => (dom ? formatDateTime(dom as string, 'YYYY-MM-DD HH:mm:ss') : '-'),
-      },
-      {
-        title: t('app.kuaicaiwu.costCommon.col.updatedAt'),
-        dataIndex: 'updated_at',
-        key: 'updated_at',
-        width: 180,
-        search: false,
-        render: (dom) => (dom ? formatDateTime(dom as string, 'YYYY-MM-DD HH:mm:ss') : '-'),
-      },
+      { title: t('app.kuaicaiwu.costRule.col.costType'), dataIndex: 'cost_type', key: 'cost_type', width: 120, hideInSearch: true, sorter: true },
+      { title: t('app.kuaicaiwu.costRule.col.calculationMethod'), dataIndex: 'calculation_method', key: 'calculation_method', width: 120, hideInSearch: true, sorter: true },
+      { title: t('app.kuaicaiwu.costRule.col.allocationBasis'), dataIndex: 'allocation_basis', key: 'allocation_basis', width: 120, hideInSearch: true, sorter: true },
+      { title: t('app.kuaicaiwu.costRule.col.sourceModule'), dataIndex: 'source_module', key: 'source_module', width: 120, hideInSearch: true, sorter: true },
+      ...costDocCreatedUpdatedColumns<CostRule>(t),
       {
         title: t('app.kuaicaiwu.costCommon.section.lifecycle'),
         dataIndex: 'lifecycle_stage',
@@ -421,27 +422,28 @@ const CostRulePage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-rules"
         scroll={{ x: 'max-content' }}
-        request={async (params: any) => {
-          // 将 ProTable 的分页参数转换为后端期望的格式
-          const queryParams: any = {
-            skip: (params.current! - 1) * params.pageSize!,
-            limit: params.pageSize!,
-          };
-
-          // 传递其他搜索参数
-          if (params.rule_type) queryParams.rule_type = params.rule_type;
-          if (params.cost_type) queryParams.cost_type = params.cost_type;
-          if (params.is_active !== undefined && params.is_active !== '') {
-            queryParams.is_active = params.is_active;
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={COST_CRUD_PINNED_ACTIVE_FIELD}
+        request={async (params, sort, _filter, searchFormValues) => {
+          const listParams = resolveCostRuleListParams(searchFormValues, sort);
+          lastListParamsRef.current = listParams;
+          try {
+            const response = await costRuleApi.list({
+              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+              limit: params.pageSize || 20,
+              ...listParams,
+            });
+            return {
+              data: response.items || [],
+              success: true,
+              total: response.total || 0,
+            };
+          } catch (error: unknown) {
+            const err = error as { message?: string };
+            messageApi.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+            return { data: [], success: false, total: 0 };
           }
-          if (params.search) queryParams.search = params.search;
-          
-          const response = await costRuleApi.list(queryParams);
-          return {
-            data: response.items || [],
-            success: true,
-            total: response.total || 0,
-          };
         }}
         columns={columns}
         rowKey="uuid"

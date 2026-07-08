@@ -105,6 +105,9 @@ export interface SalesForecastListParams {
   start_date?: string;
   end_date?: string;
   keyword?: string;
+  forecast_code?: string;
+  forecast_name?: string;
+  order_by?: string;
   include_items?: boolean;
 }
 

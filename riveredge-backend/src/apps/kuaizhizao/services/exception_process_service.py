@@ -7,7 +7,7 @@ Author: Luigi Lu
 Date: 2026-01-16
 """
 
-from datetime import datetime
+from datetime import datetime, date, time
 from typing import List, Optional, Dict, Any
 from loguru import logger
 
@@ -42,6 +42,18 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from core.tasks.dispatcher import TaskEvent, dispatch_event
+from tortoise.queryset import Q
+
+EXCEPTION_PROCESS_SORTABLE_FIELDS = frozenset({
+    "exception_type",
+    "exception_id",
+    "process_status",
+    "current_step",
+    "assigned_to_name",
+    "started_at",
+    "completed_at",
+    "created_at",
+})
 
 
 class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
@@ -419,6 +431,11 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
         assigned_to: Optional[int] = None,
         skip: int = 0,
         limit: int = 100,
+        keyword: Optional[str] = None,
+        assigned_to_name: Optional[str] = None,
+        created_start_date: Optional[date] = None,
+        created_end_date: Optional[date] = None,
+        order_by: Optional[str] = None,
     ) -> tuple[List[ExceptionProcessRecordListResponse], int]:
         """
         获取异常处理记录列表
@@ -446,8 +463,22 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
         if assigned_to:
             query = query.filter(assigned_to=assigned_to)
 
+        kw = (keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(assigned_to_name__icontains=kw) | Q(current_step__icontains=kw)
+            )
+        atn = (assigned_to_name or "").strip()
+        if atn:
+            query = query.filter(assigned_to_name__icontains=atn)
+        if created_start_date is not None:
+            query = query.filter(created_at__gte=datetime.combine(created_start_date, time.min))
+        if created_end_date is not None:
+            query = query.filter(created_at__lte=datetime.combine(created_end_date, time.max))
+
         total = await query.count()
-        records = await query.order_by("-created_at").offset(skip).limit(limit)
+        order_clause = order_by if order_by else "-created_at"
+        records = await query.order_by(order_clause).offset(skip).limit(limit)
         responses = [ExceptionProcessRecordListResponse.model_validate(r) for r in records]
         return enrich_exception_process_record_list_capabilities(records, responses), total
 

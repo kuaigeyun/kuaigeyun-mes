@@ -65,7 +65,30 @@ export interface ReceiptNoticeNotifyPreviewResponse {
   line_blocking_issues?: string[];
 }
 
-const RECEIPT_NOTICE_LIMIT_MAX = 100;
+const RECEIPT_NOTICE_LIMIT_MAX = 1000;
+
+export interface ReceiptNoticeListParams {
+  skip?: number;
+  limit?: number;
+  status?: string;
+  purchase_order_id?: number;
+  supplier_id?: number;
+  warehouse_id?: number;
+  keyword?: string;
+  notice_code?: string;
+  purchase_order_code?: string;
+  planned_start_date?: string;
+  planned_end_date?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  order_by?: string;
+}
+
+export interface ReceiptNoticeListResult {
+  data: ReceiptNotice[];
+  total: number;
+  success: boolean;
+}
 
 function clampReceiptNoticeLimit(limit: unknown): number | undefined {
   if (typeof limit !== 'number' || Number.isNaN(limit)) return undefined;
@@ -73,7 +96,7 @@ function clampReceiptNoticeLimit(limit: unknown): number | undefined {
 }
 
 export const receiptNoticeApi = {
-  list: async (params?: Record<string, any>) => {
+  list: async (params?: ReceiptNoticeListParams): Promise<ReceiptNoticeListResult> => {
     const limit = clampReceiptNoticeLimit(params?.limit);
     const safeParams = limit != null ? { ...params, limit } : params;
     return apiRequest('/apps/kuaizhizao/receipt-notices', { method: 'GET', params: safeParams });

@@ -95,43 +95,36 @@ class PerformanceService:
         holiday_type: Optional[str] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
-        is_active: Optional[bool] = None
-    ) -> List[HolidayResponse]:
-        """
-        获取假期列表
-        
-        Args:
-            tenant_id: 租户ID
-            skip: 跳过数量
-            limit: 限制数量
-            holiday_type: 假期类型（可选，用于过滤）
-            start_date: 开始日期（可选，用于过滤）
-            end_date: 结束日期（可选，用于过滤）
-            is_active: 是否启用（可选）
-            
-        Returns:
-            List[HolidayResponse]: 假期列表
-        """
-        query = Holiday.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+    ) -> dict:
+        from apps.master_data.services.performance_list_core import apply_holiday_list_filters
+
+        query = Holiday.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        start_str = start_date.isoformat() if start_date else None
+        end_str = end_date.isoformat() if end_date else None
+        query, order_clause = apply_holiday_list_filters(
+            query,
+            keyword=keyword,
+            order_by=order_by,
+            holiday_type=holiday_type,
+            start_date=start_str,
+            end_date=end_str,
+            is_active=is_active,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
         )
-        
-        if holiday_type is not None:
-            query = query.filter(holiday_type=holiday_type)
-        
-        if start_date is not None:
-            query = query.filter(holiday_date__gte=start_date)
-        
-        if end_date is not None:
-            query = query.filter(holiday_date__lte=end_date)
-        
-        if is_active is not None:
-            query = query.filter(is_active=is_active)
-        
-        holidays = await query.offset(skip).limit(limit).order_by("holiday_date").all()
-        
-        return [HolidayResponse.model_validate(h) for h in holidays]
+        total = await query.count()
+        holidays = await query.order_by(order_clause).offset(skip).limit(limit).all()
+        items = [HolidayResponse.model_validate(h) for h in holidays]
+        return {"items": items, "total": total}
     
     @staticmethod
     async def update_holiday(
@@ -292,35 +285,32 @@ class PerformanceService:
         skip: int = 0,
         limit: int = 100,
         category: Optional[str] = None,
-        is_active: Optional[bool] = None
-    ) -> List[SkillResponse]:
-        """
-        获取技能列表
-        
-        Args:
-            tenant_id: 租户ID
-            skip: 跳过数量
-            limit: 限制数量
-            category: 技能分类（可选，用于过滤）
-            is_active: 是否启用（可选）
-            
-        Returns:
-            List[SkillResponse]: 技能列表
-        """
-        query = Skill.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+    ) -> dict:
+        from apps.master_data.services.performance_list_core import apply_skill_list_filters
+
+        query = Skill.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        query, order_clause = apply_skill_list_filters(
+            query,
+            keyword=keyword,
+            order_by=order_by,
+            category=category,
+            is_active=is_active,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
         )
-        
-        if category is not None:
-            query = query.filter(category=category)
-        
-        if is_active is not None:
-            query = query.filter(is_active=is_active)
-        
-        skills = await query.offset(skip).limit(limit).order_by("code").all()
-        
-        return [SkillResponse.model_validate(s) for s in skills]
+        total = await query.count()
+        skills = await query.order_by(order_clause).offset(skip).limit(limit).all()
+        items = [SkillResponse.model_validate(s) for s in skills]
+        return {"items": items, "total": total}
     
     @staticmethod
     async def update_skill(

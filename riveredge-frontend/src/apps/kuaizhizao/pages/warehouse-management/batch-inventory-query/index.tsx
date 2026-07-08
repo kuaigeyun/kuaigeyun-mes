@@ -13,6 +13,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { apiRequest } from '../../../../../services/api';
+import { resolveInventoryBatchLineListParams } from '../../../utils/warehouseListCore';
 
 interface InTransitBreakdown {
   purchase_quantity: number;
@@ -252,7 +253,7 @@ const BatchInventoryQuery: React.FC = () => {
           <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
         ),
       },
-      { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', hideInTable: true },
+      { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', hideInTable: true, sorter: true },
       { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', hideInTable: true },
       {
         title: t('app.master-data.materials.specification'),
@@ -298,19 +299,24 @@ const BatchInventoryQuery: React.FC = () => {
         dataIndex: 'batch_no',
         width: 120,
         copyable: true,
+        sorter: true,
       },
       {
         title: t('app.kuaizhizao.batchInventoryQuery.colProductionDate'),
         dataIndex: 'production_date',
-        width: 120,
+        width: 132,
+        uniTableKeepWidth: true,
         valueType: 'date',
+        sorter: true,
         render: (_, record) => record.production_date || '-',
       },
       {
         title: t('app.kuaizhizao.batchInventoryQuery.colExpiryDate'),
         dataIndex: 'expiry_date',
-        width: 120,
+        width: 132,
+        uniTableKeepWidth: true,
         valueType: 'date',
+        sorter: true,
         render: (_, record) => {
           if (!record.expiry_date) return '-';
           const isExpired = dayjs(record.expiry_date).isBefore(dayjs());
@@ -331,6 +337,7 @@ const BatchInventoryQuery: React.FC = () => {
         width: 100,
         align: 'right',
         valueType: 'digit',
+        sorter: true,
         render: (_, record) => {
           const qty = Number(record.quantity || 0);
           return (
@@ -383,17 +390,15 @@ const BatchInventoryQuery: React.FC = () => {
     [t]
   );
 
-  const fetchBatchInventory = async (params: any, _sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
-    const search = searchFormValues || {};
+  const fetchBatchInventory = async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
+    const listParams = resolveInventoryBatchLineListParams(searchFormValues, sort);
     const apiParams = {
-      material_id: search.material_id || params.material_id,
-      warehouse_id: search.warehouse_id,
-      batch_number: search.batch_no,
+      ...listParams,
+      material_id: listParams.material_id ?? params.material_id,
       include_expired: includeExpired,
       include_zero_stock: !includeZeroStock,
       aging_bucket: agingBucket === 'all' ? undefined : agingBucket,
       status_filter: statusFilter === 'all' ? undefined : statusFilter,
-      keyword: (search as any).keyword ?? params.keyword,
     };
     lastQueryRef.current = apiParams;
     try {
@@ -544,6 +549,8 @@ const BatchInventoryQuery: React.FC = () => {
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.batch-inventory-query"
         request={fetchBatchInventory}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         showExportButton
         onExport={handleExport}
         rowKey="id"

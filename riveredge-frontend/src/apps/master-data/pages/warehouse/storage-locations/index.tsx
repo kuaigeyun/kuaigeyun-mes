@@ -14,7 +14,15 @@ import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { storageLocationApi, storageAreaApi } from '../../../services/warehouse';
-import { applyFactoryKeyword, applyFactoryTableSort } from '../../../services/factory';
+import {
+  buildMasterCrudActiveValueEnum,
+  MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  masterCrudCodeNameSearchColumns,
+  masterCrudCreatedUpdatedColumns,
+  normalizeMasterListResponse,
+  pickOptionalId,
+  resolveMasterCrudListParams,
+} from '../../../utils/masterListCore';
 import { StorageLocationFormModal } from '../../../components/StorageLocationFormModal';
 import { BatchCreateStorageLocationModal } from '../../../components/BatchCreateStorageLocationModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
@@ -43,6 +51,7 @@ const StorageLocationsPage: React.FC = () => {
   const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -461,8 +470,9 @@ const StorageLocationsPage: React.FC = () => {
         filename = t('app.master-data.storageLocations.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) });
       } else {
         // 导出全部数据
-        const allData = await storageLocationApi.list({ skip: 0, limit: 10000 });
-        exportData = allData.items;
+        const allData = await storageLocationApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
+        const { data: exportItems } = normalizeMasterListResponse(allData);
+        exportData = exportItems;
         filename = t('app.master-data.storageLocations.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) });
       }
 
@@ -548,9 +558,18 @@ const StorageLocationsPage: React.FC = () => {
   /**
    * 表格列定义
    */
+  const storageLocationActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
+    [t],
+  );
+
   const columns: ProColumns<StorageLocation>[] = React.useMemo(() => {
     const customFieldColumns = generateCustomFieldColumns();
     return [
+      ...masterCrudCodeNameSearchColumns({
+        code: t('app.master-data.storageLocations.code'),
+        name: t('app.master-data.storageLocations.name'),
+      }),
     {
       title: t('app.master-data.storageLocations.code'),
       dataIndex: 'code',
@@ -559,17 +578,20 @@ const StorageLocationsPage: React.FC = () => {
       ellipsis: true,
       copyable: true,
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.master-data.storageLocations.name'),
       dataIndex: 'name',
       width: 200,
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.master-data.storageLocations.storageArea'),
       dataIndex: 'storageAreaId',
       width: 200,
+      order: 15,
       valueType: 'select',
       valueEnum: storageAreas.reduce(
         (acc, s) => {
@@ -592,12 +614,19 @@ const StorageLocationsPage: React.FC = () => {
     {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
-      width: 100,
+      hideInTable: true,
+      order: 20,
       valueType: 'select',
-      valueEnum: {
-        true: { text: t('common.enabled'), status: 'Success' },
-        false: { text: t('common.disabled'), status: 'Default' },
-      },
+      valueEnum: storageLocationActiveValueEnum,
+      fieldProps: { allowClear: true },
+    },
+    {
+      title: t('app.master-data.warehouses.status'),
+      dataIndex: 'isActive',
+      width: 100,
+      hideInSearch: true,
+      sorter: true,
+      valueEnum: storageLocationActiveValueEnum,
       render: (_, record) => {
         return (
           <Tag color={record?.isActive ? 'success' : 'default'}>
@@ -605,16 +634,8 @@ const StorageLocationsPage: React.FC = () => {
           </Tag>
         );
       },
-      sorter: true,
     },
-    {
-      title: t('app.master-data.warehouses.createTime'),
-      dataIndex: 'createdAt',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
+    ...masterCrudCreatedUpdatedColumns<StorageLocation>(t),
     {
       title: t('app.master-data.warehouses.action'),
       valueType: 'option',
@@ -651,7 +672,7 @@ const StorageLocationsPage: React.FC = () => {
       ),
     },
     ];
-  }, [customFields, t, storageAreas]);
+  }, [customFields, t, storageAreas, storageLocationActiveValueEnum]);
 
   /**
    * 详情 Drawer 的列定义
@@ -705,29 +726,28 @@ const StorageLocationsPage: React.FC = () => {
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
-          const apiParams: Record<string, unknown> = {
-            skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-            limit: params.pageSize || 20,
-          };
-
-          if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.is_active = searchFormValues.isActive;
-          }
-
-          if (searchFormValues?.storageAreaId !== undefined && searchFormValues.storageAreaId !== '' && searchFormValues.storageAreaId !== null) {
-            apiParams.storage_area_id = searchFormValues.storageAreaId;
-          }
-
-          applyFactoryKeyword(apiParams, searchFormValues);
-          applyFactoryTableSort(apiParams, sort);
+          const pageSize = params.pageSize || 20;
+          const skip = ((params.current || 1) - 1) * pageSize;
+          const listParams = resolveMasterCrudListParams(searchFormValues, sort, {
+            extra: (search) => {
+              const storage_area_id = pickOptionalId(search, 'storageAreaId');
+              return storage_area_id != null ? { storage_area_id } : {};
+            },
+          });
+          lastListParamsRef.current = listParams;
 
           try {
-            const result = await storageLocationApi.list(apiParams as any);
-            const enrichedData = await enrichRecordsWithCustomFields(result.items);
+            const result = await storageLocationApi.list({
+              skip,
+              limit: pageSize,
+              ...listParams,
+            });
+            const { data, total } = normalizeMasterListResponse(result);
+            const enrichedData = await enrichRecordsWithCustomFields(data);
             return {
               data: enrichedData,
               success: true,
-              total: result.total,
+              total,
             };
           } catch (error: any) {
             console.error('获取库位列表失败:', error);
@@ -754,7 +774,9 @@ const StorageLocationsPage: React.FC = () => {
         }}
         showExportButton={true}
         onExport={handleExport}
-        showAdvancedSearch={true}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={MASTER_CRUD_PINNED_ACTIVE_FIELD}
         showCreateButton
         createButtonText={t('app.master-data.storageLocations.create')}
         onCreate={handleCreate}

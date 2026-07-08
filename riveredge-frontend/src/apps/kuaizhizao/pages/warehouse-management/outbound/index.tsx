@@ -45,6 +45,11 @@ import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni
 import OutboundQuickPullModals, { type OutboundQuickPullModalsRef } from './OutboundQuickPullModals';
 import OutboundConfirmPreviewModal from './OutboundConfirmPreviewModal';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  WAREHOUSE_DOC_PINNED_STATUS_FIELD,
+  buildOutboundHubStatusValueEnum,
+  resolveOutboundHubListParams,
+} from '../../../utils/warehouseListCore';
 import { fetchOutboundHubList } from './outboundListAggregate';
 import { withdrawOutboundDocument, deleteOutboundDocument } from './outboundHubWithdraw';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -431,11 +436,13 @@ const OutboundPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseOutbound.col.outboundCode'),
       dataIndex: ['delivery_code', 'picking_code'],
       hideInTable: true,
+      sorter: true,
     },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.outboundType'),
       dataIndex: 'outbound_type',
       width: 100,
+      sorter: true,
       valueEnum: {
         production_picking: { text: getOutboundIssueTypeLabel(t, 'production_picking'), status: 'processing' },
         sales_delivery: { text: getOutboundIssueTypeLabel(t, 'sales_delivery'), status: 'success' },
@@ -443,6 +450,14 @@ const OutboundPage: React.FC = () => {
         other_outbound: { text: getOutboundIssueTypeLabel(t, 'other_outbound'), status: 'default' },
         material_borrow: { text: getOutboundIssueTypeLabel(t, 'material_borrow'), status: 'default' },
       },
+    },
+    {
+      title: t('app.kuaizhizao.warehouseOutbound.col.status'),
+      dataIndex: 'status',
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: buildOutboundHubStatusValueEnum(t),
+      initialValue: 'pending',
     },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.customer'),
@@ -463,18 +478,21 @@ const OutboundPage: React.FC = () => {
       dataIndex: 'total_quantity',
       width: 100,
       align: 'right',
+      sorter: true,
     },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.totalItems'),
       dataIndex: 'total_items',
       width: 100,
       align: 'right',
+      sorter: true,
     },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.warehouse'),
       dataIndex: 'warehouse_name',
       width: 120,
       ellipsis: true,
+      sorter: true,
     },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.operator'),
@@ -486,13 +504,17 @@ const OutboundPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseOutbound.col.outboundDate'),
       dataIndex: 'delivery_date',
       valueType: 'date',
-      width: 120,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
     },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.updatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
+      sorter: true,
       defaultSortOrder: 'descend',
       render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
@@ -591,9 +613,17 @@ const OutboundPage: React.FC = () => {
         rowKey={(record) => `${record.outbound_type}::${record.id}`}
         columns={columns}
         showAdvancedSearch={true}
-        request={async (params) => {
+        pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
+        skipFuzzyPinyinClientFilter
+        request={async (params, sort, _filter, searchFormValues) => {
           try {
-            const result = await fetchOutboundHubList(params as Record<string, unknown>, {
+            const listParams = resolveOutboundHubListParams(searchFormValues, sort);
+            const result = await fetchOutboundHubList(
+              {
+                ...(params as Record<string, unknown>),
+                ...listParams,
+              },
+              {
               enrichProductionPickingRecordsWithCustomFields,
               enrichSalesDeliveryRecordsWithCustomFields,
             });

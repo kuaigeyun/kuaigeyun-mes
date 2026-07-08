@@ -15,6 +15,12 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { equipmentApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  normalizeEquipmentListResponse,
+  resolveAssetWorkflowListParams,
+} from '../../../utils/equipmentListCore';
 
 const RESOURCE = 'kuaizhizao:equipment-calibration';
 const P = 'app.kuaizhizao.equipmentCalibration';
@@ -95,21 +101,49 @@ const EquipmentCalibrationsPage: React.FC = () => {
   const columns: ProColumns<EquipmentCalibration>[] = useMemo(
     () => [
       {
+        title: t(`${P}.colCalibrationDate`),
+        dataIndex: 'calibration_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 10 } as ProColumns['search'],
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 11 } as ProColumns['search'],
+      },
+      {
         title: t(`${P}.colEquipmentCode`),
         dataIndex: 'equipment_code',
         width: 120,
+        sorter: true,
+        search: { order: 30 } as ProColumns['search'],
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }} ellipsis>
             {r.equipment_code ?? '-'}
           </Typography.Text>
         ),
       },
-      { title: t(`${P}.colEquipmentName`), dataIndex: 'equipment_name', width: 180, ellipsis: true },
-      { title: t(`${P}.colCalibrationDate`), dataIndex: 'calibration_date', valueType: 'date', width: 120 },
+      { title: t(`${P}.colEquipmentName`), dataIndex: 'equipment_name', width: 180, ellipsis: true, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.colCalibrationDate`),
+        dataIndex: 'calibration_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.calibration_date ? formatDateTime(r.calibration_date, 'YYYY-MM-DD') : '-'),
+      },
       {
         title: t(`${P}.colResult`),
         dataIndex: 'result',
         width: 100,
+        sorter: true,
+        hideInSearch: true,
         render: (_, r) => {
           const color = r.result === '合格' ? 'success' : r.result === '不合格' ? 'error' : 'warning';
           const labelKey = r.result ? CALIBRATION_RESULT_LABEL_KEYS[r.result] : undefined;
@@ -120,13 +154,23 @@ const EquipmentCalibrationsPage: React.FC = () => {
         title: t(`${P}.colCertificateNo`),
         dataIndex: 'certificate_no',
         width: 140,
+        sorter: true,
+        hideInSearch: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.certificate_no ?? '') }} ellipsis>
             {r.certificate_no ?? '-'}
           </Typography.Text>
         ),
       },
-      { title: t(`${P}.colExpiryDate`), dataIndex: 'expiry_date', valueType: 'date', width: 120 },
+      {
+        title: t(`${P}.colExpiryDate`),
+        dataIndex: 'expiry_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.expiry_date ? formatDateTime(r.expiry_date, 'YYYY-MM-DD') : '-'),
+      },
       {
         title: t(`${P}.colLifecycle`),
         dataIndex: 'lifecycle_stage',
@@ -166,13 +210,21 @@ const EquipmentCalibrationsPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="uuid"
         columns={columns}
-        request={async (params) => {
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        request={async (params, sort, _filter, searchFormValues) => {
+          const listParams = resolveAssetWorkflowListParams(searchFormValues, sort, {
+            docDateRangeKeys: ['calibration_date_range', 'calibrationDateRange'],
+            docDateParamPrefix: 'calibration',
+          });
           const res = await equipmentApi.listCalibrations({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
             equipment_uuid: params.equipment_uuid as string | undefined,
+            ...listParams,
           });
-          return { data: res.items || [], success: true, total: res.total || 0 };
+          const { data, total } = normalizeEquipmentListResponse(res);
+          return { data: data as EquipmentCalibration[], success: true, total };
         }}
         toolBarRender={() =>
           perms.canCreate

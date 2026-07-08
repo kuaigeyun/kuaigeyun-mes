@@ -84,3 +84,43 @@ export function getReworkOrderLifecycle(
   }
   return parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>));
 }
+
+const REWORK_ORDER_LIFECYCLE_KEYS = ['draft', 'released', 'in_progress', 'completed', 'cancelled'] as const;
+
+const REWORK_ORDER_LIFECYCLE_I18N: Record<string, string> = {
+  draft: 'app.kuaizhizao.reworkOrder.lifecycleDraft',
+  released: 'app.kuaizhizao.reworkOrder.lifecycleReleased',
+  in_progress: 'app.kuaizhizao.reworkOrder.lifecycleInProgress',
+  completed: 'app.kuaizhizao.reworkOrder.lifecycleCompleted',
+  cancelled: 'app.kuaizhizao.reworkOrder.lifecycleCancelled',
+};
+
+export function buildReworkOrderLifecycleValueEnum(
+  t: (key: string) => string,
+): Record<string, { text: string; status?: 'Default' | 'Processing' | 'Success' | 'Error' }> {
+  const statusByKey: Record<string, 'Default' | 'Processing' | 'Success' | 'Error'> = {
+    draft: 'Default',
+    released: 'Processing',
+    in_progress: 'Processing',
+    completed: 'Success',
+    cancelled: 'Error',
+  };
+  return Object.fromEntries(
+    REWORK_ORDER_LIFECYCLE_KEYS.map((key) => [
+      key,
+      { text: t(REWORK_ORDER_LIFECYCLE_I18N[key]!), status: statusByKey[key] },
+    ]),
+  );
+}
+
+export function resolveReworkOrderListLifecycleParams(
+  searchFormValues?: Record<string, unknown> | null,
+): { status?: string } {
+  const raw = searchFormValues?.status ?? searchFormValues?.lifecycle_stage;
+  if (raw == null || String(raw).trim() === '') return {};
+  const status = String(raw).trim();
+  if (REWORK_ORDER_LIFECYCLE_KEYS.includes(status as (typeof REWORK_ORDER_LIFECYCLE_KEYS)[number])) {
+    return { status };
+  }
+  return {};
+}

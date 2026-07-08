@@ -136,11 +136,22 @@ async def list_receipts(
     settlement_type: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    keyword: Optional[str] = Query(None),
+    receipt_code: Optional[str] = Query(None),
+    customer_name: Optional[str] = Query(None),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None),
     _auth: object = Depends(require_permission_codes("kuaicaiwu:receipt:read")),
     tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
 ):
     """获取收款单列表"""
+    from apps.kuaicaiwu.services.finance_list_core import apply_finance_voucher_list_filters
+
     try:
         settlement_service = AccountSettlementService()
         await settlement_service.backfill_receipts_from_legacy_receivables(tenant_id, current_user.id)
@@ -161,13 +172,31 @@ async def list_receipts(
         query = query.filter(customer_id=customer_id)
     if settlement_type:
         query = query.filter(settlement_type=settlement_type)
-    if start_date:
-        query = query.filter(receipt_date__gte=start_date)
-    if end_date:
-        query = query.filter(receipt_date__lte=end_date)
+
+    doc_date_start = start_date.isoformat() if start_date else None
+    doc_date_end = end_date.isoformat() if end_date else None
+
+    query, order_expr = apply_finance_voucher_list_filters(
+        query,
+        doc_code_field="receipt_code",
+        partner_name_field="customer_name",
+        doc_date_field="receipt_date",
+        keyword=keyword,
+        doc_code=receipt_code,
+        partner_name=customer_name,
+        doc_date_start=doc_date_start,
+        doc_date_end=doc_date_end,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+        sort_field=sort_field,
+        sort_order=sort_order,
+        default_sort_col="receipt_date",
+    )
 
     total = await query.count()
-    items = await query.order_by("-receipt_date", "-id").offset(skip).limit(limit).all()
+    items = await query.order_by(order_expr, "-id").offset(skip).limit(limit).all()
     serialized = [await _serialize(tenant_id, current_user.id, r) for r in items]
     return ReceiptVoucherListResponse(
         items=serialized,

@@ -19,9 +19,16 @@ import {
   workstationApi,
   productionLineApi,
   factoryListItems,
-  applyFactoryKeyword,
-  applyFactoryTableSort,
 } from '../../../services/factory';
+import {
+  buildMasterCrudActiveValueEnum,
+  MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  masterCrudCodeNameSearchColumns,
+  masterCrudCreatedUpdatedColumns,
+  normalizeMasterListResponse,
+  pickOptionalId,
+  resolveMasterCrudListParams,
+} from '../../../utils/masterListCore';
 import { WorkstationFormModal } from '../../../components/WorkstationFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { Workstation, WorkstationCreate, ProductionLine } from '../../../types/factory';
@@ -49,6 +56,7 @@ const WorkstationsPage: React.FC = () => {
   const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -472,8 +480,9 @@ const WorkstationsPage: React.FC = () => {
         filename = `${t('app.master-data.workstations.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
         // 导出全部数据
-        const allData = await workstationApi.list({ skip: 0, limit: 10000 });
-        exportData = allData.items;
+        const allData = await workstationApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
+        const { data: exportItems } = normalizeMasterListResponse(allData);
+        exportData = exportItems;
         filename = `${t('app.master-data.workstations.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
@@ -564,9 +573,18 @@ const WorkstationsPage: React.FC = () => {
   /**
    * 表格列定义
    */
+  const workstationActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
+    [t],
+  );
+
   const columns: ProColumns<Workstation>[] = React.useMemo(() => {
     const customFieldColumns = generateCustomFieldColumns();
     return [
+      ...masterCrudCodeNameSearchColumns({
+        code: t('app.master-data.workstations.code'),
+        name: t('app.master-data.workstations.name'),
+      }),
     {
       title: t('app.master-data.workstations.code'),
       dataIndex: 'code',
@@ -575,18 +593,25 @@ const WorkstationsPage: React.FC = () => {
       ellipsis: true,
       copyable: true,
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.master-data.workstations.name'),
       dataIndex: 'name',
       width: 200,
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.master-data.workstations.productionLineName'),
       dataIndex: 'productionLineId',
       width: 200,
-      hideInSearch: true,
+      order: 15,
+      valueType: 'select',
+      valueEnum: productionLines.reduce((acc, line) => {
+        acc[line.id] = { text: line.name };
+        return acc;
+      }, {} as Record<number, { text: string }>),
       sorter: true,
       render: (_, record) => formatProductionLineDisplay(record),
     },
@@ -596,17 +621,23 @@ const WorkstationsPage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
     },
-    // 插入自定义字段列
     ...customFieldColumns,
     {
       title: t('app.master-data.workstations.statusLabel'),
       dataIndex: 'isActive',
-      width: 100,
+      hideInTable: true,
+      order: 20,
       valueType: 'select',
-      valueEnum: {
-        true: { text: t('common.enabled'), status: 'Success' },
-        false: { text: t('common.disabled'), status: 'Default' },
-      },
+      valueEnum: workstationActiveValueEnum,
+      fieldProps: { allowClear: true },
+    },
+    {
+      title: t('app.master-data.workstations.statusLabel'),
+      dataIndex: 'isActive',
+      width: 100,
+      hideInSearch: true,
+      sorter: true,
+      valueEnum: workstationActiveValueEnum,
       render: (_, record) => {
         return (
           <Tag color={record?.isActive ? 'success' : 'default'}>
@@ -615,14 +646,7 @@ const WorkstationsPage: React.FC = () => {
         );
       },
     },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'createdAt',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
+    ...masterCrudCreatedUpdatedColumns<Workstation>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -659,7 +683,7 @@ const WorkstationsPage: React.FC = () => {
       ),
     },
     ];
-  }, [customFields, t, productionLines]);
+  }, [customFields, t, productionLines, workstationActiveValueEnum]);
 
   /**
    * 详情 Drawer 的列定义
@@ -713,32 +737,28 @@ const WorkstationsPage: React.FC = () => {
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
-          // 处理搜索参数
-          const apiParams: any = {
-            skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-            limit: params.pageSize || 20,
-          };
-          
-          // 启用状态筛选
-          if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.is_active = searchFormValues.isActive;
-          }
-          
-          // 产线筛选
-          if (searchFormValues?.productionLineId !== undefined && searchFormValues.productionLineId !== '' && searchFormValues.productionLineId !== null) {
-            apiParams.production_line_id = searchFormValues.productionLineId;
-          }
+          const pageSize = params.pageSize || 20;
+          const skip = ((params.current || 1) - 1) * pageSize;
+          const listParams = resolveMasterCrudListParams(searchFormValues, sort, {
+            extra: (search) => {
+              const production_line_id = pickOptionalId(search, 'productionLineId');
+              return production_line_id != null ? { production_line_id } : {};
+            },
+          });
+          lastListParamsRef.current = listParams;
 
-          applyFactoryKeyword(apiParams, searchFormValues);
-          applyFactoryTableSort(apiParams, sort);
-          
           try {
-            const result = await workstationApi.list(apiParams);
-            const enrichedData = await enrichRecordsWithCustomFields(result.items);
+            const result = await workstationApi.list({
+              skip,
+              limit: pageSize,
+              ...listParams,
+            });
+            const { data, total } = normalizeMasterListResponse(result);
+            const enrichedData = await enrichRecordsWithCustomFields(data);
             return {
               data: enrichedData,
               success: true,
-              total: result.total,
+              total,
             };
           } catch (error: any) {
             console.error('获取工位列表失败:', error);
@@ -765,7 +785,9 @@ const WorkstationsPage: React.FC = () => {
         }}
         showExportButton={true}
         onExport={handleExport}
-        showAdvancedSearch={true}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={MASTER_CRUD_PINNED_ACTIVE_FIELD}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,

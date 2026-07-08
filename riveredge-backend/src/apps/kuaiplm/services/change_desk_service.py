@@ -50,16 +50,28 @@ class ChangeDeskService:
         tenant_id: int,
         status: Optional[str] = None,
         change_type: Optional[str] = None,
+        keyword: Optional[str] = None,
+        change_code: Optional[str] = None,
+        target_name: Optional[str] = None,
         page: int = 1,
         page_size: int = 20,
     ) -> ChangeDeskListResponse:
         items: list[ChangeDeskItem] = []
         bom_total = 0
         route_total = 0
+        search_kwargs = {
+            "keyword": keyword,
+            "change_code": change_code,
+            "target_name": target_name,
+        }
 
         if change_type in (None, "bom"):
             bom_resp = await BOMChangeService.list_changes(
-                tenant_id=tenant_id, status=status, page=page, page_size=page_size
+                tenant_id=tenant_id,
+                status=status,
+                page=page,
+                page_size=page_size,
+                **search_kwargs,
             )
             bom_total = bom_resp.total
             for row in bom_resp.items:
@@ -84,7 +96,11 @@ class ChangeDeskService:
 
         if change_type in (None, "process_route"):
             route_resp = await ProcessRouteChangeService.list_changes(
-                tenant_id=tenant_id, status=status, page=page, page_size=page_size
+                tenant_id=tenant_id,
+                status=status,
+                page=page,
+                page_size=page_size,
+                **search_kwargs,
             )
             route_total = route_resp.total
             for row in route_resp.items:

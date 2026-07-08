@@ -111,18 +111,38 @@ class CostRuleService(AppBaseService[CostRule]):
         cost_type: Optional[str] = None,
         is_active: Optional[bool] = None,
         search: Optional[str] = None,
-    ) -> List[CostRuleResponse]:
+        keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> tuple[List[CostRuleResponse], int]:
+        from apps.kuaicaiwu.services.cost_list_core import apply_cost_rule_list_filters
+
         query = CostRule.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if rule_type:
-            query = query.filter(rule_type=rule_type)
-        if cost_type:
-            query = query.filter(cost_type=cost_type)
-        if is_active is not None:
-            query = query.filter(is_active=is_active)
-        if search:
-            query = query.filter(Q(code__icontains=search) | Q(name__icontains=search))
-        rules = await query.offset(skip).limit(limit).order_by("-created_at")
-        return [CostRuleResponse.model_validate(rule) for rule in rules]
+        kw = keyword or search
+        query, order_expr = apply_cost_rule_list_filters(
+            query,
+            keyword=kw,
+            code=code,
+            name=name,
+            rule_type=rule_type,
+            cost_type=cost_type,
+            is_active=is_active,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_field,
+            sort_order=sort_order,
+        )
+        total = await query.count()
+        rules = await query.offset(skip).limit(limit).order_by(order_expr)
+        return [CostRuleResponse.model_validate(rule) for rule in rules], total
 
     async def update_cost_rule(
         self,
@@ -686,18 +706,47 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         work_order_id: Optional[int] = None,
         product_id: Optional[int] = None,
         calculation_status: Optional[str] = None,
-    ) -> List[CostCalculationListResponse]:
+        keyword: Optional[str] = None,
+        calculation_no: Optional[str] = None,
+        work_order_code: Optional[str] = None,
+        product_code: Optional[str] = None,
+        product_name: Optional[str] = None,
+        calculation_date_start: Optional[str] = None,
+        calculation_date_end: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> tuple[List[CostCalculationListResponse], int]:
+        from apps.kuaicaiwu.services.cost_list_core import apply_cost_calculation_list_filters
+
         query = CostCalculation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if calculation_type:
-            query = query.filter(calculation_type=calculation_type)
-        if work_order_id:
-            query = query.filter(work_order_id=work_order_id)
-        if product_id:
-            query = query.filter(product_id=product_id)
-        if calculation_status:
-            query = query.filter(calculation_status=calculation_status)
-        calculations = await query.offset(skip).limit(limit).order_by("-created_at")
-        return [CostCalculationListResponse.model_validate(calc) for calc in calculations]
+        query, order_expr = apply_cost_calculation_list_filters(
+            query,
+            keyword=keyword,
+            calculation_no=calculation_no,
+            work_order_code=work_order_code,
+            product_code=product_code,
+            product_name=product_name,
+            calculation_type=calculation_type,
+            calculation_status=calculation_status,
+            work_order_id=work_order_id,
+            product_id=product_id,
+            calculation_date_start=calculation_date_start,
+            calculation_date_end=calculation_date_end,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_field,
+            sort_order=sort_order,
+        )
+        total = await query.count()
+        calculations = await query.offset(skip).limit(limit).order_by(order_expr, "-id")
+        items = [CostCalculationListResponse.model_validate(calc) for calc in calculations]
+        return items, total
 
     async def compare_costs(self, tenant_id: int, product_id: int) -> CostComparisonResponse:
         product = await Material.filter(tenant_id=tenant_id, id=product_id, deleted_at__isnull=True).first()

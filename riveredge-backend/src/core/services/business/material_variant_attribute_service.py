@@ -309,31 +309,37 @@ class MaterialVariantAttributeService:
     @staticmethod
     async def list_attribute_definitions(
         tenant_id: int,
+        skip: int = 0,
+        limit: int = 100,
         is_active: Optional[bool] = None,
         attribute_type: Optional[str] = None,
         keyword: Optional[str] = None,
+        attribute_name: Optional[str] = None,
+        display_name: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
-    ) -> List[MaterialVariantAttributeDefinition]:
+    ) -> tuple[List[MaterialVariantAttributeDefinition], int]:
         """
-        列出属性定义
-        
-        Args:
-            tenant_id: 组织ID
-            is_active: 是否启用（可选，用于筛选）
-            attribute_type: 属性类型（可选，用于筛选）
-            
-        Returns:
-            List[MaterialVariantAttributeDefinition]: 属性定义列表
+        列出属性定义（分页 total）
         """
+        from apps.master_data.services.master_data_list_core import (
+            apply_master_crud_created_date_range,
+            apply_master_crud_updated_date_range,
+            resolve_master_crud_order_clause,
+        )
+
         query = MaterialVariantAttributeDefinition.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
         )
-        
+
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        
+
         if attribute_type:
             query = query.filter(attribute_type=attribute_type)
 
@@ -344,21 +350,31 @@ class MaterialVariantAttributeService:
                 | Q(display_name__icontains=kw)
                 | Q(description__icontains=kw)
             )
-
-        allowed_sort = {
-            "display_order",
-            "attribute_name",
-            "display_name",
-            "created_at",
-            "updated_at",
-        }
-        if sort_by in allowed_sort:
-            desc = (sort_order or "asc").lower() == "desc"
-            order_expr = f"-{sort_by}" if desc else sort_by
-            attributes = await query.order_by(order_expr).all()
         else:
-            attributes = await query.order_by("display_order", "attribute_name").all()
-        return attributes
+            if attribute_name and str(attribute_name).strip():
+                query = query.filter(attribute_name__icontains=str(attribute_name).strip())
+            if display_name and str(display_name).strip():
+                query = query.filter(display_name__icontains=str(display_name).strip())
+
+        query = apply_master_crud_created_date_range(
+            query,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
+        query = apply_master_crud_updated_date_range(
+            query,
+            start_date=updated_start_date,
+            end_date=updated_end_date,
+        )
+
+        total = await query.count()
+        order_expr = resolve_master_crud_order_clause(
+            sort_by,
+            sort_order,
+            default_col="display_order",
+        )
+        attributes = await query.offset(skip).limit(limit).order_by(order_expr).all()
+        return attributes, total
     
     @staticmethod
     async def update_attribute_definition(

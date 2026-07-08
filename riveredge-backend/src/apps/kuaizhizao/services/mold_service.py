@@ -111,46 +111,55 @@ class MoldService:
         type: Optional[str] = None,
         status: Optional[str] = None,
         is_active: Optional[bool] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[Mold], int]:
-        """
-        获取模具列表
-        
-        Args:
-            tenant_id: 组织ID
-            skip: 跳过数量
-            limit: 限制数量
-            type: 模具类型（可选）
-            status: 模具状态（可选）
-            is_active: 是否启用（可选）
-            search: 搜索关键词（可选，搜索编码、名称）
-            
-        Returns:
-            tuple[List[Mold], int]: 模具列表和总数量
-        """
+        from apps.kuaizhizao.services.equipment_list_core import (
+            MOLD_LEDGER_SORTABLE_FIELDS,
+            apply_equipment_created_date_range,
+            apply_equipment_keyword_filter,
+            apply_equipment_updated_date_range,
+            pick_search_keyword,
+            resolve_equipment_list_order_by,
+        )
+
         query = Mold.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
         )
-        
-        # 筛选条件
         if type:
             query = query.filter(type=type)
         if status:
             query = query.filter(status=status)
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        
-        # 搜索条件（使用 Q 对象实现 OR 逻辑）
-        if search:
-            query = query.filter(Q(code__icontains=search) | Q(name__icontains=search))
-        
-        # 获取总数量
+        query = apply_equipment_keyword_filter(
+            query,
+            pick_search_keyword(keyword, search),
+            ["code", "name"],
+        )
+        query = apply_equipment_created_date_range(
+            query,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
+        query = apply_equipment_updated_date_range(
+            query,
+            start_date=updated_start_date,
+            end_date=updated_end_date,
+        )
         total = await query.count()
-        
-        # 获取列表
-        molds = await query.offset(skip).limit(limit).order_by("-created_at")
-        
+        order_clause = resolve_equipment_list_order_by(
+            order_by,
+            MOLD_LEDGER_SORTABLE_FIELDS,
+            "-updated_at",
+        )
+        molds = await query.offset(skip).limit(limit).order_by(order_clause)
         return molds, total
     
     @staticmethod
@@ -300,27 +309,44 @@ class MoldCalibrationService:
         mold_uuid: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        calibration_start_date: Optional[str] = None,
+        calibration_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[MoldCalibration], int]:
-        """
-        获取全量模具校验记录列表（支持按模具筛选）
+        from apps.kuaizhizao.services.equipment_list_core import (
+            EQUIPMENT_CALIBRATION_SORTABLE_FIELDS,
+            apply_asset_workflow_list_filters,
+        )
 
-        Args:
-            tenant_id: 组织ID
-            mold_uuid: 模具UUID（可选）
-            skip: 跳过数量
-            limit: 限制数量
-
-        Returns:
-            tuple[list[MoldCalibration], int]: 校验记录列表和总数量
-        """
         query = MoldCalibration.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
         )
         if mold_uuid:
             query = query.filter(mold_uuid=mold_uuid)
+        query, order_clause = apply_asset_workflow_list_filters(
+            query,
+            keyword=keyword,
+            search=search,
+            order_by=order_by,
+            allowed_fields=EQUIPMENT_CALIBRATION_SORTABLE_FIELDS,
+            keyword_fields=["certificate_no", "result"],
+            date_field="calibration_date",
+            date_start=calibration_start_date,
+            date_end=calibration_end_date,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await query.count()
-        items = await query.offset(skip).limit(limit).order_by("-calibration_date")
+        items = await query.offset(skip).limit(limit).order_by(order_clause)
         return list(items), total
 
 

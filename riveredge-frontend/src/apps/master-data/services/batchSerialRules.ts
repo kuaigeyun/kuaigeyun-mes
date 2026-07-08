@@ -89,6 +89,12 @@ export const batchRuleApi = {
     pageSize?: number;
     isActive?: boolean;
     keyword?: string;
+    code?: string;
+    name?: string;
+    created_start_date?: string;
+    created_end_date?: string;
+    updated_start_date?: string;
+    updated_end_date?: string;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
   }) => {
@@ -97,6 +103,12 @@ export const batchRuleApi = {
     if (params?.pageSize) p.page_size = params.pageSize;
     if (params?.isActive !== undefined) p.is_active = params.isActive;
     if (params?.keyword?.trim()) p.keyword = params.keyword.trim();
+    if (params?.code?.trim()) p.code = params.code.trim();
+    if (params?.name?.trim()) p.name = params.name.trim();
+    if (params?.created_start_date) p.created_start_date = params.created_start_date;
+    if (params?.created_end_date) p.created_end_date = params.created_end_date;
+    if (params?.updated_start_date) p.updated_start_date = params.updated_start_date;
+    if (params?.updated_end_date) p.updated_end_date = params.updated_end_date;
     if (params?.sortBy) p.sort_by = params.sortBy;
     if (params?.sortOrder) p.sort_order = params.sortOrder;
     const res = await api.get<{ items: Record<string, unknown>[]; total: number }>(
@@ -150,6 +162,12 @@ export const serialRuleApi = {
     pageSize?: number;
     isActive?: boolean;
     keyword?: string;
+    code?: string;
+    name?: string;
+    created_start_date?: string;
+    created_end_date?: string;
+    updated_start_date?: string;
+    updated_end_date?: string;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
   }) => {
@@ -158,6 +176,12 @@ export const serialRuleApi = {
     if (params?.pageSize) p.page_size = params.pageSize;
     if (params?.isActive !== undefined) p.is_active = params.isActive;
     if (params?.keyword?.trim()) p.keyword = params.keyword.trim();
+    if (params?.code?.trim()) p.code = params.code.trim();
+    if (params?.name?.trim()) p.name = params.name.trim();
+    if (params?.created_start_date) p.created_start_date = params.created_start_date;
+    if (params?.created_end_date) p.created_end_date = params.created_end_date;
+    if (params?.updated_start_date) p.updated_start_date = params.updated_start_date;
+    if (params?.updated_end_date) p.updated_end_date = params.updated_end_date;
     if (params?.sortBy) p.sort_by = params.sortBy;
     if (params?.sortOrder) p.sort_order = params.sortOrder;
     const res = await api.get<{ items: Record<string, unknown>[]; total: number }>(

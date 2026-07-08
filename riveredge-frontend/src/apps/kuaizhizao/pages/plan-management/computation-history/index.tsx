@@ -27,6 +27,14 @@ import {
   demandComputationBatchCompareAllowed,
   demandComputationBatchExportAllowed,
 } from '../../../../../hooks/useDocumentCapabilities';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import {
+  buildComputationStatusValueEnum,
+  formatPlanDateTimeCell,
+  normalizePlanListResponse,
+  resolveComputationHistoryListParams,
+} from '../../../utils/planListCore';
 
 const ComputationHistoryPage: React.FC = () => {
   const { t } = useTranslation();
@@ -57,6 +65,8 @@ const ComputationHistoryPage: React.FC = () => {
     [t]
   );
 
+  const computationStatusValueEnum = useMemo(() => buildComputationStatusValueEnum(t), [t]);
+
   const handleBatchDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) return;
     let success = 0;
@@ -83,21 +93,56 @@ const ComputationHistoryPage: React.FC = () => {
   const columns: ProColumns<DemandComputation>[] = useMemo(
     () => [
       {
+        title: t('app.kuaizhizao.computationHistory.col.computationStartTime'),
+        dataIndex: 'computation_start_time_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        hideInSearch: false,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
+      },
+      {
+        title: t('app.kuaizhizao.computationHistory.col.createdAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        hideInSearch: false,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
+      },
+      {
         title: t('app.kuaizhizao.computationHistory.col.computationCode'),
         dataIndex: 'computation_code',
-        width: 150,
+        width: 168,
         fixed: 'left',
+        hideInSearch: false,
+        sorter: true,
+        ellipsis: true,
       },
       {
         title: t('app.kuaizhizao.computationHistory.col.demandCode'),
         dataIndex: 'demand_code',
         width: 150,
+        hideInSearch: false,
+        sorter: true,
+        ellipsis: true,
       },
       {
         title: t('app.kuaizhizao.computationHistory.col.businessMode'),
         dataIndex: 'business_mode',
         width: 110,
-        valueEnum: { MTS: { text: 'MTS' }, MTO: { text: 'MTO' }, ATO: { text: 'ATO' } },
+        valueType: 'select',
+        sorter: true,
+        hideInSearch: false,
+        valueEnum: {
+          MTS: { text: getDemandBusinessModeLabel('MTS') },
+          MTO: { text: getDemandBusinessModeLabel('MTO') },
+          ATO: { text: getDemandBusinessModeLabel('ATO') },
+        },
         render: (_, record) => (
           <Tag color={getDemandBusinessModeTagColor(record.business_mode)}>
             {getDemandBusinessModeLabel(record.business_mode)}
@@ -107,13 +152,11 @@ const ComputationHistoryPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.computationHistory.col.computationStatus'),
         dataIndex: 'computation_status',
-        width: 100,
-        valueEnum: {
-          进行中: { text: statusMap['进行中'].text, status: 'Processing' },
-          计算中: { text: statusMap['计算中'].text, status: 'Processing' },
-          完成: { text: statusMap['完成'].text, status: 'Success' },
-          失败: { text: statusMap['失败'].text, status: 'Error' },
-        },
+        width: 110,
+        valueType: 'select',
+        sorter: true,
+        hideInSearch: false,
+        valueEnum: computationStatusValueEnum,
         render: (_, record) => {
           const status = statusMap[record.computation_status as keyof typeof statusMap] || statusMap['进行中'];
           return <Tag color={status.color}>{status.text}</Tag>;
@@ -122,52 +165,34 @@ const ComputationHistoryPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.computationHistory.col.computationStartTime'),
         dataIndex: 'computation_start_time',
-        width: 180,
-        valueType: 'dateTime',
+        width: 132,
+        uniTableKeepWidth: true,
         sorter: true,
+        defaultSortOrder: 'descend',
+        hideInSearch: true,
+        render: (_, record) => formatDateTimeBySiteSetting(record.computation_start_time),
       },
       {
         title: t('app.kuaizhizao.computationHistory.col.computationEndTime'),
         dataIndex: 'computation_end_time',
-        width: 180,
-        valueType: 'dateTime',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
         hideInSearch: true,
+        render: (_, record) => formatDateTimeBySiteSetting(record.computation_end_time),
       },
       {
         title: t('app.kuaizhizao.computationHistory.col.createdAt'),
         dataIndex: 'created_at',
-        width: 180,
-        valueType: 'dateTime',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
         hideInSearch: true,
+        render: (_, record) => formatPlanDateTimeCell(record.created_at),
       },
     ],
-    [statusMap, t]
+    [computationStatusValueEnum, statusMap, t]
   );
-
-  const handleRequest = async (params: any) => {
-    try {
-      const response = await listComputationHistory({
-        skip: (params.current - 1) * params.pageSize,
-        limit: params.pageSize,
-        demand_id: params.demand_id,
-        computation_type: params.computation_type,
-        start_date: params.start_date,
-        end_date: params.end_date,
-      });
-      tableRowsRef.current = response.data || [];
-      return {
-        data: response.data,
-        success: true,
-        total: response.total,
-      };
-    } catch {
-      return {
-        data: [],
-        success: false,
-        total: 0,
-      };
-    }
-  };
 
   const renderDiffCell = (record: any, field: string) => {
     if (!record.exists_in_both) {
@@ -246,9 +271,35 @@ const ComputationHistoryPage: React.FC = () => {
           columnPersistenceId="apps.kuaizhizao.pages.plan-management.computation-history"
           actionRef={actionRef}
           columns={columns}
-          request={handleRequest}
+          request={async (params, sort, _filter, searchFormValues) => {
+            try {
+              const listParams = resolveComputationHistoryListParams(searchFormValues, sort);
+              const response = await listComputationHistory({
+                skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+                limit: params.pageSize || 20,
+                ...listParams,
+              });
+              const normalized = normalizePlanListResponse(response);
+              tableRowsRef.current = normalized.data as DemandComputation[];
+              return {
+                data: normalized.data,
+                success: response.success !== false,
+                total: normalized.total,
+              };
+            } catch {
+              tableRowsRef.current = [];
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
           rowKey="id"
-          showAdvancedSearch={true}
+          showAdvancedSearch
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField="computation_status"
+          pinnedTabsValueEnum={computationStatusValueEnum}
           enableRowSelection={true}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={(keys) => setSelectedRowKeys(keys)}

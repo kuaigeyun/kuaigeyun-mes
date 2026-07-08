@@ -29,15 +29,47 @@ class SparePartService:
         limit: int = 100,
         search: Optional[str] = None,
         is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[SparePart], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            SPARE_PART_MASTER_SORTABLE_FIELDS,
+            apply_equipment_created_date_range,
+            apply_equipment_keyword_filter,
+            apply_equipment_updated_date_range,
+            pick_search_keyword,
+            resolve_equipment_list_order_by,
+        )
+
         qs = SparePart.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if is_active is not None:
             qs = qs.filter(is_active=is_active)
-        if search and search.strip():
-            k = search.strip()
-            qs = qs.filter(Q(part_no__icontains=k) | Q(part_name__icontains=k))
+        qs = apply_equipment_keyword_filter(
+            qs,
+            pick_search_keyword(keyword, search),
+            ["part_no", "part_name", "category", "brand"],
+        )
+        qs = apply_equipment_created_date_range(
+            qs,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
+        qs = apply_equipment_updated_date_range(
+            qs,
+            start_date=updated_start_date,
+            end_date=updated_end_date,
+        )
         total = await qs.count()
-        rows = await qs.order_by("-id").offset(skip).limit(limit)
+        order_clause = resolve_equipment_list_order_by(
+            order_by,
+            SPARE_PART_MASTER_SORTABLE_FIELDS,
+            "-updated_at",
+        )
+        rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
     async def get_spare_part(self, tenant_id: int, spare_part_id: int) -> SparePart:

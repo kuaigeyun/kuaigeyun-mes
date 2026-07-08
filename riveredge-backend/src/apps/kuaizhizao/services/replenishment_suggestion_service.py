@@ -9,7 +9,7 @@ Date: 2026-01-17
 
 import uuid
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from decimal import Decimal
 
 from tortoise.queryset import Q
@@ -144,7 +144,15 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
         suggestion_type: Optional[str] = None,
         material_id: Optional[int] = None,
         warehouse_id: Optional[int] = None,
-    ) -> List[ReplenishmentSuggestionListResponse]:
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        suggested_order_start_date: Optional[str] = None,
+        suggested_order_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+    ) -> Tuple[List[ReplenishmentSuggestionListResponse], int]:
         """
         获取补货建议列表
 
@@ -177,13 +185,35 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
         if warehouse_id:
             query = query.filter(warehouse_id=warehouse_id)
 
-        suggestions = await query.order_by('-priority', '-created_at').offset(skip).limit(limit)
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            REPLENISHMENT_SUGGESTION_KEYWORD_FIELDS,
+            REPLENISHMENT_SUGGESTION_SORTABLE_FIELDS,
+            apply_warehouse_doc_list_filters,
+        )
+        query, order_clause = apply_warehouse_doc_list_filters(
+            query,
+            keyword=keyword,
+            order_by=order_by,
+            allowed_fields=REPLENISHMENT_SUGGESTION_SORTABLE_FIELDS,
+            default_order="-created_at",
+            keyword_fields=REPLENISHMENT_SUGGESTION_KEYWORD_FIELDS,
+            doc_date_field="suggested_order_date",
+            doc_start_date=suggested_order_start_date,
+            doc_end_date=suggested_order_end_date,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
+
+        total = await query.count()
+        suggestions = await query.order_by(order_clause).offset(skip).limit(limit)
 
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_replenishment_suggestion_list_capabilities,
         )
         responses = [ReplenishmentSuggestionListResponse.model_validate(suggestion) for suggestion in suggestions]
-        return enrich_replenishment_suggestion_list_capabilities(suggestions, responses)
+        return enrich_replenishment_suggestion_list_capabilities(suggestions, responses), total
 
     async def get_suggestion_by_id(
         self,

@@ -113,6 +113,11 @@ export interface SPCSample {
   sample_size: number;
 }
 
+export interface SPCSampleListResponse {
+  items: SPCSample[];
+  total: number;
+}
+
 export interface SPCChartResponse {
   characteristic_name: string;
   chart_type: string;
@@ -159,8 +164,11 @@ export const qualityImprovementApi = {
   },
 
   nonconformingLedger: {
-    list: async (params?: any) =>
-      apiRequest<DefectLedgerItem[]>('/apps/kuaizhizao/nonconforming-ledger', { method: 'GET', params }),
+    list: async (params?: Record<string, unknown>) =>
+      apiRequest<{ data: DefectLedgerItem[]; total: number; success?: boolean }>(
+        '/apps/kuaizhizao/nonconforming-ledger',
+        { method: 'GET', params },
+      ),
     updateDisposition: async (
       id: number,
       data: { disposition: string; status?: string; quarantine_location?: string; remarks?: string }
@@ -227,8 +235,8 @@ export const qualityImprovementApi = {
   },
 
   spc: {
-    listSamples: async (params?: any) =>
-      apiRequest<SPCSample[]>('/apps/kuaizhizao/spc/samples', { method: 'GET', params }),
+    listSamples: async (params?: Record<string, unknown>) =>
+      apiRequest<SPCSampleListResponse>('/apps/kuaizhizao/spc/samples', { method: 'GET', params }),
     createSample: async (data: any) => apiRequest<SPCSample>('/apps/kuaizhizao/spc/samples', { method: 'POST', data }),
     getImrChart: async (characteristicName: string, limit = 50) =>
       apiRequest<SPCChartResponse>('/apps/kuaizhizao/spc/charts/imr', {

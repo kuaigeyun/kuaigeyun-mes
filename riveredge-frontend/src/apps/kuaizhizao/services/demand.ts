@@ -144,6 +144,16 @@ export interface DemandListParams {
   review_status?: string;
   start_date?: string;
   end_date?: string;
+  keyword?: string;
+  demand_code?: string;
+  demand_name?: string;
+  start_date_from?: string;
+  start_date_to?: string;
+  end_date_from?: string;
+  end_date_to?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  order_by?: string;
 }
 
 /**

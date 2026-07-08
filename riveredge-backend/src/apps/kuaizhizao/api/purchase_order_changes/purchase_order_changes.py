@@ -1,5 +1,6 @@
 """采购变更单 API"""
 
+from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Path, Query, status as http_status
@@ -13,10 +14,14 @@ from apps.kuaizhizao.schemas.order_change import (
     ChangeImpactPreviewResponse,
     PurchaseOrderChangeCreate,
     PurchaseOrderChangeListResponse,
+    PurchaseOrderChangePagedListResponse,
     PurchaseOrderChangeUpdate,
     PurchaseOrderChangeWithItemsResponse,
 )
-from apps.kuaizhizao.services.purchase_order_change_service import PurchaseOrderChangeService
+from apps.kuaizhizao.services.purchase_order_change_service import (
+    PurchaseOrderChangeService,
+    PURCHASE_ORDER_CHANGE_SORTABLE_FIELDS,
+)
 
 router = APIRouter(prefix="/purchase-order-change-orders", tags=["App · Kuaige Zhizao · Purchase Order Change"])
 service = PurchaseOrderChangeService()
@@ -52,20 +57,46 @@ async def create_change_order(
     return await service.create_change_order(tenant_id, data, current_user.id)
 
 
-@router.get("", response_model=List[PurchaseOrderChangeListResponse])
+@router.get("", response_model=PurchaseOrderChangePagedListResponse)
 async def list_change_orders(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=1000),
     source_order_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
-    lifecycle_stage: Optional[str] = Query(None),
+    lifecycle_stage: Optional[str] = Query(None, description="生命周期阶段：draft/applied/rejected"),
+    supplier_id: Optional[int] = Query(None, description="供应商 ID"),
+    change_category: Optional[str] = Query(None, description="变更类别"),
+    keyword: Optional[str] = Query(None, description="关键词（变更单号、供应商、源订单、变更原因）"),
+    change_code: Optional[str] = Query(None, description="变更单号（模糊）"),
+    source_order_code: Optional[str] = Query(None, description="源采购订单号（模糊）"),
+    start_date: Optional[date] = Query(None, description="创建日期起"),
+    end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 created_at、-applied_at"),
     tenant_id: int = Depends(get_current_tenant),
     _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
 ):
-    return await service.list_change_orders(
-        tenant_id, skip=skip, limit=limit, source_order_id=source_order_id,
-        status=status, lifecycle_stage=lifecycle_stage,
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in PURCHASE_ORDER_CHANGE_SORTABLE_FIELDS:
+            safe_order_by = order_by
+    items, total = await service.list_change_orders(
+        tenant_id,
+        skip=skip,
+        limit=limit,
+        source_order_id=source_order_id,
+        status=status,
+        lifecycle_stage=lifecycle_stage,
+        supplier_id=supplier_id,
+        change_category=change_category,
+        keyword=keyword,
+        change_code=change_code,
+        source_order_code=source_order_code,
+        start_date=start_date,
+        end_date=end_date,
+        order_by=safe_order_by,
     )
+    return PurchaseOrderChangePagedListResponse(items=items, total=total)
 
 
 @router.get("/by-order/{order_id}", response_model=List[PurchaseOrderChangeListResponse])

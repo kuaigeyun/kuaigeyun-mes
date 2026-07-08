@@ -17,7 +17,7 @@ import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
-import { toApiDateString } from '../../../../../utils/formDate';
+import { toApiDateString, formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { deferConvertLineItemsByPriceType, setFormPriceType } from '../../../../../utils/priceTypeSwitch';
 import {
@@ -210,6 +210,7 @@ import {
 } from '../../../utils/salesContractLifecycle';
 
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
@@ -445,6 +446,14 @@ const SalesContractsPage: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
 
   const [customerList, setCustomerList] = useState<any[]>([]);
+  const contractCustomerSearchOptions = useMemo(
+    () =>
+      customerList.map((c: { id?: number; customer_id?: number; name?: string; customer_name?: string; code?: string }) => ({
+        value: Number(c.id ?? c.customer_id),
+        label: String(c.name ?? c.customer_name ?? c.code ?? ''),
+      })),
+    [customerList],
+  );
 
   const [materialList, setMaterialList] = useState<Material[]>([]);
 
@@ -2582,6 +2591,7 @@ const SalesContractsPage: React.FC = () => {
         dataIndex: 'contract_code',
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         fixed: 'left',
+        sorter: true,
         fieldProps: { placeholder: t('app.kuaizhizao.salesContract.contractCode') },
         render: (_, r) => (
           <UniTableStackedPrimaryCell
@@ -2601,6 +2611,8 @@ const SalesContractsPage: React.FC = () => {
 
         uniTableKeepWidth: true,
 
+        sorter: true,
+
         valueType: 'select',
 
         valueEnum: {
@@ -2614,25 +2626,46 @@ const SalesContractsPage: React.FC = () => {
 
       {
         title: t('app.kuaizhizao.salesContract.customer'),
-        dataIndex: 'customer_name',
-        ellipsis: true,
+        dataIndex: 'customer_id',
         hideInTable: true,
-        fieldProps: { placeholder: t('field.customer.name') },
+        valueType: 'select',
+        fieldProps: {
+          showSearch: true,
+          optionFilterProp: 'label',
+          options: contractCustomerSearchOptions,
+          placeholder: t('field.customer.name'),
+        },
       },
 
       {
         title: t('app.kuaizhizao.salesContract.contractDate'),
         dataIndex: 'contract_date',
-        width: 120,
+        width: 132,
         uniTableKeepWidth: true,
+        sorter: true,
+        defaultSortOrder: 'descend',
+        hideInSearch: true,
         valueType: 'date',
+      },
+
+      {
+        title: t('app.kuaizhizao.salesContract.contractDate'),
+        dataIndex: 'contract_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
       },
 
       {
         title: t('app.kuaizhizao.salesContract.validUntil'),
         dataIndex: 'valid_to',
-        width: 120,
+        width: 132,
         uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
         valueType: 'date',
       },
 
@@ -2642,6 +2675,8 @@ const SalesContractsPage: React.FC = () => {
         width: 120,
         uniTableKeepWidth: true,
         align: 'right',
+        sorter: true,
+        hideInSearch: true,
         valueType: 'money',
       },
 
@@ -2656,6 +2691,10 @@ const SalesContractsPage: React.FC = () => {
         uniTableKeepWidth: true,
 
         align: 'right',
+
+        sorter: true,
+
+        hideInSearch: true,
 
         render: (_, r) => `¥${Number(r.released_amount ?? 0).toLocaleString()}`,
 
@@ -2742,6 +2781,8 @@ const SalesContractsPage: React.FC = () => {
       t,
       contractAuditColumn,
       contractTypeLabels,
+      contractCustomerSearchOptions,
+      contractLifecycleValueEnum,
       statusLabels,
       renderContractStatus,
       contractPerms.canDelete,
@@ -3074,6 +3115,8 @@ const SalesContractsPage: React.FC = () => {
 
         showAdvancedSearch
 
+        skipFuzzyPinyinClientFilter
+
         selectedRowKeys={selectedRowKeys}
 
         onRowSelectionChange={setSelectedRowKeys}
@@ -3177,9 +3220,23 @@ const SalesContractsPage: React.FC = () => {
           }
         }}
 
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues) => {
 
           const lifecycleParams = resolveSalesContractListLifecycleParams(searchFormValues, params);
+          const dr = searchFormValues?.contract_date_range as [unknown, unknown] | undefined;
+          let startDate: string | undefined;
+          let endDate: string | undefined;
+          if (dr && Array.isArray(dr) && dr[0]) {
+            startDate = formatDateTime(dr[0] as string | Date, 'YYYY-MM-DD');
+            endDate = dr[1] ? formatDateTime(dr[1] as string | Date, 'YYYY-MM-DD') : startDate;
+          }
+          const { sortBy, sortOrder } = extractProTableSort(sort);
+          const orderBy =
+            sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+          const keyword =
+            typeof searchFormValues?.keyword === 'string'
+              ? searchFormValues.keyword.trim() || undefined
+              : undefined;
 
           const res = await salesContractApi.list({
 
@@ -3187,11 +3244,27 @@ const SalesContractsPage: React.FC = () => {
 
             limit: params.pageSize || 20,
 
-            keyword: searchFormValues?.keyword,
+            keyword,
+
+            contract_code:
+              typeof searchFormValues?.contract_code === 'string'
+                ? searchFormValues.contract_code.trim() || undefined
+                : undefined,
 
             status: lifecycleParams.status ?? searchFormValues?.status,
 
             contract_type: searchFormValues?.contract_type,
+
+            customer_id:
+              searchFormValues?.customer_id != null && searchFormValues.customer_id !== ''
+                ? Number(searchFormValues.customer_id)
+                : undefined,
+
+            start_date: startDate,
+
+            end_date: endDate,
+
+            order_by: orderBy,
 
           });
 

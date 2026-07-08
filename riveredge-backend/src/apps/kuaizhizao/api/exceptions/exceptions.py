@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, date, time
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status as http_status
@@ -40,8 +40,16 @@ from apps.kuaizhizao.schemas.quality_exception import (
     QualityExceptionListResponse,
     QualityExceptionResponse,
 )
-from apps.kuaizhizao.services.exception_process_service import ExceptionProcessService
-from apps.kuaizhizao.services.exception_service import ExceptionService
+from apps.kuaizhizao.services.exception_process_service import (
+    ExceptionProcessService,
+    EXCEPTION_PROCESS_SORTABLE_FIELDS,
+)
+from apps.kuaizhizao.services.exception_service import (
+    ExceptionService,
+    MATERIAL_SHORTAGE_SORTABLE_FIELDS,
+    DELIVERY_DELAY_SORTABLE_FIELDS,
+    QUALITY_EXCEPTION_SORTABLE_FIELDS,
+)
 
 router = APIRouter(tags=["App · Kuaige Zhizao · Production Exceptions"])
 
@@ -124,16 +132,35 @@ async def list_material_shortage_exceptions(
     status: Optional[str] = Query(None, description="状态"),
     statuses: Optional[str] = Query(None, description="状态列表，逗号分隔"),
     alert_level: Optional[str] = Query(None, description="预警级别"),
+    keyword: Optional[str] = Query(None, description="关键词（工单、物料等）"),
+    work_order_code: Optional[str] = Query(None, description="工单编码（模糊搜索）"),
+    material_code: Optional[str] = Query(None, description="物料编码（模糊搜索）"),
+    material_name: Optional[str] = Query(None, description="物料名称（模糊搜索）"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ExceptionListPageResponse[MaterialShortageExceptionListResponse]:
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in MATERIAL_SHORTAGE_SORTABLE_FIELDS:
+            safe_order_by = order_by
     items, total = await exception_service.list_material_shortage_exceptions(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
         status=status,
         statuses=statuses,
         alert_level=alert_level,
+        keyword=keyword,
+        work_order_code=work_order_code,
+        material_code=material_code,
+        material_name=material_name,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        order_by=safe_order_by,
         skip=skip,
         limit=limit,
     )
@@ -196,16 +223,33 @@ async def list_delivery_delay_exceptions(
     status: Optional[str] = Query(None, description="状态"),
     statuses: Optional[str] = Query(None, description="状态列表，逗号分隔"),
     alert_level: Optional[str] = Query(None, description="预警级别"),
+    keyword: Optional[str] = Query(None, description="关键词（工单、延期原因等）"),
+    work_order_code: Optional[str] = Query(None, description="工单编码（模糊搜索）"),
+    delay_reason: Optional[str] = Query(None, description="延期原因（模糊搜索）"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ExceptionListPageResponse[DeliveryDelayExceptionListResponse]:
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in DELIVERY_DELAY_SORTABLE_FIELDS:
+            safe_order_by = order_by
     items, total = await exception_service.list_delivery_delay_exceptions(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
         status=status,
         statuses=statuses,
         alert_level=alert_level,
+        keyword=keyword,
+        work_order_code=work_order_code,
+        delay_reason=delay_reason,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        order_by=safe_order_by,
         skip=skip,
         limit=limit,
     )
@@ -271,10 +315,23 @@ async def list_quality_exceptions(
     severity: Optional[str] = Query(None, description="严重程度"),
     inspection_record_id: Optional[int] = Query(None, description="关联检验记录ID"),
     inspection_source_type: Optional[str] = Query(None, description="关联检验类型"),
+    keyword: Optional[str] = Query(None, description="关键词（工单、物料、批次、问题描述等）"),
+    work_order_code: Optional[str] = Query(None, description="工单编码（模糊搜索）"),
+    material_code: Optional[str] = Query(None, description="物料编码（模糊搜索）"),
+    material_name: Optional[str] = Query(None, description="物料名称（模糊搜索）"),
+    batch_no: Optional[str] = Query(None, description="批次号（模糊搜索）"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ExceptionListPageResponse[QualityExceptionListResponse]:
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in QUALITY_EXCEPTION_SORTABLE_FIELDS:
+            safe_order_by = order_by
     items, total = await exception_service.list_quality_exceptions(
         tenant_id=tenant_id,
         exception_type=exception_type,
@@ -284,6 +341,14 @@ async def list_quality_exceptions(
         severity=severity,
         inspection_record_id=inspection_record_id,
         inspection_source_type=inspection_source_type,
+        keyword=keyword,
+        work_order_code=work_order_code,
+        material_code=material_code,
+        material_name=material_name,
+        batch_no=batch_no,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        order_by=safe_order_by,
         skip=skip,
         limit=limit,
     )
@@ -363,19 +428,26 @@ async def trigger_exception_detection(
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
     try:
-        from core.tasks.dispatcher import TaskEvent, dispatch_event
-
-        await dispatch_event(
-            TaskEvent(
-                name="exception/detect",
-                data={"tenant_id": tenant_id, "work_order_id": work_order_id},
-            )
+        from apps.kuaizhizao.workflows.functions.exception_detection_workflow import (
+            run_exception_detection_for_tenant,
         )
+
+        result = await run_exception_detection_for_tenant(tenant_id, work_order_id)
+        if not result.get("success"):
+            raise _http_exception_with_trace(
+                http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+                result.get("error") or "异常检测失败",
+                "/exceptions/detect",
+                tenant_id,
+            )
         return {
             "success": True,
-            "message": "异常检测已触发",
+            "message": "异常检测已完成",
             "work_order_id": work_order_id,
+            "detection": result,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"触发异常检测失败: {e}")
         raise _http_exception_with_trace(
@@ -422,15 +494,30 @@ async def list_exception_processes(
     exception_id: Optional[int] = Query(None, description="异常记录ID筛选"),
     process_status: Optional[str] = Query(None, description="处理状态筛选"),
     assigned_to: Optional[int] = Query(None, description="分配给筛选"),
+    keyword: Optional[str] = Query(None, description="关键词（处理人、步骤等）"),
+    assigned_to_name: Optional[str] = Query(None, description="处理人姓名（模糊搜索）"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ExceptionListPageResponse[ExceptionProcessRecordListResponse]:
     try:
+        safe_order_by = None
+        if order_by:
+            field = order_by.lstrip("-")
+            if field in EXCEPTION_PROCESS_SORTABLE_FIELDS:
+                safe_order_by = order_by
         items, total = await exception_process_service.list_process_records(
             tenant_id=tenant_id,
             exception_type=exception_type,
             exception_id=exception_id,
             process_status=process_status,
             assigned_to=assigned_to,
+            keyword=keyword,
+            assigned_to_name=assigned_to_name,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            order_by=safe_order_by,
             skip=skip,
             limit=limit,
         )

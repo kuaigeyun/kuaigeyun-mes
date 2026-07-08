@@ -60,14 +60,16 @@ import { outsourceOrderApi, workOrderApi } from '../../../services/production';
 import { mapOutsourceOptionsToPullPreview } from '../../../utils/outsourceOrderPullPreview';
 import type { PushPreviewResponse } from '../../../services/sales-order';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
-import { getOutsourceOrderLifecycle } from '../../../utils/outsourceOrderLifecycle';
+import { getOutsourceOrderLifecycle, buildOutsourceOrderLifecycleValueEnum, resolveOutsourceOrderListLifecycleParams } from '../../../utils/outsourceOrderLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
-import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { useTranslation } from 'react-i18next';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
@@ -80,7 +82,6 @@ import {
 } from '../../../../../components/custom-fields';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import { formatDateTime } from '../../../../../utils/format';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_orders';
@@ -477,7 +478,7 @@ export const OutsourceOrdersTable: React.FC = () => {
   const refreshLocalStats = useCallback(async () => {
     try {
       const response = await outsourceOrderApi.list({ skip: 0, limit: 1000 });
-      const arr = Array.isArray(response) ? response : [];
+      const arr = response.data ?? [];
       setLocalStats({
         total: arr.length,
         draft: arr.filter((x: OutsourceOrder) => (x.status || '').trim() === 'draft').length,
@@ -812,15 +813,48 @@ export const OutsourceOrdersTable: React.FC = () => {
     return nodes;
   };
 
+  const outsourceOrderLifecycleValueEnum = useMemo(() => buildOutsourceOrderLifecycleValueEnum(t), [t]);
+  const supplierSearchValueEnum = useMemo(
+    () =>
+      Object.fromEntries(
+        supplierList.map((s) => [String(s.id), { text: s.name || s.code }]),
+      ),
+    [supplierList],
+  );
+
   const outsourceCustomFieldColumns = generateOutsourceCustomFieldColumns();
   const columns: ProColumns<OutsourceOrder>[] = useMemo(
     () => [
+      {
+        title: t('app.kuaizhizao.outsourceOrder.colPlannedStart'),
+        dataIndex: 'planned_start_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        hideInSearch: false,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
+      },
+      {
+        title: t('common.createdAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        hideInSearch: false,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
+      },
       {
         title: t('app.kuaizhizao.outsourceOrder.colCode'),
         dataIndex: 'code',
         width: 168,
         fixed: 'left',
         ellipsis: true,
+        sorter: true,
+        hideInSearch: false,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
             {r.code ?? '-'}
@@ -832,6 +866,8 @@ export const OutsourceOrdersTable: React.FC = () => {
         dataIndex: 'work_order_code',
         width: 148,
         ellipsis: true,
+        sorter: true,
+        hideInSearch: false,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.work_order_code ?? '') }} ellipsis>
             {r.work_order_code ?? '-'}
@@ -843,69 +879,100 @@ export const OutsourceOrdersTable: React.FC = () => {
         dataIndex: 'operation_name',
         width: 150,
         ellipsis: true,
+        sorter: true,
+        hideInSearch: false,
       },
       {
         title: t('app.kuaizhizao.outsourceOrder.colSupplierName'),
-        dataIndex: 'supplier_name',
+        dataIndex: 'supplier_id',
         width: 150,
         ellipsis: true,
+        hideInSearch: false,
+        valueType: 'select',
+        valueEnum: supplierSearchValueEnum,
+        render: (_, record) => record.supplier_name ?? '-',
       },
       {
         title: t('app.kuaizhizao.outsourceOrder.colOutsourceQty'),
         dataIndex: 'outsource_quantity',
         width: 100,
         valueType: 'digit',
+        sorter: true,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.outsourceOrder.colReceivedQty'),
         dataIndex: 'received_quantity',
         width: 100,
         valueType: 'digit',
+        sorter: true,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.outsourceOrder.colQualifiedQty'),
         dataIndex: 'qualified_quantity',
         width: 100,
         valueType: 'digit',
+        sorter: true,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.outsourceOrder.colUnitPrice'),
         dataIndex: 'unit_price',
         width: 100,
         valueType: 'money',
+        sorter: true,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.outsourceOrder.colTotalAmount'),
         dataIndex: 'total_amount',
         width: 120,
         valueType: 'money',
+        sorter: true,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.outsourceOrder.colPlannedStart'),
         dataIndex: 'planned_start_date',
         valueType: 'dateTime',
-        width: 160,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, record) =>
+          record.planned_start_date ? formatDateTimeBySiteSetting(record.planned_start_date) : '-',
       },
       {
         title: t('app.kuaizhizao.outsourceOrder.colPlannedEnd'),
         dataIndex: 'planned_end_date',
         valueType: 'dateTime',
-        width: 160,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, record) =>
+          record.planned_end_date ? formatDateTimeBySiteSetting(record.planned_end_date) : '-',
       },
       {
         title: t('app.kuaizhizao.outsourceOrder.colUpdatedAt'),
         dataIndex: 'updated_at',
-        valueType: 'dateTime',
-        width: 168,
-        hideInSearch: true,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
         defaultSortOrder: 'descend',
+        hideInSearch: true,
+        render: (_, record) =>
+          record.updated_at ? formatDateTime(record.updated_at, 'YYYY-MM-DD HH:mm') : '-',
       },
       {
         title: t('app.kuaizhizao.outsourceOrder.colLifecycle'),
-        dataIndex: 'lifecycle_stage',
+        dataIndex: 'status',
+        width: 140,
         fixed: 'right',
-        align: 'left',
-        hideInSearch: true,
+        hideInSearch: false,
+        valueType: 'select',
+        valueEnum: outsourceOrderLifecycleValueEnum,
         render: (_, record) => {
           const lifecycle = getOutsourceOrderLifecycle(record as any);
           return (
@@ -931,26 +998,75 @@ export const OutsourceOrdersTable: React.FC = () => {
           renderOoRowActions(renderOoRowActionNodes(record), `oo-${record.id ?? 'row'}`),
       },
     ],
-    [outsourceCustomFieldColumns, t],
+    [outsourceCustomFieldColumns, outsourceOrderLifecycleValueEnum, supplierSearchValueEnum, t],
   );
 
   /**
    * 处理请求
    */
-  const handleRequest = async (params: any, _sorter: any, _filter: any) => {
+  const handleRequest = async (
+    params: any,
+    sort: Record<string, 'ascend' | 'descend' | null>,
+    _filter: Record<string, React.ReactText[] | null>,
+    searchFormValues?: Record<string, unknown>,
+  ) => {
     try {
-      const response = await outsourceOrderApi.list({
-        skip: (params.current! - 1) * params.pageSize!,
-        limit: Math.min(params.pageSize ?? 100, 1000),
-        ...params,
-        keyword: params.keyword,
-      });
-      const list = response || [];
+      const s = searchFormValues ?? {};
+      const lifecycleParams = resolveOutsourceOrderListLifecycleParams(s);
+      const { sortBy, sortOrder } = extractProTableSort(sort);
+      const orderBy =
+        sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+      const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
+
+      const apiParams: Parameters<typeof outsourceOrderApi.list>[0] = {
+        skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+        limit: params.pageSize ?? 20,
+        ...lifecycleParams,
+        order_by: orderBy,
+      };
+
+      if (fuzzyKeyword) {
+        apiParams.keyword = fuzzyKeyword;
+      } else {
+        if (s.code != null && String(s.code).trim()) {
+          apiParams.code = String(s.code).trim();
+        }
+        if (s.work_order_code != null && String(s.work_order_code).trim()) {
+          apiParams.work_order_code = String(s.work_order_code).trim();
+        }
+        if (s.operation_name != null && String(s.operation_name).trim()) {
+          apiParams.operation_name = String(s.operation_name).trim();
+        }
+        if (s.supplier_id != null && String(s.supplier_id).trim()) {
+          apiParams.supplier_id = Number(s.supplier_id);
+        } else if (s.supplier_name != null && String(s.supplier_name).trim()) {
+          apiParams.supplier_name = String(s.supplier_name).trim();
+        }
+      }
+
+      const plannedRange = s.planned_start_date_range as [unknown, unknown] | undefined;
+      if (plannedRange && Array.isArray(plannedRange) && plannedRange[0]) {
+        apiParams.planned_start_from = formatDateTime(plannedRange[0] as string | Date, 'YYYY-MM-DD');
+        apiParams.planned_start_to = plannedRange[1]
+          ? formatDateTime(plannedRange[1] as string | Date, 'YYYY-MM-DD')
+          : apiParams.planned_start_from;
+      }
+
+      const createdRange = s.created_at_range as [unknown, unknown] | undefined;
+      if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+        apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
+        apiParams.created_end_date = createdRange[1]
+          ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+          : apiParams.created_start_date;
+      }
+
+      const response = await outsourceOrderApi.list(apiParams);
+      const list = response.data ?? [];
       const enriched = await enrichOutsourceRecordsWithCustomFields(list);
       return {
         data: enriched,
-        success: true,
-        total: enriched.length,
+        success: response.success,
+        total: response.total ?? 0,
       };
     } catch (error) {
       messageApi.error(t('app.kuaizhizao.outsourceOrder.fetchListFailed'));
@@ -1006,6 +1122,9 @@ export const OutsourceOrdersTable: React.FC = () => {
         onDelete={handleDelete}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.outsourceOrder.confirmBatchDelete', { count })}
         showAdvancedSearch={true}
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField="status"
+        pinnedTabsValueEnum={outsourceOrderLifecycleValueEnum}
         scroll={{ x: 1800 }}
         onRow={(record) => ({
           onClick: () => void handleDetail(record),

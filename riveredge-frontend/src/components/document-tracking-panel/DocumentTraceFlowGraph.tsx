@@ -590,7 +590,6 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
           lineWidth: 1.75,
           endArrow: true,
           radius: 16,
-          router: { type: 'orth' },
         },
       },
       /** G6 v5：Graphin 每次 setOptions 后会再次 onReady，先卸旧监听避免重复触发 */

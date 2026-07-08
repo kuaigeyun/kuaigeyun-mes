@@ -58,6 +58,25 @@ export interface PartnerStatement {
   disputed_at?: string;
   notes?: string;
   created_at: string;
+  updated_at?: string;
+}
+
+export interface PartnerStatementListParams {
+  skip?: number;
+  limit?: number;
+  partner_type?: string;
+  partner_id?: number;
+  statement_period?: string;
+  status?: string;
+  keyword?: string;
+  statement_code?: string;
+  partner_name?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
+  sort_field?: string;
+  sort_order?: 'asc' | 'desc';
 }
 
 const API = '/apps/kuaicaiwu/partner-statements';
@@ -81,7 +100,7 @@ export const partnerStatementService = {
     attachments?: Array<{ uid?: string; name?: string; status?: string; url?: string }>;
   }) => apiRequest<PartnerStatement>(API, { method: 'POST', data }),
 
-  list: (params?: Record<string, unknown>) =>
+  list: (params?: PartnerStatementListParams) =>
     apiRequest<{ items: PartnerStatement[]; total: number }>(API, { method: 'GET', params }),
 
   get: (id: number) => apiRequest<PartnerStatement>(`${API}/${id}`, { method: 'GET' }),

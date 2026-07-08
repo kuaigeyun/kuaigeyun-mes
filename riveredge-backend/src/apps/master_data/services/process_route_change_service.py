@@ -246,6 +246,9 @@ class ProcessRouteChangeService:
         process_route_uuid: Optional[str] = None,
         change_type: Optional[str] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        change_code: Optional[str] = None,
+        target_name: Optional[str] = None,
         page: int = 1,
         page_size: int = 20,
     ) -> ProcessRouteChangeListResponse:
@@ -285,6 +288,22 @@ class ProcessRouteChangeService:
         # 状态筛选
         if status:
             query = query.filter(status=status)
+
+        kw = (keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(change_reason__icontains=kw)
+                | Q(change_content__icontains=kw)
+                | Q(process_route__code__icontains=kw)
+                | Q(process_route__name__icontains=kw)
+            )
+        else:
+            code = (change_code or "").strip()
+            name = (target_name or "").strip()
+            if code:
+                query = query.filter(process_route__code__icontains=code)
+            if name:
+                query = query.filter(process_route__name__icontains=name)
         
         # 总数
         total = await query.count()

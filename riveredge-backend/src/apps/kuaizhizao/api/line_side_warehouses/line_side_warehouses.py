@@ -19,6 +19,13 @@ from apps.kuaizhizao.schemas.line_side_warehouse import (
     BackflushRecordResponse,
     BackflushRecordListResponse,
 )
+from apps.kuaizhizao.services.warehouse_list_core import (
+    apply_warehouse_doc_list_filters,
+    BACKFLUSH_RECORD_SORTABLE_FIELDS,
+    BACKFLUSH_RECORD_KEYWORD_FIELDS,
+    LINE_SIDE_INVENTORY_SORTABLE_FIELDS,
+    LINE_SIDE_INVENTORY_KEYWORD_FIELDS,
+)
 from apps.master_data.models.warehouse import Warehouse
 from apps.kuaizhizao.services.backflush_service import BackflushService
 from core.api.deps import get_current_tenant, get_current_user_id
@@ -62,8 +69,12 @@ async def list_line_side_warehouses(
 async def list_line_side_inventory(
     tenant_id: int = Depends(get_current_tenant),
     warehouse_id: Optional[int] = Query(None, description="线边仓ID"),
-    material_code: Optional[str] = Query(None, description="物料编码（模糊）"),
-    material_name: Optional[str] = Query(None, description="物料名称（模糊）"),
+    keyword: Optional[str] = Query(None, description="关键词（物料编码/名称/仓库/批号/工单）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期"),
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
 ) -> LineSideInventoryListResponse:
@@ -74,13 +85,22 @@ async def list_line_side_inventory(
     )
     if warehouse_id:
         query = query.filter(warehouse_id=warehouse_id)
-    if material_code:
-        query = query.filter(material_code__icontains=material_code)
-    if material_name:
-        query = query.filter(material_name__icontains=material_name)
+
+    query, order_clause = apply_warehouse_doc_list_filters(
+        query,
+        keyword=keyword,
+        order_by=order_by,
+        allowed_fields=LINE_SIDE_INVENTORY_SORTABLE_FIELDS,
+        default_order="-updated_at",
+        keyword_fields=LINE_SIDE_INVENTORY_KEYWORD_FIELDS,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
 
     total = await query.count()
-    items = await query.offset(skip).limit(limit).order_by("-updated_at").all()
+    items = await query.order_by(order_clause).offset(skip).limit(limit).all()
 
     return LineSideInventoryListResponse(
         items=[LineSideInventoryResponse.model_validate(i) for i in items],
@@ -95,9 +115,11 @@ async def list_line_side_inventory(
 )
 async def list_backflush_records(
     tenant_id: int = Depends(get_current_tenant),
-    work_order_code: Optional[str] = Query(None, description="工单编码（模糊）"),
-    material_code: Optional[str] = Query(None, description="物料编码（模糊）"),
+    keyword: Optional[str] = Query(None, description="关键词（工单/物料/批号/仓库）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
     status: Optional[str] = Query(None, description="状态：pending/completed/failed"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期"),
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
 ) -> BackflushRecordListResponse:
@@ -106,15 +128,22 @@ async def list_backflush_records(
         tenant_id=tenant_id,
         deleted_at__isnull=True,
     )
-    if work_order_code:
-        query = query.filter(work_order_code__icontains=work_order_code)
-    if material_code:
-        query = query.filter(material_code__icontains=material_code)
     if status:
         query = query.filter(status=status)
 
+    query, order_clause = apply_warehouse_doc_list_filters(
+        query,
+        keyword=keyword,
+        order_by=order_by,
+        allowed_fields=BACKFLUSH_RECORD_SORTABLE_FIELDS,
+        default_order="-created_at",
+        keyword_fields=BACKFLUSH_RECORD_KEYWORD_FIELDS,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+    )
+
     total = await query.count()
-    items = await query.offset(skip).limit(limit).order_by("-created_at").all()
+    items = await query.order_by(order_clause).offset(skip).limit(limit).all()
 
     return BackflushRecordListResponse(
         items=[BackflushRecordResponse.model_validate(i) for i in items],

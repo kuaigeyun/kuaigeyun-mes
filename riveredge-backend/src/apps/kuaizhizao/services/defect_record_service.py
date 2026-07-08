@@ -295,8 +295,12 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         finished_goods_inspection_id: Optional[int] = None,
         defect_id: Optional[int] = None,
         date_start: Optional[datetime] = None,
-        date_end: Optional[datetime] = None
-    ) -> List[DefectRecordListResponse]:
+        date_end: Optional[datetime] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         查询不良品记录列表
 
@@ -341,19 +345,53 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         if date_end:
             query &= Q(created_at__lte=date_end)
 
-        # 查询不良品记录
-        defect_records = await DefectRecord.filter(query).order_by('-created_at').offset(skip).limit(limit).all()
+        from apps.kuaizhizao.services.quality_service import (
+            NONCONFORMING_LEDGER_SORTABLE_FIELDS,
+            _apply_quality_inspection_list_filters,
+            _resolve_quality_list_order_by,
+        )
+
+        defect_query = DefectRecord.filter(query)
+        defect_query = _apply_quality_inspection_list_filters(
+            defect_query,
+            {
+                "keyword": keyword,
+                "created_start_date": created_start_date,
+                "created_end_date": created_end_date,
+            },
+            keyword_fields=[
+                "code",
+                "product_code",
+                "product_name",
+                "work_order_code",
+                "operation_name",
+                "defect_reason",
+                "incoming_inspection_code",
+                "process_inspection_code",
+                "finished_goods_inspection_code",
+            ],
+            time_field="created_at",
+        )
+
+        total = await defect_query.count()
+        order_clause = _resolve_quality_list_order_by(
+            order_by,
+            NONCONFORMING_LEDGER_SORTABLE_FIELDS,
+            "-created_at",
+        )
+        defect_records = await defect_query.order_by(order_clause).offset(skip).limit(limit).all()
 
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_nonconforming_ledger_list_capabilities,
         )
 
         responses = [DefectRecordListResponse.model_validate(record) for record in defect_records]
-        return await enrich_nonconforming_ledger_list_capabilities(
+        data = await enrich_nonconforming_ledger_list_capabilities(
             tenant_id,
             defect_records,
             responses,
         )
+        return {"data": data, "total": total, "success": True}
 
     async def update_disposition(
         self,

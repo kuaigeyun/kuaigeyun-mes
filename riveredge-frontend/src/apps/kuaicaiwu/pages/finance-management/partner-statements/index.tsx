@@ -35,6 +35,13 @@ import { apiRequest } from '../../../../../services/api';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  FINANCE_DOC_PINNED_STATUS_FIELD,
+  financeDocCreatedUpdatedColumns,
+  partnerStatementSearchColumns,
+  resolvePartnerStatementListParams,
+} from '../../../utils/financeListCore';
+import type { PartnerStatementListParams } from '../../../services/finance/partnerStatement';
 
 const money = (v: number | string | undefined) =>
   `¥${Number(v ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -44,6 +51,8 @@ const PS = 'app.kuaicaiwu.partnerStatement';
 const PartnerStatementsPage: React.FC = () => {
   const customerActionRef = useRef<ActionType>();
   const supplierActionRef = useRef<ActionType>();
+  const customerLastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
+  const supplierLastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [activeTab, setActiveTab] = useState<'Customer' | 'Supplier'>('Customer');
   const [customerSelectedRowKeys, setCustomerSelectedRowKeys] = useState<React.Key[]>([]);
   const [supplierSelectedRowKeys, setSupplierSelectedRowKeys] = useState<React.Key[]>([]);
@@ -197,73 +206,91 @@ const PartnerStatementsPage: React.FC = () => {
 
   const statusEnum = useMemo(() => buildPartnerStatementStatusEnum(t), [t]);
 
-  const buildColumns = useMemo(() => (type: 'Customer' | 'Supplier'): ProColumns<PartnerStatement>[] => [
-    {
-      title: t(`${PS}.col.code`),
-      dataIndex: 'statement_code',
-      width: 160,
-      fixed: 'left',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: r.statement_code }} ellipsis>
-          <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/partner-statements/${r.id}`)}>
-            {r.statement_code}
-          </a>
-        </Typography.Text>
-      ),
-    },
-    {
-      title: type === 'Customer' ? t(`${PS}.col.customerName`) : t(`${PS}.col.supplierName`),
-      dataIndex: 'partner_name',
-      width: 200,
-    },
-    {
-      title: t(`${PS}.col.period`),
-      dataIndex: 'statement_period',
-      width: 110,
-    },
-    {
-      title: t(`${PS}.col.openingBalance`),
-      dataIndex: 'opening_balance',
-      width: 120,
-      align: 'right',
-      hideInSearch: true,
-      render: (_, r) => money(r.opening_balance),
-    },
-    {
-      title: t(`${PS}.col.closingBalance`),
-      dataIndex: 'closing_balance',
-      width: 120,
-      align: 'right',
-      hideInSearch: true,
-      render: (_, r) => (
-        <Typography.Text strong type={Number(r.closing_balance) > 0 ? 'danger' : undefined}>
-          {money(r.closing_balance)}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: t('common.status'),
-      dataIndex: 'status',
-      width: 100,
-      valueEnum: statusEnum,
-      render: (_, r) => {
-        const m = statusEnum[r.status as keyof typeof statusEnum] || { text: r.status };
-        const colorMap: Record<string, string> = {
-          Draft: 'default',
-          Confirmed: 'processing',
-          Sent: 'success',
-          Disputed: 'warning',
-        };
-        return <Tag color={colorMap[r.status] || 'default'}>{m.text}</Tag>;
+  const buildColumns = useMemo(
+    () => (type: 'Customer' | 'Supplier'): ProColumns<PartnerStatement>[] => [
+      ...partnerStatementSearchColumns({
+        statementCodeLabel: t(`${PS}.col.code`),
+        partnerLabel: type === 'Customer' ? t(`${PS}.col.customerName`) : t(`${PS}.col.supplierName`),
+        partnerOptions,
+        periodLabel: t(`${PS}.col.period`),
+      }),
+      {
+        title: t(`${PS}.col.code`),
+        dataIndex: 'statement_code',
+        width: 160,
+        fixed: 'left',
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: r.statement_code }} ellipsis>
+            <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/partner-statements/${r.id}`)}>
+              {r.statement_code}
+            </a>
+          </Typography.Text>
+        ),
       },
-    },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm') : '—'),
-    },
+      {
+        title: type === 'Customer' ? t(`${PS}.col.customerName`) : t(`${PS}.col.supplierName`),
+        dataIndex: 'partner_name',
+        width: 200,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t(`${PS}.col.period`),
+        dataIndex: 'statement_period',
+        width: 110,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t(`${PS}.col.openingBalance`),
+        dataIndex: 'opening_balance',
+        width: 120,
+        align: 'right',
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => money(r.opening_balance),
+      },
+      {
+        title: t(`${PS}.col.closingBalance`),
+        dataIndex: 'closing_balance',
+        width: 120,
+        align: 'right',
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => (
+          <Typography.Text strong type={Number(r.closing_balance) > 0 ? 'danger' : undefined}>
+            {money(r.closing_balance)}
+          </Typography.Text>
+        ),
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        hideInTable: true,
+        order: 22,
+        valueEnum: statusEnum,
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        width: 100,
+        hideInSearch: true,
+        sorter: true,
+        valueEnum: statusEnum,
+        render: (_, r) => {
+          const m = statusEnum[r.status as keyof typeof statusEnum] || { text: r.status };
+          const colorMap: Record<string, string> = {
+            Draft: 'default',
+            Confirmed: 'processing',
+            Sent: 'success',
+            Disputed: 'warning',
+          };
+          return <Tag color={colorMap[r.status] || 'default'}>{m.text}</Tag>;
+        },
+      },
+      ...financeDocCreatedUpdatedColumns<PartnerStatement>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -292,8 +319,10 @@ const PartnerStatementsPage: React.FC = () => {
               </Button>
             ) : null,
           ].filter(Boolean) as React.ReactNode[],
-    },
-  ], [t, navigate, statusEnum]);
+      },
+    ],
+    [t, navigate, statusEnum, partnerOptions],
+  );
 
   const previewLineColumns = useMemo(() => [
     { title: t(`${PS}.col.date`), dataIndex: 'date', width: 110 },
@@ -323,15 +352,24 @@ const PartnerStatementsPage: React.FC = () => {
     },
   ], [t, preview?.balance_label]);
 
-  const tableRequest = (type: 'Customer' | 'Supplier') => async (params: any) => {
-    const { current, pageSize, status, statement_period } = params;
-    const res = await partnerStatementService.list({
-      skip: ((current || 1) - 1) * (pageSize || 20),
-      limit: pageSize || 20,
-      partner_type: type,
-      status,
-      statement_period,
-    });
+  const tableRequest = (type: 'Customer' | 'Supplier') => async (
+    params: { current?: number; pageSize?: number },
+    sort?: Record<string, unknown>,
+    _filter?: unknown,
+    searchFormValues?: Record<string, unknown>,
+  ) => {
+    const listParams = resolvePartnerStatementListParams(searchFormValues, sort, type);
+    if (type === 'Customer') {
+      customerLastListParamsRef.current = listParams;
+    } else {
+      supplierLastListParamsRef.current = listParams;
+    }
+    const apiParams: PartnerStatementListParams = {
+      skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+      limit: params.pageSize || 20,
+      ...listParams,
+    };
+    const res = await partnerStatementService.list(apiParams);
     return { data: res?.items || [], total: res?.total || 0, success: true };
   };
 
@@ -377,6 +415,8 @@ const PartnerStatementsPage: React.FC = () => {
       ]}
       request={tableRequest('Customer')}
       columns={buildColumns('Customer')}
+      skipFuzzyPinyinClientFilter
+      pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
     />
   );
 
@@ -422,6 +462,8 @@ const PartnerStatementsPage: React.FC = () => {
       ]}
       request={tableRequest('Supplier')}
       columns={buildColumns('Supplier')}
+      skipFuzzyPinyinClientFilter
+      pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
     />
   );
 

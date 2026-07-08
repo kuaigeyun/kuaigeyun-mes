@@ -121,7 +121,15 @@ export async function listPurchaseInquiries(params: {
   limit?: number;
   lifecycle_stage?: string;
   keyword?: string;
+  inquiry_code?: string;
+  inquiry_name?: string;
+  source_code?: string;
+  quote_deadline_from?: string;
+  quote_deadline_to?: string;
+  created_start_date?: string;
+  created_end_date?: string;
   source_id?: number;
+  order_by?: string;
 } = {}): Promise<{ data: PurchaseInquiry[]; total: number; success: boolean }> {
   return apiRequest('/apps/kuaizhizao/purchase-inquiries', { method: 'GET', params });
 }

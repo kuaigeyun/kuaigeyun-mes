@@ -1,6 +1,26 @@
 import { apiRequest } from '../../../../services/api';
 import type { DocumentPushPreview } from '../../../kuaizhizao/services/purchase-requisition';
 
+export interface PaymentListParams {
+  skip?: number;
+  limit?: number;
+  status?: string;
+  supplier_id?: number;
+  unsettled_only?: boolean;
+  settlement_type?: string;
+  start_date?: string;
+  end_date?: string;
+  keyword?: string;
+  payment_code?: string;
+  supplier_name?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
+  sort_field?: string;
+  sort_order?: 'asc' | 'desc';
+}
+
 export interface PaymentVoucher {
   id: number;
   payment_code: string;
@@ -17,6 +37,7 @@ export interface PaymentVoucher {
   settlement_type?: string;
   notes?: string;
   created_at: string;
+  updated_at?: string;
 }
 
 export type PaymentPullPreview = DocumentPushPreview & {
@@ -64,7 +85,7 @@ export const paymentService = {
       data,
     }),
 
-  listPayments: (params: Record<string, unknown>) => {
+  listPayments: (params: PaymentListParams) => {
     return apiRequest<{ items: PaymentVoucher[]; total: number }>(PAYMENT_API, {
       method: 'GET',
       params,

@@ -161,20 +161,51 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
         code: Optional[str] = None,
         warehouse_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        assembly_date_start: Optional[str] = None,
+        assembly_date_end: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> AssemblyOrderListResponse:
+        from apps.kuaizhizao.services.equipment_list_core import pick_search_keyword
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            ASSEMBLY_ORDER_KEYWORD_FIELDS,
+            ASSEMBLY_ORDER_SORTABLE_FIELDS,
+            apply_warehouse_doc_list_filters,
+        )
+
         query = AssemblyOrder.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
         )
-        if code:
-            query = query.filter(code__icontains=code)
         if warehouse_id:
             query = query.filter(warehouse_id=warehouse_id)
         if status:
             query = query.filter(status=status)
 
+        merged_keyword = pick_search_keyword(keyword, search) or (code.strip() if code and code.strip() else None)
+        query, order_clause = apply_warehouse_doc_list_filters(
+            query,
+            keyword=merged_keyword,
+            order_by=order_by,
+            allowed_fields=ASSEMBLY_ORDER_SORTABLE_FIELDS,
+            default_order="-updated_at",
+            keyword_fields=ASSEMBLY_ORDER_KEYWORD_FIELDS,
+            doc_date_field="assembly_date",
+            doc_start_date=assembly_date_start,
+            doc_end_date=assembly_date_end,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
+
         total = await query.count()
-        orders = await query.order_by('-created_at').offset(skip).limit(limit)
+        orders = await query.order_by(order_clause).offset(skip).limit(limit)
         return AssemblyOrderListResponse(
             items=[AssemblyOrderResponse.model_validate(o) for o in orders],
             total=total

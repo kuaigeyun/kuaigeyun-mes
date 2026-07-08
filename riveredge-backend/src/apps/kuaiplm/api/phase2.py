@@ -46,15 +46,36 @@ async def list_requirements(
     project_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
+    requirement_code: Optional[str] = Query(None),
+    title: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None, description="asc | desc"),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
     _auth=Depends(require_access("kuaiplm.requirement", "read", required_permissions=["kuaiplm:requirement:read"])),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows = await service.list_requirements(
-        tenant_id, project_id=project_id, status=status, keyword=keyword, skip=skip, limit=limit
+    rows, total = await service.list_requirements(
+        tenant_id,
+        project_id=project_id,
+        status=status,
+        keyword=keyword,
+        requirement_code=requirement_code,
+        title=title,
+        skip=skip,
+        limit=limit,
+        sort_field=sort_field,
+        sort_order=sort_order,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
-    return {"data": rows, "total": len(rows), "success": True}
+    return {"data": rows, "total": total, "success": True}
 
 
 @router.post("/requirements", response_model=RdRequirementResponse, status_code=status.HTTP_201_CREATED)
@@ -100,13 +121,37 @@ async def delete_requirement(
 async def list_design_reviews(
     project_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None),
+    review_code: Optional[str] = Query(None),
+    title: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None, description="asc | desc"),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
     _auth=Depends(require_access("kuaiplm.design-review", "read", required_permissions=["kuaiplm:design-review:read"])),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows = await service.list_design_reviews(tenant_id, project_id=project_id, status=status, skip=skip, limit=limit)
-    return {"data": rows, "total": len(rows), "success": True}
+    rows, total = await service.list_design_reviews(
+        tenant_id,
+        project_id=project_id,
+        status=status,
+        keyword=keyword,
+        review_code=review_code,
+        title=title,
+        skip=skip,
+        limit=limit,
+        sort_field=sort_field,
+        sort_order=sort_order,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    return {"data": rows, "total": total, "success": True}
 
 
 @router.post("/design-reviews", response_model=RdDesignReviewResponse, status_code=status.HTTP_201_CREATED)
@@ -152,13 +197,39 @@ async def delete_design_review(
 async def list_fmea_records(
     project_id: Optional[int] = Query(None),
     fmea_type: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None),
+    fmea_code: Optional[str] = Query(None),
+    title: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None, description="asc | desc"),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
     _auth=Depends(require_access("kuaiplm.fmea", "read", required_permissions=["kuaiplm:fmea:read"])),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows = await service.list_fmea_records(tenant_id, project_id=project_id, fmea_type=fmea_type, skip=skip, limit=limit)
-    return {"data": rows, "total": len(rows), "success": True}
+    rows, total = await service.list_fmea_records(
+        tenant_id,
+        project_id=project_id,
+        fmea_type=fmea_type,
+        status=status,
+        keyword=keyword,
+        fmea_code=fmea_code,
+        title=title,
+        skip=skip,
+        limit=limit,
+        sort_field=sort_field,
+        sort_order=sort_order,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    return {"data": rows, "total": total, "success": True}
 
 
 @router.post("/fmea", response_model=RdFmeaRecordResponse, status_code=status.HTTP_201_CREATED)

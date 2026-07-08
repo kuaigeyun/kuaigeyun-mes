@@ -15,7 +15,10 @@ from apps.kuaizhizao.schemas.customer_follow_up import (
     CustomerFollowUpResponse,
     CustomerFollowUpListEnvelope,
 )
-from apps.kuaizhizao.services.customer_follow_up_service import CustomerFollowUpService
+from apps.kuaizhizao.services.customer_follow_up_service import (
+    CustomerFollowUpService,
+    CUSTOMER_FOLLOW_UP_SORTABLE_FIELDS,
+)
 from core.api.deps import get_current_user, get_current_tenant
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -73,22 +76,36 @@ async def list_follow_ups(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     customer_id: Optional[int] = Query(None),
+    activity_type_code: Optional[str] = Query(None, description="跟进方式（字典 SALES_FOLLOW_UP_TYPE）"),
     keyword: Optional[str] = Query(None),
+    quotation_code: Optional[str] = Query(None, description="关联报价单号（模糊）"),
+    sales_order_code: Optional[str] = Query(None, description="关联销售订单号（模糊）"),
     occurred_from: Optional[datetime] = Query(None),
     occurred_to: Optional[datetime] = Query(None),
     pending_only: bool = Query(False, description="仅显示已到期待跟进（下次跟进时间已至）"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 occurred_at、-next_follow_up_at"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in CUSTOMER_FOLLOW_UP_SORTABLE_FIELDS:
+            safe_order_by = order_by
+
     return await _service.list_follow_ups(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
         customer_id=customer_id,
+        activity_type_code=activity_type_code,
         keyword=keyword,
+        quotation_code=quotation_code,
+        sales_order_code=sales_order_code,
         occurred_from=occurred_from,
         occurred_to=occurred_to,
         pending_only=pending_only,
+        order_by=safe_order_by,
         current_user=current_user,
     )
 

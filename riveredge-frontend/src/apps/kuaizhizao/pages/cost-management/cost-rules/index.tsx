@@ -8,7 +8,8 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
@@ -26,6 +27,12 @@ import { costRuleApi } from '../../../services/cost';
 import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  COST_CRUD_PINNED_ACTIVE_FIELD,
+  costDocCreatedUpdatedColumns,
+  costRuleSearchColumns,
+  resolveCostRuleListParams,
+} from '../../../../kuaicaiwu/utils/costListCore';
 
 interface CostRule {
   id?: number;
@@ -49,8 +56,10 @@ interface CostRule {
 }
 
 const CostRulePage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
 
   // Modal 相关状态（创建/编辑规则）
   const [modalVisible, setModalVisible] = useState(false);
@@ -176,103 +185,121 @@ const CostRulePage: React.FC = () => {
     }
   };
 
-  /**
-   * 表格列定义
-   */
-  const columns: ProColumns<CostRule>[] = [
-    {
-      title: '规则编号',
-      dataIndex: 'code',
-      key: 'code',
-      width: 150,
-      fixed: 'left',
-    },
-    {
-      title: '规则名称',
-      dataIndex: 'name',
-      key: 'name',
-      width: 200,
-    },
-    {
-      title: '规则类型',
-      dataIndex: 'rule_type',
-      key: 'rule_type',
-      width: 120,
-      render: (_, r) => {
-        const text = r.rule_type;
-        const typeMap: Record<string, { color: string; text: string }> = {
-          材料成本: { color: 'blue', text: '材料成本' },
-          人工成本: { color: 'green', text: '人工成本' },
-          制造费用: { color: 'orange', text: '制造费用' },
-        };
-        const type = typeMap[text || ''] || { color: 'default', text: text || '-' };
-        return <Tag color={type.color}>{type.text}</Tag>;
+  const columns: ProColumns<CostRule>[] = useMemo(
+    () => [
+      ...costRuleSearchColumns({
+        code: t('app.kuaicaiwu.costRule.col.code'),
+        name: t('app.kuaicaiwu.costRule.col.name'),
+      }),
+      {
+        title: t('app.kuaicaiwu.costRule.col.code'),
+        dataIndex: 'code',
+        key: 'code',
+        width: 150,
+        fixed: 'left',
+        hideInSearch: true,
+        sorter: true,
       },
-    },
-    {
-      title: '成本类型',
-      dataIndex: 'cost_type',
-      key: 'cost_type',
-      width: 120,
-    },
-    {
-      title: '计算方法',
-      dataIndex: 'calculation_method',
-      key: 'calculation_method',
-      width: 120,
-    },
-    {
-      title: '是否启用',
-      dataIndex: 'is_active',
-      key: 'is_active',
-      width: 100,
-      render: (_, r) => (
-        <Tag color={r.is_active ? 'green' : 'red'}>{r.is_active ? '启用' : '禁用'}</Tag>
-      ),
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 180,
-      render: (_, r) => (r.created_at ? formatDateTime(r.created_at as string, 'YYYY-MM-DD HH:mm:ss') : '-'),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 200,
-      fixed: 'right',
-      render: (_: any, record: CostRule) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            编辑
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record)}
-          >
-            删除
-          </Button>
-        </Space>
-      ),
-    },
-  ];
+      {
+        title: t('app.kuaicaiwu.costRule.col.name'),
+        dataIndex: 'name',
+        key: 'name',
+        width: 200,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.costRule.col.ruleType'),
+        dataIndex: 'rule_type',
+        key: 'rule_type',
+        width: 120,
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => {
+          const text = r.rule_type;
+          const typeMap: Record<string, { color: string; text: string }> = {
+            材料成本: { color: 'blue', text: '材料成本' },
+            人工成本: { color: 'green', text: '人工成本' },
+            制造费用: { color: 'orange', text: '制造费用' },
+          };
+          const type = typeMap[text || ''] || { color: 'default', text: text || '-' };
+          return <Tag color={type.color}>{type.text}</Tag>;
+        },
+      },
+      {
+        title: t('app.kuaicaiwu.costRule.col.costType'),
+        dataIndex: 'cost_type',
+        key: 'cost_type',
+        width: 120,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.costRule.col.calculationMethod'),
+        dataIndex: 'calculation_method',
+        key: 'calculation_method',
+        width: 120,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.costRule.col.status'),
+        dataIndex: 'is_active',
+        key: 'is_active',
+        width: 100,
+        hideInSearch: true,
+        sorter: true,
+        valueType: 'select',
+        valueEnum: {
+          true: { text: t('app.kuaicaiwu.costRule.status.active') },
+          false: { text: t('app.kuaicaiwu.costRule.status.inactive') },
+        },
+        render: (_, r) => (
+          <Tag color={r.is_active ? 'green' : 'red'}>
+            {r.is_active ? t('app.kuaicaiwu.costRule.status.active') : t('app.kuaicaiwu.costRule.status.inactive')}
+          </Tag>
+        ),
+      },
+      ...costDocCreatedUpdatedColumns<CostRule>(t),
+      {
+        title: t('app.kuaicaiwu.costCommon.action'),
+        key: 'action',
+        width: 200,
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_: unknown, record: CostRule) => (
+          <Space>
+            <Button
+              type="link"
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => handleDetail(record)}
+            >
+              {t('app.kuaicaiwu.costCommon.detail')}
+            </Button>
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            >
+              {t('app.kuaicaiwu.costCommon.edit')}
+            </Button>
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => handleDelete(record)}
+            >
+              {t('app.kuaicaiwu.costCommon.delete')}
+            </Button>
+          </Space>
+        ),
+      },
+    ],
+    [t],
+  );
 
   /**
    * 详情描述项
@@ -368,31 +395,31 @@ const CostRulePage: React.FC = () => {
           </Button>
         }
         actionRef={actionRef}
-        request={async (params) => {
-          // 将 ProTable 的分页参数转换为后端期望的格式
-          const queryParams: any = {
-            skip: (params.current! - 1) * params.pageSize!,
-            limit: params.pageSize!,
-          };
-          
-          // 传递其他搜索参数
-          if (params.rule_type) queryParams.rule_type = params.rule_type;
-          if (params.cost_type) queryParams.cost_type = params.cost_type;
-          if (params.is_active !== undefined) queryParams.is_active = params.is_active;
-          if (params.search) queryParams.search = params.search;
-          
-          const response = await costRuleApi.list(queryParams);
-          return {
-            data: response.items || [],
-            success: true,
-            total: response.total || 0,
-          };
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={COST_CRUD_PINNED_ACTIVE_FIELD}
+        request={async (params, sort, _filter, searchFormValues) => {
+          const listParams = resolveCostRuleListParams(searchFormValues, sort);
+          lastListParamsRef.current = listParams;
+          try {
+            const response = await costRuleApi.list({
+              skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+              limit: params.pageSize ?? 20,
+              ...listParams,
+            });
+            return {
+              data: response.items || [],
+              success: true,
+              total: response.total || 0,
+            };
+          } catch (error: unknown) {
+            const err = error as { message?: string };
+            messageApi.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+            return { data: [], success: false, total: 0 };
+          }
         }}
         columns={columns}
         rowKey="uuid"
-        search={{
-          labelWidth: 'auto',
-        }}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,

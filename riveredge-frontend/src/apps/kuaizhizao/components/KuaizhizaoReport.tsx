@@ -16,6 +16,8 @@ import {
   type KuaizhizaoReportDomain,
   type KuaizhizaoReportStatCards,
 } from '../utils/kuaizhizaoReportCore';
+import { extractProTableSort } from '../../../utils/tableQueryKey';
+import { resolveProductionReportApiParams } from '../utils/productionExecutionReportCore';
 
 export type KuaizhizaoReportProps<T extends Record<string, unknown> = Record<string, unknown>> = {
   title: string;
@@ -31,6 +33,8 @@ export type KuaizhizaoReportProps<T extends Record<string, unknown> = Record<str
   rowKey?: string | keyof T;
   statCards?: KuaizhizaoReportStatCards;
   children?: React.ReactNode;
+  /** keyword 走后端时关闭客户端拼音过滤 */
+  skipFuzzyPinyinClientFilter?: boolean;
   /** 完全自定义请求（覆盖自动路由） */
   request?: (
     params: Record<string, unknown>,
@@ -53,6 +57,7 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
   rowKey = 'id',
   statCards,
   children,
+  skipFuzzyPinyinClientFilter = true,
   request: requestOverride,
 }: KuaizhizaoReportProps<T>) {
   const domainHint = domainProp ?? inferDomainFromPersistenceId(columnPersistenceId);
@@ -64,13 +69,28 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
   const defaultRequest = useCallback(
     async (
       params: Record<string, unknown>,
-      _sort?: Record<string, unknown>,
+      sort?: Record<string, unknown>,
       _filter?: Record<string, unknown>,
       searchFormValues?: Record<string, unknown>,
     ) => {
+      const productionParams =
+        domainHint === 'production'
+          ? resolveProductionReportApiParams(searchFormValues, sort)
+          : {};
+      const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
+      const order_by =
+        productionParams.order_by ??
+        (sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined);
       return fetchKuaizhizaoReport(reportType, params, searchFormValues, {
         domainHint,
         dateRangeKeys,
+        order_by,
+        keyword: productionParams.keyword,
+        status: productionParams.status,
+        order_code: productionParams.order_code,
+        product_name: productionParams.product_name,
+        supplier_name: productionParams.supplier_name,
+        work_order_code: productionParams.work_order_code,
       }) as Promise<{ data: T[]; total: number; success: boolean; summary?: Record<string, number> }>;
     },
     [reportType, domainHint, dateRangeKeys],
@@ -91,6 +111,7 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
       rowKey={rowKey as string}
       statCards={statCards as StatCard[] | ((summary: Record<string, number>) => StatCard[])}
       request={requestOverride ?? defaultRequest}
+      skipFuzzyPinyinClientFilter={skipFuzzyPinyinClientFilter}
     >
       {children}
     </UniReport>

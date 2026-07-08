@@ -17,6 +17,11 @@ import type { HourlyRate } from '../../../types/performance';
 import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
 import { getPerformanceYesNoValueEnum } from '../components/performanceMeta';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  normalizePerformanceListResponse,
+  PERFORMANCE_PINNED_IS_ACTIVE_FIELD,
+  resolveHourlyRateListParams,
+} from '../../../utils/performanceListCore';
 
 const HourlyRatesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -79,6 +84,7 @@ const HourlyRatesPage: React.FC = () => {
         dataIndex: 'department_name',
         width: 120,
         ellipsis: true,
+        sorter: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.department_name ?? '') }} ellipsis>
             {r.department_name ?? '-'}
@@ -90,13 +96,14 @@ const HourlyRatesPage: React.FC = () => {
         dataIndex: 'position_name',
         width: 120,
         ellipsis: true,
+        sorter: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.position_name ?? '') }} ellipsis>
             {r.position_name ?? '-'}
           </Typography.Text>
         ),
       },
-      { title: t('app.kuaizhizao.performance.hourlyRates.columns.rate'), dataIndex: 'rate', width: 120, align: 'right' },
+      { title: t('app.kuaizhizao.performance.hourlyRates.columns.rate'), dataIndex: 'rate', width: 120, align: 'right', sorter: true },
       {
         title: t('app.kuaizhizao.performance.common.form.active'),
         dataIndex: 'is_active',
@@ -106,8 +113,10 @@ const HourlyRatesPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.performance.common.columns.updatedAt'),
         dataIndex: 'updated_at',
-        width: 168,
+        width: 132,
+        uniTableKeepWidth: true,
         hideInSearch: true,
+        sorter: true,
         render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
@@ -162,17 +171,20 @@ const HourlyRatesPage: React.FC = () => {
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.performance.hourly-rates"
           showAdvancedSearch
-          request={async (params) => {
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={PERFORMANCE_PINNED_IS_ACTIVE_FIELD}
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
               const pageSize = params.pageSize || 20;
               const skip = ((params.current || 1) - 1) * pageSize;
-              const result = await employeePerformanceApi.listHourlyRates({
+              const listParams = resolveHourlyRateListParams(searchFormValues, sort);
+              const response = await employeePerformanceApi.listHourlyRates({
                 skip,
                 limit: pageSize,
+                ...listParams,
               });
-              const rows = Array.isArray(result) ? result : [];
-              const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
-              return { data: rows, success: true, total };
+              const { data, total } = normalizePerformanceListResponse(response);
+              return { data: data as HourlyRate[], success: true, total };
             } catch (e: any) {
               messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
               return { data: [], success: false, total: 0 };

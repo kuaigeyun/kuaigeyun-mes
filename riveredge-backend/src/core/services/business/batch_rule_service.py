@@ -61,30 +61,36 @@ class BatchRuleService:
         page_size: int = 20,
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
     ) -> tuple[List[BatchRule], int]:
         """获取批号规则列表（支持关键词模糊、字段排序）"""
+        from apps.master_data.services.master_data_list_core import apply_master_crud_list_filters
+
         await BatchRuleService.get_or_create_system_default(tenant_id)
         qs = BatchRule.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if is_active is not None:
             qs = qs.filter(is_active=is_active)
-        if keyword and keyword.strip():
-            kw = keyword.strip()
-            qs = qs.filter(Q(name__icontains=kw) | Q(code__icontains=kw) | Q(description__icontains=kw))
+        qs, order_expr = apply_master_crud_list_filters(
+            qs,
+            keyword=keyword,
+            code=code,
+            name=name,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_by,
+            sort_order=sort_order,
+            default_sort_col="name",
+        )
         total = await qs.count()
-        allowed = {
-            "name",
-            "code",
-            "description",
-            "seq_reset_rule",
-            "is_active",
-            "created_at",
-            "updated_at",
-        }
-        field = sort_by if sort_by in allowed else "name"
-        desc = (sort_order or "asc").lower() == "desc"
-        order_expr = f"-{field}" if desc else field
         rules = await qs.order_by(order_expr).offset((page - 1) * page_size).limit(page_size).all()
         return rules, total
 

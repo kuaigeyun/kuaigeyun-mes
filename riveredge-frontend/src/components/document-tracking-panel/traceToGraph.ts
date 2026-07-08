@@ -96,6 +96,33 @@ function keepOnlyFinishedGoodsReceiptToSalesDeliveryEdges(
 }
 
 /** 工单与成品/半成品入库之间插入报工时间线节点后，改线为 工单→时间线→入库 */
+/** reporting_timeline 为工单下游合成节点；upstream 树里挂为 child 时仍应连 工单→汇总 */
+function resolveUpstreamWalkEdge(
+  parent: DocumentTraceNode,
+  child: DocumentTraceNode
+): { source: string; target: string } {
+  const parentKey = traceDocumentNodeKey(parent.document_type, parent.document_id);
+  const childKey = traceDocumentNodeKey(child.document_type, child.document_id);
+  if (parent.document_type === 'work_order' && child.document_type === 'reporting_timeline') {
+    return { source: parentKey, target: childKey };
+  }
+  return { source: childKey, target: parentKey };
+}
+
+/** 清除误生成的 报工汇总→工单 反向边（与 rewire 的 工单→汇总 冲突会导致连线重叠） */
+function dropReportingTimelineToWorkOrderEdges(
+  edges: TraceFlowEdgeDatum[],
+  edgeDedup: Set<string>
+): void {
+  for (let i = edges.length - 1; i >= 0; i--) {
+    const e = edges[i];
+    if (e.source.startsWith('reporting_timeline-') && e.target.startsWith('work_order-')) {
+      edgeDedup.delete(`${e.source}\n${e.target}`);
+      edges.splice(i, 1);
+    }
+  }
+}
+
 function rewireWorkOrderReceiptsThroughReportingTimeline(
   nodeMap: Map<string, TraceGraphNodeMeta>,
   edges: TraceFlowEdgeDatum[],
@@ -139,11 +166,10 @@ function walkUpstream(
     is_deleted: node.is_deleted ?? undefined,
     reporting_timeline: node.reporting_timeline ?? undefined,
   });
-  const parentKey = traceDocumentNodeKey(node.document_type, node.document_id);
   const children = node.children ?? [];
   for (const child of children) {
-    const childKey = traceDocumentNodeKey(child.document_type, child.document_id);
-    addEdgeDedup(edges, dedup, childKey, parentKey);
+    const { source, target } = resolveUpstreamWalkEdge(node, child);
+    addEdgeDedup(edges, dedup, source, target);
     walkUpstream(child, nodeMap, edges, dedup);
   }
 }
@@ -214,6 +240,7 @@ export function traceResponseToFlowGraphData(
 
   keepOnlyFinishedGoodsReceiptToSalesDeliveryEdges(nodeMap, edges, edgeDedup);
   rewireWorkOrderReceiptsThroughReportingTimeline(nodeMap, edges, edgeDedup);
+  dropReportingTimelineToWorkOrderEdges(edges, edgeDedup);
 
   const metaById: Record<string, TraceGraphNodeMeta> = {};
   const nodes: TraceFlowDatum[] = [];

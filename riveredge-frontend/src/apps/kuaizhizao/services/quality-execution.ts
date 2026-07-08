@@ -319,8 +319,23 @@ export const qualityApi = {
 };
 
 /** 质检方案 API */
+export interface InspectionPlanListResult {
+  items: unknown[];
+  total: number;
+}
+
+export function unwrapInspectionPlanList(res: InspectionPlanListResult | unknown[] | null | undefined): unknown[] {
+  if (Array.isArray(res)) return res;
+  if (res && typeof res === 'object') {
+    const obj = res as InspectionPlanListResult & { data?: unknown[] };
+    return Array.isArray(obj.items) ? obj.items : Array.isArray(obj.data) ? obj.data : [];
+  }
+  return [];
+}
+
 export const inspectionPlanApi = {
-  list: async (params?: any) => apiRequest('/apps/kuaizhizao/inspection-plans', { method: 'GET', params }),
+  list: async (params?: Record<string, unknown>): Promise<InspectionPlanListResult> =>
+    apiRequest('/apps/kuaizhizao/inspection-plans', { method: 'GET', params }),
   create: async (data: any) => apiRequest('/apps/kuaizhizao/inspection-plans', { method: 'POST', data }),
   update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/inspection-plans/${id}`, { method: 'PUT', data }),
   delete: async (id: string) => apiRequest(`/apps/kuaizhizao/inspection-plans/${id}`, { method: 'DELETE' }),

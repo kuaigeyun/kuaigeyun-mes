@@ -54,13 +54,34 @@ async def list_projects(
     status: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
     project_type: Optional[str] = Query(None, description="RD | DELIVERY"),
+    project_code: Optional[str] = Query(None),
+    project_name: Optional[str] = Query(None),
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None, description="asc | desc"),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
     _auth=Depends(require_access("kuaiplm.project", "read", required_permissions=["kuaiplm:project:read"])),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows = await service.list_projects(
-        tenant_id, skip=skip, limit=limit, status=status, keyword=keyword, project_type=project_type
+    rows, total = await service.list_projects(
+        tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        keyword=keyword,
+        project_type=project_type,
+        project_code=project_code,
+        project_name=project_name,
+        sort_field=sort_field,
+        sort_order=sort_order,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
-    return {"data": rows, "total": len(rows), "success": True}
+    return {"data": rows, "total": total, "success": True}
 
 
 @router.post("", response_model=RdProjectResponse, status_code=status.HTTP_201_CREATED, summary="Create project")

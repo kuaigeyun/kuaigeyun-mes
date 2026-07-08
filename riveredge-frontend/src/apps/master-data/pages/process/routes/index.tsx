@@ -22,7 +22,14 @@ import { RouteFormModal } from '../../../components/RouteFormModal';
 import { processRouteApi } from '../../../services/process';
 import type { ProcessRoute } from '../../../types/process';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
-import { extractProTableSort, mapProcessListSortField } from '../../../../../utils/tableQueryKey';
+import {
+  buildMasterCrudActiveValueEnum,
+  masterCrudCodeNameSearchColumns,
+  masterCrudCreatedUpdatedSnakeColumns,
+  PROCESS_ROUTE_PINNED_ACTIVE_FIELD,
+  processRouteActiveSearchColumn,
+  resolveProcessListParams,
+} from '../../../utils/processListCore';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
@@ -44,7 +51,13 @@ const ProcessRoutesPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const routeActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+    [t],
+  );
 
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [processRouteDetail, setProcessRouteDetail] = useState<ProcessRoute | null>(null);
@@ -371,14 +384,14 @@ const ProcessRoutesPage: React.FC = () => {
     try {
       let toExport: ProcessRoute[] = [];
       if (type === 'all') {
-        const res = await processRouteApi.list({ skip: 0, limit: 10000 });
+        const res = await processRouteApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
         toExport = Array.isArray(res) ? res : res?.data ?? [];
       } else if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
         toExport = currentPageData.filter((r) => selectedRowKeys.includes(r.uuid));
       } else if (type === 'currentPage' && currentPageData) {
         toExport = currentPageData;
       } else {
-        const res = await processRouteApi.list({ skip: 0, limit: 10000 });
+        const res = await processRouteApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
         toExport = Array.isArray(res) ? res : res?.data ?? [];
       }
       if (toExport.length === 0) {
@@ -459,18 +472,24 @@ const ProcessRoutesPage: React.FC = () => {
   const columns: ProColumns<ProcessRoute>[] = useMemo(() => {
     const customFieldColumns = generateCustomFieldColumns();
     return [
+    ...masterCrudCodeNameSearchColumns({
+      code: t('field.route.code'),
+      name: t('field.route.name'),
+    }),
     {
       title: t('field.route.code'),
       dataIndex: 'code',
       copyable: true,width: 150,
       fixed: 'left',
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('field.route.name'),
       dataIndex: 'name',
       width: 200,
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('field.route.description'),
@@ -478,15 +497,13 @@ const ProcessRoutesPage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
     },
+    processRouteActiveSearchColumn(t('app.master-data.routes.status'), routeActiveValueEnum),
     {
       title: t('app.master-data.routes.status'),
       dataIndex: 'is_active',
       width: 100,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
-        false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
-      },
+      hideInSearch: true,
+      valueEnum: routeActiveValueEnum,
       render: (_: any, record: ProcessRoute) => {
         const isActive = record?.is_active ?? (record as any)?.isActive;
         return (
@@ -498,14 +515,7 @@ const ProcessRoutesPage: React.FC = () => {
       sorter: true,
     },
     ...customFieldColumns,
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
+    ...masterCrudCreatedUpdatedSnakeColumns<ProcessRoute>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -543,7 +553,7 @@ const ProcessRoutesPage: React.FC = () => {
       ),
     },
     ];
-  }, [customFields, t]);
+  }, [customFields, t, routeActiveValueEnum]);
 
   return (
     <ListPageTemplate>
@@ -552,31 +562,25 @@ const ProcessRoutesPage: React.FC = () => {
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
-          // 处理搜索参数
-          const apiParams: any = {
+          const listParams = resolveProcessListParams(searchFormValues, sort, {
+            activeField: PROCESS_ROUTE_PINNED_ACTIVE_FIELD,
+          });
+          lastListParamsRef.current = listParams;
+          const apiParams = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
+            isActive: listParams.isActive as boolean | undefined,
+            keyword: listParams.keyword as string | undefined,
+            code: listParams.code as string | undefined,
+            name: listParams.name as string | undefined,
+            created_start_date: listParams.created_start_date as string | undefined,
+            created_end_date: listParams.created_end_date as string | undefined,
+            updated_start_date: listParams.updated_start_date as string | undefined,
+            updated_end_date: listParams.updated_end_date as string | undefined,
+            sortBy: listParams.sortBy as string | undefined,
+            sortOrder: listParams.sortOrder as 'asc' | 'desc' | undefined,
           };
-          
-          // 启用状态筛选
-          if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.isActive = searchFormValues.isActive;
-          }
 
-          const fuzzyKw = String(searchFormValues?.keyword ?? '').trim();
-          const fallbackKw =
-            fuzzyKw ||
-            String(searchFormValues?.code ?? '').trim() ||
-            String(searchFormValues?.name ?? '').trim();
-          if (fallbackKw) apiParams.keyword = fallbackKw;
-
-          const { sortBy: rawSortBy, sortOrder } = extractProTableSort(sort);
-          const sortField = mapProcessListSortField(rawSortBy);
-          if (sortField) {
-            apiParams.sortBy = sortField;
-            apiParams.sortOrder = sortOrder;
-          }
-          
           try {
             const result = await processRouteApi.list(apiParams);
             const listData = Array.isArray(result) ? result : result?.data ?? [];
@@ -597,7 +601,9 @@ const ProcessRoutesPage: React.FC = () => {
           }
         }}
         rowKey="uuid"
-        showAdvancedSearch={true}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={PROCESS_ROUTE_PINNED_ACTIVE_FIELD}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,

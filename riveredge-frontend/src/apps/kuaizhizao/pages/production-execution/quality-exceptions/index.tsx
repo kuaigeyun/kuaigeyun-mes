@@ -23,6 +23,13 @@ import { ACTIVE_QUALITY_EXCEPTION_STATUSES } from '../../../constants/exceptionS
 import { qualityImprovementApi } from '../../../services/quality-improvement';
 import { buildInspectionDetailPath } from '../../quality-management/components/inspectionTemplateUtils';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { formatDateTime } from '../../../../../utils/format';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  buildQualityExceptionStatusValueEnum,
+  resolveProductionExceptionListStatusParams,
+} from '../../../utils/productionExceptionList';
 
 const P = 'app.kuaizhizao.productionException';
 const Q = `${P}.quality`;
@@ -185,7 +192,20 @@ const QualityExceptionsPage: React.FC = () => {
     }
   };
 
+  const qualityStatusValueEnum = useMemo(() => buildQualityExceptionStatusValueEnum(t), [t]);
+
   const columns: ProColumns<QualityException>[] = useMemo(() => [
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      hideInSearch: false,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
+    },
     {
       title: t(`${P}.col.exceptionType`),
       dataIndex: 'exception_type',
@@ -251,14 +271,10 @@ const QualityExceptionsPage: React.FC = () => {
     {
       title: t(`${P}.col.status`),
       dataIndex: 'status',
-      hideInTable: true,
-      valueEnum: {
-        pending: { text: t(`${P}.status.pending`), status: 'default' },
-        investigating: { text: t(`${P}.status.investigating`), status: 'processing' },
-        correcting: { text: t(`${P}.status.correcting`), status: 'processing' },
-        closed: { text: t(`${P}.status.closed`), status: 'success' },
-        cancelled: { text: t(`${P}.status.cancelled`), status: 'error' },
-      },
+      width: 100,
+      hideInSearch: false,
+      valueType: 'select',
+      valueEnum: qualityStatusValueEnum,
     },
     {
       title: t(`${P}.col.responsiblePerson`),
@@ -268,8 +284,13 @@ const QualityExceptionsPage: React.FC = () => {
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at',
-      valueType: 'dateTime',
-      width: 160,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      defaultSortOrder: 'descend',
+      hideInSearch: true,
+      render: (_, record) =>
+        record.created_at ? formatDateTime(record.created_at, 'YYYY-MM-DD HH:mm') : '-',
     },
     {
       title: t('common.actions'),
@@ -350,7 +371,7 @@ const QualityExceptionsPage: React.FC = () => {
           { keyPrefix: `quality-exception-actions-${record.id ?? 'row'}` },
         ),
     },
-  ], [t, canCreate8D, navigate, messageApi]);
+  ], [qualityStatusValueEnum, t, canCreate8D, navigate, messageApi]);
 
   return (
     <ListPageTemplate>
@@ -360,22 +381,51 @@ const QualityExceptionsPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.production-execution.quality-exceptions"
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           try {
+            const s = searchFormValues ?? {};
+            const statusParams = resolveProductionExceptionListStatusParams(s);
+            const { sortBy, sortOrder } = extractProTableSort(sort);
+            const orderBy =
+              sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+            const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
             const pageSize = params.pageSize || 20;
             const skip = (params.current! - 1) * pageSize;
             const queryParams: Record<string, unknown> = {
               skip,
               limit: pageSize,
-              exception_type: searchFormValues?.exception_type ?? params.exception_type,
-              severity: searchFormValues?.severity ?? params.severity,
+              order_by: orderBy,
+              exception_type: s.exception_type ?? params.exception_type,
+              severity: s.severity ?? params.severity,
               inspection_record_id: initialInspectionRecordId || undefined,
               inspection_source_type: initialInspectionSourceType || undefined,
+              ...statusParams,
             };
-            if (searchFormValues?.status) {
-              queryParams.status = searchFormValues.status;
-            } else {
+            if (!statusParams.status) {
               queryParams.statuses = ACTIVE_QUALITY_EXCEPTION_STATUSES;
+            }
+            if (fuzzyKeyword) {
+              queryParams.keyword = fuzzyKeyword;
+            } else {
+              if (s.work_order_code != null && String(s.work_order_code).trim()) {
+                queryParams.work_order_code = String(s.work_order_code).trim();
+              }
+              if (s.material_code != null && String(s.material_code).trim()) {
+                queryParams.material_code = String(s.material_code).trim();
+              }
+              if (s.batch_no != null && String(s.batch_no).trim()) {
+                queryParams.batch_no = String(s.batch_no).trim();
+              }
+            }
+            const createdRange = s.created_at_range as [unknown, unknown] | undefined;
+            if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+              queryParams.created_start_date = formatDateTime(
+                createdRange[0] as string | Date,
+                'YYYY-MM-DD',
+              );
+              queryParams.created_end_date = createdRange[1]
+                ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+                : queryParams.created_start_date;
             }
             const result = await apiRequest<ExceptionListPage<QualityException>>(
               '/apps/kuaizhizao/exceptions/quality',
@@ -399,6 +449,9 @@ const QualityExceptionsPage: React.FC = () => {
           }
         }}
         showAdvancedSearch={true}
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField="status"
+        pinnedTabsValueEnum={qualityStatusValueEnum}
         scroll={{ x: 1680 }}
       />
 

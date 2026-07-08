@@ -102,11 +102,24 @@ async def list_cost_calculations(
     work_order_id: Optional[int] = Query(None),
     product_id: Optional[int] = Query(None),
     calculation_status: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None),
+    calculation_no: Optional[str] = Query(None),
+    work_order_code: Optional[str] = Query(None),
+    product_code: Optional[str] = Query(None),
+    product_name: Optional[str] = Query(None),
+    calculation_date_start: Optional[str] = Query(None),
+    calculation_date_end: Optional[str] = Query(None),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     service = CostCalculationService()
-    calculations = await service.list_cost_calculations(
+    calculations, total = await service.list_cost_calculations(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -114,17 +127,20 @@ async def list_cost_calculations(
         work_order_id=work_order_id,
         product_id=product_id,
         calculation_status=calculation_status,
+        keyword=keyword,
+        calculation_no=calculation_no,
+        work_order_code=work_order_code,
+        product_code=product_code,
+        product_name=product_name,
+        calculation_date_start=calculation_date_start,
+        calculation_date_end=calculation_date_end,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+        sort_field=sort_field,
+        sort_order=sort_order,
     )
-    query = CostCalculation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-    if calculation_type:
-        query = query.filter(calculation_type=calculation_type)
-    if work_order_id:
-        query = query.filter(work_order_id=work_order_id)
-    if product_id:
-        query = query.filter(product_id=product_id)
-    if calculation_status:
-        query = query.filter(calculation_status=calculation_status)
-    total = await query.count()
     return CostCalculationListResponse(
         items=calculations,
         total=total,

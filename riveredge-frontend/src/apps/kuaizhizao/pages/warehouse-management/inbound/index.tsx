@@ -98,6 +98,11 @@ import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
 import { inboundReceiptTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintConfig';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import {
+  WAREHOUSE_DOC_PINNED_STATUS_FIELD,
+  buildInboundHubStatusValueEnum,
+  resolveInboundHubListParams,
+} from '../../../utils/warehouseListCore';
 
 interface InboundOrder extends InboundHubOrder {
   workshop_name?: string;
@@ -1477,6 +1482,7 @@ const InboundPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseInbound.col.docNo'),
       dataIndex: ['receipt_code', 'return_code'],
       hideInTable: true,
+      sorter: true,
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.receiptType'),
@@ -1489,11 +1495,7 @@ const InboundPage: React.FC = () => {
       dataIndex: 'status',
       hideInTable: true,
       valueType: 'select',
-      valueEnum: {
-        pending: { text: t('app.kuaizhizao.warehouseInbound.filter.status.pending') },
-        posted: { text: t('app.kuaizhizao.warehouseInbound.filter.status.posted') },
-        all: { text: t('app.kuaizhizao.warehouseInbound.filter.status.all') },
-      },
+      valueEnum: buildInboundHubStatusValueEnum(t),
       initialValue: 'pending',
     },
     {
@@ -1515,12 +1517,14 @@ const InboundPage: React.FC = () => {
       dataIndex: 'total_quantity',
       width: 100,
       align: 'right',
+      sorter: true,
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.totalItems'),
       dataIndex: 'total_items',
       width: 100,
       align: 'right',
+      sorter: true,
       render: (v: number | null | undefined) => (v != null ? v : '-'),
     },
     {
@@ -1528,6 +1532,7 @@ const InboundPage: React.FC = () => {
       dataIndex: 'warehouse_name',
       width: 120,
       ellipsis: true,
+      sorter: true,
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.operator'),
@@ -1539,14 +1544,18 @@ const InboundPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.warehouseInbound.col.date'),
       dataIndex: ['receipt_date', 'return_time'],
-      width: 160,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
       render: (_, record) => formatInboundDateDisplay(record),
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.updatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
+      sorter: true,
       defaultSortOrder: 'descend',
       render: (_, r) => formatDateTimeBySiteSetting(r.updated_at),
     },
@@ -1663,9 +1672,17 @@ const InboundPage: React.FC = () => {
         rowKey={(record) => `${record.receipt_type}::${record.id}`}
         columns={columns}
         showAdvancedSearch={true}
-        request={async (params) => {
+        pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
+        skipFuzzyPinyinClientFilter
+        request={async (params, sort, _filter, searchFormValues) => {
           try {
-            const result = await fetchInboundHubList(params as Record<string, unknown>, {
+            const listParams = resolveInboundHubListParams(searchFormValues, sort);
+            const result = await fetchInboundHubList(
+              {
+                ...(params as Record<string, unknown>),
+                ...listParams,
+              },
+              {
               enrichPurchaseReceiptRecordsWithCustomFields,
               enrichFinishedGoodsReceiptRecordsWithCustomFields,
               enrichProductionReturnRecordsWithCustomFields,

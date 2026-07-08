@@ -20,6 +20,13 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { equipmentApi } from '../../../services/equipment';
 import { scrapApplicationsApi } from '../../../services/equipmentOps';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  APPROVAL_DOC_PINNED_STATUS_FIELD,
+  buildApprovalDocStatusValueEnum,
+  normalizeEquipmentListResponse,
+  resolveApprovalDocListParams,
+} from '../../../utils/equipmentListCore';
 
 const P = 'app.kuaizhizao.equipmentOps.scrap';
 const RESOURCE = 'kuaizhizao:equipment-scrap';
@@ -40,8 +47,8 @@ interface ScrapApplication {
 
 const STATUS_COLORS: Record<string, string> = {
   草稿: 'default',
-  待审批: 'processing',
-  已批准: 'success',
+  已提交: 'processing',
+  已审核: 'success',
   已驳回: 'error',
 };
 
@@ -150,24 +157,89 @@ const EquipmentScrapPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
+  const approvalStatusValueEnum = useMemo(() => buildApprovalDocStatusValueEnum(), []);
+
   const columns: ProColumns<ScrapApplication>[] = useMemo(
     () => [
-      { title: t(`${P}.col.applicationNo`), dataIndex: 'application_no', width: 140, fixed: 'left' },
-      { title: t(`${P}.col.equipment`), dataIndex: 'equipment_name', width: 160, ellipsis: true },
-      { title: t(`${P}.col.reason`), dataIndex: 'reason', ellipsis: true },
-      { title: t(`${P}.col.scrapDate`), dataIndex: 'scrap_date', width: 110, valueType: 'date' },
-      { title: t(`${P}.col.applicant`), dataIndex: 'applicant_name', width: 100 },
+      {
+        title: t(`${P}.col.scrapDate`),
+        dataIndex: 'scrap_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 10 } as ProColumns['search'],
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 11 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        valueType: 'select',
+        valueEnum: approvalStatusValueEnum,
+        hideInTable: true,
+        search: { order: 20 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.applicationNo`),
+        dataIndex: 'application_no',
+        width: 140,
+        fixed: 'left',
+        sorter: true,
+        search: { order: 30 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.equipment`),
+        dataIndex: 'equipment_name',
+        width: 160,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t(`${P}.col.reason`),
+        dataIndex: 'reason',
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t(`${P}.col.scrapDate`),
+        dataIndex: 'scrap_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        valueType: 'date',
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t(`${P}.col.applicant`),
+        dataIndex: 'applicant_name',
+        width: 100,
+        sorter: true,
+        hideInSearch: true,
+      },
       {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
         width: 90,
+        sorter: true,
+        hideInSearch: true,
         render: (_, r) => <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>,
       },
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 168,
+        width: 132,
+        uniTableKeepWidth: true,
         hideInSearch: true,
+        defaultSortOrder: 'descend',
+        sorter: true,
         render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
       {
@@ -218,7 +290,7 @@ const EquipmentScrapPage: React.FC = () => {
                 {t(`${P}.action.submit`)}
               </Button>
             )}
-            {perms.canAction?.('approve') && record.status === '待审批' && (
+            {perms.canAction?.('approve') && record.status === '已提交' && (
               <Button
                 {...rowActionKind('approve')}
                 type="link"
@@ -232,7 +304,7 @@ const EquipmentScrapPage: React.FC = () => {
                 {t(`${P}.action.approve`)}
               </Button>
             )}
-            {perms.canAction?.('reject') && record.status === '待审批' && (
+            {perms.canAction?.('reject') && record.status === '已提交' && (
               <Button
                 {...rowActionKind('reject')}
                 type="link"
@@ -271,7 +343,7 @@ const EquipmentScrapPage: React.FC = () => {
         ),
       },
     ],
-    [t, perms],
+    [t, perms, approvalStatusValueEnum],
   );
 
   return (
@@ -283,13 +355,22 @@ const EquipmentScrapPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          request={async (params) => {
+          showAdvancedSearch={true}
+          pinnedTabsField={APPROVAL_DOC_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const listParams = resolveApprovalDocListParams(searchFormValues, sort, {
+                docDateRangeKeys: ['scrap_date_range', 'scrapDateRange'],
+                docDateParamPrefix: 'scrap',
+              });
               const res = await scrapApplicationsApi.list({
                 skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
                 limit: params.pageSize,
+                ...listParams,
               });
-              return { data: res.items ?? [], success: true, total: res.total ?? 0 };
+              const { data, total } = normalizeEquipmentListResponse(res);
+              return { data: data as ScrapApplication[], success: true, total };
             } catch {
               messageApi.error(t(`${P}.listFailed`));
               return { data: [], success: false, total: 0 };

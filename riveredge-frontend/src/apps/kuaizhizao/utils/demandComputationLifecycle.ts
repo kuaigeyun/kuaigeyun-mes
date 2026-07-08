@@ -7,6 +7,7 @@ import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycl
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 import { applyLifecycleI18n, requireI18nText, type LifecycleTranslateFn } from './lifecycleI18n';
+import { LIST_LIFECYCLE_STAGE_FIELD, resolveListLifecycleStageFromSearch } from '../../../utils/listLifecycleStage';
 import { LIFECYCLE_DOCUMENT_ACTION_LABEL_KEYS as DA } from '../constants/lifecycleDocumentActionLabelKeys';
 
 const DC = 'app.kuaizhizao.demandComputation';
@@ -117,3 +118,51 @@ export function getDemandComputationLifecycle(
     t,
   );
 }
+
+const DEMAND_COMPUTATION_LIFECYCLE_STAGE_LABELS = ['进行中', '计算中', '完成', '失败'] as const;
+
+const DEMAND_COMPUTATION_LIFECYCLE_STAGE_I18N: Record<string, string> = {
+  进行中: `${DC}.statusInProgress`,
+  计算中: `${DC}.statusComputing`,
+  完成: `${DC}.statusCompleted`,
+  失败: `${DC}.statusFailed`,
+};
+
+/** 列表筛选 / 钉住 Tab：与 computation_status 展示一致 */
+export function getDemandComputationLifecycleStageLabels(): string[] {
+  return [...DEMAND_COMPUTATION_LIFECYCLE_STAGE_LABELS];
+}
+
+export function buildDemandComputationLifecycleValueEnum(
+  t: LifecycleTranslateFn,
+): Record<string, { text: string; status?: 'Default' | 'Processing' | 'Error' | 'Success' | 'Warning' }> {
+  const statusByStage: Record<string, 'Default' | 'Processing' | 'Error' | 'Success' | 'Warning'> = {
+    进行中: 'Processing',
+    计算中: 'Processing',
+    完成: 'Success',
+    失败: 'Error',
+  };
+  return Object.fromEntries(
+    getDemandComputationLifecycleStageLabels().map((stage) => [
+      stage,
+      {
+        text: requireI18nText(t, DEMAND_COMPUTATION_LIFECYCLE_STAGE_I18N[stage]!),
+        status: statusByStage[stage] ?? 'Default',
+      },
+    ]),
+  );
+}
+
+/** 从搜索表单 / 钉住条件解析列表筛选 */
+export function resolveDemandComputationListLifecycleParams(
+  searchFormValues?: Record<string, unknown> | null,
+  params?: Record<string, unknown> | null,
+): { computation_status?: string } {
+  const stage = resolveListLifecycleStageFromSearch(searchFormValues, params, {
+    allowedStages: DEMAND_COMPUTATION_LIFECYCLE_STAGE_LABELS,
+  });
+  if (!stage) return {};
+  return { computation_status: stage };
+}
+
+export { LIST_LIFECYCLE_STAGE_FIELD } from '../../../utils/listLifecycleStage';

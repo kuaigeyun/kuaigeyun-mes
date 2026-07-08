@@ -20,7 +20,15 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { rowActionKind } from '../../../../../components/uni-action';
 import { equipmentApi } from '../../../services/equipment';
 import { inspectionSchemesApi, spotChecksApi } from '../../../services/equipmentOps';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  buildAbnormalityValueEnum,
+  buildSpotCheckStatusValueEnum,
+  EQUIPMENT_OPS_PINNED_STATUS_FIELD,
+  normalizeEquipmentListResponse,
+  resolveSpotCheckListParams,
+} from '../../../utils/equipmentListCore';
 
 const P = 'app.kuaizhizao.equipmentOps.spotCheck';
 const RESOURCE = 'kuaizhizao:equipment-spot-check';
@@ -215,31 +223,101 @@ const SpotChecksPage: React.FC = () => {
     },
   ];
 
+  const spotCheckStatusValueEnum = useMemo(() => buildSpotCheckStatusValueEnum(t), [t]);
+  const abnormalityValueEnum = useMemo(() => buildAbnormalityValueEnum(t, P), [t]);
+
   const columns: ProColumns<SpotCheck>[] = useMemo(
     () => [
-      { title: t(`${P}.col.documentNo`), dataIndex: 'document_no', width: 140, fixed: 'left' },
-      { title: t(`${P}.col.equipment`), dataIndex: 'equipment_name', width: 160, ellipsis: true },
-      { title: t(`${P}.col.checkDate`), dataIndex: 'check_date', width: 110, valueType: 'date' },
-      { title: t(`${P}.col.inspector`), dataIndex: 'inspector_name', width: 100 },
+      {
+        title: t(`${P}.col.checkDate`),
+        dataIndex: 'check_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 10 } as ProColumns['search'],
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 11 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        valueType: 'select',
+        valueEnum: spotCheckStatusValueEnum,
+        hideInTable: true,
+        search: { order: 20 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.abnormality`),
+        dataIndex: 'has_abnormality',
+        valueType: 'select',
+        valueEnum: abnormalityValueEnum,
+        hideInTable: true,
+        search: { order: 21 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.documentNo`),
+        dataIndex: 'document_no',
+        width: 140,
+        fixed: 'left',
+        sorter: true,
+        search: { order: 30 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.equipment`),
+        dataIndex: 'equipment_name',
+        width: 160,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t(`${P}.col.checkDate`),
+        dataIndex: 'check_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        valueType: 'date',
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t(`${P}.col.inspector`),
+        dataIndex: 'inspector_name',
+        width: 100,
+        sorter: true,
+        hideInSearch: true,
+      },
       {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
         width: 90,
+        sorter: true,
+        hideInSearch: true,
         render: (_, r) => <Tag>{r.status ?? '-'}</Tag>,
       },
       {
         title: t(`${P}.col.abnormality`),
         dataIndex: 'has_abnormality',
         width: 80,
+        sorter: true,
+        hideInSearch: true,
         render: (_, r) =>
           r.has_abnormality ? <Tag color="error">{t(`${P}.abnormal`)}</Tag> : <Tag color="success">{t(`${P}.normal`)}</Tag>,
       },
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 168,
+        width: 132,
+        uniTableKeepWidth: true,
         hideInSearch: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
+        sorter: true,
+        defaultSortOrder: 'descend',
+        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
         title: t('common.actions'),
@@ -297,7 +375,7 @@ const SpotChecksPage: React.FC = () => {
         ),
       },
     ],
-    [t, perms],
+    [t, perms, spotCheckStatusValueEnum, abnormalityValueEnum],
   );
 
   return (
@@ -309,13 +387,19 @@ const SpotChecksPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          request={async (params) => {
+          showAdvancedSearch
+          pinnedTabsField={EQUIPMENT_OPS_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const listParams = resolveSpotCheckListParams(searchFormValues, sort);
               const res = await spotChecksApi.list({
                 skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
                 limit: params.pageSize,
+                ...listParams,
               });
-              return { data: res.items ?? [], success: true, total: res.total ?? 0 };
+              const { data, total } = normalizeEquipmentListResponse(res);
+              return { data: data as SpotCheck[], success: true, total };
             } catch {
               messageApi.error(t(`${P}.listFailed`));
               return { data: [], success: false, total: 0 };

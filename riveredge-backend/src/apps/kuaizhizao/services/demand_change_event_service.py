@@ -6,8 +6,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, date, time
 from typing import Any, Dict, List, Optional
+
+from tortoise.expressions import Q
 
 from apps.kuaizhizao.models.demand_change_event import DemandChangeEvent
 from apps.kuaizhizao.models.demand_impact_record import DemandImpactRecord
@@ -18,6 +20,30 @@ from apps.kuaizhizao.services.demand_replanning_orchestrator_service import (
     DemandReplanningOrchestratorService,
 )
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+
+DEMAND_CHANGE_EVENT_SORTABLE_FIELDS = frozenset({
+    "event_code",
+    "event_type",
+    "source_type",
+    "source_code",
+    "source_name",
+    "event_status",
+    "created_at",
+    "updated_at",
+})
+
+DEMAND_REPLAN_TASK_SORTABLE_FIELDS = frozenset({
+    "task_code",
+    "mode",
+    "status",
+    "risk_level",
+    "approval_status",
+    "priority",
+    "created_at",
+    "started_at",
+    "finished_at",
+    "updated_at",
+})
 
 
 class DemandChangeEventService:
@@ -82,13 +108,40 @@ class DemandChangeEventService:
             "task": task,
         }
 
-    async def list_pending_events(self, tenant_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+    async def list_pending_events(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 50,
+        keyword: Optional[str] = None,
+        event_type: Optional[str] = None,
+        source_type: Optional[str] = None,
+        event_status: Optional[str] = None,
+        order_by: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """待处理变更事件（含分析完成、执行失败待重试，不含已关闭）。"""
-        rows = await DemandChangeEvent.filter(
+        query = DemandChangeEvent.filter(
             tenant_id=tenant_id,
             event_status__in=["pending", "analyzed", "failed"],
-        ).order_by("-created_at").limit(limit)
-        return [
+        )
+        if event_status:
+            query = query.filter(event_status=event_status)
+        if event_type:
+            query = query.filter(event_type=event_type)
+        if source_type:
+            query = query.filter(source_type=source_type)
+        kw = (keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(event_code__icontains=kw)
+                | Q(source_code__icontains=kw)
+                | Q(source_name__icontains=kw)
+                | Q(trigger_reason__icontains=kw)
+            )
+        total = await query.count()
+        order_clause = order_by if order_by else "-created_at"
+        rows = await query.offset(skip).limit(limit).order_by(order_clause)
+        data = [
             {
                 "id": r.id,
                 "event_code": r.event_code,
@@ -101,6 +154,7 @@ class DemandChangeEventService:
             }
             for r in rows
         ]
+        return {"data": data, "total": total, "success": True}
 
     async def ensure_replan_task_for_event(
         self,
@@ -221,9 +275,46 @@ class DemandChangeEventService:
             ],
         }
 
-    async def list_replan_tasks(self, tenant_id: int, limit: int = 100) -> List[Dict[str, Any]]:
-        rows = await DemandReplanTask.filter(tenant_id=tenant_id).order_by("-created_at").limit(limit)
-        return [
+    async def list_replan_tasks(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        event_id: Optional[int] = None,
+        keyword: Optional[str] = None,
+        status: Optional[str] = None,
+        mode: Optional[str] = None,
+        risk_level: Optional[str] = None,
+        approval_status: Optional[str] = None,
+        created_start_date: Optional[date] = None,
+        created_end_date: Optional[date] = None,
+        order_by: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        query = DemandReplanTask.filter(tenant_id=tenant_id)
+        if event_id:
+            query = query.filter(event_id=event_id)
+        if status:
+            query = query.filter(status=status)
+        if mode:
+            query = query.filter(mode=mode)
+        if risk_level:
+            query = query.filter(risk_level=risk_level)
+        if approval_status:
+            query = query.filter(approval_status=approval_status)
+        kw = (keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(task_code__icontains=kw)
+                | Q(error_message__icontains=kw)
+            )
+        if created_start_date is not None:
+            query = query.filter(created_at__gte=datetime.combine(created_start_date, time.min))
+        if created_end_date is not None:
+            query = query.filter(created_at__lte=datetime.combine(created_end_date, time.max))
+        total = await query.count()
+        order_clause = order_by if order_by else "-created_at"
+        rows = await query.offset(skip).limit(limit).order_by(order_clause)
+        data = [
             {
                 "id": r.id,
                 "task_code": r.task_code,
@@ -241,3 +332,4 @@ class DemandChangeEventService:
             }
             for r in rows
         ]
+        return {"data": data, "total": total, "success": True}

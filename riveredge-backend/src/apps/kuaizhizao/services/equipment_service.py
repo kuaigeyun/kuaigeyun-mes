@@ -100,9 +100,24 @@ class EquipmentService:
         status: Optional[str] = None,
         is_active: Optional[bool] = None,
         workstation_id: Optional[int] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[Equipment], int]:
         """获取设备列表"""
+        from apps.kuaizhizao.services.equipment_list_core import (
+            EQUIPMENT_LEDGER_SORTABLE_FIELDS,
+            apply_equipment_created_date_range,
+            apply_equipment_keyword_filter,
+            apply_equipment_updated_date_range,
+            pick_search_keyword,
+            resolve_equipment_list_order_by,
+        )
+
         query = Equipment.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
@@ -117,13 +132,28 @@ class EquipmentService:
             query = query.filter(is_active=is_active)
         if workstation_id:
             query = query.filter(workstation_id=workstation_id)
-        if search:
-            from tortoise.expressions import Q
-            query = query.filter(
-                Q(code__icontains=search) | Q(name__icontains=search)
-            )
+        query = apply_equipment_keyword_filter(
+            query,
+            pick_search_keyword(keyword, search),
+            ["code", "name", "serial_no"],
+        )
+        query = apply_equipment_created_date_range(
+            query,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
+        query = apply_equipment_updated_date_range(
+            query,
+            start_date=updated_start_date,
+            end_date=updated_end_date,
+        )
         total = await query.count()
-        equipment_list = await query.offset(skip).limit(limit).order_by("-created_at")
+        order_clause = resolve_equipment_list_order_by(
+            order_by,
+            EQUIPMENT_LEDGER_SORTABLE_FIELDS,
+            "-updated_at",
+        )
+        equipment_list = await query.offset(skip).limit(limit).order_by(order_clause)
         return equipment_list, total
     
     @staticmethod
@@ -204,8 +234,22 @@ class EquipmentService:
         equipment_uuid: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        calibration_start_date: Optional[str] = None,
+        calibration_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[EquipmentCalibration], int]:
         """获取全量设备校验记录列表（支持按设备筛选）"""
+        from apps.kuaizhizao.services.equipment_list_core import (
+            EQUIPMENT_CALIBRATION_SORTABLE_FIELDS,
+            apply_asset_workflow_list_filters,
+        )
+
         query = EquipmentCalibration.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -213,8 +257,23 @@ class EquipmentService:
         if equipment_uuid:
             equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, equipment_uuid)
             query = query.filter(equipment_id=equipment.id)
+        query, order_clause = apply_asset_workflow_list_filters(
+            query,
+            keyword=keyword,
+            search=search,
+            order_by=order_by,
+            allowed_fields=EQUIPMENT_CALIBRATION_SORTABLE_FIELDS,
+            keyword_fields=["certificate_no", "result"],
+            date_field="calibration_date",
+            date_start=calibration_start_date,
+            date_end=calibration_end_date,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
         total = await query.count()
-        items = await query.offset(skip).limit(limit).order_by("-calibration_date")
+        items = await query.offset(skip).limit(limit).order_by(order_clause)
         return list(items), total
 
     @staticmethod

@@ -79,6 +79,13 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  MASTER_DATA_PINNED_ACTIVE_FIELD,
+  buildActiveStatusValueEnum,
+  normalizeEquipmentListResponse,
+  resolveLedgerListParams,
+} from '../../../utils/equipmentListCore';
 
 const EQUIPMENT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_equipment';
 
@@ -623,6 +630,18 @@ const EquipmentPage: React.FC = () => {
     return nodes;
   };
 
+  const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
+
+  const equipmentStatusValueEnum = useMemo(
+    () => ({
+      正常: { text: t('app.kuaizhizao.equipment.statusNormal') },
+      维修中: { text: t('app.kuaizhizao.equipment.statusRepairing') },
+      停用: { text: t('app.kuaizhizao.equipment.statusDisabled') },
+      报废: { text: t('app.kuaizhizao.equipment.statusScrapped') },
+    }),
+    [t],
+  );
+
   /**
    * 表格列定义
    */
@@ -630,11 +649,49 @@ const EquipmentPage: React.FC = () => {
     const customFieldColumns = generateEquipmentCustomFieldColumns();
     return [
     {
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 10 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.equipment.colIsActive'),
+      dataIndex: 'is_active',
+      valueType: 'select',
+      valueEnum: activeStatusValueEnum,
+      hideInTable: true,
+      search: { order: 20 } as ProColumns['search'],
+    },
+    {
+      title: t('common.status'),
+      dataIndex: 'status',
+      valueType: 'select',
+      valueEnum: equipmentStatusValueEnum,
+      hideInTable: true,
+      search: { order: 21 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.equipment.colType'),
+      dataIndex: 'type',
+      hideInTable: true,
+      search: { order: 22 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.equipment.colCategory'),
+      dataIndex: 'category',
+      hideInTable: true,
+      search: { order: 23 } as ProColumns['search'],
+    },
+    {
       title: t('app.kuaizhizao.equipment.colCode'),
       dataIndex: 'code',
       width: 140,
       ellipsis: true,
       fixed: 'left',
+      sorter: true,
+      search: { order: 30 } as ProColumns['search'],
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
           {r.code ?? '-'}
@@ -646,31 +703,40 @@ const EquipmentPage: React.FC = () => {
       dataIndex: 'name',
       width: 200,
       ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.equipment.colType'),
       dataIndex: 'type',
       width: 120,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.equipment.colCategory'),
       dataIndex: 'category',
       width: 120,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.equipment.colBrand'),
       dataIndex: 'brand',
       width: 100,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.equipment.colModel'),
       dataIndex: 'model',
       width: 120,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.equipment.colSerialNumber'),
       dataIndex: 'serial_number',
       width: 150,
+      hideInSearch: true,
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.serial_number ?? '') }} ellipsis>
           {r.serial_number ?? '-'}
@@ -682,19 +748,23 @@ const EquipmentPage: React.FC = () => {
       dataIndex: 'workshop_name',
       width: 120,
       ellipsis: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.equipment.colWorkCenter'),
       dataIndex: 'work_center_name',
       width: 150,
       ellipsis: true,
+      hideInSearch: true,
     },
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
       defaultSortOrder: 'descend',
+      sorter: true,
       render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     ...customFieldColumns,
@@ -708,7 +778,7 @@ const EquipmentPage: React.FC = () => {
         renderEquipmentRowActions(renderEquipmentRowNodes(record), `eq-${record.uuid ?? 'row'}`),
     },
   ];
-  }, [equipmentListCustomFields, generateEquipmentCustomFieldColumns, t]);
+  }, [equipmentListCustomFields, generateEquipmentCustomFieldColumns, t, activeStatusValueEnum, equipmentStatusValueEnum]);
 
   const calibrationResultOptions = useMemo(
     () => [
@@ -874,19 +944,22 @@ const EquipmentPage: React.FC = () => {
           rowKey="uuid"
           columns={columns}
           showAdvancedSearch={true}
-          request={async (params) => {
+          pinnedTabsField={MASTER_DATA_PINNED_ACTIVE_FIELD}
+          skipFuzzyPinyinClientFilter
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const listParams = resolveLedgerListParams(searchFormValues, sort);
               const response = await equipmentApi.list({
-                skip: (params.current! - 1) * params.pageSize!,
+                skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
                 limit: params.pageSize,
-                ...params,
-                keyword: (params as any).keyword,
+                ...listParams,
               });
-              const enriched = await enrichEquipmentRecordsWithCustomFields(response.items || []);
+              const { data, total } = normalizeEquipmentListResponse(response);
+              const enriched = await enrichEquipmentRecordsWithCustomFields(data as Equipment[]);
               return {
                 data: enriched,
                 success: true,
-                total: response.total || 0,
+                total,
               };
             } catch (error) {
               messageApi.error(t('app.kuaizhizao.equipment.getListFailed'));

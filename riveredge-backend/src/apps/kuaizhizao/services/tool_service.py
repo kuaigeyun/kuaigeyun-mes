@@ -58,18 +58,53 @@ class ToolService:
         limit: int = 100,
         type: Optional[str] = None,
         status: Optional[str] = None,
+        is_active: Optional[bool] = None,
         search: Optional[str] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> Tuple[List[Tool], int]:
+        from apps.kuaizhizao.services.equipment_list_core import (
+            TOOL_LEDGER_SORTABLE_FIELDS,
+            apply_equipment_created_date_range,
+            apply_equipment_keyword_filter,
+            apply_equipment_updated_date_range,
+            pick_search_keyword,
+            resolve_equipment_list_order_by,
+        )
+
         query = Tool.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if type:
             query = query.filter(type=type)
         if status:
             query = query.filter(status=status)
-        if search:
-            query = query.filter(Q(code__icontains=search) | Q(name__icontains=search))
-
+        if is_active is not None:
+            query = query.filter(is_active=is_active)
+        query = apply_equipment_keyword_filter(
+            query,
+            pick_search_keyword(keyword, search),
+            ["code", "name"],
+        )
+        query = apply_equipment_created_date_range(
+            query,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
+        query = apply_equipment_updated_date_range(
+            query,
+            start_date=updated_start_date,
+            end_date=updated_end_date,
+        )
         total = await query.count()
-        items = await query.offset(skip).limit(limit).order_by("-created_at")
+        order_clause = resolve_equipment_list_order_by(
+            order_by,
+            TOOL_LEDGER_SORTABLE_FIELDS,
+            "-updated_at",
+        )
+        items = await query.offset(skip).limit(limit).order_by(order_clause)
         return items, total
 
     @staticmethod

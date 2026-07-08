@@ -29,6 +29,11 @@ import {
 } from '../../../../../components/custom-fields';
 import { getPerformanceActiveValueEnum, renderActiveTag } from '../components/performanceMeta';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  normalizePerformanceListResponse,
+  PERFORMANCE_PINNED_ACTIVE_FIELD,
+  resolveHolidayListParams,
+} from '../../../utils/performanceListCore';
 
 const HolidaysPage: React.FC = () => {
   const { t } = useTranslation();
@@ -155,14 +160,15 @@ const HolidaysPage: React.FC = () => {
       dataIndex: 'name',
       width: 200,
       fixed: 'left',
+      sorter: true,
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.name ?? '') }} ellipsis>
           {r.name ?? '-'}
         </Typography.Text>
       ),
     },
-    { title: t('app.kuaizhizao.performance.holidays.columns.holidayDate'), dataIndex: 'holidayDate', width: 150, valueType: 'date', sorter: true },
-    { title: t('app.kuaizhizao.performance.holidays.columns.holidayType'), dataIndex: 'holidayType', width: 150, hideInSearch: true },
+    { title: t('app.kuaizhizao.performance.holidays.columns.holidayDate'), dataIndex: 'holidayDate', width: 132, uniTableKeepWidth: true, valueType: 'date', sorter: true },
+    { title: t('app.kuaizhizao.performance.holidays.columns.holidayType'), dataIndex: 'holidayType', width: 150, sorter: true },
     { title: t('app.kuaizhizao.performance.common.columns.description'), dataIndex: 'description', ellipsis: true, hideInSearch: true },
     ...customFieldColumns,
     {
@@ -175,8 +181,10 @@ const HolidaysPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.performance.common.columns.updatedAt'),
       dataIndex: 'updatedAt',
-      width: 168,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
+      sorter: true,
       render: (_, r) => (r.updatedAt ? formatDateTime(r.updatedAt, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
@@ -232,16 +240,14 @@ const HolidaysPage: React.FC = () => {
           actionRef={actionRef}
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.performance.holidays"
-          request={async (params, _sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
-            const apiParams: any = { skip, limit: pageSize };
-            if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) apiParams.isActive = searchFormValues.isActive;
+            const listParams = resolveHolidayListParams(searchFormValues, sort);
             try {
-              const result = await holidayApi.list(apiParams);
-              const rows = Array.isArray(result) ? result : [];
-              const enrichedRows = await enrichRecordsWithCustomFields(rows);
-              const total = enrichedRows.length < pageSize ? skip + enrichedRows.length : skip + enrichedRows.length + 1;
+              const result = await holidayApi.list({ skip, limit: pageSize, ...listParams });
+              const { data: raw, total } = normalizePerformanceListResponse(result);
+              const enrichedRows = await enrichRecordsWithCustomFields(raw as Holiday[]);
               return { data: enrichedRows, success: true, total };
             } catch (error: any) {
               messageApi.error(error?.message || t('app.kuaizhizao.performance.holidays.messages.loadListFailed'));
@@ -250,6 +256,8 @@ const HolidaysPage: React.FC = () => {
           }}
           rowKey="uuid"
           showAdvancedSearch={true}
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={PERFORMANCE_PINNED_ACTIVE_FIELD}
           scroll={{ x: 1280 }}
           pagination={{ defaultPageSize: 20, showSizeChanger: true }}
           showCreateButton

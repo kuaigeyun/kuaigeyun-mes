@@ -76,11 +76,17 @@ export interface VariantAttributeDefinition extends VariantAttributeDefinitionBa
  * 属性定义列表查询参数
  */
 export interface VariantAttributeDefinitionListParams {
-  page?: number;
-  pageSize?: number;
+  skip?: number;
+  limit?: number;
   is_active?: boolean;
   attribute_type?: VariantAttributeType;
   keyword?: string;
+  attribute_name?: string;
+  display_name?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
 }

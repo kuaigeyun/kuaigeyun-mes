@@ -14,7 +14,6 @@ import {
 import { useCustomerPoolPermissions } from '../../../hooks/useCustomerPoolPermissions';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
-import dayjs from 'dayjs';
 
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDetail } from '../../../../../components/uni-detail';
@@ -38,6 +37,11 @@ import {
 } from '../../../../master-data/utils/factoryImportTemplate';
 import type { CustomerCreate } from '../../../../master-data/types/supply-chain';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  formatCustomerPoolDateTimeCell,
+  resolveCustomerPoolListParams,
+} from '../../../utils/customerPoolListCore';
 
 const CustomerPoolPage: React.FC = () => {
   const { t } = useTranslation();
@@ -48,6 +52,7 @@ const CustomerPoolPage: React.FC = () => {
   const [scope, setScope] = useState<'pool' | 'mine' | 'all'>('all');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const tableRowsRef = useRef<CustomerPoolItem[]>([]);
+  const lastListParamsRef = useRef<Record<string, string | number | undefined>>({});
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
 
@@ -268,20 +273,26 @@ const CustomerPoolPage: React.FC = () => {
   const columns: ProColumns<CustomerPoolItem>[] = useMemo(
     () => [
       {
-        title: t('app.kuaizhizao.customerPool.keyword'),
-        dataIndex: 'keyword',
+        title: t('field.customer.code'),
+        dataIndex: 'code',
         hideInTable: true,
-        valueType: 'text',
-        fieldProps: {
-          allowClear: true,
-          placeholder: t('app.kuaizhizao.customerFollowUp.keywordPlaceholder'),
-        },
+        order: 10,
+        fieldProps: { allowClear: true, placeholder: t('field.customer.code') },
+      },
+      {
+        title: t('field.customer.name'),
+        dataIndex: 'name',
+        hideInTable: true,
+        order: 11,
+        fieldProps: { allowClear: true, placeholder: t('field.customer.name') },
       },
       {
         title: t('field.customer.nameCode'),
-        dataIndex: 'nameCode',
+        dataIndex: 'code',
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         minWidth: 260,
+        sorter: true,
+        defaultSortOrder: 'descend',
         hideInSearch: true,
         render: (_, row) => (
           <UniTableStackedPrimaryCell
@@ -290,14 +301,39 @@ const CustomerPoolPage: React.FC = () => {
           />
         ),
       },
-      { title: t('field.customer.code'), dataIndex: 'code', hideInTable: true, hideInSearch: true },
-      { title: t('field.customer.name'), dataIndex: 'name', hideInTable: true, hideInSearch: true },
-      { title: t('field.customer.contactPerson'), dataIndex: 'contact_person', width: 120, hideInSearch: true },
-      { title: t('field.customer.phone'), dataIndex: 'phone', width: 140, hideInSearch: true },
+      {
+        title: t('field.customer.contactPerson'),
+        dataIndex: 'contact_person',
+        hideInTable: true,
+        order: 12,
+        fieldProps: { allowClear: true, placeholder: t('field.customer.contactPerson') },
+      },
+      {
+        title: t('field.customer.phone'),
+        dataIndex: 'phone',
+        hideInTable: true,
+        order: 13,
+        fieldProps: { allowClear: true, placeholder: t('field.customer.phone') },
+      },
+      {
+        title: t('field.customer.contactPerson'),
+        dataIndex: 'contact_person',
+        width: 120,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('field.customer.phone'),
+        dataIndex: 'phone',
+        width: 140,
+        sorter: true,
+        hideInSearch: true,
+      },
       {
         title: t('field.customer.salesman'),
         dataIndex: 'salesman_name',
         width: 120,
+        sorter: true,
         hideInSearch: true,
         render: (_, row) => row.salesman_name || '—',
       },
@@ -305,6 +341,7 @@ const CustomerPoolPage: React.FC = () => {
         title: t('field.customer.salesman'),
         dataIndex: 'salesmanId',
         hideInTable: true,
+        order: 20,
         valueType: 'select',
         valueEnum: salesmanValueEnum,
         fieldProps: {
@@ -323,6 +360,7 @@ const CustomerPoolPage: React.FC = () => {
         title: t('field.customer.poolStatus'),
         dataIndex: 'poolStatus',
         hideInTable: true,
+        order: 21,
         valueType: 'select',
         valueEnum: poolStatusValueEnum,
         hideInSearch: scope !== 'all',
@@ -332,6 +370,7 @@ const CustomerPoolPage: React.FC = () => {
         title: t('field.customer.poolStatus'),
         dataIndex: 'pool_status',
         width: 100,
+        sorter: true,
         hideInSearch: true,
         render: (_, row) => (
           row.pool_status === 'pool' ? (
@@ -344,16 +383,102 @@ const CustomerPoolPage: React.FC = () => {
       {
         title: t('field.customer.lastFollowUpAt'),
         dataIndex: 'last_follow_up_at',
-        width: 165,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
         hideInSearch: true,
-        render: (_, row) => (row.last_follow_up_at ? formatDateTime(row.last_follow_up_at, 'YYYY-MM-DD HH:mm') : '—'),
+        render: (_, row) => formatCustomerPoolDateTimeCell(row.last_follow_up_at),
+      },
+      {
+        title: t('field.customer.lastFollowUpAt'),
+        dataIndex: 'last_follow_up_at_range',
+        valueType: 'dateTimeRange',
+        hideInTable: true,
+        order: 30,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
       },
       {
         title: t('field.customer.recycleAt'),
         dataIndex: 'recycle_at',
-        width: 165,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
         hideInSearch: true,
-        render: (_, row) => (row.recycle_at ? formatDateTime(row.recycle_at, 'YYYY-MM-DD HH:mm') : '—'),
+        render: (_, row) => formatCustomerPoolDateTimeCell(row.recycle_at),
+      },
+      {
+        title: t('field.customer.recycleAt'),
+        dataIndex: 'recycle_at_range',
+        valueType: 'dateTimeRange',
+        hideInTable: true,
+        order: 31,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
+      },
+      {
+        title: t('field.customer.assignedAt'),
+        dataIndex: 'assigned_at',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, row) => formatCustomerPoolDateTimeCell(row.assigned_at),
+      },
+      {
+        title: t('field.customer.assignedAt'),
+        dataIndex: 'assigned_at_range',
+        valueType: 'dateTimeRange',
+        hideInTable: true,
+        order: 32,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
+      },
+      {
+        title: t('common.createdAt'),
+        dataIndex: 'created_at',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, row) => formatCustomerPoolDateTimeCell(row.created_at),
+      },
+      {
+        title: t('common.createdAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        order: 33,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, row) => formatCustomerPoolDateTimeCell(row.updated_at),
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        order: 34,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
       },
       {
         title: t('common.actions'),
@@ -578,6 +703,7 @@ const CustomerPoolPage: React.FC = () => {
           scope: scopeRef.current,
           skip,
           limit: pageSize,
+          ...lastListParamsRef.current,
         });
         rows.push(...(res.items || []));
         total = res.total || 0;
@@ -632,6 +758,8 @@ const CustomerPoolPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           columns={columns}
           headerTitle={t('app.kuaizhizao.menu.sales-management.customer-pool')}
+          showAdvancedSearch
+          skipFuzzyPinyinClientFilter
           columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-pool"
           tanstackQuery={{ queryKeyPrefix: ['apps.kuaizhizao.pages.sales-management.customer-pool', scope] }}
           onTableDataChange={(data) => {
@@ -663,23 +791,15 @@ const CustomerPoolPage: React.FC = () => {
           }}
           showExportButton
           onExport={handleExport}
-          request={async (params, _sort, _filter, searchValues) => {
+          request={async (params, sort, _filter, searchValues) => {
             try {
-              const salesmanRaw = searchValues?.salesmanId;
-              const salesmanId =
-                salesmanRaw != null && salesmanRaw !== ''
-                  ? Number(salesmanRaw)
-                  : undefined;
-              const poolStatusRaw = searchValues?.poolStatus;
-              const poolStatus =
-                poolStatusRaw === 'pool' || poolStatusRaw === 'owned' ? poolStatusRaw : undefined;
+              const listParams = resolveCustomerPoolListParams(searchValues, sort);
+              lastListParamsRef.current = listParams;
               const res = await customerPoolApi.list({
                 scope: scopeRef.current,
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
-                keyword: typeof searchValues?.keyword === 'string' ? searchValues.keyword.trim() || undefined : undefined,
-                salesmanId: Number.isFinite(salesmanId) && salesmanId! > 0 ? salesmanId : undefined,
-                poolStatus,
+                ...listParams,
               });
               return { data: res.items || [], total: res.total || 0, success: true };
             } catch {

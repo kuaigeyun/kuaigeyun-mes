@@ -6,9 +6,9 @@ Date: 2026-05-28
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
-from tortoise.expressions import Q
+from tortoise.transactions import in_transaction
 
 from apps.common.base_service import AppBaseService
 from apps.kuaiplm.models import RdDesignReview, RdFmeaRecord, RdRequirement
@@ -24,6 +24,12 @@ from apps.kuaiplm.schemas.phase2 import (
     RdRequirementUpdate,
 )
 from infra.exceptions.exceptions import NotFoundError
+from apps.kuaiplm.services.plm_list_core import (
+    PHASE2_DESIGN_REVIEW_SORT_DB_COLS,
+    PHASE2_FMEA_SORT_DB_COLS,
+    PHASE2_REQUIREMENT_SORT_DB_COLS,
+    apply_plm_list_filters,
+)
 
 
 class Phase2Service(AppBaseService[RdRequirement]):
@@ -38,18 +44,45 @@ class Phase2Service(AppBaseService[RdRequirement]):
         project_id: Optional[int] = None,
         status: Optional[str] = None,
         keyword: Optional[str] = None,
+        requirement_code: Optional[str] = None,
+        title: Optional[str] = None,
         skip: int = 0,
         limit: int = 20,
-    ) -> List[RdRequirementResponse]:
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+    ) -> Tuple[List[RdRequirementResponse], int]:
         qs = RdRequirement.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if project_id:
             qs = qs.filter(project_id=project_id)
         if status:
             qs = qs.filter(status=status)
-        if keyword:
-            qs = qs.filter(Q(title__icontains=keyword) | Q(requirement_code__icontains=keyword))
-        rows = await qs.order_by("-created_at").offset(skip).limit(limit).all()
-        return [RdRequirementResponse.model_validate(r) for r in rows]
+        exact_fields = None
+        if not (keyword or "").strip():
+            exact_fields = {
+                "requirement_code": requirement_code,
+                "title": title,
+            }
+        qs, order_expr = apply_plm_list_filters(
+            qs,
+            keyword=keyword,
+            keyword_fields=["requirement_code", "title"],
+            exact_fields=exact_fields,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_field,
+            sort_order=sort_order,
+            allowed_sort_cols=PHASE2_REQUIREMENT_SORT_DB_COLS,
+            default_sort_col="created_at",
+        )
+        total = await qs.count()
+        rows = await qs.order_by(order_expr).offset(skip).limit(limit).all()
+        return [RdRequirementResponse.model_validate(r) for r in rows], total
 
     async def create_requirement(
         self, tenant_id: int, data: RdRequirementCreate, created_by: int
@@ -102,16 +135,46 @@ class Phase2Service(AppBaseService[RdRequirement]):
         tenant_id: int,
         project_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        review_code: Optional[str] = None,
+        title: Optional[str] = None,
         skip: int = 0,
         limit: int = 20,
-    ) -> List[RdDesignReviewResponse]:
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+    ) -> Tuple[List[RdDesignReviewResponse], int]:
         qs = RdDesignReview.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if project_id:
             qs = qs.filter(project_id=project_id)
         if status:
             qs = qs.filter(status=status)
-        rows = await qs.order_by("-created_at").offset(skip).limit(limit).all()
-        return [RdDesignReviewResponse.model_validate(r) for r in rows]
+        exact_fields = None
+        if not (keyword or "").strip():
+            exact_fields = {
+                "review_code": review_code,
+                "title": title,
+            }
+        qs, order_expr = apply_plm_list_filters(
+            qs,
+            keyword=keyword,
+            keyword_fields=["review_code", "title", "reviewer_name", "material_name"],
+            exact_fields=exact_fields,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_field,
+            sort_order=sort_order,
+            allowed_sort_cols=PHASE2_DESIGN_REVIEW_SORT_DB_COLS,
+            default_sort_col="created_at",
+        )
+        total = await qs.count()
+        rows = await qs.order_by(order_expr).offset(skip).limit(limit).all()
+        return [RdDesignReviewResponse.model_validate(r) for r in rows], total
 
     async def create_design_review(
         self, tenant_id: int, data: RdDesignReviewCreate, created_by: int
@@ -169,16 +232,49 @@ class Phase2Service(AppBaseService[RdRequirement]):
         tenant_id: int,
         project_id: Optional[int] = None,
         fmea_type: Optional[str] = None,
+        status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        fmea_code: Optional[str] = None,
+        title: Optional[str] = None,
         skip: int = 0,
         limit: int = 20,
-    ) -> List[RdFmeaRecordResponse]:
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+    ) -> Tuple[List[RdFmeaRecordResponse], int]:
         qs = RdFmeaRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if project_id:
             qs = qs.filter(project_id=project_id)
         if fmea_type:
             qs = qs.filter(fmea_type=fmea_type)
-        rows = await qs.order_by("-created_at").offset(skip).limit(limit).all()
-        return [RdFmeaRecordResponse.model_validate(r) for r in rows]
+        if status:
+            qs = qs.filter(status=status)
+        exact_fields = None
+        if not (keyword or "").strip():
+            exact_fields = {
+                "fmea_code": fmea_code,
+                "title": title,
+            }
+        qs, order_expr = apply_plm_list_filters(
+            qs,
+            keyword=keyword,
+            keyword_fields=["fmea_code", "title", "material_name"],
+            exact_fields=exact_fields,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_field,
+            sort_order=sort_order,
+            allowed_sort_cols=PHASE2_FMEA_SORT_DB_COLS,
+            default_sort_col="created_at",
+        )
+        total = await qs.count()
+        rows = await qs.order_by(order_expr).offset(skip).limit(limit).all()
+        return [RdFmeaRecordResponse.model_validate(r) for r in rows], total
 
     async def create_fmea_record(
         self, tenant_id: int, data: RdFmeaRecordCreate, created_by: int

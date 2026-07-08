@@ -33,6 +33,14 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  WAREHOUSE_DOC_PINNED_STATUS_FIELD,
+  buildStocktakingTypeValueEnum,
+  buildWarehouseWorkflowStatusValueEnum,
+  normalizeWarehouseListResponse,
+  resolveStocktakingListParams,
+} from '../../../utils/warehouseListCore';
 
 interface Stocktaking {
   id?: number;
@@ -415,13 +423,50 @@ const StocktakingPage: React.FC = () => {
   /**
    * 表格列定义
    */
+  const workflowStatusValueEnum = useMemo(() => buildWarehouseWorkflowStatusValueEnum(t), [t]);
+  const stocktakingTypeValueEnum = useMemo(() => buildStocktakingTypeValueEnum(t), [t]);
+
   const columns: ProColumns<Stocktaking>[] = useMemo(() => [
+    {
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 10 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      dataIndex: 'status',
+      valueType: 'select',
+      valueEnum: workflowStatusValueEnum,
+      hideInTable: true,
+      search: { order: 20 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.stocktaking.colStocktakingType'),
+      dataIndex: 'stocktaking_type',
+      valueType: 'select',
+      valueEnum: stocktakingTypeValueEnum,
+      hideInTable: true,
+      search: { order: 30 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.stocktaking.colStocktakingDate'),
+      dataIndex: 'stocktaking_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 40 } as ProColumns['search'],
+    },
     {
       title: t('app.kuaizhizao.stocktaking.colWarehouseAndCode'),
       key: 'code',
       dataIndex: 'code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
+      sorter: true,
+      search: { order: 50 } as ProColumns['search'],
       render: (_, r) => (
         <UniTableStackedPrimaryCell
           primary={String(r.warehouse_name ?? '')}
@@ -429,45 +474,53 @@ const StocktakingPage: React.FC = () => {
         />
       ),
     },
-    { title: t('app.kuaizhizao.warehouseReports.colStocktakingCode'), dataIndex: 'code', hideInTable: true },
+    { title: t('app.kuaizhizao.warehouseReports.colStocktakingCode'), dataIndex: 'code', hideInTable: true, hideInSearch: true },
     {
       title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
       dataIndex: 'warehouse_name',
       hideInTable: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.stocktaking.colStocktakingDate'),
       dataIndex: 'stocktaking_date',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
       valueType: 'date',
-      width: 120,
     },
     {
       title: t('app.kuaizhizao.stocktaking.colStocktakingType'),
       dataIndex: 'stocktaking_type',
       width: 100,
-      valueEnum: {
-        full: { text: t('app.kuaizhizao.stocktaking.typeFull'), status: 'default' },
-        partial: { text: t('app.kuaizhizao.stocktaking.typePartial'), status: 'default' },
-        cycle: { text: t('app.kuaizhizao.stocktaking.typeCycle'), status: 'default' },
-      },
+      sorter: true,
+      hideInSearch: true,
+      valueEnum: stocktakingTypeValueEnum,
     },
     {
       title: t('app.kuaizhizao.stocktaking.colTotalItems'),
       dataIndex: 'total_items',
       width: 120,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.stocktaking.colCountedItems'),
       dataIndex: 'counted_items',
       width: 120,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.stocktaking.colTotalDiff'),
       dataIndex: 'total_differences',
       width: 100,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
       render: (_, record) => (
         <span style={{ color: record.total_differences! > 0 ? '#ff4d4f' : '#52c41a' }}>
           {record.total_differences || 0}
@@ -479,6 +532,8 @@ const StocktakingPage: React.FC = () => {
       dataIndex: 'total_difference_amount',
       width: 120,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
       render: (_, record) => {
         const amount = Number(record.total_difference_amount ?? 0);
         return (
@@ -491,10 +546,12 @@ const StocktakingPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
       defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
+      sorter: true,
+      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
@@ -552,7 +609,7 @@ const StocktakingPage: React.FC = () => {
         </Space>
       ),
     },
-  ], [t]);
+  ], [t, canUpdate, canCreate, canRevoke, workflowStatusValueEnum, stocktakingTypeValueEnum]);
 
   const detailColumns = useMemo(() => [
     {
@@ -745,32 +802,25 @@ const StocktakingPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         showAdvancedSearch={true}
+        pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
+        skipFuzzyPinyinClientFilter
         showCreateButton={canCreate}
         createButtonText={createButtonLabel}
         onCreate={canCreate ? handleCreate : undefined}
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           try {
             const lifecycleStage = resolveListLifecycleStageFromSearch(searchFormValues, params);
+            const listParams = resolveStocktakingListParams(searchFormValues, sort);
             const result = await stocktakingApi.list({
               skip: (params.current! - 1) * params.pageSize!,
               limit: params.pageSize,
-              code: params.code,
-              warehouse_id: params.warehouse_id,
-              status: lifecycleStage ?? params.status,
-              stocktaking_type: params.stocktaking_type,
-              keyword: (params as any).keyword,
+              ...listParams,
+              status: lifecycleStage ?? listParams.status,
             });
-            return {
-              data: result.items || [],
-              success: true,
-              total: result.total || 0,
-            };
-          } catch (error) {
-            return {
-              data: [],
-              success: false,
-              total: 0,
-            };
+            const { data, total } = normalizeWarehouseListResponse(result);
+            return { data, success: true, total };
+          } catch {
+            return { data: [], success: false, total: 0 };
           }
         }}
         enableRowSelection={canDelete}

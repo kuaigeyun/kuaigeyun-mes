@@ -28,6 +28,11 @@ import { apiRequest } from '../../../../../services/api';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { exceptionProcessBatchCancelAllowed } from '../../../../../hooks/useDocumentCapabilities';
 import { formatDateTime } from '../../../../../utils/format';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import {
+  buildExceptionProcessStatusValueEnum,
+  resolveProductionExceptionListStatusParams,
+} from '../../../utils/productionExceptionList';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
@@ -162,15 +167,7 @@ const ExceptionProcessPage: React.FC = () => {
     [t],
   );
 
-  const processStatusValueEnum = useMemo(
-    () => ({
-      pending: t(`${P}.status.pending`),
-      processing: t(`${P}.status.processing`),
-      resolved: t(`${P}.status.resolved`),
-      cancelled: t(`${P}.status.cancelled`),
-    }),
-    [t],
-  );
+  const processStatusValueEnum = useMemo(() => buildExceptionProcessStatusValueEnum(t), [t]);
 
   const handleDetail = async (record: ExceptionProcessRecord) => {
     try {
@@ -377,18 +374,33 @@ const ExceptionProcessPage: React.FC = () => {
       width: 120,
     },
     {
+      title: t(`${P}.col.processStatus`),
+      dataIndex: 'process_status',
+      width: 120,
+      hideInSearch: false,
+      valueType: 'select',
+      valueEnum: processStatusValueEnum,
+      render: (_, record) => getStatusTag(record.process_status),
+    },
+    {
       title: t(`${P}.col.startTime`),
       dataIndex: 'started_at',
-      width: 180,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
       render: (_, record) =>
-        record.started_at ? formatDateTime(record.started_at, 'YYYY-MM-DD HH:mm:ss') : '-',
+        record.started_at ? formatDateTime(record.started_at, 'YYYY-MM-DD HH:mm') : '-',
     },
     {
       title: t(`${P}.col.endTime`),
       dataIndex: 'completed_at',
-      width: 180,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
       render: (_, record) =>
-        record.completed_at ? formatDateTime(record.completed_at, 'YYYY-MM-DD HH:mm:ss') : '-',
+        record.completed_at ? formatDateTime(record.completed_at, 'YYYY-MM-DD HH:mm') : '-',
     },
     {
       title: t('common.actions'),
@@ -425,7 +437,7 @@ const ExceptionProcessPage: React.FC = () => {
           { keyPrefix: `exception-process-actions-${record.id ?? 'row'}` },
         ),
     },
-  ], [t, getExceptionTypeTag, getStepTag]);
+  ], [t, getExceptionTypeTag, getStepTag, getStatusTag, processStatusValueEnum]);
 
   const getStepsConfig = useCallback(
     (currentStep?: string) => {
@@ -469,20 +481,42 @@ const ExceptionProcessPage: React.FC = () => {
           columnPersistenceId="apps.kuaizhizao.pages.production-execution.exception-process"
           actionRef={actionRef}
           columns={columns}
-          request={async (params, _sort, _filter, searchFormValues) => {
-            const apiParams: any = {
+          request={async (params, sort, _filter, searchFormValues) => {
+            const s = searchFormValues ?? {};
+            const statusParams = resolveProductionExceptionListStatusParams(s, 'process_status');
+            const { sortBy, sortOrder } = extractProTableSort(sort);
+            const orderBy =
+              sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+            const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
+
+            const apiParams: Record<string, unknown> = {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
+              order_by: orderBy,
+              ...statusParams,
             };
 
-            if (searchFormValues?.exception_type) {
-              apiParams.exception_type = searchFormValues.exception_type;
+            if (s.exception_type) {
+              apiParams.exception_type = s.exception_type;
             }
-            if (searchFormValues?.process_status) {
-              apiParams.process_status = searchFormValues.process_status;
+            if (s.assigned_to) {
+              apiParams.assigned_to = s.assigned_to;
             }
-            if (searchFormValues?.assigned_to) {
-              apiParams.assigned_to = searchFormValues.assigned_to;
+            if (fuzzyKeyword) {
+              apiParams.keyword = fuzzyKeyword;
+            } else if (s.assigned_to_name != null && String(s.assigned_to_name).trim()) {
+              apiParams.assigned_to_name = String(s.assigned_to_name).trim();
+            }
+
+            const createdRange = s.created_at_range as [unknown, unknown] | undefined;
+            if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+              apiParams.created_start_date = formatDateTime(
+                createdRange[0] as string | Date,
+                'YYYY-MM-DD',
+              );
+              apiParams.created_end_date = createdRange[1]
+                ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+                : apiParams.created_start_date;
             }
 
             try {
@@ -507,6 +541,9 @@ const ExceptionProcessPage: React.FC = () => {
           }}
           rowKey="id"
           showAdvancedSearch={true}
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField="process_status"
+          pinnedTabsValueEnum={processStatusValueEnum}
           showCreateButton={true}
           createButtonText={createButtonLabel}
           onCreate={() => openStartModal()}

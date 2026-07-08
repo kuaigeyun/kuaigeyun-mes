@@ -151,8 +151,9 @@ class PackingBindingListResponse(BaseModel):
 
 class PackingBindingPageResponse(BaseModel):
     """装箱绑定分页响应"""
-    items: List[PackingBindingListResponse] = Field(default_factory=list, description="分页数据")
+    data: List[PackingBindingListResponse] = Field(default_factory=list, description="分页数据")
     total: int = Field(0, description="总数")
+    success: bool = Field(True, description="是否成功")
 
 
 class PackingBindingStatisticsResponse(BaseModel):

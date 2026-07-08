@@ -21,6 +21,13 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { equipmentApi } from '../../../services/equipment';
 import { transferApplicationsApi } from '../../../services/equipmentOps';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  APPROVAL_DOC_PINNED_STATUS_FIELD,
+  buildApprovalDocStatusValueEnum,
+  normalizeEquipmentListResponse,
+  resolveApprovalDocListParams,
+} from '../../../utils/equipmentListCore';
 
 const P = 'app.kuaizhizao.equipmentOps.transfer';
 const RESOURCE = 'kuaizhizao:equipment-transfer';
@@ -137,19 +144,99 @@ const EquipmentTransfersPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
+  const approvalStatusValueEnum = useMemo(() => buildApprovalDocStatusValueEnum(), []);
+
   const columns: ProColumns<TransferApplication>[] = useMemo(
     () => [
-      { title: t(`${P}.col.applicationNo`), dataIndex: 'application_no', width: 140, fixed: 'left' },
-      { title: t(`${P}.col.equipment`), dataIndex: 'equipment_name', width: 160, ellipsis: true },
-      { title: t(`${P}.col.fromWorkshop`), dataIndex: 'from_workshop_name', width: 120, ellipsis: true },
-      { title: t(`${P}.col.toWorkshop`), dataIndex: 'to_workshop_name', width: 120, ellipsis: true },
-      { title: t(`${P}.col.toLocation`), dataIndex: 'to_workstation_name', width: 120, ellipsis: true },
-      { title: t(`${P}.col.transferDate`), dataIndex: 'transfer_date', width: 110, valueType: 'date' },
+      {
+        title: t(`${P}.col.transferDate`),
+        dataIndex: 'transfer_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 10 } as ProColumns['search'],
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 11 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        valueType: 'select',
+        valueEnum: approvalStatusValueEnum,
+        hideInTable: true,
+        search: { order: 20 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.applicationNo`),
+        dataIndex: 'application_no',
+        width: 140,
+        fixed: 'left',
+        sorter: true,
+        search: { order: 30 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.equipment`),
+        dataIndex: 'equipment_name',
+        width: 160,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t(`${P}.col.fromWorkshop`),
+        dataIndex: 'from_workshop_name',
+        width: 120,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t(`${P}.col.toWorkshop`),
+        dataIndex: 'to_workshop_name',
+        width: 120,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t(`${P}.col.toLocation`),
+        dataIndex: 'to_workstation_name',
+        width: 120,
+        ellipsis: true,
+        hideInSearch: true,
+      },
+      {
+        title: t(`${P}.col.transferDate`),
+        dataIndex: 'transfer_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        valueType: 'date',
+        sorter: true,
+        hideInSearch: true,
+      },
       {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
         width: 90,
+        sorter: true,
+        hideInSearch: true,
         render: (_, r) => <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>,
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at',
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        defaultSortOrder: 'descend',
+        sorter: true,
+        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
       {
         title: t('common.actions'),
@@ -219,7 +306,7 @@ const EquipmentTransfersPage: React.FC = () => {
         ),
       },
     ],
-    [t, perms, messageApi],
+    [t, perms, messageApi, approvalStatusValueEnum],
   );
 
   return (
@@ -231,13 +318,22 @@ const EquipmentTransfersPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          request={async (params) => {
+          showAdvancedSearch={true}
+          pinnedTabsField={APPROVAL_DOC_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const listParams = resolveApprovalDocListParams(searchFormValues, sort, {
+                docDateRangeKeys: ['transfer_date_range', 'transferDateRange'],
+                docDateParamPrefix: 'transfer',
+              });
               const res = await transferApplicationsApi.list({
                 skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
                 limit: params.pageSize,
+                ...listParams,
               });
-              return { data: res.items ?? [], success: true, total: res.total ?? 0 };
+              const { data, total } = normalizeEquipmentListResponse(res);
+              return { data: data as TransferApplication[], success: true, total };
             } catch {
               messageApi.error(t(`${P}.listFailed`));
               return { data: [], success: false, total: 0 };

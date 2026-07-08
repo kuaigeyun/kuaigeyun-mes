@@ -209,6 +209,11 @@ class SPCSampleResponse(SPCSampleBase):
         from_attributes = True
 
 
+class SPCSampleListResponse(BaseSchema):
+    items: List[SPCSampleResponse]
+    total: int
+
+
 class SPCPoint(BaseSchema):
     sample_time: datetime
     sample_value: float

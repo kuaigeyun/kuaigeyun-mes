@@ -7,7 +7,6 @@ import React, { useRef, useState, useCallback, useMemo } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Space, Tag } from 'antd';
 import { PlayCircleOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../components/uni-batch';
@@ -30,7 +29,12 @@ import { buildBomChangeCreateUrl, buildRouteChangeCreateUrl } from '../../servic
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 import { getKuaiplmChangeCategoryText, getKuaiplmChangeStatusText, getKuaiplmChangeTypeText } from '../../components/kuaiplmMeta';
-import { formatDateTime } from '../../../../utils/format';
+import {
+  changeDeskSearchColumns,
+  PLM_CHANGE_PINNED_STATUS_FIELD,
+  plmCreatedUpdatedColumns,
+  resolveChangeDeskListParams,
+} from '../../utils/plmListCore';
 
 type TabKey = 'all' | 'bom' | 'route';
 
@@ -47,6 +51,7 @@ const ChangeManagementPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const bomAuditEnabled = useAuditRequired('bom_change');
   const routeAuditEnabled = useAuditRequired('process_route_change');
   const auditEnabled = bomAuditEnabled || routeAuditEnabled;
@@ -62,11 +67,11 @@ const ChangeManagementPage: React.FC = () => {
   const fetchList = async (
     params: { current?: number; pageSize?: number },
     category: TabKey,
-    status?: string,
+    listParams: Record<string, string | number | boolean | undefined>,
   ) => {
     const skip = ((params.current || 1) - 1) * (params.pageSize || 20);
     const limit = params.pageSize || 20;
-    const base = { skip, limit, status };
+    const base = { skip, limit, ...listParams };
     if (category === 'bom') return listBomChanges(base);
     if (category === 'route') return listRouteChanges(base);
     return listUnifiedChanges({ ...base, change_category: undefined });
@@ -156,29 +161,55 @@ const ChangeManagementPage: React.FC = () => {
 
   const columns: ProColumns<UnifiedChangeRow>[] = useMemo(
     () => [
+      ...changeDeskSearchColumns({
+        changeCode: t('app.kuaiplm.common.columns.changeCode'),
+        targetName: t('app.kuaiplm.common.columns.target'),
+      }),
       {
         title: t('app.kuaiplm.common.columns.category'),
         dataIndex: 'change_category',
         width: 90,
+        hideInSearch: true,
         render: (_, row) => (
           <Tag color={row.change_category === 'bom' ? 'blue' : 'purple'}>
             {getKuaiplmChangeCategoryText(t, row.change_category)}
           </Tag>
         ),
       },
-      { title: t('app.kuaiplm.common.columns.changeCode'), dataIndex: 'change_code', width: 140 },
+      {
+        title: t('app.kuaiplm.common.columns.changeCode'),
+        dataIndex: 'change_code',
+        width: 140,
+        sorter: true,
+        hideInSearch: true,
+      },
       {
         title: t('app.kuaiplm.common.columns.changeType'),
         dataIndex: 'change_type',
         width: 120,
+        hideInSearch: true,
         render: (_, row) =>
           getKuaiplmChangeTypeText(t, row.change_type, row.change_category),
       },
-      { title: t('app.kuaiplm.common.columns.target'), dataIndex: 'target_name', ellipsis: true },
+      {
+        title: t('app.kuaiplm.common.columns.target'),
+        dataIndex: 'target_name',
+        sorter: true,
+        hideInSearch: true,
+        ellipsis: true,
+      },
       {
         title: t('app.kuaiplm.common.columns.status'),
         dataIndex: 'status',
         width: 100,
+        valueEnum: {
+          draft: { text: getKuaiplmChangeStatusText(t, 'draft') },
+          pending: { text: getKuaiplmChangeStatusText(t, 'pending') },
+          approved: { text: getKuaiplmChangeStatusText(t, 'approved') },
+          executed: { text: getKuaiplmChangeStatusText(t, 'executed') },
+          rejected: { text: getKuaiplmChangeStatusText(t, 'rejected') },
+          cancelled: { text: getKuaiplmChangeStatusText(t, 'cancelled') },
+        },
         render: (_, row) => (
           <Tag color={STATUS_COLOR[(row.status ?? '').toLowerCase()] ?? 'default'}>
             {getKuaiplmChangeStatusText(t, row.status)}
@@ -191,13 +222,9 @@ const ChangeManagementPage: React.FC = () => {
         ellipsis: true,
         hideInSearch: true,
       },
-      {
-        title: t('app.kuaiplm.common.columns.createdAt'),
-        dataIndex: 'created_at',
-        width: 168,
-        hideInSearch: true,
-        render: (_, row) => (row.created_at ? formatDateTime(row.created_at, 'YYYY-MM-DD HH:mm') : '-'),
-      },
+      ...plmCreatedUpdatedColumns<UnifiedChangeRow>(t).filter(
+        (col) => col.dataIndex === 'created_at' || col.dataIndex === 'created_at_range',
+      ),
       {
         title: t('app.kuaiplm.common.columns.actions'),
         valueType: 'option',
@@ -265,6 +292,9 @@ const ChangeManagementPage: React.FC = () => {
         columns={columns}
         columnPersistenceId={`apps.kuaiplm.pages.change-management.${activeTab}`}
         scroll={{ x: 1200 }}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={PLM_CHANGE_PINNED_STATUS_FIELD}
         showCreateButton
         createButtonText={t('app.kuaiplm.change.createBomButton') + NEW_SHORTCUT_HINT}
         onCreate={handleCreateBomChange}
@@ -306,11 +336,9 @@ const ChangeManagementPage: React.FC = () => {
         params={{ tab: activeTab }}
         request={async (params, _sort, _filter, searchFormValues) => {
           try {
-            const res = await fetchList(
-              params,
-              activeTab,
-              searchFormValues?.status as string | undefined,
-            );
+            const listParams = resolveChangeDeskListParams(searchFormValues);
+            lastListParamsRef.current = listParams;
+            const res = await fetchList(params, activeTab, listParams);
             const map: Record<string, UnifiedChangeRow> = {};
             for (const row of res.items) {
               if (row.uuid) map[String(row.uuid)] = row;

@@ -43,11 +43,73 @@
 .aps-gantt-card-compact {
   .ant-card-head {
     min-height: auto;
-    padding: 8px;
+    padding: 8px 12px;
+  }
+
+  .ant-card-head-wrapper {
+    align-items: center;
+  }
+
+  .ant-card-head-title {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .ant-card-extra {
+    display: flex;
+    align-items: center;
+    padding: 0;
+    margin-inline-start: 12px;
+  }
+
+  .ant-card-head-title .ant-space,
+  .ant-card-extra .ant-space {
+    align-items: center;
+  }
+
+  .ant-card-head-title .ant-space-item,
+  .ant-card-extra .ant-space-item {
+    display: inline-flex;
+    align-items: center;
   }
 
   .ant-card-body {
     padding: 8px;
+  }
+}
+
+.scheduling-gantt-toolbar__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65));
+}
+
+.scheduling-gantt-toolbar__help-icon {
+  display: inline-flex;
+  align-items: center;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--ant-color-text-tertiary, rgba(0, 0, 0, 0.45));
+  cursor: help;
+}
+
+.scheduling-gantt-toolbar__title,
+.scheduling-gantt-toolbar__extra {
+  .ant-btn-sm {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .ant-input-number-sm {
+    vertical-align: middle;
   }
 }
 

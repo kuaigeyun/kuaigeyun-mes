@@ -5,7 +5,7 @@ Author: RiverEdge Team
 Date: 2026-05-28
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -63,6 +63,20 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
 from apps.kuaizhizao.services.document_action_policy.purchase_inquiry import (
     assert_purchase_inquiry_capability,
 )
+
+PURCHASE_INQUIRY_SORTABLE_FIELDS = frozenset({
+    "inquiry_code",
+    "inquiry_name",
+    "source_code",
+    "inquiry_date",
+    "quote_deadline",
+    "status",
+    "review_status",
+    "buyer_name",
+    "total_quantity",
+    "created_at",
+    "updated_at",
+})
 
 
 class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
@@ -124,6 +138,37 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
 
         return await enrich_record(tenant_id, "purchase_inquiry", resp)
 
+    @staticmethod
+    def _resolve_list_order_by(order_by: Optional[str]) -> tuple[str, str]:
+        if order_by:
+            field = order_by.lstrip("-")
+            if field in PURCHASE_INQUIRY_SORTABLE_FIELDS:
+                descending = order_by.startswith("-")
+                primary = f"-{field}" if descending else field
+                secondary = "-id" if descending else "id"
+                return primary, secondary
+        return "-created_at", "-id"
+
+    @staticmethod
+    def _sort_inquiries_in_memory(
+        rows: List[PurchaseInquiry],
+        primary: str,
+        secondary: str,
+    ) -> List[PurchaseInquiry]:
+        def field_key(field_name: str, row: PurchaseInquiry):
+            val = getattr(row, field_name.lstrip("-"), None)
+            if val is None:
+                return (1, "")
+            return (0, val)
+
+        def sort_key(row: PurchaseInquiry):
+            p_field = primary.lstrip("-")
+            s_field = secondary.lstrip("-")
+            return (field_key(p_field, row), field_key(s_field, row))
+
+        reverse = primary.startswith("-")
+        return sorted(rows, key=sort_key, reverse=reverse)
+
     async def list_inquiries(
         self,
         tenant_id: int,
@@ -131,37 +176,96 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         limit: int = 20,
         lifecycle_stage: Optional[str] = None,
         keyword: Optional[str] = None,
+        inquiry_code: Optional[str] = None,
+        inquiry_name: Optional[str] = None,
+        source_code: Optional[str] = None,
+        quote_deadline_from: Optional[date] = None,
+        quote_deadline_to: Optional[date] = None,
+        created_start_date: Optional[date] = None,
+        created_end_date: Optional[date] = None,
         source_id: Optional[int] = None,
-    ) -> List[PurchaseInquiryResponse]:
+        order_by: Optional[str] = None,
+    ) -> Dict[str, Any]:
         qs = PurchaseInquiry.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if source_id:
             qs = qs.filter(source_id=source_id, source_type="PurchaseRequisition")
-        if keyword:
+        kw = (keyword or "").strip()
+        if kw:
             qs = qs.filter(
-                Q(inquiry_code__icontains=keyword)
-                | Q(inquiry_name__icontains=keyword)
-                | Q(source_code__icontains=keyword)
+                Q(inquiry_code__icontains=kw)
+                | Q(inquiry_name__icontains=kw)
+                | Q(source_code__icontains=kw)
+                | Q(buyer_name__icontains=kw)
             )
-        rows = await qs.order_by("-created_at").offset(skip).limit(limit).all()
-        audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_inquiry")
+        code = (inquiry_code or "").strip()
+        if code:
+            qs = qs.filter(inquiry_code__icontains=code)
+        name = (inquiry_name or "").strip()
+        if name:
+            qs = qs.filter(inquiry_name__icontains=name)
+        src = (source_code or "").strip()
+        if src:
+            qs = qs.filter(source_code__icontains=src)
+        if quote_deadline_from is not None:
+            qs = qs.filter(
+                quote_deadline__isnull=False, quote_deadline__gte=quote_deadline_from
+            )
+        if quote_deadline_to is not None:
+            qs = qs.filter(
+                quote_deadline__isnull=False, quote_deadline__lte=quote_deadline_to
+            )
+        if created_start_date is not None:
+            qs = qs.filter(
+                created_at__gte=datetime.combine(created_start_date, time.min)
+            )
+        if created_end_date is not None:
+            qs = qs.filter(
+                created_at__lte=datetime.combine(created_end_date, time(23, 59, 59))
+            )
+
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "purchase_inquiry"
+        )
         from apps.kuaizhizao.services.document_lifecycle_service import (
             get_purchase_inquiry_lifecycle,
             normalize_purchase_inquiry_lifecycle_stage,
         )
 
+        primary_order, secondary_order = self._resolve_list_order_by(order_by)
+        lifecycle_filter = (lifecycle_stage or "").strip()
+
+        if lifecycle_filter:
+            candidate_rows = await qs.order_by(primary_order, secondary_order).all()
+            norm_target = normalize_purchase_inquiry_lifecycle_stage(lifecycle_filter)
+            matched_rows: List[PurchaseInquiry] = []
+            for inquiry in candidate_rows:
+                lc = get_purchase_inquiry_lifecycle(inquiry, audit_required=audit_required)
+                stage_name = lc.get("current_stage_name")
+                stage_key = lc.get("current_stage_key")
+                if stage_name == norm_target or stage_key == lifecycle_filter:
+                    matched_rows.append(inquiry)
+            sorted_rows = self._sort_inquiries_in_memory(
+                matched_rows, primary_order, secondary_order
+            )
+            total = len(sorted_rows)
+            page_rows = sorted_rows[skip : skip + limit]
+        else:
+            total = await qs.count()
+            page_rows = await qs.offset(skip).limit(limit).order_by(primary_order, secondary_order)
+
         out: List[PurchaseInquiryResponse] = []
-        for inquiry in rows:
-            lc = get_purchase_inquiry_lifecycle(inquiry, audit_required=audit_required)
-            if lifecycle_stage:
-                norm = normalize_purchase_inquiry_lifecycle_stage(lifecycle_stage)
-                if lc.get("current_stage_name") != norm and lc.get("current_stage_key") != lifecycle_stage:
-                    continue
+        for inquiry in page_rows:
             resp = await self._build_response(tenant_id, inquiry)
             out.append(resp)
-        enriched = enrich_purchase_inquiry_list_capabilities(rows, out)
+        enriched = enrich_purchase_inquiry_list_capabilities(page_rows, out)
         from core.services.approval.audit_record_enricher import enrich_items
 
-        return await enrich_items(tenant_id, "purchase_inquiry", enriched)
+        enriched_items = await enrich_items(tenant_id, "purchase_inquiry", enriched)
+        return {
+            "data": [item.model_dump() for item in enriched_items],
+            "total": total,
+            "success": True,
+        }
 
     async def create_inquiry(
         self, tenant_id: int, data: PurchaseInquiryCreate, created_by: int

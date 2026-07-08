@@ -3,12 +3,11 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * 研发需求（Phase2）
  */
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useMemo } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { ProFormDigit } from '@ant-design/pro-components';
 import { App, Button, Alert } from 'antd';
 import { LinkOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
@@ -24,7 +23,12 @@ import {
 import { buildPurchaseInquiryUrl } from '../../../services/master-data-links';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { formatDateTime } from '../../../../../utils/format';
+import {
+  plmCodeTitleSearchColumns,
+  plmCreatedUpdatedColumns,
+  PLM_PHASE2_PINNED_STATUS_FIELD,
+  resolvePhase2RequirementListParams,
+} from '../../../utils/plmListCore';
 
 const RequirementsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -33,6 +37,7 @@ const RequirementsPage: React.FC = () => {
   const projectIdFilter = searchParams.get('project_id');
   const filterProjectId = projectIdFilter ? Number(projectIdFilter) : undefined;
   const actionRef = useRef<ActionType>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<RdRequirement | null>(null);
@@ -112,104 +117,126 @@ const RequirementsPage: React.FC = () => {
     internal: t('app.kuaiplm.phase2.common.source.internal'),
   };
 
-  const columns: ProColumns<RdRequirement>[] = [
-    { title: t('app.kuaiplm.phase2.requirements.columns.code'), dataIndex: 'requirement_code', width: 140 },
-    { title: t('app.kuaiplm.phase2.requirements.columns.title'), dataIndex: 'title', ellipsis: true },
-    { title: t('app.kuaiplm.phase2.requirements.columns.project'), dataIndex: 'project_name', width: 140, hideInSearch: true },
-    {
-      title: t('app.kuaiplm.phase2.requirements.columns.priority'),
-      dataIndex: 'priority',
-      width: 90,
-      valueEnum: Object.fromEntries(
-        Object.entries(priorityLabelMap).map(([value, label]) => [value, { text: label }]),
-      ),
-      render: (_, row) => priorityLabelMap[row.priority || ''] || row.priority || '-',
-    },
-    {
-      title: t('app.kuaiplm.phase2.requirements.columns.status'),
-      dataIndex: 'status',
-      width: 90,
-      valueEnum: Object.fromEntries(
-        Object.entries(requirementStatusLabelMap).map(([value, label]) => [value, { text: label }]),
-      ),
-      render: (_, row) => requirementStatusLabelMap[row.status || ''] || row.status || '-',
-    },
-    {
-      title: t('app.kuaiplm.phase2.requirements.columns.source'),
-      dataIndex: 'source_type',
-      width: 140,
-      hideInSearch: true,
-      render: (_, row) => {
-        if (row.source_type === 'purchase_inquiry' && row.source_id) {
-          return (
-            <Button
-              type="link"
-              size="small"
-              icon={<LinkOutlined />}
-              onClick={() => window.open(buildPurchaseInquiryUrl(row.source_id!), '_blank')}
-            >
-              {t('app.kuaiplm.phase2.common.source.purchaseInquiry')} #{row.source_id}
-            </Button>
-          );
-        }
-        return sourceTypeLabelMap[row.source_type || ''] || row.source_type || '-';
+  const columns: ProColumns<RdRequirement>[] = useMemo(
+    () => [
+      ...plmCodeTitleSearchColumns({
+        codeLabel: t('app.kuaiplm.phase2.requirements.columns.code'),
+        titleLabel: t('app.kuaiplm.phase2.requirements.columns.title'),
+        codeField: 'requirement_code',
+        titleField: 'title',
+      }),
+      {
+        title: t('app.kuaiplm.phase2.requirements.columns.code'),
+        dataIndex: 'requirement_code',
+        width: 140,
+        sorter: true,
+        hideInSearch: true,
       },
-    },
-    {
-      title: t('app.kuaiplm.phase2.requirements.columns.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, row) => (row.updated_at ? formatDateTime(row.updated_at, 'YYYY-MM-DD HH:mm') : '-'),
-    },
-    {
-      title: t('common.actions'),
-      valueType: 'option',
-      width: 180,
-      render: (_, row) => [
-            <Button
-              {...rowActionKind('read')}
-              key="detail"
-              type="link"
-              size="small"
-              onClick={() => {
-                setDetailRecord(row);
-              }}
-            >
-              {t('common.detail')}
-            </Button>,
-            <Button
-              {...rowActionKind('edit')}
-              key="edit"
-              type="link"
-              size="small"
-              onClick={() => {
-                setEditingRecord(row);
-              }}
-            >
-              {t('common.edit')}
-            </Button>,
-            <Button {...rowActionKind('delete')}
-              key="del"
-              type="link"
-              size="small"
-              danger
-              onClick={() => {
-                modalApi.confirm({
-                  title: t('app.kuaiplm.phase2.requirements.deleteOneTitle'),
-                  onOk: async () => {
-                    await deleteRequirement(row.id!);
-                    messageApi.success(t('common.deleteSuccess'));
-                    actionRef.current?.reload();
-                  },
-                });
-              }}
-            >
-              {t('common.delete')}
-            </Button>,
-          ],
-    },
-  ];
+      {
+        title: t('app.kuaiplm.phase2.requirements.columns.title'),
+        dataIndex: 'title',
+        sorter: true,
+        ellipsis: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaiplm.phase2.requirements.columns.project'),
+        dataIndex: 'project_name',
+        width: 140,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaiplm.phase2.requirements.columns.priority'),
+        dataIndex: 'priority',
+        width: 90,
+        sorter: true,
+        valueEnum: Object.fromEntries(
+          Object.entries(priorityLabelMap).map(([value, label]) => [value, { text: label }]),
+        ),
+        render: (_, row) => priorityLabelMap[row.priority || ''] || row.priority || '-',
+      },
+      {
+        title: t('app.kuaiplm.phase2.requirements.columns.status'),
+        dataIndex: 'status',
+        width: 90,
+        valueEnum: Object.fromEntries(
+          Object.entries(requirementStatusLabelMap).map(([value, label]) => [value, { text: label }]),
+        ),
+        render: (_, row) => requirementStatusLabelMap[row.status || ''] || row.status || '-',
+      },
+      {
+        title: t('app.kuaiplm.phase2.requirements.columns.source'),
+        dataIndex: 'source_type',
+        width: 140,
+        hideInSearch: true,
+        render: (_, row) => {
+          if (row.source_type === 'purchase_inquiry' && row.source_id) {
+            return (
+              <Button
+                type="link"
+                size="small"
+                icon={<LinkOutlined />}
+                onClick={() => window.open(buildPurchaseInquiryUrl(row.source_id!), '_blank')}
+              >
+                {t('app.kuaiplm.phase2.common.source.purchaseInquiry')} #{row.source_id}
+              </Button>
+            );
+          }
+          return sourceTypeLabelMap[row.source_type || ''] || row.source_type || '-';
+        },
+      },
+      ...plmCreatedUpdatedColumns<RdRequirement>(t),
+      {
+        title: t('common.actions'),
+        valueType: 'option',
+        width: 180,
+        render: (_, row) => [
+          <Button
+            {...rowActionKind('read')}
+            key="detail"
+            type="link"
+            size="small"
+            onClick={() => {
+              setDetailRecord(row);
+            }}
+          >
+            {t('common.detail')}
+          </Button>,
+          <Button
+            {...rowActionKind('edit')}
+            key="edit"
+            type="link"
+            size="small"
+            onClick={() => {
+              setEditingRecord(row);
+            }}
+          >
+            {t('common.edit')}
+          </Button>,
+          <Button
+            {...rowActionKind('delete')}
+            key="del"
+            type="link"
+            size="small"
+            danger
+            onClick={() => {
+              modalApi.confirm({
+                title: t('app.kuaiplm.phase2.requirements.deleteOneTitle'),
+                onOk: async () => {
+                  await deleteRequirement(row.id!);
+                  messageApi.success(t('common.deleteSuccess'));
+                  actionRef.current?.reload();
+                },
+              });
+            }}
+          >
+            {t('common.delete')}
+          </Button>,
+        ],
+      },
+    ],
+    [messageApi, modalApi, priorityLabelMap, requirementStatusLabelMap, sourceTypeLabelMap, t],
+  );
 
   return (
     <ListPageTemplate>
@@ -230,13 +257,20 @@ const RequirementsPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         columns={columns}
         columnPersistenceId="apps.kuaiplm.pages.phase2.requirements"
-        request={async (params) => {
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={PLM_PHASE2_PINNED_STATUS_FIELD}
+        request={async (params, sort, _filter, searchFormValues) => {
           const { current, pageSize } = params;
+          const listParams = resolvePhase2RequirementListParams(searchFormValues, sort, {
+            projectId: filterProjectId,
+          });
+          lastListParamsRef.current = listParams;
           try {
             const res = await listRequirements({
               skip: ((current || 1) - 1) * (pageSize || 20),
               limit: pageSize || 20,
-              project_id: filterProjectId,
+              ...listParams,
             });
             return { data: res.items, total: res.total, success: true };
           } catch (e: any) {

@@ -3,6 +3,7 @@
 """
 
 import uuid
+from datetime import date
 from decimal import Decimal
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
@@ -107,16 +108,48 @@ async def list_purchase_invoices(
     status: Optional[str] = None,
     supplier_id: Optional[int] = None,
     purchase_order_id: Optional[int] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    keyword: Optional[str] = Query(None),
+    invoice_code: Optional[str] = Query(None),
+    supplier_name: Optional[str] = Query(None),
+    invoice_number: Optional[str] = Query(None),
+    review_status: Optional[str] = None,
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None),
     _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
     tenant_id: int = Depends(get_current_tenant)
 ):
-    invoices = await invoice_service.list_purchase_invoices(
-        tenant_id, skip, limit,
-        status=status, supplier_id=supplier_id, purchase_order_id=purchase_order_id
+    doc_date_start = start_date.isoformat() if start_date else None
+    doc_date_end = end_date.isoformat() if end_date else None
+    invoices, total = await invoice_service.list_purchase_invoices(
+        tenant_id,
+        skip,
+        limit,
+        status=status,
+        supplier_id=supplier_id,
+        purchase_order_id=purchase_order_id,
+        keyword=keyword,
+        invoice_code=invoice_code,
+        supplier_name=supplier_name,
+        invoice_number=invoice_number,
+        review_status=review_status,
+        start_date=doc_date_start,
+        end_date=doc_date_end,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+        sort_field=sort_field,
+        sort_order=sort_order,
     )
     return PurchaseInvoiceListResponse(
         items=invoices,
-        total=len(invoices),
+        total=total,
         skip=skip,
         limit=limit
     )

@@ -110,9 +110,15 @@ export interface CustomerListParams {
   category?: string;
   isActive?: boolean;
   keyword?: string;
+  code?: string;
+  name?: string;
   salesmanId?: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
 }
 
 /** 客户列表分页响应 */
@@ -195,6 +201,10 @@ export interface SupplierListParams {
   name?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
 }
 
 export interface SupplierListResponse {

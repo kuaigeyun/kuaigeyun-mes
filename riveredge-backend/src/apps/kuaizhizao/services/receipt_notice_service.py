@@ -8,7 +8,7 @@ Date: 2026-02-22
 """
 
 from typing import List, Optional, Tuple, Dict, Any
-from datetime import datetime
+from datetime import datetime, date, time
 from decimal import Decimal
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
@@ -59,6 +59,21 @@ async def _first_storage_location_for_warehouse(
         if loc:
             return loc.id, loc.code
     return None, None
+
+
+RECEIPT_NOTICE_SORTABLE_FIELDS = frozenset({
+    "notice_code",
+    "purchase_order_code",
+    "supplier_name",
+    "warehouse_name",
+    "planned_receipt_date",
+    "notified_at",
+    "total_quantity",
+    "total_amount",
+    "status",
+    "created_at",
+    "updated_at",
+})
 
 
 class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
@@ -248,17 +263,45 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         if filters.get("purchase_order_id"):
             query = query.filter(purchase_order_id=filters["purchase_order_id"])
         if filters.get("supplier_id"):
-            query = query.filter(supplier_id=filters["supplier_id"])
+            query = query.filter(supplier_id=int(filters["supplier_id"]))
+        if filters.get("warehouse_id"):
+            query = query.filter(warehouse_id=int(filters["warehouse_id"]))
+        if filters.get("planned_start_date"):
+            query = query.filter(planned_receipt_date__gte=filters["planned_start_date"])
+        if filters.get("planned_end_date"):
+            query = query.filter(planned_receipt_date__lte=filters["planned_end_date"])
+        if filters.get("created_start_date"):
+            query = query.filter(
+                created_at__gte=datetime.combine(filters["created_start_date"], time.min)
+            )
+        if filters.get("created_end_date"):
+            query = query.filter(
+                created_at__lte=datetime.combine(filters["created_end_date"], time(23, 59, 59))
+            )
         keyword = str(filters.get("keyword") or "").strip()
         if keyword:
             query = query.filter(
                 Q(notice_code__icontains=keyword)
                 | Q(purchase_order_code__icontains=keyword)
                 | Q(supplier_name__icontains=keyword)
+                | Q(warehouse_name__icontains=keyword)
+                | Q(purchase_receipt_code__icontains=keyword)
             )
+        if filters.get("notice_code"):
+            code = str(filters["notice_code"]).strip()
+            if code:
+                query = query.filter(notice_code__icontains=code)
+        if filters.get("purchase_order_code"):
+            order_code = str(filters["purchase_order_code"]).strip()
+            if order_code:
+                query = query.filter(purchase_order_code__icontains=order_code)
 
         total = await query.count()
-        notices = await query.offset(skip).limit(limit).order_by("-created_at")
+        order_clause = filters.get("order_by") or "-created_at"
+        field = order_clause.lstrip("-")
+        if field not in RECEIPT_NOTICE_SORTABLE_FIELDS:
+            order_clause = "-created_at"
+        notices = await query.offset(skip).limit(limit).order_by(order_clause, "-id")
         notice_list = list(notices)
         notice_ids = [int(n.id) for n in notice_list if n.id is not None]
         items_map = await self._notice_has_items_map(tenant_id, notice_ids)

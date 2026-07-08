@@ -16,8 +16,10 @@ from tortoise.transactions import in_transaction
 
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.inspection_plan import InspectionPlan, InspectionPlanStep
+from apps.kuaizhizao.services.inspection_plan_list_core import apply_inspection_plan_list_filters
 from apps.kuaizhizao.schemas.inspection_plan import (
     InspectionPlanCreate,
+    InspectionPlanListEnvelope,
     InspectionPlanUpdate,
     InspectionPlanResponse,
     InspectionPlanListResponse,
@@ -143,8 +145,14 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
         is_active: Optional[bool] = None,
         plan_code: Optional[str] = None,
         plan_name: Optional[str] = None,
+        keyword: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+        order_by: Optional[str] = None,
         include_steps: bool = False,
-    ) -> List[InspectionPlanListResponse]:
+    ) -> InspectionPlanListEnvelope:
         """获取质检方案列表"""
         query = InspectionPlan.filter(
             tenant_id=tenant_id,
@@ -158,12 +166,21 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
             query = query.filter(Q(operation_id=operation_id) | Q(operation_id__isnull=True))
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        if plan_code:
-            query = query.filter(plan_code__icontains=plan_code)
-        if plan_name:
-            query = query.filter(plan_name__icontains=plan_name)
 
-        plans = await query.order_by("-created_at").offset(skip).limit(limit).all()
+        query, primary_order, secondary_order = apply_inspection_plan_list_filters(
+            query,
+            keyword=keyword,
+            plan_code=plan_code,
+            plan_name=plan_name,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            order_by=order_by,
+        )
+
+        total = await query.count()
+        plans = await query.order_by(primary_order, secondary_order).offset(skip).limit(limit).all()
 
         result = []
         for plan in plans:
@@ -172,7 +189,7 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
                 result.append(self._to_list_response(plan, step_rows))
             else:
                 result.append(self._to_list_response(plan))
-        return result
+        return InspectionPlanListEnvelope(items=result, total=total)
 
     async def update_inspection_plan(
         self,

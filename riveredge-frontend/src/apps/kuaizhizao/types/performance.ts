@@ -38,9 +38,24 @@ export interface HolidayListParams {
   skip?: number;
   limit?: number;
   holidayType?: string;
-  startDate?: string; // ISO date string (YYYY-MM-DD)
-  endDate?: string; // ISO date string (YYYY-MM-DD)
+  holiday_type?: string;
+  startDate?: string;
+  start_date?: string;
+  endDate?: string;
+  end_date?: string;
   isActive?: boolean;
+  is_active?: boolean;
+  keyword?: string;
+  order_by?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
+}
+
+export interface PerformanceListResult<T> {
+  items: T[];
+  total: number;
 }
 
 export interface Skill {
@@ -78,6 +93,13 @@ export interface SkillListParams {
   limit?: number;
   category?: string;
   isActive?: boolean;
+  is_active?: boolean;
+  keyword?: string;
+  order_by?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
 }
 
 // ==================== 员工绩效 ====================
@@ -121,46 +143,6 @@ export interface EmployeePerformanceConfigUpdate {
   hourly_rate?: number;
   default_piece_rate?: number;
   base_salary?: number;
-  effective_from?: string;
-  effective_to?: string;
-  is_active?: boolean;
-}
-
-export interface PieceRate {
-  id: number;
-  uuid: string;
-  tenant_id?: number;
-  operation_id: number;
-  operation_code?: string;
-  operation_name?: string;
-  material_id?: number;
-  material_code?: string;
-  rate: number;
-  effective_from?: string;
-  effective_to?: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PieceRateCreate {
-  operation_id: number;
-  operation_code?: string;
-  operation_name?: string;
-  material_id?: number;
-  material_code?: string;
-  rate: number;
-  effective_from?: string;
-  effective_to?: string;
-  is_active?: boolean;
-}
-
-export interface PieceRateUpdate {
-  operation_code?: string;
-  operation_name?: string;
-  material_id?: number;
-  material_code?: string;
-  rate?: number;
   effective_from?: string;
   effective_to?: string;
   is_active?: boolean;
@@ -349,14 +331,4 @@ export interface ShiftRosterCreate {
   employeeId?: number;
   periodStart: string;
   remarks?: string;
-}
-
-/** 工序（用于计件单价选择，从主数据 process API 获取） */
-export interface Operation {
-  id: number;
-  uuid: string;
-  code: string;
-  name: string;
-  isActive?: boolean;
-  is_active?: boolean;
 }

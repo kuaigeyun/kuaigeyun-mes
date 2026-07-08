@@ -1535,6 +1535,18 @@ QUOTATION_MAIN_STAGES_NO_AUDIT = QUOTATION_MAIN_STAGES
 QUOTATION_MAIN_STAGES_AUDIT = QUOTATION_MAIN_STAGES
 
 
+def normalize_quotation_lifecycle_filter(stage: Optional[str]) -> str:
+    """列表 lifecycle_stage 筛选值归一化（与前端展示阶段、get_quotation_lifecycle 一致）。"""
+    s = _norm(stage)
+    aliases = {
+        "已发送": "已报价",
+        "已接受": "客户确认",
+        "已拒绝": "已驳回",
+        "rejected": "已驳回",
+    }
+    return aliases.get(s, s)
+
+
 def _quotation_review_pending(review_status: Optional[str]) -> bool:
     r = _norm(review_status)
     return r in LEGACY_PENDING_VALUES or r in ("",)

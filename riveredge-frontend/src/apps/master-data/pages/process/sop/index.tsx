@@ -36,7 +36,13 @@ import {
 const SOP_CUSTOM_FIELD_TABLE = 'master_data_sops';
 
 import { sopApi, operationApi, processRouteApi, unwrapProcessPagedList } from '../../../services/process';
-import { extractProTableSort, mapProcessListSortField } from '../../../../../utils/tableQueryKey';
+import {
+  buildMasterCrudActiveValueEnum,
+  MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  masterCrudCodeNameSearchColumns,
+  masterCrudCreatedUpdatedColumns,
+  resolveSopListParams,
+} from '../../../utils/processListCore';
 import { materialApi, materialGroupApi } from '../../../services/material';
 import type { MaterialListResponse } from '../../../types/material';
 import type { SOP, SOPCreate, SOPUpdate, Operation } from '../../../types/process';
@@ -56,8 +62,14 @@ const SOPPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const sopActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+    [t],
+  );
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -486,14 +498,14 @@ const SOPPage: React.FC = () => {
     try {
       let toExport: SOP[] = [];
       if (type === 'all') {
-        const res = await sopApi.list({ skip: 0, limit: 10000 });
+        const res = await sopApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
         toExport = Array.isArray(res) ? res : res?.data ?? [];
       } else if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
         toExport = currentPageData.filter((r) => selectedRowKeys.includes(r.uuid));
       } else if (type === 'currentPage' && currentPageData) {
         toExport = currentPageData;
       } else {
-        const res = await sopApi.list({ skip: 0, limit: 10000 });
+        const res = await sopApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
         toExport = Array.isArray(res) ? res : res?.data ?? [];
       }
       if (toExport.length === 0) {
@@ -763,18 +775,24 @@ const SOPPage: React.FC = () => {
   const columns: ProColumns<SOP>[] = useMemo(() => {
     const customFieldColumns = generateSopCustomFieldColumns();
     return [
+    ...masterCrudCodeNameSearchColumns({
+      code: t('app.master-data.sop.codeLabel'),
+      name: t('app.master-data.sop.nameLabel'),
+    }),
     {
       title: t('app.master-data.sop.codeLabel'),
       dataIndex: 'code',
       copyable: true,width: 150,
       fixed: 'left',
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.master-data.sop.nameLabel'),
       dataIndex: 'name',
       width: 200,
       sorter: true,
+      hideInSearch: true,
     },
     {
       key: 'sop-operation-filter',
@@ -862,12 +880,18 @@ const SOPPage: React.FC = () => {
     {
       title: t('app.master-data.sop.status'),
       dataIndex: 'isActive',
-      width: 100,
+      hideInTable: true,
+      order: 20,
       valueType: 'select',
-      valueEnum: {
-        true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
-        false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
-      },
+      valueEnum: sopActiveValueEnum,
+      fieldProps: { allowClear: true },
+    },
+    {
+      title: t('app.master-data.sop.status'),
+      dataIndex: 'isActive',
+      width: 100,
+      hideInSearch: true,
+      valueEnum: sopActiveValueEnum,
       render: (_, record) => {
         const isActive = record?.isActive ?? (record as any)?.is_active;
         return (
@@ -879,14 +903,7 @@ const SOPPage: React.FC = () => {
       sorter: true,
     },
     ...customFieldColumns,
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'createdAt',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
+    ...masterCrudCreatedUpdatedColumns<SOP>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -942,7 +959,7 @@ const SOPPage: React.FC = () => {
       },
     },
   ];
-  }, [sopListCustomFields, generateSopCustomFieldColumns, operations, materials, materialGroups, routes, navigate, getOperationName, t]);
+  }, [sopListCustomFields, generateSopCustomFieldColumns, operations, materials, materialGroups, routes, navigate, getOperationName, t, sopActiveValueEnum]);
 
   return (
     <ListPageTemplate>
@@ -951,39 +968,26 @@ const SOPPage: React.FC = () => {
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
-          // 处理搜索参数
-          const apiParams: any = {
+          const listParams = resolveSopListParams(searchFormValues, sort);
+          lastListParamsRef.current = listParams;
+          const apiParams = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
+            isActive: listParams.isActive as boolean | undefined,
+            operationId: listParams.operationId as number | undefined,
+            material_uuid: listParams.material_uuid as string | undefined,
+            material_group_uuid: listParams.material_group_uuid as string | undefined,
+            route_uuid: listParams.route_uuid as string | undefined,
+            keyword: listParams.keyword as string | undefined,
+            code: listParams.code as string | undefined,
+            name: listParams.name as string | undefined,
+            created_start_date: listParams.created_start_date as string | undefined,
+            created_end_date: listParams.created_end_date as string | undefined,
+            updated_start_date: listParams.updated_start_date as string | undefined,
+            updated_end_date: listParams.updated_end_date as string | undefined,
+            sortBy: listParams.sortBy as string | undefined,
+            sortOrder: listParams.sortOrder as 'asc' | 'desc' | undefined,
           };
-          
-          // 启用状态筛选
-          if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.isActive = searchFormValues.isActive;
-          }
-          
-          // 工序筛选
-          if (searchFormValues?.operationId !== undefined && searchFormValues.operationId !== '' && searchFormValues.operationId !== null) {
-            apiParams.operationId = searchFormValues.operationId;
-          }
-          // 绑定/载入筛选（标准操作SOP 阶段一）
-          if (searchFormValues?.material_uuid) apiParams.material_uuid = searchFormValues.material_uuid;
-          if (searchFormValues?.material_group_uuid) apiParams.material_group_uuid = searchFormValues.material_group_uuid;
-          if (searchFormValues?.route_uuid) apiParams.route_uuid = searchFormValues.route_uuid;
-
-          const fuzzyKw = String(searchFormValues?.keyword ?? '').trim();
-          const fallbackKw =
-            fuzzyKw ||
-            String(searchFormValues?.code ?? '').trim() ||
-            String(searchFormValues?.name ?? '').trim();
-          if (fallbackKw) apiParams.keyword = fallbackKw;
-
-          const { sortBy: rawSortBy, sortOrder } = extractProTableSort(sort);
-          const sortField = mapProcessListSortField(rawSortBy);
-          if (sortField) {
-            apiParams.sortBy = sortField;
-            apiParams.sortOrder = sortOrder;
-          }
 
           try {
             const result = await sopApi.list(apiParams);
@@ -1005,7 +1009,9 @@ const SOPPage: React.FC = () => {
           }
         }}
         rowKey="uuid"
-        showAdvancedSearch={true}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={MASTER_CRUD_PINNED_ACTIVE_FIELD}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,

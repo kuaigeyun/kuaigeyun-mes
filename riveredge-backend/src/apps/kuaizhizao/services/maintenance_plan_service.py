@@ -132,7 +132,16 @@ class MaintenancePlanService:
         equipment_uuid: Optional[str] = None,
         status: Optional[str] = None,
         plan_type: Optional[str] = None,
-        search: Optional[str] = None
+        maintenance_type: Optional[str] = None,
+        search: Optional[str] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        planned_start_date: Optional[str] = None,
+        planned_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[MaintenancePlan], int]:
         """
         获取维护计划列表
@@ -161,20 +170,48 @@ class MaintenancePlanService:
             query = query.filter(status=status)
         if plan_type:
             query = query.filter(plan_type=plan_type)
-        
-        # 搜索条件
-        if search:
-            query = query.filter(
-                plan_no__icontains=search
-            ) | query.filter(
-                plan_name__icontains=search
-            )
-        
-        # 获取总数量
+        if maintenance_type:
+            query = query.filter(maintenance_type=maintenance_type)
+
+        from apps.kuaizhizao.services.equipment_list_core import (
+            MAINTENANCE_PLAN_SORTABLE_FIELDS,
+            apply_equipment_created_date_range,
+            apply_equipment_document_date_range,
+            apply_equipment_keyword_filter,
+            apply_equipment_updated_date_range,
+            pick_search_keyword,
+            resolve_equipment_list_order_by,
+        )
+
+        query = apply_equipment_keyword_filter(
+            query,
+            pick_search_keyword(keyword, search),
+            ["plan_no", "plan_name", "equipment_name"],
+        )
+        query = apply_equipment_document_date_range(
+            query,
+            date_field="planned_start_date",
+            start_date=planned_start_date,
+            end_date=planned_end_date,
+        )
+        query = apply_equipment_created_date_range(
+            query,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
+        query = apply_equipment_updated_date_range(
+            query,
+            start_date=updated_start_date,
+            end_date=updated_end_date,
+        )
+
         total = await query.count()
-        
-        # 获取列表
-        plans = await query.offset(skip).limit(limit).order_by("-created_at")
+        order_clause = resolve_equipment_list_order_by(
+            order_by,
+            MAINTENANCE_PLAN_SORTABLE_FIELDS,
+            "-updated_at",
+        )
+        plans = await query.offset(skip).limit(limit).order_by(order_clause)
         
         return plans, total
     
@@ -354,7 +391,16 @@ class MaintenanceExecutionService:
         equipment_uuid: Optional[str] = None,
         maintenance_plan_uuid: Optional[str] = None,
         status: Optional[str] = None,
-        search: Optional[str] = None
+        execution_result: Optional[str] = None,
+        search: Optional[str] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        execution_start_date: Optional[str] = None,
+        execution_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[MaintenanceExecution], int]:
         """
         获取维护执行记录列表
@@ -383,16 +429,48 @@ class MaintenanceExecutionService:
             query = query.filter(maintenance_plan_uuid=maintenance_plan_uuid)
         if status:
             query = query.filter(status=status)
-        
-        # 搜索条件
-        if search:
-            query = query.filter(execution_no__icontains=search)
-        
-        # 获取总数量
+        if execution_result:
+            query = query.filter(execution_result=execution_result)
+
+        from apps.kuaizhizao.services.equipment_list_core import (
+            MAINTENANCE_EXECUTION_SORTABLE_FIELDS,
+            apply_equipment_created_date_range,
+            apply_equipment_document_date_range,
+            apply_equipment_keyword_filter,
+            apply_equipment_updated_date_range,
+            pick_search_keyword,
+            resolve_equipment_list_order_by,
+        )
+
+        query = apply_equipment_keyword_filter(
+            query,
+            pick_search_keyword(keyword, search),
+            ["execution_no", "equipment_name", "executor_name"],
+        )
+        query = apply_equipment_document_date_range(
+            query,
+            date_field="execution_date",
+            start_date=execution_start_date,
+            end_date=execution_end_date,
+        )
+        query = apply_equipment_created_date_range(
+            query,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
+        query = apply_equipment_updated_date_range(
+            query,
+            start_date=updated_start_date,
+            end_date=updated_end_date,
+        )
+
         total = await query.count()
-        
-        # 获取列表
-        executions = await query.offset(skip).limit(limit).order_by("-execution_date")
+        order_clause = resolve_equipment_list_order_by(
+            order_by,
+            MAINTENANCE_EXECUTION_SORTABLE_FIELDS,
+            "-execution_date",
+        )
+        executions = await query.offset(skip).limit(limit).order_by(order_clause)
         
         return executions, total
     

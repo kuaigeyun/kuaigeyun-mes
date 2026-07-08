@@ -1,5 +1,6 @@
 """销售变更单 API"""
 
+from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Path, Query, status as http_status, HTTPException
@@ -15,10 +16,14 @@ from apps.kuaizhizao.schemas.order_change import (
     ChangeImpactPreviewResponse,
     SalesOrderChangeCreate,
     SalesOrderChangeListResponse,
+    SalesOrderChangePagedListResponse,
     SalesOrderChangeUpdate,
     SalesOrderChangeWithItemsResponse,
 )
-from apps.kuaizhizao.services.sales_order_change_service import SalesOrderChangeService
+from apps.kuaizhizao.services.sales_order_change_service import (
+    SalesOrderChangeService,
+    SALES_ORDER_CHANGE_SORTABLE_FIELDS,
+)
 
 router = APIRouter(prefix="/sales-order-change-orders", tags=["App · Kuaige Zhizao · Sales Order Change"])
 service = SalesOrderChangeService()
@@ -48,20 +53,46 @@ async def create_change_order(
     return await service.create_change_order(tenant_id, data, current_user.id)
 
 
-@router.get("", response_model=List[SalesOrderChangeListResponse])
+@router.get("", response_model=SalesOrderChangePagedListResponse)
 async def list_change_orders(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=1000),
     source_order_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
-    lifecycle_stage: Optional[str] = Query(None),
+    lifecycle_stage: Optional[str] = Query(None, description="生命周期阶段：draft/applied/rejected"),
+    customer_id: Optional[int] = Query(None, description="客户 ID"),
+    change_category: Optional[str] = Query(None, description="变更类别"),
+    keyword: Optional[str] = Query(None, description="关键词（变更单号、客户、源订单、变更原因）"),
+    change_code: Optional[str] = Query(None, description="变更单号（模糊）"),
+    source_order_code: Optional[str] = Query(None, description="源销售订单号（模糊）"),
+    start_date: Optional[date] = Query(None, description="创建日期起"),
+    end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 created_at、-applied_at（前缀-表示降序）"),
     tenant_id: int = Depends(get_current_tenant),
     _: None = Depends(require_kuaizhizao_module_access("sales-order-change")),
 ):
-    return await service.list_change_orders(
-        tenant_id, skip=skip, limit=limit, source_order_id=source_order_id,
-        status=status, lifecycle_stage=lifecycle_stage,
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in SALES_ORDER_CHANGE_SORTABLE_FIELDS:
+            safe_order_by = order_by
+    items, total = await service.list_change_orders(
+        tenant_id,
+        skip=skip,
+        limit=limit,
+        source_order_id=source_order_id,
+        status=status,
+        lifecycle_stage=lifecycle_stage,
+        customer_id=customer_id,
+        change_category=change_category,
+        keyword=keyword,
+        change_code=change_code,
+        source_order_code=source_order_code,
+        start_date=start_date,
+        end_date=end_date,
+        order_by=safe_order_by,
     )
+    return SalesOrderChangePagedListResponse(items=items, total=total)
 
 
 @router.get("/by-order/{order_id}", response_model=List[SalesOrderChangeListResponse])

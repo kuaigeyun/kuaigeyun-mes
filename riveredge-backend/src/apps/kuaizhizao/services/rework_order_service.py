@@ -8,13 +8,14 @@ Date: 2026-01-05
 """
 
 import uuid
-from datetime import datetime
-from typing import List, Optional
+from datetime import datetime, date, time
+from typing import List, Optional, Dict, Any
 from decimal import Decimal
 
 from core.utils.timezone_utils import is_future_datetime
 
 from tortoise.transactions import in_transaction
+from tortoise.expressions import Q
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
@@ -38,6 +39,22 @@ from apps.kuaizhizao.schemas.rework_order import (
 )
 from apps.kuaizhizao.schemas.reporting_record import ReportingRecordResponse
 from loguru import logger
+
+
+REWORK_ORDER_SORTABLE_FIELDS = frozenset({
+    "code",
+    "product_code",
+    "product_name",
+    "quantity",
+    "rework_type",
+    "status",
+    "planned_start_date",
+    "planned_end_date",
+    "actual_start_date",
+    "actual_end_date",
+    "created_at",
+    "updated_at",
+})
 
 
 class ReworkOrderService(AppBaseService[ReworkOrder]):
@@ -516,10 +533,17 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         limit: int = 100,
         code: Optional[str] = None,
         original_work_order_id: Optional[int] = None,
+        original_work_order_code: Optional[str] = None,
         product_name: Optional[str] = None,
         status: Optional[str] = None,
         rework_type: Optional[str] = None,
-    ) -> List[ReworkOrderListResponse]:
+        keyword: Optional[str] = None,
+        planned_start_from: Optional[date] = None,
+        planned_start_to: Optional[date] = None,
+        created_start_date: Optional[date] = None,
+        created_end_date: Optional[date] = None,
+        order_by: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         获取返工单列表
 
@@ -536,26 +560,51 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         Returns:
             List[ReworkOrderListResponse]: 返工单列表
         """
-        from tortoise.queryset import Q
-
         query = ReworkOrder.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
         )
 
         # 应用过滤条件
-        if code:
-            query = query.filter(code__icontains=code)
+        kw = (keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(code__icontains=kw)
+                | Q(product_name__icontains=kw)
+                | Q(product_code__icontains=kw)
+            )
+        c = (code or "").strip()
+        if c:
+            query = query.filter(code__icontains=c)
         if original_work_order_id:
             query = query.filter(original_work_order_id=original_work_order_id)
-        if product_name:
-            query = query.filter(product_name__icontains=product_name)
+        owc = (original_work_order_code or "").strip()
+        if owc:
+            matching_ids = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                code__icontains=owc,
+            ).values_list("id", flat=True)
+            query = query.filter(original_work_order_id__in=list(matching_ids))
+        pn = (product_name or "").strip()
+        if pn:
+            query = query.filter(product_name__icontains=pn)
         if status:
             query = query.filter(status=status)
         if rework_type:
             query = query.filter(rework_type=rework_type)
+        if planned_start_from is not None:
+            query = query.filter(planned_start_date__gte=planned_start_from)
+        if planned_start_to is not None:
+            query = query.filter(planned_start_date__lte=planned_start_to)
+        if created_start_date is not None:
+            query = query.filter(created_at__gte=datetime.combine(created_start_date, time.min))
+        if created_end_date is not None:
+            query = query.filter(created_at__lte=datetime.combine(created_end_date, time.max))
 
-        rework_orders = await query.offset(skip).limit(limit).order_by("-created_at")
+        total = await query.count()
+        order_clause = order_by if order_by else "-created_at"
+        rework_orders = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_lifecycle_service import get_rework_order_lifecycle
         original_ids = [
             ro.original_work_order_id for ro in rework_orders if ro.original_work_order_id
@@ -567,7 +616,11 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             resp.lifecycle = get_rework_order_lifecycle(ro)
             self._attach_original_work_order_code(resp, code_map, ro.original_work_order_id)
             result.append(resp)
-        return result
+        return {
+            "data": [r.model_dump() for r in result],
+            "total": total,
+            "success": True,
+        }
 
     async def update_rework_order(
         self,

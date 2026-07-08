@@ -10,12 +10,18 @@ import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { ProFormText, ProFormSelect, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formatBusinessDateOnly } from '../../../../../utils/format';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  batchSerialLedgerNoSearchColumn,
+  masterCrudCreatedOnlyColumns,
+  resolveBatchSerialLedgerListParams,
+} from '../../../utils/materialListCore';
 import { materialBatchApi, materialApi } from '../../../services/material';
 import type { MaterialBatch, MaterialBatchCreate, MaterialBatchUpdate } from '../../../types/material';
+
+const BATCH_STATUS_PINNED_FIELD = 'status';
 
 const BatchesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -42,6 +48,7 @@ const BatchesPage: React.FC = () => {
   );
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>();
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentUuid, setCurrentUuid] = useState<string | null>(null);
@@ -143,18 +150,8 @@ const BatchesPage: React.FC = () => {
     return formatBusinessDateOnly(String(value));
   };
 
-  const batchSortFieldMap: Record<string, string> = {
-    batchNo: 'batch_no',
-    materialCode: 'material_code',
-    materialName: 'material_name',
-    materialModel: 'material_model',
-    quantity: 'quantity',
-    status: 'status',
-    productionDate: 'production_date',
-    expiryDate: 'expiry_date',
-  };
-
-  const columns: ProColumns<MaterialBatch>[] = [
+  const columns: ProColumns<MaterialBatch>[] = useMemo(() => [
+    batchSerialLedgerNoSearchColumn(t('app.master-data.batches.batchNo'), 'batchNo'),
     {
       title: t('app.master-data.batches.batchNo'),
       dataIndex: 'batchNo',
@@ -162,6 +159,7 @@ const BatchesPage: React.FC = () => {
       ellipsis: true,
       sorter: true,
       copyable: true,
+      hideInSearch: true,
     },
     {
       title: t('app.master-data.batches.materialCode'),
@@ -199,9 +197,18 @@ const BatchesPage: React.FC = () => {
     {
       title: t('app.master-data.batches.status'),
       dataIndex: 'status',
-      width: 100,
+      hideInTable: true,
+      order: 20,
       valueType: 'select',
+      valueEnum: batchStatusValueEnum,
+      fieldProps: { allowClear: true },
+    },
+    {
+      title: t('app.master-data.batches.status'),
+      dataIndex: 'status',
+      width: 100,
       sorter: true,
+      hideInSearch: true,
       valueEnum: batchStatusValueEnum,
     },
     {
@@ -222,6 +229,7 @@ const BatchesPage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => formatBatchDateCell(r.expiryDate),
     },
+    ...masterCrudCreatedOnlyColumns<MaterialBatch>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -251,7 +259,7 @@ const BatchesPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+  ], [t, batchStatusValueEnum]);
 
   return (
     <ListPageTemplate>
@@ -262,20 +270,27 @@ const BatchesPage: React.FC = () => {
         rowKey="uuid"
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
-          const { current = 1, pageSize = 20, batchNo, status } = params || {};
-          const { sortBy: raw, sortOrder } = extractProTableSort(sort);
-          const sortBy = raw ? batchSortFieldMap[raw] : undefined;
+          const { current = 1, pageSize = 20 } = params;
+          const listParams = resolveBatchSerialLedgerListParams(searchFormValues, sort, {
+            batchNoField: 'batchNo',
+          });
+          lastListParamsRef.current = listParams;
           const res = await materialBatchApi.list({
-            batchNo: batchNo as string | undefined,
-            status: status as string | undefined,
             page: current,
             pageSize,
-            keyword: searchFormValues?.keyword?.trim() || undefined,
-            sortBy,
-            sortOrder,
+            batchNo: listParams.batch_no as string | undefined,
+            status: listParams.status as string | undefined,
+            keyword: listParams.keyword as string | undefined,
+            created_start_date: listParams.created_start_date as string | undefined,
+            created_end_date: listParams.created_end_date as string | undefined,
+            sortBy: listParams.sort_by as string | undefined,
+            sortOrder: listParams.sort_order as 'asc' | 'desc' | undefined,
           });
           return { data: res.items || [], success: true, total: res.total || 0 };
         }}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={BATCH_STATUS_PINNED_FIELD}
         search={{
           labelWidth: 'auto',
         }}

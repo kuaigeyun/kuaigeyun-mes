@@ -837,6 +837,13 @@ class SalesReturnResponse(SalesReturnBase):
         from_attributes = True
 
 
+class SalesReturnListPaginatedResponse(BaseSchema):
+    """销售退货单分页列表"""
+    data: List[SalesReturnResponse]
+    total: int
+    success: bool = True
+
+
 # === 销售退货单明细 ===
 
 class SalesReturnItemBase(BaseSchema):
@@ -953,6 +960,13 @@ class PurchaseReturnResponse(PurchaseReturnBase):
 
     class Config:
         from_attributes = True
+
+
+class PurchaseReturnListPaginatedResponse(BaseSchema):
+    """采购退货单分页列表"""
+    data: List[PurchaseReturnResponse]
+    total: int
+    success: bool = True
 
 
 # === 采购退货单明细 ===

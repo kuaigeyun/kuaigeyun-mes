@@ -265,6 +265,7 @@ import {
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate'
 import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format'
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate'
 
 const toApiDateTimeString = (value: any): string | undefined => {
   if (!value) return undefined
@@ -6290,6 +6291,7 @@ const WorkOrdersPage: React.FC = () => {
       hideInTable: true,
       hideInSearch: false,
       fieldProps: { placeholder: [t('app.kuaizhizao.workOrder.formDateRangeStart'), t('app.kuaizhizao.workOrder.formDateRangeEnd')], style: { width: '100%' } },
+      formItemProps: formDateRangeFormItemProps,
     },
     {
       title: t('app.kuaizhizao.workOrder.colPlannedEnd'),
@@ -6307,6 +6309,7 @@ const WorkOrdersPage: React.FC = () => {
       hideInTable: true,
       hideInSearch: false,
       fieldProps: { placeholder: [t('app.kuaizhizao.workOrder.formDateRangeStart'), t('app.kuaizhizao.workOrder.formDateRangeEnd')], style: { width: '100%' } },
+      formItemProps: formDateRangeFormItemProps,
     },
     {
       title: t('app.kuaizhizao.workOrder.colCreatedAt'),
@@ -6840,7 +6843,8 @@ const WorkOrdersPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch={true}
           skipFuzzyPinyinClientFilter
-          fuzzySearchPlaceholder={t('app.kuaizhizao.workOrder.fuzzySearchPlaceholder')}
+          pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
+          pinnedTabsValueEnum={workOrderLifecycleValueEnum}
           rowClassName={workOrderTableRowClassName}
           components={workOrderTableComponents}
           expandable={workOrderTableExpandable}

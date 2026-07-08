@@ -62,3 +62,43 @@ export function getOutsourceOrderLifecycle(
   if (backend?.main_stages?.length) return parseBackendLifecycle(backend);
   return parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>));
 }
+
+const OUTSOURCE_ORDER_LIFECYCLE_KEYS = ['draft', 'released', 'in_progress', 'completed', 'cancelled'] as const;
+
+const OUTSOURCE_ORDER_LIFECYCLE_I18N: Record<string, string> = {
+  draft: 'app.kuaizhizao.outsourceOrder.statusDraft',
+  released: 'app.kuaizhizao.outsourceOrder.statusReleased',
+  in_progress: 'app.kuaizhizao.outsourceOrder.statusInProgress',
+  completed: 'app.kuaizhizao.outsourceOrder.statusCompleted',
+  cancelled: 'app.kuaizhizao.outsourceOrder.statusCancelled',
+};
+
+export function buildOutsourceOrderLifecycleValueEnum(
+  t: (key: string) => string,
+): Record<string, { text: string; status?: 'Default' | 'Processing' | 'Success' | 'Error' }> {
+  const statusByKey: Record<string, 'Default' | 'Processing' | 'Success' | 'Error'> = {
+    draft: 'Default',
+    released: 'Processing',
+    in_progress: 'Processing',
+    completed: 'Success',
+    cancelled: 'Error',
+  };
+  return Object.fromEntries(
+    OUTSOURCE_ORDER_LIFECYCLE_KEYS.map((key) => [
+      key,
+      { text: t(OUTSOURCE_ORDER_LIFECYCLE_I18N[key]!), status: statusByKey[key] },
+    ]),
+  );
+}
+
+export function resolveOutsourceOrderListLifecycleParams(
+  searchFormValues?: Record<string, unknown> | null,
+): { status?: string } {
+  const raw = searchFormValues?.status ?? searchFormValues?.lifecycle_stage;
+  if (raw == null || String(raw).trim() === '') return {};
+  const status = String(raw).trim();
+  if (OUTSOURCE_ORDER_LIFECYCLE_KEYS.includes(status as (typeof OUTSOURCE_ORDER_LIFECYCLE_KEYS)[number])) {
+    return { status };
+  }
+  return {};
+}

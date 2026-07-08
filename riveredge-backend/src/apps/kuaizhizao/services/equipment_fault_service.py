@@ -125,7 +125,13 @@ class EquipmentFaultService:
         equipment_uuid: Optional[str] = None,
         status: Optional[str] = None,
         fault_type: Optional[str] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        fault_start_date: Optional[str] = None,
+        fault_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
     ) -> tuple[List[EquipmentFault], int]:
         """
         获取设备故障记录列表
@@ -154,16 +160,40 @@ class EquipmentFaultService:
             query = query.filter(status=status)
         if fault_type:
             query = query.filter(fault_type=fault_type)
-        
-        # 搜索条件
-        if search:
-            query = query.filter(fault_no__icontains=search)
-        
-        # 获取总数量
+
+        from apps.kuaizhizao.services.equipment_list_core import (
+            EQUIPMENT_FAULT_SORTABLE_FIELDS,
+            apply_equipment_created_date_range,
+            apply_equipment_document_date_range,
+            apply_equipment_keyword_filter,
+            pick_search_keyword,
+            resolve_equipment_list_order_by,
+        )
+
+        query = apply_equipment_keyword_filter(
+            query,
+            pick_search_keyword(keyword, search),
+            ["fault_no", "equipment_code", "equipment_name", "fault_description"],
+        )
+        query = apply_equipment_document_date_range(
+            query,
+            date_field="fault_date",
+            start_date=fault_start_date,
+            end_date=fault_end_date,
+        )
+        query = apply_equipment_created_date_range(
+            query,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
+
         total = await query.count()
-        
-        # 获取列表
-        faults = await query.offset(skip).limit(limit).order_by("-fault_date")
+        order_clause = resolve_equipment_list_order_by(
+            order_by,
+            EQUIPMENT_FAULT_SORTABLE_FIELDS,
+            "-fault_date",
+        )
+        faults = await query.offset(skip).limit(limit).order_by(order_clause)
         
         return faults, total
     
@@ -343,7 +373,13 @@ class EquipmentRepairService:
         equipment_uuid: Optional[str] = None,
         equipment_fault_uuid: Optional[str] = None,
         status: Optional[str] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+        repair_start_date: Optional[str] = None,
+        repair_end_date: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
     ) -> tuple[List[EquipmentRepair], int]:
         """
         获取设备维修记录列表
@@ -372,16 +408,40 @@ class EquipmentRepairService:
             query = query.filter(equipment_fault_uuid=equipment_fault_uuid)
         if status:
             query = query.filter(status=status)
-        
-        # 搜索条件
-        if search:
-            query = query.filter(repair_no__icontains=search)
-        
-        # 获取总数量
+
+        from apps.kuaizhizao.services.equipment_list_core import (
+            EQUIPMENT_REPAIR_SORTABLE_FIELDS,
+            apply_equipment_created_date_range,
+            apply_equipment_document_date_range,
+            apply_equipment_keyword_filter,
+            pick_search_keyword,
+            resolve_equipment_list_order_by,
+        )
+
+        query = apply_equipment_keyword_filter(
+            query,
+            pick_search_keyword(keyword, search),
+            ["repair_no", "equipment_name", "repairer_name", "repair_description"],
+        )
+        query = apply_equipment_document_date_range(
+            query,
+            date_field="repair_date",
+            start_date=repair_start_date,
+            end_date=repair_end_date,
+        )
+        query = apply_equipment_created_date_range(
+            query,
+            start_date=created_start_date,
+            end_date=created_end_date,
+        )
+
         total = await query.count()
-        
-        # 获取列表
-        repairs = await query.offset(skip).limit(limit).order_by("-repair_date")
+        order_clause = resolve_equipment_list_order_by(
+            order_by,
+            EQUIPMENT_REPAIR_SORTABLE_FIELDS,
+            "-repair_date",
+        )
+        repairs = await query.offset(skip).limit(limit).order_by(order_clause)
         
         return repairs, total
     

@@ -46,6 +46,13 @@ import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  buildMaintenancePlanStatusValueEnum,
+  MAINTENANCE_PLAN_PINNED_STATUS_FIELD,
+  normalizeEquipmentListResponse,
+  resolveMaintenancePlanListParams,
+} from '../../../utils/equipmentListCore';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
@@ -512,13 +519,53 @@ const MaintenancePlansPage: React.FC = () => {
   /**
    * 表格列定义
    */
+  const planStatusValueEnum = useMemo(() => buildMaintenancePlanStatusValueEnum(t), [t]);
+
   const columns: ProColumns<MaintenancePlan>[] = useMemo(() => [
+    {
+      title: t(`${P}.col.plannedStartDate`),
+      dataIndex: 'planned_start_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 10 } as ProColumns['search'],
+    },
+    {
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 11 } as ProColumns['search'],
+    },
+    {
+      title: t(`${P}.col.status`),
+      dataIndex: 'status',
+      valueType: 'select',
+      valueEnum: planStatusValueEnum,
+      hideInTable: true,
+      search: { order: 20 } as ProColumns['search'],
+    },
+    {
+      title: t(`${P}.col.planType`),
+      dataIndex: 'plan_type',
+      hideInTable: true,
+      search: { order: 21 } as ProColumns['search'],
+    },
+    {
+      title: t(`${P}.col.maintenanceType`),
+      dataIndex: 'maintenance_type',
+      hideInTable: true,
+      search: { order: 22 } as ProColumns['search'],
+    },
     {
       title: t(`${P}.col.planNo`),
       dataIndex: 'plan_no',
       width: 140,
       ellipsis: true,
       fixed: 'left',
+      sorter: true,
+      search: { order: 30 } as ProColumns['search'],
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.plan_no ?? '') }} ellipsis>
           {r.plan_no ?? '-'}
@@ -530,16 +577,21 @@ const MaintenancePlansPage: React.FC = () => {
       dataIndex: 'plan_name',
       width: 200,
       ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t(`${P}.col.planType`),
       dataIndex: 'plan_type',
       width: 120,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t(`${P}.col.equipmentCode`),
       dataIndex: 'equipment_code',
       width: 140,
+      hideInSearch: true,
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }} ellipsis>
           {r.equipment_code ?? '-'}
@@ -551,30 +603,40 @@ const MaintenancePlansPage: React.FC = () => {
       dataIndex: 'equipment_name',
       width: 200,
       ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t(`${P}.col.maintenanceType`),
       dataIndex: 'maintenance_type',
       width: 120,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t(`${P}.col.maintenanceCycle`),
       dataIndex: 'maintenance_cycle',
       width: 120,
+      hideInSearch: true,
       render: (_, record) => record ? `${record.maintenance_cycle ?? ''} ${record.maintenance_cycle_unit ?? ''}`.trim() || '-' : '-',
     },
     {
       title: t(`${P}.col.plannedStartDate`),
       dataIndex: 'planned_start_date',
       valueType: 'date',
-      width: 120,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
       defaultSortOrder: 'descend',
+      sorter: true,
       render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
@@ -596,7 +658,7 @@ const MaintenancePlansPage: React.FC = () => {
       render: (_, record) =>
         renderPlanRowActions(renderPlanRowNodes(record), `mpl-${record.uuid ?? 'row'}`),
     },
-  ], [t]);
+  ], [t, planStatusValueEnum]);
 
   return (
     <>
@@ -608,18 +670,21 @@ const MaintenancePlansPage: React.FC = () => {
           rowKey="uuid"
           columns={columns}
           showAdvancedSearch={true}
-          request={async (params) => {
+          pinnedTabsField={MAINTENANCE_PLAN_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const listParams = resolveMaintenancePlanListParams(searchFormValues, sort);
               const response = await maintenancePlanApi.list({
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
-                ...params,
-                keyword: (params as any).keyword,
+                ...listParams,
               });
+              const { data, total } = normalizeEquipmentListResponse(response);
               return {
-                data: response.items || [],
+                data: data as MaintenancePlan[],
                 success: true,
-                total: response.total || 0,
+                total,
               };
             } catch (error) {
               messageApi.error(t(`${P}.listFailed`));

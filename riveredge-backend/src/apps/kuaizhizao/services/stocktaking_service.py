@@ -446,8 +446,15 @@ class StocktakingService(AppBaseService[Stocktaking]):
         warehouse_id: Optional[int] = None,
         status: Optional[str] = None,
         stocktaking_type: Optional[str] = None,
-        stocktaking_date_start: Optional[datetime] = None,
-        stocktaking_date_end: Optional[datetime] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        stocktaking_date_start: Optional[str] = None,
+        stocktaking_date_end: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> StocktakingListResponse:
         """
         获取库存盘点单列表
@@ -469,24 +476,39 @@ class StocktakingService(AppBaseService[Stocktaking]):
             deleted_at__isnull=True
         )
 
-        if code:
-            query = query.filter(code__icontains=code)
+        from apps.kuaizhizao.services.equipment_list_core import pick_search_keyword
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            STOCKTAKING_KEYWORD_FIELDS,
+            STOCKTAKING_SORTABLE_FIELDS,
+            apply_warehouse_doc_list_filters,
+        )
+
         if warehouse_id:
             query = query.filter(warehouse_id=warehouse_id)
         if status:
             query = query.filter(status=status)
         if stocktaking_type:
             query = query.filter(stocktaking_type=stocktaking_type)
-        if stocktaking_date_start:
-            query = query.filter(stocktaking_date__gte=stocktaking_date_start)
-        if stocktaking_date_end:
-            query = query.filter(stocktaking_date__lte=stocktaking_date_end)
 
-        # 获取总数
+        merged_keyword = pick_search_keyword(keyword, search) or (code.strip() if code and code.strip() else None)
+        query, order_clause = apply_warehouse_doc_list_filters(
+            query,
+            keyword=merged_keyword,
+            order_by=order_by,
+            allowed_fields=STOCKTAKING_SORTABLE_FIELDS,
+            default_order="-updated_at",
+            keyword_fields=STOCKTAKING_KEYWORD_FIELDS,
+            doc_date_field="stocktaking_date",
+            doc_start_date=stocktaking_date_start,
+            doc_end_date=stocktaking_date_end,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
+
         total = await query.count()
-
-        # 获取列表
-        stocktakings = await query.order_by('-created_at').offset(skip).limit(limit)
+        stocktakings = await query.order_by(order_clause).offset(skip).limit(limit)
 
         # 返回分页响应
         from typing import List

@@ -8,6 +8,7 @@ Date: 2026-02-22
 """
 
 import uuid
+from datetime import date
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTTPException, status as http_status
 from loguru import logger
@@ -16,7 +17,10 @@ from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
-from apps.kuaizhizao.services.receipt_notice_service import ReceiptNoticeService
+from apps.kuaizhizao.services.receipt_notice_service import (
+    ReceiptNoticeService,
+    RECEIPT_NOTICE_SORTABLE_FIELDS,
+)
 from apps.kuaizhizao.schemas.receipt_notice import (
     ReceiptNoticeCreate,
     ReceiptNoticeUpdate,
@@ -81,15 +85,28 @@ async def create_receipt_notice(
 @router.get("", response_model=ReceiptNoticeListPaginatedResponse, summary="List receipt notices")
 async def list_receipt_notices(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=1000),
     status: Optional[str] = Query(None),
     purchase_order_id: Optional[int] = Query(None),
     supplier_id: Optional[int] = Query(None),
-    keyword: Optional[str] = Query(None),
+    warehouse_id: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None, description="模糊：通知单号/采购订单/供应商/仓库/入库单号"),
+    notice_code: Optional[str] = Query(None),
+    purchase_order_code: Optional[str] = Query(None),
+    planned_start_date: Optional[date] = Query(None),
+    planned_end_date: Optional[date] = Query(None),
+    created_start_date: Optional[date] = Query(None),
+    created_end_date: Optional[date] = Query(None),
+    order_by: Optional[str] = Query(None, description="排序字段，如 created_at、-planned_receipt_date"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """获取收货通知单列表"""
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in RECEIPT_NOTICE_SORTABLE_FIELDS:
+            safe_order_by = order_by
     return await receipt_notice_service.list_receipt_notices(
         tenant_id=tenant_id,
         skip=skip,
@@ -97,7 +114,15 @@ async def list_receipt_notices(
         status=status,
         purchase_order_id=purchase_order_id,
         supplier_id=supplier_id,
+        warehouse_id=warehouse_id,
         keyword=keyword,
+        notice_code=notice_code,
+        purchase_order_code=purchase_order_code,
+        planned_start_date=planned_start_date,
+        planned_end_date=planned_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        order_by=safe_order_by,
     )
 
 

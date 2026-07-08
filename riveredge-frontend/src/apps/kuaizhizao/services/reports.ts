@@ -25,6 +25,13 @@ export interface ReportParams {
   skip?: number;
   limit?: number;
   customer_keyword?: string;
+  keyword?: string;
+  order_by?: string;
+  status?: string;
+  order_code?: string;
+  product_name?: string;
+  supplier_name?: string;
+  work_order_code?: string;
   filters?: Record<string, any>;
 }
 
@@ -258,6 +265,13 @@ function buildReportQueryParams(
   if (params.skip != null) query.skip = params.skip;
   if (params.limit != null) query.limit = params.limit;
   if (params.customer_keyword) query.customer_keyword = params.customer_keyword;
+  if (params.keyword) query.keyword = params.keyword;
+  if (params.order_by) query.order_by = params.order_by;
+  if (params.status) query.status = params.status;
+  if (params.order_code) query.order_code = params.order_code;
+  if (params.product_name) query.product_name = params.product_name;
+  if (params.supplier_name) query.supplier_name = params.supplier_name;
+  if (params.work_order_code) query.work_order_code = params.work_order_code;
   if (params.customer_id != null) query.customer_id = params.customer_id;
   if (params.filters?.customer_id != null) query.customer_id = params.filters.customer_id;
   if (params.filters?.warehouse_id != null) query.warehouse_id = params.filters.warehouse_id;

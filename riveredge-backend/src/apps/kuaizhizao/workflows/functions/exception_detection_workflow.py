@@ -18,6 +18,64 @@ from core.workflows.client import workflow_client
 from infra.domain.tenant_context import get_current_tenant_id
 
 
+async def run_exception_detection_for_tenant(
+    tenant_id: int,
+    work_order_id: int | None = None,
+) -> Dict[str, Any]:
+    """执行租户级异常检测（缺料 + 交期延期），供 API 手动触发与工作流复用。"""
+    exception_service = ExceptionService()
+    results: Dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "work_order_id": work_order_id,
+        "material_shortage": {"detected": 0, "created": 0},
+        "delivery_delay": {"detected": 0, "created": 0},
+    }
+    try:
+        if work_order_id:
+            try:
+                exceptions = await exception_service.detect_material_shortage(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                )
+                results["material_shortage"]["detected"] = len(exceptions)
+                results["material_shortage"]["created"] = len(exceptions)
+            except Exception as e:
+                logger.error(f"检测工单 {work_order_id} 缺料异常失败: {e}")
+        else:
+            work_orders = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                status__in=list(WORK_ORDER_IN_PROGRESS_STATUS),
+                deleted_at__isnull=True,
+            ).all()
+            for work_order in work_orders:
+                try:
+                    exceptions = await exception_service.detect_material_shortage(
+                        tenant_id=tenant_id,
+                        work_order_id=work_order.id,
+                    )
+                    results["material_shortage"]["detected"] += len(exceptions)
+                    results["material_shortage"]["created"] += len(exceptions)
+                except Exception as e:
+                    logger.error(f"检测工单 {work_order.id} 缺料异常失败: {e}")
+
+        try:
+            exceptions = await exception_service.detect_delivery_delay(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                days_threshold=0,
+            )
+            results["delivery_delay"]["detected"] = len(exceptions)
+            results["delivery_delay"]["created"] = len(exceptions)
+        except Exception as e:
+            logger.error(f"检测延期异常失败: {e}")
+
+        logger.info(f"租户 {tenant_id} 异常检测完成: {results}")
+        return {"success": True, **results}
+    except Exception as e:
+        logger.error(f"异常检测执行失败 (tenant_id={tenant_id}): {e}")
+        return {"success": False, "tenant_id": tenant_id, "error": str(e)}
+
+
 async def run_exception_detection_scheduler() -> Dict[str, Any]:
     now = datetime.now()
     try:
@@ -97,55 +155,5 @@ async def exception_detection_by_tenant_function(event: Event) -> Dict[str, Any]
     tenant_id = get_current_tenant_id()
     data = event.data or {}
     work_order_id = data.get("work_order_id")
-    exception_service = ExceptionService()
-    results = {
-        "tenant_id": tenant_id,
-        "work_order_id": work_order_id,
-        "material_shortage": {"detected": 0, "created": 0},
-        "delivery_delay": {"detected": 0, "created": 0},
-    }
-    try:
-        if work_order_id:
-            try:
-                exceptions = await exception_service.detect_material_shortage(
-                    tenant_id=tenant_id,
-                    work_order_id=work_order_id,
-                )
-                results["material_shortage"]["detected"] = len(exceptions)
-                results["material_shortage"]["created"] = len(exceptions)
-            except Exception as e:
-                logger.error(f"检测工单 {work_order_id} 缺料异常失败: {e}")
-        else:
-            work_orders = await WorkOrder.filter(
-                tenant_id=tenant_id,
-                status__in=list(WORK_ORDER_IN_PROGRESS_STATUS),
-                deleted_at__isnull=True,
-            ).all()
-            for work_order in work_orders:
-                try:
-                    exceptions = await exception_service.detect_material_shortage(
-                        tenant_id=tenant_id,
-                        work_order_id=work_order.id,
-                    )
-                    results["material_shortage"]["detected"] += len(exceptions)
-                    results["material_shortage"]["created"] += len(exceptions)
-                except Exception as e:
-                    logger.error(f"检测工单 {work_order.id} 缺料异常失败: {e}")
-
-        try:
-            exceptions = await exception_service.detect_delivery_delay(
-                tenant_id=tenant_id,
-                work_order_id=work_order_id,
-                days_threshold=0,
-            )
-            results["delivery_delay"]["detected"] = len(exceptions)
-            results["delivery_delay"]["created"] = len(exceptions)
-        except Exception as e:
-            logger.error(f"检测延期异常失败: {e}")
-
-        logger.info(f"租户 {tenant_id} 异常检测完成: {results}")
-        return {"success": True, **results}
-    except Exception as e:
-        logger.error(f"异常检测工作流执行失败 (tenant_id={tenant_id}): {e}")
-        return {"success": False, "tenant_id": tenant_id, "error": str(e)}
+    return await run_exception_detection_for_tenant(tenant_id, work_order_id)
 

@@ -27,9 +27,11 @@ import { getDataDictionaryList, getDictionaryItemList } from '../../../../../ser
 import { qualityApi, reworkOrderApi, workOrderApi } from '../../../services/production';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import type { PushPreviewResponse } from '../../../services/sales-order';
-import { getReworkOrderLifecycle } from '../../../utils/reworkOrderLifecycle';
+import { getReworkOrderLifecycle, buildReworkOrderLifecycleValueEnum, resolveReworkOrderListLifecycleParams } from '../../../utils/reworkOrderLifecycle';
 import { resolveReworkTypeDisplay } from '../../../utils/reworkOrderType';
-import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { useGlobalStore } from '../../../../../stores/globalStore';
@@ -296,21 +298,51 @@ const ReworkOrdersPage: React.FC = () => {
   /**
    * 表格列定义
    */
+  const reworkOrderLifecycleValueEnum = useMemo(() => buildReworkOrderLifecycleValueEnum(t), [t]);
+
   const columns: ProColumns<ReworkOrder>[] = useMemo(() => {
     const customFieldColumns = generateReworkCustomFieldColumns();
+    const reworkTypeValueEnum = Object.fromEntries(
+      reworkTypeOptions.map((opt) => [opt.value, { text: opt.label }]),
+    );
     return [
+    {
+      title: t('app.kuaizhizao.reworkOrder.colPlannedStart'),
+      dataIndex: 'planned_start_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      hideInSearch: false,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      hideInSearch: false,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
+    },
     {
       title: t('app.kuaizhizao.reworkOrder.colCode'),
       dataIndex: 'code',
       width: 180,
       fixed: 'left',
       ellipsis: true,
+      sorter: true,
+      hideInSearch: false,
     },
     {
       title: t('app.kuaizhizao.reworkOrder.colOriginalWorkOrderId'),
       dataIndex: 'original_work_order_code',
       width: 160,
       ellipsis: true,
+      hideInSearch: false,
       render: (_, record) => record.original_work_order_code || '-',
     },
     {
@@ -318,17 +350,24 @@ const ReworkOrdersPage: React.FC = () => {
       dataIndex: 'product_name',
       width: 200,
       ellipsis: true,
+      sorter: true,
+      hideInSearch: false,
     },
     {
       title: t('app.kuaizhizao.reworkOrder.colQuantity'),
       dataIndex: 'quantity',
       width: 100,
       valueType: 'digit',
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.reworkOrder.colReworkType'),
       dataIndex: 'rework_type',
       width: 100,
+      hideInSearch: false,
+      valueType: 'select',
+      valueEnum: reworkTypeValueEnum,
       render: (_, record) => {
         const { label, color } = resolveReworkTypeDisplay(t, record.rework_type);
         return <Tag color={color}>{label}</Tag>;
@@ -337,16 +376,12 @@ const ReworkOrdersPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.reworkOrder.colLifecycle'),
-      dataIndex: 'lifecycle_stage',
+      dataIndex: 'status',
       width: 140,
       fixed: 'right',
-      valueEnum: {
-        draft: { text: t('app.kuaizhizao.reworkOrder.lifecycleDraft'), status: 'Default' },
-        released: { text: t('app.kuaizhizao.reworkOrder.lifecycleReleased'), status: 'Processing' },
-        in_progress: { text: t('app.kuaizhizao.reworkOrder.lifecycleInProgress'), status: 'Processing' },
-        completed: { text: t('app.kuaizhizao.reworkOrder.lifecycleCompleted'), status: 'Success' },
-        cancelled: { text: t('app.kuaizhizao.reworkOrder.lifecycleCancelled'), status: 'Error' },
-      },
+      hideInSearch: false,
+      valueType: 'select',
+      valueEnum: reworkOrderLifecycleValueEnum,
       render: (_, record) => {
         const lifecycle = getReworkOrderLifecycle(record);
         const activeStage = lifecycle.mainStages?.find((stage) => stage.status === 'active');
@@ -367,20 +402,34 @@ const ReworkOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.reworkOrder.colPlannedStart'),
       dataIndex: 'planned_start_date',
       valueType: 'dateTime',
-      width: 160,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, record) =>
+        record.planned_start_date ? formatDateTimeBySiteSetting(record.planned_start_date) : '-',
     },
     {
       title: t('app.kuaizhizao.reworkOrder.colPlannedEnd'),
       dataIndex: 'planned_end_date',
       valueType: 'dateTime',
-      width: 160,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, record) =>
+        record.planned_end_date ? formatDateTimeBySiteSetting(record.planned_end_date) : '-',
     },
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at',
-      valueType: 'dateTime',
-      width: 160,
+      width: 132,
+      uniTableKeepWidth: true,
       sorter: true,
+      defaultSortOrder: 'descend',
+      hideInSearch: true,
+      render: (_, record) =>
+        record.created_at ? formatDateTime(record.created_at, 'YYYY-MM-DD HH:mm') : '-',
     },
     ...customFieldColumns,
     {
@@ -425,7 +474,7 @@ const ReworkOrdersPage: React.FC = () => {
       },
     },
   ];
-  }, [reworkListCustomFields, generateReworkCustomFieldColumns, t]);
+  }, [reworkListCustomFields, generateReworkCustomFieldColumns, reworkOrderLifecycleValueEnum, reworkTypeOptions, t]);
 
   /**
    * 处理详情查看
@@ -683,19 +732,62 @@ const ReworkOrdersPage: React.FC = () => {
   const handleRequest = async (
     params: any,
     sort: Record<string, 'ascend' | 'descend' | null>,
-    filter: Record<string, React.ReactText[] | null>
+    _filter: Record<string, React.ReactText[] | null>,
+    searchFormValues?: Record<string, unknown>,
   ) => {
     try {
-      const response = await reworkOrderApi.list({
-        page: params.current || 1,
-        page_size: params.pageSize || 20,
-      });
-      const list = Array.isArray(response) ? response : [];
+      const s = searchFormValues ?? {};
+      const lifecycleParams = resolveReworkOrderListLifecycleParams(s);
+      const { sortBy, sortOrder } = extractProTableSort(sort);
+      const orderBy =
+        sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+      const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
+
+      const apiParams: Parameters<typeof reworkOrderApi.list>[0] = {
+        skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+        limit: params.pageSize ?? 20,
+        ...lifecycleParams,
+        order_by: orderBy,
+        rework_type: s.rework_type as string | undefined,
+      };
+
+      if (fuzzyKeyword) {
+        apiParams.keyword = fuzzyKeyword;
+      } else {
+        if (s.code != null && String(s.code).trim()) {
+          apiParams.code = String(s.code).trim();
+        }
+        if (s.product_name != null && String(s.product_name).trim()) {
+          apiParams.product_name = String(s.product_name).trim();
+        }
+        if (s.original_work_order_code != null && String(s.original_work_order_code).trim()) {
+          apiParams.original_work_order_code = String(s.original_work_order_code).trim();
+        }
+      }
+
+      const plannedRange = s.planned_start_date_range as [unknown, unknown] | undefined;
+      if (plannedRange && Array.isArray(plannedRange) && plannedRange[0]) {
+        apiParams.planned_start_from = formatDateTime(plannedRange[0] as string | Date, 'YYYY-MM-DD');
+        apiParams.planned_start_to = plannedRange[1]
+          ? formatDateTime(plannedRange[1] as string | Date, 'YYYY-MM-DD')
+          : apiParams.planned_start_from;
+      }
+
+      const createdRange = s.created_at_range as [unknown, unknown] | undefined;
+      if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+        apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
+        apiParams.created_end_date = createdRange[1]
+          ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+          : apiParams.created_start_date;
+      }
+
+      const response = await reworkOrderApi.list(apiParams);
+      const list = response.data ?? [];
       const enriched = await enrichReworkRecordsWithCustomFields(list);
       return {
         data: enriched,
-        success: true,
-        total: enriched.length,
+        success: response.success,
+        total: response.total ?? 0,
       };
     } catch (error: any) {
       messageApi.error(t('app.kuaizhizao.reworkOrder.listLoadFailed'));
@@ -845,6 +937,9 @@ const ReworkOrdersPage: React.FC = () => {
         onDelete={handleDeleteFromSelection}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.reworkOrder.deleteSelectedConfirm', { count })}
         showAdvancedSearch={true}
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField="status"
+        pinnedTabsValueEnum={reworkOrderLifecycleValueEnum}
         toolBarActionsAfterCreate={[
           <UniPullLoadButton
             key="rework-order-pull-from-inspection"

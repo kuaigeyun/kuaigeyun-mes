@@ -94,9 +94,22 @@ async def list_inspection_items(
     limit: int = Query(100, ge=1, le=1000),
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.inspection_item_service._list(tenant_id, skip, limit, search, is_active)
+    rows, total = await svc.inspection_item_service._list(tenant_id, skip, limit, search, is_active,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return InspectionItemListResponse(
         items=[InspectionItemResponse.model_validate(r) for r in rows],
         total=total,
@@ -171,9 +184,22 @@ async def list_inspection_schemes(
     limit: int = Query(100, ge=1, le=1000),
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.inspection_scheme_service._list(tenant_id, skip, limit, search, is_active)
+    rows, total = await svc.inspection_scheme_service._list(tenant_id, skip, limit, search, is_active,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     items = []
     for row in rows:
         _, lines = await svc.inspection_scheme_service.get_with_lines(tenant_id, row.id)
@@ -248,9 +274,22 @@ async def list_patrol_routes(
     limit: int = Query(100, ge=1, le=1000),
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.patrol_route_service._list(tenant_id, skip, limit, search, is_active)
+    rows, total = await svc.patrol_route_service._list(tenant_id, skip, limit, search, is_active,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     items = []
     for row in rows:
         _, steps = await svc.patrol_route_service.get_with_steps(tenant_id, row.id)
@@ -324,9 +363,22 @@ async def list_maintenance_items(
     limit: int = Query(100, ge=1, le=1000),
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.maintenance_item_service._list(tenant_id, skip, limit, search, is_active)
+    rows, total = await svc.maintenance_item_service._list(tenant_id, skip, limit, search, is_active,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return MaintenanceItemListResponse(
         items=[MaintenanceItemResponse.model_validate(r) for r in rows],
         total=total,
@@ -401,9 +453,22 @@ async def list_maintenance_schemes(
     limit: int = Query(100, ge=1, le=1000),
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows, total = await svc.maintenance_scheme_service._list(tenant_id, skip, limit, search, is_active)
+    rows, total = await svc.maintenance_scheme_service._list(tenant_id, skip, limit, search, is_active,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     items = []
     for row in rows:
         _, lines = await svc.maintenance_scheme_service.get_with_lines(tenant_id, row.id)

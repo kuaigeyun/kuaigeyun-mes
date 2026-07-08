@@ -49,9 +49,18 @@ class BankAccountResponse(BankAccountCreate):
     tenant_id: int
     current_balance: Decimal
     is_active: bool
+    created_at: Optional[Any] = None
+    updated_at: Optional[Any] = None
 
     class Config:
         from_attributes = True
+
+
+class BankAccountListResponse(BaseSchema):
+    items: List[BankAccountResponse]
+    total: int
+    skip: int
+    limit: int
 
 
 @router.post("", response_model=BankAccountResponse, status_code=status.HTTP_201_CREATED)
@@ -66,17 +75,47 @@ async def create_bank_account(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.get("", response_model=List[BankAccountResponse])
+@router.get("", response_model=BankAccountListResponse)
 async def list_bank_accounts(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     is_active: Optional[bool] = None,
+    keyword: Optional[str] = Query(None),
+    account_code: Optional[str] = Query(None),
+    account_name: Optional[str] = Query(None),
+    bank_name: Optional[str] = Query(None),
+    account_number: Optional[str] = Query(None),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None),
     current_user: Any = Depends(get_current_user),
 ):
-    rows = await service.list_accounts(
-        current_user.tenant_id, skip=skip, limit=limit, is_active=is_active
+    rows, total = await service.list_accounts(
+        current_user.tenant_id,
+        skip=skip,
+        limit=limit,
+        is_active=is_active,
+        keyword=keyword,
+        account_code=account_code,
+        account_name=account_name,
+        bank_name=bank_name,
+        account_number=account_number,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+        sort_field=sort_field,
+        sort_order=sort_order,
     )
-    return [BankAccountResponse.model_validate(r) for r in rows]
+    return BankAccountListResponse(
+        items=[BankAccountResponse.model_validate(r) for r in rows],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
 
 
 @router.get("/{account_id}", response_model=BankAccountResponse)
@@ -129,21 +168,47 @@ class BankTransactionResponse(BaseSchema):
         from_attributes = True
 
 
-@router.get("/{account_id}/transactions", response_model=List[BankTransactionResponse])
+class BankTransactionListResponse(BaseSchema):
+    items: List[BankTransactionResponse]
+    total: int
+    skip: int
+    limit: int
+
+
+@router.get("/{account_id}/transactions", response_model=BankTransactionListResponse)
 async def list_bank_transactions(
     account_id: int,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    keyword: Optional[str] = Query(None),
+    source_doc_code: Optional[str] = Query(None),
+    direction: Optional[str] = Query(None),
+    transaction_date_start: Optional[str] = Query(None),
+    transaction_date_end: Optional[str] = Query(None),
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None),
     current_user: Any = Depends(get_current_user),
 ):
     await service.get_by_id(current_user.tenant_id, account_id)
-    rows = await service.list_transactions(
+    rows, total = await service.list_transactions(
         current_user.tenant_id,
         bank_account_id=account_id,
         skip=skip,
         limit=limit,
+        keyword=keyword,
+        source_doc_code=source_doc_code,
+        direction=direction,
+        transaction_date_start=transaction_date_start,
+        transaction_date_end=transaction_date_end,
+        sort_field=sort_field,
+        sort_order=sort_order,
     )
-    return [BankTransactionResponse.model_validate(r) for r in rows]
+    return BankTransactionListResponse(
+        items=[BankTransactionResponse.model_validate(r) for r in rows],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
 
 
 class ImportStatementRequest(BaseSchema):

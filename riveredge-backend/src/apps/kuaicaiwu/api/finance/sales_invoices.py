@@ -303,23 +303,56 @@ async def list_sales_invoices(
     customer_id: Optional[int] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    keyword: Optional[str] = Query(None),
+    invoice_code: Optional[str] = Query(None),
+    customer_name: Optional[str] = Query(None),
+    invoice_number: Optional[str] = Query(None),
+    review_status: Optional[str] = None,
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None),
     _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:read")),
     tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
 ):
     """获取销售发票列表"""
+    from apps.kuaicaiwu.services.finance_list_core import apply_finance_invoice_list_filters
+
     query = Invoice.filter(tenant_id=tenant_id, category="OUT")
     if status:
         query = query.filter(status=status)
     if customer_id:
         query = query.filter(partner_id=customer_id)
-    if start_date:
-        query = query.filter(invoice_date__gte=start_date)
-    if end_date:
-        query = query.filter(invoice_date__lte=end_date)
+
+    doc_date_start = start_date.isoformat() if start_date else None
+    doc_date_end = end_date.isoformat() if end_date else None
+
+    query, order_expr = apply_finance_invoice_list_filters(
+        query,
+        doc_code_field="invoice_code",
+        partner_name_field="partner_name",
+        keyword=keyword,
+        doc_code=invoice_code,
+        partner_name=customer_name,
+        invoice_number=invoice_number,
+        keyword_fields=["invoice_code", "partner_name", "invoice_number", "source_document_code"],
+        review_status=review_status,
+        review_status_mode="sales_status",
+        doc_date_start=doc_date_start,
+        doc_date_end=doc_date_end,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+        sort_field=sort_field,
+        sort_order=sort_order,
+    )
 
     total = await query.count()
-    items = await query.offset(skip).limit(limit).order_by("-invoice_date", "-id")
+    items = await query.order_by(order_expr, "-id").offset(skip).limit(limit)
     serialized = [await _serialize(tenant_id, current_user.id, inv) for inv in items]
     return SalesInvoiceListResponse(
         items=serialized,

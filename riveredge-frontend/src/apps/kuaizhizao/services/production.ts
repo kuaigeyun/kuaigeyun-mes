@@ -13,7 +13,7 @@ export type ExceptionListPage<T> = {
 export { workOrderApi, reworkOrderApi, getWorkOrderStatistics } from './work-order';
 export { reportingApi, materialBindingApi, getReportingStatistics } from './reporting';
 export { warehouseApi } from './warehouse-execution';
-export { qualityApi, inspectionPlanApi } from './quality-execution';
+export { qualityApi, inspectionPlanApi, unwrapInspectionPlanList } from './quality-execution';
 export interface SchedulingConstraints {
   consider_human: boolean;
   consider_equipment: boolean;
@@ -126,10 +126,47 @@ export const coordinationBoardApi = {
 };
 
 // 委外工单相关接口
+export interface OutsourceWorkOrderListParams {
+  skip?: number;
+  limit?: number;
+  status?: string;
+  supplier_id?: number;
+  product_id?: number;
+  keyword?: string;
+  code?: string;
+  name?: string;
+  product_name?: string;
+  supplier_name?: string;
+  priority?: string;
+  planned_start_from?: string;
+  planned_start_to?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  order_by?: string;
+}
+
+export interface OutsourceWorkOrderListResult {
+  data: Record<string, unknown>[];
+  total: number;
+  success: boolean;
+}
+
 export const outsourceWorkOrderApi = {
   // 获取委外工单列表
-  list: async (params?: any) => {
-    return apiRequest('/apps/kuaizhizao/outsource-work-orders', { method: 'GET', params });
+  list: async (params?: OutsourceWorkOrderListParams): Promise<OutsourceWorkOrderListResult> => {
+    const raw = await apiRequest<OutsourceWorkOrderListResult | Record<string, unknown>[]>(
+      '/apps/kuaizhizao/outsource-work-orders',
+      { method: 'GET', params },
+    );
+    if (Array.isArray(raw)) {
+      return { data: raw, total: raw.length, success: true };
+    }
+    const rows = raw?.data ?? [];
+    return {
+      data: rows,
+      total: raw?.total ?? rows.length,
+      success: raw?.success !== false,
+    };
   },
 
   // 创建委外工单
@@ -255,10 +292,46 @@ export const outsourceProductReturnApi = {
 };
 
 // 委外单相关接口（工序委外，保留用于向后兼容）
+export interface OutsourceOrderListParams {
+  skip?: number;
+  limit?: number;
+  work_order_id?: number;
+  supplier_id?: number;
+  status?: string;
+  code?: string;
+  work_order_code?: string;
+  operation_name?: string;
+  supplier_name?: string;
+  keyword?: string;
+  planned_start_from?: string;
+  planned_start_to?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  order_by?: string;
+}
+
+export interface OutsourceOrderListResult {
+  data: Record<string, unknown>[];
+  total: number;
+  success: boolean;
+}
+
 export const outsourceOrderApi = {
   // 获取委外单列表
-  list: async (params?: any) => {
-    return apiRequest('/apps/kuaizhizao/outsource-orders', { method: 'GET', params });
+  list: async (params?: OutsourceOrderListParams): Promise<OutsourceOrderListResult> => {
+    const raw = await apiRequest<OutsourceOrderListResult | Record<string, unknown>[]>(
+      '/apps/kuaizhizao/outsource-orders',
+      { method: 'GET', params },
+    );
+    if (Array.isArray(raw)) {
+      return { data: raw, total: raw.length, success: true };
+    }
+    const rows = raw?.data ?? [];
+    return {
+      data: rows,
+      total: raw?.total ?? rows.length,
+      success: raw?.success !== false,
+    };
   },
 
   // 创建委外单

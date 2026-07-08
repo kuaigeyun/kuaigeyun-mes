@@ -30,6 +30,25 @@ from apps.kuaizhizao.schemas.quotation import (
 from apps.kuaizhizao.schemas.sales_order import SalesOrderResponse
 
 quotation_service = QuotationService()
+
+# 报价单列表可排序字段白名单（防止注入）
+QUOTATION_SORTABLE_FIELDS = frozenset({
+    "quotation_code",
+    "quotation_series_code",
+    "customer_name",
+    "quotation_date",
+    "valid_until",
+    "delivery_date",
+    "total_quantity",
+    "total_amount",
+    "version_no",
+    "status",
+    "review_status",
+    "salesman_name",
+    "created_at",
+    "updated_at",
+})
+
 router = APIRouter(
     prefix="/quotations",
     tags=["App · Kuaige Zhizao · Quotation Management"],
@@ -88,12 +107,16 @@ async def list_quotations(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     status: Optional[str] = Query(None),
+    lifecycle_stage: Optional[str] = Query(None, description="生命周期阶段（与列表展示一致，如 已报价、客户确认）"),
+    salesman_id: Optional[int] = Query(None, description="销售员 ID"),
+    customer_id: Optional[int] = Query(None, description="客户 ID"),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
-    keyword: Optional[str] = Query(None, description="关键词搜索（编码、客户）"),
+    keyword: Optional[str] = Query(None, description="关键词搜索（编号、系列、客户、销售员）"),
     quotation_code: Optional[str] = Query(None, description="报价单编号（模糊）"),
     customer_name: Optional[str] = Query(None, description="客户名称（模糊）"),
     quotation_series_code: Optional[str] = Query(None, description="报价系列编码（精确）"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 quotation_date、-updated_at（前缀-表示降序）"),
     list_scope: Optional[str] = Query(
         None,
         description="数据范围：all 全部 / mine 我的 / department 我的部门",
@@ -109,19 +132,29 @@ async def list_quotations(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """获取报价单列表，支持按状态、日期、关键词筛选"""
+    """获取报价单列表，支持按状态、生命周期、日期、关键词筛选与排序"""
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in QUOTATION_SORTABLE_FIELDS:
+            safe_order_by = order_by
+
     try:
         result = await quotation_service.list_quotations(
             tenant_id=tenant_id,
             skip=skip,
             limit=limit,
             status=status,
+            lifecycle_stage=lifecycle_stage,
+            salesman_id=salesman_id,
+            customer_id=customer_id,
             start_date=start_date,
             end_date=end_date,
             keyword=keyword,
             quotation_code=quotation_code,
             customer_name=customer_name,
             quotation_series_code=quotation_series_code,
+            order_by=safe_order_by,
             list_scope=list_scope,
             pullable_only=pullable_only,
             pull_target=pull_target,

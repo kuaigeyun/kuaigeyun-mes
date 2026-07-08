@@ -64,7 +64,16 @@ async def list_maintenance_plans(
     equipment_uuid: Optional[str] = Query(None, description="设备UUID（可选）"),
     status: Optional[str] = Query(None, description="计划状态（可选）"),
     plan_type: Optional[str] = Query(None, description="计划类型（可选）"),
+    maintenance_type: Optional[str] = Query(None, description="维护类型（可选）"),
     search: Optional[str] = Query(None, description="搜索关键词（可选）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（与 search 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    planned_start_date: Optional[str] = Query(None, description="计划开始日期起"),
+    planned_end_date: Optional[str] = Query(None, description="计划开始日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -80,7 +89,16 @@ async def list_maintenance_plans(
         equipment_uuid=equipment_uuid,
         status=status,
         plan_type=plan_type,
-        search=search
+        maintenance_type=maintenance_type,
+        search=search,
+        keyword=keyword,
+        order_by=order_by,
+        planned_start_date=planned_start_date,
+        planned_end_date=planned_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
     
     items = [MaintenancePlanResponse.model_validate(plan) for plan in plans]
@@ -194,7 +212,16 @@ async def list_maintenance_executions(
     equipment_uuid: Optional[str] = Query(None, description="设备UUID（可选）"),
     maintenance_plan_uuid: Optional[str] = Query(None, description="维护计划UUID（可选）"),
     status: Optional[str] = Query(None, description="记录状态（可选）"),
+    execution_result: Optional[str] = Query(None, description="执行结果（可选）"),
     search: Optional[str] = Query(None, description="搜索关键词（可选）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（与 search 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    execution_start_date: Optional[str] = Query(None, description="执行日期起"),
+    execution_end_date: Optional[str] = Query(None, description="执行日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -210,7 +237,16 @@ async def list_maintenance_executions(
         equipment_uuid=equipment_uuid,
         maintenance_plan_uuid=maintenance_plan_uuid,
         status=status,
-        search=search
+        execution_result=execution_result,
+        search=search,
+        keyword=keyword,
+        order_by=order_by,
+        execution_start_date=execution_start_date,
+        execution_end_date=execution_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
     
     items = [MaintenanceExecutionResponse.model_validate(exec) for exec in executions]

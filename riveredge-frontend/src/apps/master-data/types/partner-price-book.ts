@@ -64,6 +64,12 @@ export interface PartnerPriceBookListParams {
   keyword?: string;
   activeOnly?: boolean;
   effectiveOn?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
 }
 
 export interface PartnerPriceBookListResponse {

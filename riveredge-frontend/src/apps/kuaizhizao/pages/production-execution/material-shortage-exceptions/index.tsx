@@ -24,6 +24,14 @@ import { apiRequest } from '../../../../../services/api';
 import { ExceptionListPage } from '../../../services/production';
 import { ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES } from '../../../constants/exceptionStatuses';
 import { materialApi } from '../../../../master-data/services/material';
+import { formatDateTime } from '../../../../../utils/format';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  buildProductionExceptionAlertLevelValueEnum,
+  buildStandardProductionExceptionStatusValueEnum,
+  resolveProductionExceptionListStatusParams,
+} from '../../../utils/productionExceptionList';
 
 const P = 'app.kuaizhizao.productionException';
 
@@ -190,12 +198,28 @@ const MaterialShortageExceptionsPage: React.FC = () => {
     }
   };
 
+  const alertLevelValueEnum = useMemo(() => buildProductionExceptionAlertLevelValueEnum(t), [t]);
+  const exceptionStatusValueEnum = useMemo(() => buildStandardProductionExceptionStatusValueEnum(t), [t]);
+
   const columns: ProColumns<MaterialShortageException>[] = useMemo(() => [
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      hideInSearch: false,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
+    },
     {
       title: t(`${P}.col.workOrderCode`),
       dataIndex: 'work_order_code',
       width: 140,
       fixed: 'left',
+      sorter: true,
+      hideInSearch: false,
     },
     {
       title: t(`${P}.col.material`),
@@ -216,18 +240,24 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       dataIndex: 'required_quantity',
       width: 100,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t(`${P}.col.availableQty`),
       dataIndex: 'available_quantity',
       width: 100,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t(`${P}.col.shortageQty`),
       dataIndex: 'shortage_quantity',
       width: 100,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
       render: (_, record) => (
         <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
           {record.shortage_quantity}
@@ -238,23 +268,17 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       title: t(`${P}.col.alertLevel`),
       dataIndex: 'alert_level',
       width: 100,
-      valueEnum: {
-        low: { text: t(`${P}.alertLevel.low`), status: 'default' },
-        medium: { text: t(`${P}.alertLevel.medium`), status: 'warning' },
-        high: { text: t(`${P}.alertLevel.high`), status: 'error' },
-        critical: { text: t(`${P}.alertLevel.critical`), status: 'error' },
-      },
+      hideInSearch: false,
+      valueType: 'select',
+      valueEnum: alertLevelValueEnum,
     },
     {
       title: t(`${P}.col.status`),
       dataIndex: 'status',
       width: 100,
-      valueEnum: {
-        pending: { text: t(`${P}.status.pending`), status: 'default' },
-        processing: { text: t(`${P}.status.processing`), status: 'processing' },
-        resolved: { text: t(`${P}.status.resolved`), status: 'success' },
-        cancelled: { text: t(`${P}.status.cancelled`), status: 'error' },
-      },
+      hideInSearch: false,
+      valueType: 'select',
+      valueEnum: exceptionStatusValueEnum,
     },
     {
       title: t(`${P}.col.suggestedAction`),
@@ -269,8 +293,13 @@ const MaterialShortageExceptionsPage: React.FC = () => {
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at',
-      valueType: 'dateTime',
-      width: 160,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      defaultSortOrder: 'descend',
+      hideInSearch: true,
+      render: (_, record) =>
+        record.created_at ? formatDateTime(record.created_at, 'YYYY-MM-DD HH:mm') : '-',
     },
     {
       title: t('common.actions'),
@@ -327,7 +356,7 @@ const MaterialShortageExceptionsPage: React.FC = () => {
           { keyPrefix: `material-shortage-actions-${record.id ?? 'row'}` },
         ),
     },
-  ], [t]);
+  ], [alertLevelValueEnum, exceptionStatusValueEnum, t]);
 
   return (
     <ListPageTemplate>
@@ -337,18 +366,52 @@ const MaterialShortageExceptionsPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           try {
+            const s = searchFormValues ?? {};
+            const statusParams = resolveProductionExceptionListStatusParams(s);
+            const { sortBy, sortOrder } = extractProTableSort(sort);
+            const orderBy =
+              sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+            const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
+
             const queryParams: Record<string, unknown> = {
               skip: (params.current! - 1) * params.pageSize!,
               limit: params.pageSize,
-              alert_level: searchFormValues?.alert_level,
+              order_by: orderBy,
+              alert_level: s.alert_level,
+              ...statusParams,
             };
-            if (searchFormValues?.status) {
-              queryParams.status = searchFormValues.status;
-            } else {
+
+            if (!statusParams.status) {
               queryParams.statuses = ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES;
             }
+
+            if (fuzzyKeyword) {
+              queryParams.keyword = fuzzyKeyword;
+            } else {
+              if (s.work_order_code != null && String(s.work_order_code).trim()) {
+                queryParams.work_order_code = String(s.work_order_code).trim();
+              }
+              if (s.material_code != null && String(s.material_code).trim()) {
+                queryParams.material_code = String(s.material_code).trim();
+              }
+              if (s.material_name != null && String(s.material_name).trim()) {
+                queryParams.material_name = String(s.material_name).trim();
+              }
+            }
+
+            const createdRange = s.created_at_range as [unknown, unknown] | undefined;
+            if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+              queryParams.created_start_date = formatDateTime(
+                createdRange[0] as string | Date,
+                'YYYY-MM-DD',
+              );
+              queryParams.created_end_date = createdRange[1]
+                ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+                : queryParams.created_start_date;
+            }
+
             const result = await apiRequest<ExceptionListPage<MaterialShortageException>>(
               '/apps/kuaizhizao/exceptions/material-shortage',
               {
@@ -371,6 +434,9 @@ const MaterialShortageExceptionsPage: React.FC = () => {
           }
         }}
         showAdvancedSearch={true}
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField="status"
+        pinnedTabsValueEnum={exceptionStatusValueEnum}
       />
 
       <DetailDrawerTemplate

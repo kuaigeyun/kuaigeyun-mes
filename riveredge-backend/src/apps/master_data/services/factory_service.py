@@ -23,25 +23,10 @@ from apps.master_data.schemas.factory_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-_FACTORY_SORT_FIELDS = {
-    "code": "code",
-    "name": "name",
-    "createdAt": "created_at",
-    "updatedAt": "updated_at",
-    "isActive": "is_active",
-    "workshopId": "workshop_id",
-    "plantId": "plant_id",
-    "productionLineId": "production_line_id",
-}
-
-
-def _factory_order_clause(sort_field: Optional[str], sort_order: Optional[str], default_col: str = "code") -> str:
-    """表格列排序 → Tortoise order_by 片段（默认按编码升序）"""
-    key = (sort_field or "").strip()
-    col = _FACTORY_SORT_FIELDS.get(key, default_col)
-    if (sort_order or "asc").lower() == "desc":
-        return f"-{col}"
-    return col
+from apps.master_data.services.master_data_list_core import (
+    apply_master_crud_list_filters,
+    resolve_master_crud_order_clause as _factory_order_clause,
+)
 
 
 if TYPE_CHECKING:
@@ -204,6 +189,10 @@ class FactoryService:
         keyword: Optional[str] = None,
         code: Optional[str] = None,
         name: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
         sort_field: Optional[str] = None,
         sort_order: Optional[str] = None,
     ) -> PlantListResult:
@@ -233,23 +222,21 @@ class FactoryService:
             if is_active is not None:
                 query = query.filter(is_active=is_active)
 
-            # 添加搜索条件
-            if keyword:
-                # 关键词搜索厂区编码或名称
-                query = query.filter(
-                    Q(code__icontains=keyword) | Q(name__icontains=keyword)
-                )
-
-            if code:
-                # 精确匹配厂区编码
-                query = query.filter(code__icontains=code)
-
-            if name:
-                # 模糊匹配厂区名称
-                query = query.filter(name__icontains=name)
+            query, order_expr = apply_master_crud_list_filters(
+                query,
+                keyword=keyword,
+                code=code,
+                name=name,
+                created_start_date=created_start_date,
+                created_end_date=created_end_date,
+                updated_start_date=updated_start_date,
+                updated_end_date=updated_end_date,
+                sort_field=sort_field,
+                sort_order=sort_order,
+                default_sort_col="code",
+            )
 
             total = await query.count()
-            order_expr = _factory_order_clause(sort_field, sort_order, "code")
             plants = await query.offset(skip).limit(limit).order_by(order_expr).all()
 
             # 转换为响应格式
@@ -615,6 +602,10 @@ class FactoryService:
         code: Optional[str] = None,
         name: Optional[str] = None,
         plant_id: Optional[int] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
         sort_field: Optional[str] = None,
         sort_order: Optional[str] = None,
     ) -> WorkshopListResult:
@@ -644,26 +635,24 @@ class FactoryService:
             if is_active is not None:
                 query = query.filter(is_active=is_active)
 
-            # 添加搜索条件
-            if keyword:
-                # 关键词搜索车间编码或名称
-                query = query.filter(
-                    Q(code__icontains=keyword) | Q(name__icontains=keyword)
-                )
-
-            if code:
-                # 精确匹配车间编码
-                query = query.filter(code__icontains=code)
-
-            if name:
-                # 模糊匹配车间名称
-                query = query.filter(name__icontains=name)
-
             if plant_id is not None:
                 query = query.filter(plant_id=plant_id)
 
+            query, order_expr = apply_master_crud_list_filters(
+                query,
+                keyword=keyword,
+                code=code,
+                name=name,
+                created_start_date=created_start_date,
+                created_end_date=created_end_date,
+                updated_start_date=updated_start_date,
+                updated_end_date=updated_end_date,
+                sort_field=sort_field,
+                sort_order=sort_order,
+                default_sort_col="code",
+            )
+
             total = await query.count()
-            order_expr = _factory_order_clause(sort_field, sort_order, "code")
             workshops = await query.offset(skip).limit(limit).order_by(order_expr).all()
 
             result: List[WorkshopResponse] = []
@@ -1061,6 +1050,12 @@ class FactoryService:
         workshop_id: Optional[int] = None,
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
         sort_field: Optional[str] = None,
         sort_order: Optional[str] = None,
     ) -> ProductionLineListResult:
@@ -1091,13 +1086,21 @@ class FactoryService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
 
-        if keyword:
-            query = query.filter(
-                Q(code__icontains=keyword) | Q(name__icontains=keyword)
-            )
+        query, order_expr = apply_master_crud_list_filters(
+            query,
+            keyword=keyword,
+            code=code,
+            name=name,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_field,
+            sort_order=sort_order,
+            default_sort_col="code",
+        )
 
         total = await query.count()
-        order_expr = _factory_order_clause(sort_field, sort_order, "code")
         production_lines = await query.offset(skip).limit(limit).order_by(order_expr).prefetch_related("workshop").all()
 
         items: List[ProductionLineResponse] = []
@@ -1499,6 +1502,12 @@ class FactoryService:
         production_line_id: Optional[int] = None,
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
         sort_field: Optional[str] = None,
         sort_order: Optional[str] = None,
     ) -> WorkstationListResult:
@@ -1529,13 +1538,21 @@ class FactoryService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
 
-        if keyword:
-            query = query.filter(
-                Q(code__icontains=keyword) | Q(name__icontains=keyword)
-            )
+        query, order_expr = apply_master_crud_list_filters(
+            query,
+            keyword=keyword,
+            code=code,
+            name=name,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_field,
+            sort_order=sort_order,
+            default_sort_col="code",
+        )
 
         total = await query.count()
-        order_expr = _factory_order_clause(sort_field, sort_order, "code")
         workstations = await query.offset(skip).limit(limit).order_by(order_expr).all()
 
         result_ws: List[WorkstationResponse] = []
@@ -1820,6 +1837,10 @@ class FactoryService:
         keyword: Optional[str] = None,
         code: Optional[str] = None,
         name: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
         sort_field: Optional[str] = None,
         sort_order: Optional[str] = None,
     ) -> WorkCenterListResult:
@@ -1832,19 +1853,21 @@ class FactoryService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
 
-        if keyword:
-            query = query.filter(
-                Q(code__icontains=keyword) | Q(name__icontains=keyword)
-            )
-
-        if code:
-            query = query.filter(code__icontains=code)
-
-        if name:
-            query = query.filter(name__icontains=name)
+        query, order_expr = apply_master_crud_list_filters(
+            query,
+            keyword=keyword,
+            code=code,
+            name=name,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_field,
+            sort_order=sort_order,
+            default_sort_col="code",
+        )
 
         total = await query.count()
-        order_expr = _factory_order_clause(sort_field, sort_order, "code")
         work_centers = await query.offset(skip).limit(limit).order_by(order_expr).all()
         return WorkCenterListResult(
             items=[WorkCenterResponse.model_validate(wc) for wc in work_centers],

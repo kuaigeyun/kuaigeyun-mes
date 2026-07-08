@@ -1,9 +1,10 @@
 """采购变更单服务"""
 
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
+from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from apps.common.base_service import AppBaseService
@@ -40,6 +41,20 @@ from apps.kuaizhizao.services.order_change.helpers import (
 )
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.services.business_config_service import BusinessConfigService
+
+PURCHASE_ORDER_CHANGE_SORTABLE_FIELDS = frozenset({
+    "change_code",
+    "source_order_code",
+    "change_version",
+    "change_category",
+    "supplier_name",
+    "delta_amount",
+    "status",
+    "review_status",
+    "applied_at",
+    "created_at",
+    "updated_at",
+})
 
 
 class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
@@ -467,47 +482,59 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             await doc.save()
         return await self._to_detail(doc)
 
-    async def list_change_orders(
+    async def _build_change_list_rows(
         self,
         tenant_id: int,
-        skip: int = 0,
-        limit: int = 20,
-        source_order_id: Optional[int] = None,
-        status: Optional[str] = None,
+        docs: List[PurchaseOrderChangeOrder],
         lifecycle_stage: Optional[str] = None,
     ) -> List[PurchaseOrderChangeListResponse]:
-        qs = PurchaseOrderChangeOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if source_order_id:
-            qs = qs.filter(source_order_id=source_order_id)
-        if status:
-            qs = qs.filter(status=status)
-        docs = await qs.order_by("-created_at").offset(skip).limit(limit)
-        result = []
+        change_ids = [d.id for d in docs]
+        all_items = await PurchaseOrderChangeItem.filter(
+            tenant_id=tenant_id, change_order_id__in=change_ids
+        ).all() if change_ids else []
+        items_by_change: Dict[int, List[PurchaseOrderChangeItem]] = {}
+        for it in all_items:
+            items_by_change.setdefault(it.change_order_id, []).append(it)
+
+        result: List[PurchaseOrderChangeListResponse] = []
         for doc in docs:
             lifecycle = get_purchase_order_change_lifecycle(doc.status, doc.review_status, doc.applied_at)
             if lifecycle_stage and lifecycle.get("current_stage_key") != lifecycle_stage:
                 continue
-            has_content = await self._has_change_content(tenant_id, doc)
+            doc_items = items_by_change.get(doc.id, [])
+            has_content = False
+            if Decimal(str(doc.delta_amount or 0)) != 0:
+                has_content = True
+            elif doc.header_changes:
+                has_content = True
+            else:
+                for i in doc_items:
+                    if i.change_type in (OrderChangeLineType.LINE_ADD.value, OrderChangeLineType.LINE_CANCEL.value):
+                        has_content = True
+                        break
+                    if Decimal(str(i.delta_amount or 0)) != 0:
+                        has_content = True
+                        break
             row = PurchaseOrderChangeListResponse(
-                    id=doc.id,
-                    change_code=doc.change_code,
-                    source_order_id=doc.source_order_id,
-                    source_order_code=doc.source_order_code,
-                    change_version=doc.change_version,
-                    change_category=doc.change_category,
-                    change_reason=doc.change_reason,
-                    status=doc.status,
-                    review_status=doc.review_status,
-                    before_total_amount=doc.before_total_amount,
-                    after_total_amount=doc.after_total_amount,
-                    delta_amount=doc.delta_amount,
-                    applied_at=doc.applied_at,
-                    created_at=doc.created_at,
-                    lifecycle=lifecycle,
-                    supplier_id=doc.supplier_id,
-                    supplier_name=doc.supplier_name,
-                    partner_name=doc.supplier_name,
-                )
+                id=doc.id,
+                change_code=doc.change_code,
+                source_order_id=doc.source_order_id,
+                source_order_code=doc.source_order_code,
+                change_version=doc.change_version,
+                change_category=doc.change_category,
+                change_reason=doc.change_reason,
+                status=doc.status,
+                review_status=doc.review_status,
+                before_total_amount=doc.before_total_amount,
+                after_total_amount=doc.after_total_amount,
+                delta_amount=doc.delta_amount,
+                applied_at=doc.applied_at,
+                created_at=doc.created_at,
+                lifecycle=lifecycle,
+                supplier_id=doc.supplier_id,
+                supplier_name=doc.supplier_name,
+                partner_name=doc.supplier_name,
+            )
             result.append(
                 enrich_purchase_order_change_capabilities_on_response(
                     doc, row, has_change_content=has_content
@@ -516,6 +543,66 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         from core.services.approval.audit_record_enricher import enrich_items
 
         return await enrich_items(tenant_id, "purchase_order_change", result)
+
+    async def list_change_orders(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        source_order_id: Optional[int] = None,
+        status: Optional[str] = None,
+        lifecycle_stage: Optional[str] = None,
+        supplier_id: Optional[int] = None,
+        change_category: Optional[str] = None,
+        keyword: Optional[str] = None,
+        change_code: Optional[str] = None,
+        source_order_code: Optional[str] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        order_by: Optional[str] = None,
+    ) -> Tuple[List[PurchaseOrderChangeListResponse], int]:
+        qs = PurchaseOrderChangeOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if source_order_id:
+            qs = qs.filter(source_order_id=source_order_id)
+        if status:
+            qs = qs.filter(status=status)
+        if supplier_id is not None and int(supplier_id) > 0:
+            qs = qs.filter(supplier_id=int(supplier_id))
+        if change_category and str(change_category).strip():
+            qs = qs.filter(change_category=str(change_category).strip())
+        if start_date:
+            qs = qs.filter(created_at__gte=datetime.combine(start_date, datetime.min.time()))
+        if end_date:
+            qs = qs.filter(created_at__lte=datetime.combine(end_date, datetime.max.time()))
+        if keyword and str(keyword).strip():
+            kw = str(keyword).strip()
+            qs = qs.filter(
+                Q(change_code__icontains=kw)
+                | Q(supplier_name__icontains=kw)
+                | Q(source_order_code__icontains=kw)
+                | Q(change_reason__icontains=kw)
+            )
+        if change_code and str(change_code).strip():
+            qs = qs.filter(change_code__icontains=change_code.strip())
+        if source_order_code and str(source_order_code).strip():
+            qs = qs.filter(source_order_code__icontains=source_order_code.strip())
+
+        order_clause = order_by if order_by else "-created_at"
+        field = order_clause.lstrip("-")
+        if field not in PURCHASE_ORDER_CHANGE_SORTABLE_FIELDS:
+            order_clause = "-created_at"
+        lifecycle_filter = (lifecycle_stage or "").strip()
+
+        if lifecycle_filter:
+            docs = await qs.order_by(order_clause, "-id").all()
+            rows = await self._build_change_list_rows(tenant_id, docs, lifecycle_stage=lifecycle_filter)
+            total = len(rows)
+            return rows[skip : skip + limit], total
+
+        total = await qs.count()
+        docs = await qs.order_by(order_clause, "-id").offset(skip).limit(limit)
+        rows = await self._build_change_list_rows(tenant_id, docs)
+        return rows, total
 
     async def get_by_id(self, tenant_id: int, change_id: int) -> PurchaseOrderChangeWithItemsResponse:
         doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
@@ -527,7 +614,8 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         return await enrich_record(tenant_id, "purchase_order_change", resp)
 
     async def list_by_order(self, tenant_id: int, order_id: int) -> List[PurchaseOrderChangeListResponse]:
-        return await self.list_change_orders(tenant_id, skip=0, limit=100, source_order_id=order_id)
+        rows, _total = await self.list_change_orders(tenant_id, skip=0, limit=100, source_order_id=order_id)
+        return rows
 
     async def delete_change_order(self, tenant_id: int, change_id: int) -> None:
         doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)

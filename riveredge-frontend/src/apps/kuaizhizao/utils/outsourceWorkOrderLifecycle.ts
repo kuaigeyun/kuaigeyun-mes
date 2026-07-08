@@ -88,3 +88,35 @@ export function translateOutsourceWorkOrderLifecycleStatus(
   }
   return normStatus;
 }
+
+const OUTSOURCE_WORK_ORDER_LIFECYCLE_KEYS = ['draft', 'released', 'in_progress', 'completed', 'cancelled'] as const;
+
+export function buildOutsourceWorkOrderLifecycleValueEnum(
+  t: (key: string) => string,
+): Record<string, { text: string; status?: 'Default' | 'Processing' | 'Success' | 'Error' }> {
+  const statusByKey: Record<string, 'Default' | 'Processing' | 'Success' | 'Error'> = {
+    draft: 'Default',
+    released: 'Processing',
+    in_progress: 'Processing',
+    completed: 'Success',
+    cancelled: 'Error',
+  };
+  return Object.fromEntries(
+    OUTSOURCE_WORK_ORDER_LIFECYCLE_KEYS.map((key) => [
+      key,
+      { text: t(OUTSOURCE_STATUS_I18N_KEYS[key]!), status: statusByKey[key] },
+    ]),
+  );
+}
+
+export function resolveOutsourceWorkOrderListLifecycleParams(
+  searchFormValues?: Record<string, unknown> | null,
+): { status?: string } {
+  const raw = searchFormValues?.status ?? searchFormValues?.lifecycle_stage;
+  if (raw == null || String(raw).trim() === '') return {};
+  const status = String(raw).trim();
+  if (OUTSOURCE_WORK_ORDER_LIFECYCLE_KEYS.includes(status as (typeof OUTSOURCE_WORK_ORDER_LIFECYCLE_KEYS)[number])) {
+    return { status };
+  }
+  return {};
+}

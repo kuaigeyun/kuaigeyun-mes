@@ -137,6 +137,12 @@ class MaterialVariantAttributeDefinitionResponse(MaterialVariantAttributeDefinit
     )
 
 
+class MaterialVariantAttributeDefinitionListResponse(BaseModel):
+    """属性定义分页列表"""
+    items: List[MaterialVariantAttributeDefinitionResponse]
+    total: int
+
+
 class MaterialVariantAttributeHistoryResponse(BaseModel):
     """
     属性定义版本历史响应 Schema

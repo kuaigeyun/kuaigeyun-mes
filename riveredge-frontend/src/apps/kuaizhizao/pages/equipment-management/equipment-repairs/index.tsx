@@ -7,7 +7,14 @@ import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { equipmentFaultApi } from '../../../services/equipment';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  buildEquipmentRepairStatusValueEnum,
+  EQUIPMENT_OPS_PINNED_STATUS_FIELD,
+  normalizeEquipmentListResponse,
+  resolveEquipmentRepairListParams,
+} from '../../../utils/equipmentListCore';
 
 const P = 'app.kuaizhizao.equipmentRepair';
 const RESOURCE = 'kuaizhizao:equipment-fault';
@@ -45,6 +52,8 @@ const EquipmentRepairsPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detail, setDetail] = useState<EquipmentRepair | null>(null);
 
+  const repairStatusValueEnum = useMemo(() => buildEquipmentRepairStatusValueEnum(t), [t]);
+
   const handleDetail = async (record: EquipmentRepair) => {
     if (!record.uuid) return;
     const res = await equipmentFaultApi.getRepair(record.uuid);
@@ -69,41 +78,74 @@ const EquipmentRepairsPage: React.FC = () => {
   const columns: ProColumns<EquipmentRepair>[] = useMemo(
     () => [
       {
+        title: t(`${P}.col.repairDate`),
+        dataIndex: 'repair_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 10 } as ProColumns['search'],
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 11 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        valueType: 'select',
+        valueEnum: repairStatusValueEnum,
+        hideInTable: true,
+        search: { order: 20 } as ProColumns['search'],
+      },
+      {
         title: t(`${P}.col.repairNo`),
         dataIndex: 'repair_no',
         width: 140,
         fixed: 'left',
+        sorter: true,
+        search: { order: 30 } as ProColumns['search'],
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.repair_no ?? '') }} ellipsis>
             {r.repair_no ?? '-'}
           </Typography.Text>
         ),
       },
-      { title: t(`${P}.col.equipmentName`), dataIndex: 'equipment_name', width: 180, ellipsis: true },
+      {
+        title: t(`${P}.col.equipmentName`),
+        dataIndex: 'equipment_name',
+        width: 180,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+      },
       {
         title: t(`${P}.col.repairDate`),
         dataIndex: 'repair_date',
-        valueType: 'dateTime',
-        width: 160,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.repair_date ? formatDateTime(r.repair_date, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
-      { title: t(`${P}.col.repairType`), dataIndex: 'repair_type', width: 120 },
-      { title: t(`${P}.col.repairerName`), dataIndex: 'repairer_name', width: 120, hideInSearch: true },
+      { title: t(`${P}.col.repairType`), dataIndex: 'repair_type', width: 120, sorter: true, hideInSearch: true },
+      { title: t(`${P}.col.repairerName`), dataIndex: 'repairer_name', width: 120, sorter: true, hideInSearch: true },
       {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
         width: 100,
-        valueType: 'select',
-        valueEnum: {
-          进行中: { text: t(`${P}.status.inProgress`) },
-          已完成: { text: t(`${P}.status.completed`) },
-          已取消: { text: t(`${P}.status.cancelled`) },
-        },
+        sorter: true,
+        hideInSearch: true,
         render: (_, r) => <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>,
       },
       {
         title: t(`${P}.col.repairResult`),
         dataIndex: 'repair_result',
         width: 100,
+        sorter: true,
         hideInSearch: true,
       },
       {
@@ -111,6 +153,7 @@ const EquipmentRepairsPage: React.FC = () => {
         valueType: 'option',
         width: 120,
         fixed: 'right',
+        hideInSearch: true,
         render: (_, record) => [
           perms.canRead ? (
             <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
@@ -120,7 +163,7 @@ const EquipmentRepairsPage: React.FC = () => {
         ],
       },
     ],
-    [t, perms.canRead],
+    [t, perms.canRead, repairStatusValueEnum],
   );
 
   if (!perms.canRead) return null;
@@ -139,15 +182,19 @@ const EquipmentRepairsPage: React.FC = () => {
           showDeleteButton={perms.canDelete}
           onDelete={handleDelete}
           columns={columns}
+          showAdvancedSearch
+          pinnedTabsField={EQUIPMENT_OPS_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
           onRow={(record) => ({ onClick: () => void handleDetail(record), style: { cursor: 'pointer' } })}
-          request={async (params) => {
+          request={async (params, sort, _filter, searchFormValues) => {
+            const listParams = resolveEquipmentRepairListParams(searchFormValues, sort);
             const res = await equipmentFaultApi.listRepairs({
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
-              search: (params as { keyword?: string }).keyword,
-              status: params.status as string | undefined,
+              ...listParams,
             });
-            return { data: res.items || [], success: true, total: res.total || 0 };
+            const { data, total } = normalizeEquipmentListResponse(res);
+            return { data: data as EquipmentRepair[], success: true, total };
           }}
           search={{ labelWidth: 'auto' }}
           pagination={{ defaultPageSize: 20 }}

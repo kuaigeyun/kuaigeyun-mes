@@ -20,6 +20,13 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { rowActionKind } from '../../../../../components/uni-action';
 import { maintenanceItemsApi, maintenanceSchemesApi } from '../../../services/toolOps';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  MASTER_DATA_PINNED_ACTIVE_FIELD,
+  buildActiveStatusValueEnum,
+  normalizeEquipmentListResponse,
+  resolveMasterDataListParams,
+} from '../../../utils/equipmentListCore';
 
 const P = 'app.kuaizhizao.toolOps.maintenanceScheme';
 const RESOURCE = 'kuaizhizao:tool-maintenance-scheme';
@@ -135,18 +142,52 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
+  const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
+
   const columns: ProColumns<MaintenanceScheme>[] = useMemo(
     () => [
-      { title: t(`${P}.col.code`), dataIndex: 'code', width: 120, fixed: 'left' },
-      { title: t(`${P}.col.name`), dataIndex: 'name', width: 180, ellipsis: true },
-      { title: t(`${P}.col.triggerType`), dataIndex: 'trigger_type', width: 100 },
-      { title: t(`${P}.col.intervalValue`), dataIndex: 'interval_value', width: 90 },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 10 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.isActive`),
+        dataIndex: 'is_active',
+        valueType: 'select',
+        valueEnum: activeStatusValueEnum,
+        hideInTable: true,
+        search: { order: 20 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.code`),
+        dataIndex: 'code',
+        width: 120,
+        fixed: 'left',
+        sorter: true,
+        search: { order: 30 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.name`),
+        dataIndex: 'name',
+        width: 180,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+      },
+      { title: t(`${P}.col.triggerType`), dataIndex: 'trigger_type', width: 100, hideInSearch: true },
+      { title: t(`${P}.col.intervalValue`), dataIndex: 'interval_value', width: 90, hideInSearch: true },
       { title: t(`${P}.col.lineCount`), dataIndex: 'line_count', width: 80, hideInSearch: true },
       { title: t(`${P}.col.description`), dataIndex: 'description', ellipsis: true, hideInSearch: true },
       {
         title: t(`${P}.col.isActive`),
         dataIndex: 'is_active',
         width: 80,
+        sorter: true,
+        hideInSearch: true,
         render: (_, r) => (
           <Tag color={r.is_active ? 'success' : 'default'}>
             {r.is_active ? t('common.enabled') : t('common.disabled')}
@@ -156,8 +197,11 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 168,
+        width: 132,
+        uniTableKeepWidth: true,
         hideInSearch: true,
+        defaultSortOrder: 'descend',
+        sorter: true,
         render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
       {
@@ -204,7 +248,7 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
         ),
       },
     ],
-    [t, perms],
+    [t, perms, activeStatusValueEnum],
   );
 
   return (
@@ -216,14 +260,19 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          request={async (params) => {
+          showAdvancedSearch={true}
+          pinnedTabsField={MASTER_DATA_PINNED_ACTIVE_FIELD}
+          skipFuzzyPinyinClientFilter
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const listParams = resolveMasterDataListParams(searchFormValues, sort);
               const res = await maintenanceSchemesApi.list({
                 skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
                 limit: params.pageSize,
-                search: (params as { keyword?: string }).keyword,
+                ...listParams,
               });
-              return { data: res.items ?? [], success: true, total: res.total ?? 0 };
+              const { data, total } = normalizeEquipmentListResponse(res);
+              return { data: data as MaintenanceScheme[], success: true, total };
             } catch {
               messageApi.error(t(`${P}.listFailed`));
               return { data: [], success: false, total: 0 };

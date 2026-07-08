@@ -28,6 +28,18 @@ from core.services.authorization.data_scope_service import DataScopeService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
+CUSTOMER_FOLLOW_UP_SORTABLE_FIELDS = frozenset({
+    "customer_name",
+    "activity_type_code",
+    "content",
+    "occurred_at",
+    "next_follow_up_at",
+    "quotation_code",
+    "sales_order_code",
+    "created_at",
+    "updated_at",
+})
+
 RESOURCE_CUSTOMER_FOLLOW_UP = "kuaizhizao:customer-follow-up"
 RESOURCE_CUSTOMER_FOLLOW_UP_CUSTOMER = "kuaizhizao:customer-follow-up-customer"
 
@@ -397,7 +409,10 @@ class CustomerFollowUpService:
         cls,
         tenant_id: int,
         customer_id: Optional[int],
+        activity_type_code: Optional[str],
         keyword: Optional[str],
+        quotation_code: Optional[str],
+        sales_order_code: Optional[str],
         occurred_from: Optional[datetime],
         occurred_to: Optional[datetime],
         pending_only: bool,
@@ -405,6 +420,12 @@ class CustomerFollowUpService:
         query = CustomerFollowUp.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if customer_id is not None:
             query = query.filter(customer_id=customer_id)
+        if activity_type_code and str(activity_type_code).strip():
+            query = query.filter(activity_type_code=str(activity_type_code).strip())
+        if quotation_code and str(quotation_code).strip():
+            query = query.filter(quotation_code__icontains=str(quotation_code).strip())
+        if sales_order_code and str(sales_order_code).strip():
+            query = query.filter(sales_order_code__icontains=str(sales_order_code).strip())
         if occurred_from is not None:
             query = query.filter(occurred_at__gte=occurred_from)
         if occurred_to is not None:
@@ -420,8 +441,26 @@ class CustomerFollowUpService:
                     | Q(content__icontains=kw)
                     | Q(quotation_code__icontains=kw)
                     | Q(sales_order_code__icontains=kw)
+                    | Q(activity_type_code__icontains=kw)
                 )
         return query
+
+    @classmethod
+    def _resolve_list_order_by(
+        cls,
+        order_by: Optional[str],
+        pending_only: bool,
+    ) -> tuple[str, str]:
+        if order_by:
+            field = order_by.lstrip("-")
+            if field in CUSTOMER_FOLLOW_UP_SORTABLE_FIELDS:
+                descending = order_by.startswith("-")
+                primary = f"-{field}" if descending else field
+                secondary = "-id" if descending else "id"
+                return primary, secondary
+        if pending_only:
+            return "next_follow_up_at", "id"
+        return "-occurred_at", "-id"
 
     @classmethod
     async def list_follow_ups(
@@ -430,27 +469,31 @@ class CustomerFollowUpService:
         skip: int = 0,
         limit: int = 50,
         customer_id: Optional[int] = None,
+        activity_type_code: Optional[str] = None,
         keyword: Optional[str] = None,
+        quotation_code: Optional[str] = None,
+        sales_order_code: Optional[str] = None,
         occurred_from: Optional[datetime] = None,
         occurred_to: Optional[datetime] = None,
         pending_only: bool = False,
+        order_by: Optional[str] = None,
         current_user: Optional[User] = None,
     ) -> CustomerFollowUpListEnvelope:
         query = cls._filter_query(
             tenant_id,
             customer_id,
+            activity_type_code,
             keyword,
+            quotation_code,
+            sales_order_code,
             occurred_from,
             occurred_to,
             pending_only,
         )
         query = await cls._apply_list_scope(query, tenant_id, current_user)
         total = await query.count()
-        if pending_only:
-            # 已到期的回访队列：按计划时间升序，最早到期优先
-            rows = await query.offset(skip).limit(limit).order_by("next_follow_up_at", "id")
-        else:
-            rows = await query.offset(skip).limit(limit).order_by("-occurred_at", "-id")
+        primary_order, secondary_order = cls._resolve_list_order_by(order_by, pending_only)
+        rows = await query.offset(skip).limit(limit).order_by(primary_order, secondary_order)
         await cls._attach_creator_names(rows)
         out: List[CustomerFollowUpListResponse] = []
         for row in rows:

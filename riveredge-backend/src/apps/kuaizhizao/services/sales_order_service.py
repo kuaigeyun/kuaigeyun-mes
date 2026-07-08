@@ -1511,8 +1511,11 @@ class SalesOrderService:
         lifecycle_stage: Optional[str] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        customer_id: Optional[int] = None,
         customer_name: Optional[str] = None,
         order_code: Optional[str] = None,
+        contract_code: Optional[str] = None,
+        salesman_id: Optional[int] = None,
         keyword: Optional[str] = None,
         order_by: Optional[str] = None,
         include_items: bool = False,
@@ -1538,14 +1541,23 @@ class SalesOrderService:
             query = query.filter(order_date__gte=start_date)
         if end_date:
             query = query.filter(order_date__lte=end_date)
+        if customer_id is not None and int(customer_id) > 0:
+            query = query.filter(customer_id=int(customer_id))
         if customer_name and str(customer_name).strip():
             query = query.filter(customer_name__icontains=customer_name.strip())
         if order_code and str(order_code).strip():
             query = query.filter(order_code__icontains=order_code.strip())
+        if contract_code and str(contract_code).strip():
+            query = query.filter(contract_code__icontains=contract_code.strip())
+        if salesman_id is not None and int(salesman_id) > 0:
+            query = query.filter(salesman_id=int(salesman_id))
         if keyword and str(keyword).strip():
             kw = keyword.strip()
             query = query.filter(
-                Q(order_code__icontains=kw) | Q(customer_name__icontains=kw)
+                Q(order_code__icontains=kw)
+                | Q(customer_name__icontains=kw)
+                | Q(salesman_name__icontains=kw)
+                | Q(contract_code__icontains=kw)
             )
         order_clause = order_by if order_by else "-created_at"
 

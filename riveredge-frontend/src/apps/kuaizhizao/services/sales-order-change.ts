@@ -78,13 +78,30 @@ export interface ChangeImpactPreview {
   recommended_actions?: string[];
 }
 
-export async function listSalesOrderChanges(params: {
+export interface SalesOrderChangeListParams {
   skip?: number;
   limit?: number;
   source_order_id?: number;
   status?: string;
   lifecycle_stage?: string;
-} = {}): Promise<SalesOrderChange[]> {
+  customer_id?: number;
+  change_category?: string;
+  keyword?: string;
+  change_code?: string;
+  source_order_code?: string;
+  start_date?: string;
+  end_date?: string;
+  order_by?: string;
+}
+
+export interface SalesOrderChangeListResult {
+  items: SalesOrderChange[];
+  total: number;
+}
+
+export async function listSalesOrderChanges(
+  params: SalesOrderChangeListParams = {},
+): Promise<SalesOrderChangeListResult> {
   return apiRequest('/apps/kuaizhizao/sales-order-change-orders', { method: 'GET', params });
 }
 

@@ -19,23 +19,10 @@ from apps.master_data.schemas.work_group_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-_WORK_GROUP_SORT_FIELDS: Dict[str, str] = {
-    "code": "code",
-    "name": "name",
-    "createdAt": "created_at",
-    "updatedAt": "updated_at",
-    "isActive": "is_active",
-}
-
-
-def _work_group_order_clause(
-    sort_field: Optional[str], sort_order: Optional[str], default_col: str = "code"
-) -> str:
-    key = (sort_field or "").strip()
-    col = _WORK_GROUP_SORT_FIELDS.get(key, default_col)
-    if (sort_order or "asc").lower() == "desc":
-        return f"-{col}"
-    return col
+from apps.master_data.services.master_data_list_core import (
+    apply_master_crud_list_filters,
+    resolve_master_crud_order_clause as _work_group_order_clause,
+)
 
 
 class WorkGroupService:
@@ -139,6 +126,10 @@ class WorkGroupService:
         keyword: Optional[str] = None,
         code: Optional[str] = None,
         name: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
         sort_field: Optional[str] = None,
         sort_order: Optional[str] = None,
     ) -> WorkGroupListResult:
@@ -151,19 +142,21 @@ class WorkGroupService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
 
-        if keyword:
-            query = query.filter(
-                Q(code__icontains=keyword) | Q(name__icontains=keyword)
-            )
-
-        if code:
-            query = query.filter(code__icontains=code)
-
-        if name:
-            query = query.filter(name__icontains=name)
+        query, order_expr = apply_master_crud_list_filters(
+            query,
+            keyword=keyword,
+            code=code,
+            name=name,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_field,
+            sort_order=sort_order,
+            default_sort_col="code",
+        )
 
         total = await query.count()
-        order_expr = _work_group_order_clause(sort_field, sort_order, "code")
         work_groups = await query.offset(skip).limit(limit).order_by(order_expr).prefetch_related("members").all()
         result: List[WorkGroupResponse] = []
         for wg in work_groups:

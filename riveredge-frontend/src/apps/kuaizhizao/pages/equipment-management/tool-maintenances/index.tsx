@@ -29,6 +29,13 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { toolApi } from '../../../services/equipment';
 import { maintenanceSchemesApi, maintenancesApi } from '../../../services/toolOps';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  APPROVAL_DOC_PINNED_STATUS_FIELD,
+  buildApprovalDocStatusValueEnum,
+  normalizeEquipmentListResponse,
+  resolveAssetWorkflowListParams,
+} from '../../../utils/equipmentListCore';
 
 const P = 'app.kuaizhizao.toolOps.maintenance';
 const RESOURCE = 'kuaizhizao:tool-maintenance';
@@ -61,7 +68,6 @@ interface ToolMaintenance {
 const STATUS_COLORS: Record<string, string> = {
   草稿: 'default',
   已提交: 'processing',
-  待审批: 'processing',
   已审核: 'success',
   已驳回: 'error',
   已完成: 'success',
@@ -259,23 +265,75 @@ const ToolMaintenancesPage: React.FC = () => {
     },
   ];
 
+  const workflowStatusValueEnum = useMemo(
+    () => ({
+      ...buildApprovalDocStatusValueEnum(),
+      已完成: { text: '已完成' },
+    }),
+    [],
+  );
+
   const columns: ProColumns<ToolMaintenance>[] = useMemo(
     () => [
-      { title: t(`${P}.col.documentNo`), dataIndex: 'document_no', width: 140, fixed: 'left' },
-      { title: t(`${P}.col.tool`), dataIndex: 'tool_name', width: 160, ellipsis: true },
-      { title: t(`${P}.col.maintenanceDate`), dataIndex: 'maintenance_date', width: 110, valueType: 'date' },
-      { title: t(`${P}.col.executor`), dataIndex: 'applicant_name', width: 100 },
+      {
+        title: t(`${P}.col.maintenanceDate`),
+        dataIndex: 'doc_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 10 } as ProColumns['search'],
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 11 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        valueType: 'select',
+        valueEnum: workflowStatusValueEnum,
+        hideInTable: true,
+        search: { order: 20 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.documentNo`),
+        dataIndex: 'document_no',
+        width: 140,
+        fixed: 'left',
+        sorter: true,
+        search: { order: 30 } as ProColumns['search'],
+      },
+      { title: t(`${P}.col.tool`), dataIndex: 'tool_name', width: 160, ellipsis: true, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.maintenanceDate`),
+        dataIndex: 'maintenance_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        valueType: 'date',
+        sorter: true,
+        hideInSearch: true,
+      },
+      { title: t(`${P}.col.executor`), dataIndex: 'applicant_name', width: 100, sorter: true, hideInSearch: true },
       {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
         width: 90,
+        sorter: true,
+        hideInSearch: true,
         render: (_, r) => <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>,
       },
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 168,
+        width: 132,
+        uniTableKeepWidth: true,
         hideInSearch: true,
+        defaultSortOrder: 'descend',
+        sorter: true,
         render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
       },
       {
@@ -326,7 +384,7 @@ const ToolMaintenancesPage: React.FC = () => {
                 {t(`${P}.action.submit`)}
               </Button>
             )}
-            {canAudit && (record.status === '待审批' || record.status === '已提交') && (
+            {canAudit && record.status === '已提交' && (
               <Button
                 {...rowActionKind('approve')}
                 type="link"
@@ -340,7 +398,7 @@ const ToolMaintenancesPage: React.FC = () => {
                 {t(`${P}.action.approve`)}
               </Button>
             )}
-            {canAudit && (record.status === '待审批' || record.status === '已提交') && (
+            {canAudit && record.status === '已提交' && (
               <Button
                 {...rowActionKind('reject')}
                 type="link"
@@ -393,7 +451,7 @@ const ToolMaintenancesPage: React.FC = () => {
         ),
       },
     ],
-    [t, perms, canAudit],
+    [t, perms, canAudit, workflowStatusValueEnum],
   );
 
   return (
@@ -405,14 +463,19 @@ const ToolMaintenancesPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          request={async (params) => {
+          showAdvancedSearch
+          pinnedTabsField={APPROVAL_DOC_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const listParams = resolveAssetWorkflowListParams(searchFormValues, sort);
               const res = await maintenancesApi.list({
                 skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
                 limit: params.pageSize,
-                search: (params as { keyword?: string }).keyword,
+                ...listParams,
               });
-              return { data: res.items ?? [], success: true, total: res.total ?? 0 };
+              const { data, total } = normalizeEquipmentListResponse(res);
+              return { data: data as ToolMaintenance[], success: true, total };
             } catch {
               messageApi.error(t(`${P}.listFailed`));
               return { data: [], success: false, total: 0 };

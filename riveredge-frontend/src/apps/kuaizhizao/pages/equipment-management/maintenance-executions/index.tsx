@@ -8,6 +8,14 @@ import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CON
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { maintenancePlanApi } from '../../../services/equipment';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  buildMaintenanceExecutionResultValueEnum,
+  buildMaintenanceExecutionStatusValueEnum,
+  MAINTENANCE_EXECUTION_PINNED_STATUS_FIELD,
+  normalizeEquipmentListResponse,
+  resolveMaintenanceExecutionListParams,
+} from '../../../utils/equipmentListCore';
 
 const P = 'app.kuaizhizao.maintenanceExecution';
 const RESOURCE = 'kuaizhizao:maintenance-plan';
@@ -25,6 +33,7 @@ interface MaintenanceExecution {
   maintenance_cost?: number;
   spare_parts_used?: { items?: Array<{ spare_part_id?: number; quantity?: number }> };
   created_at?: string;
+  updated_at?: string;
 }
 
 const RESULT_COLORS: Record<string, string> = {
@@ -63,37 +72,87 @@ const MaintenanceExecutionsPage: React.FC = () => {
     });
   };
 
+  const executionStatusValueEnum = useMemo(() => buildMaintenanceExecutionStatusValueEnum(), []);
+  const executionResultValueEnum = useMemo(() => buildMaintenanceExecutionResultValueEnum(t), [t]);
+
   const columns: ProColumns<MaintenanceExecution>[] = useMemo(
     () => [
+      {
+        title: t(`${P}.col.executionDate`),
+        dataIndex: 'execution_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 10 } as ProColumns['search'],
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 11 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        valueType: 'select',
+        valueEnum: executionStatusValueEnum,
+        hideInTable: true,
+        search: { order: 20 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.executionResult`),
+        dataIndex: 'execution_result',
+        valueType: 'select',
+        valueEnum: executionResultValueEnum,
+        hideInTable: true,
+        search: { order: 21 } as ProColumns['search'],
+      },
       {
         title: t(`${P}.col.executionNo`),
         dataIndex: 'execution_no',
         width: 140,
         fixed: 'left',
+        sorter: true,
+        search: { order: 30 } as ProColumns['search'],
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.execution_no ?? '') }} ellipsis>
             {r.execution_no ?? '-'}
           </Typography.Text>
         ),
       },
-      { title: t(`${P}.col.equipmentName`), dataIndex: 'equipment_name', width: 180, ellipsis: true },
+      {
+        title: t(`${P}.col.equipmentName`),
+        dataIndex: 'equipment_name',
+        width: 180,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+      },
       {
         title: t(`${P}.col.executionDate`),
         dataIndex: 'execution_date',
         valueType: 'dateTime',
-        width: 160,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.execution_date ? formatDateTime(r.execution_date) : '-'),
       },
-      { title: t(`${P}.col.executorName`), dataIndex: 'executor_name', width: 120, hideInSearch: true },
+      {
+        title: t(`${P}.col.executorName`),
+        dataIndex: 'executor_name',
+        width: 120,
+        sorter: true,
+        hideInSearch: true,
+      },
       {
         title: t(`${P}.col.executionResult`),
         dataIndex: 'execution_result',
         width: 100,
-        valueType: 'select',
-        valueEnum: {
-          正常: { text: t(`${P}.result.normal`) },
-          异常: { text: t(`${P}.result.abnormal`) },
-          待处理: { text: t(`${P}.result.pending`) },
-        },
+        sorter: true,
+        hideInSearch: true,
         render: (_, r) => (
           <Tag color={RESULT_COLORS[r.execution_result ?? ''] ?? 'default'}>
             {r.execution_result ?? '-'}
@@ -104,6 +163,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
         width: 100,
+        sorter: true,
         hideInSearch: true,
       },
       {
@@ -111,6 +171,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
         valueType: 'option',
         width: 120,
         fixed: 'right',
+        hideInSearch: true,
         render: (_, record) => [
           perms.canRead ? (
             <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
@@ -120,7 +181,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
         ],
       },
     ],
-    [t, perms.canRead],
+    [t, perms.canRead, executionStatusValueEnum, executionResultValueEnum],
   );
 
   if (!perms.canRead) return null;
@@ -139,15 +200,24 @@ const MaintenanceExecutionsPage: React.FC = () => {
           showDeleteButton={perms.canDelete}
           onDelete={handleDelete}
           columns={columns}
+          showAdvancedSearch={true}
+          pinnedTabsField={MAINTENANCE_EXECUTION_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
           onRow={(record) => ({ onClick: () => void handleDetail(record), style: { cursor: 'pointer' } })}
-          request={async (params) => {
-            const res = await maintenancePlanApi.listExecutions({
-              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-              limit: params.pageSize || 20,
-              search: (params as { keyword?: string }).keyword,
-              status: params.status as string | undefined,
-            });
-            return { data: res.items || [], success: true, total: res.total || 0 };
+          request={async (params, sort, _filter, searchFormValues) => {
+            try {
+              const listParams = resolveMaintenanceExecutionListParams(searchFormValues, sort);
+              const res = await maintenancePlanApi.listExecutions({
+                skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+                limit: params.pageSize || 20,
+                ...listParams,
+              });
+              const { data, total } = normalizeEquipmentListResponse(res);
+              return { data: data as MaintenanceExecution[], success: true, total };
+            } catch {
+              messageApi.error(t('common.loadFailed'));
+              return { data: [], success: false, total: 0 };
+            }
           }}
           search={{ labelWidth: 'auto' }}
           pagination={{ defaultPageSize: 20 }}

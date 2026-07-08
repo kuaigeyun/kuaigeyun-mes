@@ -256,7 +256,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
     (async () => {
       setDefinitionsLoading(true);
       try {
-        const list = await variantAttributeApi.list({ is_active: true });
+        const { items: list } = await variantAttributeApi.list({ is_active: true, limit: 10000 });
         list.sort((a, b) => a.display_order - b.display_order);
         if (!cancelled) setDefinitions(list);
       } catch (e: any) {

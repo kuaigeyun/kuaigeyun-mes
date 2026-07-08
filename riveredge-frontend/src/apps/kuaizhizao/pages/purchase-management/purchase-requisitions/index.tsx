@@ -98,6 +98,8 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { formatDateTime } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {
   demandComputationCapabilityReasonMessage,
   purchaseRequisitionCapabilityReasonMessage,
@@ -1217,6 +1219,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
       valueType: 'dateRange',
       hideInTable: true,
       hideInSearch: false,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
       search: {
         transform: (value: any) => {
           if (!value || !Array.isArray(value)) return {};
@@ -1258,7 +1264,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       hideInSearch: false,
     },
     { title: t('app.kuaizhizao.purchaseRequisition.col.name'), dataIndex: 'requisition_name', hideInTable: true, hideInSearch: false, ellipsis: true },
-    { title: t('app.kuaizhizao.purchaseRequisition.col.sourceCode'), dataIndex: 'source_code', width: 132, hideInSearch: false, ellipsis: true },
+    { title: t('app.kuaizhizao.purchaseRequisition.col.sourceCode'), dataIndex: 'source_code', width: 132, uniTableKeepWidth: true, sorter: true, hideInSearch: false, ellipsis: true },
     {
       title: t('app.kuaizhizao.purchaseRequisition.col.sourceType'),
       dataIndex: 'source_type',
@@ -1276,18 +1282,42 @@ const PurchaseRequisitionsPage: React.FC = () => {
       title: t('app.kuaizhizao.purchaseRequisition.col.requiredDate'),
       dataIndex: 'required_date',
       valueType: 'date',
-      width: 120,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
       hideInSearch: true,
     },
     { title: t('app.kuaizhizao.purchaseRequisition.col.itemCount'), dataIndex: 'items_count', width: 80, align: 'center', hideInSearch: true },
-    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime', width: 160, hideInSearch: true },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, record) =>
+        record.created_at ? formatDateTime(record.created_at, 'YYYY-MM-DD HH:mm') : '-',
+    },
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      valueType: 'dateTime',
-      width: 168,
-      hideInSearch: true,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
       defaultSortOrder: 'descend',
+      hideInSearch: true,
+      render: (_, record) =>
+        record.updated_at ? formatDateTime(record.updated_at, 'YYYY-MM-DD HH:mm') : '-',
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      fieldProps: {
+        placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+      },
+      formItemProps: formDateRangeFormItemProps,
     },
     ...(purchaseRequisitionAuditColumn ? [purchaseRequisitionAuditColumn] : []),
     {
@@ -1498,6 +1528,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                                     formItemProps={{ style: { margin: 0 } }}
                                     showQuickCreate
                                     showAdvancedSearch
+                                  skipFuzzyPinyinClientFilter
                                   />
                                 </div>
                               </div>
@@ -1722,23 +1753,43 @@ const PurchaseRequisitionsPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.menu.purchase-management.purchase-requisitions')}
           columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-requisitions"
           actionRef={actionRef}
-          request={async (params: any, _sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
-            const s = searchFormValues || {};
+          request={async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
+            const s = searchFormValues ?? {};
             const lifecycleParams = resolvePurchaseRequisitionListLifecycleParams(
               searchFormValues,
               params,
             );
-            const res = await listPurchaseRequisitions({
+            const { sortBy, sortOrder } = extractProTableSort(sort);
+            const orderBy =
+              sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+            const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
+            const apiParams: Parameters<typeof listPurchaseRequisitions>[0] = {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
               ...lifecycleParams,
+              order_by: orderBy,
               source_type: s.source_type,
-              keyword: s.keyword,
-              requisition_code: s.requisition_code,
-              requisition_name: s.requisition_name,
               required_date_from: s.required_date_from,
               required_date_to: s.required_date_to,
-            });
+            };
+            if (fuzzyKeyword) {
+              apiParams.keyword = fuzzyKeyword;
+            } else {
+              if (s.requisition_code != null && String(s.requisition_code).trim()) {
+                apiParams.requisition_code = String(s.requisition_code).trim();
+              }
+              if (s.requisition_name != null && String(s.requisition_name).trim()) {
+                apiParams.requisition_name = String(s.requisition_name).trim();
+              }
+            }
+            const createdRange = s.created_at_range as [unknown, unknown] | undefined;
+            if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+              apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
+              apiParams.created_end_date = createdRange[1]
+                ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+                : apiParams.created_start_date;
+            }
+            const res = await listPurchaseRequisitions(apiParams);
             tableRowsRef.current = res.data || [];
             return {
               data: res.data || [],
@@ -1754,6 +1805,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
           columns={columns}
           rowKey="id"
           showAdvancedSearch={true}
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
+          pinnedTabsValueEnum={lifecycleValueEnum}
           search={false}
           showCreateButton={false}
           createButtonText={t('app.kuaizhizao.menu.purchase-management.purchase-requisitions.new')}

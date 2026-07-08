@@ -22,6 +22,19 @@ from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_item import DemandItem
 
+SALES_FORECAST_SORTABLE_FIELDS = frozenset({
+    "forecast_code",
+    "forecast_name",
+    "forecast_type",
+    "forecast_period",
+    "start_date",
+    "end_date",
+    "status",
+    "review_status",
+    "created_at",
+    "updated_at",
+})
+
 from apps.kuaizhizao.schemas.sales import (
     # 销售预测
     SalesForecastCreate, SalesForecastUpdate, SalesForecastResponse, SalesForecastListResponse,
@@ -232,13 +245,28 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         if filters.get('end_date'):
             query = query.filter(end_date__lte=filters['end_date'])
         if filters.get('keyword'):
-            query = query.filter(Q(forecast_code__icontains=filters['keyword']) | Q(forecast_name__icontains=filters['keyword']))
+            kw = str(filters['keyword']).strip()
+            if kw:
+                query = query.filter(
+                    Q(forecast_code__icontains=kw) | Q(forecast_name__icontains=kw)
+                )
+        if filters.get('forecast_code'):
+            code = str(filters['forecast_code']).strip()
+            if code:
+                query = query.filter(forecast_code__icontains=code)
+        if filters.get('forecast_name'):
+            name = str(filters['forecast_name']).strip()
+            if name:
+                query = query.filter(forecast_name__icontains=name)
 
         # 获取总数
         total = await query.count()
-        
+
+        order_by = filters.get('order_by')
+        order_clause = order_by if order_by else '-updated_at'
+
         # 获取分页数据
-        forecasts = await query.offset(skip).limit(limit).order_by('-created_at')
+        forecasts = await query.offset(skip).limit(limit).order_by(order_clause, '-id')
 
         forecast_ids = [f.id for f in forecasts]
         demand_by_fid: Dict[int, Demand] = {}

@@ -19,6 +19,7 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.master_data.models.material import Material
 from apps.master_data.models.material_batch import MaterialBatch
 from apps.kuaicaiwu.services.finance_service import ReceivableService
+from apps.kuaicaiwu.services.management_list_core import filter_sort_paginate_margin_report_items
 from core.utils.timezone_utils import to_api_isoformat
 
 
@@ -419,25 +420,124 @@ class ManagementReportService:
                 "gross_margin": float(margin.quantize(Decimal("0.01"))),
                 "gross_margin_rate": round(float(rate), 4),
             })
-        rows.sort(key=lambda x: x["gross_margin"], reverse=True)
         return rows
 
-    async def get_margin_by_product(self, tenant_id: int, days: int = 30) -> Dict[str, Any]:
-        items = await self._aggregate_delivery_margin_rows(tenant_id, days=days, group_by="product")
-        return {"period_days": days, "items": items}
+    async def _paginate_margin_rows(
+        self,
+        tenant_id: int,
+        *,
+        days: int,
+        group_by: str,
+        keyword: Optional[str] = None,
+        product_code: Optional[str] = None,
+        product_name: Optional[str] = None,
+        customer_name: Optional[str] = None,
+        sales_order_code: Optional[str] = None,
+        delivery_code: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        items = await self._aggregate_delivery_margin_rows(tenant_id, days=days, group_by=group_by)
+        if group_by == "order":
+            order_ids = [i["sales_order_id"] for i in items if i.get("sales_order_id")]
+            order_map = {}
+            if order_ids:
+                orders = await SalesOrder.filter(tenant_id=tenant_id, id__in=order_ids).all()
+                order_map = {o.id: o.order_code for o in orders}
+            for row in items:
+                so_id = row.get("sales_order_id")
+                row["sales_order_code"] = order_map.get(so_id) if so_id else None
 
-    async def get_margin_by_customer(self, tenant_id: int, days: int = 30) -> Dict[str, Any]:
-        items = await self._aggregate_delivery_margin_rows(tenant_id, days=days, group_by="customer")
-        return {"period_days": days, "items": items}
+        page_items, total = filter_sort_paginate_margin_report_items(
+            items,
+            group_by=group_by,
+            keyword=keyword,
+            product_code=product_code,
+            product_name=product_name,
+            customer_name=customer_name,
+            sales_order_code=sales_order_code,
+            delivery_code=delivery_code,
+            sort_field=sort_field,
+            sort_order=sort_order,
+            skip=skip,
+            limit=limit,
+        )
+        return {"period_days": days, "items": page_items, "total": total}
 
-    async def get_margin_by_order(self, tenant_id: int, days: int = 30) -> Dict[str, Any]:
-        items = await self._aggregate_delivery_margin_rows(tenant_id, days=days, group_by="order")
-        order_ids = [i["sales_order_id"] for i in items if i.get("sales_order_id")]
-        order_map = {}
-        if order_ids:
-            orders = await SalesOrder.filter(tenant_id=tenant_id, id__in=order_ids).all()
-            order_map = {o.id: o.order_code for o in orders}
-        for row in items:
-            so_id = row.get("sales_order_id")
-            row["sales_order_code"] = order_map.get(so_id) if so_id else None
-        return {"period_days": days, "items": items}
+    async def get_margin_by_product(
+        self,
+        tenant_id: int,
+        days: int = 30,
+        *,
+        keyword: Optional[str] = None,
+        product_code: Optional[str] = None,
+        product_name: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return await self._paginate_margin_rows(
+            tenant_id,
+            days=days,
+            group_by="product",
+            keyword=keyword,
+            product_code=product_code,
+            product_name=product_name,
+            skip=skip,
+            limit=limit,
+            sort_field=sort_field,
+            sort_order=sort_order,
+        )
+
+    async def get_margin_by_customer(
+        self,
+        tenant_id: int,
+        days: int = 30,
+        *,
+        keyword: Optional[str] = None,
+        customer_name: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return await self._paginate_margin_rows(
+            tenant_id,
+            days=days,
+            group_by="customer",
+            keyword=keyword,
+            customer_name=customer_name,
+            skip=skip,
+            limit=limit,
+            sort_field=sort_field,
+            sort_order=sort_order,
+        )
+
+    async def get_margin_by_order(
+        self,
+        tenant_id: int,
+        days: int = 30,
+        *,
+        keyword: Optional[str] = None,
+        sales_order_code: Optional[str] = None,
+        delivery_code: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return await self._paginate_margin_rows(
+            tenant_id,
+            days=days,
+            group_by="order",
+            keyword=keyword,
+            sales_order_code=sales_order_code,
+            delivery_code=delivery_code,
+            skip=skip,
+            limit=limit,
+            sort_field=sort_field,
+            sort_order=sort_order,
+        )

@@ -19,9 +19,15 @@ import {
   workCenterApi,
   workstationApi,
   factoryListItems,
-  applyFactoryKeyword,
-  applyFactoryTableSort,
 } from '../../../services/factory';
+import {
+  buildMasterCrudActiveValueEnum,
+  MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  masterCrudCodeNameSearchColumns,
+  masterCrudCreatedUpdatedColumns,
+  normalizeMasterListResponse,
+  resolveMasterCrudListParams,
+} from '../../../utils/masterListCore';
 import { WorkCenterFormModal } from '../../../components/WorkCenterFormModal';
 import type { WorkCenter, WorkCenterCreate, Workstation } from '../../../types/factory';
 import { downloadFile } from '../../../../../utils';
@@ -48,6 +54,7 @@ const WorkCentersPage: React.FC = () => {
 
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
@@ -382,8 +389,9 @@ const WorkCentersPage: React.FC = () => {
         exportData = currentPageData;
         filename = `${t('app.master-data.workCenters.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
-        const allData = await workCenterApi.list({ skip: 0, limit: 10000 });
-        exportData = allData.items;
+        const allData = await workCenterApi.list({ skip: 0, limit: 10000, ...lastListParamsRef.current });
+        const { data: exportItems } = normalizeMasterListResponse(allData);
+        exportData = exportItems;
         filename = `${t('app.master-data.workCenters.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
@@ -428,9 +436,18 @@ const WorkCentersPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
+  const workCenterActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
+    [t],
+  );
+
   const columns: ProColumns<WorkCenter>[] = React.useMemo(() => {
     const customFieldColumns = generateCustomFieldColumns();
     return [
+      ...masterCrudCodeNameSearchColumns({
+        code: t('field.workCenter.code'),
+        name: t('field.workCenter.name'),
+      }),
     {
       title: t('field.workCenter.code'),
       dataIndex: 'code',
@@ -439,6 +456,7 @@ const WorkCentersPage: React.FC = () => {
       ellipsis: true,
       copyable: true,
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('field.workCenter.name'),
@@ -446,6 +464,7 @@ const WorkCentersPage: React.FC = () => {
       width: 200,
       ellipsis: true,
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('field.workCenter.description'),
@@ -454,31 +473,30 @@ const WorkCentersPage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
     },
-    // 插入自定义字段列
     ...customFieldColumns,
     {
       title: t('field.workCenter.isActive'),
       dataIndex: 'isActive',
-      width: 100,
+      hideInTable: true,
+      order: 20,
       valueType: 'select',
-      valueEnum: {
-        true: { text: t('common.enabled'), status: 'Success' },
-        false: { text: t('common.disabled'), status: 'Default' },
-      },
+      valueEnum: workCenterActiveValueEnum,
+      fieldProps: { allowClear: true },
+    },
+    {
+      title: t('field.workCenter.isActive'),
+      dataIndex: 'isActive',
+      width: 100,
+      hideInSearch: true,
+      sorter: true,
+      valueEnum: workCenterActiveValueEnum,
       render: (_, record) => (
         <Tag color={record?.isActive ? 'success' : 'default'}>
           {record?.isActive ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'createdAt',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
+    ...masterCrudCreatedUpdatedColumns<WorkCenter>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -518,7 +536,7 @@ const WorkCentersPage: React.FC = () => {
       ),
     },
     ];
-  }, [customFields, t]);
+  }, [customFields, t, workCenterActiveValueEnum]);
 
   const detailColumns: ProDescriptionsItemProps<WorkCenter>[] = [
     { title: t('field.workCenter.code'), dataIndex: 'code' },
@@ -561,25 +579,24 @@ const WorkCentersPage: React.FC = () => {
           defaultViewType="table"
           loadingDelay={200}
           request={async (params, sort, _filter, searchFormValues) => {
-            const apiParams: any = {
-              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-              limit: params.pageSize || 20,
-            };
-
-            if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-              apiParams.is_active = searchFormValues.isActive;
-            }
-            applyFactoryKeyword(apiParams, searchFormValues);
-            applyFactoryTableSort(apiParams, sort);
+            const pageSize = params.pageSize || 20;
+            const skip = ((params.current || 1) - 1) * pageSize;
+            const listParams = resolveMasterCrudListParams(searchFormValues, sort);
+            lastListParamsRef.current = listParams;
 
             try {
-              const result = await workCenterApi.list(apiParams);
-              const enrichedData = await enrichRecordsWithCustomFields(result.items);
+              const result = await workCenterApi.list({
+                skip,
+                limit: pageSize,
+                ...listParams,
+              });
+              const { data, total } = normalizeMasterListResponse(result);
+              const enrichedData = await enrichRecordsWithCustomFields(data);
 
               return {
                 data: enrichedData,
                 success: true,
-                total: result.total,
+                total,
               };
             } catch (error: any) {
               console.error('获取工作中心列表失败:', error);
@@ -592,7 +609,9 @@ const WorkCentersPage: React.FC = () => {
             }
           }}
           rowKey="uuid"
-          showAdvancedSearch={true}
+          showAdvancedSearch
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={MASTER_CRUD_PINNED_ACTIVE_FIELD}
           pagination={{
             defaultPageSize: 20,
             showSizeChanger: true,

@@ -71,7 +71,7 @@ async def create_purchase_order(
 @router.get("/purchase-orders", summary="List purchase orders")
 async def list_purchase_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(20, ge=1, le=100, description="返回数量"),
+    limit: int = Query(20, ge=1, le=1000, description="返回数量"),
     supplier_id: Optional[int] = Query(None, description="供应商ID"),
     status: Optional[str] = Query(None, description="订单状态"),
     review_status: Optional[str] = Query(None, description="审核状态"),
@@ -79,7 +79,11 @@ async def list_purchase_orders(
     order_date_to: Optional[date] = Query(None, description="订单日期到"),
     delivery_date_from: Optional[date] = Query(None, description="到货日期从"),
     delivery_date_to: Optional[date] = Query(None, description="到货日期到"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_code: Optional[str] = Query(None, description="订单编号（模糊）"),
     keyword: Optional[str] = Query(None, description="关键词搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 order_date、-updated_at"),
     current_user: CurrentUser = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -88,6 +92,14 @@ async def list_purchase_orders(
 
     支持多种筛选条件和分页查询
     """
+    from apps.kuaizhizao.services.purchase_service import PURCHASE_ORDER_SORTABLE_FIELDS
+
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in PURCHASE_ORDER_SORTABLE_FIELDS:
+            safe_order_by = order_by
+
     params = PurchaseOrderListParams(
         skip=skip,
         limit=limit,
@@ -98,7 +110,11 @@ async def list_purchase_orders(
         order_date_to=order_date_to,
         delivery_date_from=delivery_date_from,
         delivery_date_to=delivery_date_to,
-        keyword=keyword
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        order_code=order_code,
+        keyword=keyword,
+        order_by=safe_order_by,
     )
 
     return await PurchaseService().list_purchase_orders(tenant_id, params, current_user=current_user)

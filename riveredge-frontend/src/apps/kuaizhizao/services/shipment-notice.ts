@@ -4,6 +4,29 @@
 
 import { apiRequest } from '../../../services/api';
 
+export interface ShipmentNoticeListParams {
+  skip?: number;
+  limit?: number;
+  status?: string;
+  sales_order_id?: number;
+  customer_id?: number;
+  warehouse_id?: number;
+  keyword?: string;
+  notice_code?: string;
+  sales_order_code?: string;
+  planned_start_date?: string;
+  planned_end_date?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  order_by?: string;
+}
+
+export interface ShipmentNoticeListResult {
+  data: ShipmentNotice[];
+  total: number;
+  success?: boolean;
+}
+
 export interface ActionCapability {
   allowed: boolean;
   reason?: string | null;
@@ -104,8 +127,8 @@ export interface ShipmentNoticeNotifyPreviewResponse {
 }
 
 export const shipmentNoticeApi = {
-  list: async (params?: Record<string, any>) =>
-    apiRequest('/apps/kuaizhizao/shipment-notices', { method: 'GET', params }),
+  list: async (params?: ShipmentNoticeListParams) =>
+    apiRequest<ShipmentNoticeListResult>('/apps/kuaizhizao/shipment-notices', { method: 'GET', params }),
   create: async (data: any) => apiRequest('/apps/kuaizhizao/shipment-notices', { method: 'POST', data }),
   update: async (id: string, data: any) =>
     apiRequest(`/apps/kuaizhizao/shipment-notices/${id}`, { method: 'PUT', data }),

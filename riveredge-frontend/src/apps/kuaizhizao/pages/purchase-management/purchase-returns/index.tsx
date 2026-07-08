@@ -101,7 +101,16 @@ import {
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import { supplierApi, getDictionaryOptions } from '../../../../master-data/services/supply-chain';
 import { initializeSystemDictionaries } from '../../../../../services/dataDictionary';
-import { getPurchaseReturnLifecycle } from '../../../utils/purchaseReturnLifecycle';
+import {
+  buildPurchaseReturnLifecycleValueEnum,
+  getPurchaseReturnLifecycle,
+  LIST_LIFECYCLE_STAGE_FIELD,
+  resolvePurchaseReturnListLifecycleParams,
+} from '../../../utils/purchaseReturnLifecycle';
+import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import type { PurchaseReturnListParams } from '../../../services/purchase-return';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
@@ -290,6 +299,25 @@ const PurchaseReturnsPage: React.FC = () => {
   );
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<PurchaseReturn[]>([]);
+  const purchaseReturnLifecycleValueEnum = useMemo(() => buildPurchaseReturnLifecycleValueEnum(t), [t]);
+  const [supplierList, setSupplierList] = useState<Array<{ id: number; name?: string; code?: string }>>([]);
+
+  useEffect(() => {
+    supplierApi.list({ limit: 1000, isActive: true }).then((res) => {
+      const list = Array.isArray(res) ? res : (res as { data?: typeof supplierList })?.data ?? [];
+      setSupplierList(Array.isArray(list) ? list : []);
+    }).catch(() => setSupplierList([]));
+  }, []);
+
+  const purchaseReturnSupplierSearchOptions = useMemo(
+    () =>
+      supplierList.map((s) => ({
+        value: Number(s.id),
+        label: [s.name, s.code].filter(Boolean).join(' · ') || String(s.id),
+      })),
+    [supplierList],
+  );
+
   const pullPoQueryCloseRef = useRef<(() => void) | null>(null);
   const pullIiQueryCloseRef = useRef<(() => void) | null>(null);
   const purchaseReturnPerms = useResourcePermissions(PURCHASE_RETURN_RESOURCE);
@@ -1056,6 +1084,16 @@ const PurchaseReturnsPage: React.FC = () => {
   const columns: ProColumns<PurchaseReturn>[] = useMemo(
     () => [
       {
+        title: t('app.kuaizhizao.purchaseReturn.returnTime'),
+        dataIndex: 'return_time_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
+      },
+      {
         title: t('app.kuaizhizao.purchaseReturn.colSupplierReturnCode'),
         key: 'return_code',
         dataIndex: 'return_code',
@@ -1068,12 +1106,27 @@ const PurchaseReturnsPage: React.FC = () => {
           />
         ),
       },
-      { title: t('app.kuaizhizao.purchaseReturn.colReturnCode'), dataIndex: 'return_code', hideInTable: true },
-      { title: t('app.kuaizhizao.purchaseReturn.supplier'), dataIndex: 'supplier_name', hideInTable: true },
+      { title: t('app.kuaizhizao.purchaseReturn.colReturnCode'), dataIndex: 'return_code', hideInTable: true, hideInSearch: false },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.supplier'),
+        dataIndex: 'supplier_id',
+        hideInTable: true,
+        valueType: 'select',
+        fieldProps: {
+          showSearch: true,
+          optionFilterProp: 'label',
+          options: purchaseReturnSupplierSearchOptions,
+          placeholder: t('app.kuaizhizao.purchaseReturn.supplier'),
+        },
+      },
+      { title: t('app.kuaizhizao.purchaseReturn.supplier'), dataIndex: 'supplier_name', hideInTable: true, hideInSearch: true },
       {
         title: t('app.kuaizhizao.purchaseReturn.colPurchaseReceiptCode'),
         dataIndex: 'purchase_receipt_code',
-        width: 148,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: false,
         ellipsis: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.purchase_receipt_code ?? '') }} ellipsis>
@@ -1084,7 +1137,10 @@ const PurchaseReturnsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.purchaseReturn.colPurchaseOrderCode'),
         dataIndex: 'purchase_order_code',
-        width: 148,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: false,
         ellipsis: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.purchase_order_code ?? '') }} ellipsis>
@@ -1092,7 +1148,7 @@ const PurchaseReturnsPage: React.FC = () => {
           </Typography.Text>
         ),
       },
-      { title: t('app.kuaizhizao.purchaseReturn.colWarehouse'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
+      { title: t('app.kuaizhizao.purchaseReturn.colWarehouse'), dataIndex: 'warehouse_name', width: 120, sorter: true, hideInSearch: true, ellipsis: true },
       {
         title: t('app.kuaizhizao.purchaseReturn.reviewStatus'),
         dataIndex: 'review_status',
@@ -1108,48 +1164,57 @@ const PurchaseReturnsPage: React.FC = () => {
         dataIndex: 'total_quantity',
         width: 100,
         align: 'right',
+        sorter: true,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.purchaseReturn.totalAmount'),
         dataIndex: 'total_amount',
         width: 120,
         align: 'right',
+        sorter: true,
+        hideInSearch: true,
         render: (text: any) => `¥${text?.toLocaleString() || 0}`,
       },
       {
         title: t('app.kuaizhizao.purchaseReturn.returnTime'),
         dataIndex: 'return_time',
-        valueType: 'dateTime',
-        width: 160,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.return_time ? formatDateTime(r.return_time, 'YYYY-MM-DD HH:mm') : '-'),
       },
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        valueType: 'dateTime',
-        width: 168,
-        hideInSearch: true,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
         defaultSortOrder: 'descend',
+        hideInSearch: true,
+        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm') : '-'),
+      },
+      {
+        title: t('common.createdAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
       },
       {
         title: t('app.kuaizhizao.purchaseReturn.colLifecycle'),
-        dataIndex: 'lifecycle_stage',
+        dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
         fixed: 'right',
         align: 'left',
-        hideInSearch: true,
-        render: (_, record) => {
-          const lifecycle = getPurchaseReturnLifecycle(record);
-          return (
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          );
-        },
+        valueType: 'select',
+        valueEnum: purchaseReturnLifecycleValueEnum,
+        render: (_, record) => (
+          <ListUniLifecycleCell lifecycle={getPurchaseReturnLifecycle(record, t)} />
+        ),
       },
       ...purchaseReturnCustomFieldColumns,
       {
@@ -1230,6 +1295,8 @@ const PurchaseReturnsPage: React.FC = () => {
       handleEdit,
       handleWithdraw,
       purchaseReturnCustomFieldColumns,
+      purchaseReturnLifecycleValueEnum,
+      purchaseReturnSupplierSearchOptions,
       reviewStatusMap,
       t,
       i18n.language,
@@ -1259,6 +1326,7 @@ const PurchaseReturnsPage: React.FC = () => {
               material_unit: 'baseUnit',
             }}
             showAdvancedSearch
+          skipFuzzyPinyinClientFilter
           />
         ),
       },
@@ -1380,6 +1448,9 @@ const PurchaseReturnsPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
+          pinnedTabsValueEnum={purchaseReturnLifecycleValueEnum}
           showCreateButton={false}
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
@@ -1404,22 +1475,55 @@ const PurchaseReturnsPage: React.FC = () => {
               ])}
             />,
           ]}
-          request={async (params) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
-              const response = await warehouseApi.purchaseReturn.list({
+              const sf = searchFormValues ?? {};
+              const lifecycleParams = resolvePurchaseReturnListLifecycleParams(sf, params);
+              const { sortBy, sortOrder } = extractProTableSort(sort);
+              const orderBy =
+                sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+              const fuzzyKeyword = typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
+              const apiParams: PurchaseReturnListParams = {
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
-                status: params.status,
-                purchase_receipt_id: params.purchase_receipt_id,
-                supplier_id: params.supplier_id,
-                keyword: params.keyword,
-              });
-              const list = Array.isArray(response) ? response : response.data || [];
+                ...lifecycleParams,
+                order_by: orderBy,
+              };
+              if (fuzzyKeyword) {
+                apiParams.keyword = fuzzyKeyword;
+              } else if (sf.return_code != null && String(sf.return_code).trim()) {
+                apiParams.return_code = String(sf.return_code).trim();
+              }
+              if (sf.supplier_id != null && sf.supplier_id !== '') {
+                apiParams.supplier_id = Number(sf.supplier_id);
+              }
+              const receiptCode =
+                sf.purchase_receipt_code != null ? String(sf.purchase_receipt_code).trim() : '';
+              if (receiptCode) apiParams.purchase_receipt_code = receiptCode;
+              const orderCode =
+                sf.purchase_order_code != null ? String(sf.purchase_order_code).trim() : '';
+              if (orderCode) apiParams.purchase_order_code = orderCode;
+              const returnRange = sf.return_time_range as [unknown, unknown] | undefined;
+              if (returnRange && Array.isArray(returnRange) && returnRange[0]) {
+                apiParams.return_start_date = formatDateTime(returnRange[0] as string | Date, 'YYYY-MM-DD');
+                apiParams.return_end_date = returnRange[1]
+                  ? formatDateTime(returnRange[1] as string | Date, 'YYYY-MM-DD')
+                  : apiParams.return_start_date;
+              }
+              const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
+              if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+                apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
+                apiParams.created_end_date = createdRange[1]
+                  ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+                  : apiParams.created_start_date;
+              }
+              const response = await warehouseApi.purchaseReturn.list(apiParams);
+              const list = response?.data ?? [];
               const enriched = await enrichPurchaseReturnRecordsWithCustomFields(list);
               return {
                 data: enriched,
                 success: true,
-                total: Array.isArray(response) ? enriched.length : response.total || enriched.length,
+                total: response?.total ?? enriched.length,
               };
             } catch {
               messageApi.error(t('app.kuaizhizao.purchaseReturn.listFailed'));
@@ -1958,7 +2062,7 @@ const PurchaseReturnsPage: React.FC = () => {
               <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
-                    const lifecycle = getPurchaseReturnLifecycle(returnDetail);
+                    const lifecycle = getPurchaseReturnLifecycle(returnDetail, t);
                     const mainStages = lifecycle.mainStages ?? [];
                     if (mainStages.length === 0) return null;
                     return (

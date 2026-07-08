@@ -10,11 +10,17 @@ import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { ProFormText, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formatBusinessDateOnly } from '../../../../../utils/format';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  batchSerialLedgerNoSearchColumn,
+  masterCrudCreatedOnlyColumns,
+  resolveBatchSerialLedgerListParams,
+} from '../../../utils/materialListCore';
 import { materialSerialApi, materialApi } from '../../../services/material';
 import type { MaterialSerial, MaterialSerialCreate, MaterialSerialUpdate } from '../../../types/material';
+
+const SERIAL_STATUS_PINNED_FIELD = 'status';
 
 const SerialsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -43,6 +49,7 @@ const SerialsPage: React.FC = () => {
   );
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>();
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentUuid, setCurrentUuid] = useState<string | null>(null);
@@ -141,17 +148,8 @@ const SerialsPage: React.FC = () => {
     return formatBusinessDateOnly(String(value));
   };
 
-  const serialSortFieldMap: Record<string, string> = {
-    serialNo: 'serial_no',
-    materialCode: 'material_code',
-    materialName: 'material_name',
-    materialModel: 'material_model',
-    status: 'status',
-    productionDate: 'production_date',
-    factoryDate: 'factory_date',
-  };
-
-  const columns: ProColumns<MaterialSerial>[] = [
+  const columns: ProColumns<MaterialSerial>[] = useMemo(() => [
+    batchSerialLedgerNoSearchColumn(t('app.master-data.serials.serialNo'), 'serialNo'),
     {
       title: t('app.master-data.serials.serialNo'),
       dataIndex: 'serialNo',
@@ -159,6 +157,7 @@ const SerialsPage: React.FC = () => {
       ellipsis: true,
       sorter: true,
       copyable: true,
+      hideInSearch: true,
     },
     {
       title: t('app.master-data.serials.materialCode'),
@@ -188,9 +187,18 @@ const SerialsPage: React.FC = () => {
     {
       title: t('app.master-data.serials.status'),
       dataIndex: 'status',
-      width: 100,
+      hideInTable: true,
+      order: 20,
       valueType: 'select',
+      valueEnum: serialStatusValueEnum,
+      fieldProps: { allowClear: true },
+    },
+    {
+      title: t('app.master-data.serials.status'),
+      dataIndex: 'status',
+      width: 100,
       sorter: true,
+      hideInSearch: true,
       valueEnum: serialStatusValueEnum,
     },
     {
@@ -211,6 +219,7 @@ const SerialsPage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => formatSerialDateCell(r.factoryDate),
     },
+    ...masterCrudCreatedOnlyColumns<MaterialSerial>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -240,7 +249,7 @@ const SerialsPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+  ], [t, serialStatusValueEnum]);
 
   return (
     <ListPageTemplate>
@@ -251,20 +260,27 @@ const SerialsPage: React.FC = () => {
         rowKey="uuid"
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
-          const { current = 1, pageSize = 20, serialNo, status } = params || {};
-          const { sortBy: raw, sortOrder } = extractProTableSort(sort);
-          const sortBy = raw ? serialSortFieldMap[raw] : undefined;
+          const { current = 1, pageSize = 20 } = params;
+          const listParams = resolveBatchSerialLedgerListParams(searchFormValues, sort, {
+            serialNoField: 'serialNo',
+          });
+          lastListParamsRef.current = listParams;
           const res = await materialSerialApi.list({
-            serialNo: serialNo as string | undefined,
-            status: status as string | undefined,
             page: current,
             pageSize,
-            keyword: searchFormValues?.keyword?.trim() || undefined,
-            sortBy,
-            sortOrder,
+            serialNo: listParams.serial_no as string | undefined,
+            status: listParams.status as string | undefined,
+            keyword: listParams.keyword as string | undefined,
+            created_start_date: listParams.created_start_date as string | undefined,
+            created_end_date: listParams.created_end_date as string | undefined,
+            sortBy: listParams.sort_by as string | undefined,
+            sortOrder: listParams.sort_order as 'asc' | 'desc' | undefined,
           });
           return { data: res.items || [], success: true, total: res.total || 0 };
         }}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={SERIAL_STATUS_PINNED_FIELD}
         search={{
           labelWidth: 'auto',
         }}

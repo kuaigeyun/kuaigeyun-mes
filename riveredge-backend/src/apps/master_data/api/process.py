@@ -101,8 +101,14 @@ async def list_defect_types(
     category: Optional[str] = Query(None, description="分类（过滤）"),
     is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
     keyword: Optional[str] = Query(None, description="模糊匹配编号、名称、描述"),
-    sort_by: Optional[str] = Query(None, alias="sortBy", description="排序字段：code,name,category,created_at,is_active"),
+    code: Optional[str] = Query(None, description="编号（模糊）"),
+    name: Optional[str] = Query(None, description="名称（模糊）"),
+    sort_by: Optional[str] = Query(None, alias="sortBy", description="排序字段：code,name,category,created_at,updated_at,is_active"),
     sort_order: Optional[str] = Query(None, alias="sortOrder", description="asc 或 desc"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
 ):
     """
     获取不良品列表（分页，返回 data 与 total）
@@ -119,8 +125,14 @@ async def list_defect_types(
         category,
         is_active,
         keyword=keyword,
+        code=code,
+        name=name,
         sort_by=sort_by,
         sort_order=sort_order,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
     return DefectTypeListResponse(data=items, total=total)
 
@@ -268,8 +280,14 @@ async def list_operations(
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
     keyword: Optional[str] = Query(None, description="模糊匹配编号、名称、描述"),
-    sort_by: Optional[str] = Query(None, alias="sortBy", description="排序字段：code,name,created_at,is_active,reporting_type"),
+    code: Optional[str] = Query(None, description="编号（模糊）"),
+    name: Optional[str] = Query(None, description="名称（模糊）"),
+    sort_by: Optional[str] = Query(None, alias="sortBy", description="排序字段：code,name,created_at,updated_at,is_active,reporting_type"),
     sort_order: Optional[str] = Query(None, alias="sortOrder", description="asc 或 desc"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
 ):
     """
     获取工序列表
@@ -285,8 +303,14 @@ async def list_operations(
             limit,
             is_active,
             keyword=keyword,
+            code=code,
+            name=name,
             sort_by=sort_by,
             sort_order=sort_order,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
         )
         return OperationListResponse(data=items, total=total)
     except Exception as e:
@@ -442,8 +466,14 @@ async def list_process_routes(
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
     keyword: Optional[str] = Query(None, description="模糊匹配编号、名称、描述"),
-    sort_by: Optional[str] = Query(None, alias="sortBy", description="排序字段：code,name,created_at,is_active"),
+    code: Optional[str] = Query(None, description="编号（模糊）"),
+    name: Optional[str] = Query(None, description="名称（模糊）"),
+    sort_by: Optional[str] = Query(None, alias="sortBy", description="排序字段：code,name,created_at,updated_at,is_active"),
     sort_order: Optional[str] = Query(None, alias="sortOrder", description="asc 或 desc"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
 ):
     """
     获取工艺路线列表
@@ -458,8 +488,14 @@ async def list_process_routes(
         limit,
         is_active,
         keyword=keyword,
+        code=code,
+        name=name,
         sort_by=sort_by,
         sort_order=sort_order,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
     return ProcessRouteListResponse(data=items, total=total)
 
@@ -1254,8 +1290,14 @@ async def list_sops(
     material_group_uuid: Optional[str] = Query(None, description="物料组UUID（筛选绑定该物料组的SOP）"),
     route_uuid: Optional[str] = Query(None, description="工艺路线UUID（筛选载入该工艺路线的SOP）"),
     keyword: Optional[str] = Query(None, description="模糊匹配编号、名称、版本、内容"),
-    sort_by: Optional[str] = Query(None, alias="sortBy", description="排序字段：code,name,version,created_at,is_active,operation_id"),
+    code: Optional[str] = Query(None, description="编号（模糊）"),
+    name: Optional[str] = Query(None, description="名称（模糊）"),
+    sort_by: Optional[str] = Query(None, alias="sortBy", description="排序字段：code,name,version,created_at,updated_at,is_active,operation_id"),
     sort_order: Optional[str] = Query(None, alias="sortOrder", description="asc 或 desc"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
 ):
     """
     获取作业程序（SOP）列表
@@ -1273,8 +1315,14 @@ async def list_sops(
         material_group_uuid=material_group_uuid,
         route_uuid=route_uuid,
         keyword=keyword,
+        code=code,
+        name=name,
         sort_by=sort_by,
         sort_order=sort_order,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
     return SOPListResponse(data=items, total=total)
 

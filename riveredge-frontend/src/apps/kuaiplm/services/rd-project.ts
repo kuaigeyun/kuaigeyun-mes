@@ -167,6 +167,14 @@ export interface RdProjectListParams {
   lifecycle_stage?: string;
   keyword?: string;
   project_type?: ProjectType;
+  project_code?: string;
+  project_name?: string;
+  sort_field?: string;
+  sort_order?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
 }
 
 function unwrapList<T>(res: unknown): { items: T[]; total: number } {

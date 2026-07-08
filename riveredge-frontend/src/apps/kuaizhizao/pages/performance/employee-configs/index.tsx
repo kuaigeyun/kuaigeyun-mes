@@ -28,6 +28,11 @@ import {
   getPieceRateModeOptions,
 } from '../components/performanceMeta';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  normalizePerformanceListResponse,
+  PERFORMANCE_PINNED_IS_ACTIVE_FIELD,
+  resolveEmployeeConfigListParams,
+} from '../../../utils/performanceListCore';
 
 const EmployeeConfigsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -101,6 +106,7 @@ const EmployeeConfigsPage: React.FC = () => {
         width: 120,
         ellipsis: true,
         fixed: 'left',
+        sorter: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.employee_name ?? '') }} ellipsis>
             {r.employee_name ?? '-'}
@@ -111,6 +117,9 @@ const EmployeeConfigsPage: React.FC = () => {
         title: t('app.kuaizhizao.performance.common.columns.calcMode'),
         dataIndex: 'calc_mode',
         width: 100,
+        sorter: true,
+        valueType: 'select',
+        valueEnum: Object.fromEntries(calcModeOptions.map((o) => [o.value, { text: o.label }])),
         render: (_, r) => <Tag>{getCalcModeText(t, r.calc_mode)}</Tag>,
       },
       { title: t('app.kuaizhizao.performance.employeeConfigs.columns.hourlyRate'), dataIndex: 'hourly_rate', width: 120, align: 'right' },
@@ -125,8 +134,10 @@ const EmployeeConfigsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.performance.common.columns.updatedAt'),
         dataIndex: 'updated_at',
-        width: 168,
+        width: 132,
+        uniTableKeepWidth: true,
         hideInSearch: true,
+        sorter: true,
         render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
@@ -168,7 +179,7 @@ const EmployeeConfigsPage: React.FC = () => {
         ),
       },
     ],
-    [t],
+    [t, calcModeOptions],
   );
 
   return (
@@ -181,17 +192,20 @@ const EmployeeConfigsPage: React.FC = () => {
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.performance.employee-configs"
           showAdvancedSearch
-          request={async (params) => {
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={PERFORMANCE_PINNED_IS_ACTIVE_FIELD}
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
               const pageSize = params.pageSize || 20;
               const skip = ((params.current || 1) - 1) * pageSize;
-              const result = await employeePerformanceApi.listConfigs({
+              const listParams = resolveEmployeeConfigListParams(searchFormValues, sort);
+              const response = await employeePerformanceApi.listConfigs({
                 skip,
                 limit: pageSize,
+                ...listParams,
               });
-              const rows = Array.isArray(result) ? result : [];
-              const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
-              return { data: rows, success: true, total };
+              const { data, total } = normalizePerformanceListResponse(response);
+              return { data: data as EmployeePerformanceConfig[], success: true, total };
             } catch (e: any) {
               messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
               return { data: [], success: false, total: 0 };

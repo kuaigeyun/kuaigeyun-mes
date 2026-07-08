@@ -115,14 +115,18 @@ export interface QuotationListParams {
   skip?: number;
   limit?: number;
   status?: string;
+  lifecycle_stage?: string;
   salesman_id?: number;
+  customer_id?: number;
   start_date?: string;
   end_date?: string;
-  /** 工具栏模糊搜索：编号、客户 */
+  /** 工具栏模糊搜索：编号、系列、客户、销售员 */
   keyword?: string;
   quotation_code?: string;
   customer_name?: string;
   quotation_series_code?: string;
+  /** 排序字段，如 quotation_date、-updated_at */
+  order_by?: string;
   /** 数据范围：all 全部 / mine 我的 / department 我的部门 */
   list_scope?: 'all' | 'mine' | 'department';
   /** 仅可上拉建销售订单：未关联销售订单且非已转订单 */

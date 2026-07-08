@@ -467,7 +467,7 @@ const TraceabilityPage: React.FC = () => {
                 {
                   title: t('app.kuaizhizao.quality.traceability.eventTime'),
                   dataIndex: 'eventTime',
-                  width: 170,
+                  width: 132,
                   render: (v) => (v ? formatDateTimeBySiteSetting(String(v)) : '-'),
                 },
                 {

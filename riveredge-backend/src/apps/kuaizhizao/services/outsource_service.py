@@ -8,8 +8,8 @@ Date: 2025-01-04
 """
 
 import uuid
-from datetime import datetime
-from typing import Dict, List, Optional
+from datetime import date, datetime, time
+from typing import Any, Dict, List, Optional
 from decimal import Decimal
 from collections import defaultdict
 
@@ -36,6 +36,23 @@ from apps.kuaizhizao.services.over_report_rules import (
     tuple_from_model,
 )
 from loguru import logger
+
+OUTSOURCE_ORDER_SORTABLE_FIELDS = frozenset({
+    "code",
+    "work_order_code",
+    "operation_name",
+    "supplier_name",
+    "outsource_quantity",
+    "received_quantity",
+    "qualified_quantity",
+    "unit_price",
+    "total_amount",
+    "status",
+    "planned_start_date",
+    "planned_end_date",
+    "created_at",
+    "updated_at",
+})
 
 
 class OutsourceService(AppBaseService[OutsourceOrder]):
@@ -400,8 +417,17 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
         work_order_id: Optional[int] = None,
         supplier_id: Optional[int] = None,
         status: Optional[str] = None,
-        code: Optional[str] = None
-    ) -> List[OutsourceOrderListResponse]:
+        code: Optional[str] = None,
+        work_order_code: Optional[str] = None,
+        operation_name: Optional[str] = None,
+        supplier_name: Optional[str] = None,
+        keyword: Optional[str] = None,
+        planned_start_from: Optional[date] = None,
+        planned_start_to: Optional[date] = None,
+        created_start_date: Optional[date] = None,
+        created_end_date: Optional[date] = None,
+        order_by: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         查询委外单列表
 
@@ -429,12 +455,44 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
             query = query.filter(supplier_id=supplier_id)
         if status:
             query = query.filter(status=status)
-        if code:
-            query = query.filter(code__icontains=code)
+        c = (code or "").strip()
+        if c:
+            query = query.filter(code__icontains=c)
+        kw = (keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(code__icontains=kw)
+                | Q(work_order_code__icontains=kw)
+                | Q(operation_name__icontains=kw)
+                | Q(supplier_name__icontains=kw)
+            )
+        woc = (work_order_code or "").strip()
+        if woc:
+            query = query.filter(work_order_code__icontains=woc)
+        on = (operation_name or "").strip()
+        if on:
+            query = query.filter(operation_name__icontains=on)
+        sn = (supplier_name or "").strip()
+        if sn:
+            query = query.filter(supplier_name__icontains=sn)
+        if planned_start_from is not None:
+            query = query.filter(planned_start_date__gte=planned_start_from)
+        if planned_start_to is not None:
+            query = query.filter(planned_start_date__lte=planned_start_to)
+        if created_start_date is not None:
+            query = query.filter(created_at__gte=datetime.combine(created_start_date, time.min))
+        if created_end_date is not None:
+            query = query.filter(created_at__lte=datetime.combine(created_end_date, time.max))
 
-        outsource_orders = await query.offset(skip).limit(limit).order_by("-created_at").all()
+        total = await query.count()
+        order_clause = order_by if order_by else "-created_at"
+        outsource_orders = await query.offset(skip).limit(limit).order_by(order_clause).all()
 
-        return [OutsourceOrderListResponse.model_validate(os) for os in outsource_orders]
+        return {
+            "data": [OutsourceOrderListResponse.model_validate(os).model_dump() for os in outsource_orders],
+            "total": total,
+            "success": True,
+        }
 
     async def update_outsource_order(
         self,

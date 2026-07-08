@@ -17,9 +17,9 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
-from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
+from apps.kuaizhizao.services.rework_order_service import ReworkOrderService, REWORK_ORDER_SORTABLE_FIELDS
 from apps.kuaizhizao.services.demand_source_chain_service import DemandSourceChainService
-from apps.kuaizhizao.services.outsource_service import OutsourceService
+from apps.kuaizhizao.services.outsource_service import OutsourceService, OUTSOURCE_ORDER_SORTABLE_FIELDS
 from apps.kuaizhizao.schemas.visual_scheduling import (
     OperationBatchUpdateDatesResult,
     OperationBatchUpdateStationsResult,
@@ -1214,23 +1214,35 @@ async def create_rework_order(
     )
 
 
-@router.get("/rework-orders", response_model=List[ReworkOrderListResponse], summary="List rework orders")
+@router.get("/rework-orders", summary="List rework orders")
 async def list_rework_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     code: Optional[str] = Query(None, description="返工单编码（模糊搜索）"),
     status: Optional[str] = Query(None, description="返工单状态"),
     original_work_order_id: Optional[int] = Query(None, description="原工单ID"),
+    original_work_order_code: Optional[str] = Query(None, description="原工单编码（模糊搜索）"),
     product_name: Optional[str] = Query(None, description="产品名称（模糊搜索）"),
     rework_type: Optional[str] = Query(None, description="返工类型"),
+    keyword: Optional[str] = Query(None, description="关键词（编码、产品名称等）"),
+    planned_start_from: Optional[date] = Query(None, description="计划开始日期起"),
+    planned_start_to: Optional[date] = Query(None, description="计划开始日期止"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 code、-created_at"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[ReworkOrderListResponse]:
+) -> Dict[str, Any]:
     """
     获取返工单列表
 
     支持多种筛选条件的高级搜索。
     """
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in REWORK_ORDER_SORTABLE_FIELDS:
+            safe_order_by = order_by
     return await ReworkOrderService().list_rework_orders(
         tenant_id=tenant_id,
         skip=skip,
@@ -1238,8 +1250,15 @@ async def list_rework_orders(
         code=code,
         status=status,
         original_work_order_id=original_work_order_id,
+        original_work_order_code=original_work_order_code,
         product_name=product_name,
         rework_type=rework_type,
+        keyword=keyword,
+        planned_start_from=planned_start_from,
+        planned_start_to=planned_start_to,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        order_by=safe_order_by,
     )
 
 
@@ -1410,7 +1429,7 @@ async def create_outsource_order(
     )
 
 
-@router.get("/outsource-orders", response_model=List[OutsourceOrderListResponse], summary="List outsourced operations")
+@router.get("/outsource-orders", summary="List outsourced operations")
 async def list_outsource_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -1418,14 +1437,28 @@ async def list_outsource_orders(
     supplier_id: Optional[int] = Query(None, description="供应商ID"),
     status: Optional[str] = Query(None, description="工序委外状态"),
     code: Optional[str] = Query(None, description="工序委外单编码（模糊搜索）"),
+    work_order_code: Optional[str] = Query(None, description="工单编码（模糊搜索）"),
+    operation_name: Optional[str] = Query(None, description="工序名称（模糊搜索）"),
+    supplier_name: Optional[str] = Query(None, description="供应商名称（模糊搜索）"),
+    keyword: Optional[str] = Query(None, description="关键词（编码、工单、工序、供应商等）"),
+    planned_start_from: Optional[date] = Query(None, description="计划开始日期起"),
+    planned_start_to: Optional[date] = Query(None, description="计划开始日期止"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 code、-created_at"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[OutsourceOrderListResponse]:
+) -> Dict[str, Any]:
     """
     获取工序委外列表
 
     支持多种筛选条件的高级搜索。
     """
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in OUTSOURCE_ORDER_SORTABLE_FIELDS:
+            safe_order_by = order_by
     return await OutsourceService().list_outsource_orders(
         tenant_id=tenant_id,
         skip=skip,
@@ -1434,6 +1467,15 @@ async def list_outsource_orders(
         supplier_id=supplier_id,
         status=status,
         code=code,
+        work_order_code=work_order_code,
+        operation_name=operation_name,
+        supplier_name=supplier_name,
+        keyword=keyword,
+        planned_start_from=planned_start_from,
+        planned_start_to=planned_start_to,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        order_by=safe_order_by,
     )
 
 

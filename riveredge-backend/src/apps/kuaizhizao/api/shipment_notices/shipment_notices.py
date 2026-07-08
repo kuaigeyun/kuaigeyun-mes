@@ -9,6 +9,7 @@ Date: 2026-02-22
 
 import uuid
 from typing import List, Optional
+from datetime import date
 from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTTPException, status as http_status, Body
 from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
@@ -18,7 +19,10 @@ from core.api.deps.access import require_permission_codes
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
-from apps.kuaizhizao.services.shipment_notice_service import ShipmentNoticeService
+from apps.kuaizhizao.services.shipment_notice_service import (
+    ShipmentNoticeService,
+    SHIPMENT_NOTICE_SORTABLE_FIELDS,
+)
 from apps.kuaizhizao.schemas.shipment_notice import (
     ShipmentNoticeCreate,
     ShipmentNoticeUpdate,
@@ -84,15 +88,28 @@ async def create_shipment_notice(
 @router.get("", response_model=ShipmentNoticeListPaginatedResponse, summary="List shipment notices")
 async def list_shipment_notices(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=1000),
     status: Optional[str] = Query(None),
     sales_order_id: Optional[int] = Query(None),
     customer_id: Optional[int] = Query(None),
-    keyword: Optional[str] = Query(None),
+    warehouse_id: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None, description="关键词（通知单号、销售订单、客户、仓库、出库单）"),
+    notice_code: Optional[str] = Query(None, description="通知单号（模糊）"),
+    sales_order_code: Optional[str] = Query(None, description="销售订单号（模糊）"),
+    planned_start_date: Optional[date] = Query(None, description="计划发货日期起"),
+    planned_end_date: Optional[date] = Query(None, description="计划发货日期止"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 planned_ship_date、-created_at（前缀-表示降序）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """获取发货通知单列表"""
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in SHIPMENT_NOTICE_SORTABLE_FIELDS:
+            safe_order_by = order_by
     return await shipment_notice_service.list_shipment_notices(
         tenant_id=tenant_id,
         skip=skip,
@@ -100,7 +117,15 @@ async def list_shipment_notices(
         status=status,
         sales_order_id=sales_order_id,
         customer_id=customer_id,
+        warehouse_id=warehouse_id,
         keyword=keyword,
+        notice_code=notice_code,
+        sales_order_code=sales_order_code,
+        planned_start_date=planned_start_date,
+        planned_end_date=planned_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        order_by=safe_order_by,
     )
 
 

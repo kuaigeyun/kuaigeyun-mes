@@ -6069,6 +6069,23 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 ])
         
         return file_path
+
+SALES_RETURN_SORTABLE_FIELDS = frozenset({
+    "return_code",
+    "sales_delivery_code",
+    "sales_order_code",
+    "customer_name",
+    "warehouse_name",
+    "return_time",
+    "total_quantity",
+    "total_amount",
+    "status",
+    "review_status",
+    "created_at",
+    "updated_at",
+})
+
+
 class SalesReturnService(AppBaseService[SalesReturn]):
     """销售退货单服务"""
 
@@ -6454,19 +6471,61 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         response.lifecycle = get_sales_return_lifecycle(return_obj, milestones=milestones)
         return await self._enrich_return_response(tenant_id, return_obj, response)
 
-    async def list_sales_returns(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[SalesReturnResponse]:
+    async def list_sales_returns(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取销售退货单列表"""
+        from datetime import time as dt_time
+
         query = SalesReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
-        # 应用过滤条件
         if filters.get('status'):
             query = query.filter(status=filters['status'])
         if filters.get('sales_delivery_id'):
             query = query.filter(sales_delivery_id=filters['sales_delivery_id'])
         if filters.get('customer_id'):
-            query = query.filter(customer_id=filters['customer_id'])
+            query = query.filter(customer_id=int(filters['customer_id']))
+        if filters.get('warehouse_id'):
+            query = query.filter(warehouse_id=int(filters['warehouse_id']))
+        if filters.get('return_start_date'):
+            query = query.filter(
+                return_time__gte=datetime.combine(filters['return_start_date'], dt_time.min)
+            )
+        if filters.get('return_end_date'):
+            query = query.filter(
+                return_time__lte=datetime.combine(filters['return_end_date'], dt_time(23, 59, 59))
+            )
+        if filters.get('created_start_date'):
+            query = query.filter(
+                created_at__gte=datetime.combine(filters['created_start_date'], dt_time.min)
+            )
+        if filters.get('created_end_date'):
+            query = query.filter(
+                created_at__lte=datetime.combine(filters['created_end_date'], dt_time(23, 59, 59))
+            )
+        keyword = str(filters.get('keyword') or '').strip()
+        if keyword:
+            query = query.filter(
+                Q(return_code__icontains=keyword)
+                | Q(customer_name__icontains=keyword)
+                | Q(sales_delivery_code__icontains=keyword)
+                | Q(sales_order_code__icontains=keyword)
+                | Q(warehouse_name__icontains=keyword)
+            )
+        if filters.get('return_code'):
+            code = str(filters['return_code']).strip()
+            if code:
+                query = query.filter(return_code__icontains=code)
+        if filters.get('sales_delivery_code'):
+            delivery_code = str(filters['sales_delivery_code']).strip()
+            if delivery_code:
+                query = query.filter(sales_delivery_code__icontains=delivery_code)
+        if filters.get('sales_order_code'):
+            order_code = str(filters['sales_order_code']).strip()
+            if order_code:
+                query = query.filter(sales_order_code__icontains=order_code)
 
-        returns = await query.offset(skip).limit(limit).order_by('-created_at')
+        total = await query.count()
+        order_clause = filters.get('order_by') or '-created_at'
+        returns = await query.offset(skip).limit(limit).order_by(order_clause, '-id')
         return_ids = [int(r.id) for r in returns]
         has_items_by_id = await self._return_has_items_map(tenant_id, return_ids)
         item_counts_by_id = await self._return_item_count_map(tenant_id, return_ids)
@@ -6477,12 +6536,17 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             resp = SalesReturnResponse.model_validate(return_obj)
             resp.lifecycle = get_sales_return_lifecycle(return_obj)
             list_responses.append(resp)
-        return enrich_sales_return_list_capabilities(
+        enriched = enrich_sales_return_list_capabilities(
             returns,
             list_responses,
             has_items_by_id=has_items_by_id,
             item_counts_by_id=item_counts_by_id,
         )
+        return {
+            'data': enriched,
+            'total': total,
+            'success': True,
+        }
 
     async def confirm_return(
         self,
@@ -6818,6 +6882,22 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 updated_by=updated_by,
             )
             return await self.get_sales_return_by_id(tenant_id, return_id)
+
+
+PURCHASE_RETURN_SORTABLE_FIELDS = frozenset({
+    "return_code",
+    "supplier_name",
+    "purchase_receipt_code",
+    "purchase_order_code",
+    "warehouse_name",
+    "return_time",
+    "total_quantity",
+    "total_amount",
+    "status",
+    "review_status",
+    "created_at",
+    "updated_at",
+})
 
 
 class PurchaseReturnService(AppBaseService[PurchaseReturn]):
@@ -7179,30 +7259,80 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             "trend_cancelled": trend_cancelled,
         }
 
-    async def list_purchase_returns(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[PurchaseReturnResponse]:
+    async def list_purchase_returns(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取采购退货单列表"""
+        from datetime import time as dt_time
+
         query = PurchaseReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
-        # 应用过滤条件
         if filters.get('status'):
             query = query.filter(status=filters['status'])
         if filters.get('purchase_receipt_id'):
             query = query.filter(purchase_receipt_id=filters['purchase_receipt_id'])
         if filters.get('supplier_id'):
-            query = query.filter(supplier_id=filters['supplier_id'])
+            query = query.filter(supplier_id=int(filters['supplier_id']))
+        if filters.get('warehouse_id'):
+            query = query.filter(warehouse_id=int(filters['warehouse_id']))
+        if filters.get('return_start_date'):
+            query = query.filter(
+                return_time__gte=datetime.combine(filters['return_start_date'], dt_time.min)
+            )
+        if filters.get('return_end_date'):
+            query = query.filter(
+                return_time__lte=datetime.combine(filters['return_end_date'], dt_time(23, 59, 59))
+            )
+        if filters.get('created_start_date'):
+            query = query.filter(
+                created_at__gte=datetime.combine(filters['created_start_date'], dt_time.min)
+            )
+        if filters.get('created_end_date'):
+            query = query.filter(
+                created_at__lte=datetime.combine(filters['created_end_date'], dt_time(23, 59, 59))
+            )
+        keyword = str(filters.get('keyword') or '').strip()
+        if keyword:
+            query = query.filter(
+                Q(return_code__icontains=keyword)
+                | Q(supplier_name__icontains=keyword)
+                | Q(purchase_receipt_code__icontains=keyword)
+                | Q(purchase_order_code__icontains=keyword)
+                | Q(warehouse_name__icontains=keyword)
+            )
+        if filters.get('return_code'):
+            code = str(filters['return_code']).strip()
+            if code:
+                query = query.filter(return_code__icontains=code)
+        if filters.get('purchase_receipt_code'):
+            receipt_code = str(filters['purchase_receipt_code']).strip()
+            if receipt_code:
+                query = query.filter(purchase_receipt_code__icontains=receipt_code)
+        if filters.get('purchase_order_code'):
+            order_code = str(filters['purchase_order_code']).strip()
+            if order_code:
+                query = query.filter(purchase_order_code__icontains=order_code)
 
-        returns = await query.offset(skip).limit(limit).order_by('-created_at')
+        total = await query.count()
+        order_clause = filters.get('order_by') or '-created_at'
+        field = order_clause.lstrip("-")
+        if field not in PURCHASE_RETURN_SORTABLE_FIELDS:
+            order_clause = '-created_at'
+        returns = await query.offset(skip).limit(limit).order_by(order_clause, '-id')
         return_list = list(returns)
         return_ids = [int(r.id) for r in return_list if r.id is not None]
         has_items_by_id = await self._purchase_return_has_items_map(tenant_id, return_ids)
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_purchase_return_list_capabilities
 
         responses = [PurchaseReturnResponse.model_validate(r) for r in return_list]
-        return enrich_purchase_return_list_capabilities(
+        enriched = enrich_purchase_return_list_capabilities(
             return_list,
             responses,
             has_items_by_id=has_items_by_id,
         )
+        return {
+            'data': enriched,
+            'total': total,
+            'success': True,
+        }
 
     async def confirm_return(self, tenant_id: int, return_id: int, confirmed_by: int) -> PurchaseReturnResponse:
         """确认退货"""
@@ -7602,8 +7732,14 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         skip: int = 0,
         limit: int = 20,
         **filters
-    ) -> List[OtherInboundListResponse]:
+    ) -> tuple[List[OtherInboundListResponse], int]:
         """获取其他入库单列表"""
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            OTHER_INBOUND_KEYWORD_FIELDS,
+            OTHER_INBOUND_SORTABLE_FIELDS,
+            apply_warehouse_doc_list_filters,
+        )
+
         query = OtherInbound.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         if filters.get("status"):
@@ -7615,7 +7751,24 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         if filters.get("scoped_ids") is not None:
             query = query.filter(id__in=filters["scoped_ids"])
 
-        inbounds = await query.offset(skip).limit(limit).order_by("-created_at")
+        query, order_clause = apply_warehouse_doc_list_filters(
+            query,
+            keyword=filters.get("keyword"),
+            search=filters.get("search"),
+            order_by=filters.get("order_by"),
+            allowed_fields=OTHER_INBOUND_SORTABLE_FIELDS,
+            default_order="-updated_at",
+            keyword_fields=OTHER_INBOUND_KEYWORD_FIELDS,
+            doc_date_field="receipt_time",
+            doc_start_date=filters.get("receipt_start_date"),
+            doc_end_date=filters.get("receipt_end_date"),
+            created_start_date=filters.get("created_start_date"),
+            created_end_date=filters.get("created_end_date"),
+            updated_start_date=filters.get("updated_start_date"),
+            updated_end_date=filters.get("updated_end_date"),
+        )
+        total = await query.count()
+        inbounds = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             batch_document_item_counts,
             enrich_inbound_hub_list_capabilities,
@@ -7624,9 +7777,10 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         item_counts = await batch_document_item_counts(
             tenant_id, OtherInboundItem, "inbound_id", [r.id for r in inbounds]
         )
-        return enrich_inbound_hub_list_capabilities(
+        enriched = enrich_inbound_hub_list_capabilities(
             inbounds, responses, "other_inbound", item_counts=item_counts
         )
+        return enriched, total
 
     async def update_other_inbound(
         self,
@@ -8054,8 +8208,14 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         skip: int = 0,
         limit: int = 20,
         **filters
-    ) -> List[OtherOutboundListResponse]:
+    ) -> tuple[List[OtherOutboundListResponse], int]:
         """获取其他出库单列表"""
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            OTHER_OUTBOUND_KEYWORD_FIELDS,
+            OTHER_OUTBOUND_SORTABLE_FIELDS,
+            apply_warehouse_doc_list_filters,
+        )
+
         query = OtherOutbound.filter(tenant_id=tenant_id)
         if filters.get("status"):
             query = query.filter(status=filters["status"])
@@ -8066,7 +8226,24 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         if filters.get("scoped_ids") is not None:
             query = query.filter(id__in=filters["scoped_ids"])
 
-        outbounds = await query.offset(skip).limit(limit).order_by("-created_at")
+        query, order_clause = apply_warehouse_doc_list_filters(
+            query,
+            keyword=filters.get("keyword"),
+            search=filters.get("search"),
+            order_by=filters.get("order_by"),
+            allowed_fields=OTHER_OUTBOUND_SORTABLE_FIELDS,
+            default_order="-updated_at",
+            keyword_fields=OTHER_OUTBOUND_KEYWORD_FIELDS,
+            doc_date_field="delivery_time",
+            doc_start_date=filters.get("delivery_start_date"),
+            doc_end_date=filters.get("delivery_end_date"),
+            created_start_date=filters.get("created_start_date"),
+            created_end_date=filters.get("created_end_date"),
+            updated_start_date=filters.get("updated_start_date"),
+            updated_end_date=filters.get("updated_end_date"),
+        )
+        total = await query.count()
+        outbounds = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
         from apps.kuaizhizao.services.document_lifecycle_service import get_other_outbound_lifecycle
 
@@ -8075,7 +8252,8 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             resp = OtherOutboundListResponse.model_validate(outbound)
             resp.lifecycle = get_other_outbound_lifecycle(outbound, milestones=[])
             out.append(resp)
-        return enrich_outbound_hub_list_capabilities(outbounds, out, "other_outbound")
+        enriched = enrich_outbound_hub_list_capabilities(outbounds, out, "other_outbound")
+        return enriched, total
 
     async def update_other_outbound(
         self,
@@ -8378,8 +8556,14 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
         skip: int = 0,
         limit: int = 20,
         **filters
-    ) -> List[MaterialBorrowListResponse]:
+    ) -> tuple[List[MaterialBorrowListResponse], int]:
         """获取借料单列表"""
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            MATERIAL_BORROW_KEYWORD_FIELDS,
+            MATERIAL_BORROW_SORTABLE_FIELDS,
+            apply_warehouse_doc_list_filters,
+        )
+
         query = MaterialBorrow.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if filters.get("status"):
             query = query.filter(status=filters["status"])
@@ -8388,7 +8572,24 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
         if filters.get("scoped_ids") is not None:
             query = query.filter(id__in=filters["scoped_ids"])
 
-        borrows = await query.offset(skip).limit(limit).order_by("-created_at")
+        query, order_clause = apply_warehouse_doc_list_filters(
+            query,
+            keyword=filters.get("keyword"),
+            search=filters.get("search"),
+            order_by=filters.get("order_by"),
+            allowed_fields=MATERIAL_BORROW_SORTABLE_FIELDS,
+            default_order="-updated_at",
+            keyword_fields=MATERIAL_BORROW_KEYWORD_FIELDS,
+            doc_date_field="borrow_time",
+            doc_start_date=filters.get("borrow_start_date"),
+            doc_end_date=filters.get("borrow_end_date"),
+            created_start_date=filters.get("created_start_date"),
+            created_end_date=filters.get("created_end_date"),
+            updated_start_date=filters.get("updated_start_date"),
+            updated_end_date=filters.get("updated_end_date"),
+        )
+        total = await query.count()
+        borrows = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
         from apps.kuaizhizao.services.document_lifecycle_service import get_material_borrow_lifecycle
 
@@ -8397,7 +8598,8 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
             resp = MaterialBorrowListResponse.model_validate(borrow)
             resp.lifecycle = get_material_borrow_lifecycle(borrow, milestones=[])
             out.append(resp)
-        return enrich_outbound_hub_list_capabilities(borrows, out, "material_borrow")
+        enriched = enrich_outbound_hub_list_capabilities(borrows, out, "material_borrow")
+        return enriched, total
 
     async def update_material_borrow(
         self,
@@ -8680,8 +8882,14 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
         skip: int = 0,
         limit: int = 20,
         **filters
-    ) -> List[MaterialReturnListResponse]:
+    ) -> tuple[List[MaterialReturnListResponse], int]:
         """获取还料单列表"""
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            MATERIAL_RETURN_KEYWORD_FIELDS,
+            MATERIAL_RETURN_SORTABLE_FIELDS,
+            apply_warehouse_doc_list_filters,
+        )
+
         query = MaterialReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if filters.get("status"):
             query = query.filter(status=filters["status"])
@@ -8692,7 +8900,24 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
         if filters.get("scoped_ids") is not None:
             query = query.filter(id__in=filters["scoped_ids"])
 
-        returns = await query.offset(skip).limit(limit).order_by("-created_at")
+        query, order_clause = apply_warehouse_doc_list_filters(
+            query,
+            keyword=filters.get("keyword"),
+            search=filters.get("search"),
+            order_by=filters.get("order_by"),
+            allowed_fields=MATERIAL_RETURN_SORTABLE_FIELDS,
+            default_order="-updated_at",
+            keyword_fields=MATERIAL_RETURN_KEYWORD_FIELDS,
+            doc_date_field="return_time",
+            doc_start_date=filters.get("return_start_date"),
+            doc_end_date=filters.get("return_end_date"),
+            created_start_date=filters.get("created_start_date"),
+            created_end_date=filters.get("created_end_date"),
+            updated_start_date=filters.get("updated_start_date"),
+            updated_end_date=filters.get("updated_end_date"),
+        )
+        total = await query.count()
+        returns = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             batch_document_item_counts,
             enrich_inbound_hub_list_capabilities,
@@ -8703,9 +8928,10 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
         item_counts = await batch_document_item_counts(
             tenant_id, MaterialReturnItem, "return_id", [r.id for r in returns]
         )
-        return enrich_inbound_hub_list_capabilities(
+        enriched = enrich_inbound_hub_list_capabilities(
             returns, responses, "material_return", item_counts=item_counts
         )
+        return enriched, total
 
     async def update_material_return(
         self,

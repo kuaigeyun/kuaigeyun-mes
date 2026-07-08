@@ -40,6 +40,30 @@ export interface SalesReturn {
   items?: SalesReturnItem[];
 }
 
+export interface SalesReturnListParams {
+  skip?: number;
+  limit?: number;
+  status?: string;
+  sales_delivery_id?: number;
+  customer_id?: number;
+  warehouse_id?: number;
+  keyword?: string;
+  return_code?: string;
+  sales_delivery_code?: string;
+  sales_order_code?: string;
+  return_start_date?: string;
+  return_end_date?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  order_by?: string;
+}
+
+export interface SalesReturnListResult {
+  data: SalesReturn[];
+  total: number;
+  success?: boolean;
+}
+
 export interface SalesReturnItem {
   id?: number;
   material_id?: number;

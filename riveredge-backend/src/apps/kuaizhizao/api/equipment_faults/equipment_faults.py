@@ -65,6 +65,12 @@ async def list_equipment_faults(
     status: Optional[str] = Query(None, description="故障状态（可选）"),
     fault_type: Optional[str] = Query(None, description="故障类型（可选）"),
     search: Optional[str] = Query(None, description="搜索关键词（可选）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    fault_start_date: Optional[str] = Query(None, description="故障开始日期 YYYY-MM-DD"),
+    fault_end_date: Optional[str] = Query(None, description="故障结束日期 YYYY-MM-DD"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -80,7 +86,13 @@ async def list_equipment_faults(
         equipment_uuid=equipment_uuid,
         status=status,
         fault_type=fault_type,
-        search=search
+        search=search,
+        keyword=keyword,
+        order_by=order_by,
+        fault_start_date=fault_start_date,
+        fault_end_date=fault_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
     )
     
     items = [EquipmentFaultResponse.model_validate(fault) for fault in faults]
@@ -195,6 +207,12 @@ async def list_equipment_repairs(
     equipment_fault_uuid: Optional[str] = Query(None, description="设备故障UUID（可选）"),
     status: Optional[str] = Query(None, description="维修状态（可选）"),
     search: Optional[str] = Query(None, description="搜索关键词（可选）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    repair_start_date: Optional[str] = Query(None, description="维修开始日期 YYYY-MM-DD"),
+    repair_end_date: Optional[str] = Query(None, description="维修结束日期 YYYY-MM-DD"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -210,7 +228,13 @@ async def list_equipment_repairs(
         equipment_uuid=equipment_uuid,
         equipment_fault_uuid=equipment_fault_uuid,
         status=status,
-        search=search
+        search=search,
+        keyword=keyword,
+        order_by=order_by,
+        repair_start_date=repair_start_date,
+        repair_end_date=repair_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
     )
     
     items = [EquipmentRepairResponse.model_validate(repair) for repair in repairs]

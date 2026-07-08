@@ -38,7 +38,14 @@ import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import dayjs from 'dayjs';
-import { coerceFormDate } from '../../../../../utils/formDate';
+import { coerceFormDate, formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formatDateTime } from '../../../../../utils/format';
+import {
+  WAREHOUSE_DOC_PINNED_STATUS_FIELD,
+  buildCustomerMaterialRegistrationStatusValueEnum,
+  normalizeWarehouseListResponse,
+  resolveCustomerMaterialRegistrationListParams,
+} from '../../../utils/warehouseListCore';
 import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
 import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
 
@@ -542,44 +549,104 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     }
   };
 
+  const registrationStatusValueEnum = useMemo(() => buildCustomerMaterialRegistrationStatusValueEnum(t), [t]);
+
   const columns: ProColumns<CustomerMaterialRegistration>[] = useMemo(() => [
+    {
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 10 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      dataIndex: 'status',
+      valueType: 'select',
+      valueEnum: registrationStatusValueEnum,
+      hideInTable: true,
+      search: { order: 20 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colRegistrationDate'),
+      dataIndex: 'registration_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 30 } as ProColumns['search'],
+    },
     {
       title: t('app.kuaizhizao.warehouseCommon.colCode'),
       dataIndex: 'registration_code',
       width: 150,
       fixed: 'left',
+      sorter: true,
+      search: { order: 40 } as ProColumns['search'],
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.registration_code ?? '') }} ellipsis>
           {r.registration_code ?? '-'}
         </Typography.Text>
       ),
     },
-    { title: t('app.kuaizhizao.warehouseCommon.colCustomer'), dataIndex: 'customer_name', width: 140, ellipsis: true },
-    { title: t('app.kuaizhizao.warehouseCommon.colWorkOrder'), dataIndex: 'work_order_code', width: 120, ellipsis: true },
-    { title: t('app.kuaizhizao.warehouseCommon.colMaterial'), dataIndex: 'mapped_material_name', width: 140, ellipsis: true, hideInSearch: true },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colCustomer'),
+      dataIndex: 'customer_name',
+      width: 140,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colWorkOrder'),
+      dataIndex: 'work_order_code',
+      width: 120,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
+      dataIndex: 'mapped_material_name',
+      width: 140,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
+    },
     {
       title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
       dataIndex: 'total_quantity',
       width: 90,
       align: 'right',
+      hideInSearch: true,
       render: (_, r) => r.total_quantity ?? r.quantity ?? '-',
     },
-    { title: t('app.kuaizhizao.warehouseCommon.colWarehouse'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colWarehouse'),
+      dataIndex: 'warehouse_name',
+      width: 120,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
+    },
     {
       title: t('app.kuaizhizao.warehouseCommon.colRegistrationDate'),
       dataIndex: 'registration_date',
-      valueType: 'dateTime',
-      width: 160,
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, r) => (r.registration_date ? formatDateTime(r.registration_date) : '-'),
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
-      dataIndex: 'status',
-      hideInTable: true,
-      valueEnum: {
-        pending: { text: t('app.kuaizhizao.warehouseCommon.statusPendingInbound'), status: 'warning' },
-        processed: { text: t('app.kuaizhizao.warehouseCommon.statusInbound'), status: 'success' },
-        cancelled: { text: t('app.kuaizhizao.warehouseCommon.statusCancelled'), status: 'error' },
-      },
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at',
+      width: 132,
+      uniTableKeepWidth: true,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      sorter: true,
+      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
@@ -637,7 +704,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         </Space>
       ),
     },
-  ], [t, resourcePerms]);
+  ], [t, resourcePerms, registrationStatusValueEnum]);
 
   const detailColumns = useMemo(() => [
     { title: t('app.kuaizhizao.warehouseCommon.colCode'), dataIndex: 'registration_code' },
@@ -846,21 +913,22 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.customer-material-registration"
         showAdvancedSearch
+        pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
+        skipFuzzyPinyinClientFilter
         showCreateButton
         createButtonText={createButtonLabel}
         onCreate={handleCreate}
-        request={async (params: any) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           const pageSize = params.pageSize || 20;
-          const skip = (params.current! - 1) * pageSize;
+          const skip = ((params.current ?? 1) - 1) * pageSize;
+          const listParams = resolveCustomerMaterialRegistrationListParams(searchFormValues, sort);
           const result = await customerMaterialRegistrationApi.list({
             skip,
             limit: pageSize,
-            customer_id: params.customer_id,
-            status: params.status,
+            ...listParams,
           });
-          const rows = Array.isArray(result) ? result : [];
-          const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
-          return { data: rows, success: true, total };
+          const { data, total } = normalizeWarehouseListResponse(result);
+          return { data, success: true, total };
         }}
         scroll={{ x: 1500 }}
       />

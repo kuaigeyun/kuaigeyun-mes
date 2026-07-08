@@ -280,7 +280,7 @@ export const PartnerPriceVariantPricesEditor: React.FC = () => {
     (async () => {
       setLoading(true);
       try {
-        const list = await variantAttributeApi.list({ is_active: true });
+        const { items: list } = await variantAttributeApi.list({ is_active: true, limit: 10000 });
         if (cancelled) return;
         list.sort((a, b) => a.display_order - b.display_order);
         setDefinitions(list);

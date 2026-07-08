@@ -40,8 +40,14 @@ export interface DefectTypeListParams {
   category?: string;
   isActive?: boolean;
   keyword?: string;
+  code?: string;
+  name?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
 }
 
 /** 不良品列表分页响应 */
@@ -151,8 +157,14 @@ export interface OperationListParams {
   limit?: number;
   isActive?: boolean;
   keyword?: string;
+  code?: string;
+  name?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
 }
 
 /** 工序列表分页响应 */
@@ -222,8 +234,14 @@ export interface ProcessRouteListParams {
   limit?: number;
   isActive?: boolean;
   keyword?: string;
+  code?: string;
+  name?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
 }
 
 export interface ProcessRouteListResponse {
@@ -338,8 +356,14 @@ export interface SOPListParams {
   material_group_uuid?: string;
   route_uuid?: string;
   keyword?: string;
+  code?: string;
+  name?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
 }
 
 export interface SOPListResponse {

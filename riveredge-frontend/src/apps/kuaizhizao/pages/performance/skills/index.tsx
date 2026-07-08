@@ -27,6 +27,11 @@ import {
 } from '../../../../../components/custom-fields';
 import { getPerformanceActiveValueEnum, renderActiveTag } from '../components/performanceMeta';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  normalizePerformanceListResponse,
+  PERFORMANCE_PINNED_ACTIVE_FIELD,
+  resolveSkillListParams,
+} from '../../../utils/performanceListCore';
 
 const SkillsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -139,14 +144,15 @@ const SkillsPage: React.FC = () => {
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
+      sorter: true,
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
           {r.code ?? '-'}
         </Typography.Text>
       ),
     },
-    { title: t('app.kuaizhizao.performance.skills.columns.skillName'), dataIndex: 'name', width: 200, ellipsis: true },
-    { title: t('app.kuaizhizao.performance.skills.columns.category'), dataIndex: 'category', width: 150, hideInSearch: true },
+    { title: t('app.kuaizhizao.performance.skills.columns.skillName'), dataIndex: 'name', width: 200, ellipsis: true, sorter: true },
+    { title: t('app.kuaizhizao.performance.skills.columns.category'), dataIndex: 'category', width: 150, sorter: true },
     { title: t('app.kuaizhizao.performance.common.columns.description'), dataIndex: 'description', ellipsis: true, hideInSearch: true },
     ...customFieldColumns,
     {
@@ -159,8 +165,10 @@ const SkillsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.performance.common.columns.updatedAt'),
       dataIndex: 'updatedAt',
-      width: 168,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
+      sorter: true,
       render: (_, r) => (r.updatedAt ? formatDateTime(r.updatedAt, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
@@ -216,17 +224,14 @@ const SkillsPage: React.FC = () => {
           actionRef={actionRef}
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.performance.skills"
-          request={async (params, _sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
-            const apiParams: any = { skip, limit: pageSize };
-            if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) apiParams.isActive = searchFormValues.isActive;
-            if (searchFormValues?.category !== undefined && searchFormValues.category !== '' && searchFormValues.category !== null) apiParams.category = searchFormValues.category;
+            const listParams = resolveSkillListParams(searchFormValues, sort);
             try {
-              const result = await skillApi.list(apiParams);
-              const rows = Array.isArray(result) ? result : [];
-              const enrichedRows = await enrichRecordsWithCustomFields(rows);
-              const total = enrichedRows.length < pageSize ? skip + enrichedRows.length : skip + enrichedRows.length + 1;
+              const result = await skillApi.list({ skip, limit: pageSize, ...listParams });
+              const { data: raw, total } = normalizePerformanceListResponse(result);
+              const enrichedRows = await enrichRecordsWithCustomFields(raw as Skill[]);
               return { data: enrichedRows, success: true, total };
             } catch (error: any) {
               messageApi.error(error?.message || t('app.kuaizhizao.performance.skills.messages.loadListFailed'));
@@ -235,6 +240,8 @@ const SkillsPage: React.FC = () => {
           }}
           rowKey="uuid"
           showAdvancedSearch={true}
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={PERFORMANCE_PINNED_ACTIVE_FIELD}
           scroll={{ x: 1280 }}
           pagination={{ defaultPageSize: 20, showSizeChanger: true }}
           showCreateButton

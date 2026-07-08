@@ -88,10 +88,28 @@ async def list_spare_parts(
     limit: int = Query(100, ge=1, le=1000),
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """获取备件列表"""
-    rows, total = await service.list_spare_parts(tenant_id, skip, limit, search, is_active)
+    rows, total = await service.list_spare_parts(
+        tenant_id,
+        skip,
+        limit,
+        search,
+        is_active,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
     return SparePartListResponse(
         items=[SparePartResponse.model_validate(p) for p in rows],
         total=total,

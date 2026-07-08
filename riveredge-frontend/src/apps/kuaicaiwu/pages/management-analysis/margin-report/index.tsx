@@ -1,73 +1,155 @@
-import React, { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ProColumns } from '@ant-design/pro-components';
-import { InputNumber, Space } from 'antd';
+import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import { App, InputNumber, Space } from 'antd';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
 import { managementReportService } from '../../../services/management-report';
+import type { MarginReportRow } from '../../../types/management-report';
+import {
+  marginReportCustomerSearchColumns,
+  marginReportOrderSearchColumns,
+  marginReportProductSearchColumns,
+  resolveMarginReportListParams,
+} from '../../../utils/managementListCore';
 
-type MarginRow = Record<string, unknown>;
 type Dimension = 'product' | 'customer' | 'order';
 
 const MarginTable: React.FC<{ dimension: Dimension; days: number }> = ({ dimension, days }) => {
   const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const actionRef = useRef<ActionType>();
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
 
-  const columns: ProColumns<MarginRow>[] = useMemo(() => {
-    const marginRateCol: ProColumns<MarginRow> = {
+  useEffect(() => {
+    actionRef.current?.reload();
+  }, [days]);
+
+  const columns: ProColumns<MarginReportRow>[] = useMemo(() => {
+    const marginRateCol: ProColumns<MarginReportRow> = {
       title: t('app.kuaicaiwu.marginReport.col.grossMarginRate'),
       dataIndex: 'gross_margin_rate',
       align: 'right',
+      hideInSearch: true,
+      sorter: true,
       render: (_, r) => `${((Number(r.gross_margin_rate) || 0) * 100).toFixed(2)}%`,
     };
-    const sharedCols: ProColumns<MarginRow>[] = [
-      { title: t('app.kuaicaiwu.marginReport.col.revenue'), dataIndex: 'revenue', valueType: 'money', align: 'right' },
-      { title: t('app.kuaicaiwu.marginReport.col.cost'), dataIndex: 'cost', valueType: 'money', align: 'right' },
-      { title: t('app.kuaicaiwu.marginReport.col.grossMargin'), dataIndex: 'gross_margin', valueType: 'money', align: 'right' },
+    const sharedCols: ProColumns<MarginReportRow>[] = [
+      {
+        title: t('app.kuaicaiwu.marginReport.col.revenue'),
+        dataIndex: 'revenue',
+        valueType: 'money',
+        align: 'right',
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.marginReport.col.cost'),
+        dataIndex: 'cost',
+        valueType: 'money',
+        align: 'right',
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.marginReport.col.grossMargin'),
+        dataIndex: 'gross_margin',
+        valueType: 'money',
+        align: 'right',
+        hideInSearch: true,
+        sorter: true,
+      },
       marginRateCol,
     ];
 
     if (dimension === 'product') {
       return [
-        { title: t('app.kuaicaiwu.marginReport.col.productCode'), dataIndex: 'product_code', width: 120 },
-        { title: t('app.kuaicaiwu.marginReport.col.productName'), dataIndex: 'product_name', ellipsis: true },
+        ...marginReportProductSearchColumns({
+          productCode: t('app.kuaicaiwu.marginReport.col.productCode'),
+          productName: t('app.kuaicaiwu.marginReport.col.productName'),
+        }),
+        {
+          title: t('app.kuaicaiwu.marginReport.col.productCode'),
+          dataIndex: 'product_code',
+          width: 120,
+          hideInSearch: true,
+          sorter: true,
+        },
+        {
+          title: t('app.kuaicaiwu.marginReport.col.productName'),
+          dataIndex: 'product_name',
+          ellipsis: true,
+          hideInSearch: true,
+          sorter: true,
+        },
         ...sharedCols,
       ];
     }
     if (dimension === 'customer') {
       return [
-        { title: t('app.kuaicaiwu.marginReport.col.customer'), dataIndex: 'customer_name', ellipsis: true },
+        ...marginReportCustomerSearchColumns(t('app.kuaicaiwu.marginReport.col.customer')),
+        {
+          title: t('app.kuaicaiwu.marginReport.col.customer'),
+          dataIndex: 'customer_name',
+          ellipsis: true,
+          hideInSearch: true,
+          sorter: true,
+        },
         ...sharedCols,
       ];
     }
     return [
-      { title: t('app.kuaicaiwu.marginReport.col.orderNo'), dataIndex: 'sales_order_code', width: 140 },
-      { title: t('app.kuaicaiwu.marginReport.col.deliveryNote'), dataIndex: 'delivery_code', width: 140 },
+      ...marginReportOrderSearchColumns({
+        orderNo: t('app.kuaicaiwu.marginReport.col.orderNo'),
+        deliveryNote: t('app.kuaicaiwu.marginReport.col.deliveryNote'),
+      }),
+      {
+        title: t('app.kuaicaiwu.marginReport.col.orderNo'),
+        dataIndex: 'sales_order_code',
+        width: 140,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.marginReport.col.deliveryNote'),
+        dataIndex: 'delivery_code',
+        width: 140,
+        hideInSearch: true,
+        sorter: true,
+      },
       ...sharedCols,
     ];
   }, [dimension, t]);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['marginReport', dimension, days],
-    queryFn: async () => {
-      if (dimension === 'product') return managementReportService.getMarginByProduct(days);
-      if (dimension === 'customer') return managementReportService.getMarginByCustomer(days);
-      return managementReportService.getMarginByOrder(days);
-    },
-  });
-
-  const items: MarginRow[] = (data as any)?.items ?? [];
-
   return (
-    <UniTable<MarginRow>
+    <UniTable<MarginReportRow>
+      actionRef={actionRef}
       rowKey={(r, i) => String(r.product_id ?? r.customer_id ?? r.delivery_id ?? i)}
       columnPersistenceId={`apps.kuaicaiwu.pages.management-analysis.margin-report.${dimension}`}
       columns={columns}
-      dataSource={items}
-      loading={isLoading}
-      search={false}
-      pagination={{ pageSize: 20 }}
+      showAdvancedSearch
+      skipFuzzyPinyinClientFilter
       toolBarRender={false}
+      request={async (params, sort, _filter, searchFormValues) => {
+        const listParams = resolveMarginReportListParams(searchFormValues, sort, dimension);
+        lastListParamsRef.current = listParams;
+        const skip = ((params.current ?? 1) - 1) * (params.pageSize ?? 20);
+        const limit = params.pageSize ?? 20;
+        try {
+          const fetchParams = { days, skip, limit, ...listParams };
+          const res =
+            dimension === 'product'
+              ? await managementReportService.getMarginByProduct(fetchParams)
+              : dimension === 'customer'
+                ? await managementReportService.getMarginByCustomer(fetchParams)
+                : await managementReportService.getMarginByOrder(fetchParams);
+          return { data: res.items, success: true, total: res.total };
+        } catch (error: unknown) {
+          const err = error as { message?: string };
+          messageApi.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+          return { data: [], success: false, total: 0 };
+        }
+      }}
     />
   );
 };

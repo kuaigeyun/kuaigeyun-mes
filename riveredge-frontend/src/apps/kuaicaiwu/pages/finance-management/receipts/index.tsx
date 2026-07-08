@@ -24,6 +24,8 @@ import {
   receiptService,
   type ReceiptPullCandidate,
   type ReceiptPullPreview,
+  type ReceiptVoucher,
+  type ReceiptListParams,
 } from '../../../services/finance/receipt';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
@@ -39,24 +41,13 @@ import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/docum
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
 import { receiptCapabilityReasonMessage } from '../../../utils/receiptCapabilityMessages';
 import { formatDateTime } from '../../../../../utils/format';
-
-interface ReceiptVoucher {
-  id: number;
-  receipt_code: string;
-  customer_id: number;
-  customer_name: string;
-  total_amount: number;
-  settled_amount: number;
-  unsettled_amount: number;
-  receipt_date: string;
-  payment_method: string;
-  bank_account?: string;
-  bank_account_id?: number;
-  settlement_type?: string;
-  status: string;
-  notes?: string;
-  created_at: string;
-}
+import {
+  FINANCE_DOC_PINNED_STATUS_FIELD,
+  financeDocCodePartnerSearchColumns,
+  financeDocCreatedUpdatedColumns,
+  resolveReceiptListParams,
+} from '../../../utils/financeListCore';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 
 type PullReceivableCandidate = ReceiptPullCandidate;
 
@@ -64,6 +55,7 @@ const R = 'app.kuaicaiwu.receipt';
 
 const ReceiptsPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
   const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
@@ -108,7 +100,7 @@ const ReceiptsPage: React.FC = () => {
       }
     };
     load();
-    bankAccountService.list({ limit: 200, is_active: true }).then(setBankAccounts).catch(() => setBankAccounts([]));
+    bankAccountService.list({ limit: 200, is_active: true }).then((res) => setBankAccounts(res.data)).catch(() => setBankAccounts([]));
   }, []);
 
   const bankAccountOptions = bankAccounts.map((a) => ({
@@ -424,11 +416,21 @@ const ReceiptsPage: React.FC = () => {
   ], [t]);
 
   const columns: ProColumns<ReceiptVoucher>[] = useMemo(() => [
+    ...financeDocCodePartnerSearchColumns({
+      docCodeLabel: t(`${R}.col.code`),
+      docCodeField: 'receipt_code',
+      partnerLabel: t('app.kuaicaiwu.common.customer'),
+      partnerIdField: 'customer_id',
+      partnerNameField: 'customer_name',
+      partnerOptions: customerOptions,
+    }),
     {
       title: t(`${R}.col.code`),
       dataIndex: 'receipt_code',
       width: 168,
       fixed: 'left',
+      hideInSearch: true,
+      sorter: true,
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.receipt_code ?? '') }} ellipsis>
           {r.receipt_code ?? '-'}
@@ -439,6 +441,8 @@ const ReceiptsPage: React.FC = () => {
       title: t('app.kuaicaiwu.common.customer'),
       dataIndex: 'customer_name',
       width: 200,
+      hideInSearch: true,
+      sorter: true,
     },
     {
       title: t(`${R}.col.totalAmount`),
@@ -446,6 +450,8 @@ const ReceiptsPage: React.FC = () => {
       valueType: 'money',
       align: 'right',
       width: 130,
+      hideInSearch: true,
+      sorter: true,
     },
     {
       title: t(`${R}.col.settledAmount`),
@@ -453,12 +459,16 @@ const ReceiptsPage: React.FC = () => {
       valueType: 'money',
       align: 'right',
       width: 120,
+      hideInSearch: true,
+      sorter: true,
     },
     {
       title: t(`${R}.col.unsettledAmount`),
       dataIndex: 'unsettled_amount',
       align: 'right',
       width: 120,
+      hideInSearch: true,
+      sorter: true,
       render: (_, record) => (
         <span style={{ color: record.unsettled_amount > 0 ? '#1677ff' : 'inherit', fontWeight: 'bold' }}>
           ¥{Number(record.unsettled_amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
@@ -470,26 +480,44 @@ const ReceiptsPage: React.FC = () => {
       dataIndex: 'receipt_date',
       valueType: 'date',
       width: 110,
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: t(`${R}.col.receiptDate`),
+      dataIndex: 'receipt_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      order: 20,
+      formItemProps: formDateRangeFormItemProps,
     },
     {
       title: t(`${R}.col.paymentMethod`),
       dataIndex: 'payment_method',
       width: 110,
+      hideInSearch: true,
+      sorter: true,
       render: (_, record) => formatPaymentMethod(record.payment_method, t),
+    },
+    {
+      title: t(`${R}.settlementType`, '结算类型'),
+      dataIndex: 'settlement_type',
+      hideInTable: true,
+      order: 15,
+      valueType: 'select',
+      fieldProps: {
+        options: receiptSettlementTypeOptions,
+        allowClear: true,
+      },
     },
     {
       title: t('common.status'),
       dataIndex: 'status',
       hideInTable: true,
+      order: 22,
       valueEnum: buildVoucherStatusEnum(t),
     },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
-    },
+    ...financeDocCreatedUpdatedColumns<ReceiptVoucher>(t),
     {
       title: t('app.kuaicaiwu.common.lifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -542,7 +570,7 @@ const ReceiptsPage: React.FC = () => {
             ) : null,
           ].filter(Boolean) as React.ReactNode[],
     },
-  ], [t, navigate]);
+  ], [t, navigate, customerOptions, receiptSettlementTypeOptions]);
 
   return (
     <ListPageTemplate>
@@ -588,24 +616,23 @@ const ReceiptsPage: React.FC = () => {
             ])}
           />,
         ]}
-        request={async (params, _sort, _filter, searchFormValues) => {
-          const { current, pageSize, status, customer_id, start_date, end_date } = params;
-          const res = await apiRequest<any>('/apps/kuaicaiwu/receipts', {
-            params: {
-              skip: ((current || 1) - 1) * (pageSize || 20),
-              limit: pageSize || 20,
-              status: searchFormValues?.status ?? status,
-              customer_id: searchFormValues?.customer_id ?? customer_id,
-              start_date: searchFormValues?.start_date ?? start_date,
-              end_date: searchFormValues?.end_date ?? end_date,
-            },
-          });
+        request={async (params, sort, _filter, searchFormValues) => {
+          const listParams = resolveReceiptListParams(searchFormValues, sort);
+          lastListParamsRef.current = listParams;
+          const apiParams: ReceiptListParams = {
+            skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+            limit: params.pageSize || 20,
+            ...listParams,
+          };
+          const res = await receiptService.listReceipts(apiParams);
           return {
             data: res?.items || [],
             total: res?.total || 0,
             success: true,
           };
         }}
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
         columns={columns}
       />
 

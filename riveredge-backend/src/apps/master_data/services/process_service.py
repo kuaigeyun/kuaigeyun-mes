@@ -29,6 +29,7 @@ from apps.master_data.services.process_preset_catalog import (
     get_operation_preset_by_key,
     preset_catalog_for_api,
 )
+from apps.master_data.services.master_data_list_core import apply_master_crud_list_filters
 from core.services.business.code_generation_service import CodeGenerationService
 
 
@@ -387,8 +388,14 @@ class ProcessService:
         category: Optional[str] = None,
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> tuple[List[DefectTypeResponse], int]:
         """
         获取不良品列表（分页，返回列表与总数）
@@ -414,17 +421,22 @@ class ProcessService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
 
-        if keyword and keyword.strip():
-            kw = keyword.strip()
-            query = query.filter(
-                Q(code__icontains=kw) | Q(name__icontains=kw) | Q(description__icontains=kw)
-            )
+        query, order_expr = apply_master_crud_list_filters(
+            query,
+            keyword=keyword,
+            code=code,
+            name=name,
+            keyword_fields=["code", "name", "description"],
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_by,
+            sort_order=sort_order,
+            default_sort_col="code",
+        )
 
         total = await query.count()
-        allowed_sort = {"code", "name", "category", "created_at", "is_active"}
-        field = sort_by if sort_by in allowed_sort else "code"
-        desc = (sort_order or "asc").lower() == "desc"
-        order_expr = f"-{field}" if desc else field
         defect_types = await query.offset(skip).limit(limit).order_by(order_expr).all()
         items = [DefectTypeResponse.model_validate(_defect_type_to_response_data(dt)) for dt in defect_types]
         return items, total
@@ -814,8 +826,14 @@ class ProcessService:
         limit: int = 100,
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> Tuple[List[OperationResponse], int]:
         """
         获取工序列表
@@ -837,17 +855,22 @@ class ProcessService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
 
-        if keyword and keyword.strip():
-            kw = keyword.strip()
-            query = query.filter(
-                Q(code__icontains=kw) | Q(name__icontains=kw) | Q(description__icontains=kw)
-            )
+        query, order_expr = apply_master_crud_list_filters(
+            query,
+            keyword=keyword,
+            code=code,
+            name=name,
+            keyword_fields=["code", "name", "description"],
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_by,
+            sort_order=sort_order,
+            default_sort_col="code",
+        )
 
         total = await query.count()
-        allowed_sort = {"code", "name", "created_at", "is_active", "reporting_type"}
-        field = sort_by if sort_by in allowed_sort else "code"
-        desc = (sort_order or "asc").lower() == "desc"
-        order_expr = f"-{field}" if desc else field
 
         # 不使用 prefetch_related("defect_types")，避免 Tortoise 解析 through 模型失败；不良品列表在 _operation_to_response_data 中通过关联表 SQL 查询
         operations = await query.offset(skip).limit(limit).order_by(order_expr).all()
@@ -1262,8 +1285,14 @@ class ProcessService:
         limit: int = 100,
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> Tuple[List[ProcessRouteResponse], int]:
         """
         获取工艺路线列表
@@ -1285,17 +1314,22 @@ class ProcessService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
 
-        if keyword and keyword.strip():
-            kw = keyword.strip()
-            query = query.filter(
-                Q(code__icontains=kw) | Q(name__icontains=kw) | Q(description__icontains=kw)
-            )
+        query, order_expr = apply_master_crud_list_filters(
+            query,
+            keyword=keyword,
+            code=code,
+            name=name,
+            keyword_fields=["code", "name", "description"],
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_by,
+            sort_order=sort_order,
+            default_sort_col="code",
+        )
 
         total = await query.count()
-        allowed_sort = {"code", "name", "created_at", "is_active"}
-        field = sort_by if sort_by in allowed_sort else "code"
-        desc = (sort_order or "asc").lower() == "desc"
-        order_expr = f"-{field}" if desc else field
 
         process_routes = await query.offset(skip).limit(limit).order_by(order_expr).all()
 
@@ -1798,8 +1832,14 @@ class ProcessService:
         material_group_uuid: Optional[str] = None,
         route_uuid: Optional[str] = None,
         keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
     ) -> Tuple[List[SOPResponse], int]:
         """
         获取作业程序（SOP）列表
@@ -1835,20 +1875,22 @@ class ProcessService:
         if route_uuid:
             query = query.filter(route_uuids__contains=[route_uuid])
 
-        if keyword and keyword.strip():
-            kw = keyword.strip()
-            query = query.filter(
-                Q(code__icontains=kw)
-                | Q(name__icontains=kw)
-                | Q(version__icontains=kw)
-                | Q(content__icontains=kw)
-            )
+        query, order_expr = apply_master_crud_list_filters(
+            query,
+            keyword=keyword,
+            code=code,
+            name=name,
+            keyword_fields=["code", "name", "version", "content"],
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_by,
+            sort_order=sort_order,
+            default_sort_col="code",
+        )
 
         total = await query.count()
-        allowed_sort = {"code", "name", "version", "created_at", "is_active", "operation_id"}
-        field = sort_by if sort_by in allowed_sort else "code"
-        desc = (sort_order or "asc").lower() == "desc"
-        order_expr = f"-{field}" if desc else field
 
         sops = await query.offset(skip).limit(limit).order_by(order_expr).prefetch_related("operation").all()
 

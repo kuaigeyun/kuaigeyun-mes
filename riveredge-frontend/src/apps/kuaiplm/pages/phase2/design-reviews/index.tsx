@@ -3,11 +3,10 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * 设计评审（Phase2）
  */
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useMemo } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { useSearchParams } from 'react-router-dom';
 import { App, Button, Alert } from 'antd';
-import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
@@ -22,6 +21,12 @@ import {
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  plmCodeTitleSearchColumns,
+  plmCreatedUpdatedColumns,
+  PLM_PHASE2_PINNED_STATUS_FIELD,
+  resolvePhase2DesignReviewListParams,
+} from '../../../utils/plmListCore';
 
 const DesignReviewsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -31,6 +36,7 @@ const DesignReviewsPage: React.FC = () => {
     ? Number(searchParams.get('project_id'))
     : undefined;
   const actionRef = useRef<ActionType>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<RdDesignReview | null>(null);
@@ -100,27 +106,62 @@ const DesignReviewsPage: React.FC = () => {
     ARCHIVED: t('app.kuaiplm.phase2.common.status.archived'),
   };
 
-  const columns: ProColumns<RdDesignReview>[] = [
-    { title: t('app.kuaiplm.phase2.designReviews.columns.code'), dataIndex: 'review_code', width: 140 },
-    { title: t('app.kuaiplm.phase2.designReviews.columns.title'), dataIndex: 'title', ellipsis: true },
-    { title: t('app.kuaiplm.phase2.designReviews.columns.type'), dataIndex: 'review_type', width: 100 },
-    {
-      title: t('app.kuaiplm.phase2.designReviews.columns.status'),
-      dataIndex: 'status',
-      width: 90,
-      valueEnum: Object.fromEntries(
-        Object.entries(reviewStatusLabelMap).map(([value, label]) => [value, { text: label }]),
-      ),
-      render: (_, row) => reviewStatusLabelMap[row.status || ''] || row.status || '-',
-    },
-    { title: t('app.kuaiplm.phase2.designReviews.columns.reviewer'), dataIndex: 'reviewer_name', width: 100, hideInSearch: true },
-    {
-      title: t('app.kuaiplm.phase2.designReviews.columns.scheduledAt'),
-      dataIndex: 'scheduled_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, row) => (row.scheduled_at ? formatDateTime(row.scheduled_at, 'YYYY-MM-DD HH:mm') : '-'),
-    },
+  const columns: ProColumns<RdDesignReview>[] = useMemo(
+    () => [
+      ...plmCodeTitleSearchColumns({
+        codeLabel: t('app.kuaiplm.phase2.designReviews.columns.code'),
+        titleLabel: t('app.kuaiplm.phase2.designReviews.columns.title'),
+        codeField: 'review_code',
+        titleField: 'title',
+      }),
+      {
+        title: t('app.kuaiplm.phase2.designReviews.columns.code'),
+        dataIndex: 'review_code',
+        width: 140,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaiplm.phase2.designReviews.columns.title'),
+        dataIndex: 'title',
+        sorter: true,
+        ellipsis: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaiplm.phase2.designReviews.columns.type'),
+        dataIndex: 'review_type',
+        width: 100,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaiplm.phase2.designReviews.columns.status'),
+        dataIndex: 'status',
+        width: 90,
+        valueEnum: Object.fromEntries(
+          Object.entries(reviewStatusLabelMap).map(([value, label]) => [value, { text: label }]),
+        ),
+        render: (_, row) => reviewStatusLabelMap[row.status || ''] || row.status || '-',
+      },
+      {
+        title: t('app.kuaiplm.phase2.designReviews.columns.reviewer'),
+        dataIndex: 'reviewer_name',
+        width: 100,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaiplm.phase2.designReviews.columns.scheduledAt'),
+        dataIndex: 'scheduled_at',
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_, row) =>
+          row.scheduled_at || (row as { review_date?: string }).review_date
+            ? formatDateTime(row.scheduled_at || (row as { review_date?: string }).review_date!, 'YYYY-MM-DD HH:mm')
+            : '-',
+      },
+      ...plmCreatedUpdatedColumns<RdDesignReview>(t),
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -164,7 +205,9 @@ const DesignReviewsPage: React.FC = () => {
             </Button>,
           ],
     },
-  ];
+    ],
+    [modalApi, messageApi, reviewStatusLabelMap, t],
+  );
 
   return (
     <ListPageTemplate>
@@ -185,13 +228,20 @@ const DesignReviewsPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         columns={columns}
         columnPersistenceId="apps.kuaiplm.pages.phase2.design-reviews"
-        request={async (params) => {
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={PLM_PHASE2_PINNED_STATUS_FIELD}
+        request={async (params, sort, _filter, searchFormValues) => {
           const { current, pageSize } = params;
+          const listParams = resolvePhase2DesignReviewListParams(searchFormValues, sort, {
+            projectId: filterProjectId,
+          });
+          lastListParamsRef.current = listParams;
           try {
             const res = await listDesignReviews({
               skip: ((current || 1) - 1) * (pageSize || 20),
               limit: pageSize || 20,
-              project_id: filterProjectId,
+              ...listParams,
             });
             return { data: res.items, total: res.total, success: true };
           } catch (e: any) {

@@ -56,49 +56,6 @@ class EmployeePerformanceConfigResponse(EmployeePerformanceConfigBase):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
-# ==================== 计件单价 ====================
-
-class PieceRateBase(BaseModel):
-    operation_id: int = Field(..., description="工序ID")
-    operation_code: Optional[str] = Field(None, max_length=50)
-    operation_name: Optional[str] = Field(None, max_length=200)
-    material_id: Optional[int] = Field(None, description="物料ID（可选）")
-    material_code: Optional[str] = Field(None, max_length=50)
-    rate: Decimal = Field(..., description="单价（元/件）")
-    effective_from: Optional[date] = Field(None, description="生效日期")
-    effective_to: Optional[date] = Field(None, description="失效日期")
-    is_active: bool = Field(True, description="是否启用")
-
-    model_config = ConfigDict(populate_by_name=True)
-
-
-class PieceRateCreate(PieceRateBase):
-    pass
-
-
-class PieceRateUpdate(BaseModel):
-    operation_code: Optional[str] = None
-    operation_name: Optional[str] = None
-    material_id: Optional[int] = None
-    material_code: Optional[str] = None
-    rate: Optional[Decimal] = None
-    effective_from: Optional[date] = None
-    effective_to: Optional[date] = None
-    is_active: Optional[bool] = None
-
-    model_config = ConfigDict(populate_by_name=True)
-
-
-class PieceRateResponse(PieceRateBase):
-    id: int = Field(..., description="主键ID")
-    uuid: str = Field(..., description="UUID")
-    tenant_id: Optional[int] = Field(None, description="租户ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
-
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
-
-
 # ==================== 工时单价 ====================
 
 class HourlyRateBase(BaseModel):

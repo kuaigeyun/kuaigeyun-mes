@@ -358,18 +358,42 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         partner_id: Optional[int] = None,
         statement_period: Optional[str] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        statement_code: Optional[str] = None,
+        partner_name: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ) -> Tuple[List[PartnerStatement], int]:
+        from apps.kuaicaiwu.services.finance_list_core import apply_finance_partner_statement_list_filters
+
         query = PartnerStatement.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if partner_type:
             query = query.filter(partner_type=partner_type)
         if partner_id:
             query = query.filter(partner_id=partner_id)
-        if statement_period:
-            query = query.filter(statement_period=statement_period)
         if status:
             query = query.filter(status=status)
+
+        query, order_expr = apply_finance_partner_statement_list_filters(
+            query,
+            keyword=keyword,
+            statement_code=statement_code,
+            partner_name=partner_name,
+            statement_period=statement_period,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_field,
+            sort_order=sort_order,
+        )
+
         total = await query.count()
-        items = await query.offset(skip).limit(limit).order_by("-created_at", "-id")
+        items = await query.offset(skip).limit(limit).order_by(order_expr, "-id")
         return items, total
 
     async def get_statement(self, tenant_id: int, statement_id: int) -> PartnerStatement:

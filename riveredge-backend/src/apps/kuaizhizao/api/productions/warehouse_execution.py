@@ -7,7 +7,7 @@
 
 
 
-from datetime import datetime
+from datetime import datetime, date, time
 import uuid
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
@@ -28,8 +28,10 @@ from apps.kuaizhizao.services.warehouse_service import (
     FinishedGoodsReceiptService,
     SalesDeliveryService,
     SalesReturnService,
+    SALES_RETURN_SORTABLE_FIELDS,
     PurchaseReceiptService,
     PurchaseReturnService,
+    PURCHASE_RETURN_SORTABLE_FIELDS,
     OtherInboundService,
     OtherOutboundService,
     MaterialBorrowService,
@@ -38,7 +40,7 @@ from apps.kuaizhizao.services.warehouse_service import (
 from apps.kuaizhizao.services.semi_finished_goods_receipt_service import SemiFinishedGoodsReceiptService
 from apps.kuaizhizao.services.inventory_analysis_service import InventoryAnalysisService
 from apps.kuaizhizao.services.inventory_alert_service import InventoryAlertRuleService, InventoryAlertService
-from apps.kuaizhizao.services.packing_binding_service import PackingBindingService
+from apps.kuaizhizao.services.packing_binding_service import PackingBindingService, PACKING_BINDING_SORTABLE_FIELDS
 from apps.kuaizhizao.services.customer_material_registration_service import (
     BarcodeMappingRuleService,
     CustomerMaterialRegistrationService,
@@ -87,6 +89,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     SalesReturnCreate,
     SalesReturnUpdate,
     SalesReturnResponse,
+    SalesReturnListPaginatedResponse,
     WorkOrderInboundPreviewResponse,
     ProductionReturnPreviewResponse,
     SalesOrderReturnPreviewResponse,
@@ -97,6 +100,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     PurchaseReturnCreate,
     PurchaseReturnUpdate,
     PurchaseReturnResponse,
+    PurchaseReturnListPaginatedResponse,
     OtherInboundCreate,
     OtherInboundUpdate,
     OtherInboundResponse,
@@ -1064,6 +1068,15 @@ async def list_other_inbounds(
     status: Optional[str] = Query(None, description="状态筛选"),
     reason_type: Optional[str] = Query(None, description="原因类型筛选"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    receipt_start_date: Optional[str] = Query(None, description="入库时间起"),
+    receipt_end_date: Optional[str] = Query(None, description="入库时间止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -1073,7 +1086,7 @@ async def list_other_inbounds(
         tenant_id=tenant_id,
         current_user=current_user,
     )
-    result = await OtherInboundService().list_other_inbounds(
+    items, total = await OtherInboundService().list_other_inbounds(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -1081,9 +1094,18 @@ async def list_other_inbounds(
         reason_type=reason_type,
         warehouse_id=warehouse_id,
         scoped_ids=scoped_ids,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        receipt_start_date=receipt_start_date,
+        receipt_end_date=receipt_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
-    logger.info(f"FINAL-DEBUG: 模块 {__file__} 返回了 {len(result)} 条数据")
-    return result
+    logger.info(f"FINAL-DEBUG: 模块 {__file__} 返回了 {len(items)} 条数据")
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 
 @router.post("/other-inbounds", response_model=OtherInboundResponse, summary="Create misc inbound")
@@ -1274,13 +1296,22 @@ async def create_other_outbound(
     )
 
 
-@router.get("/other-outbounds", response_model=List[OtherOutboundListResponse], summary="List misc outbounds")
+@router.get("/other-outbounds", summary="List misc outbounds")
 async def list_other_outbounds(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     status: Optional[str] = Query(None, description="状态筛选"),
     reason_type: Optional[str] = Query(None, description="原因类型筛选"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    delivery_start_date: Optional[str] = Query(None, description="出库时间起"),
+    delivery_end_date: Optional[str] = Query(None, description="出库时间止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -1289,7 +1320,7 @@ async def list_other_outbounds(
         tenant_id=tenant_id,
         current_user=current_user,
     )
-    return await OtherOutboundService().list_other_outbounds(
+    items, total = await OtherOutboundService().list_other_outbounds(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -1297,7 +1328,17 @@ async def list_other_outbounds(
         reason_type=reason_type,
         warehouse_id=warehouse_id,
         scoped_ids=scoped_ids,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        delivery_start_date=delivery_start_date,
+        delivery_end_date=delivery_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 
 @router.get("/other-outbounds/{outbound_id}", response_model=OtherOutboundWithItemsResponse, summary="Get misc outbound")
@@ -1447,12 +1488,21 @@ async def create_material_borrow(
     )
 
 
-@router.get("/material-borrows", response_model=List[MaterialBorrowListResponse], summary="List material borrow slips")
+@router.get("/material-borrows", summary="List material borrow slips")
 async def list_material_borrows(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     status: Optional[str] = Query(None),
     warehouse_id: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    borrow_start_date: Optional[str] = Query(None, description="借出时间起"),
+    borrow_end_date: Optional[str] = Query(None, description="借出时间止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -1461,14 +1511,24 @@ async def list_material_borrows(
         tenant_id=tenant_id,
         current_user=current_user,
     )
-    return await MaterialBorrowService().list_material_borrows(
+    items, total = await MaterialBorrowService().list_material_borrows(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
         status=status,
         warehouse_id=warehouse_id,
         scoped_ids=scoped_ids,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        borrow_start_date=borrow_start_date,
+        borrow_end_date=borrow_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 
 @router.get("/material-borrows/{borrow_id}", response_model=MaterialBorrowWithItemsResponse, summary="Get material borrow slip")
@@ -1618,13 +1678,22 @@ async def create_material_return(
     )
 
 
-@router.get("/material-returns", response_model=List[MaterialReturnListResponse], summary="List material return slips")
+@router.get("/material-returns", summary="List material return slips")
 async def list_material_returns(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     status: Optional[str] = Query(None),
     borrow_id: Optional[int] = Query(None),
     warehouse_id: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    return_start_date: Optional[str] = Query(None, description="归还时间起"),
+    return_end_date: Optional[str] = Query(None, description="归还时间止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -1633,7 +1702,7 @@ async def list_material_returns(
         tenant_id=tenant_id,
         current_user=current_user,
     )
-    return await MaterialReturnService().list_material_returns(
+    items, total = await MaterialReturnService().list_material_returns(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -1641,7 +1710,17 @@ async def list_material_returns(
         borrow_id=borrow_id,
         warehouse_id=warehouse_id,
         scoped_ids=scoped_ids,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        return_start_date=return_start_date,
+        return_end_date=return_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 
 @router.get("/material-returns/{return_id}", response_model=MaterialReturnWithItemsResponse, summary="Get material return slip")
@@ -2190,6 +2269,18 @@ async def list_packing_bindings(
     product_id: Optional[int] = Query(None, description="产品ID"),
     box_no: Optional[str] = Query(None, description="箱号（模糊搜索）"),
     uuid: Optional[str] = Query(None, description="业务UUID（精确匹配）"),
+    keyword: Optional[str] = Query(None, description="关键词（箱号、产品、条码等）"),
+    product_code: Optional[str] = Query(None, description="产品编码（模糊搜索）"),
+    product_name: Optional[str] = Query(None, description="产品名称（模糊搜索）"),
+    product_serial_no: Optional[str] = Query(None, description="产品序列号（模糊搜索）"),
+    packing_material_name: Optional[str] = Query(None, description="包装物料名称（模糊搜索）"),
+    binding_method: Optional[str] = Query(None, description="绑定方式（scan/manual）"),
+    source_type: Optional[str] = Query(None, description="来源类型（finished_goods_receipt/sales_delivery）"),
+    bound_at_start_date: Optional[date] = Query(None, description="绑定日期起"),
+    bound_at_end_date: Optional[date] = Query(None, description="绑定日期止"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 box_no、-bound_at"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> List[PackingBindingListResponse]:
@@ -2206,6 +2297,13 @@ async def list_packing_bindings(
 
     返回装箱绑定记录列表。
     """
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in PACKING_BINDING_SORTABLE_FIELDS:
+            safe_order_by = order_by
+    bound_at_from = datetime.combine(bound_at_start_date, time.min) if bound_at_start_date else None
+    bound_at_to = datetime.combine(bound_at_end_date, time.max) if bound_at_end_date else None
     return await packing_binding_service.list_packing_bindings(
         tenant_id=tenant_id,
         skip=skip,
@@ -2215,6 +2313,18 @@ async def list_packing_bindings(
         product_id=product_id,
         box_no=box_no,
         uuid_value=uuid,
+        keyword=keyword,
+        product_code=product_code,
+        product_name=product_name,
+        product_serial_no=product_serial_no,
+        packing_material_name=packing_material_name,
+        binding_method=binding_method,
+        source_type=source_type,
+        bound_at_from=bound_at_from,
+        bound_at_to=bound_at_to,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        order_by=safe_order_by,
     )
 
 
@@ -2227,9 +2337,28 @@ async def list_packing_bindings_page(
     product_id: Optional[int] = Query(None, description="产品ID"),
     box_no: Optional[str] = Query(None, description="箱号（模糊搜索）"),
     uuid: Optional[str] = Query(None, description="业务UUID（精确匹配）"),
+    keyword: Optional[str] = Query(None, description="关键词（箱号、产品、条码等）"),
+    product_code: Optional[str] = Query(None, description="产品编码（模糊搜索）"),
+    product_name: Optional[str] = Query(None, description="产品名称（模糊搜索）"),
+    product_serial_no: Optional[str] = Query(None, description="产品序列号（模糊搜索）"),
+    packing_material_name: Optional[str] = Query(None, description="包装物料名称（模糊搜索）"),
+    binding_method: Optional[str] = Query(None, description="绑定方式（scan/manual）"),
+    source_type: Optional[str] = Query(None, description="来源类型（finished_goods_receipt/sales_delivery）"),
+    bound_at_start_date: Optional[date] = Query(None, description="绑定日期起"),
+    bound_at_end_date: Optional[date] = Query(None, description="绑定日期止"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 box_no、-bound_at"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> PackingBindingPageResponse:
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in PACKING_BINDING_SORTABLE_FIELDS:
+            safe_order_by = order_by
+    bound_at_from = datetime.combine(bound_at_start_date, time.min) if bound_at_start_date else None
+    bound_at_to = datetime.combine(bound_at_end_date, time.max) if bound_at_end_date else None
     return await packing_binding_service.list_packing_bindings_page(
         tenant_id=tenant_id,
         skip=skip,
@@ -2239,6 +2368,18 @@ async def list_packing_bindings_page(
         product_id=product_id,
         box_no=box_no,
         uuid_value=uuid,
+        keyword=keyword,
+        product_code=product_code,
+        product_name=product_name,
+        product_serial_no=product_serial_no,
+        packing_material_name=packing_material_name,
+        binding_method=binding_method,
+        source_type=source_type,
+        bound_at_from=bound_at_from,
+        bound_at_to=bound_at_to,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        order_by=safe_order_by,
     )
 
 
@@ -2388,15 +2529,21 @@ async def create_inventory_alert_rule(
         raise _http_exception_with_trace(400, str(e), "/inventory-alert-rules", tenant_id)
 
 
-@router.get("/inventory-alert-rules", response_model=List[InventoryAlertRuleListResponse], summary="List inventory alert rules")
+@router.get("/inventory-alert-rules", summary="List inventory alert rules")
 async def list_inventory_alert_rules(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     alert_type: Optional[str] = Query(None, description="预警类型"),
     is_enabled: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[InventoryAlertRuleListResponse]:
+) -> dict:
     """
     获取库存预警规则列表
 
@@ -2409,13 +2556,20 @@ async def list_inventory_alert_rules(
 
     返回库存预警规则列表。
     """
-    return await inventory_alert_rule_service.list_alert_rules(
+    items, total = await inventory_alert_rule_service.list_alert_rules(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
         alert_type=alert_type,
         is_enabled=is_enabled,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
+    return {"items": items, "total": total}
 
 
 @router.get("/inventory-alert-rules/{rule_id}", response_model=InventoryAlertRuleResponse, summary="Get inventory alert rule")
@@ -2515,7 +2669,7 @@ async def get_inventory_alert_statistics(
     return JSONResponse(content=statistics)
 
 
-@router.get("/inventory-alerts", response_model=List[InventoryAlertListResponse], summary="List inventory alerts")
+@router.get("/inventory-alerts", summary="List inventory alerts")
 async def list_inventory_alerts(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -2524,9 +2678,15 @@ async def list_inventory_alerts(
     alert_level: Optional[str] = Query(None, description="预警级别"),
     material_id: Optional[int] = Query(None, description="物料ID"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    keyword: Optional[str] = Query(None, description="关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    triggered_start_date: Optional[str] = Query(None, description="触发开始日期"),
+    triggered_end_date: Optional[str] = Query(None, description="触发结束日期"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[InventoryAlertListResponse]:
+) -> dict:
     """
     获取库存预警记录列表
 
@@ -2542,7 +2702,7 @@ async def list_inventory_alerts(
 
     返回库存预警记录列表。
     """
-    return await inventory_alert_service.get_alerts(
+    items, total = await inventory_alert_service.get_alerts(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -2551,7 +2711,14 @@ async def list_inventory_alerts(
         alert_level=alert_level,
         material_id=material_id,
         warehouse_id=warehouse_id,
+        keyword=keyword,
+        order_by=order_by,
+        triggered_start_date=triggered_start_date,
+        triggered_end_date=triggered_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
     )
+    return {"items": items, "total": total}
 
 
 @router.get("/inventory-alerts/{alert_id}", response_model=InventoryAlertResponse, summary="Get inventory alert")
@@ -2779,47 +2946,46 @@ async def create_and_start_production_from_customer_material(
         )
 
 
-@router.get("/inventory/customer-material-registration", response_model=List[CustomerMaterialRegistrationListResponse], summary="List customer material registrations")
+@router.get("/inventory/customer-material-registration", summary="List customer material registrations")
 async def list_customer_material_registrations(
     skip: int = Query(0, description="跳过数量"),
     limit: int = Query(100, description="限制数量"),
     customer_id: Optional[int] = Query(None, description="客户ID"),
     status: Optional[str] = Query(None, description="状态"),
-    registration_date_start: Optional[str] = Query(None, description="登记开始日期（ISO格式）"),
-    registration_date_end: Optional[str] = Query(None, description="登记结束日期（ISO格式）"),
+    registration_date_start: Optional[str] = Query(None, description="登记开始日期"),
+    registration_date_end: Optional[str] = Query(None, description="登记结束日期"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[CustomerMaterialRegistrationListResponse]:
+):
     """
     获取客户来料登记列表
 
     支持多种筛选条件的高级搜索。
     """
-    # 转换时间参数
-    date_start_dt = None
-    date_end_dt = None
-
-    if registration_date_start:
-        try:
-            date_start_dt = datetime.fromisoformat(registration_date_start.replace('Z', '+00:00'))
-        except ValueError:
-            pass
-
-    if registration_date_end:
-        try:
-            date_end_dt = datetime.fromisoformat(registration_date_end.replace('Z', '+00:00'))
-        except ValueError:
-            pass
-
-    return await customer_material_registration_service.list_registrations(
+    items, total = await customer_material_registration_service.list_registrations(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
         customer_id=customer_id,
         status=status,
-        registration_date_start=date_start_dt,
-        registration_date_end=date_end_dt,
+        registration_date_start=registration_date_start,
+        registration_date_end=registration_date_end,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 
 # ============ 条码映射规则管理 API ============
@@ -2843,27 +3009,40 @@ async def create_barcode_mapping_rule(
     )
 
 
-@router.get("/inventory/customer-material-registration/mapping-rules", response_model=List[BarcodeMappingRuleListResponse], summary="List barcode mapping rules")
+@router.get("/inventory/customer-material-registration/mapping-rules", summary="List barcode mapping rules")
 async def list_barcode_mapping_rules(
     skip: int = Query(0, description="跳过数量"),
     limit: int = Query(100, description="限制数量"),
     customer_id: Optional[int] = Query(None, description="客户ID"),
     is_enabled: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[BarcodeMappingRuleListResponse]:
+) -> dict:
     """
     获取条码映射规则列表
 
     支持多种筛选条件的高级搜索。
     """
-    return await barcode_mapping_rule_service.list_mapping_rules(
+    items, total = await barcode_mapping_rule_service.list_mapping_rules(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
         customer_id=customer_id,
         is_enabled=is_enabled,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
+    return {"items": items, "total": total}
 
 
 @router.get("/inventory/customer-material-registration/{registration_id}", response_model=CustomerMaterialRegistrationResponse, summary="Get customer material registration")
@@ -3627,39 +3806,56 @@ async def pull_sales_return_from_sales_order(
     )
 
 
-@router.get("/sales-returns", response_model=List[SalesReturnResponse], summary="List sales returns")
+@router.get("/sales-returns", response_model=SalesReturnListPaginatedResponse, summary="List sales returns")
 async def list_sales_returns(
     skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(20, ge=1, le=100, description="限制数量"),
+    limit: int = Query(20, ge=1, le=1000, description="限制数量"),
     status: Optional[str] = Query(None, description="退货状态筛选"),
     sales_delivery_id: Optional[int] = Query(None, description="销售出库单ID筛选"),
     customer_id: Optional[int] = Query(None, description="客户ID筛选"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
+    keyword: Optional[str] = Query(None, description="关键词（退货单号、客户、出库单、订单、仓库）"),
+    return_code: Optional[str] = Query(None, description="退货单号（模糊）"),
+    sales_delivery_code: Optional[str] = Query(None, description="出库单号（模糊）"),
+    sales_order_code: Optional[str] = Query(None, description="销售订单号（模糊）"),
+    return_start_date: Optional[date] = Query(None, description="退货时间起"),
+    return_end_date: Optional[date] = Query(None, description="退货时间止"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 return_time、-created_at（前缀-表示降序）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[SalesReturnResponse]:
+) -> SalesReturnListPaginatedResponse:
     """
     获取销售退货单列表
-
-    - **skip**: 跳过数量
-    - **limit**: 限制数量
-    - **status**: 退货状态筛选
-    - **sales_delivery_id**: 销售出库单ID筛选
-    - **customer_id**: 客户ID筛选
     """
-    filters = {}
-    if status:
-        filters['status'] = status
-    if sales_delivery_id:
-        filters['sales_delivery_id'] = sales_delivery_id
-    if customer_id:
-        filters['customer_id'] = customer_id
-    
-    return await SalesReturnService().list_sales_returns(
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in SALES_RETURN_SORTABLE_FIELDS:
+            safe_order_by = order_by
+    filters: Dict[str, Any] = {
+        'status': status,
+        'sales_delivery_id': sales_delivery_id,
+        'customer_id': customer_id,
+        'warehouse_id': warehouse_id,
+        'keyword': keyword,
+        'return_code': return_code,
+        'sales_delivery_code': sales_delivery_code,
+        'sales_order_code': sales_order_code,
+        'return_start_date': return_start_date,
+        'return_end_date': return_end_date,
+        'created_start_date': created_start_date,
+        'created_end_date': created_end_date,
+        'order_by': safe_order_by,
+    }
+    result = await SalesReturnService().list_sales_returns(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
-        **filters
+        **{k: v for k, v in filters.items() if v is not None},
     )
+    return SalesReturnListPaginatedResponse(**result)
 
 
 @router.get("/sales-returns/{return_id}", response_model=SalesReturnResponse, summary="Get sales return")
@@ -4206,39 +4402,54 @@ async def pull_purchase_return_from_purchase_order(
     )
 
 
-@router.get("/purchase-returns", response_model=List[PurchaseReturnResponse], summary="List purchase returns")
+@router.get("/purchase-returns", response_model=PurchaseReturnListPaginatedResponse, summary="List purchase returns")
 async def list_purchase_returns(
     skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(20, ge=1, le=100, description="限制数量"),
+    limit: int = Query(20, ge=1, le=1000, description="限制数量"),
     status: Optional[str] = Query(None, description="退货状态筛选"),
     purchase_receipt_id: Optional[int] = Query(None, description="采购入库单ID筛选"),
     supplier_id: Optional[int] = Query(None, description="供应商ID筛选"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
+    keyword: Optional[str] = Query(None, description="关键词（退货单号、供应商、入库单、订单、仓库）"),
+    return_code: Optional[str] = Query(None, description="退货单号（模糊）"),
+    purchase_receipt_code: Optional[str] = Query(None, description="采购入库单号（模糊）"),
+    purchase_order_code: Optional[str] = Query(None, description="采购订单号（模糊）"),
+    return_start_date: Optional[date] = Query(None, description="退货时间起"),
+    return_end_date: Optional[date] = Query(None, description="退货时间止"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 return_time、-created_at"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[PurchaseReturnResponse]:
-    """
-    获取采购退货单列表
-
-    - **skip**: 跳过数量
-    - **limit**: 限制数量
-    - **status**: 退货状态筛选
-    - **purchase_receipt_id**: 采购入库单ID筛选
-    - **supplier_id**: 供应商ID筛选
-    """
-    filters = {}
-    if status:
-        filters['status'] = status
-    if purchase_receipt_id:
-        filters['purchase_receipt_id'] = purchase_receipt_id
-    if supplier_id:
-        filters['supplier_id'] = supplier_id
-    
-    return await PurchaseReturnService().list_purchase_returns(
+) -> PurchaseReturnListPaginatedResponse:
+    """获取采购退货单列表"""
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in PURCHASE_RETURN_SORTABLE_FIELDS:
+            safe_order_by = order_by
+    filters: Dict[str, Any] = {
+        'status': status,
+        'purchase_receipt_id': purchase_receipt_id,
+        'supplier_id': supplier_id,
+        'warehouse_id': warehouse_id,
+        'keyword': keyword,
+        'return_code': return_code,
+        'purchase_receipt_code': purchase_receipt_code,
+        'purchase_order_code': purchase_order_code,
+        'return_start_date': return_start_date,
+        'return_end_date': return_end_date,
+        'created_start_date': created_start_date,
+        'created_end_date': created_end_date,
+        'order_by': safe_order_by,
+    }
+    result = await PurchaseReturnService().list_purchase_returns(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
-        **filters
+        **{k: v for k, v in filters.items() if v is not None},
     )
+    return PurchaseReturnListPaginatedResponse(**result)
 
 
 @router.get("/purchase-returns/statistics", summary="Purchase return statistics (KPI cards)")
@@ -4387,7 +4598,7 @@ async def generate_replenishment_suggestions_from_alerts(
     )
 
 
-@router.get("/replenishment-suggestions", response_model=List[ReplenishmentSuggestionListResponse], summary="List replenishment suggestions")
+@router.get("/replenishment-suggestions", summary="List replenishment suggestions")
 async def list_replenishment_suggestions(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=200, description="限制数量"),
@@ -4396,9 +4607,17 @@ async def list_replenishment_suggestions(
     suggestion_type: Optional[str] = Query(None, description="建议类型筛选"),
     material_id: Optional[int] = Query(None, description="物料ID筛选"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
+    keyword: Optional[str] = Query(None, description="关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    suggested_order_start_date: Optional[str] = Query(None, description="建议下单开始日期"),
+    suggested_order_end_date: Optional[str] = Query(None, description="建议下单结束日期"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[ReplenishmentSuggestionListResponse]:
+) -> dict:
     """
     获取补货建议列表
 
@@ -4410,7 +4629,7 @@ async def list_replenishment_suggestions(
     - **material_id**: 物料ID筛选
     - **warehouse_id**: 仓库ID筛选
     """
-    return await ReplenishmentSuggestionService().get_suggestions(
+    items, total = await ReplenishmentSuggestionService().get_suggestions(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -4419,7 +4638,16 @@ async def list_replenishment_suggestions(
         suggestion_type=suggestion_type,
         material_id=material_id,
         warehouse_id=warehouse_id,
+        keyword=keyword,
+        order_by=order_by,
+        suggested_order_start_date=suggested_order_start_date,
+        suggested_order_end_date=suggested_order_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
+    return {"items": items, "total": total}
 
 
 @router.get("/replenishment-suggestions/{suggestion_id}", response_model=ReplenishmentSuggestionResponse, summary="Get replenishment suggestion")
@@ -4473,6 +4701,8 @@ async def list_batching_center_tasks(
     task_type: Optional[str] = Query(None, description="proactive_prep|material_call|batching_draft|backflush_alert"),
     status: Optional[str] = Query(None),
     work_order_code: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None, description="关键词（工单/单据/物料）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
     priority: Optional[str] = Query(None),
     include_completed_batching: bool = Query(False),
     include_proactive_prep: bool = Query(
@@ -4488,6 +4718,8 @@ async def list_batching_center_tasks(
         task_type=task_type,
         status=status,
         work_order_code=work_order_code,
+        keyword=keyword,
+        order_by=order_by,
         priority=priority,
         include_completed_batching=include_completed_batching,
         include_proactive_prep=include_proactive_prep,

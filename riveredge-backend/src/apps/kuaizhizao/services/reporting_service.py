@@ -10,7 +10,7 @@ Date: 2025-01-01
 import uuid
 import math
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from decimal import Decimal
 
 from core.utils.timezone_utils import is_future_datetime
@@ -108,6 +108,25 @@ def _maybe_mark_operation_completed(
         work_order_operation.actual_end_date or now or datetime.now()
     )
     return True
+
+
+REPORTING_SORTABLE_FIELDS = frozenset({
+    "work_order_code",
+    "work_order_name",
+    "operation_code",
+    "operation_name",
+    "worker_name",
+    "recorded_by_name",
+    "reported_quantity",
+    "qualified_quantity",
+    "unqualified_quantity",
+    "work_hours",
+    "status",
+    "reported_at",
+    "approved_at",
+    "created_at",
+    "updated_at",
+})
 
 
 class ReportingService(AppBaseService[ReportingRecord]):
@@ -847,7 +866,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
         status: Optional[str] = None,
         reported_at_start: Optional[datetime] = None,
         reported_at_end: Optional[datetime] = None,
-    ) -> List[ReportingRecordListResponse]:
+        keyword: Optional[str] = None,
+        order_by: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         获取报工记录列表
 
@@ -866,13 +887,25 @@ class ReportingService(AppBaseService[ReportingRecord]):
         Returns:
             List[ReportingRecordListResponse]: 报工记录列表
         """
-        query = ReportingRecord.filter(tenant_id=tenant_id)
+        query = ReportingRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         # 添加筛选条件
-        if work_order_code:
-            query = query.filter(work_order_code__icontains=work_order_code)
-        if work_order_name:
-            query = query.filter(work_order_name__icontains=work_order_name)
+        kw = (keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(work_order_code__icontains=kw)
+                | Q(work_order_name__icontains=kw)
+                | Q(operation_name__icontains=kw)
+                | Q(operation_code__icontains=kw)
+                | Q(worker_name__icontains=kw)
+                | Q(recorded_by_name__icontains=kw)
+            )
+        wc = (work_order_code or "").strip()
+        if wc:
+            query = query.filter(work_order_code__icontains=wc)
+        wn = (work_order_name or "").strip()
+        if wn:
+            query = query.filter(work_order_name__icontains=wn)
         if operation_name:
             query = query.filter(operation_name__icontains=operation_name)
         if worker_name:
@@ -884,7 +917,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
         if reported_at_end:
             query = query.filter(reported_at__lte=reported_at_end)
 
-        records = await query.offset(skip).limit(limit).order_by("-reported_at").all()
+        total = await query.count()
+        order_clause = order_by if order_by else "-reported_at"
+        records = await query.offset(skip).limit(limit).order_by(order_clause).all()
         from core.services.approval.audit_record_enricher import enrich_items
         from apps.kuaizhizao.services.document_lifecycle_service import get_reporting_record_lifecycle
 
@@ -894,7 +929,12 @@ class ReportingService(AppBaseService[ReportingRecord]):
             resp.lifecycle = get_reporting_record_lifecycle(record)
             rows.append(resp)
         rows = await enrich_items(tenant_id, "reporting_record", rows)
-        return enrich_reporting_record_list_capabilities(records, rows)
+        enriched = enrich_reporting_record_list_capabilities(records, rows)
+        return {
+            "data": [r.model_dump() for r in enriched],
+            "total": total,
+            "success": True,
+        }
 
     async def approve_reporting_record(
         self,

@@ -102,8 +102,12 @@ async def list_plants(
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     is_active: Optional[bool] = Query(None, description="是否启用"),
     keyword: Optional[str] = Query(None, description="搜索关键词（厂区编码或名称）"),
-    code: Optional[str] = Query(None, description="厂区编码（精确匹配）"),
+    code: Optional[str] = Query(None, description="厂区编码（模糊匹配）"),
     name: Optional[str] = Query(None, description="厂区名称（模糊匹配）"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
     sort_field: Optional[str] = Query(None, description="排序字段（code/name/createdAt/updatedAt/isActive）"),
     sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
 ):
@@ -119,7 +123,9 @@ async def list_plants(
     """
     try:
         return await FactoryService.list_plants(
-            tenant_id, skip, limit, is_active, keyword, code, name, sort_field, sort_order
+            tenant_id, skip, limit, is_active, keyword, code, name,
+            created_start_date, created_end_date, updated_start_date, updated_end_date,
+            sort_field, sort_order,
         )
     except Exception as e:
         from loguru import logger
@@ -256,6 +262,10 @@ async def list_workshops(
     code: Optional[str] = Query(None, description="车间编码（精确匹配）"),
     name: Optional[str] = Query(None, description="车间名称（模糊匹配）"),
     plant_id: Optional[int] = Query(None, description="所属厂区ID（过滤）"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
     sort_field: Optional[str] = Query(None, description="排序字段（含 code/name/plantId/createdAt 等）"),
     sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
 ):
@@ -271,7 +281,20 @@ async def list_workshops(
     """
     try:
         return await FactoryService.list_workshops(
-            tenant_id, skip, limit, is_active, keyword, code, name, plant_id, sort_field, sort_order
+            tenant_id,
+            skip,
+            limit,
+            is_active,
+            keyword,
+            code,
+            name,
+            plant_id,
+            created_start_date,
+            created_end_date,
+            updated_start_date,
+            updated_end_date,
+            sort_field,
+            sort_order,
         )
     except Exception as e:
         from loguru import logger
@@ -406,6 +429,12 @@ async def list_production_lines(
     workshop_id: Optional[int] = Query(None, description="车间ID（过滤）"),
     is_active: Optional[bool] = Query(None, description="是否启用"),
     keyword: Optional[str] = Query(None, description="搜索关键词（产线编码或名称）"),
+    code: Optional[str] = Query(None, description="产线编码（模糊匹配）"),
+    name: Optional[str] = Query(None, description="产线名称（模糊匹配）"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
     sort_field: Optional[str] = Query(None, description="排序字段"),
     sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
 ):
@@ -418,7 +447,20 @@ async def list_production_lines(
     - **is_active**: 是否启用（可选）
     """
     return await FactoryService.list_production_lines(
-        tenant_id, skip, limit, workshop_id, is_active, keyword, sort_field, sort_order
+        tenant_id,
+        skip,
+        limit,
+        workshop_id,
+        is_active,
+        keyword,
+        code,
+        name,
+        created_start_date,
+        created_end_date,
+        updated_start_date,
+        updated_end_date,
+        sort_field,
+        sort_order,
     )
 
 
@@ -547,6 +589,12 @@ async def list_workstations(
     production_line_id: Optional[int] = Query(None, description="产线ID（过滤）"),
     is_active: Optional[bool] = Query(None, description="是否启用"),
     keyword: Optional[str] = Query(None, description="搜索关键词（工位编码或名称）"),
+    code: Optional[str] = Query(None, description="工位编码（模糊匹配）"),
+    name: Optional[str] = Query(None, description="工位名称（模糊匹配）"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
     sort_field: Optional[str] = Query(None, description="排序字段"),
     sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
 ):
@@ -559,7 +607,20 @@ async def list_workstations(
     - **is_active**: 是否启用（可选）
     """
     return await FactoryService.list_workstations(
-        tenant_id, skip, limit, production_line_id, is_active, keyword, sort_field, sort_order
+        tenant_id,
+        skip,
+        limit,
+        production_line_id,
+        is_active,
+        keyword,
+        code,
+        name,
+        created_start_date,
+        created_end_date,
+        updated_start_date,
+        updated_end_date,
+        sort_field,
+        sort_order,
     )
 
 
@@ -682,6 +743,10 @@ async def list_work_centers(
     keyword: Optional[str] = Query(None, description="搜索关键词（工作中心编码或名称）"),
     code: Optional[str] = Query(None, description="工作中心编码（精确匹配）"),
     name: Optional[str] = Query(None, description="工作中心名称（模糊匹配）"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
     sort_field: Optional[str] = Query(None, description="排序字段"),
     sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
 ):
@@ -697,7 +762,19 @@ async def list_work_centers(
     """
     try:
         return await FactoryService.list_work_centers(
-            tenant_id, skip, limit, is_active, keyword, code, name, sort_field, sort_order
+            tenant_id,
+            skip,
+            limit,
+            is_active,
+            keyword,
+            code,
+            name,
+            created_start_date,
+            created_end_date,
+            updated_start_date,
+            updated_end_date,
+            sort_field,
+            sort_order,
         )
     except Exception as e:
         from loguru import logger
@@ -827,6 +904,10 @@ async def list_work_groups(
     keyword: Optional[str] = Query(None, description="搜索关键词（工作小组编码或名称）"),
     code: Optional[str] = Query(None, description="工作小组编码（精确匹配）"),
     name: Optional[str] = Query(None, description="工作小组名称（模糊匹配）"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
     sort_field: Optional[str] = Query(None, description="排序字段"),
     sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
 ):
@@ -842,7 +923,19 @@ async def list_work_groups(
     """
     try:
         return await WorkGroupService.list_work_groups(
-            tenant_id, skip, limit, is_active, keyword, code, name, sort_field, sort_order
+            tenant_id,
+            skip,
+            limit,
+            is_active,
+            keyword,
+            code,
+            name,
+            created_start_date,
+            created_end_date,
+            updated_start_date,
+            updated_end_date,
+            sort_field,
+            sort_order,
         )
     except Exception as e:
         from loguru import logger

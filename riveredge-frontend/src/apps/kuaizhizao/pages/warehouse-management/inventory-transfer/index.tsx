@@ -29,6 +29,14 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  WAREHOUSE_DOC_PINNED_STATUS_FIELD,
+  buildInventoryTransferModeValueEnum,
+  buildWarehouseWorkflowStatusValueEnum,
+  normalizeWarehouseListResponse,
+  resolveInventoryTransferListParams,
+} from '../../../utils/warehouseListCore';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
@@ -416,13 +424,50 @@ const InventoryTransferPage: React.FC = () => {
   /**
    * 表格列定义
    */
+  const workflowStatusValueEnum = useMemo(() => buildWarehouseWorkflowStatusValueEnum(t), [t]);
+  const transferModeValueEnum = useMemo(() => buildInventoryTransferModeValueEnum(t), [t]);
+
   const columns: ProColumns<InventoryTransfer>[] = useMemo(() => [
+    {
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 10 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      dataIndex: 'status',
+      valueType: 'select',
+      valueEnum: workflowStatusValueEnum,
+      hideInTable: true,
+      search: { order: 20 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.inventoryTransfer.colTransferMode'),
+      dataIndex: 'transfer_mode',
+      valueType: 'select',
+      valueEnum: transferModeValueEnum,
+      hideInTable: true,
+      search: { order: 30 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.inventoryTransfer.colTransferDate'),
+      dataIndex: 'transfer_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 40 } as ProColumns['search'],
+    },
     {
       title: t('app.kuaizhizao.warehouseReports.colTransferCode'),
       dataIndex: 'code',
       width: 150,
       ellipsis: true,
       fixed: 'left',
+      sorter: true,
+      search: { order: 50 } as ProColumns['search'],
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
           {r.code ?? '-'}
@@ -433,10 +478,8 @@ const InventoryTransferPage: React.FC = () => {
       title: t('app.kuaizhizao.inventoryTransfer.colTransferMode'),
       dataIndex: 'transfer_mode',
       width: 110,
-      valueEnum: {
-        transfer: { text: t('app.kuaizhizao.inventoryTransfer.transferModeCross'), status: 'processing' },
-        bin_relocation: { text: t('app.kuaizhizao.inventoryTransfer.transferModeBinRelocation'), status: 'warning' },
-      },
+      sorter: true,
+      hideInSearch: true,
       render: (_, record) => (
         <Tag color={record.transfer_mode === 'bin_relocation' ? 'gold' : 'blue'}>
           {record.transfer_mode === 'bin_relocation'
@@ -450,45 +493,60 @@ const InventoryTransferPage: React.FC = () => {
       dataIndex: 'from_warehouse_name',
       width: 120,
       ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.warehouseReports.colToWarehouse'),
       dataIndex: 'to_warehouse_name',
       width: 120,
       ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.inventoryTransfer.colTransferDate'),
       dataIndex: 'transfer_date',
+      width: 132,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: true,
       valueType: 'date',
-      width: 120,
     },
     {
       title: t('app.kuaizhizao.inventoryTransfer.colTotalItems'),
       dataIndex: 'total_items',
       width: 120,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.inventoryTransfer.colTotalQty'),
       dataIndex: 'total_quantity',
       width: 120,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.inventoryTransfer.colTotalAmount'),
       dataIndex: 'total_amount',
       width: 120,
       align: 'right',
+      sorter: true,
+      hideInSearch: true,
       render: (_, record) => `¥${Number(record.total_amount ?? 0).toFixed(2)}`,
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
       defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
+      sorter: true,
+      render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at) : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
@@ -540,7 +598,7 @@ const InventoryTransferPage: React.FC = () => {
         </Space>
       ),
     },
-  ], [t]);
+  ], [t, workflowStatusValueEnum, transferModeValueEnum]);
 
   const getAreaOptions = (warehouseId?: number) =>
     storageAreaList
@@ -561,33 +619,25 @@ const InventoryTransferPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         showAdvancedSearch={true}
+        pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
+        skipFuzzyPinyinClientFilter
         showCreateButton={true}
         createButtonText={createButtonLabel}
         onCreate={handleCreate}
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           try {
             const lifecycleStage = resolveListLifecycleStageFromSearch(searchFormValues, params);
+            const listParams = resolveInventoryTransferListParams(searchFormValues, sort);
             const result = await inventoryTransferApi.list({
               skip: (params.current! - 1) * params.pageSize!,
               limit: params.pageSize,
-              code: params.code,
-              from_warehouse_id: params.from_warehouse_id,
-              to_warehouse_id: params.to_warehouse_id,
-              status: lifecycleStage ?? params.status,
-              transfer_mode: (params as any).transfer_mode,
-              keyword: (params as any).keyword,
+              ...listParams,
+              status: lifecycleStage ?? listParams.status,
             });
-            return {
-              data: result.items || [],
-              success: true,
-              total: result.total || 0,
-            };
-          } catch (error) {
-            return {
-              data: [],
-              success: false,
-              total: 0,
-            };
+            const { data, total } = normalizeWarehouseListResponse(result);
+            return { data, success: true, total };
+          } catch {
+            return { data: [], success: false, total: 0 };
           }
         }}
         enableRowSelection={true}

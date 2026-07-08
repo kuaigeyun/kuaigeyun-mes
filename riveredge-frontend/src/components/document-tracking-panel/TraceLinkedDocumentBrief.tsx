@@ -677,7 +677,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
         skip: 0,
         limit: 200,
       });
-      const arr = Array.isArray(rawList) ? rawList : (rawList as { items?: unknown[] })?.items ?? [];
+      const arr = rawList.data ?? [];
       let list = (arr as Record<string, unknown>[]).filter(
         (r) => String(r.work_order_code ?? '').trim() === woCode
       );

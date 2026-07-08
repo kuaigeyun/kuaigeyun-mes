@@ -10,6 +10,7 @@ Date: 2025-01-14
 """
 
 import uuid
+from datetime import date
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException
 from loguru import logger
@@ -19,7 +20,7 @@ from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_modu
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
-from apps.kuaizhizao.services.demand_service import DemandService
+from apps.kuaizhizao.services.demand_service import DemandService, DEMAND_SORTABLE_FIELDS
 from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
 from apps.kuaizhizao.schemas.document_relation import ChangeImpactResponse
 from apps.kuaizhizao.schemas.demand import (
@@ -232,6 +233,16 @@ async def list_demands(
     pushed_to_computation: Optional[bool] = Query(None, description="是否已下推计算"),
     business_mode: Optional[str] = Query(None, description="业务模式（MTS / MTO / ATO）"),
     review_status: Optional[str] = Query(None, description="审核状态"),
+    keyword: Optional[str] = Query(None, description="关键词（编码、名称、来源编码、客户名称等）"),
+    demand_code: Optional[str] = Query(None, description="需求编码（模糊）"),
+    demand_name: Optional[str] = Query(None, description="需求名称（模糊）"),
+    start_date_from: Optional[date] = Query(None, description="计划开始日期起"),
+    start_date_to: Optional[date] = Query(None, description="计划开始日期止"),
+    end_date_from: Optional[date] = Query(None, description="计划结束日期起"),
+    end_date_to: Optional[date] = Query(None, description="计划结束日期止"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 demand_code、-created_at"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -241,6 +252,12 @@ async def list_demands(
     支持按需求类型、状态、业务模式、审核状态等条件筛选。
     """
     try:
+        safe_order_by = None
+        if order_by:
+            field = order_by.lstrip("-")
+            if field in DEMAND_SORTABLE_FIELDS:
+                safe_order_by = order_by
+
         filters = {'demand_type': "demand_plan" if demand_type != "demand_plan" else demand_type}
         if demand_status:
             filters['status'] = demand_status
@@ -250,6 +267,26 @@ async def list_demands(
             filters['business_mode'] = business_mode
         if review_status:
             filters['review_status'] = review_status
+        if keyword and str(keyword).strip():
+            filters['keyword'] = str(keyword).strip()
+        if demand_code and str(demand_code).strip():
+            filters['demand_code'] = str(demand_code).strip()
+        if demand_name and str(demand_name).strip():
+            filters['demand_name'] = str(demand_name).strip()
+        if start_date_from is not None:
+            filters['start_date_from'] = start_date_from
+        if start_date_to is not None:
+            filters['start_date_to'] = start_date_to
+        if end_date_from is not None:
+            filters['end_date_from'] = end_date_from
+        if end_date_to is not None:
+            filters['end_date_to'] = end_date_to
+        if created_start_date is not None:
+            filters['created_start_date'] = created_start_date
+        if created_end_date is not None:
+            filters['created_end_date'] = created_end_date
+        if safe_order_by:
+            filters['order_by'] = safe_order_by
         
         result = await demand_service.list_demands(
             tenant_id=tenant_id,

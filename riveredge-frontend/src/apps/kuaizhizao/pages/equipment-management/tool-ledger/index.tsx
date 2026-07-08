@@ -46,6 +46,13 @@ import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  MASTER_DATA_PINNED_ACTIVE_FIELD,
+  buildActiveStatusValueEnum,
+  normalizeEquipmentListResponse,
+  resolveLedgerListParams,
+} from '../../../utils/equipmentListCore';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -382,30 +389,97 @@ const ToolLedgerPage: React.FC = () => {
     [t]
   );
 
+  const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
+
+  const toolStatusValueEnum = useMemo(
+    () => ({
+      正常: { text: t('app.kuaizhizao.toolLedger.statusNormal') },
+      领用中: { text: t('app.kuaizhizao.toolLedger.statusCheckedOut') },
+      维修中: { text: t('app.kuaizhizao.toolLedger.statusRepairing') },
+      校验中: { text: t('app.kuaizhizao.toolLedger.statusCalibrating') },
+      停用: { text: t('app.kuaizhizao.toolLedger.statusDisabled') },
+      报废: { text: t('app.kuaizhizao.toolLedger.statusScrapped') },
+    }),
+    [t],
+  );
+
   const columns: ProColumns<Tool>[] = useMemo(
     () => [
+    {
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 10 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.toolLedger.fieldIsActive'),
+      dataIndex: 'is_active',
+      valueType: 'select',
+      valueEnum: activeStatusValueEnum,
+      hideInTable: true,
+      search: { order: 20 } as ProColumns['search'],
+    },
+    {
+      title: t('common.status'),
+      dataIndex: 'status',
+      valueType: 'select',
+      valueEnum: toolStatusValueEnum,
+      hideInTable: true,
+      search: { order: 21 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.toolLedger.colType'),
+      dataIndex: 'type',
+      hideInTable: true,
+      search: { order: 22 } as ProColumns['search'],
+    },
     {
       title: t('app.kuaizhizao.toolLedger.colCode'),
       dataIndex: 'code',
       width: 140,
       ellipsis: true,
       fixed: 'left',
+      sorter: true,
+      search: { order: 30 } as ProColumns['search'],
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
           {r.code ?? '-'}
         </Typography.Text>
       ),
     },
-    { title: t('app.kuaizhizao.toolLedger.colName'), dataIndex: 'name', width: 200, ellipsis: true },
-    { title: t('app.kuaizhizao.toolLedger.colType'), dataIndex: 'type', width: 100 },
-    { title: t('app.kuaizhizao.toolLedger.colSpec'), dataIndex: 'spec', width: 120, ellipsis: true },
-    { title: t('app.kuaizhizao.toolLedger.colTotalUsageCount'), dataIndex: 'total_usage_count', width: 110 },
+    {
+      title: t('app.kuaizhizao.toolLedger.colName'),
+      dataIndex: 'name',
+      width: 200,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.toolLedger.colType'),
+      dataIndex: 'type',
+      width: 100,
+      sorter: true,
+      hideInSearch: true,
+    },
+    { title: t('app.kuaizhizao.toolLedger.colSpec'), dataIndex: 'spec', width: 120, ellipsis: true, hideInSearch: true },
+    {
+      title: t('app.kuaizhizao.toolLedger.colTotalUsageCount'),
+      dataIndex: 'total_usage_count',
+      width: 110,
+      sorter: true,
+      hideInSearch: true,
+    },
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
       defaultSortOrder: 'descend',
+      sorter: true,
       render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
@@ -442,7 +516,7 @@ const ToolLedgerPage: React.FC = () => {
       ],
     },
   ],
-  [t],
+  [t, activeStatusValueEnum, toolStatusValueEnum],
   );
 
   const maintenanceTableColumns = useMemo(
@@ -496,22 +570,25 @@ const ToolLedgerPage: React.FC = () => {
           rowKey="uuid"
           columns={columns}
           showAdvancedSearch={true}
+          pinnedTabsField={MASTER_DATA_PINNED_ACTIVE_FIELD}
+          skipFuzzyPinyinClientFilter
           onRow={(record) => ({
             onClick: () => void handleDetail(record),
             style: { cursor: 'pointer' },
           })}
-          request={async (params) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const listParams = resolveLedgerListParams(searchFormValues, sort);
               const response = await toolApi.list({
-                skip: (params.current! - 1) * params.pageSize!,
+                skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
                 limit: params.pageSize,
-                ...params,
-                keyword: (params as any).keyword,
+                ...listParams,
               });
+              const { data, total } = normalizeEquipmentListResponse(response);
               return {
-                data: response.items || [],
+                data: data as Tool[],
                 success: true,
-                total: response.total || 0,
+                total,
               };
             } catch (error) {
               messageApi.error(t('app.kuaizhizao.toolLedger.getListFailed'));

@@ -87,6 +87,12 @@ async def list_warehouses(
     is_active: Optional[bool] = Query(None, description="是否启用"),
     warehouse_type: Optional[str] = Query(None, description="仓库类型（normal/line_side/wip/outsourcing/consignment/vmi/defect/quarantine）"),
     keyword: Optional[str] = Query(None, description="关键词（编码或名称模糊匹配）"),
+    code: Optional[str] = Query(None, description="仓库编码（模糊匹配）"),
+    name: Optional[str] = Query(None, description="仓库名称（模糊匹配）"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
     sort_field: Optional[str] = Query(None, description="排序字段（code/name/createdAt 等）"),
     sort_order: Optional[str] = Query(None, description="排序方向：asc / desc"),
 ):
@@ -102,7 +108,20 @@ async def list_warehouses(
     """
     try:
         return await WarehouseService.list_warehouses(
-            tenant_id, skip, limit, is_active, warehouse_type, keyword, sort_field, sort_order
+            tenant_id,
+            skip,
+            limit,
+            is_active,
+            warehouse_type,
+            keyword,
+            code,
+            name,
+            created_start_date,
+            created_end_date,
+            updated_start_date,
+            updated_end_date,
+            sort_field,
+            sort_order,
         )
     except Exception as e:
         from loguru import logger
@@ -283,6 +302,12 @@ async def list_storage_areas(
     warehouse_id: Optional[int] = Query(None, description="仓库ID（过滤）"),
     is_active: Optional[bool] = Query(None, description="是否启用"),
     keyword: Optional[str] = Query(None, description="关键词（编码或名称模糊匹配）"),
+    code: Optional[str] = Query(None, description="库区编码（模糊匹配）"),
+    name: Optional[str] = Query(None, description="库区名称（模糊匹配）"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
     sort_field: Optional[str] = Query(None, description="排序字段"),
     sort_order: Optional[str] = Query(None, description="排序方向：asc / desc"),
 ):
@@ -297,7 +322,20 @@ async def list_storage_areas(
     - **sort_field** / **sort_order**: 表格排序（可选）
     """
     return await WarehouseService.list_storage_areas(
-        tenant_id, skip, limit, warehouse_id, is_active, keyword, sort_field, sort_order
+        tenant_id,
+        skip,
+        limit,
+        warehouse_id,
+        is_active,
+        keyword,
+        code,
+        name,
+        created_start_date,
+        created_end_date,
+        updated_start_date,
+        updated_end_date,
+        sort_field,
+        sort_order,
     )
 
 
@@ -426,6 +464,12 @@ async def list_storage_locations(
     storage_area_id: Optional[int] = Query(None, description="库区ID（过滤）"),
     is_active: Optional[bool] = Query(None, description="是否启用"),
     keyword: Optional[str] = Query(None, description="关键词（编码或名称模糊匹配）"),
+    code: Optional[str] = Query(None, description="库位编码（模糊匹配）"),
+    name: Optional[str] = Query(None, description="库位名称（模糊匹配）"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期 YYYY-MM-DD"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
     sort_field: Optional[str] = Query(None, description="排序字段"),
     sort_order: Optional[str] = Query(None, description="排序方向：asc / desc"),
 ):
@@ -440,7 +484,20 @@ async def list_storage_locations(
     - **sort_field** / **sort_order**: 表格排序（可选）
     """
     return await WarehouseService.list_storage_locations(
-        tenant_id, skip, limit, storage_area_id, is_active, keyword, sort_field, sort_order
+        tenant_id,
+        skip,
+        limit,
+        storage_area_id,
+        is_active,
+        keyword,
+        code,
+        name,
+        created_start_date,
+        created_end_date,
+        updated_start_date,
+        updated_end_date,
+        sort_field,
+        sort_order,
     )
 
 

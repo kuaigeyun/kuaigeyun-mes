@@ -8,7 +8,7 @@ Date: 2025-01-04
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime, time
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 
@@ -40,6 +40,22 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
     enrich_packing_binding_capabilities_on_response,
     enrich_packing_binding_list_capabilities,
 )
+
+PACKING_BINDING_SORTABLE_FIELDS = frozenset({
+    "box_no",
+    "product_code",
+    "product_name",
+    "product_serial_no",
+    "packing_quantity",
+    "packing_material_code",
+    "packing_material_name",
+    "binding_method",
+    "barcode",
+    "bound_by_name",
+    "bound_at",
+    "created_at",
+    "updated_at",
+})
 
 
 class PackingBindingService(AppBaseService[PackingBinding]):
@@ -335,6 +351,83 @@ class PackingBindingService(AppBaseService[PackingBinding]):
         binding.deleted_at = datetime.now()
         await binding.save()
 
+    def _build_packing_binding_list_query(
+        self,
+        tenant_id: int,
+        receipt_id: Optional[int] = None,
+        sales_delivery_id: Optional[int] = None,
+        product_id: Optional[int] = None,
+        box_no: Optional[str] = None,
+        uuid_value: Optional[str] = None,
+        keyword: Optional[str] = None,
+        product_code: Optional[str] = None,
+        product_name: Optional[str] = None,
+        product_serial_no: Optional[str] = None,
+        packing_material_name: Optional[str] = None,
+        binding_method: Optional[str] = None,
+        source_type: Optional[str] = None,
+        bound_at_from: Optional[datetime] = None,
+        bound_at_to: Optional[datetime] = None,
+        created_start_date: Optional[date] = None,
+        created_end_date: Optional[date] = None,
+    ):
+        query = PackingBinding.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+
+        if receipt_id:
+            query = query.filter(finished_goods_receipt_id=receipt_id)
+        if sales_delivery_id:
+            query = query.filter(sales_delivery_id=sales_delivery_id)
+        if product_id:
+            query = query.filter(product_id=product_id)
+        bn = (box_no or "").strip()
+        if bn:
+            query = query.filter(box_no__icontains=bn)
+        if uuid_value:
+            query = query.filter(uuid=uuid_value)
+
+        kw = (keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(box_no__icontains=kw)
+                | Q(product_code__icontains=kw)
+                | Q(product_name__icontains=kw)
+                | Q(product_serial_no__icontains=kw)
+                | Q(packing_material_name__icontains=kw)
+                | Q(barcode__icontains=kw)
+                | Q(bound_by_name__icontains=kw)
+            )
+        pc = (product_code or "").strip()
+        if pc:
+            query = query.filter(product_code__icontains=pc)
+        pn = (product_name or "").strip()
+        if pn:
+            query = query.filter(product_name__icontains=pn)
+        psn = (product_serial_no or "").strip()
+        if psn:
+            query = query.filter(product_serial_no__icontains=psn)
+        pmn = (packing_material_name or "").strip()
+        if pmn:
+            query = query.filter(packing_material_name__icontains=pmn)
+        if binding_method:
+            query = query.filter(binding_method=binding_method)
+        st = (source_type or "").strip()
+        if st == "finished_goods_receipt":
+            query = query.filter(finished_goods_receipt_id__isnull=False)
+        elif st == "sales_delivery":
+            query = query.filter(sales_delivery_id__isnull=False)
+        if bound_at_from is not None:
+            query = query.filter(bound_at__gte=bound_at_from)
+        if bound_at_to is not None:
+            query = query.filter(bound_at__lte=bound_at_to)
+        if created_start_date is not None:
+            query = query.filter(created_at__gte=datetime.combine(created_start_date, time.min))
+        if created_end_date is not None:
+            query = query.filter(created_at__lte=datetime.combine(created_end_date, time.max))
+        return query
+
     async def list_packing_bindings(
         self,
         tenant_id: int,
@@ -345,6 +438,18 @@ class PackingBindingService(AppBaseService[PackingBinding]):
         product_id: Optional[int] = None,
         box_no: Optional[str] = None,
         uuid_value: Optional[str] = None,
+        keyword: Optional[str] = None,
+        product_code: Optional[str] = None,
+        product_name: Optional[str] = None,
+        product_serial_no: Optional[str] = None,
+        packing_material_name: Optional[str] = None,
+        binding_method: Optional[str] = None,
+        source_type: Optional[str] = None,
+        bound_at_from: Optional[datetime] = None,
+        bound_at_to: Optional[datetime] = None,
+        created_start_date: Optional[date] = None,
+        created_end_date: Optional[date] = None,
+        order_by: Optional[str] = None,
     ) -> List[PackingBindingListResponse]:
         """
         获取装箱绑定记录列表
@@ -360,23 +465,28 @@ class PackingBindingService(AppBaseService[PackingBinding]):
         Returns:
             List[PackingBindingListResponse]: 装箱绑定记录列表
         """
-        query = PackingBinding.filter(
+        query = self._build_packing_binding_list_query(
             tenant_id=tenant_id,
-            deleted_at__isnull=True
+            receipt_id=receipt_id,
+            sales_delivery_id=sales_delivery_id,
+            product_id=product_id,
+            box_no=box_no,
+            uuid_value=uuid_value,
+            keyword=keyword,
+            product_code=product_code,
+            product_name=product_name,
+            product_serial_no=product_serial_no,
+            packing_material_name=packing_material_name,
+            binding_method=binding_method,
+            source_type=source_type,
+            bound_at_from=bound_at_from,
+            bound_at_to=bound_at_to,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
         )
 
-        if receipt_id:
-            query = query.filter(finished_goods_receipt_id=receipt_id)
-        if sales_delivery_id:
-            query = query.filter(sales_delivery_id=sales_delivery_id)
-        if product_id:
-            query = query.filter(product_id=product_id)
-        if box_no:
-            query = query.filter(box_no__icontains=box_no)
-        if uuid_value:
-            query = query.filter(uuid=uuid_value)
-
-        bindings = await query.order_by('-bound_at').offset(skip).limit(limit)
+        order_clause = order_by if order_by else "-bound_at"
+        bindings = await query.order_by(order_clause).offset(skip).limit(limit)
 
         responses = [PackingBindingListResponse.model_validate(binding) for binding in bindings]
         return enrich_packing_binding_list_capabilities(bindings, responses)
@@ -391,32 +501,51 @@ class PackingBindingService(AppBaseService[PackingBinding]):
         product_id: Optional[int] = None,
         box_no: Optional[str] = None,
         uuid_value: Optional[str] = None,
+        keyword: Optional[str] = None,
+        product_code: Optional[str] = None,
+        product_name: Optional[str] = None,
+        product_serial_no: Optional[str] = None,
+        packing_material_name: Optional[str] = None,
+        binding_method: Optional[str] = None,
+        source_type: Optional[str] = None,
+        bound_at_from: Optional[datetime] = None,
+        bound_at_to: Optional[datetime] = None,
+        created_start_date: Optional[date] = None,
+        created_end_date: Optional[date] = None,
+        order_by: Optional[str] = None,
     ) -> PackingBindingPageResponse:
         """分页获取装箱绑定记录（含 total）。"""
-        query = PackingBinding.filter(
+        query = self._build_packing_binding_list_query(
             tenant_id=tenant_id,
-            deleted_at__isnull=True
+            receipt_id=receipt_id,
+            sales_delivery_id=sales_delivery_id,
+            product_id=product_id,
+            box_no=box_no,
+            uuid_value=uuid_value,
+            keyword=keyword,
+            product_code=product_code,
+            product_name=product_name,
+            product_serial_no=product_serial_no,
+            packing_material_name=packing_material_name,
+            binding_method=binding_method,
+            source_type=source_type,
+            bound_at_from=bound_at_from,
+            bound_at_to=bound_at_to,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
         )
-        if receipt_id:
-            query = query.filter(finished_goods_receipt_id=receipt_id)
-        if sales_delivery_id:
-            query = query.filter(sales_delivery_id=sales_delivery_id)
-        if product_id:
-            query = query.filter(product_id=product_id)
-        if box_no:
-            query = query.filter(box_no__icontains=box_no)
-        if uuid_value:
-            query = query.filter(uuid=uuid_value)
 
         total = await query.count()
-        rows = await query.order_by('-bound_at').offset(skip).limit(limit)
+        order_clause = order_by if order_by else "-bound_at"
+        rows = await query.order_by(order_clause).offset(skip).limit(limit)
         items = enrich_packing_binding_list_capabilities(
             rows,
             [PackingBindingListResponse.model_validate(r) for r in rows],
         )
         return PackingBindingPageResponse(
-            items=items,
+            data=items,
             total=total,
+            success=True,
         )
 
     async def get_packing_binding_statistics(self, tenant_id: int) -> PackingBindingStatisticsResponse:

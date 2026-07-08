@@ -323,6 +323,10 @@ export interface MaterialListParams {
   /** 后端：main_code | name | created_at | updated_at */
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
   /** 树形列表：主物料为父行，属性 SKU 为 children */
   treeView?: boolean;
   /** 仅主物料（排除属性 SKU 行），用于下拉选择等 */
@@ -998,6 +1002,8 @@ export interface MaterialBatchListParams {
   /** 后端 snake：batch_no | quantity | status | production_date | expiry_date | created_at | material_name */
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  created_start_date?: string;
+  created_end_date?: string;
 }
 
 export interface MaterialBatchListResponse {
@@ -1055,6 +1061,8 @@ export interface MaterialSerialListParams {
   /** serial_no | status | production_date | factory_date | created_at | material_name */
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  created_start_date?: string;
+  created_end_date?: string;
 }
 
 export interface MaterialSerialListResponse {

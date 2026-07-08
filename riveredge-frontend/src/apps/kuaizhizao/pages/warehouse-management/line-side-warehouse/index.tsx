@@ -15,6 +15,10 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import {
+  normalizeWarehouseListResponse,
+  resolveLineSideInventoryListParams,
+} from '../../../utils/warehouseListCore';
 
 interface LineSideWarehouse {
   id: number;
@@ -78,7 +82,7 @@ const LineSideWarehousePage: React.FC = () => {
           />
         ),
       },
-      { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', hideInTable: true },
+      { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', hideInTable: true, sorter: true },
       { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', hideInTable: true },
       {
         title: t('app.kuaizhizao.lineSideWarehouse.colSpec'),
@@ -89,6 +93,7 @@ const LineSideWarehousePage: React.FC = () => {
         title: t('app.kuaizhizao.batchInventoryQuery.colBatchNo'),
         dataIndex: 'batch_no',
         width: 100,
+        sorter: true,
         render: (_, record) => record.batch_no || '-',
       },
       {
@@ -96,6 +101,7 @@ const LineSideWarehousePage: React.FC = () => {
         dataIndex: 'quantity',
         width: 100,
         valueType: 'digit',
+        sorter: true,
         render: (_, record) => (
           <span style={{ color: record.quantity <= 0 ? '#ff4d4f' : 'inherit' }}>
             {record.quantity} {record.material_unit || ''}
@@ -130,20 +136,17 @@ const LineSideWarehousePage: React.FC = () => {
     [t]
   );
 
-  const fetchInventory = async (params: any) => {
+  const fetchInventory = async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, unknown>) => {
     try {
+      const listParams = resolveLineSideInventoryListParams(searchFormValues, sort);
       const res = await warehouseApi.lineSideWarehouse.listInventory({
-        warehouse_id: selectedWarehouseId || params?.warehouse_id,
-        material_code: params?.material_code,
-        material_name: params?.material_name,
+        ...listParams,
+        warehouse_id: selectedWarehouseId || listParams.warehouse_id,
         skip: ((params?.current || 1) - 1) * (params?.pageSize || 20),
         limit: params?.pageSize || 20,
       });
-      return {
-        data: res?.items || [],
-        total: res?.total || 0,
-        success: true,
-      };
+      const { data, total } = normalizeWarehouseListResponse(res);
+      return { data, total, success: true };
     } catch {
       message.error(t('app.kuaizhizao.warehouseCommon.queryFailed'));
       return { data: [], total: 0, success: false };
@@ -158,6 +161,8 @@ const LineSideWarehousePage: React.FC = () => {
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.line-side-warehouse"
         request={fetchInventory}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         rowKey="id"
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}

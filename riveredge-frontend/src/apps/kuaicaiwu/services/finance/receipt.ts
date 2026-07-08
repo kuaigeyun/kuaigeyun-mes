@@ -1,6 +1,26 @@
 import { apiRequest } from '../../../../services/api';
 import type { DocumentPushPreview } from '../../../kuaizhizao/services/purchase-requisition';
 
+export interface ReceiptListParams {
+  skip?: number;
+  limit?: number;
+  status?: string;
+  customer_id?: number;
+  unsettled_only?: boolean;
+  settlement_type?: string;
+  start_date?: string;
+  end_date?: string;
+  keyword?: string;
+  receipt_code?: string;
+  customer_name?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
+  sort_field?: string;
+  sort_order?: 'asc' | 'desc';
+}
+
 export interface ReceiptVoucher {
   id: number;
   receipt_code: string;
@@ -17,6 +37,7 @@ export interface ReceiptVoucher {
   settlement_type?: string;
   notes?: string;
   created_at: string;
+  updated_at?: string;
 }
 
 export type ReceiptPullPreview = DocumentPushPreview & {
@@ -64,7 +85,7 @@ export const receiptService = {
       data,
     }),
 
-  listReceipts: (params: Record<string, unknown>) => {
+  listReceipts: (params: ReceiptListParams) => {
     return apiRequest<{ items: ReceiptVoucher[]; total: number }>(RECEIPT_API, {
       method: 'GET',
       params,

@@ -248,9 +248,15 @@ import {
 import { buildFactoryImportTemplate } from '../../utils/factoryImportTemplate'
 import { downloadFile } from '../../../../utils'
 import { formatDateTimeBySiteSetting } from '../../../../utils/format'
+import { formDateRangeFormItemProps } from '../../../../utils/formDate'
 import { useNewShortcut } from '../../../../hooks/useNewShortcut'
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut'
-import { extractProTableSort } from '../../../../utils/tableQueryKey'
+import {
+  buildMasterCrudActiveValueEnum,
+  formatMasterDateTimeCell,
+  MATERIAL_PINNED_ACTIVE_FIELD,
+  resolveMaterialListParams,
+} from '../../utils/materialListCore'
 import { getSuspendedModal, clearSuspendedModal } from '../../utils/suspendedModal'
 import { useCustomFieldsForList } from '../../../../hooks/useCustomFieldsForList'
 import { useCustomFields } from '../../../../hooks/useCustomFields'
@@ -426,7 +432,13 @@ const MaterialsManagementPage: React.FC = () => {
 
   // 右侧物料列表状态
   const actionRef = useRef<ActionType>(null)
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({})
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+
+  const materialActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'app.master-data.materials.enabled', 'app.master-data.materials.disabled'),
+    [t],
+  )
 
   /** 批量批号/序列号管理（后端 batch-tracking 单接口） */
   const [batchSerialModalOpen, setBatchSerialModalOpen] = useState(false)
@@ -897,7 +909,7 @@ const MaterialsManagementPage: React.FC = () => {
     }
 
     try {
-      const defs = await variantAttributeApi.list({ is_active: true })
+      const { items: defs } = await variantAttributeApi.list({ is_active: true, limit: 10000 })
       defs.sort((a, b) => a.display_order - b.display_order)
       setVariantAttrDefinitions(defs)
     } catch (error: unknown) {
@@ -1875,7 +1887,20 @@ const MaterialsManagementPage: React.FC = () => {
     try {
       let toExport: Material[] = []
       if (type === 'all') {
-        const res = await materialApi.list({ skip: 0, limit: 10000, groupId: selectedGroupId ?? undefined })
+        const filter = lastListParamsRef.current
+        const res = await materialApi.list({
+          skip: 0,
+          limit: 10000,
+          treeView: true,
+          ...filter,
+          ...(Object.keys(filter).length === 0
+            ? selectedGroupId === -1
+              ? { noGroup: true }
+              : selectedGroupId != null
+                ? { groupId: selectedGroupId }
+                : {}
+            : {}),
+        })
         toExport = res.items ?? []
       } else if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
         toExport = currentPageData.filter((r) => selectedRowKeys.includes(r.uuid))
@@ -2320,12 +2345,19 @@ const MaterialsManagementPage: React.FC = () => {
       {
         title: t('app.master-data.materials.enabledStatus'),
         dataIndex: 'isActive',
+        hideInTable: true,
+        order: 20,
+        valueType: 'select',
+        valueEnum: materialActiveValueEnum,
+        fieldProps: { allowClear: true },
+      },
+      {
+        title: t('app.master-data.materials.enabledStatus'),
+        dataIndex: 'isActive',
         width: 100,
         valueType: 'select',
-        valueEnum: {
-          true: { text: t('app.master-data.materials.enabled'), status: 'Success' },
-          false: { text: t('app.master-data.materials.disabled'), status: 'Default' },
-        },
+        hideInSearch: true,
+        valueEnum: materialActiveValueEnum,
         render: (_, record) =>
           renderMasterCell(
             record,
@@ -2335,19 +2367,50 @@ const MaterialsManagementPage: React.FC = () => {
           ),
       },
       {
-        title: t('app.master-data.materials.createTime'),
+        title: t('common.createdAt'),
         dataIndex: 'createdAt',
-        width: 180,
-        valueType: 'dateTime',
-        hideInSearch: true,
+        width: 132,
+        uniTableKeepWidth: true,
         sorter: true,
+        hideInSearch: true,
         render: (_, record) =>
           renderMasterCell(
             record,
-            formatDateTimeBySiteSetting(
+            formatMasterDateTimeCell(
               (record as any).createdAt ?? (record as any).created_at,
             ),
           ),
+      },
+      {
+        title: t('common.createdAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        order: 30,
+        formItemProps: formDateRangeFormItemProps,
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updatedAt',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, record) =>
+          renderMasterCell(
+            record,
+            formatMasterDateTimeCell(
+              (record as any).updatedAt ?? (record as any).updated_at,
+            ),
+          ),
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        order: 31,
+        formItemProps: formDateRangeFormItemProps,
       },
       {
         title: t('app.master-data.materials.action'),
@@ -2388,6 +2451,7 @@ const MaterialsManagementPage: React.FC = () => {
       loadingBaseUnitOptions,
       messageApi,
       token,
+      materialActiveValueEnum,
       handleViewMaterial,
       handleEditMaterial,
       handleDeleteMaterial,
@@ -2546,95 +2610,22 @@ const MaterialsManagementPage: React.FC = () => {
                   </Space>
                 }
                 request={async (params, sort, _filter, searchFormValues) => {
-                const apiParams: any = {
+                const treeGroupId = selectedGroupIdRef.current
+                const listParams = resolveMaterialListParams(searchFormValues, sort, {
+                  noGroup: treeGroupId === -1,
+                  groupId: treeGroupId != null && treeGroupId !== -1 ? treeGroupId : undefined,
+                })
+                lastListParamsRef.current = listParams
+
+                const apiParams: Record<string, unknown> = {
                   skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                   limit: params.pageSize || 20,
-                }
-
-                // 物料分组筛选（如果搜索表单中有值，覆盖左侧树选择）
-                if (
-                  searchFormValues?.groupId !== undefined &&
-                  searchFormValues.groupId !== null &&
-                  searchFormValues.groupId !== ''
-                ) {
-                  apiParams.groupId = Number(searchFormValues.groupId)
-                } else if (selectedGroupIdRef.current === -1) {
-                  apiParams.noGroup = true
-                } else if (selectedGroupIdRef.current !== null) {
-                  // 如果没有搜索表单值，使用左侧树选择（使用 ref，避免 state 异步导致滞后一拍）
-                  apiParams.groupId = selectedGroupIdRef.current
-                }
-
-                // 启用状态筛选
-                if (
-                  searchFormValues?.isActive !== undefined &&
-                  searchFormValues.isActive !== '' &&
-                  searchFormValues.isActive !== null
-                ) {
-                  apiParams.isActive = searchFormValues.isActive
-                }
-
-                // 搜索参数处理
-                if (searchFormValues?.code && searchFormValues.code.trim()) {
-                  apiParams.code = searchFormValues.code.trim()
-                }
-
-                if (searchFormValues?.name && searchFormValues.name.trim()) {
-                  apiParams.name = searchFormValues.name.trim()
-                }
-
-                // 物料来源类型搜索
-                if (
-                  searchFormValues?.sourceType !== undefined &&
-                  searchFormValues.sourceType !== null &&
-                  searchFormValues.sourceType !== ''
-                ) {
-                  apiParams.sourceType = searchFormValues.sourceType
-                }
-
-                // 规格搜索
-                if (searchFormValues?.specification && searchFormValues.specification.trim()) {
-                  apiParams.specification = searchFormValues.specification.trim()
-                }
-
-                // 品牌搜索
-                if (searchFormValues?.brand && searchFormValues.brand.trim()) {
-                  apiParams.brand = searchFormValues.brand.trim()
-                }
-
-                // 型号搜索
-                if (searchFormValues?.model && searchFormValues.model.trim()) {
-                  apiParams.model = searchFormValues.model.trim()
-                }
-
-                // 基础单位搜索
-                if (
-                  searchFormValues?.baseUnit !== undefined &&
-                  searchFormValues.baseUnit !== null &&
-                  searchFormValues.baseUnit !== ''
-                ) {
-                  apiParams.baseUnit = searchFormValues.baseUnit
-                }
-
-                // 如果有关键词搜索，传递给后端
-                if (searchFormValues?.keyword && searchFormValues.keyword.trim()) {
-                  apiParams.keyword = searchFormValues.keyword.trim()
-                }
-
-                const { sortBy: rawSortField, sortOrder } = extractProTableSort(sort)
-                const materialSortMap: Record<string, string> = {
-                  createdAt: 'created_at',
-                  name: 'name',
-                  mainCode: 'main_code',
-                }
-                const sortKey = rawSortField ? materialSortMap[rawSortField] : undefined
-                if (sortKey) {
-                  apiParams.sortBy = sortKey
-                  apiParams.sortOrder = sortOrder
+                  treeView: true,
+                  ...listParams,
                 }
 
                 try {
-                  const { items, total } = await materialApi.list({ ...apiParams, treeView: true })
+                  const { items, total } = await materialApi.list(apiParams as any)
                   const enriched = await enrichRecordsWithCustomFields(items || [])
                   return {
                     data: enriched,
@@ -2654,6 +2645,8 @@ const MaterialsManagementPage: React.FC = () => {
                 rowKey="uuid"
                 defaultExpandAllRows
                 showAdvancedSearch={true}
+                skipFuzzyPinyinClientFilter
+                pinnedTabsField={MATERIAL_PINNED_ACTIVE_FIELD}
                 toolBarRender={() => []}
                 rowSelection={{
                   selectedRowKeys,

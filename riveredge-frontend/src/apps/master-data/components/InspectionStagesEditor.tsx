@@ -5,7 +5,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Select, Table, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useRequest } from 'ahooks';
-import { inspectionPlanApi } from '../../kuaizhizao/services/production';
+import { inspectionPlanApi, unwrapInspectionPlanList } from '../../kuaizhizao/services/quality-execution';
 import { qualityApi } from '../../kuaizhizao/services/quality-execution';
 import { QualityMasterDataHint } from '../../kuaizhizao/pages/quality-management/components/QualityMasterDataHint';
 
@@ -149,9 +149,11 @@ export const InspectionStagesEditor: React.FC<InspectionStagesEditorProps> = ({
   useEffect(() => {
     const load = async () => {
       try {
-        const plans = (await inspectionPlanApi.list({ limit: 500, is_active: true })) || [];
+        const plans = unwrapInspectionPlanList(
+          await inspectionPlanApi.list({ limit: 500, is_active: true }),
+        );
         const grouped: Record<string, { label: string; value: number }[]> = {};
-        for (const p of Array.isArray(plans) ? plans : []) {
+        for (const p of plans) {
           const pt = p.plan_type || p.planType || '';
           if (!pt) continue;
           grouped[pt] = grouped[pt] || [];

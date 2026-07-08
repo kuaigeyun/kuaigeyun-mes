@@ -16,6 +16,7 @@ from apps.master_data.schemas.warehouse_schemas import (
     StorageLocationCreate, StorageLocationUpdate, StorageLocationResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from apps.master_data.services.master_data_list_core import apply_master_crud_list_filters
 
 if TYPE_CHECKING:
     from apps.master_data.schemas.warehouse_schemas import (
@@ -23,58 +24,6 @@ if TYPE_CHECKING:
         StorageAreaTreeResponse,
         StorageLocationTreeResponse
     )
-
-_WAREHOUSE_LIST_SORT_FIELDS = {
-    "code": "code",
-    "name": "name",
-    "createdAt": "created_at",
-    "updatedAt": "updated_at",
-    "isActive": "is_active",
-    "warehouseType": "warehouse_type",
-}
-
-_STORAGE_AREA_LIST_SORT_FIELDS = {
-    "code": "code",
-    "name": "name",
-    "createdAt": "created_at",
-    "updatedAt": "updated_at",
-    "isActive": "is_active",
-    "warehouseId": "warehouse_id",
-}
-
-_STORAGE_LOCATION_LIST_SORT_FIELDS = {
-    "code": "code",
-    "name": "name",
-    "createdAt": "created_at",
-    "updatedAt": "updated_at",
-    "isActive": "is_active",
-    "storageAreaId": "storage_area_id",
-}
-
-
-def _warehouse_list_order(sort_field: Optional[str], sort_order: Optional[str], default_col: str = "code") -> str:
-    key = (sort_field or "").strip()
-    col = _WAREHOUSE_LIST_SORT_FIELDS.get(key, default_col)
-    if (sort_order or "asc").lower() == "desc":
-        return f"-{col}"
-    return col
-
-
-def _storage_area_list_order(sort_field: Optional[str], sort_order: Optional[str], default_col: str = "code") -> str:
-    key = (sort_field or "").strip()
-    col = _STORAGE_AREA_LIST_SORT_FIELDS.get(key, default_col)
-    if (sort_order or "asc").lower() == "desc":
-        return f"-{col}"
-    return col
-
-
-def _storage_location_list_order(sort_field: Optional[str], sort_order: Optional[str], default_col: str = "code") -> str:
-    key = (sort_field or "").strip()
-    col = _STORAGE_LOCATION_LIST_SORT_FIELDS.get(key, default_col)
-    if (sort_order or "asc").lower() == "desc":
-        return f"-{col}"
-    return col
-
 
 class WarehouseService:
     """仓库数据服务"""
@@ -265,6 +214,12 @@ class WarehouseService:
         is_active: Optional[bool] = None,
         warehouse_type: Optional[str] = None,
         keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
         sort_field: Optional[str] = None,
         sort_order: Optional[str] = None,
     ) -> dict:
@@ -293,13 +248,22 @@ class WarehouseService:
             query = query.filter(is_active=is_active)
         if warehouse_type:
             query = query.filter(warehouse_type=warehouse_type)
-        if keyword:
-            kw = keyword.strip()
-            if kw:
-                query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
+
+        query, order_expr = apply_master_crud_list_filters(
+            query,
+            keyword=keyword,
+            code=code,
+            name=name,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_field,
+            sort_order=sort_order,
+            default_sort_col="code",
+        )
 
         total = await query.count()
-        order_expr = _warehouse_list_order(sort_field, sort_order, "code")
         warehouses = await query.offset(skip).limit(limit).order_by(order_expr).all()
 
         return {
@@ -618,6 +582,12 @@ class WarehouseService:
         warehouse_id: Optional[int] = None,
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
         sort_field: Optional[str] = None,
         sort_order: Optional[str] = None,
     ) -> dict:
@@ -647,13 +617,22 @@ class WarehouseService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        if keyword:
-            kw = keyword.strip()
-            if kw:
-                query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
-        
+
+        query, order_expr = apply_master_crud_list_filters(
+            query,
+            keyword=keyword,
+            code=code,
+            name=name,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_field,
+            sort_order=sort_order,
+            default_sort_col="code",
+        )
+
         total = await query.count()
-        order_expr = _storage_area_list_order(sort_field, sort_order, "code")
         storage_areas = await query.offset(skip).limit(limit).order_by(order_expr).all()
 
         items: List[StorageAreaResponse] = []
@@ -972,6 +951,12 @@ class WarehouseService:
         storage_area_id: Optional[int] = None,
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
         sort_field: Optional[str] = None,
         sort_order: Optional[str] = None,
     ) -> dict:
@@ -1001,13 +986,22 @@ class WarehouseService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        if keyword:
-            kw = keyword.strip()
-            if kw:
-                query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
-        
+
+        query, order_expr = apply_master_crud_list_filters(
+            query,
+            keyword=keyword,
+            code=code,
+            name=name,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+            sort_field=sort_field,
+            sort_order=sort_order,
+            default_sort_col="code",
+        )
+
         total = await query.count()
-        order_expr = _storage_location_list_order(sort_field, sort_order, "code")
         storage_locations = await query.offset(skip).limit(limit).order_by(order_expr).all()
 
         loc_items: List[StorageLocationResponse] = []

@@ -378,7 +378,7 @@ const OnboardingWizardPage: React.FC = () => {
         return { material_main: v, material_data: v };
       });
       runSource('variantAttr', async () => ({
-        material_variants: getApiListCount(await variantAttributeApi.list()) ?? 0,
+        material_variants: getApiListCount((await variantAttributeApi.list({ limit: 1 })).total) ?? 0,
       }));
       runSource('batchRule', async () => ({
         material_batch_rules: getApiListCount(await batchRuleApi.list()) ?? 0,

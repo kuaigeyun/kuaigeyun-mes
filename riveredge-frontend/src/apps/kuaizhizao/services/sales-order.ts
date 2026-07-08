@@ -159,8 +159,10 @@ export interface SalesOrderListParams {
   lifecycle_stage?: string;
   start_date?: string;
   end_date?: string;
+  customer_id?: number;
   customer_name?: string;
   order_code?: string;
+  contract_code?: string;
   salesman_id?: number;
   keyword?: string;
   order_by?: string;

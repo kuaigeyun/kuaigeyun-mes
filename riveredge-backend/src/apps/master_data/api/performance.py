@@ -21,7 +21,6 @@ from apps.master_data.schemas.performance_schemas import (
 )
 from apps.master_data.services.employee_performance_service import (
     EmployeePerformanceConfigService,
-    PieceRateService,
     HourlyRateService,
     KPIDefinitionService,
 )
@@ -40,9 +39,6 @@ from apps.master_data.schemas.employee_performance_schemas import (
     EmployeePerformanceConfigCreate,
     EmployeePerformanceConfigUpdate,
     EmployeePerformanceConfigResponse,
-    PieceRateCreate,
-    PieceRateUpdate,
-    PieceRateResponse,
     HourlyRateCreate,
     HourlyRateUpdate,
     HourlyRateResponse,
@@ -110,7 +106,7 @@ async def create_holiday(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/holidays", response_model=List[HolidayResponse], summary="List holidays")
+@router.get("/holidays", summary="List holidays")
 async def list_holidays(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -119,19 +115,29 @@ async def list_holidays(
     holiday_type: Optional[str] = Query(None, description="假期类型（过滤）"),
     start_date: Optional[date] = Query(None, description="开始日期（过滤）"),
     end_date: Optional[date] = Query(None, description="结束日期（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期"),
 ):
-    """
-    获取假期列表
-    
-    - **skip**: 跳过数量（默认：0）
-    - **limit**: 限制数量（默认：100，最大：1000）
-    - **holiday_type**: 假期类型（可选，用于过滤）
-    - **start_date**: 开始日期（可选，用于过滤）
-    - **end_date**: 结束日期（可选，用于过滤）
-    - **is_active**: 是否启用（可选）
-    """
-    return await PerformanceService.list_holidays(tenant_id, skip, limit, holiday_type, start_date, end_date, is_active)
+    return await PerformanceService.list_holidays(
+        tenant_id,
+        skip,
+        limit,
+        holiday_type,
+        start_date,
+        end_date,
+        is_active,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
 
 
 @router.get("/holidays/{holiday_uuid}", response_model=HolidayResponse, summary="Get holiday")
@@ -217,24 +223,34 @@ async def create_skill(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/skills", response_model=List[SkillResponse], summary="List skills")
+@router.get("/skills", summary="List skills")
 async def list_skills(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     category: Optional[str] = Query(None, description="技能分类（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期"),
 ):
-    """
-    获取技能列表
-    
-    - **skip**: 跳过数量（默认：0）
-    - **limit**: 限制数量（默认：100，最大：1000）
-    - **category**: 技能分类（可选，用于过滤）
-    - **is_active**: 是否启用（可选）
-    """
-    return await PerformanceService.list_skills(tenant_id, skip, limit, category, is_active)
+    return await PerformanceService.list_skills(
+        tenant_id,
+        skip,
+        limit,
+        category,
+        is_active,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
 
 
 @router.get("/skills/{skill_uuid}", response_model=SkillResponse, summary="Get skill")
@@ -368,16 +384,36 @@ async def create_employee_config(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/employee-configs", response_model=List[EmployeePerformanceConfigResponse], summary="List employee performance configs")
+@router.get("/employee-configs", summary="List employee performance configs")
 async def list_employee_configs(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     employee_id: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None),
+    order_by: Optional[str] = Query(None),
+    calc_mode: Optional[str] = Query(None),
+    is_active: Optional[bool] = Query(None),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
 ):
-    """获取员工绩效配置列表"""
-    return await EmployeePerformanceConfigService.list_configs(tenant_id, skip, limit, employee_id)
+    return await EmployeePerformanceConfigService.list_configs(
+        tenant_id,
+        skip,
+        limit,
+        employee_id,
+        keyword=keyword,
+        order_by=order_by,
+        calc_mode=calc_mode,
+        is_active=is_active,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
 
 
 @router.get("/employee-configs/{config_id}", response_model=EmployeePerformanceConfigResponse, summary="Get employee performance config")
@@ -420,69 +456,6 @@ async def delete_employee_config(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-# ==================== 计件单价 ====================
-
-@router.post("/piece-rates", response_model=PieceRateResponse, summary="Create piece rate")
-async def create_piece_rate(
-    data: PieceRateCreate,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
-):
-    try:
-        return await PieceRateService.create(tenant_id, data)
-    except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.get("/piece-rates", response_model=List[PieceRateResponse], summary="List piece rates")
-async def list_piece_rates(
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
-    operation_id: Optional[int] = Query(None),
-):
-    return await PieceRateService.list_rates(tenant_id, skip, limit, operation_id)
-
-
-@router.get("/piece-rates/{rate_id}", response_model=PieceRateResponse, summary="Get piece rate")
-async def get_piece_rate(
-    rate_id: int = Path(..., description="计件单价ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
-):
-    try:
-        return await PieceRateService.get_by_id(tenant_id, rate_id)
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
-
-@router.put("/piece-rates/{rate_id}", response_model=PieceRateResponse, summary="Update piece rate")
-async def update_piece_rate(
-    rate_id: int = Path(..., description="计件单价ID"),
-    data: PieceRateUpdate = ...,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    try:
-        return await PieceRateService.update(tenant_id, rate_id, data)
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
-
-@router.delete("/piece-rates/{rate_id}", summary="Delete piece rate")
-async def delete_piece_rate(
-    rate_id: int = Path(..., description="计件单价ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
-):
-    try:
-        await PieceRateService.delete(tenant_id, rate_id)
-        return {"message": "计件单价删除成功"}
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
-
 # ==================== 工时单价 ====================
 
 @router.post("/hourly-rates", response_model=HourlyRateResponse, summary="Create hourly rate")
@@ -497,14 +470,32 @@ async def create_hourly_rate(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/hourly-rates", response_model=List[HourlyRateResponse], summary="List hourly rates")
+@router.get("/hourly-rates", summary="List hourly rates")
 async def list_hourly_rates(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
+    keyword: Optional[str] = Query(None),
+    order_by: Optional[str] = Query(None),
+    is_active: Optional[bool] = Query(None),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
 ):
-    return await HourlyRateService.list_rates(tenant_id, skip, limit)
+    return await HourlyRateService.list_rates(
+        tenant_id,
+        skip,
+        limit,
+        keyword=keyword,
+        order_by=order_by,
+        is_active=is_active,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
 
 
 @router.get("/hourly-rates/{rate_id}", response_model=HourlyRateResponse, summary="Get hourly rate")
@@ -559,14 +550,34 @@ async def create_kpi_definition(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/kpi-definitions", response_model=List[KPIDefinitionResponse], summary="List KPI definitions")
+@router.get("/kpi-definitions", summary="List KPI definitions")
 async def list_kpi_definitions(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
+    keyword: Optional[str] = Query(None),
+    order_by: Optional[str] = Query(None),
+    calc_type: Optional[str] = Query(None),
+    is_active: Optional[bool] = Query(None),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
 ):
-    return await KPIDefinitionService.list(tenant_id, skip, limit)
+    return await KPIDefinitionService.list(
+        tenant_id,
+        skip,
+        limit,
+        keyword=keyword,
+        order_by=order_by,
+        calc_type=calc_type,
+        is_active=is_active,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
 
 
 @router.get("/kpi-definitions/{kpi_id}", response_model=KPIDefinitionResponse, summary="Get KPI definition")
@@ -609,7 +620,7 @@ async def delete_kpi_definition(
 
 # ==================== 绩效统计与计算 ====================
 
-@router.get("/summaries", response_model=List[PerformanceSummaryResponse], summary="List performance summaries")
+@router.get("/summaries", summary="List performance summaries")
 async def get_performance_summaries(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -617,9 +628,28 @@ async def get_performance_summaries(
     employee_id: Optional[int] = Query(None, description="员工ID"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
+    keyword: Optional[str] = Query(None),
+    order_by: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
 ):
-    """获取绩效汇总列表，支持按周期、员工筛选"""
-    return await PerformanceCalcService.get_summaries(tenant_id, period, employee_id, skip, limit)
+    return await PerformanceCalcService.get_summaries(
+        tenant_id,
+        period,
+        employee_id,
+        skip,
+        limit,
+        keyword=keyword,
+        order_by=order_by,
+        status=status,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
 
 
 @router.get("/details", response_model=PerformanceDetailResponse, summary="Get performance detail")
@@ -801,15 +831,32 @@ async def create_shift(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/shifts", response_model=List[ShiftResponse], summary="List shifts")
+@router.get("/shifts", summary="List shifts")
 async def list_shifts(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     skip: int = Query(0, ge=0),
     limit: int = Query(200, ge=1, le=1000),
     is_active: Optional[bool] = Query(None),
+    keyword: Optional[str] = Query(None),
+    order_by: Optional[str] = Query(None),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    updated_start_date: Optional[str] = Query(None),
+    updated_end_date: Optional[str] = Query(None),
 ):
-    return await ShiftSchedulingService.list_shifts(tenant_id, skip, limit, is_active)
+    return await ShiftSchedulingService.list_shifts(
+        tenant_id,
+        skip,
+        limit,
+        is_active,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
 
 
 @router.get("/shifts/{shift_uuid}", response_model=ShiftResponse, summary="Get shift")

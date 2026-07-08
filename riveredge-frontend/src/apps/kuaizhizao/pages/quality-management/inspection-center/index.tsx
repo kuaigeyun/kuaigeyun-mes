@@ -23,6 +23,7 @@ import 'dayjs/locale/zh-cn';
 import 'dayjs/locale/en';
 import { qualityApi, type QualityAnomalyItem } from '../../../services/quality-execution';
 import { qualityImprovementApi } from '../../../services/quality-improvement';
+import { normalizeQualityImprovementListResponse } from '../../../utils/qualityImprovementListCore';
 import { mesDashboardService } from '../../../services/dashboard';
 import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
 import {
@@ -104,7 +105,8 @@ const InspectionCenter: React.FC = () => {
 
   const { data: ncItems, loading: ncLoading } = useDashboardRequest(async () => {
     const res = await qualityImprovementApi.nonconformingLedger.list({ limit: 6 });
-    return Array.isArray(res) ? res : [];
+    const { data } = normalizeQualityImprovementListResponse(res);
+    return data;
   }, 'kz:quality-dashboard:nc-ledger');
 
   const anomalies = anomaliesResp?.anomalies ?? [];

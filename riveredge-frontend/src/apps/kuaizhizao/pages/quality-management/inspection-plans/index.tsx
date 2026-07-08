@@ -42,10 +42,17 @@ import { InspectionPlanStepEditor, type InspectionPlanStepItem } from '../../../
 import { InspectionSamplingTypeTag, InspectionValueTypeTag } from '../../../components/inspectionStepTableBadges';
 import { formatAcceptanceCriteriaPreview, normalizeValueType, bumpPlanVersion, stepsFingerprint } from '../../../types/inspectionStepSpec';
 import { valueTypeOptions } from '../../../components/InspectionStepValueSpecFields';
-import { countWithPagedRequests } from '../../../../../utils/pagedCount';
-import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { getQualityPlanTypeFallback, getQualityTypeText } from '../components/qualityMeta';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  buildInspectionPlanActiveValueEnum,
+  buildInspectionPlanTypeValueEnum,
+  formatQualityDateTimeCell,
+  INSPECTION_PLAN_PINNED_STATUS_FIELD,
+  normalizeQualityImprovementListResponse,
+  resolveInspectionPlanListParams,
+} from '../../../utils/qualityImprovementListCore';
 import { formatDateTime } from '../../../../../utils/format';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
@@ -110,6 +117,8 @@ const InspectionPlansPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const planTypeOptions = useMemo(() => getQualityPlanTypeFallback(t), [t]);
+  const planTypeValueEnum = useMemo(() => buildInspectionPlanTypeValueEnum(t), [t]);
+  const planActiveValueEnum = useMemo(() => buildInspectionPlanActiveValueEnum(t), [t]);
   const stepValueTypeLabels = useMemo(() => {
     return Object.fromEntries(valueTypeOptions(t).map((o) => [o.value, o.label]));
   }, [t]);
@@ -311,43 +320,110 @@ const InspectionPlansPage: React.FC = () => {
         title: t('app.kuaizhizao.quality.plans.columns.planCode'),
         dataIndex: 'plan_code',
         hideInTable: true,
+        order: 10,
+        fieldProps: { allowClear: true },
       },
-      stackedPrimarySecondaryColumn<InspectionPlan>(
-        t('app.kuaizhizao.quality.plans.columns.planStacked'),
-        'planStacked',
-        ['plan_name', 'planName'],
-        ['plan_code', 'planCode'],
-        { dataIndex: 'plan_name', fixed: 'left' },
-      ),
-      { title: t('app.kuaizhizao.quality.plans.columns.planName'), dataIndex: 'plan_name', hideInTable: true, ellipsis: true },
+      {
+        title: t('app.kuaizhizao.quality.plans.columns.planName'),
+        dataIndex: 'plan_name',
+        hideInTable: true,
+        order: 11,
+        fieldProps: { allowClear: true },
+      },
+      {
+        ...stackedPrimarySecondaryColumn<InspectionPlan>(
+          t('app.kuaizhizao.quality.plans.columns.planStacked'),
+          'planStacked',
+          ['plan_name', 'planName'],
+          ['plan_code', 'planCode'],
+          { dataIndex: 'plan_name', fixed: 'left' },
+        ),
+        sorter: true,
+      },
+      {
+        title: t('app.kuaizhizao.quality.plans.columns.planType'),
+        dataIndex: 'plan_type',
+        hideInTable: true,
+        order: 20,
+        valueType: 'select',
+        valueEnum: planTypeValueEnum,
+        fieldProps: {
+          showSearch: true,
+          allowClear: true,
+          options: planTypeOptions,
+        },
+      },
       {
         title: t('app.kuaizhizao.quality.plans.columns.planType'),
         dataIndex: 'plan_type',
         width: 100,
+        sorter: true,
+        hideInSearch: true,
         render: (_, record) => {
           if (!record) return '-';
           return planTypeLabel(record.plan_type);
         },
       },
-      { title: t('app.kuaizhizao.quality.plans.columns.version'), dataIndex: 'version', width: 80 },
+      {
+        title: t('app.kuaizhizao.quality.plans.columns.version'),
+        dataIndex: 'version',
+        width: 80,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.createdAt'),
+        dataIndex: 'created_at',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => formatQualityDateTimeCell(r.created_at),
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.createdAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        order: 30,
+        formItemProps: formDateRangeFormItemProps,
+      },
       {
         title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
         dataIndex: 'updated_at',
-        width: 168,
-        hideInSearch: true,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
         defaultSortOrder: 'descend',
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
+        hideInSearch: true,
+        render: (_, r) => formatQualityDateTimeCell(r.updated_at),
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
+        dataIndex: 'updated_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        order: 31,
+        formItemProps: formDateRangeFormItemProps,
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.status'),
+        dataIndex: 'is_active',
+        hideInTable: true,
+        order: 21,
+        valueType: 'select',
+        valueEnum: planActiveValueEnum,
+        fieldProps: { allowClear: true },
       },
       {
         title: t('app.kuaizhizao.quality.common.columns.status'),
         dataIndex: 'is_active',
         width: 88,
+        sorter: true,
         fixed: 'right',
         align: 'center',
-        valueEnum: {
-          true: { text: t('app.kuaizhizao.quality.plans.active.enabled'), status: 'Success' },
-          false: { text: t('app.kuaizhizao.quality.plans.active.disabled'), status: 'Default' },
-        },
+        hideInSearch: true,
+        valueEnum: planActiveValueEnum,
         render: (_, record) => renderPlanActiveStatus(t, record.is_active),
       },
       {
@@ -389,7 +465,7 @@ const InspectionPlansPage: React.FC = () => {
         ),
       },
     ],
-    [t],
+    [planActiveValueEnum, planTypeOptions, planTypeValueEnum, t],
   );
 
   return (
@@ -397,33 +473,25 @@ const InspectionPlansPage: React.FC = () => {
       <UniTable<InspectionPlan>
         headerTitle={t('app.kuaizhizao.quality.plans.pageTitle')}
         columnPersistenceId="apps.kuaizhizao.pages.quality-management.inspection-plans"
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={INSPECTION_PLAN_PINNED_STATUS_FIELD}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        request={async (params: any) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           try {
-            const filters = {
-              plan_type: params.plan_type,
-              is_active: params.is_active,
-              plan_code: params.plan_code,
-              plan_name: params.plan_name,
-              keyword: params.keyword,
-            };
-            const [response, total] = await Promise.all([
-              inspectionPlanApi.list({
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-                ...filters,
-              }),
-              countWithPagedRequests(
-                (p) => inspectionPlanApi.list(p),
-                filters,
-                { chunkSize: 100 },
-              ),
-            ]);
-            const data = Array.isArray(response) ? response : response?.data || [];
-            return { data, success: true, total };
-          } catch (error) {
+            const pageSize = params.pageSize || 20;
+            const skip = ((params.current || 1) - 1) * pageSize;
+            const listParams = resolveInspectionPlanListParams(searchFormValues, sort);
+            const response = await inspectionPlanApi.list({
+              skip,
+              limit: pageSize,
+              ...listParams,
+            });
+            const { data, total } = normalizeQualityImprovementListResponse(response);
+            return { data: data as InspectionPlan[], success: true, total };
+          } catch {
             messageApi.error(t('app.kuaizhizao.quality.plans.messages.loadListFailed'));
             return { data: [], success: false, total: 0 };
           }

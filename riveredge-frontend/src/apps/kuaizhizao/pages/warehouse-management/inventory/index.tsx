@@ -10,6 +10,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { apiRequest } from '../../../../../services/api';
+import { resolveInventoryMaterialBalanceListParams } from '../../../utils/warehouseListCore';
 
 interface InTransitBreakdown {
   purchase_quantity: number;
@@ -270,7 +271,7 @@ const InventoryPage: React.FC = () => {
           <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
         ),
       },
-      { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', hideInTable: true },
+      { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', hideInTable: true, sorter: true },
       { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', hideInTable: true },
       {
         title: t('app.master-data.materials.specification'),
@@ -317,6 +318,7 @@ const InventoryPage: React.FC = () => {
         width: 100,
         align: 'right',
         valueType: 'digit',
+        sorter: true,
         render: (_, record) => {
           const qty = Number(record.quantity || 0);
           return (
@@ -344,6 +346,9 @@ const InventoryPage: React.FC = () => {
         title: t('app.kuaizhizao.warehouseCommon.colStatus'),
         dataIndex: 'status',
         width: 100,
+        hideInTable: false,
+        hideInSearch: true,
+        sorter: true,
         render: (_, record) => {
           let color = 'default';
           if (record.status === '已过期') color = 'red';
@@ -356,20 +361,19 @@ const InventoryPage: React.FC = () => {
         title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
         dataIndex: 'warehouse_name',
         width: 120,
+        sorter: true,
         render: (_, r) => r.warehouse_name || '-',
       },
     ],
     [t]
   );
 
-  const fetchInventory = async (params: any, _sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
-    const search = searchFormValues || {};
+  const fetchInventory = async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
+    const listParams = resolveInventoryMaterialBalanceListParams(searchFormValues, sort);
     const baseQuery = {
-      material_id: search.material_id,
-      warehouse_id: search.warehouse_id,
+      ...listParams,
       include_zero_stock: !includeZeroStock,
       status_filter: statusFilter === 'all' ? undefined : statusFilter,
-      keyword: (search as any).keyword ?? params.keyword,
     };
     lastQueryRef.current = baseQuery;
     try {
@@ -463,6 +467,8 @@ const InventoryPage: React.FC = () => {
         actionRef={actionRef}
         columns={columns}
         request={fetchInventory}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         showExportButton
         onExport={handleExport}
         rowKey="id"

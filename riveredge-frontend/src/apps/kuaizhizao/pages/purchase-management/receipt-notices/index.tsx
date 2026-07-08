@@ -72,7 +72,17 @@ import {
   receiptNoticeCapabilityReasonMessage,
   purchaseOrderCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities';
-import { getReceiptNoticeLifecycle } from '../../../utils/receiptNoticeLifecycle';
+import {
+  buildReceiptNoticeLifecycleValueEnum,
+  getReceiptNoticeLifecycle,
+  LIST_LIFECYCLE_STAGE_FIELD,
+  resolveReceiptNoticeListLifecycleParams,
+} from '../../../utils/receiptNoticeLifecycle';
+import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
+import { supplierApi } from '../../../../master-data/services/supply-chain';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import type { ReceiptNoticeListParams } from '../../../services/receipt-notice';
 import {
   listPurchaseOrders,
   getPurchaseOrder,
@@ -183,6 +193,25 @@ const ReceiptNoticesPage: React.FC = () => {
   );
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<ReceiptNotice[]>([]);
+  const receiptNoticeLifecycleValueEnum = useMemo(() => buildReceiptNoticeLifecycleValueEnum(t), [t]);
+  const [supplierList, setSupplierList] = useState<Array<{ id: number; name?: string; code?: string }>>([]);
+
+  useEffect(() => {
+    supplierApi.list({ limit: 1000, isActive: true }).then((res) => {
+      const list = Array.isArray(res) ? res : (res as { data?: typeof supplierList })?.data ?? [];
+      setSupplierList(Array.isArray(list) ? list : []);
+    }).catch(() => setSupplierList([]));
+  }, []);
+
+  const receiptNoticeSupplierSearchOptions = useMemo(
+    () =>
+      supplierList.map((s) => ({
+        value: Number(s.id),
+        label: [s.name, s.code].filter(Boolean).join(' · ') || String(s.id),
+      })),
+    [supplierList],
+  );
+
   const receiptNoticePerms = useResourcePermissions(RECEIPT_NOTICE_RESOURCE);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [statsVersion, setStatsVersion] = useState(0);
@@ -191,10 +220,9 @@ const ReceiptNoticesPage: React.FC = () => {
   const refreshLocalStats = useCallback(async () => {
     try {
       const response = await receiptNoticeApi.list({ skip: 0, limit: 5000 });
-      const data = Array.isArray(response) ? response : (response as any)?.items || (response as any)?.data || [];
-      const arr = Array.isArray(data) ? data : [];
+      const arr = response?.data ?? [];
       setLocalStats({
-        total: (response as any)?.total ?? arr.length,
+        total: response?.total ?? arr.length,
         pending: arr.filter((x: ReceiptNotice) => (x.status || '').trim() === '待收货').length,
         notified: arr.filter((x: ReceiptNotice) => (x.status || '').trim() === '已通知').length,
         received: arr.filter((x: ReceiptNotice) => (x.status || '').trim() === '已入库').length,
@@ -603,6 +631,16 @@ const ReceiptNoticesPage: React.FC = () => {
   const columns: ProColumns<ReceiptNotice>[] = useMemo(
     () => [
       {
+        title: t('app.kuaizhizao.receiptNotice.plannedReceiptDate'),
+        dataIndex: 'planned_receipt_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
+      },
+      {
         title: t('app.kuaizhizao.receiptNotice.colSupplierNotice'),
         key: 'notice_code',
         dataIndex: 'notice_code',
@@ -615,12 +653,27 @@ const ReceiptNoticesPage: React.FC = () => {
           />
         ),
       },
-      { title: t('app.kuaizhizao.shipmentNotice.noticeCode'), dataIndex: 'notice_code', hideInTable: true },
-      { title: t('app.kuaizhizao.receiptNotice.supplier'), dataIndex: 'supplier_name', hideInTable: true },
+      { title: t('app.kuaizhizao.shipmentNotice.noticeCode'), dataIndex: 'notice_code', hideInTable: true, hideInSearch: false },
+      {
+        title: t('app.kuaizhizao.receiptNotice.supplier'),
+        dataIndex: 'supplier_id',
+        hideInTable: true,
+        valueType: 'select',
+        fieldProps: {
+          showSearch: true,
+          optionFilterProp: 'label',
+          options: receiptNoticeSupplierSearchOptions,
+          placeholder: t('app.kuaizhizao.receiptNotice.supplier'),
+        },
+      },
+      { title: t('app.kuaizhizao.receiptNotice.supplier'), dataIndex: 'supplier_name', hideInTable: true, hideInSearch: true },
       {
         title: t('app.kuaizhizao.receiptNotice.purchaseOrderCode'),
         dataIndex: 'purchase_order_code',
-        width: 148,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: false,
         ellipsis: true,
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.purchase_order_code ?? '') }} ellipsis>
@@ -628,8 +681,16 @@ const ReceiptNoticesPage: React.FC = () => {
           </Typography.Text>
         ),
       },
-      { title: t('app.kuaizhizao.receiptNotice.inboundWarehouse'), dataIndex: 'warehouse_name', width: 120 },
-      { title: t('app.kuaizhizao.receiptNotice.plannedReceiptDate'), dataIndex: 'planned_receipt_date', valueType: 'date', width: 120 },
+      { title: t('app.kuaizhizao.receiptNotice.inboundWarehouse'), dataIndex: 'warehouse_name', width: 120, sorter: true, hideInSearch: true },
+      {
+        title: t('app.kuaizhizao.receiptNotice.plannedReceiptDate'),
+        dataIndex: 'planned_receipt_date',
+        valueType: 'date',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+      },
       {
         title: t('app.kuaizhizao.receiptNotice.receiptConversion'),
         dataIndex: 'purchase_receipt_code',
@@ -649,35 +710,37 @@ const ReceiptNoticesPage: React.FC = () => {
           return <Tag color="default">{t('app.kuaizhizao.receiptNotice.notPulled')}</Tag>;
         },
       },
-      { title: t('app.kuaizhizao.shipmentNotice.notifiedAt'), dataIndex: 'notified_at', valueType: 'dateTime', width: 160 },
+      { title: t('app.kuaizhizao.shipmentNotice.notifiedAt'), dataIndex: 'notified_at', width: 132, uniTableKeepWidth: true, sorter: true, hideInSearch: true, render: (_, r) => (r.notified_at ? formatDateTime(r.notified_at, 'YYYY-MM-DD HH:mm') : '-') },
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        valueType: 'dateTime',
-        width: 168,
-        hideInSearch: true,
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
         defaultSortOrder: 'descend',
+        hideInSearch: true,
+        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm') : '-'),
+      },
+      {
+        title: t('common.createdAt'),
+        dataIndex: 'created_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        fieldProps: {
+          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
+        },
+        formItemProps: formDateRangeFormItemProps,
       },
       {
         title: t('app.kuaizhizao.salesOrder.lifecycle'),
-        dataIndex: 'lifecycle_stage',
+        dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
         fixed: 'right',
         align: 'left',
-        hideInSearch: true,
-        render: (_, record) => {
-          const lifecycle = getReceiptNoticeLifecycle(record as unknown as Record<string, unknown>, t);
-          return (
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          );
-        },
+        valueType: 'select',
+        valueEnum: receiptNoticeLifecycleValueEnum,
+        render: (_, record) => (
+          <ListUniLifecycleCell lifecycle={getReceiptNoticeLifecycle(record as unknown as Record<string, unknown>, t)} />
+        ),
       },
       {
         title: t('common.actions'),
@@ -783,7 +846,7 @@ const ReceiptNoticesPage: React.FC = () => {
         },
       },
     ],
-    [handleDelete, handleDetail, handleEdit, handleNotify, handleWithdraw, navigate, t, i18n.language],
+    [handleDelete, handleDetail, handleEdit, handleNotify, handleWithdraw, navigate, receiptNoticeLifecycleValueEnum, receiptNoticeSupplierSearchOptions, t, i18n.language],
   );
 
   const pullPurchaseOrderColumns = useMemo(
@@ -829,6 +892,7 @@ const ReceiptNoticesPage: React.FC = () => {
                   formItemProps={{ style: { margin: 0 } }}
                   showQuickCreate
                   showAdvancedSearch
+                skipFuzzyPinyinClientFilter
                 />
               );
             }}
@@ -1327,6 +1391,9 @@ const ReceiptNoticesPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
+          pinnedTabsValueEnum={receiptNoticeLifecycleValueEnum}
           showCreateButton={false}
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
@@ -1414,19 +1481,48 @@ const ReceiptNoticesPage: React.FC = () => {
           onTableDataChange={(rows) => {
             tableRowsRef.current = rows;
           }}
-          request={async (params) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
-              const response = await receiptNoticeApi.list({
+              const sf = searchFormValues ?? {};
+              const lifecycleParams = resolveReceiptNoticeListLifecycleParams(sf, params);
+              const { sortBy, sortOrder } = extractProTableSort(sort);
+              const orderBy =
+                sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+              const fuzzyKeyword = typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
+              const apiParams: ReceiptNoticeListParams = {
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
-                status: params.status,
-                supplier_id: params.supplier_id,
-                purchase_order_id: params.purchase_order_id,
-                keyword: params.keyword,
-              });
-              const data = Array.isArray(response) ? response : response?.items || response?.data || [];
-              const total = Array.isArray(response) ? response.length : response?.total ?? data.length;
-              return { data, success: true, total };
+                ...lifecycleParams,
+                order_by: orderBy,
+              };
+              if (fuzzyKeyword) {
+                apiParams.keyword = fuzzyKeyword;
+              } else if (sf.notice_code != null && String(sf.notice_code).trim()) {
+                apiParams.notice_code = String(sf.notice_code).trim();
+              }
+              if (sf.supplier_id != null && sf.supplier_id !== '') {
+                apiParams.supplier_id = Number(sf.supplier_id);
+              }
+              const orderCode =
+                sf.purchase_order_code != null ? String(sf.purchase_order_code).trim() : '';
+              if (orderCode) apiParams.purchase_order_code = orderCode;
+              const plannedRange = sf.planned_receipt_date_range as [unknown, unknown] | undefined;
+              if (plannedRange && Array.isArray(plannedRange) && plannedRange[0]) {
+                apiParams.planned_start_date = formatDateTime(plannedRange[0] as string | Date, 'YYYY-MM-DD');
+                apiParams.planned_end_date = plannedRange[1]
+                  ? formatDateTime(plannedRange[1] as string | Date, 'YYYY-MM-DD')
+                  : apiParams.planned_start_date;
+              }
+              const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
+              if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
+                apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
+                apiParams.created_end_date = createdRange[1]
+                  ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
+                  : apiParams.created_start_date;
+              }
+              const response = await receiptNoticeApi.list(apiParams);
+              const data = response?.data ?? [];
+              return { data, success: true, total: response?.total ?? data.length };
             } catch {
               messageApi.error(t('app.kuaizhizao.shipmentNotice.listFailed'));
               return { data: [], success: false, total: 0 };

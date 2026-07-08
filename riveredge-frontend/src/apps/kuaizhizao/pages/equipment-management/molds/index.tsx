@@ -46,6 +46,13 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { formatDateTime } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  MASTER_DATA_PINNED_ACTIVE_FIELD,
+  buildActiveStatusValueEnum,
+  normalizeEquipmentListResponse,
+  resolveLedgerListParams,
+} from '../../../utils/equipmentListCore';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const MOLD_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_molds';
@@ -598,15 +605,66 @@ const MoldsPage: React.FC = () => {
   /**
    * 表格列定义
    */
+  const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
+
+  const moldStatusValueEnum = useMemo(
+    () => ({
+      正常: { text: t('app.kuaizhizao.mold.statusNormal') },
+      使用中: { text: t('app.kuaizhizao.mold.statusInUse') },
+      维护中: { text: t('app.kuaizhizao.mold.statusMaintaining') },
+      停用: { text: t('app.kuaizhizao.mold.statusDisabled') },
+      报废: { text: t('app.kuaizhizao.mold.statusScrapped') },
+    }),
+    [t],
+  );
+
   const columns: ProColumns<Mold>[] = useMemo(() => {
     const customFieldColumns = generateMoldCustomFieldColumns();
     return [
+    {
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 10 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.mold.colIsActive'),
+      dataIndex: 'is_active',
+      valueType: 'select',
+      valueEnum: activeStatusValueEnum,
+      hideInTable: true,
+      search: { order: 20 } as ProColumns['search'],
+    },
+    {
+      title: t('common.status'),
+      dataIndex: 'status',
+      valueType: 'select',
+      valueEnum: moldStatusValueEnum,
+      hideInTable: true,
+      search: { order: 21 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.mold.colType'),
+      dataIndex: 'type',
+      hideInTable: true,
+      search: { order: 22 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.mold.colCategory'),
+      dataIndex: 'category',
+      hideInTable: true,
+      search: { order: 23 } as ProColumns['search'],
+    },
     {
       title: t('app.kuaizhizao.mold.colCode'),
       dataIndex: 'code',
       width: 140,
       ellipsis: true,
       fixed: 'left',
+      sorter: true,
+      search: { order: 30 } as ProColumns['search'],
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
           {r.code ?? '-'}
@@ -618,36 +676,47 @@ const MoldsPage: React.FC = () => {
       dataIndex: 'name',
       width: 200,
       ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.mold.colType'),
       dataIndex: 'type',
       width: 120,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.mold.colCategory'),
       dataIndex: 'category',
       width: 120,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.mold.colBrand'),
       dataIndex: 'brand',
       width: 100,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.mold.colModel'),
       dataIndex: 'model',
       width: 120,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.mold.colSerialNumber'),
       dataIndex: 'serial_number',
       width: 150,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.mold.colIsActive'),
       dataIndex: 'is_active',
       width: 100,
+      sorter: true,
+      hideInSearch: true,
       render: (isActive) => (
         <Tag color={isActive ? 'success' : 'default'}>
           {isActive ? t('app.kuaizhizao.mold.isActiveEnabled') : t('app.kuaizhizao.mold.isActiveDisabled')}
@@ -658,11 +727,14 @@ const MoldsPage: React.FC = () => {
       title: t('app.kuaizhizao.mold.colTotalUsageCount'),
       dataIndex: 'total_usage_count',
       width: 110,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.mold.colLifeProgress'),
       dataIndex: ['total_usage_count', 'design_lifetime'],
       width: 100,
+      hideInSearch: true,
       render: (_: any, record: Mold) => {
         const total = record.total_usage_count ?? 0;
         const lifetime = record.design_lifetime;
@@ -676,9 +748,11 @@ const MoldsPage: React.FC = () => {
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 132,
+      uniTableKeepWidth: true,
       hideInSearch: true,
       defaultSortOrder: 'descend',
+      sorter: true,
       render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     ...customFieldColumns,
@@ -730,7 +804,7 @@ const MoldsPage: React.FC = () => {
       ),
     },
   ];
-  }, [moldListCustomFields, generateMoldCustomFieldColumns, t]);
+  }, [moldListCustomFields, generateMoldCustomFieldColumns, t, activeStatusValueEnum, moldStatusValueEnum]);
 
   const moldCalibrationResultOptions = useMemo(
     () => [
@@ -818,23 +892,26 @@ const MoldsPage: React.FC = () => {
           rowKey="uuid"
           columns={columns}
           showAdvancedSearch={true}
+          pinnedTabsField={MASTER_DATA_PINNED_ACTIVE_FIELD}
+          skipFuzzyPinyinClientFilter
           onRow={(record) => ({
             onClick: () => void handleDetail(record),
             style: { cursor: 'pointer' },
           })}
-          request={async (params) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const listParams = resolveLedgerListParams(searchFormValues, sort);
               const response = await moldApi.list({
-                skip: (params.current! - 1) * params.pageSize!,
+                skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
                 limit: params.pageSize,
-                ...params,
-                keyword: (params as any).keyword,
+                ...listParams,
               });
-              const enriched = await enrichMoldRecordsWithCustomFields(response.items || []);
+              const { data, total } = normalizeEquipmentListResponse(response);
+              const enriched = await enrichMoldRecordsWithCustomFields(data as Mold[]);
               return {
                 data: enriched,
                 success: true,
-                total: response.total || 0,
+                total,
               };
             } catch (error) {
               messageApi.error(t('app.kuaizhizao.mold.getListFailed'));

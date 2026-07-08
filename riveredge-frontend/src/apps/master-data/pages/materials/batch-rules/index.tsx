@@ -13,12 +13,19 @@ import { App, Popconfirm, Button, Tag, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import {
+  buildMasterCrudActiveValueEnum,
+  formatMasterDateTimeCell,
+  MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  masterCrudCreatedUpdatedColumns,
+  masterRuleCodeNameSearchColumns,
+  resolveRuleListParams,
+} from '../../../utils/materialListCore';
+import { batchRuleApi } from '../../../services/batchSerialRules';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import CodeRuleComponentBuilder from '../../../../../components/code-rule-component-builder';
-import { batchRuleApi } from '../../../services/batchSerialRules';
 import { BATCH_RULE_AVAILABLE_FIELDS, DEFAULT_BATCH_RULE_COMPONENTS } from '../../../constants/batchRuleConstants';
 import type { BatchRule, BatchRuleCreate, BatchRuleUpdate } from '../../../services/batchSerialRules';
 import type { CodeRuleComponent } from '../../../../../types/codeRuleComponent';
@@ -39,7 +46,13 @@ const BatchRulesPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentUuid, setCurrentUuid] = useState<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [ruleComponents, setRuleComponents] = useState<CodeRuleComponent[]>([]);
+
+  const ruleActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'app.master-data.seqRules.enabled', 'app.master-data.seqRules.disabled'),
+    [t],
+  );
 
   const handleCreate = () => {
     setIsEdit(false);
@@ -107,16 +120,6 @@ const BatchRulesPage: React.FC = () => {
     }
   };
 
-  const ruleSortFieldMap: Record<string, string> = {
-    name: 'name',
-    code: 'code',
-    description: 'description',
-    seqResetRule: 'seq_reset_rule',
-    isActive: 'is_active',
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
-  };
-
   const handleDelete = async (record: BatchRule) => {
     try {
       await batchRuleApi.delete(record.uuid);
@@ -150,7 +153,11 @@ const BatchRulesPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
-  const columns: ProColumns<BatchRule>[] = [
+  const columns: ProColumns<BatchRule>[] = useMemo(() => [
+    ...masterRuleCodeNameSearchColumns({
+      code: t('app.master-data.seqRules.ruleCode'),
+      name: t('app.master-data.seqRules.ruleName'),
+    }),
     {
       title: t('app.master-data.seqRules.ruleName'),
       dataIndex: 'name',
@@ -158,31 +165,46 @@ const BatchRulesPage: React.FC = () => {
       ellipsis: true,
       fixed: 'left',
       sorter: true,
+      hideInSearch: true,
     },
-    { title: t('app.master-data.seqRules.ruleCode'), dataIndex: 'code', copyable: true, width: 120, sorter: true },
+    { title: t('app.master-data.seqRules.ruleCode'), dataIndex: 'code', copyable: true, width: 120, sorter: true, hideInSearch: true },
     {
       title: t('app.master-data.seqRules.description'),
       dataIndex: 'description',
       width: 200,
       ellipsis: true,
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.master-data.seqRules.seqReset'),
       dataIndex: 'seqResetRule',
       width: 100,
       sorter: true,
+      hideInSearch: true,
       render: (_, r) => seqResetOptions.find((o) => o.value === r.seqResetRule)?.label || r.seqResetRule || '-',
+    },
+    {
+      title: t('app.master-data.seqRules.status'),
+      dataIndex: 'isActive',
+      hideInTable: true,
+      order: 20,
+      valueType: 'select',
+      valueEnum: ruleActiveValueEnum,
+      fieldProps: { allowClear: true },
     },
     {
       title: t('app.master-data.seqRules.status'),
       dataIndex: 'isActive',
       width: 80,
       sorter: true,
+      hideInSearch: true,
+      valueEnum: ruleActiveValueEnum,
       render: (_, r) => (
         <Tag color={r.isActive ? 'success' : 'default'}>{r.isActive ? t('app.master-data.seqRules.enabled') : t('app.master-data.seqRules.disabled')}</Tag>
       ),
     },
+    ...masterCrudCreatedUpdatedColumns<BatchRule>(t),
     {
       title: t('common.actions'),
       width: 150,
@@ -210,7 +232,7 @@ const BatchRulesPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+  ], [t, seqResetOptions, ruleActiveValueEnum]);
 
   return (
     <ListPageTemplate>
@@ -222,17 +244,27 @@ const BatchRulesPage: React.FC = () => {
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
           const { current = 1, pageSize = 20 } = params;
-          const { sortBy: raw, sortOrder } = extractProTableSort(sort);
-          const sortBy = raw ? ruleSortFieldMap[raw] : undefined;
+          const listParams = resolveRuleListParams(searchFormValues, sort);
+          lastListParamsRef.current = listParams;
           const res = await batchRuleApi.list({
             page: current,
             pageSize,
-            keyword: searchFormValues?.keyword?.trim() || undefined,
-            sortBy,
-            sortOrder,
+            isActive: listParams.is_active as boolean | undefined,
+            keyword: listParams.keyword as string | undefined,
+            code: listParams.code as string | undefined,
+            name: listParams.name as string | undefined,
+            created_start_date: listParams.created_start_date as string | undefined,
+            created_end_date: listParams.created_end_date as string | undefined,
+            updated_start_date: listParams.updated_start_date as string | undefined,
+            updated_end_date: listParams.updated_end_date as string | undefined,
+            sortBy: listParams.sort_by as string | undefined,
+            sortOrder: listParams.sort_order as 'asc' | 'desc' | undefined,
           });
           return { data: res.items, success: true, total: res.total };
         }}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={MASTER_CRUD_PINNED_ACTIVE_FIELD}
         showCreateButton
         createButtonText={t('app.master-data.batchRules.createTitle') + NEW_SHORTCUT_HINT}
         onCreate={handleCreate}
