@@ -193,7 +193,6 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         source_order = await PurchaseOrder.get_or_none(
             tenant_id=tenant_id,
             id=notice_data.purchase_order_id,
-            deleted_at__isnull=True,
         )
         if not source_order:
             raise BusinessLogicError("采购订单不存在或已删除，无法创建收货通知单")
@@ -248,6 +247,8 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
                     unit_price=unit_p,
                     total_amount=amt,
                     purchase_order_item_id=item_data.purchase_order_item_id,
+                    warehouse_id=getattr(item_data, "warehouse_id", None),
+                    warehouse_name=getattr(item_data, "warehouse_name", None),
                     notes=item_data.notes,
                 )
                 total_quantity += qty
@@ -506,7 +507,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
     ) -> ReceiptNoticeResponse:
         """通知仓库：标记已通知，并同步生成采购入库单（草稿），供仓库核对后确认入库。"""
         from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
-        from apps.kuaizhizao.services.warehouse_service import PurchaseReceiptService
+        from apps.kuaizhizao.services.warehouse_service import PurchaseReceiptService, _resolve_warehouse_name_by_id
         from apps.kuaizhizao.schemas.warehouse import PurchaseReceiptCreate, PurchaseReceiptItemCreate
         from apps.master_data.models.warehouse import Warehouse
 
@@ -515,17 +516,24 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             raise NotFoundError(f"收货通知单不存在: {notice_id}")
 
         notice_items = await ReceiptNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).all()
+        has_line_warehouse = any(getattr(ni, "warehouse_id", None) for ni in notice_items)
         assert_receipt_notice_capability(
             notice,
             "notify",
             has_items=bool(notice_items),
-            has_warehouse=getattr(notice, "warehouse_id", None) is not None,
+            has_warehouse=getattr(notice, "warehouse_id", None) is not None or has_line_warehouse,
         )
         if not notice_items:
             raise BusinessLogicError("收货通知单无明细，无法生成采购入库单")
 
         wh_id = notice.warehouse_id
         wh_name = notice.warehouse_name
+        if not wh_id:
+            for ni in notice_items:
+                if getattr(ni, "warehouse_id", None):
+                    wh_id = int(ni.warehouse_id)
+                    wh_name = getattr(ni, "warehouse_name", None)
+                    break
         if not wh_id:
             default_wh = await Warehouse.filter(tenant_id=tenant_id, is_active=True).first()
             if not default_wh:
@@ -537,12 +545,19 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         wh_params = cfg.get("parameters", {}).get("warehouse", {})
         location_required = bool(wh_params.get("location_management", False))
 
-        default_loc_id: Optional[int] = None
-        default_loc_code: Optional[str] = None
-        if location_required:
-            default_loc_id, default_loc_code = await _first_storage_location_for_warehouse(
-                tenant_id, int(wh_id)
-            )
+        default_loc_by_wh: dict[int, tuple[Optional[int], Optional[str]]] = {}
+
+        async def _default_location_for_warehouse(warehouse_id: int) -> tuple[Optional[int], Optional[str]]:
+            if warehouse_id in default_loc_by_wh:
+                return default_loc_by_wh[warehouse_id]
+            loc_id: Optional[int] = None
+            loc_code: Optional[str] = None
+            if location_required:
+                loc_id, loc_code = await _first_storage_location_for_warehouse(
+                    tenant_id, int(warehouse_id)
+                )
+            default_loc_by_wh[warehouse_id] = (loc_id, loc_code)
+            return loc_id, loc_code
 
         receipt_items: List[PurchaseReceiptItemCreate] = []
         for ni in notice_items:
@@ -559,6 +574,11 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
                 raise ValidationError(
                     f"物料 {ni.material_code} 的通知数量 {qty} 超过采购订单未入库数量 {po_item.outstanding_quantity}"
                 )
+
+            line_wh_id = int(ni.warehouse_id) if getattr(ni, "warehouse_id", None) else int(wh_id)
+            line_wh_name = getattr(ni, "warehouse_name", None)
+            if not line_wh_name:
+                line_wh_name = await _resolve_warehouse_name_by_id(tenant_id, line_wh_id)
 
             unit_p = Decimal(str(ni.unit_price or 0))
             if unit_p <= 0 and po_item is not None:
@@ -580,7 +600,10 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
                 qualified_quantity=float(qty),
                 unqualified_quantity=0.0,
                 status="草稿",
+                warehouse_id=line_wh_id,
+                warehouse_name=line_wh_name,
             )
+            default_loc_id, default_loc_code = await _default_location_for_warehouse(line_wh_id)
             if default_loc_id is not None:
                 item_kwargs["location_id"] = default_loc_id
                 if default_loc_code:

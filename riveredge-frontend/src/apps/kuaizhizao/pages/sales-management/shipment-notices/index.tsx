@@ -28,6 +28,7 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniCapabilityBatchButton, UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 const LazyUniImport = lazy(() =>
@@ -221,6 +222,8 @@ const ShipmentNoticesPage: React.FC = () => {
   const [pullPreviewSalesOrderId, setPullPreviewSalesOrderId] = useState<number | null>(null);
   const [pullSelectedItemIds, setPullSelectedItemIds] = useState<number[]>([]);
   const [pullQuantities, setPullQuantities] = useState<Record<number, number>>({});
+  const [pullPreviewWarehouseOptions, setPullPreviewWarehouseOptions] = useState<Array<{ label: string; value: number }>>([]);
+  const [pullPreviewLineWh, setPullPreviewLineWh] = useState<Record<number, number>>({});
 
   const [notifyPreviewOpen, setNotifyPreviewOpen] = useState(false);
   const [notifyPreviewLoading, setNotifyPreviewLoading] = useState(false);
@@ -609,6 +612,8 @@ const ShipmentNoticesPage: React.FC = () => {
     setPullPreviewSalesOrderId(null);
     setPullSelectedItemIds([]);
     setPullQuantities({});
+    setPullPreviewWarehouseOptions([]);
+    setPullPreviewLineWh({});
   }, []);
 
   const showPullCreatePreview = useCallback(
@@ -620,20 +625,38 @@ const ShipmentNoticesPage: React.FC = () => {
       setPullPreviewSalesOrderId(salesOrderId);
       setPullSelectedItemIds([]);
       setPullQuantities({});
-      previewPushSalesOrderToShipmentNotice(salesOrderId)
-        .then((res) => {
+      setPullPreviewWarehouseOptions([]);
+      setPullPreviewLineWh({});
+      Promise.all([
+        previewPushSalesOrderToShipmentNotice(salesOrderId),
+        masterWarehouseApi.list({ is_active: true, limit: 500 }),
+      ])
+        .then(([res, whRes]) => {
           setPullPreviewData(res);
+          const whList = Array.isArray(whRes) ? whRes : (whRes as { items?: unknown[] })?.items ?? [];
+          const warehouseOptions = (Array.isArray(whList) ? whList : []).map((w) => {
+            const row = w as { id: number; code?: string; name?: string };
+            const label = `${row.code || ''} ${row.name || ''}`.trim() || String(row.id);
+            return { label, value: row.id };
+          });
+          setPullPreviewWarehouseOptions(warehouseOptions);
           const ids: number[] = [];
           const qtyMap: Record<number, number> = {};
+          const lineWh: Record<number, number> = {};
           (res.items || []).forEach((row) => {
             const itemId = Number(row.item_id);
             const maxQty = Number(row.max_push_quantity ?? 0);
             if (!Number.isFinite(itemId) || itemId <= 0 || maxQty <= 0) return;
             ids.push(itemId);
             qtyMap[itemId] = maxQty;
+            const whId = Number(row.warehouse_id);
+            if (Number.isFinite(whId) && whId > 0) {
+              lineWh[itemId] = whId;
+            }
           });
           setPullSelectedItemIds(ids);
           setPullQuantities(qtyMap);
+          setPullPreviewLineWh(lineWh);
         })
         .catch((error: any) => {
           messageApi.error(error?.message || error?.detail || t('app.kuaizhizao.shipmentNotice.pullPreviewFailed'));
@@ -653,6 +676,10 @@ const ShipmentNoticesPage: React.FC = () => {
       );
       return;
     }
+    if (!pullPreviewWarehouseOptions.length) {
+      messageApi.warning(t('app.kuaizhizao.salesOrder.pushShipmentNoWarehouse'));
+      return;
+    }
     const rows = (pullPreviewData.items || []).filter((row) => Number(row.item_id) > 0);
     const rowById = new Map(rows.map((row) => [Number(row.item_id), row]));
     const selectedIds = pullSelectedItemIds.filter((id) => rowById.has(id));
@@ -666,6 +693,7 @@ const ShipmentNoticesPage: React.FC = () => {
       return;
     }
     const selectedQuantities: Record<number, number> = {};
+    const lineWarehouses: Record<number, number> = {};
     for (const id of selectedIds) {
       const row = rowById.get(id);
       const qty = Number(pullQuantities[id] ?? 0);
@@ -678,13 +706,24 @@ const ShipmentNoticesPage: React.FC = () => {
         messageApi.warning(t('app.kuaizhizao.salesOrder.pushQtyExceedsShippable', { code: row?.material_code || id }));
         return;
       }
+      const lineWh = pullPreviewLineWh[id];
+      if (lineWh == null || !(lineWh > 0)) {
+        messageApi.warning(
+          t('app.kuaizhizao.salesOrder.pushShipmentSelectLineWarehouse', {
+            material: row?.material_code || row?.material_name || id,
+          }),
+        );
+        return;
+      }
       selectedQuantities[id] = qty;
+      lineWarehouses[id] = lineWh;
     }
     setPullPreviewConfirming(true);
     try {
       const res = await pushSalesOrderToShipmentNotice(pullPreviewSalesOrderId, {
         selected_item_ids: selectedIds,
         selected_quantities: selectedQuantities,
+        line_warehouses: lineWarehouses,
       });
       messageApi.success(res?.message || t('app.kuaizhizao.salesOrder.pushSuccess'));
       invalidateMenuBadgeCounts();
@@ -709,6 +748,8 @@ const ShipmentNoticesPage: React.FC = () => {
     pullPreviewSalesOrderId,
     pullQuantities,
     pullSelectedItemIds,
+    pullPreviewLineWh,
+    pullPreviewWarehouseOptions,
     resetPullPreviewModal,
     salesOrderEntityName,
     shipmentNoticeEntityName,
@@ -1825,7 +1866,7 @@ const ShipmentNoticesPage: React.FC = () => {
                 dataSource={pullPreviewData.items}
                 rowKey={(row) => String(row.item_id)}
                 pagination={false}
-                scroll={{ x: 960 }}
+                scroll={{ x: 1180 }}
                 columns={[
                   {
                     title: t('common.select'),
@@ -1854,6 +1895,33 @@ const ShipmentNoticesPage: React.FC = () => {
                   { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
                   { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
                   { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  {
+                    title: (
+                      <>
+                        {t('app.kuaizhizao.salesOrder.pushShipmentLineWarehouse')}
+                        <Typography.Text type="danger"> *</Typography.Text>
+                      </>
+                    ),
+                    width: 160,
+                    render: (_: unknown, row) => {
+                      const itemId = Number(row.item_id);
+                      const selected = pullSelectedItemIds.includes(itemId);
+                      return (
+                        <Select
+                          style={{ width: '100%', minWidth: 140 }}
+                          placeholder={t('app.kuaizhizao.shipmentNotice.selectOutboundWarehouse')}
+                          showSearch
+                          optionFilterProp="label"
+                          disabled={!selected}
+                          value={pullPreviewLineWh[itemId]}
+                          options={pullPreviewWarehouseOptions}
+                          onChange={(nv) => {
+                            setPullPreviewLineWh((prev) => ({ ...prev, [itemId]: Number(nv) }));
+                          }}
+                        />
+                      );
+                    },
+                  },
                   {
                     title: t('app.kuaizhizao.salesOrder.colShipQty'),
                     dataIndex: 'push_quantity',

@@ -175,7 +175,8 @@ export const MAINTENANCE_PLAN_PINNED_STATUS_FIELD = 'status';
 export function buildMaintenancePlanStatusValueEnum(t: TFunction): Record<string, { text: string }> {
   const P = 'app.kuaizhizao.maintenancePlan';
   return {
-    待执行: { text: t(`${P}.status.pending`) },
+    草稿: { text: t(`${P}.status.draft`) },
+    已发布: { text: t(`${P}.status.published`) },
     执行中: { text: t(`${P}.status.running`) },
     已完成: { text: t(`${P}.status.completed`) },
     已取消: { text: t(`${P}.status.cancelled`) },

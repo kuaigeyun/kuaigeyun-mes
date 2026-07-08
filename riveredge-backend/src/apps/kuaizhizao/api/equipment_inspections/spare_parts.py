@@ -68,7 +68,7 @@ async def stock_adjust(
             rel_type=body.rel_type,
             rel_id=body.rel_id,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
             remark=body.remark,
         )
         return {

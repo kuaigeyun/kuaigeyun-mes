@@ -10,7 +10,7 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import type { DescriptionsProps } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ActionType,
   ProColumns,
@@ -191,6 +191,7 @@ interface ProcessInspection {
 
 const ProcessInspectionPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { t, i18n } = useTranslation();
   const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'process_inspection.pull_from_work_order');
 
@@ -247,6 +248,8 @@ const ProcessInspectionPage: React.FC = () => {
   const ncPerms = useResourcePermissions(NC_RESOURCE);
   const { canRead: canReadNcLedger } = useResourcePermissions(NC_RESOURCE);
   const actionRef = useRef<ActionType>(null);
+  const urlListFiltersRef = useRef<{ work_order_id?: number; operation_id?: number }>({});
+  const deepLinkOpenedRef = useRef(false);
   const tableRowsRef = useRef<ProcessInspection[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const selectedRecordsForBatch = useMemo(
@@ -379,6 +382,26 @@ const ProcessInspectionPage: React.FC = () => {
       messageApi.error(t('app.kuaizhizao.quality.common.messages.loadDetailFailed'));
     }
   };
+
+  useEffect(() => {
+    if (deepLinkOpenedRef.current) return;
+    const idParam = searchParams.get('id');
+    if (idParam && /^\d+$/.test(idParam)) {
+      deepLinkOpenedRef.current = true;
+      void handleDetail({ id: Number(idParam) } as ProcessInspection);
+      return;
+    }
+    const woId = searchParams.get('work_order_id');
+    const opId = searchParams.get('operation_id');
+    if (woId && /^\d+$/.test(woId) && opId && /^\d+$/.test(opId)) {
+      deepLinkOpenedRef.current = true;
+      urlListFiltersRef.current = {
+        work_order_id: Number(woId),
+        operation_id: Number(opId),
+      };
+      actionRef.current?.reload();
+    }
+  }, [searchParams]);
 
   // 处理检验
   const handleInspect = async (record: ProcessInspection) => {
@@ -983,6 +1006,7 @@ const ProcessInspectionPage: React.FC = () => {
               skip: (params.current! - 1) * params.pageSize!,
               limit: params.pageSize,
               ...listParams,
+              ...urlListFiltersRef.current,
             });
             const { data: raw, total } = normalizeQualityInspectionListResponse(response);
             const data = await enrichInspectionRecordsWithCustomFields(raw as ProcessInspection[]);

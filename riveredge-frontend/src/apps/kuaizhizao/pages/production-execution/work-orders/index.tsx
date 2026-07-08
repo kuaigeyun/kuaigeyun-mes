@@ -78,6 +78,7 @@ import {
   CloseCircleOutlined,
   InboxOutlined,
   SendOutlined,
+  AuditOutlined,
   RetweetOutlined,
   SplitCellsOutlined,
   DisconnectOutlined,
@@ -237,7 +238,16 @@ const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-m
 import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD, isWorkOrderPlannedEndOverdue } from '../../../utils/workOrderLifecycle'
 import { commitListPageSearchParams } from '../../../../../utils/listLifecycleStage'
 import { UniLifecycle } from '../../../../../components/uni-lifecycle'
-import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity } from '../../../utils/workOrderReporting'
+import {
+  formatOperationInspectionSummary,
+  buildProcessInspectionPageUrl,
+  getOperationInspectionMode,
+  getProcessInspectionCardStatus,
+  getProcessInspectionStatusTagColor,
+  getRemainingReportableQuantity,
+  getStatusReportingCompleteQuantity,
+  isReportBlockedByUpstreamQc,
+} from '../../../utils/workOrderReporting'
 import ReportableQuantityPanel from '../../../components/ReportableQuantityPanel'
 import ReportingInboundWarehouseField from '../../../components/ReportingInboundWarehouseField'
 import {
@@ -548,6 +558,8 @@ function pickDefaultProductionWorker(
       return {
         id: Number(operation.assigned_worker_id),
         full_name: String(operation.assigned_worker_name || curName),
+        username: currentUser?.username || gu.username,
+        uuid: undefined,
       }
     }
     return {
@@ -562,6 +574,8 @@ function pickDefaultProductionWorker(
     return {
       id: Number(operation.assigned_worker_id),
       full_name: String(operation.assigned_worker_name || curName),
+      username: undefined,
+      uuid: undefined,
     }
   }
   const defs = operation?.default_operators
@@ -570,6 +584,7 @@ function pickDefaultProductionWorker(
     return {
       id: Number(d.id),
       full_name: String(d.name || curName),
+      username: undefined,
       uuid: d.uuid,
     }
   }
@@ -594,7 +609,10 @@ function getQuickReportWorkerPayload(
     }
   }
   const picked = pickDefaultProductionWorker(mode, operation, currentUser)
-  return { worker_id: picked.id, worker_name: picked.full_name }
+  return {
+    worker_id: picked.id,
+    worker_name: String(picked.full_name || picked.username || ''),
+  }
 }
 
 /** 列表展示：值由后端按工单 product_id → 产品物料上的制造模式定义解析 */
@@ -2084,16 +2102,25 @@ const WorkOrdersPage: React.FC = () => {
         try {
           const res = await searchUserDisplay({ is_active: true, page_size: 200 })
           const u = res.items?.find((x) => x.id === picked.id)
-          uuid = u?.uuid
+          if (u) {
+            uuid = u.uuid
+            quickReportingProxyWorkerRef.current = {
+              id: u.id,
+              full_name: u.full_name || u.username || picked.full_name,
+              username: u.username,
+            }
+          }
         } catch {
           /* ignore */
         }
       }
       if (cancelled) return
-      quickReportingProxyWorkerRef.current = {
-        id: picked.id,
-        full_name: picked.full_name,
-        username: picked.username || '',
+      if (!quickReportingProxyWorkerRef.current) {
+        quickReportingProxyWorkerRef.current = {
+          id: picked.id,
+          full_name: picked.full_name,
+          username: picked.username || '',
+        }
       }
       setTimeout(() => {
         quickReportingFormRef.current?.setFieldsValue({
@@ -3006,9 +3033,14 @@ const WorkOrdersPage: React.FC = () => {
       return
     }
     if (operation.reporting_type === 'quantity') {
-      const rem = getRemainingReportableQuantity(operation, Number(workOrder.quantity) || 0)
+      const woQty = Number(workOrder.quantity) || 0
+      const rem = getRemainingReportableQuantity(operation, woQty)
       if (rem <= 0) {
-        messageApi.warning('该工序已无可报数量')
+        if (isReportBlockedByUpstreamQc(operation, woQty)) {
+          messageApi.warning(t('app.kuaizhizao.workOrder.reportBlockedByPrevQc'))
+        } else {
+          messageApi.warning('该工序已无可报数量')
+        }
         return
       }
     }
@@ -3249,10 +3281,9 @@ const WorkOrdersPage: React.FC = () => {
     const qualifiedRate = calculateQualifiedRate(operation)
     const plannedQty = Number(workOrder.quantity || 0)
     const qualifiedQty = Number(operation.qualified_quantity || 0)
-    const completedQty = Number(operation.completed_quantity || 0)
     const isEffectivelyCompleted =
       operation.status === 'completed' ||
-      (plannedQty > 0 && (qualifiedQty >= plannedQty || completedQty >= plannedQty))
+      (plannedQty > 0 && qualifiedQty >= plannedQty)
     const isCompleted = isEffectivelyCompleted
     const isInProgress = !isCompleted && operation.status === 'in_progress'
     const isOutsourced = Boolean(
@@ -3492,6 +3523,52 @@ const WorkOrdersPage: React.FC = () => {
                     已领 {operation.material_picked_count} 种物料
                   </div>
                 )}
+                <div
+                  style={{
+                    marginBottom: 6,
+                    fontSize: 12,
+                    color:
+                      getOperationInspectionMode(operation) === 'none'
+                        ? token.colorTextTertiary
+                        : token.colorTextSecondary,
+                    display: 'flex',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', minWidth: 0 }}>
+                    <AuditOutlined style={{ marginRight: 4 }} />
+                    <strong>{t('app.kuaizhizao.workOrder.opCard.inspection')}: </strong>
+                    {formatOperationInspectionSummary(operation, {
+                      none: t('app.kuaizhizao.workOrder.opCard.inspectionNone'),
+                      simple: t('app.kuaizhizao.workOrder.opCard.inspectionSimple'),
+                      planFallback: t('app.kuaizhizao.workOrder.opCard.inspectionPlanFallback'),
+                    })}
+                  </span>
+                  {(() => {
+                    const qcStatus = getProcessInspectionCardStatus(operation)
+                    if (!qcStatus) return null
+                    const targetUrl = buildProcessInspectionPageUrl(operation, workOrder.id)
+                    return (
+                      <Tag
+                        color={getProcessInspectionStatusTagColor(qcStatus)}
+                        style={{
+                          marginInlineEnd: 0,
+                          lineHeight: '18px',
+                          cursor: targetUrl ? 'pointer' : 'default',
+                        }}
+                        onClick={(e) => {
+                          if (!targetUrl) return
+                          e.stopPropagation()
+                          navigate(targetUrl)
+                        }}
+                      >
+                        {t(`app.kuaizhizao.workOrder.opCard.processInspectionStatus.${qcStatus}`)}
+                      </Tag>
+                    )
+                  })()}
+                </div>
                 {!isOutsourced ? (
                   <>
                     <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

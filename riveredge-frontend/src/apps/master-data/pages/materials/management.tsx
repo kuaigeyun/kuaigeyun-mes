@@ -909,7 +909,7 @@ const MaterialsManagementPage: React.FC = () => {
     }
 
     try {
-      const { items: defs } = await variantAttributeApi.list({ is_active: true, limit: 10000 })
+      const { items: defs } = await variantAttributeApi.list({ is_active: true, limit: 1000 })
       defs.sort((a, b) => a.display_order - b.display_order)
       setVariantAttrDefinitions(defs)
     } catch (error: unknown) {

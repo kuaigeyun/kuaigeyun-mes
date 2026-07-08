@@ -277,13 +277,3 @@ class PurchaseReceiptPullCandidateListResponse(BaseModel):
     data: List[PurchaseReceiptPullCandidate]
     total: int
     success: bool = True
-
-
-class ExpediteRequest(BaseModel):
-    reason: str
-    expected_delivery_date: date
-
-
-class ExpediteResponse(BaseModel):
-    success: bool
-    message: str

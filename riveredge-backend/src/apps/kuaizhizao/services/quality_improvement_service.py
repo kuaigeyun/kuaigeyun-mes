@@ -375,15 +375,20 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         super().__init__(OQCInspection)
 
     async def create(self, tenant_id: int, user_id: int, payload: OQCInspectionCreate) -> OQCInspectionResponse:
+        from apps.kuaizhizao.services.quality_service import _quality_inspection_initial_review_fields
+
         inspection_code = payload.inspection_code
         if not inspection_code:
             inspection_code = _build_quick_code("OQC")
+        create_fields = payload.model_dump(exclude={"inspection_code"})
+        create_fields.update(
+            await _quality_inspection_initial_review_fields(tenant_id, "oqc_inspection")
+        )
         row = await OQCInspection.create(
             tenant_id=tenant_id,
             inspection_code=inspection_code,
             status="待检验",
-            review_status="待审核",
-            **payload.model_dump(exclude={"inspection_code"}),
+            **create_fields,
         )
         return OQCInspectionResponse.model_validate(row)
 
@@ -464,6 +469,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         from apps.kuaizhizao.services.quality_service import (
             _apply_template_conduct_to_payload,
             _maybe_create_quality_exception_from_inspection,
+            _quality_inspection_conduct_finalize_fields,
         )
 
         row = await OQCInspection.get_or_none(id=inspection_id, tenant_id=tenant_id, deleted_at__isnull=True)
@@ -486,7 +492,20 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             row.attachments = conduct_extra["attachments"]
         if conduct_extra.get("measurement_data") is not None:
             pass  # OQC 暂无 measurement_data 列，已并入 other_checks
-        row.status = "已检验"
+        finalize_fields = await _quality_inspection_conduct_finalize_fields(
+            tenant_id,
+            "oqc_inspection",
+            quality_status=payload.quality_status,
+            inspected_by=user_id,
+            inspector_name=user_info["name"],
+        )
+        row.status = finalize_fields.get("status", "已检验")
+        if finalize_fields.get("review_status") is not None:
+            row.review_status = finalize_fields["review_status"]
+        if finalize_fields.get("reviewer_id") is not None:
+            row.reviewer_id = finalize_fields["reviewer_id"]
+            row.reviewer_name = finalize_fields["reviewer_name"]
+            row.review_time = finalize_fields["review_time"]
         row.inspector_id = user_id
         row.inspector_name = user_info["name"]
         row.inspection_time = datetime.now()
@@ -1002,7 +1021,10 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
         from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
         from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
-        from apps.kuaizhizao.services.quality_service import _resolve_inspection_template_fields
+        from apps.kuaizhizao.services.quality_service import (
+            _resolve_inspection_template_fields,
+            _quality_inspection_initial_review_fields,
+        )
         from apps.master_data.models.material import Material
 
         notice = await ShipmentNotice.get_or_none(
@@ -1025,6 +1047,9 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         mat_by_id = {m.id: m for m in mat_rows}
 
         created: List[OQCInspectionResponse] = []
+        initial_review_fields = await _quality_inspection_initial_review_fields(
+            tenant_id, "oqc_inspection"
+        )
         async with in_transaction():
             for item in items:
                 if not item.material_id:
@@ -1071,9 +1096,9 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     material_name=item.material_name,
                     inspection_quantity=item.notice_quantity,
                     status="待检验",
-                    review_status="待审核",
                     inspection_standard=template.get("inspection_standard"),
                     other_checks=template.get("other_checks"),
+                    **initial_review_fields,
                 )
                 created.append(OQCInspectionResponse.model_validate(row))
         if not created:
@@ -1091,7 +1116,10 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         from apps.kuaizhizao.models.sales_delivery import SalesDelivery
         from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
         from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
-        from apps.kuaizhizao.services.quality_service import _resolve_inspection_template_fields
+        from apps.kuaizhizao.services.quality_service import (
+            _resolve_inspection_template_fields,
+            _quality_inspection_initial_review_fields,
+        )
         from apps.master_data.models.material import Material
 
         delivery = await SalesDelivery.get_or_none(
@@ -1114,6 +1142,9 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         mat_by_id = {m.id: m for m in mat_rows}
 
         created: List[OQCInspectionResponse] = []
+        initial_review_fields = await _quality_inspection_initial_review_fields(
+            tenant_id, "oqc_inspection"
+        )
         async with in_transaction():
             for item in items:
                 if not item.material_id:
@@ -1160,9 +1191,9 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     batch_number=item.batch_number,
                     inspection_quantity=item.delivery_quantity,
                     status="待检验",
-                    review_status="待审核",
                     inspection_standard=template.get("inspection_standard"),
                     other_checks=template.get("other_checks"),
+                    **initial_review_fields,
                 )
                 created.append(OQCInspectionResponse.model_validate(row))
         if not created:

@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
@@ -167,10 +167,13 @@ class BatchingCenterService:
             "order_by": order_by,
         }
 
+        builder_filters = self._builder_query_filters(filters)
+
         if task_type == "material_call":
             items, total = await self._build_material_call_tasks(
-                tenant_id, status, skip=skip, limit=limit, **filters
+                tenant_id, status, skip=skip, limit=limit, **builder_filters
             )
+            self._sort_tasks_by_order(items, filters.get("order_by"))
             return BatchingCenterTaskListResponse(items=items, total=total)
 
         if task_type == "batching_draft":
@@ -180,26 +183,29 @@ class BatchingCenterService:
                 skip=skip,
                 limit=limit,
                 include_completed=include_completed_batching,
-                **filters,
+                **builder_filters,
             )
+            self._sort_tasks_by_order(items, filters.get("order_by"))
             return BatchingCenterTaskListResponse(items=items, total=total)
 
         if task_type == "proactive_prep":
             items, total = await self._build_proactive_prep_tasks(
-                tenant_id, skip=skip, limit=limit, **filters
+                tenant_id, skip=skip, limit=limit, **builder_filters
             )
+            self._sort_tasks_by_order(items, filters.get("order_by"))
             return BatchingCenterTaskListResponse(items=items, total=total)
 
         if task_type == "backflush_alert":
             items, total = await self._build_backflush_alert_tasks(
-                tenant_id, skip=skip, limit=limit, **filters
+                tenant_id, skip=skip, limit=limit, **builder_filters
             )
+            self._sort_tasks_by_order(items, filters.get("order_by"))
             return BatchingCenterTaskListResponse(items=items, total=total)
 
         # 未指定 task_type：仅合并轻量任务；主动备料需显式 task_type 或 include_proactive_prep
         tasks: List[BatchingCenterTaskItem] = []
         mc_items, _ = await self._build_material_call_tasks(
-            tenant_id, status, skip=0, limit=200, **filters
+            tenant_id, status, skip=0, limit=200, **builder_filters
         )
         tasks.extend(mc_items)
         bd_items, _ = await self._build_batching_draft_tasks(
@@ -208,16 +214,16 @@ class BatchingCenterService:
             skip=0,
             limit=200,
             include_completed=include_completed_batching,
-            **filters,
+            **builder_filters,
         )
         tasks.extend(bd_items)
         bf_items, _ = await self._build_backflush_alert_tasks(
-            tenant_id, skip=0, limit=50, **filters
+            tenant_id, skip=0, limit=50, **builder_filters
         )
         tasks.extend(bf_items)
         if include_proactive_prep:
             pp_items, _ = await self._build_proactive_prep_tasks(
-                tenant_id, skip=0, limit=50, **filters
+                tenant_id, skip=0, limit=50, **builder_filters
             )
             tasks.extend(pp_items)
 
@@ -225,6 +231,14 @@ class BatchingCenterService:
         total = len(tasks)
         page = tasks[skip : skip + limit]
         return BatchingCenterTaskListResponse(items=page, total=total)
+
+    @staticmethod
+    def _builder_query_filters(filters: dict) -> dict:
+        """仅向各 _build_* 传递其支持的查询参数（不含 keyword/order_by）。"""
+        return {
+            "work_order_code": filters.get("work_order_code"),
+            "priority": filters.get("priority"),
+        }
 
     @staticmethod
     def _apply_task_filters(
@@ -274,11 +288,12 @@ class BatchingCenterService:
 
     @staticmethod
     def _sort_tasks(tasks: List[BatchingCenterTaskItem]) -> None:
+        fallback_created_at = datetime.max.replace(tzinfo=timezone.utc)
         tasks.sort(
             key=lambda t: (
                 0 if t.sla_overdue else 1,
                 -(t.picking_score or 0),
-                t.created_at or datetime.max,
+                t.created_at or fallback_created_at,
             )
         )
 
@@ -500,7 +515,7 @@ class BatchingCenterService:
             tenant_id=tenant_id,
             batching_order_id__in=order_ids,
             deleted_at__isnull=True,
-        ).order_by("id")
+        ).order_by("id").all()
         items_by_order: dict = {}
         for item in order_items:
             items_by_order.setdefault(item.batching_order_id, []).append(item)

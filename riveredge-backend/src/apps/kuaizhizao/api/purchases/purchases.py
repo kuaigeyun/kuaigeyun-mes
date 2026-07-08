@@ -24,8 +24,7 @@ from apps.kuaizhizao.schemas.purchase import (
     PurchaseOrderListResponse, PurchaseOrderApprove, PurchaseOrderConfirm,
     PurchaseOrderListParams, MaterialPriceHistoryResponse,
     PurchaseTrackingResponse,
-    ExpediteRequest, ExpediteResponse, PriceComparisonResponse,
-    LandingCostAllocationRequest, PurchaseOrderChangeResponse,
+    PriceComparisonResponse, LandingCostAllocationRequest, PurchaseOrderChangeResponse,
     PurchaseReceiptPullCandidateListResponse,
 )
 from apps.kuaizhizao.services.purchase_service import PurchaseService
@@ -583,7 +582,7 @@ async def push_purchase_order_to_receipt(
 @router.post("/purchase-orders/{order_id}/push-to-receipt-notice", summary="Push to receipt notice")
 async def push_purchase_order_to_receipt_notice(
     order_id: int = Path(..., description="采购订单ID"),
-    notice_quantities: Optional[dict] = Body(None, description="通知数量字典 {item_id: quantity}"),
+    body: Optional[dict] = Body(None, description="notice_quantities、selected_item_ids、line_warehouses"),
     current_user: CurrentUser = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -591,9 +590,27 @@ async def push_purchase_order_to_receipt_notice(
     从采购单下推到收货通知
     
     自动生成收货通知单，通知仓库收货（不直接动库存）
+    
+    body 格式：{ "notice_quantities": {item_id: quantity}, "selected_item_ids": [1,2], "line_warehouses": {item_id: warehouse_id} }
+    或直接传 notice_quantities 字典（向后兼容）
     """
     from fastapi import status
     from fastapi.responses import JSONResponse
+    from typing import Any
+
+    if not body:
+        body = {}
+    notice_quantities = body.get("notice_quantities")
+    if notice_quantities is None and "selected_item_ids" not in body and "line_warehouses" not in body:
+        notice_quantities = body
+
+    def _normalize_int_int_map(raw: Any) -> Optional[dict]:
+        if not raw or not isinstance(raw, dict):
+            return None
+        try:
+            return {int(k): int(v) for k, v in raw.items()}
+        except (ValueError, TypeError):
+            return None
 
     normalized = None
     if notice_quantities and isinstance(notice_quantities, dict):
@@ -606,12 +623,26 @@ async def push_purchase_order_to_receipt_notice(
                 continue
         normalized = tmp if tmp else None
 
+    selected_item_ids = None
+    raw_ids = body.get("selected_item_ids")
+    if isinstance(raw_ids, list):
+        try:
+            selected_item_ids = [int(v) for v in raw_ids if v is not None]
+        except (ValueError, TypeError):
+            selected_item_ids = None
+        if not selected_item_ids:
+            selected_item_ids = None
+
+    line_warehouses = _normalize_int_int_map(body.get("line_warehouses"))
+
     service = PurchaseService()
     result = await service.push_to_receipt_notice(
         tenant_id=tenant_id,
         order_id=order_id,
         created_by=current_user.id,
-        notice_quantities=normalized
+        notice_quantities=normalized,
+        selected_item_ids=selected_item_ids,
+        line_warehouses=line_warehouses,
     )
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 
@@ -701,14 +732,6 @@ async def get_purchase_order_tracking(
     return await PurchaseService().get_purchase_order_tracking(tenant_id, order_id)
 
 
-@router.post("/purchase-orders/{order_id}/expedite", response_model=ExpediteResponse, summary="Expedite purchase (one click)")
-async def expedite_purchase_order(
-    order_id: int = Path(..., description="采购订单ID"),
-    request: ExpediteRequest = Body(None),
-    tenant_id: int = Depends(get_current_tenant)
-):
-    """记录催单日志并模拟发出催单通知"""
-    return await PurchaseService().expedite_purchase_order(tenant_id, order_id, request.remarks if request else None)
 @router.get("/price-comparison", response_model=PriceComparisonResponse, summary="Multi-material price comparison")
 async def get_price_comparison(
     material_ids: str = Query(..., description="物料ID列表，逗号分隔"),

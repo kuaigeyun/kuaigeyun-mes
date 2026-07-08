@@ -22,7 +22,7 @@ import {
   WAREHOUSE_DETAIL_TABLE_STYLES,
 } from '../../../../../components/layout-templates';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
-import { getSalesOrder, type SalesOrderItem } from '../../../services/sales-order';
+import { getSalesOrder, previewPushSalesOrderToDelivery, pushSalesOrderToDelivery, type SalesOrderItem } from '../../../services/sales-order';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
@@ -57,7 +57,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [maxQuantities, setMaxQuantities] = useState<Record<number, number>>({});
-  const [warehouseId, setWarehouseId] = useState<number | undefined>();
+  const [lineWh, setLineWh] = useState<Record<number, number>>({});
   const [deliveryTime, setDeliveryTime] = useState(() => dayjs());
   const [notes, setNotes] = useState('');
   const [attachments, setAttachments] = useState<UploadFile[]>([]);
@@ -102,6 +102,28 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
         render: (_: unknown, it: SalesOrderItem) => Number(maxQuantities[it.id!] ?? 0),
       },
       {
+        title: (
+          <>
+            {t('app.kuaizhizao.salesOrder.pushShipmentLineWarehouse')}
+            <Typography.Text type="danger"> *</Typography.Text>
+          </>
+        ),
+        key: 'warehouse',
+        width: 160,
+        render: (_: unknown, it: SalesOrderItem) =>
+          it.id != null ? (
+            <Select
+              style={{ width: '100%', minWidth: 140 }}
+              placeholder={t('app.kuaizhizao.shipmentNotice.selectOutboundWarehouse')}
+              showSearch
+              optionFilterProp="label"
+              options={warehouseOptions}
+              value={lineWh[it.id]}
+              onChange={(nv) => setLineWh((prev) => ({ ...prev, [it.id!]: Number(nv) }))}
+            />
+          ) : null,
+      },
+      {
         title: t('app.kuaizhizao.warehouseOutbound.entry.thisOutbound'),
         key: 'qty',
         width: 140,
@@ -118,7 +140,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
       },
       { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 60 },
     ],
-    [quantities, maxQuantities, t],
+    [lineWh, maxQuantities, quantities, t, warehouseOptions],
   );
 
   const leavePage = useCallback(() => {
@@ -129,7 +151,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
   useEffect(() => {
     bindSnapshot(() => ({
       quantities,
-      warehouseId,
+      lineWh,
       deliveryTime,
       notes,
       receiverUuid: operatorHook.receiverUuid,
@@ -138,7 +160,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
     persistNow();
   }, [
     quantities,
-    warehouseId,
+    lineWh,
     deliveryTime,
     notes,
     operatorHook.receiverUuid,
@@ -172,20 +194,34 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
     void (async () => {
       setLoading(true);
       try {
-        const [so, whRes] = await Promise.all([
+        const [so, whRes, preview] = await Promise.all([
           getSalesOrder(salesOrderId, true),
           masterWarehouseApi.list({ is_active: true, limit: 500 }),
+          previewPushSalesOrderToDelivery(salesOrderId),
         ]);
         setOrder(so as Record<string, unknown>);
         const lines = (so.items ?? []) as SalesOrderItem[];
         setItems(lines);
         setWarehouseOptions(mapWarehouseSelectOptions(whRes));
         const initQty: Record<number, number> = {};
+        const initMax: Record<number, number> = {};
+        const initLineWh: Record<number, number> = {};
         lines.forEach((it) => {
           if (it.id == null) return;
           initQty[it.id] = 0;
         });
+        (preview.items || []).forEach((row) => {
+          const itemId = Number(row.item_id);
+          if (!Number.isFinite(itemId) || itemId <= 0) return;
+          initMax[itemId] = Number(row.max_push_quantity ?? 0);
+          const whId = Number(row.warehouse_id);
+          if (Number.isFinite(whId) && whId > 0) {
+            initLineWh[itemId] = whId;
+          }
+        });
         setQuantities(initQty);
+        setMaxQuantities(initMax);
+        setLineWh(initLineWh);
         applyDraftOnce((draft) => {
           if (draft.quantities) {
             setQuantities((prev) => mergeRecordMaps(prev, draft.quantities as Record<number, number>));
@@ -193,8 +229,9 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
           if (draft.maxQuantities) {
             setMaxQuantities(draft.maxQuantities as Record<number, number>);
           }
-          const whId = draftOptionalNumber(draft.warehouseId);
-          if (whId != null) setWarehouseId(whId);
+          if (draft.lineWh) {
+            setLineWh((prev) => mergeRecordMaps(prev, draft.lineWh as Record<number, number>));
+          }
           if (draft.deliveryTime) setDeliveryTime(draftDayjs(draft.deliveryTime));
           if (typeof draft.notes === 'string') setNotes(draft.notes);
           operatorHook.restoreReceiver(
@@ -212,14 +249,13 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
   }, [salesOrderId, leavePage, messageApi, t, applyDraftOnce, operatorHook.restoreReceiver]);
 
   const submit = async (mode: 'draft' | 'confirm') => {
-    if (!warehouseId || !(warehouseId > 0)) {
-      messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse'));
+    if (!warehouseOptions.length) {
+      messageApi.error(t('app.kuaizhizao.salesOrder.pushShipmentNoWarehouse'));
       return;
     }
-    const whOpt = warehouseOptions.find((o) => o.value === warehouseId);
-    if (!whOpt) return;
 
     const deliveryQuantities: Record<number, number> = {};
+    const lineWarehouses: Record<number, number> = {};
     let hasPositive = false;
     for (const it of items) {
       if (it.id == null) continue;
@@ -235,7 +271,17 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
         );
         return;
       }
+      const wh = lineWh[it.id];
+      if (wh == null || !(wh > 0)) {
+        messageApi.error(
+          t('app.kuaizhizao.salesOrder.pushShipmentSelectLineWarehouse', {
+            material: it.material_code || it.material_name || it.id,
+          }),
+        );
+        return;
+      }
       deliveryQuantities[it.id] = qty;
+      lineWarehouses[it.id] = wh;
       hasPositive = true;
     }
     if (!hasPositive) {
@@ -245,21 +291,21 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const created = (await warehouseApi.salesDelivery.pullFromSalesOrder({
-        sales_order_id: salesOrderId,
-        warehouse_id: warehouseId,
-        warehouse_name: whOpt.name,
+      const created = await pushSalesOrderToDelivery(salesOrderId, {
         delivery_quantities: deliveryQuantities,
-      })) as { id?: number; delivery_code?: string };
-      if (created?.id == null) {
+        line_warehouses: lineWarehouses,
+      });
+      if (created?.delivery_id == null) {
         messageApi.error(t('app.kuaizhizao.warehouseOutbound.entry.noDeliveryId'));
         return;
       }
-      await warehouseApi.salesDelivery.update(String(created.id), {
+      const headerWhId = lineWarehouses[Number(Object.keys(lineWarehouses)[0])];
+      const whOpt = warehouseOptions.find((o) => o.value === headerWhId);
+      await warehouseApi.salesDelivery.update(String(created.delivery_id), {
         customer_id: Number(order?.customer_id ?? 0),
         customer_name: String(order?.customer_name ?? ''),
-        warehouse_id: warehouseId,
-        warehouse_name: whOpt.name,
+        warehouse_id: headerWhId,
+        warehouse_name: whOpt?.name,
         delivery_time: deliveryTime?.toISOString(),
         deliverer_name: operatorHook.receiverName.trim() || undefined,
         notes: notes.trim() || undefined,
@@ -271,16 +317,17 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
         navigate(OUTBOUND_LIST_PATH, {
           state: {
             outboundDirectConfirm: {
-              id: Number(created.id),
+              id: Number(created.delivery_id),
               outbound_type: 'sales_delivery',
             },
           },
         });
       } else {
         messageApi.success(
-          t('app.kuaizhizao.warehouseOutbound.entry.draftDeliveryCreated', {
-            code: created.delivery_code ? `：${created.delivery_code}` : '',
-          }),
+          created.message ||
+            t('app.kuaizhizao.warehouseOutbound.entry.draftDeliveryCreated', {
+              code: created.delivery_code ? `：${created.delivery_code}` : '',
+            }),
         );
         leavePage();
       }
@@ -339,21 +386,6 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
                 <Col xs={24} sm={12} lg={6}>
                   <Form.Item label={t('app.kuaizhizao.warehouseOutbound.entry.orderStatus')}>
                     <ReadOnlyFormValue value={String(order.status ?? '')} />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.field.warehouse')} required>
-                    <Select
-                      style={{ width: '100%' }}
-                      placeholder={t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse')}
-                      options={warehouseOptions}
-                      value={warehouseId}
-                      onChange={setWarehouseId}
-                      showSearch
-                      filterOption={(input, opt) =>
-                        (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
-                      }
-                    />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>

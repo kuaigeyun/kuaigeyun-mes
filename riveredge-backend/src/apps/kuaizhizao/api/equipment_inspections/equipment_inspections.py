@@ -20,7 +20,7 @@ async def create_inspection(
     if not record_data.get("inspector_id"):
         record_data["inspector_id"] = current_user.id
     if not record_data.get("inspector_name"):
-        record_data["inspector_name"] = current_user.nickname or current_user.username
+        record_data["inspector_name"] = current_user.full_name or current_user.username
     
     record = await service.create_inspection_record(tenant_id, record_data)
     return PointInspectionRecordResponse.model_validate(record)

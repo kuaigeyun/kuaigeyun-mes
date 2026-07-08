@@ -41,7 +41,7 @@ import { equipmentFaultApi, equipmentApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString, coerceFormDate } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
 import {
   buildEquipmentFaultStatusValueEnum,
@@ -53,6 +53,11 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const P = 'app.kuaizhizao.equipmentFault';
+
+function toApiDateTimeString(value: unknown): string | undefined {
+  const d = coerceFormDate(value);
+  return d ? d.format('YYYY-MM-DD HH:mm:ss') : undefined;
+}
 
 const FAULT_STATUS_KEYS: Record<string, string> = {
   '待处理': `${P}.status.pending`,
@@ -142,6 +147,10 @@ const EquipmentFaultsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentFault, setCurrentFault] = useState<EquipmentFault | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
+    undefined,
+  );
+  const [submitting, setSubmitting] = useState(false);
   const formRef = useRef<any>(null);
 
   // Drawer 相关状态（详情查看）
@@ -159,6 +168,10 @@ const EquipmentFaultsPage: React.FC = () => {
   // 创建维修记录 Modal 状态
   const [repairModalVisible, setRepairModalVisible] = useState(false);
   const [repairFault, setRepairFault] = useState<EquipmentFault | null>(null);
+  const [repairFormInitialValues, setRepairFormInitialValues] = useState<
+    Record<string, unknown> | undefined
+  >(undefined);
+  const [repairSubmitting, setRepairSubmitting] = useState(false);
   const repairFormRef = useRef<any>(null);
 
   /**
@@ -167,8 +180,8 @@ const EquipmentFaultsPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentFault(null);
+    setFormInitialValues({ fault_date: dayjs() });
     setModalVisible(true);
-    formRef.current?.resetFields();
   };
   useNewShortcut(handleCreate);
   const createButtonLabel = useMemo(
@@ -188,19 +201,17 @@ const EquipmentFaultsPage: React.FC = () => {
       const detail = await equipmentFaultApi.get(record.uuid);
       setIsEdit(true);
       setCurrentFault(detail);
+      setFormInitialValues({
+        equipment_uuid: detail.equipment_uuid,
+        fault_date: detail.fault_date ? dayjs(detail.fault_date) : dayjs(),
+        fault_type: detail.fault_type,
+        fault_level: detail.fault_level,
+        fault_description: detail.fault_description,
+        status: detail.status,
+        repair_required: detail.repair_required,
+        attachments: mapAttachmentsToUploadList(detail.attachments),
+      });
       setModalVisible(true);
-      setTimeout(() => {
-        formRef.current?.setFieldsValue({
-          equipment_uuid: detail.equipment_uuid,
-          fault_date: detail.fault_date ? dayjs(detail.fault_date) : null,
-          fault_type: detail.fault_type,
-          fault_level: detail.fault_level,
-          fault_description: detail.fault_description,
-          status: detail.status,
-          repair_required: detail.repair_required,
-          attachments: mapAttachmentsToUploadList(detail.attachments),
-        });
-      }, 100);
     } catch (error) {
       messageApi.error(t(`${P}.detailFailed`));
     }
@@ -254,10 +265,11 @@ const EquipmentFaultsPage: React.FC = () => {
    * 处理提交表单（创建/更新）
    */
   const handleSubmit = async (values: any): Promise<void> => {
+    setSubmitting(true);
     try {
       const submitData = {
         ...values,
-        fault_date: values.fault_date ? values.fault_date.format('YYYY-MM-DD') : null,
+        fault_date: toApiDateString(values.fault_date) ?? null,
         attachments: normalizeDocumentAttachments(values.attachments),
       };
 
@@ -271,7 +283,7 @@ const EquipmentFaultsPage: React.FC = () => {
       }
       setModalVisible(false);
       setCurrentFault(null);
-      formRef.current?.resetFields();
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
       if (editedUuid && faultDetail?.uuid === editedUuid) {
         try {
@@ -285,6 +297,8 @@ const EquipmentFaultsPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || t('common.operationFailed'));
       throw error;
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -297,18 +311,16 @@ const EquipmentFaultsPage: React.FC = () => {
       return;
     }
     setRepairFault(record);
+    setRepairFormInitialValues({
+      repair_date: dayjs(),
+      repair_type: '现场维修',
+      repair_description: t(`${P}.repairDescriptionTemplate`, {
+        faultNo: record.fault_no,
+        description: record.fault_description || '',
+      }),
+      status: '进行中',
+    });
     setRepairModalVisible(true);
-    setTimeout(() => {
-      repairFormRef.current?.setFieldsValue({
-        repair_date: dayjs(),
-        repair_type: '现场维修',
-        repair_description: t(`${P}.repairDescriptionTemplate`, {
-          faultNo: record.fault_no,
-          description: record.fault_description || '',
-        }),
-        status: '进行中',
-      });
-    }, 100);
   };
 
   /**
@@ -316,11 +328,14 @@ const EquipmentFaultsPage: React.FC = () => {
    */
   const handleRepairSubmit = async (values: any) => {
     if (!repairFault?.uuid || !repairFault?.equipment_uuid) return;
+    setRepairSubmitting(true);
     try {
       await equipmentFaultApi.createRepair({
         equipment_uuid: repairFault.equipment_uuid,
         equipment_fault_uuid: repairFault.uuid,
-        repair_date: values.repair_date?.format?.('YYYY-MM-DD HH:mm:ss') ?? new Date().toISOString().slice(0, 19).replace('T', ' '),
+        repair_date:
+          toApiDateTimeString(values.repair_date) ??
+          new Date().toISOString().slice(0, 19).replace('T', ' '),
         repair_type: values.repair_type ?? '现场维修',
         repair_description: values.repair_description ?? '',
         status: values.status ?? '进行中',
@@ -329,11 +344,13 @@ const EquipmentFaultsPage: React.FC = () => {
       messageApi.success(t(`${P}.repairCreated`));
       setRepairModalVisible(false);
       setRepairFault(null);
-      repairFormRef.current?.resetFields();
+      setRepairFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || t('common.operationFailed'));
       throw error;
+    } finally {
+      setRepairSubmitting(false);
     }
   };
 
@@ -686,12 +703,14 @@ const EquipmentFaultsPage: React.FC = () => {
         onClose={() => {
           setModalVisible(false);
           setCurrentFault(null);
-          formRef.current?.resetFields();
+          setFormInitialValues(undefined);
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
+        loading={submitting}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        initialValues={formInitialValues}
         grid={false}
       >
         <Row gutter={16}>
@@ -720,6 +739,7 @@ const EquipmentFaultsPage: React.FC = () => {
               label={t(`${P}.col.faultDate`)}
               placeholder={t(`${P}.form.selectFaultDate`)}
               rules={[{ required: true, message: t(`${P}.form.selectFaultDate`) }]}
+              formItemProps={formDateFormItemProps}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
@@ -751,11 +771,6 @@ const EquipmentFaultsPage: React.FC = () => {
               ]}
               rules={[{ required: true, message: t(`${P}.form.selectFaultLevel`) }]}
             />
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={24}>
-            <DocumentAttachmentsField category="equipment_fault_attachments" />
           </Col>
         </Row>
         <Row gutter={16}>
@@ -797,6 +812,11 @@ const EquipmentFaultsPage: React.FC = () => {
             />
           </Col>
         </Row>
+        <Row gutter={16}>
+          <Col span={24}>
+            <DocumentAttachmentsField category="equipment_fault_attachments" />
+          </Col>
+        </Row>
       </FormModalTemplate>
 
       {/* 创建维修记录 Modal */}
@@ -806,12 +826,14 @@ const EquipmentFaultsPage: React.FC = () => {
         onClose={() => {
           setRepairModalVisible(false);
           setRepairFault(null);
-          repairFormRef.current?.resetFields();
+          setRepairFormInitialValues(undefined);
         }}
         onFinish={handleRepairSubmit}
         isEdit={false}
+        loading={repairSubmitting}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={repairFormRef}
+        initialValues={repairFormInitialValues}
         grid={false}
       >
         <Row gutter={16}>
@@ -821,6 +843,7 @@ const EquipmentFaultsPage: React.FC = () => {
               label={t(`${P}.form.repairDate`)}
               placeholder={t(`${P}.form.selectRepairDate`)}
               rules={[{ required: true, message: t(`${P}.form.selectRepairDate`) }]}
+              formItemProps={formDateFormItemProps}
               fieldProps={{ showTime: true, style: { width: '100%' } }}
             />
           </Col>

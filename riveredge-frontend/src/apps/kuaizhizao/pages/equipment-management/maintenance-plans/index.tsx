@@ -46,7 +46,7 @@ import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { formatDateTime } from '../../../../../utils/format';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString, coerceFormDate } from '../../../../../utils/formDate';
 import {
   buildMaintenancePlanStatusValueEnum,
   MAINTENANCE_PLAN_PINNED_STATUS_FIELD,
@@ -58,19 +58,47 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 
 const P = 'app.kuaizhizao.maintenancePlan';
 
+function toApiDateTimeString(value: unknown): string | undefined {
+  const d = coerceFormDate(value);
+  return d ? d.format('YYYY-MM-DD HH:mm:ss') : undefined;
+}
+
 const PLAN_STATUS_KEYS: Record<string, string> = {
-  '待执行': `${P}.status.pending`,
-  '执行中': `${P}.status.running`,
-  '已完成': `${P}.status.completed`,
-  '已取消': `${P}.status.cancelled`,
+  草稿: `${P}.status.draft`,
+  已发布: `${P}.status.published`,
+  执行中: `${P}.status.running`,
+  已完成: `${P}.status.completed`,
+  已取消: `${P}.status.cancelled`,
 };
 
 const PLAN_STATUS_COLORS: Record<string, string> = {
-  '待执行': 'default',
-  '执行中': 'processing',
-  '已完成': 'success',
-  '已取消': 'error',
+  草稿: 'default',
+  已发布: 'blue',
+  执行中: 'processing',
+  已完成: 'success',
+  已取消: 'error',
 };
+
+const EXECUTABLE_PLAN_STATUSES = new Set(['草稿', '已发布', '执行中']);
+
+function buildMaintenancePlanSubmitPayload(values: Record<string, unknown>) {
+  return {
+    plan_name: values.plan_name,
+    plan_type: values.plan_type,
+    equipment_uuid: values.equipment_uuid,
+    maintenance_type: values.maintenance_type,
+    cycle_type: values.cycle_type,
+    cycle_value: values.cycle_value,
+    cycle_unit: values.cycle_unit,
+    planned_start_date: toApiDateString(values.planned_start_date) ?? null,
+    planned_end_date: toApiDateString(values.planned_end_date) ?? null,
+    responsible_person_id: values.responsible_person_id,
+    responsible_person_name: values.responsible_person_name,
+    status: values.status,
+    remark: values.remark,
+    attachments: normalizeDocumentAttachments(values.attachments),
+  };
+}
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -117,8 +145,9 @@ interface MaintenancePlan {
   equipment_code?: string;
   equipment_name?: string;
   maintenance_type?: string;
-  maintenance_cycle?: number;
-  maintenance_cycle_unit?: string;
+  cycle_type?: string;
+  cycle_value?: number;
+  cycle_unit?: string;
   planned_start_date?: string;
   planned_end_date?: string;
   status?: string;
@@ -140,6 +169,10 @@ const MaintenancePlansPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<MaintenancePlan | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
+    undefined,
+  );
+  const [submitting, setSubmitting] = useState(false);
   const formRef = useRef<any>(null);
 
   // Drawer 相关状态（详情查看）
@@ -157,6 +190,10 @@ const MaintenancePlansPage: React.FC = () => {
   // 执行维护保养 Modal 状态
   const [executeModalVisible, setExecuteModalVisible] = useState(false);
   const [executePlan, setExecutePlan] = useState<MaintenancePlan | null>(null);
+  const [executeFormInitialValues, setExecuteFormInitialValues] = useState<
+    Record<string, unknown> | undefined
+  >(undefined);
+  const [executeSubmitting, setExecuteSubmitting] = useState(false);
   const executeFormRef = useRef<any>(null);
   const [schemeOptions, setSchemeOptions] = useState<{ label: string; value: number }[]>([]);
   const [executedItems, setExecutedItems] = useState<Array<{ item_id?: number; item_name?: string; done?: boolean }>>([]);
@@ -169,8 +206,12 @@ const MaintenancePlansPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentPlan(null);
+    setFormInitialValues({
+      planned_start_date: dayjs(),
+      cycle_type: '按时间',
+      status: '草稿',
+    });
     setModalVisible(true);
-    formRef.current?.resetFields();
   };
   useNewShortcut(handleCreate);
   const createButtonLabel = useMemo(
@@ -190,21 +231,20 @@ const MaintenancePlansPage: React.FC = () => {
       const detail = await maintenancePlanApi.get(record.uuid);
       setIsEdit(true);
       setCurrentPlan(detail);
+      setFormInitialValues({
+        plan_name: detail.plan_name,
+        plan_type: detail.plan_type,
+        equipment_uuid: detail.equipment_uuid,
+        maintenance_type: detail.maintenance_type,
+        cycle_type: detail.cycle_type ?? '按时间',
+        cycle_value: detail.cycle_value,
+        cycle_unit: detail.cycle_unit,
+        planned_start_date: detail.planned_start_date ? dayjs(detail.planned_start_date) : dayjs(),
+        planned_end_date: detail.planned_end_date ? dayjs(detail.planned_end_date) : undefined,
+        status: detail.status,
+        attachments: mapAttachmentsToUploadList(detail.attachments),
+      });
       setModalVisible(true);
-      setTimeout(() => {
-        formRef.current?.setFieldsValue({
-          plan_name: detail.plan_name,
-          plan_type: detail.plan_type,
-          equipment_uuid: detail.equipment_uuid,
-          maintenance_type: detail.maintenance_type,
-          maintenance_cycle: detail.maintenance_cycle,
-          maintenance_cycle_unit: detail.maintenance_cycle_unit,
-          planned_start_date: detail.planned_start_date ? dayjs(detail.planned_start_date) : null,
-          planned_end_date: detail.planned_end_date ? dayjs(detail.planned_end_date) : null,
-          status: detail.status,
-          attachments: mapAttachmentsToUploadList(detail.attachments),
-        });
-      }, 100);
     } catch (error) {
       messageApi.error(t(`${P}.detailFailed`));
     }
@@ -258,13 +298,9 @@ const MaintenancePlansPage: React.FC = () => {
    * 处理提交表单（创建/更新）
    */
   const handleSubmit = async (values: any): Promise<void> => {
+    setSubmitting(true);
     try {
-      const submitData = {
-        ...values,
-        planned_start_date: values.planned_start_date ? values.planned_start_date.format('YYYY-MM-DD') : null,
-        planned_end_date: values.planned_end_date ? values.planned_end_date.format('YYYY-MM-DD') : null,
-        attachments: normalizeDocumentAttachments(values.attachments),
-      };
+      const submitData = buildMaintenancePlanSubmitPayload(values);
 
       const editedUuid = isEdit ? currentPlan?.uuid : undefined;
       if (isEdit && editedUuid) {
@@ -276,7 +312,7 @@ const MaintenancePlansPage: React.FC = () => {
       }
       setModalVisible(false);
       setCurrentPlan(null);
-      formRef.current?.resetFields();
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
       if (editedUuid && planDetail?.uuid === editedUuid) {
         try {
@@ -290,6 +326,8 @@ const MaintenancePlansPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || t('common.operationFailed'));
       throw error;
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -304,6 +342,11 @@ const MaintenancePlansPage: React.FC = () => {
     setExecutePlan(record);
     setExecutedItems([]);
     setSparePartLines([]);
+    setExecuteFormInitialValues({
+      execution_date: dayjs(),
+      execution_result: '正常',
+      execution_content: t(`${P}.executionContentTemplate`, { name: record.plan_name }),
+    });
     setExecuteModalVisible(true);
     void Promise.all([
       maintenanceSchemesApi.list({ limit: 1000, is_active: true }),
@@ -322,13 +365,6 @@ const MaintenancePlansPage: React.FC = () => {
         })),
       );
     });
-    setTimeout(() => {
-      executeFormRef.current?.setFieldsValue({
-        execution_date: dayjs(),
-        execution_result: '正常',
-        execution_content: t(`${P}.executionContentTemplate`, { name: record.plan_name }),
-      });
-    }, 100);
   };
 
   const handleSchemeChange = async (schemeId?: number) => {
@@ -355,6 +391,7 @@ const MaintenancePlansPage: React.FC = () => {
    */
   const handleExecuteSubmit = async (values: any) => {
     if (!executePlan?.uuid || !executePlan?.equipment_uuid) return;
+    setExecuteSubmitting(true);
     try {
       const validParts = sparePartLines.filter((l) => l.spare_part_id && l.quantity);
       await maintenancePlanApi.execute({
@@ -362,7 +399,9 @@ const MaintenancePlansPage: React.FC = () => {
         maintenance_plan_uuid: executePlan.uuid,
         maintenance_scheme_id: values.maintenance_scheme_id,
         executed_items: executedItems.filter((i) => i.done),
-        execution_date: values.execution_date?.format?.('YYYY-MM-DD HH:mm:ss') ?? new Date().toISOString().slice(0, 19).replace('T', ' '),
+        execution_date:
+          toApiDateTimeString(values.execution_date) ??
+          new Date().toISOString().slice(0, 19).replace('T', ' '),
         execution_content: values.execution_content,
         execution_result: values.execution_result ?? '正常',
         status: '已确认',
@@ -374,11 +413,13 @@ const MaintenancePlansPage: React.FC = () => {
       setExecutePlan(null);
       setExecutedItems([]);
       setSparePartLines([]);
-      executeFormRef.current?.resetFields();
+      setExecuteFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || t('common.operationFailed'));
       throw error;
+    } finally {
+      setExecuteSubmitting(false);
     }
   };
 
@@ -416,8 +457,9 @@ const MaintenancePlansPage: React.FC = () => {
     },
     {
       title: t(`${P}.col.maintenanceCycle`),
-      dataIndex: 'maintenance_cycle',
-      render: (_, record) => record ? `${record.maintenance_cycle ?? ''} ${record.maintenance_cycle_unit ?? ''}`.trim() || '-' : '-',
+      dataIndex: 'cycle_value',
+      render: (_, record) =>
+        record ? `${record.cycle_value ?? ''} ${record.cycle_unit ?? ''}`.trim() || '-' : '-',
     },
     {
       title: t(`${P}.col.plannedStartDate`),
@@ -498,7 +540,7 @@ const MaintenancePlansPage: React.FC = () => {
         {t('common.delete')}
       </Button>,
     ];
-    if (record.status === '待执行') {
+    if (record.status && EXECUTABLE_PLAN_STATUSES.has(record.status)) {
       nodes.push(
         <Button {...rowActionKind('execute')}
           key="exec"
@@ -615,10 +657,11 @@ const MaintenancePlansPage: React.FC = () => {
     },
     {
       title: t(`${P}.col.maintenanceCycle`),
-      dataIndex: 'maintenance_cycle',
+      dataIndex: 'cycle_value',
       width: 120,
       hideInSearch: true,
-      render: (_, record) => record ? `${record.maintenance_cycle ?? ''} ${record.maintenance_cycle_unit ?? ''}`.trim() || '-' : '-',
+      render: (_, record) =>
+        record ? `${record.cycle_value ?? ''} ${record.cycle_unit ?? ''}`.trim() || '-' : '-',
     },
     {
       title: t(`${P}.col.plannedStartDate`),
@@ -717,12 +760,14 @@ const MaintenancePlansPage: React.FC = () => {
         onClose={() => {
           setModalVisible(false);
           setCurrentPlan(null);
-          formRef.current?.resetFields();
+          setFormInitialValues(undefined);
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
+        loading={submitting}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        initialValues={formInitialValues}
         grid={false}
       >
         <Row gutter={16}>
@@ -742,7 +787,7 @@ const MaintenancePlansPage: React.FC = () => {
               options={[
                 { label: t(`${P}.planType.regular`), value: '定期维护' },
                 { label: t(`${P}.planType.preventive`), value: '预防性维护' },
-                { label: t(`${P}.planType.postFault`), value: '故障后维护' },
+                { label: t(`${P}.planType.temporary`), value: '临时维护' },
               ]}
               rules={[{ required: true, message: t(`${P}.form.selectPlanType`) }]}
             />
@@ -775,9 +820,9 @@ const MaintenancePlansPage: React.FC = () => {
               placeholder={t(`${P}.form.selectMaintenanceType`)}
               options={[
                 { label: t(`${P}.maintenanceType.daily`), value: '日常保养' },
-                { label: t(`${P}.maintenanceType.periodic`), value: '定期保养' },
-                { label: t(`${P}.maintenanceType.overhaul`), value: '大修' },
                 { label: t(`${P}.maintenanceType.minor`), value: '小修' },
+                { label: t(`${P}.maintenanceType.medium`), value: '中修' },
+                { label: t(`${P}.maintenanceType.overhaul`), value: '大修' },
               ]}
               rules={[{ required: true, message: t(`${P}.form.selectMaintenanceType`) }]}
             />
@@ -785,17 +830,32 @@ const MaintenancePlansPage: React.FC = () => {
         </Row>
         <Row gutter={16}>
           <Col span={12}>
+            <ProFormSelect
+              name="cycle_type"
+              label={t(`${P}.form.cycleType`)}
+              placeholder={t(`${P}.form.selectCycleType`)}
+              options={[
+                { label: t(`${P}.cycleType.byTime`), value: '按时间' },
+                { label: t(`${P}.cycleType.byRuntime`), value: '按运行时长' },
+                { label: t(`${P}.cycleType.byCount`), value: '按使用次数' },
+              ]}
+              rules={[{ required: true, message: t(`${P}.form.selectCycleType`) }]}
+            />
+          </Col>
+          <Col span={12}>
             <ProFormDigit
-              name="maintenance_cycle"
+              name="cycle_value"
               label={t(`${P}.form.maintenanceCycle`)}
               placeholder={t(`${P}.form.maintenanceCyclePlaceholder`)}
               min={1}
               rules={[{ required: true, message: t(`${P}.form.maintenanceCyclePlaceholder`) }]}
             />
           </Col>
+        </Row>
+        <Row gutter={16}>
           <Col span={12}>
             <ProFormSelect
-              name="maintenance_cycle_unit"
+              name="cycle_unit"
               label={t(`${P}.form.cycleUnit`)}
               placeholder={t(`${P}.form.selectCycleUnit`)}
               options={[
@@ -803,8 +863,25 @@ const MaintenancePlansPage: React.FC = () => {
                 { label: t(`${P}.cycleUnit.week`), value: '周' },
                 { label: t(`${P}.cycleUnit.month`), value: '月' },
                 { label: t(`${P}.cycleUnit.year`), value: '年' },
+                { label: t(`${P}.cycleUnit.hour`), value: '小时' },
+                { label: t(`${P}.cycleUnit.count`), value: '次' },
               ]}
               rules={[{ required: true, message: t(`${P}.form.selectCycleUnit`) }]}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="status"
+              label={t(`${P}.col.status`)}
+              placeholder={t(`${P}.form.selectStatus`)}
+              options={[
+                { label: t(`${P}.status.draft`), value: '草稿' },
+                { label: t(`${P}.status.published`), value: '已发布' },
+                { label: t(`${P}.status.running`), value: '执行中' },
+                { label: t(`${P}.status.completed`), value: '已完成' },
+                { label: t(`${P}.status.cancelled`), value: '已取消' },
+              ]}
+              rules={[{ required: true, message: t(`${P}.form.selectStatus`) }]}
             />
           </Col>
         </Row>
@@ -814,6 +891,7 @@ const MaintenancePlansPage: React.FC = () => {
               name="planned_start_date"
               label={t(`${P}.form.plannedStartDate`)}
               placeholder={t(`${P}.form.selectPlannedStartDate`)}
+              formItemProps={formDateFormItemProps}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
@@ -822,6 +900,7 @@ const MaintenancePlansPage: React.FC = () => {
               name="planned_end_date"
               label={t(`${P}.form.plannedEndDate`)}
               placeholder={t(`${P}.form.selectPlannedEndDate`)}
+              formItemProps={formDateFormItemProps}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
@@ -829,22 +908,6 @@ const MaintenancePlansPage: React.FC = () => {
         <Row gutter={16}>
           <Col span={24}>
             <DocumentAttachmentsField category="maintenance_plan_attachments" />
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormSelect
-              name="status"
-              label={t(`${P}.col.status`)}
-              placeholder={t(`${P}.form.selectStatus`)}
-              options={[
-                { label: t(`${P}.status.pending`), value: '待执行' },
-                { label: t(`${P}.status.running`), value: '执行中' },
-                { label: t(`${P}.status.completed`), value: '已完成' },
-                { label: t(`${P}.status.cancelled`), value: '已取消' },
-              ]}
-              rules={[{ required: true, message: t(`${P}.form.selectStatus`) }]}
-            />
           </Col>
         </Row>
       </FormModalTemplate>
@@ -858,12 +921,14 @@ const MaintenancePlansPage: React.FC = () => {
           setExecutePlan(null);
           setExecutedItems([]);
           setSparePartLines([]);
-          executeFormRef.current?.resetFields();
+          setExecuteFormInitialValues(undefined);
         }}
         onFinish={handleExecuteSubmit}
         isEdit={false}
+        loading={executeSubmitting}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={executeFormRef}
+        initialValues={executeFormInitialValues}
         grid={false}
       >
         <Row gutter={16}>
@@ -910,6 +975,7 @@ const MaintenancePlansPage: React.FC = () => {
               label={t(`${P}.form.executionDate`)}
               placeholder={t(`${P}.form.selectExecutionDate`)}
               rules={[{ required: true, message: t(`${P}.form.selectExecutionDate`) }]}
+              formItemProps={formDateFormItemProps}
               fieldProps={{ showTime: true, style: { width: '100%' } }}
             />
           </Col>

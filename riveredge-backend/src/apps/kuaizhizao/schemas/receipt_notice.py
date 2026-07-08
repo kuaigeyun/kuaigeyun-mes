@@ -102,6 +102,8 @@ class ReceiptNoticeItemBase(BaseSchema):
     unit_price: float = Field(0, ge=0, description="单价")
     total_amount: Optional[float] = Field(None, ge=0, description="金额")
     purchase_order_item_id: Optional[int] = Field(None, description="采购订单明细ID")
+    warehouse_id: Optional[int] = Field(None, description="行入库仓库ID")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="行入库仓库名称")
     notes: Optional[str] = Field(None, description="备注")
 
 

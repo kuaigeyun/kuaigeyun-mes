@@ -175,7 +175,7 @@ export async function pushSalesOrderToDelivery(id: number, deliveryQuantities?: 
     `/apps/kuaizhizao/sales-orders/${id}/push-to-delivery`,
     {
       method: 'POST',
-      data: deliveryQuantities || {},
+      data: deliveryQuantities ? { delivery_quantities: deliveryQuantities } : {},
     }
   );
 }

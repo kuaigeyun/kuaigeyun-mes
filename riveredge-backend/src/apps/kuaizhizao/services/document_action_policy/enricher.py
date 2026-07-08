@@ -656,6 +656,28 @@ async def _purchase_order_outstanding_by_ids(tenant_id: int, order_ids: List[int
     return result
 
 
+async def _purchase_order_pushable_receipt_outstanding_by_ids(
+    tenant_id: int, order_ids: List[int]
+) -> dict[int, bool]:
+    """任意订单行存在可下推入库余量（未入库 - 未完成入库单占用）。"""
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+    from apps.kuaizhizao.services.warehouse_service import occupied_purchase_receipt_qty_by_po_item_ids
+
+    if not order_ids:
+        return {}
+    items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id__in=order_ids).all()
+    occupied_by_item = await occupied_purchase_receipt_qty_by_po_item_ids(tenant_id, order_ids)
+    result: dict[int, bool] = {oid: False for oid in order_ids}
+    for item in items:
+        outstanding = float(item.outstanding_quantity or 0)
+        if outstanding <= 0:
+            continue
+        occupied = float(occupied_by_item.get(int(item.id), 0))
+        if outstanding - occupied > 0:
+            result[int(item.order_id)] = True
+    return result
+
+
 async def _purchase_order_received_by_ids(tenant_id: int, order_ids: List[int]) -> dict[int, bool]:
     from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
 
@@ -666,6 +688,22 @@ async def _purchase_order_received_by_ids(tenant_id: int, order_ids: List[int]) 
     for item in items:
         if float(item.received_quantity or 0) > 0:
             result[int(item.order_id)] = True
+    return result
+
+
+async def _purchase_order_receipt_notice_by_ids(tenant_id: int, order_ids: List[int]) -> dict[int, bool]:
+    from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
+
+    if not order_ids:
+        return {}
+    result: dict[int, bool] = {oid: False for oid in order_ids}
+    notice_order_ids = await ReceiptNotice.filter(
+        tenant_id=tenant_id,
+        purchase_order_id__in=order_ids,
+        deleted_at__isnull=True,
+    ).values_list("purchase_order_id", flat=True)
+    for oid in notice_order_ids:
+        result[int(oid)] = True
     return result
 
 
@@ -821,8 +859,10 @@ def enrich_purchase_order_capabilities_on_response(
     *,
     has_items: bool = True,
     has_outstanding: bool = False,
+    has_pushable_receipt_outstanding: bool = False,
     has_received: bool = False,
     has_invoice: bool = False,
+    has_receipt_notice: bool = False,
     has_downstream: bool = False,
     has_pending_change: bool = False,
     has_returnable: bool = False,
@@ -831,8 +871,10 @@ def enrich_purchase_order_capabilities_on_response(
         order,
         has_items=has_items,
         has_outstanding=has_outstanding,
+        has_pushable_receipt_outstanding=has_pushable_receipt_outstanding,
         has_received=has_received,
         has_invoice=has_invoice,
+        has_receipt_notice=has_receipt_notice,
         has_downstream=has_downstream,
         has_pending_change=has_pending_change,
         has_returnable=has_returnable,
@@ -851,8 +893,12 @@ async def enrich_purchase_order_detail_capabilities(
 ) -> T:
     order_id = int(order.id)
     has_outstanding = await _purchase_order_has_outstanding(tenant_id, order_id)
+    pushable_receipt_map = await _purchase_order_pushable_receipt_outstanding_by_ids(
+        tenant_id, [order_id]
+    )
     has_received_map = await _purchase_order_received_by_ids(tenant_id, [order_id])
     has_invoice_map = await _purchase_order_invoice_by_ids(tenant_id, [order_id])
+    has_receipt_notice_map = await _purchase_order_receipt_notice_by_ids(tenant_id, [order_id])
     has_downstream = await purchase_order_has_downstream(tenant_id, order_id)
     pending_change_map = await _purchase_order_pending_change_by_ids(tenant_id, [order_id])
     returnable_map = await _purchase_order_returnable_by_ids(tenant_id, [order_id])
@@ -861,8 +907,10 @@ async def enrich_purchase_order_detail_capabilities(
         response,
         has_items=has_items,
         has_outstanding=has_outstanding,
+        has_pushable_receipt_outstanding=pushable_receipt_map.get(order_id, False),
         has_received=has_received_map.get(order_id, False),
         has_invoice=has_invoice_map.get(order_id, False),
+        has_receipt_notice=has_receipt_notice_map.get(order_id, False),
         has_downstream=has_downstream,
         has_pending_change=pending_change_map.get(order_id, False),
         has_returnable=returnable_map.get(order_id, False),
@@ -878,8 +926,12 @@ async def enrich_purchase_order_list_capabilities(
 ) -> List[T]:
     order_ids = [int(getattr(o, "id", 0) or 0) for o in orders]
     outstanding_map = await _purchase_order_outstanding_by_ids(tenant_id, order_ids)
+    pushable_receipt_map = await _purchase_order_pushable_receipt_outstanding_by_ids(
+        tenant_id, order_ids
+    )
     received_map = await _purchase_order_received_by_ids(tenant_id, order_ids)
     invoice_map = await _purchase_order_invoice_by_ids(tenant_id, order_ids)
+    receipt_notice_map = await _purchase_order_receipt_notice_by_ids(tenant_id, order_ids)
     downstream_map = await _purchase_order_downstream_by_ids(tenant_id, order_ids)
     pending_change_map = await _purchase_order_pending_change_by_ids(tenant_id, order_ids)
     returnable_map = await _purchase_order_returnable_by_ids(tenant_id, order_ids)
@@ -891,8 +943,10 @@ async def enrich_purchase_order_list_capabilities(
             order_model,
             has_items=items_map.get(oid, True),
             has_outstanding=outstanding_map.get(oid, False),
+            has_pushable_receipt_outstanding=pushable_receipt_map.get(oid, False),
             has_received=received_map.get(oid, False),
             has_invoice=invoice_map.get(oid, False),
+            has_receipt_notice=receipt_notice_map.get(oid, False),
             has_downstream=downstream_map.get(oid, False),
             has_pending_change=pending_change_map.get(oid, False),
             has_returnable=returnable_map.get(oid, False),

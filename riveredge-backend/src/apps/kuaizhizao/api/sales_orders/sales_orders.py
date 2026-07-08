@@ -1099,7 +1099,7 @@ async def push_sales_order_to_shipment_notice(
     sales_order_id: int = Path(..., description="销售订单ID"),
     body: Optional[Dict[str, Any]] = Body(
         default=None,
-        description="可选：selected_item_ids=[1,2]，selected_quantities={\"1\": 2}",
+        description="可选：selected_item_ids=[1,2]，selected_quantities={\"1\": 2}，line_warehouses={\"1\": 3}",
     ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -1121,12 +1121,36 @@ async def push_sales_order_to_shipment_notice(
                     selected_quantities[int(k)] = float(v)
                 except Exception:
                     continue
+        warehouse_id_raw = payload.get("warehouse_id")
+        warehouse_id = None
+        if warehouse_id_raw is not None:
+            try:
+                warehouse_id = int(warehouse_id_raw)
+            except (TypeError, ValueError):
+                warehouse_id = None
+        warehouse_name = payload.get("warehouse_name")
+        if warehouse_name is not None:
+            warehouse_name = str(warehouse_name).strip() or None
+        line_warehouses_raw = payload.get("line_warehouses")
+        line_warehouses = None
+        if isinstance(line_warehouses_raw, dict):
+            line_warehouses = {}
+            for k, v in line_warehouses_raw.items():
+                try:
+                    line_warehouses[int(k)] = int(v)
+                except (TypeError, ValueError):
+                    continue
+            if not line_warehouses:
+                line_warehouses = None
         result = await sales_order_service.push_sales_order_to_shipment_notice(
             tenant_id=tenant_id,
             sales_order_id=sales_order_id,
             created_by=current_user.id,
             selected_item_ids=selected_item_ids,
             selected_quantities=selected_quantities,
+            warehouse_id=warehouse_id,
+            warehouse_name=warehouse_name,
+            line_warehouses=line_warehouses,
         )
         return result
     except NotFoundError as e:
@@ -1227,7 +1251,10 @@ async def push_sales_order_to_invoice(
 @router.post("/{sales_order_id}/push-to-delivery", summary="Push to sales delivery")
 async def push_sales_order_to_delivery(
     sales_order_id: int = Path(..., description="销售订单ID"),
-    delivery_quantities: Optional[Dict[int, float]] = Body(None, description="出库数量字典 {item_id: quantity}"),
+    body: Optional[Dict[str, Any]] = Body(
+        default=None,
+        description="可选：delivery_quantities={\"1\": 2}，line_warehouses={\"1\": 3}，warehouse_id=1",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -1235,11 +1262,49 @@ async def push_sales_order_to_delivery(
     从销售订单下推到销售出库
     """
     try:
+        payload = body or {}
+        delivery_quantities_raw = payload.get("delivery_quantities", payload)
+        delivery_quantities = None
+        if isinstance(delivery_quantities_raw, dict):
+            delivery_quantities = {}
+            for k, v in delivery_quantities_raw.items():
+                if k in ("line_warehouses", "warehouse_id", "warehouse_name"):
+                    continue
+                try:
+                    delivery_quantities[int(k)] = float(v)
+                except (TypeError, ValueError):
+                    continue
+            if not delivery_quantities:
+                delivery_quantities = None
+        warehouse_id_raw = payload.get("warehouse_id")
+        warehouse_id = None
+        if warehouse_id_raw is not None:
+            try:
+                warehouse_id = int(warehouse_id_raw)
+            except (TypeError, ValueError):
+                warehouse_id = None
+        warehouse_name = payload.get("warehouse_name")
+        if warehouse_name is not None:
+            warehouse_name = str(warehouse_name).strip() or None
+        line_warehouses_raw = payload.get("line_warehouses")
+        line_warehouses = None
+        if isinstance(line_warehouses_raw, dict):
+            line_warehouses = {}
+            for k, v in line_warehouses_raw.items():
+                try:
+                    line_warehouses[int(k)] = int(v)
+                except (TypeError, ValueError):
+                    continue
+            if not line_warehouses:
+                line_warehouses = None
         result = await sales_order_service.push_sales_order_to_delivery(
             tenant_id=tenant_id,
             sales_order_id=sales_order_id,
             created_by=current_user.id,
-            delivery_quantities=delivery_quantities
+            delivery_quantities=delivery_quantities,
+            warehouse_id=warehouse_id,
+            warehouse_name=warehouse_name,
+            line_warehouses=line_warehouses,
         )
         return result
     except NotFoundError as e:

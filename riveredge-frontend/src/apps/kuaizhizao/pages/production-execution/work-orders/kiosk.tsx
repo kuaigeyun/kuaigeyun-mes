@@ -46,6 +46,7 @@ import { getAvatarText } from '../../../../../utils/avatar';
 import { getCurrentUser, CurrentUser } from '../../../../../services/auth';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
+import { formatOperationInspectionSummary, getProcessInspectionCardStatus } from '../../../utils/workOrderReporting';
 
 const { Search } = Input;
 const { Text, Title } = Typography;
@@ -461,6 +462,18 @@ const WorkOrdersKioskPage: React.FC = () => {
     const currentStatusLabel = !selectedWorkOrder
         ? '待选择'
         : (activeOperation?.status === 'processing' ? '执行中' : activeOperation?.status === 'completed' ? '已完成' : '待执行');
+
+    const kioskInspectionSummary = (() => {
+        if (!activeOperation) return '—';
+        const summary = formatOperationInspectionSummary(activeOperation, {
+            none: t('app.kuaizhizao.workOrder.opCard.inspectionNone'),
+            simple: t('app.kuaizhizao.workOrder.opCard.inspectionSimple'),
+            planFallback: t('app.kuaizhizao.workOrder.opCard.inspectionPlanFallback'),
+        });
+        const qcStatus = getProcessInspectionCardStatus(activeOperation);
+        if (!qcStatus) return summary;
+        return `${summary} · ${t(`app.kuaizhizao.workOrder.opCard.processInspectionStatus.${qcStatus}`)}`;
+    })();
 
     const panelStyle: React.CSSProperties = {
         background: HMI_DESIGN_TOKENS.BG_CARD,
@@ -1031,7 +1044,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                         { label: '工单数', value: String(filteredWorkOrders.length), valueColor: HMI_DESIGN_TOKENS.STATUS_INFO },
                         { label: '计划/已报', planValue: selectedWorkOrder?.quantity ?? '—', reportedValue: selectedWorkOrder?.completed_quantity ?? 0 },
                         { label: t('app.kuaizhizao.workOrder.kioskPassRate'), value: selectedWorkOrder && (selectedWorkOrder.completed_quantity ?? 0) > 0 ? `${Math.round(((selectedWorkOrder.qualified_quantity ?? ((selectedWorkOrder.completed_quantity ?? 0) - (selectedWorkOrder.unqualified_quantity ?? 0))) / (selectedWorkOrder.completed_quantity ?? 1)) * 100)}%` : '—', valueColor: selectedWorkOrder && (selectedWorkOrder.completed_quantity ?? 0) > 0 ? HMI_DESIGN_TOKENS.STATUS_OK : HMI_DESIGN_TOKENS.TEXT_TERTIARY },
-                        { label: '质检', value: '—', valueColor: HMI_DESIGN_TOKENS.TEXT_TERTIARY },
+                        { label: t('app.kuaizhizao.workOrder.opCard.inspection'), value: kioskInspectionSummary, valueColor: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
                         { label: '当前状态', value: currentStatusLabel, valueColor: currentStatusLabel === '执行中' ? token.colorWarning : currentStatusLabel === '已完成' ? token.colorSuccess : HMI_DESIGN_TOKENS.TEXT_PRIMARY },
                     ].map((item, i) => {
                         const valueEl = 'planValue' in item ? (
@@ -1044,7 +1057,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                             <div style={{ color: item.valueColor, fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE, fontWeight: 600 }}>{item.value}</div>
                         );
                         return (
-                        <Tooltip key={i} title={item.label === '质检' ? '工序检验数据待对接' : undefined}>
+                        <Tooltip key={i} title={undefined}>
                             <div key={i} style={{
                                 flex: 1,
                                 display: 'flex',
@@ -1052,7 +1065,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                                 justifyContent: 'center',
                                 padding: '0 16px',
                                 borderRight: i < 4 ? `1px solid ${HMI_DESIGN_TOKENS.BORDER}` : 'none',
-                                cursor: item.label === '质检' ? 'help' : 'default',
+                                cursor: 'default',
                             }}>
                                 <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: 12, marginBottom: 2 }}>{item.label}</div>
                                 {valueEl}

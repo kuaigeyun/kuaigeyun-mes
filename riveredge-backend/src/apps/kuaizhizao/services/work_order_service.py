@@ -3100,11 +3100,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             deleted_at__isnull=True
         ).order_by('sequence').all()
 
-        from apps.kuaizhizao.services.reporting_service import _maybe_mark_operation_completed
+        from apps.kuaizhizao.services.reporting_service import _sync_operation_completion_status
 
         op_status_changed = False
         for op in operations:
-            if _maybe_mark_operation_completed(work_order, op):
+            if _sync_operation_completion_status(work_order, op):
                 await op.save()
                 op_status_changed = True
         if op_status_changed:
@@ -3114,6 +3114,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
                 work_order.status = "completed"
                 work_order.actual_end_date = work_order.actual_end_date or datetime.now()
+                await work_order.save()
+            elif (
+                not all_done
+                and work_order.status == "completed"
+                and not work_order.manually_completed
+            ):
+                work_order.status = "in_progress"
+                work_order.actual_end_date = None
                 await work_order.save()
 
         if not operations and work_order.parent_work_order_id is not None:
@@ -3150,7 +3158,21 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         ).exclude(status="cancelled").all()
         outsource_by_op_id = {row.work_order_operation_id: row for row in outsource_rows}
 
-        prev_qualified = Decimal(str(plan_qty))
+        from apps.kuaizhizao.services.operation_transfer_service import (
+            build_operation_policy_cache,
+            count_pending_process_inspections,
+            load_process_inspections_by_operation,
+            pending_process_inspection_codes,
+            resolve_operation_inspection_plan_label,
+            resolve_operation_transfer_qualified,
+            resolve_process_inspection_card_status,
+            resolve_process_inspection_link_id,
+        )
+
+        policy_cache = await build_operation_policy_cache(tenant_id, op_ids)
+        inspections_by_op = await load_process_inspections_by_operation(tenant_id, work_order_id)
+
+        prev_transfer = Decimal(str(plan_qty))
         result = []
         for idx, op in enumerate(operations):
             defect_types_raw = defect_by_master_op.get(op.operation_id, [])
@@ -3159,8 +3181,52 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             op_data["defect_types"] = defect_types
 
             qualified = op.qualified_quantity or Decimal("0")
-            # 物料剩余：上道合格 - 本道合格；首道为 计划 - 本道合格
-            material_remaining = prev_qualified - qualified
+            master_op_id = int(op.operation_id) if op.operation_id is not None else 0
+            mode, plan_id, _ = policy_cache.get(master_op_id, ("none", None, "default_none"))
+            op_inspections = inspections_by_op.get(master_op_id, [])
+
+            transfer_qualified = await resolve_operation_transfer_qualified(
+                tenant_id,
+                work_order_id,
+                op,
+                policy_cache=policy_cache,
+                inspections_by_op=inspections_by_op,
+            )
+            qc_pending = Decimal("0")
+            if mode == "plan":
+                qc_pending = max(Decimal("0"), qualified - transfer_qualified)
+
+            op_data["inspection_mode"] = mode
+            op_data["inspection_plan_label"] = (
+                await resolve_operation_inspection_plan_label(
+                    tenant_id, master_op_id, mode=mode, plan_id=plan_id
+                )
+                if mode == "plan"
+                else None
+            )
+            op_data["transfer_qualified_quantity"] = transfer_qualified
+            op_data["qc_pending_quantity"] = qc_pending if mode == "plan" else None
+            op_data["process_inspection_pending_count"] = (
+                count_pending_process_inspections(op_inspections) if mode == "plan" else None
+            )
+            op_data["process_inspection_pending_codes"] = (
+                pending_process_inspection_codes(op_inspections) if mode == "plan" else []
+            )
+            op_data["process_inspection_status"] = (
+                await resolve_process_inspection_card_status(
+                    tenant_id,
+                    op_inspections,
+                    reported_qualified=qualified,
+                )
+                if mode == "plan"
+                else None
+            )
+            op_data["process_inspection_id"] = (
+                resolve_process_inspection_link_id(op_inspections) if mode == "plan" else None
+            )
+
+            # 物料剩余：上道可转下道 - 本道已报合格；首道为 计划 - 本道合格
+            material_remaining = prev_transfer - qualified
             if material_remaining < 0:
                 material_remaining = Decimal("0")
             op_data["material_remaining"] = material_remaining
@@ -3171,7 +3237,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 op_data["material_picked_count"] = picked_material_count
 
             next_op = operations[idx + 1] if idx + 1 < len(operations) else None
-            op_data["next_op_planned_qty"] = qualified
+            op_data["next_op_planned_qty"] = transfer_qualified
             op_data["next_op_has_reporting"] = bool(next_op and (next_op.completed_quantity or 0) > 0) if next_op else None
 
             sop = sop_by_op.get(op.operation_id)
@@ -3191,12 +3257,20 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             else:
                 op_data["is_outsourced"] = False
 
-            prev_qualified = qualified
+            prev_transfer = transfer_qualified
             result.append(WorkOrderOperationResponse.model_validate(op_data))
         if include_meta:
             mm = await self._resolve_manufacturing_mode(tenant_id, work_order.product_id)
             return {"manufacturing_mode": mm, "operations": result}
         return result
+
+    async def refresh_work_order_operation_transfer_state(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+    ) -> None:
+        """过程检验放行后触发；转下道数量为查询时计算，此处保留扩展点。"""
+        _ = (tenant_id, work_order_id)
 
     async def update_work_order_operations(
         self,
@@ -3617,7 +3691,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             allow_jump = effective_allow_jump(work_order, work_order_operation)
 
             if not allow_jump:
-                # 只检查上一道工序：只要有产出即可开始（报工数量由 reporting_service 校验不超过上一道完工数）
+                # 只检查上一道工序：上道须有可转下道数量（方案质检须检验放行）
                 previous_operations = await WorkOrderOperation.filter(
                     tenant_id=tenant_id,
                     work_order_id=work_order_id,
@@ -3626,9 +3700,16 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 ).order_by('-sequence').limit(1).all()
 
                 if previous_operations:
+                    from apps.kuaizhizao.services.operation_jump_rules import qualified_transfer_quantity_async
+
                     prev_op = previous_operations[0]
-                    if (prev_op.completed_quantity or 0) <= 0:
-                        raise BusinessLogicError(f"前序工序 {prev_op.operation_name} 尚无产出，不能开始当前工序")
+                    prev_transfer = await qualified_transfer_quantity_async(
+                        tenant_id, work_order_id, prev_op
+                    )
+                    if prev_transfer <= 0:
+                        raise BusinessLogicError(
+                            f"前序工序「{prev_op.operation_name}」尚无可转下道合格数量，不能开始当前工序"
+                        )
             else:
                 await validate_start_respects_node_operations(
                     tenant_id, work_order_id, work_order_operation

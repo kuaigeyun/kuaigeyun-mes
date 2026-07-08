@@ -610,6 +610,38 @@ class WorkOrderOperationResponse(WorkOrderOperationBase):
     is_outsourced: bool = Field(False, description="是否已创建工序委外单（未取消）")
     outsource_supplier_name: Optional[str] = Field(None, description="委外供应商名称")
     outsource_order_code: Optional[str] = Field(None, description="委外单编码")
+
+    # 质检（工序档案 IPQC 策略，后端按需填充）
+    inspection_mode: str = Field("none", alias="inspectionMode", description="质检模式（none/simple/plan）")
+    inspection_plan_label: Optional[str] = Field(
+        None, alias="inspectionPlanLabel", description="方案质检时的检验方案名称"
+    )
+    transfer_qualified_quantity: Optional[Decimal] = Field(
+        None,
+        alias="transferQualifiedQuantity",
+        description="可转下道合格数量（方案质检须过程检验放行后计入）",
+    )
+    qc_pending_quantity: Optional[Decimal] = Field(
+        None, alias="qcPendingQuantity", description="方案质检下已报工未放行的数量"
+    )
+    process_inspection_pending_count: Optional[int] = Field(
+        None, alias="processInspectionPendingCount", description="待检验过程检验单数量"
+    )
+    process_inspection_pending_codes: List[str] = Field(
+        default_factory=list,
+        alias="processInspectionPendingCodes",
+        description="待检验过程检验单编码（展示用）",
+    )
+    process_inspection_status: Optional[str] = Field(
+        None,
+        alias="processInspectionStatus",
+        description="方案质检过程检验状态（not_started/pending/pending_review/released/rejected/unqualified）",
+    )
+    process_inspection_id: Optional[int] = Field(
+        None,
+        alias="processInspectionId",
+        description="工序关联过程检验单ID（卡片徽章跳转）",
+    )
     
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")

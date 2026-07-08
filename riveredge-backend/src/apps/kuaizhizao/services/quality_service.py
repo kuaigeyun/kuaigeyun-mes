@@ -177,6 +177,45 @@ async def _is_quality_audit_required(tenant_id: int, stage_code: str) -> bool:
     return await config_service.check_audit_required(tenant_id, stage_code)
 
 
+async def _quality_inspection_initial_review_fields(
+    tenant_id: int, stage_code: str
+) -> Dict[str, Any]:
+    """未开启人工审核时，创建检验单即预置审核通过（与来料检验一致）。"""
+    if await _is_quality_audit_required(tenant_id, stage_code):
+        return {}
+    from apps.kuaizhizao.constants import ReviewStatus
+
+    return {"review_status": ReviewStatus.APPROVED}
+
+
+async def _quality_inspection_conduct_finalize_fields(
+    tenant_id: int,
+    stage_code: str,
+    *,
+    quality_status: str,
+    inspected_by: int,
+    inspector_name: str,
+) -> Dict[str, Any]:
+    """执行检验后的状态字段：未开启人工审核且合格时自动审核通过。"""
+    fields: Dict[str, Any] = {"status": "已检验"}
+    if await _is_quality_audit_required(tenant_id, stage_code):
+        return fields
+    if quality_status != "合格":
+        return fields
+    from apps.kuaizhizao.constants import ReviewStatus
+
+    fields.update(
+        {
+            "review_status": ReviewStatus.APPROVED,
+            "status": "已审核",
+            "reviewer_id": inspected_by,
+            "reviewer_name": inspector_name,
+            "review_time": datetime.now(),
+        }
+    )
+    return fields
+
+
 async def _require_iqc_stage_enabled(tenant_id: int) -> None:
     """组织级 IQC 总开关（TenantConfig）；关闭时禁止创建/下推来料检。"""
     t = await get_quality_inspection_stage_toggles(tenant_id)
@@ -621,11 +660,9 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             )
             for k, v in template.items():
                 create_data.setdefault(k, v)
-            # 检查业务配置：若无需审核，则创建时直接设为已审核（考虑中小企业实情）
-            from apps.kuaizhizao.constants import ReviewStatus
-            audit_required = await _is_quality_audit_required(tenant_id, "incoming_inspection")
-            if not audit_required:
-                create_data["review_status"] = ReviewStatus.APPROVED
+            create_data.update(
+                await _quality_inspection_initial_review_fields(tenant_id, "incoming_inspection")
+            )
 
             inspection = await IncomingInspection.create(
                 tenant_id=tenant_id,
@@ -785,16 +822,18 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 "inspector_id": inspected_by,
                 "inspector_name": inspector_name,
                 "inspection_time": datetime.now(),
-                "status": "已检验",
                 "updated_by": inspected_by,
                 **conduct_payload,
             }
-            audit_required = await _is_quality_audit_required(tenant_id, "incoming_inspection")
-            if not audit_required and quality_status == "合格":
-                from apps.kuaizhizao.constants import ReviewStatus
-
-                conduct_update["review_status"] = ReviewStatus.APPROVED
-                conduct_update["status"] = "已审核"
+            conduct_update.update(
+                await _quality_inspection_conduct_finalize_fields(
+                    tenant_id,
+                    "incoming_inspection",
+                    quality_status=quality_status,
+                    inspected_by=inspected_by,
+                    inspector_name=inspector_name,
+                )
+            )
             await IncomingInspection.filter(tenant_id=tenant_id, id=inspection_id).update(**conduct_update)
 
             updated_inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
@@ -1076,7 +1115,9 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
     ) -> List[IncomingInspectionResponse]:
         """为采购入库单明细补齐缺失的来料检验单（已有则跳过，不拆单）。"""
         purchase_receipt_id = int(receipt.id)
-        audit_required = await _is_quality_audit_required(tenant_id, "incoming_inspection")
+        initial_review_fields = await _quality_inspection_initial_review_fields(
+            tenant_id, "incoming_inspection"
+        )
         inspections: List[IncomingInspectionResponse] = []
         for item in receipt_items:
             existing = await IncomingInspection.filter(
@@ -1126,10 +1167,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 "created_by": created_by,
                 **template,
             }
-            if not audit_required:
-                from apps.kuaizhizao.constants import ReviewStatus
-
-                create_kwargs["review_status"] = ReviewStatus.APPROVED
+            create_kwargs.update(initial_review_fields)
             inspection = await IncomingInspection.create(**create_kwargs)
             inspections.append(IncomingInspectionResponse.model_validate(inspection))
 
@@ -1322,7 +1360,9 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             deleted_at__isnull=True,
         ).all()
         mat_by_id = {m.id: m for m in mat_rows}
-        audit_required = await _is_quality_audit_required(tenant_id, "incoming_inspection")
+        initial_review_fields = await _quality_inspection_initial_review_fields(
+            tenant_id, "incoming_inspection"
+        )
         inspections: List[IncomingInspectionResponse] = []
 
         for item in registration_items:
@@ -1373,10 +1413,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 "created_by": created_by,
                 **template,
             }
-            if not audit_required:
-                from apps.kuaizhizao.constants import ReviewStatus
-
-                create_kwargs["review_status"] = ReviewStatus.APPROVED
+            create_kwargs.update(initial_review_fields)
             inspection = await IncomingInspection.create(**create_kwargs)
             inspections.append(IncomingInspectionResponse.model_validate(inspection))
 
@@ -2087,6 +2124,9 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         success_count = 0
         failure_count = 0
         errors = []
+        initial_review_fields = await _quality_inspection_initial_review_fields(
+            tenant_id, "incoming_inspection"
+        )
         
         # 从第三行开始处理数据（跳过表头和示例行）
         for row_idx, row in enumerate(data[2:], start=3):
@@ -2162,6 +2202,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     status="待检验" if qualified_quantity == 0 and unqualified_quantity == 0 else "已检验",
                     notes=notes,
                     created_by=created_by,
+                    **initial_review_fields,
                 )
                 success_count += 1
             except Exception as e:
@@ -2277,10 +2318,9 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             )
             for k, v in template.items():
                 create_data.setdefault(k, v)
-            from apps.kuaizhizao.constants import ReviewStatus
-            audit_required = await _is_quality_audit_required(tenant_id, "process_inspection")
-            if not audit_required:
-                create_data["review_status"] = ReviewStatus.APPROVED
+            create_data.update(
+                await _quality_inspection_initial_review_fields(tenant_id, "process_inspection")
+            )
 
             inspection = await ProcessInspection.create(
                 tenant_id=tenant_id,
@@ -2389,17 +2429,28 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 inspection_model, "quality_characteristics", inspection_data
             )
 
+            conduct_update: Dict[str, Any] = {
+                "qualified_quantity": qualified_quantity,
+                "unqualified_quantity": unqualified_quantity,
+                "inspection_result": "已检验",
+                "quality_status": quality_status,
+                "inspector_id": inspected_by,
+                "inspector_name": inspector_name,
+                "inspection_time": datetime.now(),
+                "updated_by": inspected_by,
+                **conduct_payload,
+            }
+            conduct_update.update(
+                await _quality_inspection_conduct_finalize_fields(
+                    tenant_id,
+                    "process_inspection",
+                    quality_status=quality_status,
+                    inspected_by=inspected_by,
+                    inspector_name=inspector_name,
+                )
+            )
             await ProcessInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
-                qualified_quantity=qualified_quantity,
-                unqualified_quantity=unqualified_quantity,
-                inspection_result="已检验",
-                quality_status=quality_status,
-                inspector_id=inspected_by,
-                inspector_name=inspector_name,
-                inspection_time=datetime.now(),
-                status="已检验",
-                updated_by=inspected_by,
-                **conduct_payload
+                **conduct_update
             )
 
             updated_inspection = await self.get_process_inspection_by_id(tenant_id, inspection_id)
@@ -2430,6 +2481,12 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                     work_order_id=inspection_model.work_order_id,
                     operation_id=inspection_model.operation_id,
                     qualified_quantity=qualified_quantity
+                )
+                from apps.kuaizhizao.services.work_order_service import WorkOrderService
+
+                await WorkOrderService().refresh_work_order_operation_transfer_state(
+                    tenant_id=tenant_id,
+                    work_order_id=int(inspection_model.work_order_id),
                 )
             
             return updated_inspection
@@ -2465,6 +2522,14 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 status=status,
                 updated_by=approved_by
             )
+
+            if not rejection_reason and inspection.work_order_id:
+                from apps.kuaizhizao.services.work_order_service import WorkOrderService
+
+                await WorkOrderService().refresh_work_order_operation_transfer_state(
+                    tenant_id=tenant_id,
+                    work_order_id=int(inspection.work_order_id),
+                )
 
             return await self.get_process_inspection_by_id(tenant_id, inspection_id)
 
@@ -2621,6 +2686,9 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 operation_id=master_op_id,
                 use_quality_characteristics=True,
             )
+            initial_review_fields = await _quality_inspection_initial_review_fields(
+                tenant_id, "process_inspection"
+            )
             
             inspection = await ProcessInspection.create(
                 tenant_id=tenant_id,
@@ -2646,6 +2714,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 status="待检验",
                 created_by=created_by,
                 **template,
+                **initial_review_fields,
             )
             try:
                 from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
@@ -2989,6 +3058,9 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         success_count = 0
         failure_count = 0
         errors = []
+        initial_review_fields = await _quality_inspection_initial_review_fields(
+            tenant_id, "process_inspection"
+        )
 
         from apps.kuaizhizao.models.work_order import WorkOrder
         from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
@@ -3081,6 +3153,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                     status="待检验" if qualified_quantity == 0 and unqualified_quantity == 0 else "已检验",
                     notes=notes,
                     created_by=created_by,
+                    **initial_review_fields,
                 )
                 success_count += 1
             except Exception as e:
@@ -3287,10 +3360,9 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             )
             for k, v in template.items():
                 create_data.setdefault(k, v)
-            from apps.kuaizhizao.constants import ReviewStatus
-            audit_required = await _is_quality_audit_required(tenant_id, "finished_goods_inspection")
-            if not audit_required:
-                create_data["review_status"] = ReviewStatus.APPROVED
+            create_data.update(
+                await _quality_inspection_initial_review_fields(tenant_id, "finished_goods_inspection")
+            )
 
             inspection = await FinishedGoodsInspection.create(
                 tenant_id=tenant_id,
@@ -3413,17 +3485,28 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 inspection_model, "other_checks", inspection_data
             )
 
+            conduct_update: Dict[str, Any] = {
+                "qualified_quantity": qualified_quantity,
+                "unqualified_quantity": unqualified_quantity,
+                "inspection_result": "已检验",
+                "quality_status": quality_status,
+                "inspector_id": inspected_by,
+                "inspector_name": inspector_name,
+                "inspection_time": datetime.now(),
+                "updated_by": inspected_by,
+                **conduct_payload,
+            }
+            conduct_update.update(
+                await _quality_inspection_conduct_finalize_fields(
+                    tenant_id,
+                    "finished_goods_inspection",
+                    quality_status=quality_status,
+                    inspected_by=inspected_by,
+                    inspector_name=inspector_name,
+                )
+            )
             await FinishedGoodsInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
-                qualified_quantity=qualified_quantity,
-                unqualified_quantity=unqualified_quantity,
-                inspection_result="已检验",
-                quality_status=quality_status,
-                inspector_id=inspected_by,
-                inspector_name=inspector_name,
-                inspection_time=datetime.now(),
-                status="已检验",
-                updated_by=inspected_by,
-                **conduct_payload
+                **conduct_update
             )
 
             updated_inspection = await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
@@ -4215,6 +4298,9 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 wf["material_id"],
                 "fqc",
             )
+            initial_review_fields = await _quality_inspection_initial_review_fields(
+                tenant_id, "finished_goods_inspection"
+            )
             
             inspection = await FinishedGoodsInspection.create(
                 tenant_id=tenant_id,
@@ -4242,6 +4328,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 status="待检验",
                 created_by=created_by,
                 **template,
+                **initial_review_fields,
             )
             # 建立工单→成品检验 的 DocumentRelation
             try:
@@ -4302,6 +4389,9 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         success_count = 0
         failure_count = 0
         errors = []
+        initial_review_fields = await _quality_inspection_initial_review_fields(
+            tenant_id, "finished_goods_inspection"
+        )
 
         from apps.kuaizhizao.models.work_order import WorkOrder
         from apps.master_data.models.material import Material
@@ -4378,6 +4468,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                     status="待检验" if qualified_quantity == 0 and unqualified_quantity == 0 else "已检验",
                     notes=notes,
                     created_by=created_by,
+                    **initial_review_fields,
                 )
                 success_count += 1
             except Exception as e:

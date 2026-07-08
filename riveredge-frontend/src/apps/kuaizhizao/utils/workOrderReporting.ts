@@ -82,6 +82,90 @@ export function getRemainingReportableQuantity(operation: any, workOrderQuantity
   return getReportableQuantityBreakdown(operation, workOrderQuantity).effectiveRemaining;
 }
 
+/** 工序 IPQC 质检模式（none / simple / plan） */
+export function getOperationInspectionMode(operation: any): string {
+  return String(operation?.inspection_mode ?? operation?.inspectionMode ?? 'none');
+}
+
+/** 工序卡片质检展示文案（不含括号说明；方案质检状态由徽章单独展示） */
+export function formatOperationInspectionSummary(
+  operation: any,
+  labels?: {
+    none?: string;
+    simple?: string;
+    planFallback?: string;
+  },
+): string {
+  const mode = getOperationInspectionMode(operation);
+  if (mode === 'simple') {
+    return labels?.simple ?? '简易质检';
+  }
+  if (mode === 'plan') {
+    const planName = String(
+      operation?.inspection_plan_label ?? operation?.inspectionPlanLabel ?? '',
+    ).trim();
+    return planName || labels?.planFallback || '检验方案';
+  }
+  return labels?.none ?? '无质检';
+}
+
+export type ProcessInspectionCardStatus =
+  | 'not_started'
+  | 'pending'
+  | 'pending_review'
+  | 'released'
+  | 'rejected'
+  | 'unqualified';
+
+export function getProcessInspectionCardStatus(operation: any): ProcessInspectionCardStatus | null {
+  const mode = getOperationInspectionMode(operation);
+  if (mode !== 'plan') return null;
+  const raw = operation?.process_inspection_status ?? operation?.processInspectionStatus;
+  if (!raw) return null;
+  return String(raw) as ProcessInspectionCardStatus;
+}
+
+export function getProcessInspectionStatusTagColor(
+  status: ProcessInspectionCardStatus,
+): 'default' | 'processing' | 'warning' | 'success' | 'error' {
+  switch (status) {
+    case 'pending':
+      return 'processing';
+    case 'pending_review':
+      return 'warning';
+    case 'released':
+      return 'success';
+    case 'rejected':
+    case 'unqualified':
+      return 'error';
+    case 'not_started':
+    default:
+      return 'default';
+  }
+}
+
+export function buildProcessInspectionPageUrl(
+  operation: any,
+  workOrderId?: number | string | null,
+): string | null {
+  const base = '/apps/kuaizhizao/quality-management/process-inspection';
+  const inspectionId = operation?.process_inspection_id ?? operation?.processInspectionId;
+  if (inspectionId != null && inspectionId !== '') {
+    return `${base}?id=${inspectionId}`;
+  }
+  const operationId = operation?.operation_id ?? operation?.operationId;
+  if (workOrderId != null && workOrderId !== '' && operationId != null && operationId !== '') {
+    return `${base}?work_order_id=${workOrderId}&operation_id=${operationId}`;
+  }
+  return null;
+}
+
+/** 是否因上道方案质检未放行导致无可报数量 */
+export function isReportBlockedByUpstreamQc(operation: any, workOrderQuantity: number): boolean {
+  const breakdown = getReportableQuantityBreakdown(operation, workOrderQuantity);
+  return breakdown.planRemaining > 0 && breakdown.materialRemaining === 0;
+}
+
 /** 按状态报工标记「完成」时，本次应报工数量（与后端 status_reporting_complete_delta 一致） */
 export function getStatusReportingCompleteQuantity(operation: any, workOrderQuantity: number): number {
   return getRemainingReportableQuantity(operation, workOrderQuantity);

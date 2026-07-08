@@ -61,7 +61,7 @@ export const VariantSkuPickerPanel: React.FC<VariantSkuPickerPanelProps> = ({
 
   const loadDefinitions = useCallback(async () => {
     try {
-      const { items: defs } = await variantAttributeApi.list({ is_active: true, limit: 10000 });
+      const { items: defs } = await variantAttributeApi.list({ is_active: true, limit: 1000 });
       defs.sort((a, b) => a.display_order - b.display_order);
       setDefinitions(defs);
     } catch {

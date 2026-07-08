@@ -32,6 +32,9 @@ class ShipmentNoticeItem(BaseModel):
 
     sales_order_item_id = fields.IntField(null=True, description="销售订单明细ID（关联）")
 
+    warehouse_id = fields.IntField(null=True, description="行出库仓库ID")
+    warehouse_name = fields.CharField(max_length=100, null=True, description="行出库仓库名称")
+
     notes = fields.TextField(null=True, description="备注")
 
     class Meta:
@@ -41,4 +44,5 @@ class ShipmentNoticeItem(BaseModel):
             ("tenant_id", "notice_id"),
             ("material_id",),
             ("sales_order_item_id",),
+            ("warehouse_id",),
         ]

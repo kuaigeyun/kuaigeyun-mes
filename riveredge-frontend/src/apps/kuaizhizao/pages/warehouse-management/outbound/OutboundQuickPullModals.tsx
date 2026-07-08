@@ -1,12 +1,13 @@
 import React, { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Alert, App, Empty, Modal, Spin, Table, Tag, Typography } from 'antd';
+import { Alert, App, Empty, Modal, Select, Spin, Table, Tag, Typography } from 'antd';
 import {
   listSalesOrders,
   previewPushSalesOrderToDelivery,
   type PushPreviewResponse,
 } from '../../../services/sales-order';
+import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import {
   shipmentNoticeApi,
   type ShipmentNotice,
@@ -109,6 +110,8 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
     const [pullSoPreviewData, setPullSoPreviewData] = useState<PushPreviewResponse | null>(null);
     const [pullSoPreviewOrderId, setPullSoPreviewOrderId] = useState<number | null>(null);
     const [pullSoSelectedItemIds, setPullSoSelectedItemIds] = useState<number[]>([]);
+    const [pullSoWarehouseOptions, setPullSoWarehouseOptions] = useState<Array<{ label: string; value: number }>>([]);
+    const [pullSoLineWh, setPullSoLineWh] = useState<Record<number, number>>({});
     const [pullSnPreviewOpen, setPullSnPreviewOpen] = useState(false);
     const [pullSnPreviewLoading, setPullSnPreviewLoading] = useState(false);
     const [pullSnPreviewConfirming, setPullSnPreviewConfirming] = useState(false);
@@ -143,6 +146,8 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
       setPullSoPreviewData(null);
       setPullSoPreviewOrderId(null);
       setPullSoSelectedItemIds([]);
+      setPullSoWarehouseOptions([]);
+      setPullSoLineWh({});
     }, []);
 
     const resetPullSnPreviewModal = useCallback(() => {
@@ -160,9 +165,30 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
         setPullSoPreviewData(null);
         setPullSoPreviewOrderId(orderId);
         setPullSoSelectedItemIds([]);
-        previewPushSalesOrderToDelivery(orderId)
-          .then((res) => {
+        setPullSoLineWh({});
+        Promise.all([
+          previewPushSalesOrderToDelivery(orderId),
+          masterWarehouseApi.list({ is_active: true, limit: 500 }),
+        ])
+          .then(([res, whRes]) => {
             setPullSoPreviewData(res);
+            const whList = Array.isArray(whRes) ? whRes : (whRes as { items?: unknown[] })?.items ?? [];
+            setPullSoWarehouseOptions(
+              (Array.isArray(whList) ? whList : []).map((w) => {
+                const row = w as { id: number; code?: string; name?: string };
+                const label = `${row.code || ''} ${row.name || ''}`.trim() || String(row.id);
+                return { label, value: row.id };
+              }),
+            );
+            const lineWh: Record<number, number> = {};
+            (res.items || []).forEach((row) => {
+              const itemId = Number(row.item_id);
+              const whId = Number(row.warehouse_id);
+              if (Number.isFinite(itemId) && itemId > 0 && Number.isFinite(whId) && whId > 0) {
+                lineWh[itemId] = whId;
+              }
+            });
+            setPullSoLineWh(lineWh);
             setPullSoSelectedItemIds(
               (res.items || [])
                 .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
@@ -194,17 +220,29 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
       }
       const quantities: Record<number, number> = {};
       const maxQuantities: Record<number, number> = {};
+      const lineWh: Record<number, number> = {};
       (pullSoPreviewData.items || []).forEach((row) => {
         const itemId = Number(row.item_id);
         quantities[itemId] = 0;
         maxQuantities[itemId] = Number(row.max_push_quantity ?? 0);
       });
-      selectedIds.forEach((id) => {
-        quantities[id] = Number(rowById.get(id)?.max_push_quantity ?? 0);
-      });
+      for (const id of selectedIds) {
+        const row = rowById.get(id);
+        const wh = pullSoLineWh[id];
+        if (wh == null || !(wh > 0)) {
+          messageApi.warning(
+            t('app.kuaizhizao.salesOrder.pushShipmentSelectLineWarehouse', {
+              material: row?.material_code || row?.material_name || id,
+            }),
+          );
+          return;
+        }
+        quantities[id] = Number(row?.max_push_quantity ?? 0);
+        lineWh[id] = wh;
+      }
       const entryPath = outboundSalesOrderEntryPath(pullSoPreviewOrderId);
       const draftKey = buildDocumentCreateDraftKey('kuaizhizao:outbound-sales-order-pull', entryPath, '');
-      setDocumentFormDraft(draftKey, { quantities, maxQuantities });
+      setDocumentFormDraft(draftKey, { quantities, maxQuantities, lineWh });
       resetPullSoPreviewModal();
       navigate(entryPath);
     }, [
@@ -213,6 +251,7 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
       pullSoPreviewData,
       pullSoPreviewOrderId,
       pullSoSelectedItemIds,
+      pullSoLineWh,
       resetPullSoPreviewModal,
       t,
     ]);
@@ -794,7 +833,7 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
                   dataSource={pullSoPreviewData.items}
                   rowKey={(row) => String(row.item_id)}
                   pagination={false}
-                  scroll={{ x: 960 }}
+                  scroll={{ x: 1180 }}
                   rowSelection={{
                     selectedRowKeys: pullSoSelectedItemIds.map(String),
                     onChange: (keys) => setPullSoSelectedItemIds(keys.map((k) => Number(k))),
@@ -808,6 +847,33 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
                     { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
                     { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
                     { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                    {
+                      title: (
+                        <>
+                          {t('app.kuaizhizao.salesOrder.pushShipmentLineWarehouse')}
+                          <Typography.Text type="danger"> *</Typography.Text>
+                        </>
+                      ),
+                      width: 160,
+                      render: (_: unknown, row) => {
+                        const itemId = Number(row.item_id);
+                        const selected = pullSoSelectedItemIds.includes(itemId);
+                        return (
+                          <Select
+                            style={{ width: '100%', minWidth: 140 }}
+                            placeholder={t('app.kuaizhizao.shipmentNotice.selectOutboundWarehouse')}
+                            showSearch
+                            optionFilterProp="label"
+                            disabled={!selected}
+                            value={pullSoLineWh[itemId]}
+                            options={pullSoWarehouseOptions}
+                            onChange={(nv) => {
+                              setPullSoLineWh((prev) => ({ ...prev, [itemId]: Number(nv) }));
+                            }}
+                          />
+                        );
+                      },
+                    },
                   ]}
                 />
               ) : (

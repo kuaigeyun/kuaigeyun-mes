@@ -830,6 +830,7 @@ class SalesReturnResponse(SalesReturnBase):
         description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
     )
     total_items: Optional[int] = Field(None, description="退货品种数（明细行数）")
+    items: Optional[List["SalesReturnItemResponse"]] = Field(None, description="退货明细列表")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 

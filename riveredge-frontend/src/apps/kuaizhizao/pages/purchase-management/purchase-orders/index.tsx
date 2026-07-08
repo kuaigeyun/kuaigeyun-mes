@@ -90,9 +90,9 @@ import {
   deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder,
   withdrawPurchaseOrder,
   revokePurchaseOrder,
-  pushPurchaseOrderToReceipt, pushPurchaseOrderToReceiptPreview,
+  pushPurchaseOrderToReceipt,
   pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToInvoice, pushPurchaseOrderToPurchaseReturn,
-  pullPurchaseOrderFromInquiry, getPurchaseOrderStatistics, expeditePurchaseOrder,
+  pullPurchaseOrderFromInquiry, getPurchaseOrderStatistics,
   previewPushToReceiptNotice, previewPushToReceipt, previewPushToInvoice, previewPushToPurchaseReturn,
   type DocumentPushPreview,
   PurchaseOrder, PurchaseOrderItem
@@ -158,7 +158,6 @@ import { SupplierSelectDropdown } from '../../../../master-data/components/Suppl
 import { batchImport } from '../../../../../utils/batchOperations';
 import { ROUTES } from '../../../constants/routes';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import { fetchStorageLocationsForWarehouse } from '../../warehouse-management/inbound/inboundPoReceiptEntryUtils';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
@@ -335,7 +334,8 @@ const PurchaseOrdersPage: React.FC = () => {
   const pushToPurchaseReturnAction = resolveKuaizhizaoDocumentAction(t, 'purchase_return.pull_from_purchase_order');
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
-  const tableRowsRef = useRef<PurchaseOrder[]>([]);
+  /** 列表当前页数据（唯一源：UniTable onTableDataChange，与表格展示一致） */
+  const [tableOrders, setTableOrders] = useState<PurchaseOrder[]>([]);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
 
   const purchaseOrderImportTemplate = useMemo(
@@ -388,9 +388,9 @@ const PurchaseOrdersPage: React.FC = () => {
   const selectedOrdersForBatch = useMemo(
     () =>
       selectedRowKeys
-        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .map((key) => tableOrders.find((row) => String(row.id) === String(key)))
         .filter((row): row is PurchaseOrder => row != null),
-    [selectedRowKeys],
+    [selectedRowKeys, tableOrders],
   );
 
   const purchaseOrderHighlightOverdueToolbar = useMemo(
@@ -511,9 +511,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const [approvalLoading, setApprovalLoading] = useState(false);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
 
-  // 下推入库 Modal
-  const [pushToReceiptVisible, setPushToReceiptVisible] = useState(false);
-  const [pushToNoticeVisible, setPushToNoticeVisible] = useState(false);
+  // 下推退货 Modal
   const [pushToReturnVisible, setPushToReturnVisible] = useState(false);
   const [landingCostModalVisible, setLandingCostModalVisible] = useState(false);
 
@@ -717,25 +715,7 @@ const PurchaseOrdersPage: React.FC = () => {
     [messageApi],
   );
 
-  const [pushToReceiptOrder, setPushToReceiptOrder] = useState<PurchaseOrderDetail | null>(null);
-  const [pushToReceiptQuantities, setPushToReceiptQuantities] = useState<Record<number, number>>({});
-  const [pushToReceiptBatchNumbers, setPushToReceiptBatchNumbers] = useState<Record<number, string>>({});
-  const [pushToReceiptWarehouseId, setPushToReceiptWarehouseId] = useState<number | undefined>();
-  const [pushToReceiptWarehouseOptions, setPushToReceiptWarehouseOptions] = useState<
-    { label: string; value: number }[]
-  >([]);
-  const [pushToReceiptLineWh, setPushToReceiptLineWh] = useState<Record<number, number>>({});
-  const [pushToReceiptLineLoc, setPushToReceiptLineLoc] = useState<Record<number, number | undefined>>({});
-  const [pushToReceiptLineLocCode, setPushToReceiptLineLocCode] = useState<Record<number, string>>({});
-  const [pushToReceiptLocOptionsByWh, setPushToReceiptLocOptionsByWh] = useState<
-    Record<number, { value: number; label: string; code: string }[]>
-  >({});
-  const [pushToReceiptPreviewLoading, setPushToReceiptPreviewLoading] = useState(false);
-  const [pushToReceiptLoading, setPushToReceiptLoading] = useState(false);
-
-  // 下推收货通知 Modal 相关详情状态
-  const [pushToNoticeOrder, setPushToNoticeOrder] = useState<PurchaseOrderDetail | null>(null);
-  const [pushToNoticeQuantities, setPushToNoticeQuantities] = useState<Record<number, number>>({});
+  // 下推退货 Modal 相关详情状态
   const [pushToReturnOrder, setPushToReturnOrder] = useState<PurchaseOrderDetail | null>(null);
   const [pushToReturnQuantities, setPushToReturnQuantities] = useState<Record<number, number>>({});
   const [pushToReturnWarehouseId, setPushToReturnWarehouseId] = useState<number | undefined>(undefined);
@@ -938,7 +918,6 @@ const PurchaseOrdersPage: React.FC = () => {
     },
   ], [t, purchaseOrderAuditEnabled, lifecycleValueEnum, purchaseOrderAuditColumn, purchaseOrderCustomFieldColumns, purchaseOrderPerms, purchaseOrderSupplierSearchOptions]);
 
-  const [pushToNoticeLoading, setPushToNoticeLoading] = useState(false);
   const [pushToInvoiceLoading, setPushToInvoiceLoading] = useState(false);
 
   const pullQueryCloseRef = useRef<(() => void) | null>(null);
@@ -964,6 +943,51 @@ const PurchaseOrdersPage: React.FC = () => {
   const [pushPreviewData, setPushPreviewData] = useState<DocumentPushPreview | null>(null);
   const [pushPreviewTarget, setPushPreviewTarget] = useState<PurchaseOrder | null>(null);
   const [pushPreviewSelectedItemIds, setPushPreviewSelectedItemIds] = useState<number[]>([]);
+  const [pushPreviewQuantities, setPushPreviewQuantities] = useState<Record<number, number>>({});
+  const [pushPreviewLineWh, setPushPreviewLineWh] = useState<Record<number, number>>({});
+  const [pushPreviewWarehouseOptions, setPushPreviewWarehouseOptions] = useState<Array<{ label: string; value: number }>>([]);
+
+  const pushPreviewModalTitle = useMemo(() => {
+    if (pushPreviewKind === 'receipt_notice') return pushToReceiptNoticeAction.label;
+    if (pushPreviewKind === 'receipt') return pushToReceiptAction.label;
+    if (pushPreviewKind === 'invoice') return pushToInvoiceAction.label;
+    if (pushPreviewKind === 'purchase_return') return pushToPurchaseReturnAction.label;
+    return t('app.kuaizhizao.salesOrder.pushPreviewTitle');
+  }, [
+    pushPreviewKind,
+    pushToInvoiceAction.label,
+    pushToPurchaseReturnAction.label,
+    pushToReceiptAction.label,
+    pushToReceiptNoticeAction.label,
+    t,
+  ]);
+
+  const pushPreviewQtyColumnTitles = useMemo(() => {
+    if (pushPreviewKind === 'receipt_notice' || pushPreviewKind === 'receipt') {
+      return {
+        quantity: t('app.kuaizhizao.purchaseOrder.col.orderedQty'),
+        pushed: t('app.kuaizhizao.purchaseOrder.col.receivedQty'),
+        pushable: t('app.kuaizhizao.purchaseOrder.col.outstandingQty'),
+      };
+    }
+    if (pushPreviewKind === 'purchase_return') {
+      return {
+        quantity: t('app.kuaizhizao.salesOrder.quantity'),
+        pushed: t('app.kuaizhizao.salesOrder.colPushedQty'),
+        pushable: t('app.kuaizhizao.salesOrder.colPushableQty'),
+      };
+    }
+    return {
+      quantity: t('app.kuaizhizao.salesOrder.quantity'),
+      pushed: t('app.kuaizhizao.salesOrder.colPushedQty'),
+      pushable: t('app.kuaizhizao.salesOrder.colPushableQty'),
+    };
+  }, [pushPreviewKind, t]);
+
+  const pushPreviewConfirmLabel =
+    pushPreviewKind === 'receipt_notice' || pushPreviewKind === 'receipt'
+      ? t('app.kuaizhizao.salesOrder.confirmPush')
+      : t('common.confirm');
 
   // 处理详情查看
   const handleDetail = async (record: PurchaseOrder) => {
@@ -1004,6 +1028,9 @@ const PurchaseOrdersPage: React.FC = () => {
     setPushPreviewData(null);
     setPushPreviewTarget(null);
     setPushPreviewSelectedItemIds([]);
+    setPushPreviewQuantities({});
+    setPushPreviewLineWh({});
+    setPushPreviewWarehouseOptions([]);
   }, []);
 
   const resetPullRequisitionPreviewModal = useCallback(() => {
@@ -1019,87 +1046,6 @@ const PurchaseOrdersPage: React.FC = () => {
     setPullInquiryPreviewId(null);
     setPullInquirySelectedItemIds([]);
   }, []);
-
-  const openPushReceiptWarehouseModal = useCallback(
-    async (record: PurchaseOrder, quantities: Record<number, number>) => {
-      const [detail, whRes] = await Promise.all([
-        getPurchaseOrder(record.id!),
-        masterWarehouseApi.list({ is_active: true, limit: 500 }),
-      ]);
-      const items = (detail.items || []).filter(
-        (it: PurchaseOrderItem) => it.id != null && (quantities[it.id] ?? 0) > 0,
-      );
-      if (items.length === 0) {
-        messageApi.warning(t('app.kuaizhizao.purchaseOrder.pushReceiptQtyRequired'));
-        return;
-      }
-      const whList = Array.isArray(whRes) ? whRes : (whRes as { items?: unknown[] })?.items ?? [];
-      const warehouseOptions = (Array.isArray(whList) ? whList : []).map((w) => {
-        const row = w as { id: number; code?: string; name?: string };
-        const label = `${row.code || ''} ${row.name || ''}`.trim() || String(row.id);
-        return { label, value: row.id };
-      });
-      if (warehouseOptions.length === 0) {
-        messageApi.error(t('app.kuaizhizao.purchaseOrder.pushReceiptNoWarehouse'));
-        return;
-      }
-      setPushToReceiptOrder(detail as PurchaseOrderDetail);
-      setPushToReceiptQuantities(quantities);
-      setPushToReceiptWarehouseOptions(warehouseOptions);
-      setPushToReceiptLineWh({});
-      setPushToReceiptLineLoc({});
-      setPushToReceiptLineLocCode({});
-      setPushToReceiptLocOptionsByWh({});
-      const defaultWhId = warehouseOptions.length === 1 ? warehouseOptions[0].value : undefined;
-      setPushToReceiptWarehouseId(defaultWhId);
-      if (defaultWhId != null) {
-        const lineWh: Record<number, number> = {};
-        items.forEach((it: PurchaseOrderItem) => {
-          if (it.id != null) lineWh[it.id] = defaultWhId;
-        });
-        setPushToReceiptLineWh(lineWh);
-        void fetchStorageLocationsForWarehouse(defaultWhId).then((opts) =>
-          setPushToReceiptLocOptionsByWh((prev) => ({ ...prev, [defaultWhId]: opts })),
-        );
-      }
-      setPushToReceiptBatchNumbers({});
-      setPushToReceiptVisible(true);
-      setPushToReceiptPreviewLoading(true);
-      try {
-        const preview = await pushPurchaseOrderToReceiptPreview(record.id!, quantities);
-        const batchMap: Record<number, string> = {};
-        (preview.items || []).forEach((it: { item_id: number; batch_number?: string }) => {
-          if (it.batch_number) batchMap[it.item_id] = it.batch_number;
-        });
-        setPushToReceiptBatchNumbers(batchMap);
-      } catch (error: unknown) {
-        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrder.push.previewBatchFailed')));
-        setPushToReceiptVisible(false);
-        setPushToReceiptOrder(null);
-        return;
-      } finally {
-        setPushToReceiptPreviewLoading(false);
-      }
-    },
-    [fetchStorageLocationsForWarehouse, messageApi, t],
-  );
-
-  const openPushNoticeQuantityModal = useCallback(
-    async (record: PurchaseOrder, quantities: Record<number, number>) => {
-      const detail = await getPurchaseOrder(record.id!);
-      const items = (detail.items || []).filter(
-        (it: PurchaseOrderItem) => it.id != null && (quantities[it.id] ?? 0) > 0,
-      );
-      if (items.length === 0) {
-        messageApi.warning(t('app.kuaizhizao.purchaseOrder.allReceived'));
-        return;
-      }
-      setPushToNoticeOrder(detail as PurchaseOrderDetail);
-      setPushToNoticeQuantities(quantities);
-      setPushToNoticeVisible(true);
-    },
-    [messageApi, t],
-  );
 
   const openPushReturnWarehouseModal = useCallback(
     async (record: PurchaseOrder, quantities: Record<number, number>) => {
@@ -1126,6 +1072,9 @@ const PurchaseOrdersPage: React.FC = () => {
       setPushPreviewTarget(record);
       setPushPreviewConfirming(false);
       setPushPreviewSelectedItemIds([]);
+      setPushPreviewQuantities({});
+      setPushPreviewLineWh({});
+      setPushPreviewWarehouseOptions([]);
       setPushPreviewLoading(true);
       setPushPreviewData(null);
       try {
@@ -1140,11 +1089,36 @@ const PurchaseOrdersPage: React.FC = () => {
           preview = await previewPushToPurchaseReturn(record.id);
         }
         setPushPreviewData(preview);
-        setPushPreviewSelectedItemIds(
-          (preview.items || [])
-            .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
-            .map((row) => Number(row.item_id)),
-        );
+        const rows = preview.items || [];
+        const ids: number[] = [];
+        const qtyMap: Record<number, number> = {};
+        const lineWh: Record<number, number> = {};
+        rows.forEach((row) => {
+          const itemId = Number(row.item_id);
+          if (!Number.isFinite(itemId) || itemId <= 0) return;
+          const defaultQty = Number(row.max_push_quantity ?? 0);
+          if (Number.isFinite(defaultQty) && defaultQty > 0) {
+            ids.push(itemId);
+          }
+          qtyMap[itemId] = Number.isFinite(defaultQty) && defaultQty > 0 ? defaultQty : 0;
+          const whId = Number(row.warehouse_id);
+          if (Number.isFinite(whId) && whId > 0) {
+            lineWh[itemId] = whId;
+          }
+        });
+        setPushPreviewSelectedItemIds(ids);
+        setPushPreviewQuantities(qtyMap);
+        setPushPreviewLineWh(lineWh);
+        if (kind === 'receipt_notice' || kind === 'receipt') {
+          const whRes = await masterWarehouseApi.list({ is_active: true, limit: 500 });
+          const whList = Array.isArray(whRes) ? whRes : (whRes as { items?: unknown[] })?.items ?? [];
+          const warehouseOptions = (Array.isArray(whList) ? whList : []).map((w) => {
+            const row = w as { id: number; code?: string; name?: string };
+            const label = `${row.code || ''} ${row.name || ''}`.trim() || String(row.id);
+            return { label, value: row.id };
+          });
+          setPushPreviewWarehouseOptions(warehouseOptions);
+        }
       } catch (error: unknown) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrder.push.previewFailed')));
         resetPushPreviewModal();
@@ -1169,24 +1143,123 @@ const PurchaseOrdersPage: React.FC = () => {
       messageApi.warning(t('app.kuaizhizao.purchaseOrder.push.selectLinesFirst'));
       return;
     }
-    const quantities = Object.fromEntries(
-      selectedIds.map((id) => [id, Number(rowById.get(id)?.max_push_quantity ?? 0)]),
-    );
+
+    const needsLineWarehouse =
+      pushPreviewKind === 'receipt_notice' ||
+      pushPreviewKind === 'receipt' ||
+      !!pushPreviewData.line_warehouse_required;
+
+    const quantities: Record<number, number> = {};
+    const lineWarehouses: Record<number, number> = {};
+    if (pushPreviewKind !== 'invoice') {
+      for (const id of selectedIds) {
+        const row = rowById.get(id);
+        const qty = Number(pushPreviewQuantities[id] ?? 0);
+        const maxQty = Number(row?.max_push_quantity ?? 0);
+        if (!Number.isFinite(qty) || qty <= 0) {
+          messageApi.warning(
+            t('app.kuaizhizao.salesOrder.pushQtyInvalid', { code: row?.material_code || id }),
+          );
+          return;
+        }
+        if (Number.isFinite(maxQty) && maxQty > 0 && qty > maxQty) {
+          messageApi.warning(
+            t('app.kuaizhizao.salesOrder.pushQtyExceedsRemaining', { code: row?.material_code || id }),
+          );
+          return;
+        }
+        if (needsLineWarehouse) {
+          const lineWh = pushPreviewLineWh[id];
+          if (lineWh == null || !(lineWh > 0)) {
+            messageApi.warning(
+              t('app.kuaizhizao.purchaseOrder.pushReceiptSelectLineWarehouse', {
+                material: row?.material_code || row?.material_name || id,
+              }),
+            );
+            return;
+          }
+          lineWarehouses[id] = lineWh;
+        }
+        quantities[id] = qty;
+      }
+    }
+
     const target = pushPreviewTarget;
     const kind = pushPreviewKind;
-    resetPushPreviewModal();
+
     if (kind === 'receipt_notice') {
-      await openPushNoticeQuantityModal(target, quantities);
+      setPushPreviewConfirming(true);
+      try {
+        const result = await pushPurchaseOrderToReceiptNotice(target.id!, {
+          selected_item_ids: selectedIds,
+          notice_quantities: quantities,
+          line_warehouses: lineWarehouses,
+        });
+        messageApi.success(
+          t('app.kuaizhizao.purchaseOrder.pushNoticeSuccess', {
+            code: result.notice_code || t('app.kuaizhizao.purchaseOrder.createdFallback'),
+          }),
+        );
+        resetPushPreviewModal();
+        invalidateStatistics();
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+        if (detailDrawerVisible && orderDetail?.id === target.id) {
+          getPurchaseOrder(target.id!).then(setOrderDetail);
+        }
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrder.pushNoticeFailed')));
+      } finally {
+        setPushPreviewConfirming(false);
+      }
       return;
     }
+
     if (kind === 'receipt') {
-      await openPushReceiptWarehouseModal(target, quantities);
+      setPushPreviewConfirming(true);
+      try {
+        let headerWarehouseId: number | undefined;
+        for (const id of selectedIds) {
+          const wh = lineWarehouses[id];
+          if (wh != null && wh > 0 && headerWarehouseId == null) {
+            headerWarehouseId = wh;
+          }
+        }
+        const result = await pushPurchaseOrderToReceipt(target.id!, quantities, undefined, {
+          warehouseId: headerWarehouseId,
+          lineWarehouses,
+        });
+        const receiptId = Number(result?.id);
+        if (!Number.isFinite(receiptId) || receiptId <= 0) {
+          messageApi.error(t('app.kuaizhizao.purchaseOrder.pushReceiptFailed'));
+          return;
+        }
+        messageApi.success(
+          t('app.kuaizhizao.purchaseOrder.pushReceiptSuccess', {
+            code: result.receipt_code || t('app.kuaizhizao.purchaseOrder.createdFallback'),
+          }),
+        );
+        resetPushPreviewModal();
+        invalidateStatistics();
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+        if (detailDrawerVisible && orderDetail?.id === target.id) {
+          getPurchaseOrder(target.id!).then(setOrderDetail);
+        }
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrder.pushReceiptFailed')));
+      } finally {
+        setPushPreviewConfirming(false);
+      }
       return;
     }
+
     if (kind === 'purchase_return') {
+      resetPushPreviewModal();
       await openPushReturnWarehouseModal(target, quantities);
       return;
     }
+    resetPushPreviewModal();
     setPushToInvoiceLoading(true);
     try {
       const result = await pushPurchaseOrderToInvoice(target.id!);
@@ -1207,12 +1280,12 @@ const PurchaseOrdersPage: React.FC = () => {
     invalidateMenuBadgeCounts,
     invalidateStatistics,
     messageApi,
-    openPushNoticeQuantityModal,
-    openPushReceiptWarehouseModal,
     openPushReturnWarehouseModal,
     orderDetail?.id,
     pushPreviewData,
     pushPreviewKind,
+    pushPreviewLineWh,
+    pushPreviewQuantities,
     pushPreviewSelectedItemIds,
     pushPreviewTarget,
     resetPushPreviewModal,
@@ -1246,133 +1319,6 @@ const PurchaseOrdersPage: React.FC = () => {
     },
     [loadPushPreview],
   );
-
-  // 确认下推入库
-  const handlePushToReceiptConfirm = async () => {
-    if (!pushToReceiptOrder?.id) return;
-    const items = (pushToReceiptOrder.items || []).filter(
-      (it: PurchaseOrderItem) => (it.outstanding_quantity ?? 0) > 0
-    );
-    let hasPositiveQty = false;
-    for (const it of items) {
-      if (it.id == null) continue;
-      const qty = pushToReceiptQuantities[it.id] ?? 0;
-      const max = Number(it.outstanding_quantity ?? 0);
-      if (qty <= 0) continue;
-      hasPositiveQty = true;
-      if (qty > max) {
-        messageApi.error(t('app.kuaizhizao.purchaseOrder.qtyExceedsUnreceived', { material: it.material_code || it.material_name, max }));
-        return;
-      }
-      const lineWh = pushToReceiptLineWh[it.id];
-      if (lineWh == null || !(lineWh > 0)) {
-        messageApi.error(t('app.kuaizhizao.purchaseOrder.pushReceiptSelectLineWarehouse', { material: it.material_code || it.material_name || '-' }));
-        return;
-      }
-    }
-    if (!hasPositiveQty) {
-      messageApi.warning(t('app.kuaizhizao.purchaseOrder.pushReceiptQtyRequired'));
-      return;
-    }
-    const batchNumbers: Record<number, string> = {};
-    const lineWhByPoItemId: Record<number, number> = {};
-    const lineLocByPoItemId: Record<number, number> = {};
-    const lineLocCodeByPoItemId: Record<number, string> = {};
-    let headerWarehouseId: number | undefined;
-    items.forEach((it: PurchaseOrderItem) => {
-      if (it.id == null) return;
-      const qty = pushToReceiptQuantities[it.id] ?? 0;
-      if (qty <= 0) return;
-      const lineWh = pushToReceiptLineWh[it.id];
-      if (lineWh == null || !(lineWh > 0)) return;
-      lineWhByPoItemId[it.id] = lineWh;
-      if (headerWarehouseId == null) headerWarehouseId = lineWh;
-      const locId = pushToReceiptLineLoc[it.id];
-      if (locId != null && locId > 0) {
-        lineLocByPoItemId[it.id] = locId;
-        const locCode = pushToReceiptLineLocCode[it.id];
-        if (locCode) lineLocCodeByPoItemId[it.id] = locCode;
-      }
-      if (pushToReceiptBatchNumbers[it.id]) {
-        batchNumbers[it.id] = pushToReceiptBatchNumbers[it.id];
-      }
-    });
-    setPushToReceiptLoading(true);
-    try {
-      const result = await pushPurchaseOrderToReceipt(
-        pushToReceiptOrder.id,
-        pushToReceiptQuantities,
-        Object.keys(batchNumbers).length > 0 ? batchNumbers : undefined,
-        {
-          warehouseId: headerWarehouseId,
-          lineWarehouses: lineWhByPoItemId,
-          lineLocationIds: lineLocByPoItemId,
-          lineLocationCodes: lineLocCodeByPoItemId,
-        },
-      );
-      const receiptId = Number(result?.id);
-      if (!Number.isFinite(receiptId) || receiptId <= 0) {
-        messageApi.error(t('app.kuaizhizao.purchaseOrder.pushReceiptFailed'));
-        return;
-      }
-      messageApi.success(t('app.kuaizhizao.purchaseOrder.pushReceiptSuccess', { code: result.receipt_code || t('app.kuaizhizao.purchaseOrder.createdFallback') }));
-      setPushToReceiptVisible(false);
-      setPushToReceiptOrder(null);
-      setPushToReceiptQuantities({});
-      setPushToReceiptBatchNumbers({});
-      setPushToReceiptWarehouseId(undefined);
-      setPushToReceiptWarehouseOptions([]);
-      setPushToReceiptLineWh({});
-      setPushToReceiptLineLoc({});
-      setPushToReceiptLineLocCode({});
-      setPushToReceiptLocOptionsByWh({});
-      invalidateStatistics();
-      invalidateMenuBadgeCounts();
-
-      actionRef.current?.reload();
-      if (detailDrawerVisible && orderDetail?.id === pushToReceiptOrder.id) {
-        getPurchaseOrder(pushToReceiptOrder.id).then(setOrderDetail);
-      }
-    } catch (error: any) {
-      messageApi.error(error?.response?.data?.detail || error.message || t('app.kuaizhizao.purchaseOrder.pushReceiptFailed'));
-    } finally {
-      setPushToReceiptLoading(false);
-    }
-  };
-
-  const handlePushToNoticeConfirm = async () => {
-    if (!pushToNoticeOrder?.id) return;
-    const items = (pushToNoticeOrder.items || []).filter((it: PurchaseOrderItem) => (it.outstanding_quantity ?? 0) > 0);
-    for (const it of items) {
-      if (it.id == null) continue;
-      const qty = pushToNoticeQuantities[it.id] ?? 0;
-      const max = Number(it.outstanding_quantity ?? 0);
-      if (qty <= 0) continue;
-      if (qty > max) {
-        messageApi.error(t('app.kuaizhizao.purchaseOrder.qtyExceedsNotice', { material: it.material_code || it.material_name, max }));
-        return;
-      }
-    }
-    setPushToNoticeLoading(true);
-    try {
-      const result = await pushPurchaseOrderToReceiptNotice(pushToNoticeOrder.id, pushToNoticeQuantities);
-      messageApi.success(t('app.kuaizhizao.purchaseOrder.pushNoticeSuccess', { code: result.notice_code || t('app.kuaizhizao.purchaseOrder.createdFallback') }));
-      setPushToNoticeVisible(false);
-      setPushToNoticeOrder(null);
-      setPushToNoticeQuantities({});
-      invalidateStatistics();
-      invalidateMenuBadgeCounts();
-
-      actionRef.current?.reload();
-      if (detailDrawerVisible && orderDetail?.id === pushToNoticeOrder.id) {
-        getPurchaseOrder(pushToNoticeOrder.id).then(setOrderDetail);
-      }
-    } catch (error: any) {
-      messageApi.error(error?.response?.data?.detail || error.message || t('app.kuaizhizao.purchaseOrder.pushNoticeFailed'));
-    } finally {
-      setPushToNoticeLoading(false);
-    }
-  };
 
   const handlePushToReturnConfirm = async () => {
     if (!pushToReturnOrder?.id) return;
@@ -1421,10 +1367,8 @@ const PurchaseOrdersPage: React.FC = () => {
 
   const selectedOrderForToolbar = useMemo(() => {
     if (selectedRowKeys.length !== 1) return null;
-    const id = Number(selectedRowKeys[0]);
-    if (!Number.isFinite(id) || id <= 0) return null;
-    return tableRowsRef.current.find((row) => row.id === id) ?? null;
-  }, [selectedRowKeys]);
+    return tableOrders.find((row) => String(row.id) === String(selectedRowKeys[0])) ?? null;
+  }, [selectedRowKeys, tableOrders]);
 
   const buildToolbarPushMenuItems = useCallback((record: PurchaseOrder) => {
       const capReason = (cap?: { allowed?: boolean; reason?: string | null }) =>
@@ -3060,9 +3004,7 @@ const PurchaseOrdersPage: React.FC = () => {
           enableRowSelection
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
-          onTableDataChange={(rows) => {
-            tableRowsRef.current = rows;
-          }}
+          onTableDataChange={setTableOrders}
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.purchaseOrder.confirmBatchDelete', { count })}
@@ -3202,7 +3144,6 @@ const PurchaseOrdersPage: React.FC = () => {
                   : apiParams.created_start_date;
               }
               const response = await listPurchaseOrders(apiParams as Parameters<typeof listPurchaseOrders>[0]);
-              tableRowsRef.current = response.data || [];
               const enriched = await enrichPurchaseOrderRecordsWithCustomFields(response.data || []);
               return {
                 data: enriched,
@@ -3429,12 +3370,13 @@ const PurchaseOrdersPage: React.FC = () => {
       </Modal>
 
       <Modal
-        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
+        title={pushPreviewModalTitle}
         open={pushPreviewOpen}
         destroyOnClose
-        width={1100}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        styles={{ body: { maxHeight: MODAL_CONFIG.BODY_MAX_HEIGHT, overflow: 'auto' } }}
         onCancel={resetPushPreviewModal}
-        okText={t('common.confirm')}
+        okText={pushPreviewConfirmLabel}
         cancelText={t('common.cancel')}
         confirmLoading={pushPreviewConfirming}
         onOk={() => void handlePushPreviewConfirm()}
@@ -3468,20 +3410,127 @@ const PurchaseOrdersPage: React.FC = () => {
                 dataSource={pushPreviewData.items}
                 rowKey={(row) => String(row.item_id)}
                 pagination={false}
-                scroll={{ x: 960 }}
-                rowSelection={{
-                  selectedRowKeys: pushPreviewSelectedItemIds.map(String),
-                  onChange: (keys) => setPushPreviewSelectedItemIds(keys.map((k) => Number(k))),
-                  getCheckboxProps: (row) => ({
-                    disabled: Number(row.max_push_quantity ?? 0) <= 0,
-                  }),
-                }}
+                tableLayout="fixed"
                 columns={[
-                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  {
+                    title: t('common.select'),
+                    dataIndex: 'item_id',
+                    key: 'select',
+                    width: 64,
+                    render: (_: unknown, row: DocumentPushPreview['items'][number]) => {
+                      const itemId = Number(row?.item_id);
+                      if (!Number.isFinite(itemId) || itemId <= 0) return null;
+                      const maxQty = Number(row?.max_push_quantity ?? 0);
+                      const disabled = !Number.isFinite(maxQty) || maxQty <= 0;
+                      return (
+                        <Switch
+                          size="small"
+                          disabled={disabled}
+                          checked={pushPreviewSelectedItemIds.includes(itemId)}
+                          onChange={(checked) => {
+                            setPushPreviewSelectedItemIds((prev) =>
+                              checked ? Array.from(new Set([...prev, itemId])) : prev.filter((id) => id !== itemId),
+                            );
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 140, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 200, ellipsis: true },
+                  { title: pushPreviewQtyColumnTitles.quantity, dataIndex: 'quantity', width: 90, align: 'right' },
+                  { title: pushPreviewQtyColumnTitles.pushed, dataIndex: 'pushed_quantity', width: 90, align: 'right' },
+                  { title: pushPreviewQtyColumnTitles.pushable, dataIndex: 'max_push_quantity', width: 90, align: 'right' },
+                  ...(pushPreviewKind === 'receipt_notice' || pushPreviewKind === 'receipt'
+                    ? [
+                        {
+                          title: (
+                            <>
+                              {t('app.kuaizhizao.purchaseOrder.pushReceiptWarehouse')}
+                              <Typography.Text type="danger"> *</Typography.Text>
+                            </>
+                          ),
+                          key: 'warehouse_id',
+                          width: 200,
+                          render: (_: unknown, row: DocumentPushPreview['items'][number]) => {
+                            const itemId = Number(row?.item_id);
+                            if (!Number.isFinite(itemId) || itemId <= 0) return null;
+                            const selected = pushPreviewSelectedItemIds.includes(itemId);
+                            return (
+                              <Select
+                                style={{ width: '100%', minWidth: 140 }}
+                                placeholder={t('app.kuaizhizao.purchaseOrder.pushReceiptSelectWarehouse')}
+                                showSearch
+                                optionFilterProp="label"
+                                disabled={!selected}
+                                value={pushPreviewLineWh[itemId]}
+                                options={pushPreviewWarehouseOptions}
+                                onChange={(nv) => {
+                                  setPushPreviewLineWh((prev) => ({ ...prev, [itemId]: Number(nv) }));
+                                }}
+                              />
+                            );
+                          },
+                        },
+                        {
+                          title: t('app.kuaizhizao.salesOrder.colPushQty'),
+                          key: 'push_qty',
+                          width: 120,
+                          align: 'right' as const,
+                          render: (_: unknown, row: DocumentPushPreview['items'][number]) => {
+                            const itemId = Number(row?.item_id);
+                            if (!Number.isFinite(itemId) || itemId <= 0) return null;
+                            const maxQty = Number(row?.max_push_quantity ?? 0);
+                            const selected = pushPreviewSelectedItemIds.includes(itemId);
+                            return (
+                              <InputNumber
+                                min={0}
+                                max={maxQty > 0 ? maxQty : undefined}
+                                disabled={!selected || maxQty <= 0}
+                                value={pushPreviewQuantities[itemId] ?? 0}
+                                onChange={(v) => {
+                                  setPushPreviewQuantities((prev) => ({
+                                    ...prev,
+                                    [itemId]: Number(v) || 0,
+                                  }));
+                                }}
+                                style={{ width: 100 }}
+                              />
+                            );
+                          },
+                        },
+                      ]
+                    : pushPreviewKind === 'purchase_return'
+                      ? [
+                          {
+                            title: t('app.kuaizhizao.salesOrder.colPushQty'),
+                            key: 'push_qty',
+                            width: 120,
+                            align: 'right' as const,
+                            render: (_: unknown, row: DocumentPushPreview['items'][number]) => {
+                              const itemId = Number(row?.item_id);
+                              if (!Number.isFinite(itemId) || itemId <= 0) return null;
+                              const maxQty = Number(row?.max_push_quantity ?? 0);
+                              const selected = pushPreviewSelectedItemIds.includes(itemId);
+                              return (
+                                <InputNumber
+                                  min={0}
+                                  max={maxQty > 0 ? maxQty : undefined}
+                                  disabled={!selected || maxQty <= 0}
+                                  value={pushPreviewQuantities[itemId] ?? 0}
+                                  onChange={(v) => {
+                                    setPushPreviewQuantities((prev) => ({
+                                      ...prev,
+                                      [itemId]: Number(v) || 0,
+                                    }));
+                                  }}
+                                  style={{ width: 100 }}
+                                />
+                              );
+                            },
+                          },
+                        ]
+                      : []),
                 ]}
               />
             ) : pushPreviewKind === 'invoice' && pushPreviewData.items?.length > 0 ? (
@@ -3648,28 +3697,6 @@ const PurchaseOrdersPage: React.FC = () => {
                       }
                     >
                       {t('app.kuaizhizao.purchaseOrder.createChange')}
-                    </Button>
-                  ),
-                },
-                {
-                  key: 'expedite',
-                  visible: orderDetail.status === 'AUDITED' || orderDetail.status === 'CONFIRMED' || orderDetail.status === '已审核' || orderDetail.status === '已确认',
-                  render: () => (
-                    <Button 
-                      type="link" 
-                      size="small" 
-                      icon={<ClockCircleOutlined />} 
-                      style={{ color: '#faad14' }}
-                      onClick={async () => {
-                        try {
-                          await expeditePurchaseOrder(orderDetail.id!);
-                          messageApi.success(t('app.kuaizhizao.purchaseOrder.expediteSuccess'));
-                        } catch (err: any) {
-                          messageApi.error(err.message || t('app.kuaizhizao.purchaseOrder.expediteFailed'));
-                        }
-                      }}
-                    >
-                      {t('app.kuaizhizao.purchaseOrder.expedite')}
                     </Button>
                   ),
                 },
@@ -4052,264 +4079,6 @@ const PurchaseOrdersPage: React.FC = () => {
         onConfirm={handleSyncConfirm}
         title={t('app.kuaizhizao.purchaseOrder.syncFromDatasetTitle')}
       />
-
-      {/* 下推入库 Modal：标准 Modal，采购数量可编辑 */}
-      <Modal
-        title={pushToReceiptAction.label}
-        open={pushToReceiptVisible}
-        onCancel={() => {
-          setPushToReceiptVisible(false);
-          setPushToReceiptOrder(null);
-          setPushToReceiptQuantities({});
-          setPushToReceiptBatchNumbers({});
-          setPushToReceiptWarehouseId(undefined);
-          setPushToReceiptWarehouseOptions([]);
-          setPushToReceiptLineWh({});
-          setPushToReceiptLineLoc({});
-          setPushToReceiptLineLocCode({});
-          setPushToReceiptLocOptionsByWh({});
-        }}
-        onOk={handlePushToReceiptConfirm}
-        confirmLoading={pushToReceiptLoading}
-        okText={t('app.kuaizhizao.purchaseOrder.confirmPush')}
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
-        destroyOnHidden
-      >
-        {pushToReceiptOrder && (
-          <div>
-            <p style={{ marginBottom: 16 }}>
-              {t('app.kuaizhizao.purchaseOrder.pushReceiptIntro', { code: pushToReceiptOrder.order_code })}
-            </p>
-            <Row gutter={16} style={{ marginBottom: 16 }}>
-              <Col span={12}>
-                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
-                  {t('app.kuaizhizao.purchaseOrder.pushReceiptDefaultWarehouse')}
-                </Typography.Text>
-                <Select
-                  style={{ width: '100%' }}
-                  placeholder={t('app.kuaizhizao.purchaseOrder.pushReceiptBatchWarehousePlaceholder')}
-                  showSearch
-                  allowClear
-                  optionFilterProp="label"
-                  value={pushToReceiptWarehouseId}
-                  options={pushToReceiptWarehouseOptions}
-                  onChange={(value) => {
-                    setPushToReceiptWarehouseId(value ?? undefined);
-                    if (value == null) return;
-                    const lineIds = (pushToReceiptOrder.items || [])
-                      .filter((it: PurchaseOrderItem) => (it.outstanding_quantity ?? 0) > 0 && it.id != null)
-                      .map((it) => it.id!);
-                    setPushToReceiptLineWh((prev) => {
-                      const next = { ...prev };
-                      lineIds.forEach((id) => {
-                        next[id] = value;
-                      });
-                      return next;
-                    });
-                    setPushToReceiptLineLoc((prev) => {
-                      const next = { ...prev };
-                      lineIds.forEach((id) => {
-                        delete next[id];
-                      });
-                      return next;
-                    });
-                    setPushToReceiptLineLocCode((prev) => {
-                      const next = { ...prev };
-                      lineIds.forEach((id) => {
-                        delete next[id];
-                      });
-                      return next;
-                    });
-                    void fetchStorageLocationsForWarehouse(value).then((opts) =>
-                      setPushToReceiptLocOptionsByWh((prev) => ({ ...prev, [value]: opts })),
-                    );
-                  }}
-                />
-              </Col>
-            </Row>
-            <Table
-              size="small"
-              dataSource={(pushToReceiptOrder.items || []).filter(
-                (it: PurchaseOrderItem) => (it.outstanding_quantity ?? 0) > 0
-              )}
-              rowKey="id"
-              pagination={false}
-              scroll={{ x: 1200 }}
-              columns={[
-                { title: t('app.kuaizhizao.purchaseOrder.col.materialCode'), dataIndex: 'material_code', width: 110 },
-                { title: t('app.kuaizhizao.purchaseOrder.col.materialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
-                { title: t('app.kuaizhizao.purchaseOrder.col.orderedQty'), dataIndex: 'ordered_quantity', width: 90, align: 'right' },
-                { title: t('app.kuaizhizao.purchaseOrder.col.receivedQty'), dataIndex: 'received_quantity', width: 80, align: 'right' },
-                { title: t('app.kuaizhizao.purchaseOrder.col.outstandingQty'), dataIndex: 'outstanding_quantity', width: 80, align: 'right' },
-                {
-                  title: (
-                    <>
-                      {t('app.kuaizhizao.purchaseOrder.pushReceiptWarehouse')}
-                      <Typography.Text type="danger"> *</Typography.Text>
-                    </>
-                  ),
-                  width: 150,
-                  render: (_: unknown, record: PurchaseOrderItem) =>
-                    record.id != null ? (
-                      <Select
-                        style={{ width: '100%', minWidth: 130 }}
-                        placeholder={t('app.kuaizhizao.purchaseOrder.pushReceiptSelectWarehouse')}
-                        showSearch
-                        optionFilterProp="label"
-                        value={pushToReceiptLineWh[record.id]}
-                        options={pushToReceiptWarehouseOptions}
-                        onChange={(nv) => {
-                          const rid = record.id!;
-                          setPushToReceiptLineWh((prev) => ({ ...prev, [rid]: nv }));
-                          setPushToReceiptLineLoc((prev) => {
-                            const next = { ...prev };
-                            delete next[rid];
-                            return next;
-                          });
-                          setPushToReceiptLineLocCode((prev) => {
-                            const next = { ...prev };
-                            delete next[rid];
-                            return next;
-                          });
-                          void fetchStorageLocationsForWarehouse(nv).then((opts) =>
-                            setPushToReceiptLocOptionsByWh((prev) => ({ ...prev, [nv]: opts })),
-                          );
-                        }}
-                      />
-                    ) : null,
-                },
-                {
-                  title: t('app.kuaizhizao.purchaseOrder.pushReceiptLocation'),
-                  width: 150,
-                  render: (_: unknown, record: PurchaseOrderItem) => {
-                    if (record.id == null) return null;
-                    const rid = record.id;
-                    const wh = pushToReceiptLineWh[rid];
-                    const locOpts = wh != null ? pushToReceiptLocOptionsByWh[wh] ?? [] : [];
-                    return (
-                      <Select
-                        style={{ width: '100%', minWidth: 130 }}
-                        placeholder={
-                          wh != null
-                            ? t('app.kuaizhizao.purchaseOrder.pushReceiptSelectLocation')
-                            : t('app.kuaizhizao.purchaseOrder.pushReceiptSelectWarehouseFirst')
-                        }
-                        showSearch
-                        allowClear
-                        optionFilterProp="label"
-                        value={pushToReceiptLineLoc[rid]}
-                        options={locOpts}
-                        disabled={wh == null}
-                        onDropdownVisibleChange={(open) => {
-                          if (open && wh != null && !pushToReceiptLocOptionsByWh[wh]?.length) {
-                            void fetchStorageLocationsForWarehouse(wh).then((opts) =>
-                              setPushToReceiptLocOptionsByWh((prev) => ({ ...prev, [wh]: opts })),
-                            );
-                          }
-                        }}
-                        onChange={(v) => {
-                          setPushToReceiptLineLoc((prev) => ({ ...prev, [rid]: v ?? undefined }));
-                          const o = locOpts.find((x) => x.value === v);
-                          setPushToReceiptLineLocCode((prev) => {
-                            const next = { ...prev };
-                            if (v == null) delete next[rid];
-                            else next[rid] = o?.code ?? '';
-                            return next;
-                          });
-                        }}
-                      />
-                    );
-                  },
-                },
-                {
-                  title: t('app.kuaizhizao.purchaseOrder.col.batchNo'),
-                  width: 120,
-                  render: (_: any, record: PurchaseOrderItem) =>
-                    record.id != null ? (pushToReceiptBatchNumbers[record.id] ?? (pushToReceiptPreviewLoading ? t('app.kuaizhizao.purchaseOrder.loading') : '-')) : '-',
-                },
-                {
-                  title: t('app.kuaizhizao.purchaseOrder.col.receiptQty'),
-                  width: 110,
-                  align: 'right',
-                  render: (_: any, record: PurchaseOrderItem) => (record.id != null ? (
-                    <InputNumber
-                      min={0}
-                      max={Number(record.outstanding_quantity ?? 0)}
-                      value={pushToReceiptQuantities[record.id] ?? 0}
-                      onChange={(v) =>
-                        setPushToReceiptQuantities((prev) => ({
-                          ...prev,
-                          [record.id!]: Number(v) || 0,
-                        }))
-                      }
-                      style={{ width: 88 }}
-                    />
-                  ) : null),
-                },
-              ]}
-            />
-          </div>
-        )}
-      </Modal>
-
-      {/* 下推收货通知 Modal */}
-      <Modal
-        title={pushToReceiptNoticeAction.label}
-        open={pushToNoticeVisible}
-        onCancel={() => {
-          setPushToNoticeVisible(false);
-          setPushToNoticeOrder(null);
-          setPushToNoticeQuantities({});
-        }}
-        onOk={handlePushToNoticeConfirm}
-        confirmLoading={pushToNoticeLoading}
-        okText={t('app.kuaizhizao.purchaseOrder.confirmPush')}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        destroyOnHidden
-      >
-        {pushToNoticeOrder && (
-          <div>
-            <p style={{ marginBottom: 16 }}>
-              {t('app.kuaizhizao.purchaseOrder.pushNoticeIntro', { code: pushToNoticeOrder.order_code })}
-            </p>
-            <Table
-              size="small"
-              dataSource={(pushToNoticeOrder.items || []).filter(
-                (it: PurchaseOrderItem) => (it.outstanding_quantity ?? 0) > 0
-              )}
-              rowKey="id"
-              pagination={false}
-              scroll={{ x: 700 }}
-              columns={[
-                { title: t('app.kuaizhizao.purchaseOrder.col.materialCode'), dataIndex: 'material_code', width: 120 },
-                { title: t('app.kuaizhizao.purchaseOrder.col.materialName'), dataIndex: 'material_name', width: 150 },
-                { title: t('app.kuaizhizao.purchaseOrder.col.orderedQty'), dataIndex: 'ordered_quantity', width: 100, align: 'right' },
-                { title: t('app.kuaizhizao.purchaseOrder.col.receivedQty'), dataIndex: 'received_quantity', width: 90, align: 'right' },
-                { title: t('app.kuaizhizao.purchaseOrder.col.outstandingQty'), dataIndex: 'outstanding_quantity', width: 90, align: 'right' },
-                {
-                  title: t('app.kuaizhizao.purchaseOrder.col.noticeQty'),
-                  width: 140,
-                  align: 'right',
-                  render: (_: any, record: PurchaseOrderItem) => (record.id != null ? (
-                    <InputNumber
-                      min={0}
-                      max={Number(record.outstanding_quantity ?? 0)}
-                      value={pushToNoticeQuantities[record.id] ?? 0}
-                      onChange={(v) =>
-                        setPushToNoticeQuantities((prev) => ({
-                          ...prev,
-                          [record.id!]: Number(v) || 0,
-                        }))
-                      }
-                      style={{ width: 100 }}
-                    />
-                  ) : null),
-                },
-              ]}
-            />
-          </div>
-        )}
-      </Modal>
 
       <Modal
         title={pushToPurchaseReturnAction.label}

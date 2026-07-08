@@ -87,7 +87,7 @@ async def create_spot_check(
             tenant_id,
             data,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
         )
         lines = await svc.spot_check_service._load_lines(tenant_id, header.id)
         return _spot_check_response(header, lines)
@@ -204,7 +204,7 @@ async def create_route_patrol(
             tenant_id,
             data,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
         )
         lines = await svc.route_patrol_service._load_lines(tenant_id, header.id)
         return _route_patrol_response(header, lines)
@@ -309,7 +309,7 @@ async def create_scrap_application(
             tenant_id,
             data,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
         )
         return ScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -414,7 +414,7 @@ async def approve_scrap_application(
             tenant_id,
             row_id,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         return ScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -439,7 +439,7 @@ async def reject_scrap_application(
             row_id,
             body.reject_reason,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         return ScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -478,7 +478,7 @@ async def create_transfer_application(
             tenant_id,
             data,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
         )
         return TransferApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -583,7 +583,7 @@ async def approve_transfer_application(
             tenant_id,
             row_id,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         return TransferApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -608,7 +608,7 @@ async def reject_transfer_application(
             row_id,
             body.reject_reason,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         return TransferApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:

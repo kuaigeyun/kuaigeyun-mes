@@ -241,6 +241,13 @@ class StationService(WorkOrderService):
                 op.completed_quantity = target_qty
                 op.qualified_quantity = target_qty
                 op.unqualified_quantity = Decimal("0")
+            else:
+                plan_qty = Decimal(str(work_order.quantity or 0))
+                qualified = Decimal(str(op.qualified_quantity or 0))
+                if plan_qty > 0 and qualified < plan_qty:
+                    raise BusinessLogicError(
+                        f"合格数量（{qualified}）未达计划数量（{plan_qty}），不能结束工序"
+                    )
             op.status = "completed"
             op.actual_end_date = datetime.now()
             op.updated_by = completed_by

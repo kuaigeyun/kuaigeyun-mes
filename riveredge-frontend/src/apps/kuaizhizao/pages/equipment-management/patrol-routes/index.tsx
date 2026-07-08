@@ -58,6 +58,9 @@ const PatrolRoutesPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<PatrolRoute | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
+    undefined,
+  );
   const [equipmentOptions, setEquipmentOptions] = useState<{ label: string; value: number }[]>([]);
   const [schemeOptions, setSchemeOptions] = useState<{ label: string; value: number }[]>([]);
 
@@ -83,10 +86,9 @@ const PatrolRoutesPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrent(null);
+    setFormInitialValues({ is_active: true, steps: [{ sort_order: 0 }] });
     setModalVisible(true);
     void loadOptions();
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ is_active: true, steps: [{ sort_order: 0 }] });
   };
   useNewShortcut(handleCreate);
 
@@ -95,9 +97,7 @@ const PatrolRoutesPage: React.FC = () => {
     const detail = await patrolRoutesApi.get(record.id);
     setIsEdit(true);
     setCurrent(detail);
-    setModalVisible(true);
-    void loadOptions();
-    formRef.current?.setFieldsValue({
+    setFormInitialValues({
       ...detail,
       steps: (detail.steps ?? []).map((s: RouteStep, i: number) => ({
         equipment_id: s.equipment_id,
@@ -105,6 +105,8 @@ const PatrolRoutesPage: React.FC = () => {
         sort_order: s.sort_order ?? i,
       })),
     });
+    setModalVisible(true);
+    void loadOptions();
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -293,11 +295,15 @@ const PatrolRoutesPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
         onFinish={handleSubmit}
         isEdit={isEdit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        initialValues={formInitialValues}
         grid={false}
       >
         <Row gutter={16}>

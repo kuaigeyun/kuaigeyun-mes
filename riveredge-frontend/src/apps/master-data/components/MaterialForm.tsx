@@ -34,6 +34,7 @@ import {
   type CustomerCodeMapping,
   type SupplierCodeMapping,
   type MaterialUnit,
+  type MaterialUnits,
   type MaterialCodeMapping,
 } from '../types/material';
 import type { Customer } from '../types/supply-chain';
@@ -1265,6 +1266,33 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         .material-form-modal .ant-table-wrapper {
           width: 100%;
         }
+
+        .material-form-modal .material-units-table .ant-table-cell {
+          vertical-align: middle;
+        }
+
+        .material-form-modal .material-units-conversion-row.ant-space-compact {
+          width: 100%;
+        }
+
+        .material-form-modal .material-units-conversion-row .material-units-conversion-sep,
+        .material-form-modal .material-units-conversion-row .material-units-conversion-preview {
+          text-align: center;
+          cursor: default;
+          color: rgba(0, 0, 0, 0.65);
+          background-color: rgba(0, 0, 0, 0.02);
+        }
+
+        .material-form-modal .material-units-conversion-row .material-units-conversion-sep {
+          padding-inline: 0;
+        }
+
+        .material-form-modal .material-units-table .material-units-action-cell {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 24px;
+        }
         
         /* Modal 内的 Alert - 确保间距合理 */
         .material-form-modal .ant-alert {
@@ -1335,7 +1363,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
-          destroyInactiveTabPane
+          destroyInactiveTabPane={false}
           items={[
             {
               key: 'basic',
@@ -1564,24 +1592,31 @@ const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = () => {
 };
 
 /**
- * 多单位管理组件（须在 ProForm 内渲染，通过 Form 上下文订阅字段）
+ * 多单位编辑区（Form.Item 受控子组件，value/onChange 为唯一数据源）
  */
-const MaterialUnitsManager: React.FC = () => {
+interface MaterialUnitsEditorProps {
+  value?: MaterialUnits;
+  onChange?: (value: MaterialUnits) => void;
+}
+
+const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChange }) => {
   const { t } = useTranslation();
   const form = Form.useFormInstance();
-  const [units, setUnits] = useState<MaterialUnit[]>([]);
-  const [scenarios, setScenarios] = useState<{
-    purchase?: string;
-    sale?: string;
-    production?: string;
-    inventory?: string;
-  }>({});
-  const [baseUnit, setBaseUnit] = useState<string>('');
+  const units = value?.units ?? [];
+  const scenarios = value?.scenarios ?? {};
   const [unitOptions, setUnitOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [loadingUnits, setLoadingUnits] = useState(false);
   const [unitValueToLabel, setUnitValueToLabel] = useState<Record<string, string>>({});
 
-  // 加载数据字典单位选项
+  const baseUnit = (Form.useWatch('baseUnit', form) ?? '') as string;
+
+  const commitUnits = (
+    nextUnits: MaterialUnit[],
+    nextScenarios: NonNullable<MaterialUnits['scenarios']> = scenarios,
+  ) => {
+    onChange?.({ units: nextUnits, scenarios: nextScenarios });
+  };
+
   useEffect(() => {
     const loadUnitOptions = async () => {
       try {
@@ -1595,8 +1630,7 @@ const MaterialUnitsManager: React.FC = () => {
             value: item.value,
           }));
         setUnitOptions(options);
-        
-        // 创建value到label的映射
+
         const valueToLabelMap: Record<string, string> = {};
         items.forEach(item => {
           valueToLabelMap[item.value] = item.label;
@@ -1612,81 +1646,43 @@ const MaterialUnitsManager: React.FC = () => {
     loadUnitOptions();
   }, []);
 
-  // 订阅表单字段变化（须用 Form 上下文实例，formRef.current 在 Modal 重建时可能为 null）
-  const watchedUnits = Form.useWatch('units', form);
-  const watchedBaseUnit = Form.useWatch('baseUnit', form);
-
-  useEffect(() => {
-    if (watchedUnits && (watchedUnits.units || watchedUnits.scenarios)) {
-      setUnits(watchedUnits.units || []);
-      setScenarios(watchedUnits.scenarios || {});
-    } else if (watchedUnits == null) {
-      setUnits([]);
-      setScenarios({});
-    }
-  }, [watchedUnits]);
-
-  useEffect(() => {
-    if (watchedBaseUnit && watchedBaseUnit !== baseUnit) {
-      setBaseUnit(watchedBaseUnit);
-    }
-  }, [watchedBaseUnit, baseUnit]);
-
-  // 添加辅助单位
   const handleAddUnit = () => {
-    const newUnit: MaterialUnit = {
-      unit: '',
-      numerator: 1,
-      denominator: 1,
-      scenarios: [],
-    };
-    setUnits([...units, newUnit]);
+    commitUnits([
+      ...units,
+      { unit: '', numerator: 1, denominator: 1, scenarios: [] },
+    ]);
   };
 
-  // 删除辅助单位
   const handleDeleteUnit = (index: number) => {
-    const newUnits = units.filter((_, i) => i !== index);
-    setUnits(newUnits);
-    updateFormValue(newUnits, scenarios);
+    commitUnits(units.filter((_, i) => i !== index));
   };
 
-  // 更新单位信息
-  const handleUnitChange = (index: number, field: keyof MaterialUnit, value: any) => {
-    const newUnits = [...units];
-    newUnits[index] = { ...newUnits[index], [field]: value };
-    setUnits(newUnits);
-    updateFormValue(newUnits, scenarios);
+  const handleUnitChange = (index: number, field: keyof MaterialUnit, fieldValue: unknown) => {
+    const nextUnits = [...units];
+    nextUnits[index] = { ...nextUnits[index], [field]: fieldValue };
+    commitUnits(nextUnits);
   };
 
-  // 更新场景映射
   const handleScenarioChange = (scenario: string, unit: string) => {
-    const newScenarios = { ...scenarios, [scenario]: unit };
-    setScenarios(newScenarios);
-    updateFormValue(units, newScenarios);
-  };
-
-  // 更新表单值
-  const updateFormValue = (newUnits: MaterialUnit[], newScenarios: typeof scenarios) => {
-    form.setFieldsValue({
-      units: {
-        units: newUnits,
-        scenarios: newScenarios,
-      },
+    onChange?.({
+      units,
+      scenarios: { ...scenarios, [scenario]: unit },
     });
   };
 
-  // 所有可用单位（基础单位 + 辅助单位），用于场景单位映射
   const allUnits = baseUnit ? [baseUnit, ...units.map(u => u.unit).filter(Boolean)] : [];
 
   const columns = [
     {
       title: t('app.master-data.materialForm.unitName'),
       dataIndex: 'unit',
-      render: (_: any, record: MaterialUnit, index: number) => (
+      width: 132,
+      render: (_: unknown, record: MaterialUnit, index: number) => (
         <Select
+          size="small"
           value={record.unit}
           placeholder={t('app.master-data.materialForm.unitPlaceholder')}
-          onChange={(value: string) => handleUnitChange(index, 'unit', value)}
+          onChange={(unitValue: string) => handleUnitChange(index, 'unit', unitValue)}
           style={{ width: '100%' }}
           showSearch
           allowClear
@@ -1701,60 +1697,76 @@ const MaterialUnitsManager: React.FC = () => {
     {
       title: t('app.master-data.materialForm.conversionRelation'),
       dataIndex: 'conversion',
-      render: (_: any, record: MaterialUnit, index: number) => {
+      width: 360,
+      render: (_: unknown, record: MaterialUnit, index: number) => {
         const numerator = record.numerator || 1;
         const denominator = record.denominator || 1;
         const conversionRate = numerator / denominator;
         const isInteger = Number.isInteger(conversionRate);
-        
+        const previewText = baseUnit
+          ? `= ${isInteger ? conversionRate : `${numerator}/${denominator}`} ${unitValueToLabel[baseUnit] || baseUnit}`
+          : '';
+
         return (
-          <div>
-            <Input.Group compact style={{ marginBottom: 4 }}>
-              <Input
-                style={{ width: '28%' }}
-                type="number"
-                value={numerator}
-                placeholder={t('app.master-data.materialForm.numerator')}
-                onChange={(e) => {
-                  const num = parseInt(e.target.value) || 1;
-                  handleUnitChange(index, 'numerator', num);
-                }}
-                min={1}
-                step={1}
-              />
-              <span style={{ width: '8%', display: 'inline-block', lineHeight: '32px', textAlign: 'center', background: '#f5f5f5' }}>
-                /
-              </span>
-              <Input
-                style={{ width: '28%' }}
-                type="number"
-                value={denominator}
-                placeholder={t('app.master-data.materialForm.denominator')}
-                onChange={(e) => {
-                  const den = parseInt(e.target.value) || 1;
-                  handleUnitChange(index, 'denominator', den);
-                }}
-                min={1}
-                step={1}
-              />
-              <span style={{ width: '36%', display: 'inline-block', lineHeight: '32px', textAlign: 'center', background: '#f5f5f5', fontSize: '12px' }}>
-                {baseUnit ? ` = ${isInteger ? conversionRate : `${numerator}/${denominator}`} ${unitValueToLabel[baseUnit] || baseUnit}` : ''}
-              </span>
-            </Input.Group>
-          </div>
+          <Space.Compact block className="material-units-conversion-row">
+            <Input
+              size="small"
+              style={{ width: '24%' }}
+              type="number"
+              value={numerator}
+              placeholder={t('app.master-data.materialForm.numerator')}
+              onChange={(e) => {
+                const num = parseInt(e.target.value, 10) || 1;
+                handleUnitChange(index, 'numerator', num);
+              }}
+              min={1}
+              step={1}
+            />
+            <Input
+              size="small"
+              className="material-units-conversion-sep"
+              style={{ width: '8%' }}
+              value="/"
+              readOnly
+              tabIndex={-1}
+            />
+            <Input
+              size="small"
+              style={{ width: '24%' }}
+              type="number"
+              value={denominator}
+              placeholder={t('app.master-data.materialForm.denominator')}
+              onChange={(e) => {
+                const den = parseInt(e.target.value, 10) || 1;
+                handleUnitChange(index, 'denominator', den);
+              }}
+              min={1}
+              step={1}
+            />
+            <Input
+              size="small"
+              className="material-units-conversion-preview"
+              style={{ width: '44%' }}
+              value={previewText}
+              readOnly
+              tabIndex={-1}
+            />
+          </Space.Compact>
         );
       },
     },
     {
       title: t('app.master-data.materialForm.useScenario'),
       dataIndex: 'scenarios',
-      render: (_: any, record: MaterialUnit, index: number) => (
+      render: (_: unknown, record: MaterialUnit, index: number) => (
         <Select
+          size="small"
           mode="multiple"
           value={record.scenarios || []}
-          onChange={(value: string[]) => handleUnitChange(index, 'scenarios', value)}
+          onChange={(scenarioValues: string[]) => handleUnitChange(index, 'scenarios', scenarioValues)}
           placeholder={t('app.master-data.materialForm.useScenarioPlaceholder')}
           style={{ width: '100%' }}
+          maxTagCount="responsive"
           options={[
             { label: t('app.master-data.materialForm.purchase'), value: 'purchase' },
             { label: t('app.master-data.materialForm.sale'), value: 'sale' },
@@ -1766,15 +1778,20 @@ const MaterialUnitsManager: React.FC = () => {
     },
     {
       title: t('app.master-data.materialForm.action'),
-      render: (_: any, __: MaterialUnit, index: number) => (
-        <Button
-          type="link"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={() => handleDeleteUnit(index)}
-        >
-          {t('app.master-data.materialForm.delete')}
-        </Button>
+      width: 88,
+      align: 'center' as const,
+      render: (_: unknown, __: MaterialUnit, index: number) => (
+        <div className="material-units-action-cell">
+          <Button
+            type="link"
+            size="small"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleDeleteUnit(index)}
+          >
+            {t('app.master-data.materialForm.delete')}
+          </Button>
+        </div>
       ),
     },
   ];
@@ -1784,19 +1801,20 @@ const MaterialUnitsManager: React.FC = () => {
       <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ fontWeight: 500 }}>{t('app.master-data.materialForm.multiUnit')}</div>
         {baseUnit && (
-          <div style={{ 
-            padding: '4px 12px', 
-            background: '#e6f7ff', 
-            borderRadius: '4px', 
+          <div style={{
+            padding: '4px 12px',
+            background: '#e6f7ff',
+            borderRadius: '4px',
             border: '1px solid #91d5ff',
             fontSize: '12px',
-            color: '#1890ff'
+            color: '#1890ff',
           }}>
             {t('app.master-data.materialForm.baseUnitColon')}<strong>{unitValueToLabel[baseUnit] || baseUnit}</strong>
           </div>
         )}
       </div>
       <Table
+        className="material-units-table"
         columns={columns}
         dataSource={units}
         rowKey={(_, index) => `unit-${index}`}
@@ -1825,13 +1843,13 @@ const MaterialUnitsManager: React.FC = () => {
               <div style={{ marginBottom: 8 }}>{t('app.master-data.materialForm.purchaseUnit')}</div>
               <Select
                 value={scenarios.purchase}
-                onChange={(value: string) => handleScenarioChange('purchase', value)}
+                onChange={(unitValue: string) => handleScenarioChange('purchase', unitValue)}
                 placeholder={t('app.master-data.materialForm.selectPurchaseUnit')}
                 allowClear
                 style={{ width: '100%' }}
                 showSearch
                 loading={loadingUnits}
-                options={unitOptions.filter((opt: { label: string; value: string }) => allUnits.includes(opt.value))}
+                options={unitOptions.filter((opt) => allUnits.includes(opt.value))}
                 filterOption={(input, option) =>
                   (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
                 }
@@ -1841,13 +1859,13 @@ const MaterialUnitsManager: React.FC = () => {
               <div style={{ marginBottom: 8 }}>{t('app.master-data.materialForm.saleUnit')}</div>
               <Select
                 value={scenarios.sale}
-                onChange={(value: string) => handleScenarioChange('sale', value)}
+                onChange={(unitValue: string) => handleScenarioChange('sale', unitValue)}
                 placeholder={t('app.master-data.materialForm.selectSaleUnit')}
                 allowClear
                 style={{ width: '100%' }}
                 showSearch
                 loading={loadingUnits}
-                options={unitOptions.filter((opt: { label: string; value: string }) => allUnits.includes(opt.value))}
+                options={unitOptions.filter((opt) => allUnits.includes(opt.value))}
                 filterOption={(input, option) =>
                   (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
                 }
@@ -1857,13 +1875,13 @@ const MaterialUnitsManager: React.FC = () => {
               <div style={{ marginBottom: 8 }}>{t('app.master-data.materialForm.productionUnit')}</div>
               <Select
                 value={scenarios.production}
-                onChange={(value: string) => handleScenarioChange('production', value)}
+                onChange={(unitValue: string) => handleScenarioChange('production', unitValue)}
                 placeholder={t('app.master-data.materialForm.selectProductionUnit')}
                 allowClear
                 style={{ width: '100%' }}
                 showSearch
                 loading={loadingUnits}
-                options={unitOptions.filter((opt: { label: string; value: string }) => allUnits.includes(opt.value))}
+                options={unitOptions.filter((opt) => allUnits.includes(opt.value))}
                 filterOption={(input, option) =>
                   (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
                 }
@@ -1883,6 +1901,15 @@ const MaterialUnitsManager: React.FC = () => {
     </div>
   );
 };
+
+/**
+ * 多单位管理（Form.Item name="units" 注册字段，提交时由 ProForm 自然收集）
+ */
+const MaterialUnitsManager: React.FC = () => (
+  <Form.Item name="units" noStyle>
+    <MaterialUnitsEditor />
+  </Form.Item>
+);
 
 /**
  * 基本信息标签页（按字段作用分两段：part1 标识与分类，part2 管理开关与描述；中间为物料来源）

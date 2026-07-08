@@ -49,6 +49,8 @@ export interface DocumentPushPreviewItem {
   supplier_id?: number;
   unit_price?: number;
   required_date?: string | null;
+  warehouse_id?: number | null;
+  warehouse_name?: string | null;
 }
 
 export interface DocumentPushPreview {
@@ -60,6 +62,13 @@ export interface DocumentPushPreview {
   has_blocking_issues: boolean;
   blocking_reason?: string | null;
   tip?: string | null;
+  line_warehouse_required?: boolean;
+}
+
+export interface PushToReceiptNoticeRequest {
+  notice_quantities?: Record<number, number>;
+  selected_item_ids?: number[];
+  line_warehouses?: Record<number, number>;
 }
 
 /**
@@ -418,10 +427,17 @@ export async function pushPurchaseOrderToReceipt(
 /**
  * 下推到收货通知
  */
-export async function pushPurchaseOrderToReceiptNotice(id: number, noticeQuantities?: Record<number, number>): Promise<any> {
+export async function pushPurchaseOrderToReceiptNotice(
+  id: number,
+  data?: PushToReceiptNoticeRequest | Record<number, number>,
+): Promise<any> {
+  const payload =
+    data && typeof data === 'object' && ('notice_quantities' in data || 'selected_item_ids' in data || 'line_warehouses' in data)
+      ? data
+      : { notice_quantities: data || {} };
   return apiRequest<any>(`/apps/kuaizhizao/purchase-orders/${id}/push-to-receipt-notice`, {
     method: 'POST',
-    data: noticeQuantities || {},
+    data: payload,
   });
 }
 
@@ -501,14 +517,6 @@ export async function getMaterialPriceHistory(materialId: number): Promise<Mater
 export async function getPurchaseOrderTracking(orderId: number): Promise<PurchaseTrackingResponse> {
   return apiRequest<PurchaseTrackingResponse>(`/apps/kuaizhizao/purchase-orders/${orderId}/tracking`, {
     method: 'GET',
-  });
-}
-
-/** 一键催单 */
-export async function expeditePurchaseOrder(orderId: number, remarks?: string): Promise<{ success: boolean; message: string }> {
-  return apiRequest<any>(`/apps/kuaizhizao/purchase-orders/${orderId}/expedite`, {
-    method: 'POST',
-    data: { remarks },
   });
 }
 

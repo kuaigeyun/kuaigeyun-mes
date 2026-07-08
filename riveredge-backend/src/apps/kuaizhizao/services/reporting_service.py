@@ -79,13 +79,12 @@ async def _resolve_work_order_operation_for_reporting(
 
 
 def _plan_quantity_reached(work_order: WorkOrder, work_order_operation: WorkOrderOperation) -> bool:
-    """工序累计产量是否已达工单计划数量（完成态口径，与进度圈 100% 一致）。"""
+    """工序累计合格产出是否已达工单计划数量（完成态口径，与进度圈 100% 一致）。"""
     plan = Decimal(str(work_order.quantity or 0))
     if plan <= 0:
         return False
-    completed = Decimal(str(work_order_operation.completed_quantity or 0))
     qualified = Decimal(str(work_order_operation.qualified_quantity or 0))
-    return completed >= plan or qualified >= plan
+    return qualified >= plan
 
 
 def _maybe_mark_operation_completed(
@@ -95,7 +94,7 @@ def _maybe_mark_operation_completed(
     now: Optional[datetime] = None,
 ) -> bool:
     """
-    计划产量达标即将工序置为 completed。
+    计划合格产量达标即将工序置为 completed。
 
     超报上限仅约束继续报工，不推迟完成状态（否则 UI 进度 100% 仍显示进行中）。
     """
@@ -108,6 +107,41 @@ def _maybe_mark_operation_completed(
         work_order_operation.actual_end_date or now or datetime.now()
     )
     return True
+
+
+def _reconcile_operation_completion_status(
+    work_order: WorkOrder,
+    work_order_operation: WorkOrderOperation,
+) -> bool:
+    """
+    按数量报工时，合格未达标却为 completed 的工序回退为进行中（修正历史误标完成）。
+    """
+    reporting_type = work_order_operation.reporting_type or "quantity"
+    if reporting_type != "quantity":
+        return False
+    if work_order_operation.status != "completed":
+        return False
+    plan = Decimal(str(work_order.quantity or 0))
+    if plan <= 0:
+        return False
+    qualified = Decimal(str(work_order_operation.qualified_quantity or 0))
+    if qualified >= plan:
+        return False
+    work_order_operation.status = "in_progress"
+    work_order_operation.actual_end_date = None
+    return True
+
+
+def _sync_operation_completion_status(
+    work_order: WorkOrder,
+    work_order_operation: WorkOrderOperation,
+    *,
+    now: Optional[datetime] = None,
+) -> bool:
+    """校正并完成工序状态；返回 status 是否变更。"""
+    if _reconcile_operation_completion_status(work_order, work_order_operation):
+        return True
+    return _maybe_mark_operation_completed(work_order, work_order_operation, now=now)
 
 
 REPORTING_SORTABLE_FIELDS = frozenset({
@@ -581,10 +615,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
                                 f"工序跳转规则：请先完成前序工序「{previous_operation.operation_name}」后，再将当前工序报为完成"
                             )
                     
-                    # 检查前序工序转入量（以上道合格产出为准，与 material_remaining 一致）
-                    from apps.kuaizhizao.services.operation_jump_rules import qualified_transfer_quantity
+                    # 检查前序工序转入量（以上道可转下道合格产出为准，方案质检须检验放行）
+                    from apps.kuaizhizao.services.operation_jump_rules import qualified_transfer_quantity_async
 
-                    previous_transfer = qualified_transfer_quantity(previous_operation)
+                    previous_transfer = await qualified_transfer_quantity_async(
+                        tenant_id,
+                        reporting_data.work_order_id,
+                        previous_operation,
+                    )
                     current_completed = Decimal(str(work_order_operation.completed_quantity or 0))
                     new_total = current_completed + reported_quantity_dec
 
@@ -730,7 +768,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 work_order_operation.status = "completed"
                 work_order_operation.actual_end_date = datetime.now()
             else:
-                _maybe_mark_operation_completed(work_order, work_order_operation)
+                _sync_operation_completion_status(work_order, work_order_operation)
             
             await work_order_operation.save()
 
@@ -1502,9 +1540,11 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 work_order_id=work_order_id,
                 deleted_at__isnull=True,
             ).all()
+            status_changed = False
             for op in all_operations:
-                if _maybe_mark_operation_completed(work_order, op):
+                if _sync_operation_completion_status(work_order, op):
                     await op.save()
+                    status_changed = True
 
             await self._sync_work_order_header_quantities_from_last_operation(tenant_id, work_order)
 
@@ -1521,6 +1561,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if all_completed and work_order.status != 'completed':
                 work_order.status = 'completed'
                 work_order.actual_end_date = datetime.now()
+            elif (
+                status_changed
+                and not all_completed
+                and work_order.status == 'completed'
+                and not work_order.manually_completed
+            ):
+                work_order.status = 'in_progress'
+                work_order.actual_end_date = None
 
             await work_order.save()
 

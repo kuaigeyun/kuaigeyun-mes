@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { App, Space, Tag } from 'antd';
+import { App, Form, Space, Tag } from 'antd';
 import { ProFormSelect } from '@ant-design/pro-components';
 import { useDebounceFn } from 'ahooks';
 import { NamePath } from 'antd/es/form/interface';
 import {
   getUserList,
+  resolveUserDisplay,
   searchUserDisplay,
   type User,
   type UserDisplayItem,
@@ -63,6 +64,25 @@ function displayItemToUser(item: UserDisplayItem): User {
   };
 }
 
+function collectSelectedUuids(value: unknown, mode?: 'multiple' | 'tags'): string[] {
+  if (mode === 'multiple' || mode === 'tags') {
+    return (Array.isArray(value) ? value : [])
+      .map((v) => String(v ?? '').trim())
+      .filter(Boolean);
+  }
+  const single = String(value ?? '').trim();
+  return single ? [single] : [];
+}
+
+function mergeUsersByUuid(prev: User[], incoming: User[]): User[] {
+  const next = [...prev];
+  for (const user of incoming) {
+    if (!user.uuid || next.some((item) => item.uuid === user.uuid)) continue;
+    next.unshift(user);
+  }
+  return next;
+}
+
 /**
  * 统一的人员/角色选择组件
  *
@@ -95,6 +115,8 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
 
   const [data, setData] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+  const form = Form.useFormInstance();
+  const watchedValue = Form.useWatch(name, form);
 
   const fetchUsers = async (searchText: string = '') => {
     if (!canInteract) {
@@ -144,6 +166,28 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
     void fetchUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOnly, departmentUuid, positionUuid, canInteract, useFullList]);
+
+  /** 表单预填 uuid 时，解析展示名并并入 options（避免 Select 回显原始 UUID） */
+  useEffect(() => {
+    if (!canInteract) return;
+    const selectedUuids = collectSelectedUuids(watchedValue, mode);
+    if (!selectedUuids.length) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const resolved = await resolveUserDisplay({ user_uuids: selectedUuids });
+        if (cancelled) return;
+        setData((prev) => mergeUsersByUuid(prev, resolved.map(displayItemToUser)));
+      } catch (error) {
+        console.error('Failed to resolve selected users:', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [watchedValue, canInteract, mode]);
 
   const handleChange = (val: any, _option: any) => {
     if (!onChange) return;

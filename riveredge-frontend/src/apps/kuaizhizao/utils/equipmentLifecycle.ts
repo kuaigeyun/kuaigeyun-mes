@@ -101,22 +101,22 @@ export function getMaintenancePlanLifecycle(
 ): LifecycleResult {
   if (!record) return { percent: 0, stageName: '-', mainStages: [] };
   const status = String(record.status ?? '').trim();
-  const order = ['待执行', '执行中', '已完成', '已取消'];
+  const order = ['草稿', '已发布', '执行中', '已完成', '已取消'];
   const idx = order.indexOf(status);
   const safeIdx = idx >= 0 ? idx : 0;
-  const percent = status === '已取消' ? 100 : Math.round(((safeIdx + 1) / 3) * 100);
+  const percent = status === '已取消' ? 100 : Math.round(((safeIdx + 1) / 4) * 100);
 
   const result: LifecycleResult = {
     percent,
-    stageName: status || '待执行',
+    stageName: status || '草稿',
     status: status === '已完成' ? 'success' : status === '已取消' ? 'exception' : 'normal',
     mainStages: [
-      { key: 'plan', label: '计划', status: 'done' },
-      { key: 'exec', label: '执行', status: status === '待执行' ? 'active' : 'done' },
+      { key: 'plan', label: '计划', status: ['草稿', '已发布'].includes(status) ? 'active' : 'done' },
+      { key: 'exec', label: '执行', status: status === '执行中' ? 'active' : status === '已完成' || status === '已取消' ? 'done' : 'pending' },
       { key: 'done', label: '结案', status: status === '已完成' || status === '已取消' ? 'active' : 'pending' },
     ],
     subStages: [],
-    nextStepSuggestions: status === '待执行' ? ['执行保养'] : [],
+    nextStepSuggestions: ['草稿', '已发布'].includes(status) ? ['执行保养'] : [],
   };
   if (!t) return result;
   return applyLifecycleI18n(

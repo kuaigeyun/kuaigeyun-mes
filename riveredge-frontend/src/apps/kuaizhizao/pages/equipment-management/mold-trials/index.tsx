@@ -22,7 +22,8 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { moldApi } from '../../../services/equipment';
 import { trialsApi } from '../../../services/moldOps';
 import { formatDateTime } from '../../../../../utils/format';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString } from '../../../../../utils/formDate';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
@@ -34,15 +35,31 @@ const RESOURCE = 'kuaizhizao:mold-trial';
 interface MoldTrial {
   id?: number;
   trial_no?: string;
+  document_no?: string;
   mold_id?: number;
   mold_code?: string;
   mold_name?: string;
   trial_date?: string;
+  trial_result?: string;
   supplier?: string;
   trial_count?: number;
-  result?: string;
   remark?: string;
   updated_at?: string;
+}
+
+function buildMoldTrialSubmitPayload(values: Record<string, unknown>) {
+  const remarkParts: string[] = [];
+  if (values.supplier) remarkParts.push(`供应商: ${values.supplier}`);
+  if (values.trial_count != null && values.trial_count !== '') {
+    remarkParts.push(`试模次数: ${values.trial_count}`);
+  }
+  if (values.remark) remarkParts.push(String(values.remark));
+  return {
+    mold_id: values.mold_id,
+    trial_date: toApiDateString(values.trial_date),
+    trial_result: values.result,
+    remark: remarkParts.length ? remarkParts.join('\n') : undefined,
+  };
 }
 
 const MoldTrialsPage: React.FC = () => {
@@ -54,6 +71,10 @@ const MoldTrialsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<MoldTrial | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
+    undefined,
+  );
+  const [submitting, setSubmitting] = useState(false);
   const [moldOptions, setMoldOptions] = useState<{ label: string; value: number }[]>([]);
 
   const resultOptions = useMemo(
@@ -78,28 +99,31 @@ const MoldTrialsPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrent(null);
+    setFormInitialValues({ trial_date: dayjs(), trial_count: 1, result: '合格' });
     setModalVisible(true);
     void loadMoldOptions();
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ trial_date: dayjs(), trial_count: 1, result: '合格' });
   };
   useNewShortcut(handleCreate);
 
   const handleEdit = async (record: MoldTrial) => {
     if (!record.id) return;
-    const detail = await trialsApi.get(record.id);
-    setIsEdit(true);
-    setCurrent(detail);
-    setModalVisible(true);
-    void loadMoldOptions();
-    formRef.current?.setFieldsValue({
-      mold_id: detail.mold_id,
-      trial_date: detail.trial_date ? dayjs(detail.trial_date) : dayjs(),
-      supplier: detail.supplier,
-      trial_count: detail.trial_count,
-      result: detail.result,
-      remark: detail.remark,
-    });
+    try {
+      const detail = await trialsApi.get(record.id);
+      setIsEdit(true);
+      setCurrent(detail);
+      setFormInitialValues({
+        mold_id: detail.mold_id,
+        trial_date: detail.trial_date ? dayjs(detail.trial_date) : dayjs(),
+        supplier: detail.supplier,
+        trial_count: detail.trial_count ?? 1,
+        result: detail.trial_result,
+        remark: detail.remark,
+      });
+      setModalVisible(true);
+      void loadMoldOptions();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.listFailed`)));
+    }
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -117,23 +141,24 @@ const MoldTrialsPage: React.FC = () => {
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
-    const payload = {
-      mold_id: values.mold_id,
-      trial_date: (values.trial_date as dayjs.Dayjs)?.format('YYYY-MM-DD'),
-      supplier: values.supplier,
-      trial_count: values.trial_count,
-      result: values.result,
-      remark: values.remark,
-    };
-    if (isEdit && current?.id) {
-      await trialsApi.update(current.id, payload);
-      messageApi.success(t('common.updateSuccess'));
-    } else {
-      await trialsApi.create(payload);
-      messageApi.success(t('common.createSuccess'));
+    const payload = buildMoldTrialSubmitPayload(values);
+    setSubmitting(true);
+    try {
+      if (isEdit && current?.id) {
+        await trialsApi.update(current.id, payload);
+        messageApi.success(t('common.updateSuccess'));
+      } else {
+        await trialsApi.create(payload);
+        messageApi.success(t('common.createSuccess'));
+      }
+      setModalVisible(false);
+      setFormInitialValues(undefined);
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.submitFailed`)));
+    } finally {
+      setSubmitting(false);
     }
-    setModalVisible(false);
-    actionRef.current?.reload();
   };
 
   const columns: ProColumns<MoldTrial>[] = useMemo(
@@ -156,11 +181,12 @@ const MoldTrialsPage: React.FC = () => {
       },
       {
         title: t(`${P}.col.trialNo`),
-        dataIndex: 'trial_no',
+        dataIndex: 'document_no',
         width: 140,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
+        render: (_, r) => r.document_no ?? r.trial_no ?? '-',
       },
       { title: t(`${P}.col.mold`), dataIndex: 'mold_name', width: 160, ellipsis: true, sorter: true, hideInSearch: true },
       {
@@ -176,11 +202,11 @@ const MoldTrialsPage: React.FC = () => {
       { title: t(`${P}.col.trialCount`), dataIndex: 'trial_count', width: 90, sorter: true, hideInSearch: true },
       {
         title: t(`${P}.col.result`),
-        dataIndex: 'result',
+        dataIndex: 'trial_result',
         width: 100,
         sorter: true,
         hideInSearch: true,
-        render: (_, r) => <Tag>{r.result ?? '-'}</Tag>,
+        render: (_, r) => <Tag>{r.trial_result ?? '-'}</Tag>,
       },
       {
         title: t('common.updatedAt'),
@@ -289,11 +315,16 @@ const MoldTrialsPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
         onFinish={handleSubmit}
         isEdit={isEdit}
+        loading={submitting}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
+        initialValues={formInitialValues}
         grid={false}
       >
         <Row gutter={16}>
@@ -312,6 +343,7 @@ const MoldTrialsPage: React.FC = () => {
               name="trial_date"
               label={t(`${P}.col.trialDate`)}
               rules={[{ required: true }]}
+              formItemProps={formDateFormItemProps}
               fieldProps={EQUIPMENT_DATE_FIELD_PROPS}
             />
           </Col>

@@ -93,6 +93,14 @@ class QualityAutomationService:
             return
         if not cfg["auto_create"]["ipqc_on_reporting"]:
             return
+        from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
+
+        master_op_id = int(work_order_operation.operation_id)
+        eff, _, _ = await resolve_inspection_policy(
+            tenant_id, "ipqc", operation_id=master_op_id
+        )
+        if eff != "plan":
+            return
         try:
             from apps.kuaizhizao.services.quality_service import ProcessInspectionService
 

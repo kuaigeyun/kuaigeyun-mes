@@ -22,6 +22,7 @@ import { equipmentApi } from '../../../services/equipment';
 import { inspectionSchemesApi, spotChecksApi } from '../../../services/equipmentOps';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   buildAbnormalityValueEnum,
   buildSpotCheckStatusValueEnum,
@@ -33,11 +34,19 @@ import {
 const P = 'app.kuaizhizao.equipmentOps.spotCheck';
 const RESOURCE = 'kuaizhizao:equipment-spot-check';
 
+function formatSpotCheckFormDate(value: unknown): string | undefined {
+  if (value == null || value === '') return undefined;
+  if (dayjs.isDayjs(value)) return value.format('YYYY-MM-DD');
+  const parsed = dayjs(value as string | number | Date);
+  return parsed.isValid() ? parsed.format('YYYY-MM-DD') : undefined;
+}
+
 interface SpotCheckLine {
   line_no?: number;
   item_id?: number;
   item_code?: string;
   item_name?: string;
+  requirement?: string;
   value_type?: string;
   unit?: string;
   measured_value?: string;
@@ -69,6 +78,10 @@ const SpotChecksPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<SpotCheck | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
+    undefined,
+  );
+  const [submitting, setSubmitting] = useState(false);
   const [previewLines, setPreviewLines] = useState<SpotCheckLine[]>([]);
   const [equipmentOptions, setEquipmentOptions] = useState<{ label: string; value: number }[]>([]);
   const [schemeOptions, setSchemeOptions] = useState<{ label: string; value: number }[]>([]);
@@ -97,14 +110,21 @@ const SpotChecksPage: React.FC = () => {
       setPreviewLines([]);
       return;
     }
+    if (!schemeId) {
+      setPreviewLines([]);
+      return;
+    }
     try {
       const res = await spotChecksApi.previewLines({
         equipment_id: equipmentId,
         scheme_id: schemeId,
       });
       setPreviewLines(res.lines ?? []);
-    } catch {
-      messageApi.error(t(`${P}.previewFailed`));
+      if (res.scheme_id) {
+        formRef.current?.setFieldsValue({ scheme_id: res.scheme_id });
+      }
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.previewFailed`)));
       setPreviewLines([]);
     }
   };
@@ -113,31 +133,34 @@ const SpotChecksPage: React.FC = () => {
     setIsEdit(false);
     setCurrent(null);
     setPreviewLines([]);
+    setFormInitialValues({ check_date: dayjs() });
     setModalVisible(true);
     void loadOptions();
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ check_date: dayjs() });
   };
   useNewShortcut(handleCreate);
 
   const handleEdit = async (record: SpotCheck) => {
     if (!record.id) return;
-    const detail = await spotChecksApi.get(record.id);
-    setIsEdit(true);
-    setCurrent(detail);
-    setPreviewLines(detail.lines ?? []);
-    setModalVisible(true);
-    void loadOptions();
-    const inspectorUuid = await resolveUserUuidById(detail.inspector_id);
-    formRef.current?.setFieldsValue({
-      equipment_id: detail.equipment_id,
-      scheme_id: detail.scheme_id,
-      check_date: detail.check_date ? dayjs(detail.check_date) : dayjs(),
-      inspector_uuid: inspectorUuid,
-      inspector_id: detail.inspector_id,
-      inspector_name: detail.inspector_name,
-      remark: detail.remark,
-    });
+    try {
+      const detail = await spotChecksApi.get(record.id);
+      const inspectorUuid = await resolveUserUuidById(detail.inspector_id);
+      setIsEdit(true);
+      setCurrent(detail);
+      setPreviewLines(detail.lines ?? []);
+      setFormInitialValues({
+        equipment_id: detail.equipment_id,
+        scheme_id: detail.scheme_id,
+        check_date: detail.check_date ? dayjs(detail.check_date) : dayjs(),
+        inspector_uuid: inspectorUuid,
+        inspector_id: detail.inspector_id,
+        inspector_name: detail.inspector_name,
+        remark: detail.remark,
+      });
+      setModalVisible(true);
+      void loadOptions();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.listFailed`)));
+    }
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -155,10 +178,14 @@ const SpotChecksPage: React.FC = () => {
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
+    if (!previewLines.length) {
+      messageApi.warning(t(`${P}.noPreviewLines`));
+      return;
+    }
     const payload = {
       equipment_id: values.equipment_id,
       scheme_id: values.scheme_id,
-      check_date: (values.check_date as dayjs.Dayjs)?.format('YYYY-MM-DD'),
+      check_date: formatSpotCheckFormDate(values.check_date),
       inspector_id: values.inspector_id,
       inspector_name: values.inspector_name,
       remark: values.remark,
@@ -167,6 +194,7 @@ const SpotChecksPage: React.FC = () => {
         item_id: l.item_id,
         item_code: l.item_code,
         item_name: l.item_name,
+        requirement: l.requirement,
         value_type: l.value_type,
         unit: l.unit,
         measured_value: l.measured_value,
@@ -174,15 +202,24 @@ const SpotChecksPage: React.FC = () => {
         remark: l.remark,
       })),
     };
-    if (isEdit && current?.id) {
-      await spotChecksApi.update(current.id, payload);
-      messageApi.success(t('common.updateSuccess'));
-    } else {
-      await spotChecksApi.create(payload);
-      messageApi.success(t('common.createSuccess'));
+    setSubmitting(true);
+    try {
+      if (isEdit && current?.id) {
+        await spotChecksApi.update(current.id, payload);
+        messageApi.success(t('common.updateSuccess'));
+      } else {
+        await spotChecksApi.create(payload);
+        messageApi.success(t('common.createSuccess'));
+      }
+      setModalVisible(false);
+      setFormInitialValues(undefined);
+      setPreviewLines([]);
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.submitFailed`)));
+    } finally {
+      setSubmitting(false);
     }
-    setModalVisible(false);
-    actionRef.current?.reload();
   };
 
   const lineColumns = [
@@ -417,11 +454,17 @@ const SpotChecksPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+          setPreviewLines([]);
+        }}
         onFinish={handleSubmit}
         isEdit={isEdit}
+        loading={submitting}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        initialValues={formInitialValues}
         grid={false}
       >
         <Row gutter={16}>
@@ -445,6 +488,7 @@ const SpotChecksPage: React.FC = () => {
               name="scheme_id"
               label={t(`${P}.form.scheme`)}
               options={schemeOptions}
+              rules={[{ required: true, message: t(`${P}.schemeRequired`) }]}
               showSearch
               allowClear
               fieldProps={{

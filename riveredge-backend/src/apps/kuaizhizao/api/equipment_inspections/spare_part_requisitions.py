@@ -47,7 +47,7 @@ async def create_spare_part_requisition(
             tenant_id,
             data,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
         )
         lines = await service._load_lines(tenant_id, header.id)
         return _response(header, lines)
@@ -149,7 +149,7 @@ async def approve_spare_part_requisition(
             tenant_id,
             row_id,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         lines = await service._load_lines(tenant_id, header.id)
         return _response(header, lines)
@@ -175,7 +175,7 @@ async def reject_spare_part_requisition(
             row_id,
             body.reject_reason,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         lines = await service._load_lines(tenant_id, header.id)
         return _response(header, lines)

@@ -205,8 +205,9 @@ export const warehouseApi = {
     pullFromSalesOrder: async (data: {
       sales_order_id: number;
       delivery_quantities?: Record<number, number>;
-      warehouse_id: number;
+      warehouse_id?: number;
       warehouse_name?: string;
+      line_warehouses?: Record<number, number>;
     }) => apiRequest('/apps/kuaizhizao/sales-deliveries/pull-from-sales-order', { method: 'POST', data }),
     pullFromSalesForecast: async (data: {
       sales_forecast_id: number;

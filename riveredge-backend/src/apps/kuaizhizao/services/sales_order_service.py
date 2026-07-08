@@ -3525,6 +3525,7 @@ class SalesOrderService:
         delivery_quantities: Optional[Dict[int, float]] = None,
         warehouse_id: Optional[int] = None,
         warehouse_name: Optional[str] = None,
+        line_warehouses: Optional[Dict[int, int]] = None,
     ) -> Dict[str, Any]:
         """下推销售订单到销售出库"""
         order = await SalesOrder.get_or_none(
@@ -3535,30 +3536,80 @@ class SalesOrderService:
         await self._assert_sales_order_capability_for_order(tenant_id, order, "push_sales_delivery")
 
         from apps.kuaizhizao.services.warehouse_service import SalesDeliveryService
-        from apps.master_data.models.warehouse import Warehouse
+        from apps.kuaizhizao.services.shipment_notice_service import _resolve_warehouse_name_by_id
 
-        if not warehouse_id:
-            default_wh = await Warehouse.filter(
-                tenant_id=tenant_id, is_active=True
-            ).first()
-            if not default_wh:
-                raise ValidationError("未配置仓库，无法生成销售出库单，请先维护仓库主数据")
-            warehouse_id = default_wh.id
-            warehouse_name = warehouse_name or default_wh.name
+        delivery_service = SalesDeliveryService()
+        qty_map: Dict[int, float] = {}
+        if delivery_quantities:
+            for k, v in delivery_quantities.items():
+                try:
+                    qty = float(v or 0)
+                except (TypeError, ValueError):
+                    continue
+                if qty > 0:
+                    qty_map[int(k)] = qty
+        if not qty_map:
+            raise ValidationError("请选择至少一条出库明细并填写数量")
 
-        delivery = await SalesDeliveryService().pull_from_sales_order(
-            tenant_id=tenant_id,
-            sales_order_id=sales_order_id,
-            created_by=created_by,
-            delivery_quantities=delivery_quantities,
-            warehouse_id=warehouse_id,
-            warehouse_name=warehouse_name,
-        )
+        created_deliveries = []
+        if line_warehouses:
+            groups: Dict[int, Dict[int, float]] = {}
+            for item_id, qty in qty_map.items():
+                wh_id = line_warehouses.get(int(item_id))
+                if wh_id is None or int(wh_id) <= 0:
+                    raise ValidationError(f"请为销售订单明细 {item_id} 指定出库仓库")
+                groups.setdefault(int(wh_id), {})[int(item_id)] = qty
+            for wh_id, group_qty in groups.items():
+                wh_name = await _resolve_warehouse_name_by_id(
+                    tenant_id=tenant_id,
+                    warehouse_id=int(wh_id),
+                    preferred_name=warehouse_name if warehouse_id == wh_id else None,
+                )
+                delivery = await delivery_service.pull_from_sales_order(
+                    tenant_id=tenant_id,
+                    sales_order_id=sales_order_id,
+                    created_by=created_by,
+                    delivery_quantities=group_qty,
+                    warehouse_id=int(wh_id),
+                    warehouse_name=wh_name,
+                )
+                created_deliveries.append(delivery)
+        else:
+            if warehouse_id is None or int(warehouse_id) <= 0:
+                raise ValidationError("请指定出库仓库")
+            wh_name = warehouse_name
+            if not wh_name:
+                wh_name = await _resolve_warehouse_name_by_id(
+                    tenant_id=tenant_id,
+                    warehouse_id=int(warehouse_id),
+                    preferred_name=None,
+                )
+            delivery = await delivery_service.pull_from_sales_order(
+                tenant_id=tenant_id,
+                sales_order_id=sales_order_id,
+                created_by=created_by,
+                delivery_quantities=qty_map,
+                warehouse_id=int(warehouse_id),
+                warehouse_name=wh_name,
+            )
+            created_deliveries.append(delivery)
+
+        primary = created_deliveries[0]
+        delivery_codes = [str(d.delivery_code) for d in created_deliveries if getattr(d, "delivery_code", None)]
+        message = "已生成销售出库单"
+        if len(created_deliveries) > 1:
+            message = f"已生成 {len(created_deliveries)} 张销售出库单"
         return {
             "success": True,
-            "message": "已生成销售出库单",
-            "delivery_id": delivery.id,
-            "delivery_code": delivery.delivery_code,
+            "message": message,
+            "delivery_id": primary.id,
+            "delivery_code": primary.delivery_code,
+            "delivery_codes": delivery_codes,
+            "related_deliveries": [
+                {"id": int(d.id), "code": str(d.delivery_code)}
+                for d in created_deliveries
+                if getattr(d, "id", None) is not None
+            ],
         }
 
     async def push_sales_order_to_sales_return(
@@ -3607,6 +3658,9 @@ class SalesOrderService:
         created_by: int,
         selected_item_ids: Optional[List[int]] = None,
         selected_quantities: Optional[Dict[int, float]] = None,
+        warehouse_id: Optional[int] = None,
+        warehouse_name: Optional[str] = None,
+        line_warehouses: Optional[Dict[int, int]] = None,
     ) -> Dict[str, Any]:
         """下推销售订单到发货通知单"""
         order = await SalesOrder.get_or_none(
@@ -3634,11 +3688,17 @@ class SalesOrderService:
                 except Exception:
                     continue
 
-        from apps.kuaizhizao.services.shipment_notice_service import ShipmentNoticeService
+        from apps.kuaizhizao.services.shipment_notice_service import (
+            ShipmentNoticeService,
+            _resolve_warehouse_name_by_id,
+        )
         today = datetime.now().strftime("%Y%m%d")
         code = await ShipmentNoticeService().generate_code(
             tenant_id, "SHIPMENT_NOTICE_CODE", prefix=f"SN{today}"
         )
+
+        header_wh_id: Optional[int] = None
+        header_wh_name: Optional[str] = None
 
         async with in_transaction():
             notice = await ShipmentNotice.create(
@@ -3677,6 +3737,25 @@ class SalesOrderService:
                         f"物料 {it.material_code or it.material_name or item_id} 下推数量 {qty} "
                         f"不能超过欠发数量 {remaining_qty}"
                     )
+
+                line_wh_id: Optional[int] = None
+                if line_warehouses and item_id in line_warehouses:
+                    line_wh_id = int(line_warehouses[item_id])
+                elif warehouse_id is not None:
+                    line_wh_id = int(warehouse_id)
+                if line_wh_id is None or line_wh_id <= 0:
+                    raise ValidationError(
+                        f"请为物料 {it.material_code or it.material_name or item_id} 指定出库仓库"
+                    )
+                line_wh_name = await _resolve_warehouse_name_by_id(
+                    tenant_id=tenant_id,
+                    warehouse_id=line_wh_id,
+                    preferred_name=warehouse_name if warehouse_id == line_wh_id else None,
+                )
+                if header_wh_id is None:
+                    header_wh_id = line_wh_id
+                    header_wh_name = line_wh_name
+
                 amt = qty * (it.unit_price or Decimal("0"))
                 await ShipmentNoticeItem.create(
                     tenant_id=tenant_id,
@@ -3690,6 +3769,8 @@ class SalesOrderService:
                     unit_price=it.unit_price or Decimal("0"),
                     total_amount=amt,
                     sales_order_item_id=it.id,
+                    warehouse_id=line_wh_id,
+                    warehouse_name=line_wh_name,
                 )
                 total_qty += qty
                 total_amt += amt
@@ -3698,6 +3779,8 @@ class SalesOrderService:
             await ShipmentNotice.filter(tenant_id=tenant_id, id=notice.id).update(
                 total_quantity=total_qty,
                 total_amount=total_amt,
+                warehouse_id=header_wh_id,
+                warehouse_name=header_wh_name,
             )
 
         notice_id = notice.id
@@ -3715,14 +3798,27 @@ class SalesOrderService:
             ) from e
 
         logger.info("从销售订单 %s 生成发货通知单 %s 并已通知仓库", order.order_code, code)
+        related_deliveries = getattr(notified, "related_sales_delivery_ids", None) or []
+        delivery_codes = [
+            str(entry.get("code"))
+            for entry in related_deliveries
+            if isinstance(entry, dict) and entry.get("code")
+        ]
+        if not delivery_codes and getattr(notified, "sales_delivery_code", None):
+            delivery_codes = [str(notified.sales_delivery_code)]
+        message = "已生成发货通知单并已通知仓库"
+        if len(delivery_codes) > 1:
+            message = f"已生成发货通知单并已通知仓库（生成 {len(delivery_codes)} 张销售出库单）"
         return {
             "success": True,
-            "message": "已生成发货通知单并已通知仓库",
+            "message": message,
             "notice_id": notice_id,
             "notice_code": code,
             "status": notified.status,
             "sales_delivery_id": getattr(notified, "sales_delivery_id", None),
             "sales_delivery_code": getattr(notified, "sales_delivery_code", None),
+            "sales_delivery_codes": delivery_codes,
+            "related_sales_delivery_ids": related_deliveries,
         }
 
     async def preview_push_sales_order_to_shipment_notice(
@@ -3745,6 +3841,10 @@ class SalesOrderService:
             raise BusinessLogicError("销售订单无明细，无法下推发货通知单")
 
         material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
+
         preview_items: List[Dict[str, Any]] = []
         for it in items:
             order_qty = Decimal(str(it.order_quantity or 0))
@@ -3756,6 +3856,16 @@ class SalesOrderService:
             )
             remaining_qty = max(Decimal("0"), Decimal(str(remaining_qty)))
             material_code, material_name = self._resolve_item_material_display(it, material_fallback)
+            line_wh_id: Optional[int] = None
+            line_wh_name: Optional[str] = None
+            material_id = getattr(it, "material_id", None)
+            if material_id:
+                material_wh = await resolve_primary_default_warehouse_from_material(
+                    tenant_id,
+                    material_id=int(material_id),
+                )
+                if material_wh:
+                    line_wh_id, line_wh_name = material_wh
             preview_items.append(
                 {
                     "item_id": int(it.id),
@@ -3766,6 +3876,8 @@ class SalesOrderService:
                     "max_push_quantity": float(remaining_qty),
                     "delivery_date": str(it.delivery_date) if it.delivery_date else None,
                     "suggested_action": "发货",
+                    "warehouse_id": line_wh_id,
+                    "warehouse_name": line_wh_name,
                 }
             )
 
@@ -3775,19 +3887,19 @@ class SalesOrderService:
         pushable_count = sum(
             1 for row in preview_items if Decimal(str(row.get("max_push_quantity", 0))) > 0
         )
+
         return {
             "target_type": "shipment_notice",
             "summary": f"请选择本次要通知发货的产品与数量（共 {pushable_count} 条可发货明细）",
             "items": preview_items,
-            "tip": "系统将按所选数量生成发货通知单，并自动通知仓库生成销售出库。",
+            "tip": "请为每行选择出库仓库；系统将按所选数量生成发货通知单，并自动通知仓库生成销售出库。",
+            "line_warehouse_required": True,
         }
 
     @staticmethod
     async def _occupied_delivery_qty_by_material(
         tenant_id: int, sales_order_id: int
     ) -> Dict[int, Decimal]:
-        from apps.kuaizhizao.models.sales_delivery import SalesDelivery, SalesDeliveryItem
-
         existing_deliveries = await SalesDelivery.filter(
             tenant_id=tenant_id,
             sales_order_id=sales_order_id,
@@ -3837,6 +3949,9 @@ class SalesOrderService:
             tenant_id, sales_order_id
         )
         material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
         preview_items: List[Dict[str, Any]] = []
         for it in items:
             order_qty = Decimal(str(it.order_quantity or 0))
@@ -3852,6 +3967,16 @@ class SalesOrderService:
             if max_push_qty < 0:
                 max_push_qty = Decimal("0")
             material_code, material_name = self._resolve_item_material_display(it, material_fallback)
+            line_wh_id: Optional[int] = None
+            line_wh_name: Optional[str] = None
+            material_id = getattr(it, "material_id", None)
+            if material_id:
+                material_wh = await resolve_primary_default_warehouse_from_material(
+                    tenant_id,
+                    material_id=int(material_id),
+                )
+                if material_wh:
+                    line_wh_id, line_wh_name = material_wh
             preview_items.append(
                 {
                     "item_id": int(it.id),
@@ -3861,6 +3986,8 @@ class SalesOrderService:
                     "pushed_quantity": float(delivered_qty + occupied_qty),
                     "max_push_quantity": float(max_push_qty),
                     "delivery_date": str(it.delivery_date) if it.delivery_date else None,
+                    "warehouse_id": line_wh_id,
+                    "warehouse_name": line_wh_name,
                 }
             )
 
@@ -3874,7 +4001,8 @@ class SalesOrderService:
             "target_type": "sales_delivery",
             "summary": f"请选择本次要下推的出库明细（{pushable_count}/{len(preview_items)} 行可下推）",
             "items": preview_items,
-            "tip": "确认后将按所选明细与数量生成销售出库单。",
+            "tip": "请为每行选择出库仓库；确认后将按所选明细与数量生成销售出库单。",
+            "line_warehouse_required": True,
         }
 
     async def preview_push_sales_order_to_invoice(
@@ -3941,16 +4069,33 @@ class SalesOrderService:
             tenant_id=tenant_id,
             sales_order_id=sales_order_id,
         )
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
+
         preview_items: List[Dict[str, Any]] = []
         for line in raw.lines:
+            line_wh_id: Optional[int] = None
+            line_wh_name: Optional[str] = None
+            material_id = getattr(line, "material_id", None)
+            if material_id:
+                material_wh = await resolve_primary_default_warehouse_from_material(
+                    tenant_id,
+                    material_id=int(material_id),
+                )
+                if material_wh:
+                    line_wh_id, line_wh_name = material_wh
             preview_items.append(
                 {
                     "item_id": int(line.sales_order_item_id),
+                    "material_id": int(line.material_id),
                     "material_code": line.material_code,
                     "material_name": line.material_name,
                     "quantity": float(line.source_doc_quantity),
                     "pushed_quantity": float(line.source_received_quantity),
                     "max_push_quantity": float(line.source_pending_quantity),
+                    "warehouse_id": line_wh_id,
+                    "warehouse_name": line_wh_name,
                 }
             )
 
@@ -3969,7 +4114,8 @@ class SalesOrderService:
             "blocking_reason": (
                 "sales_order.push_return.no_delivered" if not preview_items else None
             ),
-            "tip": "确认前须选择退货仓库；退货数量不能超过可退数量。",
+            "tip": "请为每行选择退入仓库；退货数量不能超过可退数量。",
+            "line_warehouse_required": True,
         }
 
     async def push_sales_order_to_invoice(

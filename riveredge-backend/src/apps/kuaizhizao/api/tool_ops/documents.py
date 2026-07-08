@@ -96,7 +96,7 @@ async def create_tool_borrow(
             tenant_id,
             data,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
         )
         return ToolBorrowResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -234,7 +234,7 @@ async def create_tool_return(
             tenant_id,
             data,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
         )
         return ToolReturnResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -357,7 +357,7 @@ async def create_tool_maintenance(
             tenant_id,
             data,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
         )
         lines = await svc.maintenance_service._load_lines(tenant_id, header.id)
         return _maintenance_response(header, lines)
@@ -466,7 +466,7 @@ async def approve_tool_maintenance(
             tenant_id,
             row_id,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         return ToolMaintenanceResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -490,7 +490,7 @@ async def reject_tool_maintenance(
             row_id,
             body.reject_reason,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         return ToolMaintenanceResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -544,14 +544,14 @@ async def create_tool_calibration(
                 tenant_id,
                 data,
                 operator_id=current_user.id,
-                operator_name=current_user.nickname or current_user.username,
+                operator_name=current_user.full_name or current_user.username,
             )
         else:
             row = await svc.calibration_service.create(
                 tenant_id,
                 data,
                 operator_id=current_user.id,
-                operator_name=current_user.nickname or current_user.username,
+                operator_name=current_user.full_name or current_user.username,
             )
         return ToolOpsCalibrationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -672,7 +672,7 @@ async def create_tool_scrap_application(
             tenant_id,
             data,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
         )
         return ToolScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -781,7 +781,7 @@ async def approve_tool_scrap_application(
             tenant_id,
             row_id,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         return ToolScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -805,7 +805,7 @@ async def reject_tool_scrap_application(
             row_id,
             body.reject_reason,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         return ToolScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -857,7 +857,7 @@ async def create_tool_repair(
             tenant_id,
             data,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
         )
         lines = await svc.repair_service._load_lines(tenant_id, header.id)
         return _repair_response(header, lines)
@@ -966,7 +966,7 @@ async def approve_tool_repair(
             tenant_id,
             row_id,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         return ToolRepairResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -990,7 +990,7 @@ async def reject_tool_repair(
             row_id,
             body.reject_reason,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         return ToolRepairResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:

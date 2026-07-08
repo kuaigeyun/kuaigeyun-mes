@@ -22,6 +22,7 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 const LazyUniImport = lazy(() =>
@@ -1349,8 +1350,8 @@ const SalesOrdersPage: React.FC = () => {
   const [workCenterOptionsLoading, setWorkCenterOptionsLoading] = useState(false);
   const [workOrderPushMode, setWorkOrderPushMode] = useState<'draft' | 'confirm'>('draft');
   const [workOrderGranularity, setWorkOrderGranularity] = useState<'grouped' | 'per_unit'>('grouped');
-  const [pushToReturnWarehouseId, setPushToReturnWarehouseId] = useState<number | undefined>(undefined);
-  const [pushToReturnWarehouseName, setPushToReturnWarehouseName] = useState<string>('');
+  const [pushShipmentNoticeWarehouseOptions, setPushShipmentNoticeWarehouseOptions] = useState<Array<{ label: string; value: number }>>([]);
+  const [pushShipmentNoticeLineWh, setPushShipmentNoticeLineWh] = useState<Record<number, number>>({});
 
   const resolvePushPreviewModalTitle = (
     targetType: NonNullable<PushPreviewResponse['target_type']>,
@@ -1383,8 +1384,8 @@ const SalesOrdersPage: React.FC = () => {
     setWorkOrderSelectedWorkCenters({});
     setWorkOrderPushMode('draft');
     setWorkOrderGranularity('grouped');
-    setPushToReturnWarehouseId(undefined);
-    setPushToReturnWarehouseName('');
+    setPushShipmentNoticeWarehouseOptions([]);
+    setPushShipmentNoticeLineWh({});
     const ensureWorkCentersLoaded = async () => {
       if (workCenterOptions.length > 0) return;
       try {
@@ -1436,6 +1437,26 @@ const SalesOrdersPage: React.FC = () => {
           if (res.target_type === 'work_order') {
             const defaultMode = res.push_mode_default === 'confirm' ? 'confirm' : 'draft';
             setWorkOrderPushMode(defaultMode);
+          }
+          if (res.target_type === 'shipment_notice' || res.target_type === 'sales_delivery' || res.target_type === 'sales_return') {
+            void masterWarehouseApi.list({ is_active: true, limit: 500 }).then((whRes) => {
+              const whList = Array.isArray(whRes) ? whRes : (whRes as { items?: unknown[] })?.items ?? [];
+              const warehouseOptions = (Array.isArray(whList) ? whList : []).map((w) => {
+                const row = w as { id: number; code?: string; name?: string };
+                const label = `${row.code || ''} ${row.name || ''}`.trim() || String(row.id);
+                return { label, value: row.id };
+              });
+              setPushShipmentNoticeWarehouseOptions(warehouseOptions);
+            });
+            const lineWh: Record<number, number> = {};
+            rows.forEach((row) => {
+              const itemId = Number((row as any).item_id);
+              const whId = Number((row as any).warehouse_id);
+              if (Number.isFinite(itemId) && itemId > 0 && Number.isFinite(whId) && whId > 0) {
+                lineWh[itemId] = whId;
+              }
+            });
+            setPushShipmentNoticeLineWh(lineWh);
           }
         } else if (res?.target_type === 'sales_invoice') {
           const ids = (res.items || [])
@@ -1522,6 +1543,7 @@ const SalesOrdersPage: React.FC = () => {
           return;
         }
         const selectedQuantities: Record<number, number> = {};
+        const lineWarehouses: Record<number, number> = {};
         for (const id of selectedIds) {
           const row = rowById.get(id);
           const qty = Number(workOrderPushQuantities[id] ?? 0);
@@ -1534,11 +1556,22 @@ const SalesOrdersPage: React.FC = () => {
             messageApi.warning(t('app.kuaizhizao.salesOrder.pushQtyExceedsShippable', { code: row?.material_code || id }));
             return;
           }
+          const lineWh = pushShipmentNoticeLineWh[id];
+          if (lineWh == null || !(lineWh > 0)) {
+            messageApi.warning(
+              t('app.kuaizhizao.salesOrder.pushShipmentSelectLineWarehouse', {
+                material: row?.material_code || row?.material_name || id,
+              }),
+            );
+            return;
+          }
           selectedQuantities[id] = qty;
+          lineWarehouses[id] = lineWh;
         }
         await pushPreviewAction.doPush({
           selected_item_ids: selectedIds,
           selected_quantities: selectedQuantities,
+          line_warehouses: lineWarehouses,
         });
       } else if (pushPreviewData.target_type === 'demand_computation') {
         const rows = (pushPreviewData.items || []).filter((row: any) => Number(row?.item_id) > 0);
@@ -1578,6 +1611,7 @@ const SalesOrdersPage: React.FC = () => {
           return;
         }
         const deliveryQuantities: Record<number, number> = {};
+        const lineWarehouses: Record<number, number> = {};
         for (const id of selectedIds) {
           const row = rowById.get(id);
           const qty = Number(workOrderPushQuantities[id] ?? 0);
@@ -1590,15 +1624,24 @@ const SalesOrdersPage: React.FC = () => {
             messageApi.warning(t('app.kuaizhizao.salesOrder.pushQtyExceedsRemaining', { code: row?.material_code || id }));
             return;
           }
+          const lineWh = pushShipmentNoticeLineWh[id];
+          if (lineWh == null || !(lineWh > 0)) {
+            messageApi.warning(
+              t('app.kuaizhizao.salesOrder.pushShipmentSelectLineWarehouse', {
+                material: row?.material_code || row?.material_name || id,
+              }),
+            );
+            return;
+          }
           deliveryQuantities[id] = qty;
+          lineWarehouses[id] = lineWh;
         }
-        const res = await pushPreviewAction.doPush({ delivery_quantities: deliveryQuantities });
+        const res = await pushPreviewAction.doPush({
+          delivery_quantities: deliveryQuantities,
+          line_warehouses: lineWarehouses,
+        });
         messageApi.success(res?.message || t('app.kuaizhizao.salesOrder.deliveryCreated'));
       } else if (pushPreviewData.target_type === 'sales_return') {
-        if (!pushToReturnWarehouseId || pushToReturnWarehouseId <= 0) {
-          messageApi.warning(t('app.kuaizhizao.salesOrder.returnWarehouseRequired'));
-          return;
-        }
         const rows = (pushPreviewData.items || []).filter((row: any) => Number(row?.item_id) > 0);
         const rowById = new Map<number, any>();
         rows.forEach((row: any) => rowById.set(Number(row.item_id), row));
@@ -1608,6 +1651,7 @@ const SalesOrdersPage: React.FC = () => {
           return;
         }
         const returnQuantities: Record<number, number> = {};
+        const warehouseIds = new Set<number>();
         for (const id of selectedIds) {
           const row = rowById.get(id);
           const qty = Number(workOrderPushQuantities[id] ?? 0);
@@ -1617,15 +1661,31 @@ const SalesOrdersPage: React.FC = () => {
             messageApi.error(t('app.kuaizhizao.salesOrder.returnQtyExceedsMax', { material: row?.material_code || id, max: maxQty }));
             return;
           }
+          const lineWh = pushShipmentNoticeLineWh[id];
+          if (lineWh == null || !(lineWh > 0)) {
+            messageApi.warning(
+              t('app.kuaizhizao.salesOrder.pushReturnSelectLineWarehouse', {
+                material: row?.material_code || row?.material_name || id,
+              }),
+            );
+            return;
+          }
           returnQuantities[id] = qty;
+          warehouseIds.add(lineWh);
         }
         if (!Object.keys(returnQuantities).length) {
           messageApi.warning(t('app.kuaizhizao.salesOrder.selectAtLeastOneLine'));
           return;
         }
+        if (warehouseIds.size !== 1) {
+          messageApi.warning(t('app.kuaizhizao.salesOrder.returnLineWarehouseMustSame'));
+          return;
+        }
+        const warehouseId = warehouseIds.values().next().value as number;
+        const warehouseOption = pushShipmentNoticeWarehouseOptions.find((opt) => opt.value === warehouseId);
         const result = await pushPreviewAction.doPush({
-          warehouse_id: pushToReturnWarehouseId,
-          warehouse_name: pushToReturnWarehouseName || undefined,
+          warehouse_id: warehouseId,
+          warehouse_name: warehouseOption?.label,
           return_quantities: returnQuantities,
         });
         messageApi.success(
@@ -1657,8 +1717,8 @@ const SalesOrdersPage: React.FC = () => {
       setWorkOrderSelectedWorkCenters({});
       setWorkOrderPushMode('draft');
       setWorkOrderGranularity('grouped');
-      setPushToReturnWarehouseId(undefined);
-      setPushToReturnWarehouseName('');
+      setPushShipmentNoticeWarehouseOptions([]);
+      setPushShipmentNoticeLineWh({});
     } catch (error: any) {
       messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.pushFailed')));
     } finally {
@@ -4637,8 +4697,8 @@ const SalesOrdersPage: React.FC = () => {
           setWorkOrderSelectedWorkCenters({});
           setWorkOrderPushMode('draft');
           setWorkOrderGranularity('grouped');
-          setPushToReturnWarehouseId(undefined);
-          setPushToReturnWarehouseName('');
+          setPushShipmentNoticeWarehouseOptions([]);
+          setPushShipmentNoticeLineWh({});
         }}
         okText={t('app.kuaizhizao.salesOrder.confirmPush')}
         cancelText={t('common.cancel')}
@@ -4670,26 +4730,6 @@ const SalesOrdersPage: React.FC = () => {
                   t('app.kuaizhizao.salesOrder.pushFailed')
                 }
               />
-            ) : null}
-            {pushPreviewData.target_type === 'sales_return' ? (
-              <Row gutter={12} style={{ marginBottom: 12 }}>
-                <Col span={8}>
-                  <InputNumber
-                    min={1}
-                    style={{ width: '100%' }}
-                    value={pushToReturnWarehouseId}
-                    onChange={(v) => setPushToReturnWarehouseId(Number(v) || undefined)}
-                    placeholder={t('app.kuaizhizao.salesOrder.returnWarehouseIdPlaceholder')}
-                  />
-                </Col>
-                <Col span={16}>
-                  <Input
-                    value={pushToReturnWarehouseName}
-                    onChange={(e) => setPushToReturnWarehouseName(e.target.value)}
-                    placeholder={t('app.kuaizhizao.salesOrder.returnWarehouseNamePlaceholder')}
-                  />
-                </Col>
-              </Row>
             ) : null}
             {pushPreviewData.target_type === 'work_order' && (
               <div style={{ marginBottom: 10 }}>
@@ -4849,6 +4889,7 @@ const SalesOrdersPage: React.FC = () => {
               <Table
                 size="small"
                 dataSource={pushPreviewData.items}
+                scroll={{ x: 1180 }}
                 columns={[
                   {
                     title: t('common.select'),
@@ -4879,6 +4920,35 @@ const SalesOrdersPage: React.FC = () => {
                   { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const },
                   { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const },
                   { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const },
+                  {
+                    title: (
+                      <>
+                        {t('app.kuaizhizao.salesOrder.pushShipmentLineWarehouse')}
+                        <Typography.Text type="danger"> *</Typography.Text>
+                      </>
+                    ),
+                    key: 'warehouse_id',
+                    width: 160,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id);
+                      if (!Number.isFinite(itemId) || itemId <= 0) return null;
+                      const selected = workOrderSelectedItemIds.includes(itemId);
+                      return (
+                        <Select
+                          style={{ width: '100%', minWidth: 140 }}
+                          placeholder={t('app.kuaizhizao.shipmentNotice.selectOutboundWarehouse')}
+                          showSearch
+                          optionFilterProp="label"
+                          disabled={!selected}
+                          value={pushShipmentNoticeLineWh[itemId]}
+                          options={pushShipmentNoticeWarehouseOptions}
+                          onChange={(nv) => {
+                            setPushShipmentNoticeLineWh((prev) => ({ ...prev, [itemId]: Number(nv) }));
+                          }}
+                        />
+                      );
+                    },
+                  },
                   {
                     title: t('app.kuaizhizao.salesOrder.colShipQty'),
                     dataIndex: 'push_quantity',
@@ -4997,7 +5067,192 @@ const SalesOrdersPage: React.FC = () => {
                 pagination={false}
                 style={{ marginBottom: 8 }}
               />
-            ) : ['sales_delivery', 'sales_return', 'sales_invoice'].includes(pushPreviewData.target_type) &&
+            ) : pushPreviewData.target_type === 'sales_delivery' && pushPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pushPreviewData.items}
+                scroll={{ x: 1180 }}
+                columns={[
+                  {
+                    title: t('common.select'),
+                    dataIndex: 'item_id',
+                    key: 'select',
+                    width: 64,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id);
+                      if (!Number.isFinite(itemId) || itemId <= 0) return null;
+                      const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+                      const disabled = !Number.isFinite(maxQty) || maxQty <= 0;
+                      return (
+                        <Switch
+                          size="small"
+                          disabled={disabled}
+                          checked={workOrderSelectedItemIds.includes(itemId)}
+                          onChange={(checked) => {
+                            setWorkOrderSelectedItemIds((prev) =>
+                              checked ? Array.from(new Set([...prev, itemId])) : prev.filter((id) => id !== itemId),
+                            );
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 130, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 160, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const },
+                  {
+                    title: (
+                      <>
+                        {t('app.kuaizhizao.salesOrder.pushShipmentLineWarehouse')}
+                        <Typography.Text type="danger"> *</Typography.Text>
+                      </>
+                    ),
+                    key: 'warehouse_id',
+                    width: 160,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id);
+                      if (!Number.isFinite(itemId) || itemId <= 0) return null;
+                      const selected = workOrderSelectedItemIds.includes(itemId);
+                      return (
+                        <Select
+                          style={{ width: '100%', minWidth: 140 }}
+                          placeholder={t('app.kuaizhizao.shipmentNotice.selectOutboundWarehouse')}
+                          showSearch
+                          optionFilterProp="label"
+                          disabled={!selected}
+                          value={pushShipmentNoticeLineWh[itemId]}
+                          options={pushShipmentNoticeWarehouseOptions}
+                          onChange={(nv) => {
+                            setPushShipmentNoticeLineWh((prev) => ({ ...prev, [itemId]: Number(nv) }));
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.colPushQty'),
+                    dataIndex: 'push_quantity',
+                    key: 'push_quantity',
+                    width: 130,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id);
+                      const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+                      return (
+                        <InputNumber
+                          min={0}
+                          max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
+                          precision={2}
+                          style={{ width: '100%' }}
+                          value={workOrderPushQuantities[itemId]}
+                          onChange={(val) => {
+                            const next = Number(val ?? 0);
+                            setWorkOrderPushQuantities((prev) => ({ ...prev, [itemId]: next }));
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', key: 'delivery_date', width: 110 },
+                ]}
+                rowKey={(r: any, i) => `${r.item_id || r.material_code}-${i}`}
+                pagination={false}
+                style={{ marginBottom: 8 }}
+              />
+            ) : pushPreviewData.target_type === 'sales_return' && pushPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pushPreviewData.items}
+                scroll={{ x: 1180 }}
+                columns={[
+                  {
+                    title: t('common.select'),
+                    dataIndex: 'item_id',
+                    key: 'select',
+                    width: 64,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id);
+                      if (!Number.isFinite(itemId) || itemId <= 0) return null;
+                      const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+                      const disabled = !Number.isFinite(maxQty) || maxQty <= 0;
+                      return (
+                        <Switch
+                          size="small"
+                          disabled={disabled}
+                          checked={workOrderSelectedItemIds.includes(itemId)}
+                          onChange={(checked) => {
+                            setWorkOrderSelectedItemIds((prev) =>
+                              checked ? Array.from(new Set([...prev, itemId])) : prev.filter((id) => id !== itemId),
+                            );
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 130, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 160, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const },
+                  {
+                    title: (
+                      <>
+                        {t('app.kuaizhizao.salesOrder.pushReturnLineWarehouse')}
+                        <Typography.Text type="danger"> *</Typography.Text>
+                      </>
+                    ),
+                    key: 'warehouse_id',
+                    width: 160,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id);
+                      if (!Number.isFinite(itemId) || itemId <= 0) return null;
+                      const selected = workOrderSelectedItemIds.includes(itemId);
+                      return (
+                        <Select
+                          style={{ width: '100%', minWidth: 140 }}
+                          placeholder={t('app.kuaizhizao.salesReturn.selectReturnWarehouse')}
+                          showSearch
+                          optionFilterProp="label"
+                          disabled={!selected}
+                          value={pushShipmentNoticeLineWh[itemId]}
+                          options={pushShipmentNoticeWarehouseOptions}
+                          onChange={(nv) => {
+                            setPushShipmentNoticeLineWh((prev) => ({ ...prev, [itemId]: Number(nv) }));
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.colPushQty'),
+                    dataIndex: 'push_quantity',
+                    key: 'push_quantity',
+                    width: 130,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id);
+                      const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+                      return (
+                        <InputNumber
+                          min={0}
+                          max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
+                          precision={2}
+                          style={{ width: '100%' }}
+                          value={workOrderPushQuantities[itemId]}
+                          onChange={(val) => {
+                            const next = Number(val ?? 0);
+                            setWorkOrderPushQuantities((prev) => ({ ...prev, [itemId]: next }));
+                          }}
+                        />
+                      );
+                    },
+                  },
+                ]}
+                rowKey={(r: any, i) => `${r.item_id || r.material_code}-${i}`}
+                pagination={false}
+                style={{ marginBottom: 8 }}
+              />
+            ) : pushPreviewData.target_type === 'sales_invoice' &&
               pushPreviewData.items?.length > 0 ? (
               <Table
                 size="small"
@@ -5036,33 +5291,6 @@ const SalesOrdersPage: React.FC = () => {
                   { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const },
                   { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const },
                   { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const },
-                  ...(pushPreviewData.target_type === 'sales_invoice'
-                    ? []
-                    : [
-                        {
-                          title: t('app.kuaizhizao.salesOrder.colPushQty'),
-                          dataIndex: 'push_quantity',
-                          key: 'push_quantity',
-                          width: 130,
-                          render: (_: unknown, row: any) => {
-                            const itemId = Number(row?.item_id);
-                            const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
-                            return (
-                              <InputNumber
-                                min={0}
-                                max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
-                                precision={2}
-                                style={{ width: '100%' }}
-                                value={workOrderPushQuantities[itemId]}
-                                onChange={(val) => {
-                                  const next = Number(val ?? 0);
-                                  setWorkOrderPushQuantities((prev) => ({ ...prev, [itemId]: next }));
-                                }}
-                              />
-                            );
-                          },
-                        },
-                      ]),
                   { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', key: 'delivery_date', width: 110 },
                 ]}
                 rowKey={(r: any, i) => `${r.item_id || r.material_code}-${i}`}

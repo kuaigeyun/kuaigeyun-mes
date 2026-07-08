@@ -20,7 +20,8 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { equipmentApi } from '../../../services/equipment';
 import { scrapApplicationsApi } from '../../../services/equipmentOps';
 import { formatDateTime } from '../../../../../utils/format';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString } from '../../../../../utils/formDate';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   APPROVAL_DOC_PINNED_STATUS_FIELD,
   buildApprovalDocStatusValueEnum,
@@ -61,6 +62,10 @@ const EquipmentScrapPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<ScrapApplication | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
+    undefined,
+  );
+  const [submitting, setSubmitting] = useState(false);
   const [equipmentOptions, setEquipmentOptions] = useState<{ label: string; value: number }[]>([]);
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<ScrapApplication | null>(null);
@@ -79,26 +84,29 @@ const EquipmentScrapPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrent(null);
+    setFormInitialValues({ scrap_date: dayjs() });
     setModalVisible(true);
     void loadEquipmentOptions();
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ scrap_date: dayjs() });
   };
   useNewShortcut(handleCreate);
 
   const handleEdit = async (record: ScrapApplication) => {
     if (!record.id) return;
-    const detail = await scrapApplicationsApi.get(record.id);
-    setIsEdit(true);
-    setCurrent(detail);
-    setModalVisible(true);
-    void loadEquipmentOptions();
-    formRef.current?.setFieldsValue({
-      equipment_id: detail.equipment_id,
-      reason: detail.reason,
-      scrap_date: detail.scrap_date ? dayjs(detail.scrap_date) : dayjs(),
-      remark: detail.remark,
-    });
+    try {
+      const detail = await scrapApplicationsApi.get(record.id);
+      setIsEdit(true);
+      setCurrent(detail);
+      setFormInitialValues({
+        equipment_id: detail.equipment_id,
+        reason: detail.reason,
+        scrap_date: detail.scrap_date ? dayjs(detail.scrap_date) : dayjs(),
+        remark: detail.remark,
+      });
+      setModalVisible(true);
+      void loadEquipmentOptions();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.listFailed`)));
+    }
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -119,18 +127,26 @@ const EquipmentScrapPage: React.FC = () => {
     const payload = {
       equipment_id: values.equipment_id,
       reason: values.reason,
-      scrap_date: (values.scrap_date as dayjs.Dayjs)?.format('YYYY-MM-DD'),
+      scrap_date: toApiDateString(values.scrap_date),
       remark: values.remark,
     };
-    if (isEdit && current?.id) {
-      await scrapApplicationsApi.update(current.id, payload);
-      messageApi.success(t('common.updateSuccess'));
-    } else {
-      await scrapApplicationsApi.create(payload);
-      messageApi.success(t('common.createSuccess'));
+    setSubmitting(true);
+    try {
+      if (isEdit && current?.id) {
+        await scrapApplicationsApi.update(current.id, payload);
+        messageApi.success(t('common.updateSuccess'));
+      } else {
+        await scrapApplicationsApi.create(payload);
+        messageApi.success(t('common.createSuccess'));
+      }
+      setModalVisible(false);
+      setFormInitialValues(undefined);
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.submitFailed`)));
+    } finally {
+      setSubmitting(false);
     }
-    setModalVisible(false);
-    actionRef.current?.reload();
   };
 
   const handleSubmitDoc = async (record: ScrapApplication) => {
@@ -387,11 +403,16 @@ const EquipmentScrapPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
         onFinish={handleSubmit}
         isEdit={isEdit}
+        loading={submitting}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
+        initialValues={formInitialValues}
         grid={false}
       >
         <Row gutter={16}>
@@ -412,6 +433,7 @@ const EquipmentScrapPage: React.FC = () => {
             <ProFormDatePicker
               name="scrap_date"
               label={t(`${P}.col.scrapDate`)}
+              formItemProps={formDateFormItemProps}
               fieldProps={EQUIPMENT_DATE_FIELD_PROPS}
             />
           </Col>

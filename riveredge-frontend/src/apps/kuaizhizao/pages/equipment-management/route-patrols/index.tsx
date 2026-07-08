@@ -21,6 +21,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { patrolRoutesApi, routePatrolsApi } from '../../../services/equipmentOps';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   buildAbnormalityValueEnum,
   buildSpotCheckStatusValueEnum,
@@ -31,6 +32,13 @@ import {
 
 const P = 'app.kuaizhizao.equipmentOps.routePatrol';
 const RESOURCE = 'kuaizhizao:equipment-route-patrol';
+
+function formatRoutePatrolFormDate(value: unknown): string | undefined {
+  if (value == null || value === '') return undefined;
+  if (dayjs.isDayjs(value)) return value.format('YYYY-MM-DD');
+  const parsed = dayjs(value as string | number | Date);
+  return parsed.isValid() ? parsed.format('YYYY-MM-DD') : undefined;
+}
 
 interface RoutePatrolLine {
   step_no?: number;
@@ -52,6 +60,7 @@ interface RoutePatrol {
   route_name?: string;
   patrol_date?: string;
   inspector_name?: string;
+  inspector_id?: number;
   status?: string;
   has_abnormality?: boolean;
   updated_at?: string;
@@ -67,6 +76,10 @@ const RoutePatrolsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<RoutePatrol | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
+    undefined,
+  );
+  const [submitting, setSubmitting] = useState(false);
   const [previewLines, setPreviewLines] = useState<RoutePatrolLine[]>([]);
   const [routeOptions, setRouteOptions] = useState<{ label: string; value: number }[]>([]);
 
@@ -88,8 +101,8 @@ const RoutePatrolsPage: React.FC = () => {
     try {
       const res = await routePatrolsApi.previewLines({ route_id: routeId });
       setPreviewLines(res.lines ?? []);
-    } catch {
-      messageApi.error(t(`${P}.previewFailed`));
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.previewFailed`)));
       setPreviewLines([]);
     }
   };
@@ -98,30 +111,33 @@ const RoutePatrolsPage: React.FC = () => {
     setIsEdit(false);
     setCurrent(null);
     setPreviewLines([]);
+    setFormInitialValues({ patrol_date: dayjs() });
     setModalVisible(true);
     void loadRouteOptions();
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ patrol_date: dayjs() });
   };
   useNewShortcut(handleCreate);
 
   const handleEdit = async (record: RoutePatrol) => {
     if (!record.id) return;
-    const detail = await routePatrolsApi.get(record.id);
-    setIsEdit(true);
-    setCurrent(detail);
-    setPreviewLines(detail.lines ?? []);
-    setModalVisible(true);
-    void loadRouteOptions();
-    const inspectorUuid = await resolveUserUuidById(detail.inspector_id);
-    formRef.current?.setFieldsValue({
-      route_id: detail.route_id,
-      patrol_date: detail.patrol_date ? dayjs(detail.patrol_date) : dayjs(),
-      inspector_uuid: inspectorUuid,
-      inspector_id: detail.inspector_id,
-      inspector_name: detail.inspector_name,
-      remark: detail.remark,
-    });
+    try {
+      const detail = await routePatrolsApi.get(record.id);
+      const inspectorUuid = await resolveUserUuidById(detail.inspector_id);
+      setIsEdit(true);
+      setCurrent(detail);
+      setPreviewLines(detail.lines ?? []);
+      setFormInitialValues({
+        route_id: detail.route_id,
+        patrol_date: detail.patrol_date ? dayjs(detail.patrol_date) : dayjs(),
+        inspector_uuid: inspectorUuid,
+        inspector_id: detail.inspector_id,
+        inspector_name: detail.inspector_name,
+        remark: detail.remark,
+      });
+      setModalVisible(true);
+      void loadRouteOptions();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.listFailed`)));
+    }
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -139,9 +155,13 @@ const RoutePatrolsPage: React.FC = () => {
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
+    if (!previewLines.length) {
+      messageApi.warning(t(`${P}.noPreviewLines`));
+      return;
+    }
     const payload = {
       route_id: values.route_id,
-      patrol_date: (values.patrol_date as dayjs.Dayjs)?.format('YYYY-MM-DD'),
+      patrol_date: formatRoutePatrolFormDate(values.patrol_date),
       inspector_id: values.inspector_id,
       inspector_name: values.inspector_name,
       remark: values.remark,
@@ -155,15 +175,24 @@ const RoutePatrolsPage: React.FC = () => {
         remark: l.remark,
       })),
     };
-    if (isEdit && current?.id) {
-      await routePatrolsApi.update(current.id, payload);
-      messageApi.success(t('common.updateSuccess'));
-    } else {
-      await routePatrolsApi.create(payload);
-      messageApi.success(t('common.createSuccess'));
+    setSubmitting(true);
+    try {
+      if (isEdit && current?.id) {
+        await routePatrolsApi.update(current.id, payload);
+        messageApi.success(t('common.updateSuccess'));
+      } else {
+        await routePatrolsApi.create(payload);
+        messageApi.success(t('common.createSuccess'));
+      }
+      setModalVisible(false);
+      setFormInitialValues(undefined);
+      setPreviewLines([]);
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.submitFailed`)));
+    } finally {
+      setSubmitting(false);
     }
-    setModalVisible(false);
-    actionRef.current?.reload();
   };
 
   const lineColumns = [
@@ -398,11 +427,17 @@ const RoutePatrolsPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+          setPreviewLines([]);
+        }}
         onFinish={handleSubmit}
         isEdit={isEdit}
+        loading={submitting}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        initialValues={formInitialValues}
         grid={false}
       >
         <Row gutter={16}>

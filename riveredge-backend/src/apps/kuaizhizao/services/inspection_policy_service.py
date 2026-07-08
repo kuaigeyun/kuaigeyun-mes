@@ -522,6 +522,55 @@ async def iqc_inspection_passed_for_inbound(tenant_id: int, inspection: Any) -> 
 _FQC_CONDUCTED_STATUSES = frozenset({"已检验", "已审核"})
 
 
+_IPQC_CONDUCTED_STATUSES = frozenset({"已检验", "已审核"})
+
+
+async def ipqc_inspection_passed_for_transfer(tenant_id: int, inspection: Any) -> bool:
+    """过程检验是否满足转下道条件（合格 + 已检验；需审核时另须审核通过）。"""
+    if getattr(inspection, "quality_status", None) != "合格":
+        return False
+    from infra.services.business_config_service import BusinessConfigService
+
+    audit_required = await BusinessConfigService().check_audit_required(tenant_id, "process_inspection")
+    if not audit_required:
+        return str(getattr(inspection, "status", "") or "").strip() in _IPQC_CONDUCTED_STATUSES
+    return getattr(inspection, "review_status", None) in _IQC_PASSED_REVIEW_STATUSES
+
+
+async def resolve_ipqc_plan_label_for_operation(
+    tenant_id: int,
+    operation_id: int,
+    *,
+    plan_id: Optional[int] = None,
+) -> Optional[str]:
+    """解析工序过程检验方案展示名；无需检验时返回 None。"""
+    from apps.kuaizhizao.models.inspection_plan import InspectionPlan
+
+    mode, resolved_plan_id, _ = await resolve_inspection_policy(
+        tenant_id, "ipqc", operation_id=operation_id
+    )
+    if mode == "none":
+        return None
+    if mode == "simple":
+        return None
+    pid = plan_id if plan_id is not None else resolved_plan_id
+    if pid:
+        plan = await InspectionPlan.filter(
+            tenant_id=tenant_id, id=pid, deleted_at__isnull=True
+        ).first()
+        if plan:
+            return str(plan.plan_name or plan.plan_code or "检验方案").strip() or "检验方案"
+    plan = await InspectionPlan.filter(
+        tenant_id=tenant_id,
+        plan_type="process",
+        deleted_at__isnull=True,
+        is_active=True,
+    ).order_by("-created_at").first()
+    if plan:
+        return str(plan.plan_name or plan.plan_code or "检验方案").strip() or "检验方案"
+    return "检验方案"
+
+
 async def fqc_inspection_passed_for_inbound(tenant_id: int, inspection: Any) -> bool:
     """成品检验是否满足成品入库确认条件（合格 + 已检验；需审核时另须审核通过）。"""
     if getattr(inspection, "quality_status", None) != "合格":

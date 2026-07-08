@@ -75,6 +75,10 @@ class ShipmentNoticeResponse(ShipmentNoticeBase):
     notified_at: Optional[datetime] = Field(None, description="通知仓库时间")
     sales_delivery_id: Optional[int] = Field(None, description="销售出库单ID")
     sales_delivery_code: Optional[str] = Field(None, max_length=50, description="销售出库单编码")
+    related_sales_delivery_ids: Optional[List[dict]] = Field(
+        None,
+        description="关联销售出库单列表（多仓发货）",
+    )
     total_quantity: float = Field(0, description="总数量")
     total_amount: float = Field(0, description="总金额")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycle/Stepper 展示）")
@@ -114,6 +118,8 @@ class ShipmentNoticeItemBase(BaseSchema):
     unit_price: float = Field(0, ge=0, description="单价")
     total_amount: Optional[float] = Field(None, ge=0, description="金额")
     sales_order_item_id: Optional[int] = Field(None, description="销售订单明细ID")
+    warehouse_id: Optional[int] = Field(None, description="行出库仓库ID")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="行出库仓库名称")
     notes: Optional[str] = Field(None, description="备注")
 
 

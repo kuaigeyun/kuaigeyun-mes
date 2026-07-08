@@ -89,7 +89,7 @@ async def create_mold_trial(
             tenant_id,
             data,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
         )
         return MoldTrialResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -197,7 +197,7 @@ async def create_mold_borrow(
             tenant_id,
             data,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
         )
         return MoldBorrowResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -335,7 +335,7 @@ async def create_mold_return(
             tenant_id,
             data,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
         )
         return MoldReturnResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -458,7 +458,7 @@ async def create_mold_maintenance(
             tenant_id,
             data,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
         )
         lines = await svc.maintenance_service._load_lines(tenant_id, header.id)
         return _maintenance_response(header, lines)
@@ -567,7 +567,7 @@ async def approve_mold_maintenance(
             tenant_id,
             row_id,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         return MoldMaintenanceResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -591,7 +591,7 @@ async def reject_mold_maintenance(
             row_id,
             body.reject_reason,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         return MoldMaintenanceResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -657,7 +657,7 @@ async def create_mold_repair(
             tenant_id,
             data,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
         )
         lines = await svc.repair_service._load_lines(tenant_id, header.id)
         return _repair_response(header, lines)
@@ -766,7 +766,7 @@ async def approve_mold_repair(
             tenant_id,
             row_id,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         return MoldRepairResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -790,7 +790,7 @@ async def reject_mold_repair(
             row_id,
             body.reject_reason,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         return MoldRepairResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -840,7 +840,7 @@ async def create_mold_scrap_application(
             tenant_id,
             data,
             operator_id=current_user.id,
-            operator_name=current_user.nickname or current_user.username,
+            operator_name=current_user.full_name or current_user.username,
         )
         return MoldScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -949,7 +949,7 @@ async def approve_mold_scrap_application(
             tenant_id,
             row_id,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         return MoldScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:
@@ -973,7 +973,7 @@ async def reject_mold_scrap_application(
             row_id,
             body.reject_reason,
             approver_id=current_user.id,
-            approver_name=current_user.nickname or current_user.username,
+            approver_name=current_user.full_name or current_user.username,
         )
         return MoldScrapApplicationResponse.model_validate(row)
     except (ValidationError, NotFoundError) as e:

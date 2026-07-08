@@ -396,6 +396,8 @@ export interface PushPreviewResponse {
     max_push_quantity?: number;
     delivery_date?: string;
     suggested_action?: string;
+    warehouse_id?: number;
+    warehouse_name?: string;
     source_type?: string;
     blocking_issues?: string[];
     has_bom?: boolean;
@@ -406,6 +408,10 @@ export interface PushPreviewResponse {
   has_blocking_issues?: boolean;
   blocking_reason?: string | null;
   push_mode_default?: 'draft' | 'confirm';
+  line_warehouse_required?: boolean;
+  warehouse_required?: boolean;
+  warehouse_id?: number;
+  warehouse_name?: string;
 }
 
 /**
@@ -459,6 +465,9 @@ export interface PushToShipmentNoticeResponse {
 export interface PushToShipmentNoticeRequest {
   selected_item_ids?: number[];
   selected_quantities?: Record<number, number>;
+  line_warehouses?: Record<number, number>;
+  warehouse_id?: number;
+  warehouse_name?: string;
 }
 
 export async function previewPushSalesOrderToShipmentNotice(salesOrderId: number): Promise<PushPreviewResponse> {
@@ -486,6 +495,9 @@ export interface PushToDeliveryResponse {
 
 export interface PushToDeliveryRequest {
   delivery_quantities?: Record<number, number>;
+  line_warehouses?: Record<number, number>;
+  warehouse_id?: number;
+  warehouse_name?: string;
 }
 
 export async function previewPushSalesOrderToDelivery(salesOrderId: number): Promise<PushPreviewResponse> {
@@ -500,7 +512,7 @@ export async function pushSalesOrderToDelivery(
 ): Promise<PushToDeliveryResponse> {
   return apiRequest<PushToDeliveryResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-delivery`, {
     method: 'POST',
-    data: data?.delivery_quantities ?? {},
+    data: data ?? {},
   });
 }
 

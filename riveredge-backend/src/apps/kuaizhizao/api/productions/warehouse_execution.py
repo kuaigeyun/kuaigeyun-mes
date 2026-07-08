@@ -3461,28 +3461,47 @@ async def pull_sales_delivery_from_order(
     
     - **sales_order_id**: 销售订单ID（必填）
     - **delivery_quantities**: 出库数量字典 {item_id: quantity}（可选）
-    - **warehouse_id**: 出库仓库ID（必填）
+    - **line_warehouses**: 行级出库仓库 {item_id: warehouse_id}（推荐）
+    - **warehouse_id**: 出库仓库ID（未传 line_warehouses 时必填）
     - **warehouse_name**: 出库仓库名称（可选）
     """
+    from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+
     sales_order_id = request.get('sales_order_id')
     if not sales_order_id:
         raise ValidationError("必须提供销售订单ID")
-    
+
     delivery_quantities = request.get('delivery_quantities')
     warehouse_id = request.get('warehouse_id')
     warehouse_name = request.get('warehouse_name')
-    
-    if not warehouse_id:
-        raise ValidationError("必须提供出库仓库ID")
-    
-    return await SalesDeliveryService().pull_from_sales_order(
+    line_warehouses_raw = request.get('line_warehouses')
+    line_warehouses = None
+    if isinstance(line_warehouses_raw, dict):
+        line_warehouses = {}
+        for k, v in line_warehouses_raw.items():
+            try:
+                line_warehouses[int(k)] = int(v)
+            except (TypeError, ValueError):
+                continue
+        if not line_warehouses:
+            line_warehouses = None
+
+    if not line_warehouses and not warehouse_id:
+        raise ValidationError("必须提供出库仓库ID或行级出库仓库")
+
+    result = await SalesOrderService().push_sales_order_to_delivery(
         tenant_id=tenant_id,
-        sales_order_id=sales_order_id,
+        sales_order_id=int(sales_order_id),
         created_by=current_user.id,
         delivery_quantities=delivery_quantities,
-        warehouse_id=warehouse_id,
-        warehouse_name=warehouse_name
+        warehouse_id=int(warehouse_id) if warehouse_id is not None else None,
+        warehouse_name=warehouse_name,
+        line_warehouses=line_warehouses,
     )
+    delivery_id = result.get("delivery_id")
+    if not delivery_id:
+        raise ValidationError("生成销售出库单失败")
+    return await SalesDeliveryService().get_sales_delivery_by_id(tenant_id=tenant_id, delivery_id=int(delivery_id))
 
 
 @router.post("/sales-deliveries/pull-from-sales-forecast", response_model=SalesDeliveryResponse, summary="Build sales delivery from forecast")

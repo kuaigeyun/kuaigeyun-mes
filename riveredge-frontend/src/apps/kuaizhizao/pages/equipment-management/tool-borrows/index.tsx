@@ -23,7 +23,8 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { toolApi } from '../../../services/equipment';
 import { borrowsApi } from '../../../services/toolOps';
 import { formatDateTime } from '../../../../../utils/format';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateRangeFormItemProps, formDateFormItemProps, coerceFormDate } from '../../../../../utils/formDate';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   EQUIPMENT_OPS_PINNED_STATUS_FIELD,
   normalizeEquipmentListResponse,
@@ -33,19 +34,48 @@ import {
 const P = 'app.kuaizhizao.toolOps.borrow';
 const RESOURCE = 'kuaizhizao:tool-borrow';
 
+function toApiBorrowDateTimeString(value: unknown): string | undefined {
+  const d = coerceFormDate(value);
+  return d ? d.format('YYYY-MM-DD HH:mm:ss') : undefined;
+}
+
+function buildToolBorrowSubmitPayload(values: Record<string, unknown>) {
+  const remarkParts: string[] = [];
+  if (values.planned_qty != null && values.planned_qty !== '') {
+    remarkParts.push(`计划数量: ${values.planned_qty}`);
+  }
+  if (values.remark) remarkParts.push(String(values.remark));
+  const workOrderNo =
+    typeof values.work_order_no === 'string' ? values.work_order_no.trim() : undefined;
+  return {
+    tool_id: values.tool_id,
+    borrow_date: toApiBorrowDateTimeString(values.borrow_date),
+    borrower_id: values.borrower_id,
+    borrower_name: values.borrower_name,
+    department_name: values.department,
+    source_type: workOrderNo ? 'work_order' : undefined,
+    source_no: workOrderNo || undefined,
+    remark: remarkParts.length ? remarkParts.join('\n') : undefined,
+  };
+}
+
 interface ToolBorrow {
   id?: number;
   borrow_no?: string;
+  document_no?: string;
   tool_id?: number;
   tool_code?: string;
   tool_name?: string;
   work_order_no?: string;
+  source_no?: string;
   department?: string;
+  department_name?: string;
   borrower_id?: number;
   borrower_name?: string;
   borrow_date?: string;
   planned_qty?: number;
   status?: string;
+  remark?: string;
   updated_at?: string;
 }
 
@@ -58,6 +88,10 @@ const ToolBorrowsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<ToolBorrow | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
+    undefined,
+  );
+  const [submitting, setSubmitting] = useState(false);
   const [toolOptions, setToolOptions] = useState<{ label: string; value: number }[]>([]);
 
   const loadToolOptions = async () => {
@@ -73,32 +107,35 @@ const ToolBorrowsPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrent(null);
+    setFormInitialValues({ borrow_date: dayjs() });
     setModalVisible(true);
     void loadToolOptions();
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ borrow_date: dayjs() });
   };
   useNewShortcut(handleCreate);
 
   const handleEdit = async (record: ToolBorrow) => {
     if (!record.id) return;
-    const detail = await borrowsApi.get(record.id);
-    setIsEdit(true);
-    setCurrent(detail);
-    setModalVisible(true);
-    void loadToolOptions();
-    const borrowerUuid = await resolveUserUuidById(detail.borrower_id);
-    formRef.current?.setFieldsValue({
-      tool_id: detail.tool_id,
-      work_order_no: detail.work_order_no,
-      department: detail.department,
-      borrower_uuid: borrowerUuid,
-      borrower_id: detail.borrower_id,
-      borrower_name: detail.borrower_name,
-      borrow_date: detail.borrow_date ? dayjs(detail.borrow_date) : dayjs(),
-      planned_qty: detail.planned_qty,
-      remark: detail.remark,
-    });
+    try {
+      const detail = await borrowsApi.get(record.id);
+      const borrowerUuid = await resolveUserUuidById(detail.borrower_id);
+      setIsEdit(true);
+      setCurrent(detail);
+      setFormInitialValues({
+        tool_id: detail.tool_id,
+        work_order_no: detail.source_no ?? detail.work_order_no,
+        department: detail.department_name ?? detail.department,
+        borrower_uuid: borrowerUuid,
+        borrower_id: detail.borrower_id,
+        borrower_name: detail.borrower_name,
+        borrow_date: detail.borrow_date ? dayjs(detail.borrow_date) : dayjs(),
+        planned_qty: detail.planned_qty,
+        remark: detail.remark,
+      });
+      setModalVisible(true);
+      void loadToolOptions();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.listFailed`)));
+    }
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -116,25 +153,24 @@ const ToolBorrowsPage: React.FC = () => {
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
-    const payload = {
-      tool_id: values.tool_id,
-      work_order_no: values.work_order_no,
-      department: values.department,
-      borrower_id: values.borrower_id,
-      borrower_name: values.borrower_name,
-      borrow_date: (values.borrow_date as dayjs.Dayjs)?.format('YYYY-MM-DD'),
-      planned_qty: values.planned_qty,
-      remark: values.remark,
-    };
-    if (isEdit && current?.id) {
-      await borrowsApi.update(current.id, payload);
-      messageApi.success(t('common.updateSuccess'));
-    } else {
-      await borrowsApi.create(payload);
-      messageApi.success(t('common.createSuccess'));
+    const payload = buildToolBorrowSubmitPayload(values);
+    setSubmitting(true);
+    try {
+      if (isEdit && current?.id) {
+        await borrowsApi.update(current.id, payload);
+        messageApi.success(t('common.updateSuccess'));
+      } else {
+        await borrowsApi.create(payload);
+        messageApi.success(t('common.createSuccess'));
+      }
+      setModalVisible(false);
+      setFormInitialValues(undefined);
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.submitFailed`)));
+    } finally {
+      setSubmitting(false);
     }
-    setModalVisible(false);
-    actionRef.current?.reload();
   };
 
   const borrowStatusValueEnum = useMemo(
@@ -173,14 +209,15 @@ const ToolBorrowsPage: React.FC = () => {
       },
       {
         title: t(`${P}.col.borrowNo`),
-        dataIndex: 'borrow_no',
+        dataIndex: 'document_no',
         width: 140,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
+        render: (_, r) => r.document_no ?? r.borrow_no ?? '-',
       },
       { title: t(`${P}.col.tool`), dataIndex: 'tool_name', width: 160, ellipsis: true, sorter: true, hideInSearch: true },
-      { title: t(`${P}.col.workOrderNo`), dataIndex: 'work_order_no', width: 130, sorter: true, hideInSearch: true },
+      { title: t(`${P}.col.workOrderNo`), dataIndex: 'source_no', width: 130, sorter: true, hideInSearch: true, render: (_, r) => r.source_no ?? r.work_order_no ?? '-' },
       { title: t(`${P}.col.borrower`), dataIndex: 'borrower_name', width: 100, sorter: true, hideInSearch: true },
       {
         title: t(`${P}.col.borrowDate`),
@@ -230,7 +267,7 @@ const ToolBorrowsPage: React.FC = () => {
             >
               {t('common.detail')}
             </Button>
-            {perms.canUpdate && record.status === '生效' && (
+            {perms.canUpdate && record.status === '领用中' && (
               <Button
                 {...rowActionKind('update')}
                 type="link"
@@ -308,11 +345,16 @@ const ToolBorrowsPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
         onFinish={handleSubmit}
         isEdit={isEdit}
+        loading={submitting}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
+        initialValues={formInitialValues}
         grid={false}
       >
         <Row gutter={16}>
@@ -346,6 +388,7 @@ const ToolBorrowsPage: React.FC = () => {
               name="borrow_date"
               label={t(`${P}.col.borrowDate`)}
               rules={[{ required: true }]}
+              formItemProps={formDateFormItemProps}
               fieldProps={EQUIPMENT_DATE_FIELD_PROPS}
             />
           </Col>

@@ -557,6 +557,56 @@ async def _sum_confirmed_purchase_receipt_qty_for_po_item(
     return total
 
 
+async def occupied_purchase_receipt_qty_by_po_item_ids(
+    tenant_id: int,
+    order_ids: List[int],
+) -> dict[int, Decimal]:
+    """
+    统计采购订单行被未完成入库单占用的数量（草稿/待入库等，不含已入库与作废）。
+    对齐销售出库下推预览：避免重复下推生成多张占用同一余量的入库草稿。
+    """
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+    from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+
+    if not order_ids:
+        return {}
+
+    receipts = await PurchaseReceipt.filter(
+        tenant_id=tenant_id,
+        purchase_order_id__in=order_ids,
+        deleted_at__isnull=True,
+    ).values("id", "status")
+    occupying_receipt_ids: List[int] = []
+    for row in receipts:
+        rid = row.get("id")
+        if rid is None:
+            continue
+        status = str(row.get("status") or "").strip()
+        if status in _PURCHASE_RECEIPT_VOID_STATUSES:
+            continue
+        if status in _PURCHASE_RECEIPT_CONFIRMED_STATUSES:
+            continue
+        occupying_receipt_ids.append(int(rid))
+
+    if not occupying_receipt_ids:
+        return {}
+
+    occupied_by_po_item: dict[int, Decimal] = {}
+    item_rows = await PurchaseReceiptItem.filter(
+        tenant_id=tenant_id,
+        receipt_id__in=occupying_receipt_ids,
+    ).values("purchase_order_item_id", "receipt_quantity")
+    for row in item_rows:
+        po_item_id = int(row.get("purchase_order_item_id") or 0)
+        if po_item_id <= 0:
+            continue
+        qty = Decimal(str(row.get("receipt_quantity") or 0))
+        if qty <= 0:
+            continue
+        occupied_by_po_item[po_item_id] = occupied_by_po_item.get(po_item_id, Decimal("0")) + qty
+    return occupied_by_po_item
+
+
 async def sync_purchase_order_receipt_quantities(
     tenant_id: int,
     purchase_order_id: int,
@@ -6119,13 +6169,24 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             enrich_sales_return_capabilities_on_response,
         )
 
-        item_count = await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_obj.id).count()
-        return enrich_sales_return_capabilities_on_response(
+        items = await SalesReturnItem.filter(
+            tenant_id=tenant_id, return_id=return_obj.id
+        ).order_by("id")
+        item_responses = [SalesReturnItemResponse.model_validate(i) for i in items]
+        item_count = len(item_responses)
+        enriched = enrich_sales_return_capabilities_on_response(
             return_obj,
             response,
             has_items=item_count > 0,
             audit_required=audit_required,
         )
+        if hasattr(enriched, "model_copy"):
+            return enriched.model_copy(
+                update={"items": item_responses, "total_items": item_count}
+            )
+        enriched.items = item_responses
+        enriched.total_items = item_count
+        return enriched
 
     async def create_sales_return(self, tenant_id: int, return_data: SalesReturnCreate, created_by: int) -> SalesReturnResponse:
         """创建销售退货单"""
@@ -6396,16 +6457,34 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         if not order_items:
             raise BusinessLogicError("销售订单没有明细，无法下推销售退货单")
 
+        preview = await self.get_sales_order_return_preview(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+        )
+        returnable_by_item_id = {
+            int(line.sales_order_item_id): Decimal(str(line.source_pending_quantity or 0))
+            for line in preview.lines
+            if line.sales_order_item_id is not None
+        }
+
+        qty_keys = set(return_quantities.keys()) if return_quantities else None
         return_items: List[SalesReturnItemCreate] = []
         for item in order_items:
-            delivered_qty = Decimal(str(item.delivered_quantity or 0))
-            if delivered_qty <= 0:
+            if qty_keys is not None and item.id not in qty_keys:
                 continue
-            selected_qty = Decimal(str(return_quantities.get(item.id, delivered_qty))) if return_quantities and item.id in return_quantities else delivered_qty
+            returnable_qty = returnable_by_item_id.get(int(item.id), Decimal("0"))
+            if returnable_qty <= 0:
+                continue
+            if return_quantities and item.id in return_quantities:
+                selected_qty = Decimal(str(return_quantities[item.id]))
+            else:
+                selected_qty = returnable_qty
             if selected_qty <= 0:
                 continue
-            if selected_qty > delivered_qty:
-                raise BusinessLogicError(f"物料 {item.material_code or item.material_name} 的退货数量不能超过可退数量 {delivered_qty}")
+            if selected_qty > returnable_qty:
+                raise BusinessLogicError(
+                    f"物料 {item.material_code or item.material_name} 的退货数量不能超过可退数量 {returnable_qty}"
+                )
             unit_price = Decimal(str(item.unit_price or 0))
             total_amount = selected_qty * unit_price
             return_items.append(
