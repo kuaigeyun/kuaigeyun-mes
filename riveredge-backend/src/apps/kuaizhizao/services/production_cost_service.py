@@ -20,7 +20,12 @@ from apps.master_data.models.material import Material, BOM
 from apps.master_data.models.process import ProcessRoute, Operation
 from apps.kuaicaiwu.models.cost_calculation import CostCalculation
 from apps.kuaicaiwu.models.cost_rule import CostRule
-from apps.kuaizhizao.utils.bom_helper import get_bom_items_by_material_id, calculate_material_requirements_from_bom
+from apps.kuaizhizao.utils.bom_helper import (
+    get_bom_items_by_material_id,
+    calculate_material_requirements_from_bom,
+    bom_line_required_quantity_decimal,
+    bom_item_base_quantity,
+)
 
 
 class ProductionCostService:
@@ -220,7 +225,14 @@ class ProductionCostService:
                     "component_id": component.id,
                     "component_code": component.main_code,
                     "component_name": component.name,
-                    "quantity": float(bom_item.quantity) * float(quantity),
+                    "quantity": float(
+                        bom_line_required_quantity_decimal(
+                            bom_item.quantity,
+                            bom_item_base_quantity(bom_item),
+                            quantity,
+                            Decimal(str(bom_item.waste_rate or 0)),
+                        )
+                    ),
                     "unit": bom_item.unit or component.base_unit,
                     "waste_rate": float(bom_item.waste_rate),
                     "source_type": component.source_type,
@@ -391,8 +403,11 @@ class ProductionCostService:
                     continue
                 
                 # 计算子件数量（考虑损耗率）
-                component_qty = Decimal(str(bom_item.quantity)) * qty * (
-                    Decimal(1) + Decimal(str(bom_item.waste_rate)) / Decimal(100)
+                component_qty = bom_line_required_quantity_decimal(
+                    bom_item.quantity,
+                    bom_item_base_quantity(bom_item),
+                    qty,
+                    Decimal(str(bom_item.waste_rate or 0)),
                 )
                 
                 component_source_type = component.source_type or "Make"

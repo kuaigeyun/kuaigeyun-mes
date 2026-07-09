@@ -28,7 +28,22 @@ from apps.master_data.constants.material_source_type import (
     CANONICAL_SOURCE_TYPES,
     normalize_material_source_type,
 )
-from apps.kuaizhizao.utils.bom_helper import _select_alternatives, _select_configurable, _bom_effective_filter
+from apps.kuaizhizao.utils.bom_helper import (
+    _select_alternatives,
+    _select_configurable,
+    _bom_effective_filter,
+    bom_line_required_quantity,
+    bom_item_base_quantity,
+)
+
+
+def _bom_component_qty(bom_item: BOM, required_quantity: float) -> float:
+    return bom_line_required_quantity(
+        bom_item.quantity,
+        bom_item_base_quantity(bom_item),
+        required_quantity,
+        bom_item.waste_rate or Decimal("0"),
+    )
 
 
 def _bom_leaf_requirement(
@@ -431,9 +446,7 @@ async def expand_bom_with_source_control(
                 component = await bom_item.component
                 if not component:
                     continue
-                component_qty = float(bom_item.quantity) * required_quantity
-                if bom_item.waste_rate:
-                    component_qty = component_qty * (1 + float(bom_item.waste_rate) / 100)
+                component_qty = _bom_component_qty(bom_item, required_quantity)
                 ct = component.source_type
                 _expand_kw = dict(
                     tenant_id=tenant_id,
@@ -471,9 +484,7 @@ async def expand_bom_with_source_control(
                 component = await bom_item.component
                 if not component:
                     continue
-                component_qty = float(bom_item.quantity) * required_quantity
-                if bom_item.waste_rate:
-                    component_qty = component_qty * (1 + float(bom_item.waste_rate) / 100)
+                component_qty = _bom_component_qty(bom_item, required_quantity)
                 ct = component.source_type
                 _expand_kw = dict(
                     tenant_id=tenant_id,
@@ -558,9 +569,7 @@ async def expand_bom_with_source_control(
             component = await bom_item.component
             if not component:
                 continue
-            component_qty = float(bom_item.quantity) * required_quantity
-            if bom_item.waste_rate:
-                component_qty = component_qty * (1 + float(bom_item.waste_rate) / 100)
+            component_qty = _bom_component_qty(bom_item, required_quantity)
             component_source_type = component.source_type
             if component_source_type == SOURCE_TYPE_PHANTOM:
                 child_requirements = await expand_bom_with_source_control(
@@ -595,9 +604,7 @@ async def expand_bom_with_source_control(
             component = await bom_item.component
             if not component:
                 continue
-            component_qty = float(bom_item.quantity) * required_quantity
-            if bom_item.waste_rate:
-                component_qty = component_qty * (1 + float(bom_item.waste_rate) / 100)
+            component_qty = _bom_component_qty(bom_item, required_quantity)
             component_source_type = component.source_type
             if component_source_type == SOURCE_TYPE_PHANTOM:
                 child_requirements = await expand_bom_with_source_control(

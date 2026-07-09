@@ -240,7 +240,11 @@ class OutsourceCostService:
         Returns:
             tuple[Decimal, List[Dict[str, Any]]]: (材料成本, 成本明细)
         """
-        from apps.kuaizhizao.utils.bom_helper import get_bom_items_by_material_id
+        from apps.kuaizhizao.utils.bom_helper import (
+            get_bom_items_by_material_id,
+            bom_line_required_quantity_decimal,
+            bom_item_base_quantity,
+        )
         
         total_cost = Decimal(0)
         cost_breakdown = []
@@ -262,8 +266,11 @@ class OutsourceCostService:
                 continue
             
             # 计算子件数量（考虑损耗率）
-            component_qty = Decimal(str(bom_item.quantity)) * quantity * (
-                Decimal(1) + Decimal(str(bom_item.waste_rate)) / Decimal(100)
+            component_qty = bom_line_required_quantity_decimal(
+                bom_item.quantity,
+                bom_item_base_quantity(bom_item),
+                quantity,
+                Decimal(str(bom_item.waste_rate or 0)),
             )
             
             # 获取物料单价

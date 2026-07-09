@@ -25,6 +25,7 @@ import { downloadImportTemplateXlsx, parseImportXlsxFile } from './uni-import-xl
 import { UniImportMappingModal } from './uni-import-mapping-modal';
 import {
   UniImportCustomModal,
+  normalizeRelationEntities,
   type UniImportCustomModalApplyResult,
 } from './uni-import-custom-modal';
 import {
@@ -309,7 +310,10 @@ export const UniImport: React.FC<UniImportProps> = ({
     || (colorScheme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   useEffect(() => {
-    if (open ?? visible) return;
+    if (open ?? visible) {
+      setCustomRelationEntities((prev) => normalizeRelationEntities(prev, relationDefaultEntities));
+      return;
+    }
     setUploadedSheetRows(null);
     setMappingModalOpen(false);
     setMappingRawRows([]);
@@ -321,7 +325,7 @@ export const UniImport: React.FC<UniImportProps> = ({
     setPreviewData([]);
     setPrecheckResult(null);
     setPrecheckLoading(false);
-  }, [open, visible]);
+  }, [open, visible, relationDefaultEntities, relationDefaultWriteStrategy]);
 
   useEffect(() => {
     if (!(open ?? visible)) return;
@@ -417,8 +421,12 @@ export const UniImport: React.FC<UniImportProps> = ({
   };
 
   const handleCustomApply = (result: UniImportCustomModalApplyResult) => {
+    const sanitizedRelationEntities = normalizeRelationEntities(
+      result.relationEntities,
+      relationDefaultEntities,
+    );
     setCustomImportFieldKeys(result.selectedFieldKeys);
-    setCustomRelationEntities(result.relationEntities);
+    setCustomRelationEntities(sanitizedRelationEntities);
     setCustomWriteStrategy(result.writeStrategy);
     const savedMap = getPreference<Record<string, string[]>>('ui.import_field_selection', {});
     const nextMap = {
@@ -1187,6 +1195,7 @@ export const UniImport: React.FC<UniImportProps> = ({
           initialSelectedFieldKeys={selectedImportFieldKeys}
           enableRelationImport={showRelationImport}
           defaultRelationEntities={relationDefaultEntities}
+          availableRelationEntities={relationDefaultEntities}
           defaultWriteStrategy={relationDefaultWriteStrategy}
           supportedStrategies={relationSupportedStrategies}
           initialRelationEntities={customRelationEntities}

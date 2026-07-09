@@ -3452,6 +3452,123 @@ class MaterialService:
         return BOMResponse.model_validate(bom)
     
     @staticmethod
+    def build_default_bom_name(
+        material: Material,
+        bom_code: Optional[str],
+    ) -> str:
+        """默认 BOM 名称：主件名称 + 空格 + BOM编号（版本号已在编号中，不再重复）。"""
+        main_label = (material.name or material.main_code or material.code or "").strip()
+        code = (bom_code or "").strip()
+        if main_label and code:
+            return f"{main_label} {code}"
+        return main_label or code
+
+    @staticmethod
+    def resolve_version_bom_name(
+        bom_name: Optional[str],
+        material: Material,
+        bom_code: Optional[str],
+        version: str,
+    ) -> Optional[str]:
+        """未传 bom_name 时自动生成；显式空字符串存为 None。"""
+        if bom_name is None:
+            default = MaterialService.build_default_bom_name(material, bom_code)
+            return default or None
+        stripped = str(bom_name).strip()
+        return stripped or None
+
+    @staticmethod
+    def _pick_consistent_import_field(
+        items: List[Any],
+        attr: str,
+        parent_label: str,
+        field_label: str,
+    ) -> Optional[str]:
+        """同父件多行时，取首个非空值并校验一致。"""
+        values: List[str] = []
+        for item in items:
+            raw = getattr(item, attr, None)
+            if raw is None:
+                continue
+            text = str(raw).strip()
+            if text:
+                values.append(text)
+        if not values:
+            return None
+        first = values[0]
+        if any(v != first for v in values):
+            raise ValidationError(f"父件 {parent_label} 的{field_label}在同批次导入中不一致")
+        return first
+
+    @staticmethod
+    def _resolve_parent_bom_import_meta(
+        items: List[Any],
+        data: "BOMBatchImport",
+        parent_material: Material,
+        parent_label: str,
+    ) -> tuple:
+        """解析单个父件分组的 BOM 头表字段（版本/编号/名称/基准数量）。"""
+        version = (
+            MaterialService._pick_consistent_import_field(items, "version", parent_label, "版本号")
+            or data.version
+            or "1.0"
+        )
+        bom_code = (
+            MaterialService._pick_consistent_import_field(items, "bom_code", parent_label, "BOM编号")
+            or data.bom_code
+        )
+        row_bom_name = MaterialService._pick_consistent_import_field(
+            items, "bom_name", parent_label, "BOM名称"
+        )
+        bom_name_source = row_bom_name if row_bom_name is not None else data.bom_name
+        bom_name = MaterialService.resolve_version_bom_name(
+            bom_name_source,
+            parent_material,
+            bom_code,
+            version,
+        )
+
+        explicit_bases = [
+            Decimal(str(getattr(item, "base_quantity")))
+            for item in items
+            if getattr(item, "base_quantity", None) is not None
+        ]
+        if explicit_bases:
+            parent_base_qty = explicit_bases[0]
+            if any(bq != parent_base_qty for bq in explicit_bases):
+                raise ValidationError(f"父件 {parent_label} 的基准数量在同批次导入中不一致")
+        else:
+            parent_base_qty = Decimal(str(data.base_quantity or 1))
+
+        return version, bom_code, bom_name, parent_base_qty
+
+    @staticmethod
+    async def _writeback_component_source_types_from_bom_items(
+        tenant_id: int,
+        items: List[Any],
+        components: List[Material],
+    ) -> None:
+        """子件物料未配置来源时，将 BOM 行上的 source_type 回写至物料主数据。"""
+        component_map = {c.id: c for c in components}
+        for item in items:
+            raw_source = getattr(item, "source_type", None)
+            if not raw_source:
+                continue
+            component = component_map.get(item.component_id)
+            if not component:
+                continue
+            existing = normalize_material_source_type(getattr(component, "source_type", None))
+            if existing:
+                continue
+            patch: Dict[str, Any] = {"source_type": str(raw_source).strip()}
+            _apply_canonical_material_source_type(patch)
+            new_source = patch.get("source_type")
+            if not new_source:
+                continue
+            component.source_type = new_source
+            await component.save(update_fields=["source_type", "updated_at"])
+
+    @staticmethod
     async def create_bom_batch(
         tenant_id: int,
         data: BOMBatchCreate
@@ -3485,12 +3602,18 @@ class MaterialService:
             tenant_id=tenant_id,
             id__in=component_ids,
             deleted_at__isnull=True
-        )
+        ).all()
         
         found_component_ids = {c.id for c in components}
         missing_ids = set(component_ids) - found_component_ids
         if missing_ids:
             raise ValidationError(f"子物料 {missing_ids} 不存在")
+        
+        await MaterialService._writeback_component_source_types_from_bom_items(
+            tenant_id,
+            data.items,
+            list(components),
+        )
         
         # 检查主物料和子物料不能相同
         if data.material_id in component_ids:
@@ -3547,12 +3670,20 @@ class MaterialService:
         
         # 批量创建BOM（PLM 层级：根主料 level 0，直接子件 level 1；path 为 父/子 路径）
         bom_list = []
+        version_base_qty = data.base_quantity or Decimal("1")
+        version_bom_name = MaterialService.resolve_version_bom_name(
+            data.bom_name,
+            material,
+            data.bom_code,
+            data.version or "1.0",
+        )
         for item in data.items:
             bom = await BOM.create(
                 tenant_id=tenant_id,
                 material_id=data.material_id,
                 component_id=item.component_id,
                 quantity=item.quantity,
+                base_quantity=version_base_qty,
                 unit=item.unit,
                 waste_rate=item.waste_rate if hasattr(item, 'waste_rate') else Decimal("0.00"),
                 is_required=item.is_required if hasattr(item, 'is_required') else True,
@@ -3561,6 +3692,7 @@ class MaterialService:
                 path=f"{data.material_id}/{item.component_id}",
                 version=data.version,
                 bom_code=data.bom_code,
+                bom_name=version_bom_name,
                 effective_date=data.effective_date,
                 expiry_date=data.expiry_date,
                 approval_status=data.approval_status,
@@ -3706,6 +3838,7 @@ class MaterialService:
         sql = f"""
             SELECT material_id, version,
                    MAX(bom_code) AS bom_code,
+                   MAX(bom_name) AS bom_name,
                    MAX(approval_status) AS approval_status,
                    BOOL_OR(is_default) AS is_default,
                    BOOL_OR(is_obsolete) AS is_obsolete,
@@ -3727,10 +3860,11 @@ class MaterialService:
                     "material_id": r[0],
                     "version": r[1] or "1.0",
                     "bom_code": r[2],
-                    "approval_status": (r[3] or "draft").lower(),
-                    "is_default": bool(r[4]) if r[4] is not None else False,
-                    "is_obsolete": bool(r[5]) if r[5] is not None else False,
-                    "item_count": int(r[6]) if r[6] is not None else 0,
+                    "bom_name": r[3],
+                    "approval_status": (r[4] or "draft").lower(),
+                    "is_default": bool(r[5]) if r[5] is not None else False,
+                    "is_obsolete": bool(r[6]) if r[6] is not None else False,
+                    "item_count": int(r[7]) if r[7] is not None else 0,
                 }
                 for r in raw
             ]
@@ -3873,7 +4007,7 @@ class MaterialService:
                 and update_data.get("is_default") is True
             )
             if not only_set_default:
-                raise ValidationError(f"BOM {bom.bom_code} (版本 {bom.version}) 已审核通过，禁止修改。请先反审核或创建新版本。")
+                raise ValidationError(f"BOM {bom.bom_code} (版本 {bom.version}) 已审核通过，禁止修改。请先撤销审核或创建新版本。")
         
         # 如果更新主物料ID，检查主物料是否存在
         if data.material_id and data.material_id != bom.material_id:
@@ -3957,7 +4091,7 @@ class MaterialService:
             
         # 检查BOM状态：已审核的BOM不可删除
         if bom.approval_status == 'approved':
-            raise ValidationError(f"BOM {bom.bom_code} (版本 {bom.version}) 已审核通过，禁止删除。请先反审核。")
+            raise ValidationError(f"BOM {bom.bom_code} (版本 {bom.version}) 已审核通过，禁止删除。请先撤销审核。")
         
         # 软删除
         from tortoise import timezone
@@ -4027,7 +4161,7 @@ class MaterialService:
             approval_comment: 审核意见
             approved: 是否通过（True=通过，False=拒绝）
             recursive: 是否递归处理子BOM
-            is_reverse: 是否反审核（True=重置为草稿）
+            is_reverse: 是否撤销审核（True=重置为草稿）
             
         Returns:
             List[BOMResponse]: 审核后的BOM对象列表
@@ -4198,6 +4332,7 @@ class MaterialService:
                  material_id=source.material_id,
                  component_id=source.component_id,
                  quantity=source.quantity,
+                 base_quantity=source.base_quantity or Decimal("1"),
                  unit=source.unit,
                  waste_rate=source.waste_rate,
                  is_required=source.is_required,
@@ -4205,6 +4340,7 @@ class MaterialService:
                  path=source.path,
                  version=new_version,
                  bom_code=new_bom_code,  # 升版时 BOM 编码随版本更新
+                 bom_name=source.bom_name,
                  effective_date=timezone.now(), # 生效日期更新为当前
                  description=source.description,
                  remark=version_remark if version_remark else source.remark,
@@ -4634,20 +4770,26 @@ class MaterialService:
             
             return current_level, new_path
         
-        # 步骤5.5：校验已审核版本不可直接修改
-        target_version = data.version or "1.0"
-        parent_ids = set(code_to_material[item.parent_code] for item in data.items)
-        for pid in parent_ids:
+        # 步骤5.5：校验已审核版本不可直接修改（按父件+解析后的版本）
+        parent_items_map_pre: Dict[int, List[Any]] = defaultdict(list)
+        for item in data.items:
+            parent_items_map_pre[code_to_material[item.parent_code]].append(item)
+        for parent_id, items in parent_items_map_pre.items():
+            parent_material = await Material.get(id=parent_id)
+            parent_label = material_id_to_code.get(parent_id, str(parent_id))
+            target_version, _, _, _ = MaterialService._resolve_parent_bom_import_meta(
+                items, data, parent_material, parent_label
+            )
             approved_exists = await BOM.filter(
                 tenant_id=tenant_id,
-                material_id=pid,
+                material_id=parent_id,
                 version=target_version,
                 approval_status="approved",
                 deleted_at__isnull=True,
             ).exists()
             if approved_exists:
                 raise ValidationError(
-                    f"版本 {target_version} 已审核通过，禁止直接修改。请先升版或使用「另存为新版本」。"
+                    f"父件 {parent_label} 的版本 {target_version} 已审核通过，禁止直接修改。请先升版或使用「另存为新版本」。"
                 )
         
         # 步骤6：创建BOM数据 (Refactored: Clean Replace & Auto-Numbering)
@@ -4664,10 +4806,15 @@ class MaterialService:
             parent_items_map[parent_id].append(item)
             
         for parent_id, items in parent_items_map.items():
-            # 1. 目标版本已在步骤5.5确定
+            parent_material = await Material.get(id=parent_id)
+            parent_label = material_id_to_code.get(parent_id, str(parent_id))
+            target_version, bom_code_hint, parent_bom_name, parent_base_qty = (
+                MaterialService._resolve_parent_bom_import_meta(
+                    items, data, parent_material, parent_label
+                )
+            )
             # 2. 确定 BOM 编码 (Auto-Numbering)
-            # 优先使用现有同版本的编码，或者请求中指定的编码
-            bom_code = data.bom_code
+            bom_code = bom_code_hint
             
             # 如果请求未指定，尝试查找该父件该版本的现有编码
             if not bom_code:
@@ -4747,6 +4894,7 @@ class MaterialService:
                     material_id=parent_id,
                     component_id=component_id,
                     quantity=item.quantity,
+                    base_quantity=parent_base_qty,
                     unit=item.unit,
                     waste_rate=item.waste_rate or Decimal("0.00"),
                     is_required=item.is_required if item.is_required is not None else True,
@@ -4754,6 +4902,7 @@ class MaterialService:
                     path=path,
                     version=target_version,
                     bom_code=bom_code,
+                    bom_name=parent_bom_name,
                     effective_date=data.effective_date,
                     description=data.description,
                     remark=row_remark,
@@ -5751,12 +5900,15 @@ class MaterialService:
         tree = await build_tree(material_id)
         
         material = await Material.get(id=material_id)
+        from apps.kuaizhizao.utils.bom_helper import bom_item_base_quantity
         
         return {
             "material_id": material_id,
             "material_code": material.main_code,
             "material_name": material.name,
             "version": resolved_version or bom_items[0].version,
+            "base_quantity": float(bom_item_base_quantity(bom_items[0])),
+            "bom_name": bom_items[0].bom_name,
             "approval_status": bom_items[0].approval_status,
             "items": tree
         }
@@ -5784,6 +5936,11 @@ class MaterialService:
             Dict[str, Any]: 计算结果，包含每个子物料的实际用量
         """
         from collections import defaultdict
+        from apps.kuaizhizao.utils.bom_helper import (
+            bom_line_unit_quantity,
+            bom_line_required_quantity_decimal,
+            bom_item_base_quantity,
+        )
         
         # 查询BOM数据
         query = BOM.filter(
@@ -5803,34 +5960,28 @@ class MaterialService:
         
         bom_items = await query.prefetch_related("component").all()
         
+        version_base_qty = (
+            bom_item_base_quantity(bom_items[0]) if bom_items else Decimal("1")
+        )
         result = {
             "material_id": material_id,
             "parent_quantity": float(parent_quantity),
+            "base_quantity": float(version_base_qty),
             "components": []
         }
-        
-        # 递归计算每个子物料的用量
-        def calculate_component_quantity(
-            comp_id: int,
-            comp_quantity: Decimal,
-            comp_waste_rate: Decimal,
-            parent_qty: Decimal
-        ) -> Decimal:
-            """计算子物料的实际用量（考虑损耗率）"""
-            # 实际需要 = 基础用量 × (1 + 损耗率) × 父物料数量
-            actual_quantity = comp_quantity * (Decimal("1") + comp_waste_rate / Decimal("100")) * parent_qty
-            return actual_quantity
         
         # 计算直接子物料的用量
         component_quantities = defaultdict(Decimal)
         
         for bom in bom_items:
             if bom.is_required:
-                actual_qty = calculate_component_quantity(
-                    bom.component_id,
+                line_base = bom_item_base_quantity(bom)
+                unit_qty = bom_line_unit_quantity(bom.quantity, line_base)
+                actual_qty = bom_line_required_quantity_decimal(
                     bom.quantity,
+                    line_base,
+                    parent_quantity,
                     bom.waste_rate or Decimal("0.00"),
-                    parent_quantity
                 )
                 component_quantities[bom.component_id] += actual_qty
                 
@@ -5839,7 +5990,9 @@ class MaterialService:
                     "component_id": bom.component_id,
                     "component_code": component.main_code,
                     "component_name": component.name,
-                    "base_quantity": float(bom.quantity),
+                    "line_quantity": float(bom.quantity),
+                    "base_quantity": float(line_base),
+                    "unit_quantity": float(unit_qty),
                     "waste_rate": float(bom.waste_rate or Decimal("0.00")),
                     "actual_quantity": float(actual_qty),
                     "unit": bom.unit,
@@ -5917,6 +6070,7 @@ class MaterialService:
                     material_id=bom.material_id,
                     component_id=bom.component_id,
                     quantity=bom.quantity,
+                    base_quantity=bom.base_quantity or Decimal("1"),
                     unit=bom.unit,
                     waste_rate=bom.waste_rate,
                     is_required=bom.is_required,
@@ -5924,6 +6078,7 @@ class MaterialService:
                     path=bom.path,
                     version=data.version,
                     bom_code=current_bom_code,  # 使用相同的BOM编码
+                    bom_name=bom.bom_name,
                     effective_date=data.effective_date or bom.effective_date,
                     expiry_date=bom.expiry_date,
                     approval_status="draft",  # 新版本默认为草稿

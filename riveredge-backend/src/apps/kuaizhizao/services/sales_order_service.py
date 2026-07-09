@@ -4408,9 +4408,12 @@ class SalesOrderService:
                 elif comp.defaults.get("moving_average_cost"):
                     remark = "读取自移动平均成本"
             
+            from apps.kuaizhizao.utils.bom_helper import bom_line_unit_quantity, bom_item_base_quantity
+
             qty = bom.quantity or Decimal("0")
             waste_rate = bom.waste_rate or Decimal("0")
-            actual_qty = qty * (1 + waste_rate / 100)
+            unit_qty = bom_line_unit_quantity(qty, bom_item_base_quantity(bom))
+            actual_qty = unit_qty * (Decimal("1") + waste_rate / Decimal("100"))
             item_total = actual_qty * unit_cost
             total_material_cost += item_total
             

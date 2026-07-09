@@ -173,12 +173,12 @@ class BOMChangeService:
         change_id: int,
         operator_id: int,
     ) -> BOMChangeResponse:
-        """反审核已审批且未执行的变更。"""
+        """撤销审核已审批且未执行的变更。"""
         from core.services.approval.uni_audit_service import UniAuditService
 
         change = await BOMChangeService._get_change_or_raise(tenant_id, change_id)
         if change.status != "approved":
-            raise ValidationError(f"变更记录状态为 {change.status}，无法反审核")
+            raise ValidationError(f"变更记录状态为 {change.status}，无法撤销审核")
 
         from apps.kuaiplm.services.engineering_change_audit import is_audit_required
         from core.services.approval.audit_transition import resolve_revoke_landing_phase

@@ -7,7 +7,11 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from apps.kuaizhizao.utils.bom_helper import get_bom_items_by_material_id
+from apps.kuaizhizao.utils.bom_helper import (
+    get_bom_items_by_material_id,
+    bom_line_required_quantity,
+    bom_item_base_quantity,
+)
 from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_BUY,
     SOURCE_TYPE_CONFIGURE,
@@ -132,9 +136,12 @@ async def _walk_bom_children(
         component = await bom_item.component
         if not component:
             continue
-        qty = float(bom_item.quantity or 0) * required_quantity
-        if bom_item.waste_rate:
-            qty *= 1 + float(bom_item.waste_rate) / 100
+        qty = bom_line_required_quantity(
+            bom_item.quantity or Decimal("0"),
+            bom_item_base_quantity(bom_item),
+            required_quantity,
+            bom_item.waste_rate or Decimal("0"),
+        )
         if qty <= 0:
             continue
 

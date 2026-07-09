@@ -274,6 +274,7 @@ class BOM(BaseModel):
         material_id: 主物料ID（外键，父件）
         component_id: 子物料ID（外键，子件）
         quantity: 用量（必填，数字）
+        base_quantity: 基准数量（本版本用量对应的成品基数，默认 1）
         unit: 单位（可选，如：个、kg、m等）
         waste_rate: 损耗率（可选，百分比，如：5%，用于计算实际用料数量）
         is_required: 是否必选（可选，是/否，默认：是）
@@ -286,6 +287,7 @@ class BOM(BaseModel):
         remark: 备注
         version: BOM版本号
         bom_code: BOM编码（升版时随版本更新，如 BOM-XXX-1.0 -> BOM-XXX-1.1）
+        bom_name: BOM名称（版本级，可空）
         effective_date: 生效日期
         expiry_date: 失效日期
         is_obsolete: 是否已失效（人为设置）
@@ -326,6 +328,12 @@ class BOM(BaseModel):
     
     # 基本信息
     quantity = fields.DecimalField(max_digits=18, decimal_places=4, description="用量（必填，数字）")
+    base_quantity = fields.DecimalField(
+        max_digits=18,
+        decimal_places=4,
+        default=1,
+        description="基准数量（本版本用量对应的成品基数）",
+    )
     unit = fields.CharField(max_length=20, null=True, description="单位（可选，如：个、kg、m等）")
     
     # 损耗率和必选标识（根据优化设计规范新增）
@@ -349,6 +357,7 @@ class BOM(BaseModel):
     # 版本控制
     version = fields.CharField(max_length=50, default="1.0", description="BOM版本号")
     bom_code = fields.CharField(max_length=100, null=True, description="BOM编码（升版时随版本更新）")
+    bom_name = fields.CharField(max_length=200, null=True, description="BOM名称（版本级，可空）")
     is_default = fields.BooleanField(default=False, description="是否为默认版本（每个物料至多一个默认版本）")
     
     # 有效期管理

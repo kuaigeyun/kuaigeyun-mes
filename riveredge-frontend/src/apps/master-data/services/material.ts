@@ -40,6 +40,7 @@ import type {
   BOMHierarchy,
   BOMHierarchyItem,
   BOMQuantityResult,
+  BOMQuantityComponent,
   BOMVersionCreate,
   BOMVersionCompare,
   BOMVersionCompareResult,
@@ -111,6 +112,7 @@ function mapBomFromApi(raw: Record<string, unknown>): BOM {
     materialId: (raw.material_id ?? raw.materialId) as number,
     componentId: (raw.component_id ?? raw.componentId) as number,
     quantity: Number(raw.quantity),
+    baseQuantity: Number(raw.base_quantity ?? raw.baseQuantity ?? 1),
     unit: (raw.unit as string) ?? undefined,
     wasteRate: Number(raw.waste_rate ?? raw.wasteRate ?? 0),
     isRequired: (raw.is_required ?? raw.isRequired) !== false,
@@ -118,6 +120,7 @@ function mapBomFromApi(raw: Record<string, unknown>): BOM {
     path: (raw.path as string) ?? undefined,
     version: (raw.version as string) ?? '1.0',
     bomCode: (raw.bom_code ?? raw.bomCode) as string | undefined,
+    bomName: (raw.bom_name ?? raw.bomName) as string | null | undefined,
     isDefault: (raw.is_default ?? raw.isDefault) === true,
     effectiveDate: (raw.effective_date ?? raw.effectiveDate) as string | undefined,
     expiryDate: (raw.expiry_date ?? raw.expiryDate) as string | undefined,
@@ -188,10 +191,37 @@ function mapBomHierarchyFromApi(raw: Record<string, unknown>): BOMHierarchy {
     materialCode: materialCode ? String(materialCode) : '',
     materialName: materialName ? String(materialName) : '',
     version: raw.version ? String(raw.version) : '1.0',
+    baseQuantity: Number(raw.base_quantity ?? raw.baseQuantity ?? 1),
+    bomName: (raw.bom_name ?? raw.bomName) as string | null | undefined,
     approvalStatus: raw.approval_status as any,
     items: items ? items.map(item => mapBomHierarchyItemFromApi(item)) : [],
   };
 
+}
+
+function mapBomQuantityComponentFromApi(raw: Record<string, unknown>): BOMQuantityComponent {
+  return {
+    componentId: Number(raw.component_id ?? raw.componentId),
+    componentCode: String(raw.component_code ?? raw.componentCode ?? ''),
+    componentName: String(raw.component_name ?? raw.componentName ?? ''),
+    lineQuantity: Number(raw.line_quantity ?? raw.lineQuantity ?? raw.quantity ?? 0),
+    baseQuantity: Number(raw.base_quantity ?? raw.baseQuantity ?? 1),
+    unitQuantity: Number(raw.unit_quantity ?? raw.unitQuantity ?? 0),
+    wasteRate: Number(raw.waste_rate ?? raw.wasteRate ?? 0),
+    actualQuantity: Number(raw.actual_quantity ?? raw.actualQuantity ?? 0),
+    unit: (raw.unit as string) ?? undefined,
+    level: Number(raw.level ?? 0),
+  };
+}
+
+function mapBomQuantityResultFromApi(raw: Record<string, unknown>): BOMQuantityResult {
+  const components = (raw.components as Record<string, unknown>[] | undefined) ?? [];
+  return {
+    materialId: Number(raw.material_id ?? raw.materialId),
+    parentQuantity: Number(raw.parent_quantity ?? raw.parentQuantity ?? 1),
+    baseQuantity: Number(raw.base_quantity ?? raw.baseQuantity ?? 1),
+    components: components.map((c) => mapBomQuantityComponentFromApi(c)),
+  };
 }
 
 /**
@@ -499,6 +529,7 @@ export const bomApi = {
       material_id: item.material_id ?? item.materialId,
       version: item.version ?? '1.0',
       bom_code: item.bom_code ?? item.bomCode,
+      bom_name: item.bom_name ?? item.bomName ?? null,
       approval_status: (item.approval_status ?? item.approvalStatus) ?? 'draft',
       is_default: !!(item.is_default ?? item.isDefault),
       is_obsolete: !!(item.is_obsolete ?? item.isObsolete),
@@ -674,6 +705,10 @@ export const bomApi = {
     const payload = {
       items: data.items.map((item) => ({
         parent_code: item.parentCode,
+        version: item.version,
+        bom_code: item.bomCode,
+        bom_name: item.bomName,
+        base_quantity: item.baseQuantity,
         component_code: item.componentCode,
         quantity: item.quantity,
         unit: item.unit,
@@ -689,6 +724,8 @@ export const bomApi = {
         remark: item.remark,
       })),
       version: data.version,
+      base_quantity: data.baseQuantity ?? 1,
+      bom_name: data.bomName ?? undefined,
       bom_code: data.bomCode,
       effective_date: data.effectiveDate,
       description: data.description,
@@ -740,9 +777,10 @@ export const bomApi = {
     parentQuantity: number = 1.0,
     version?: string
   ): Promise<BOMQuantityResult> => {
-    return api.get(`/apps/master-data/materials/bom/material/${materialId}/quantity`, {
+    const raw = await api.get(`/apps/master-data/materials/bom/material/${materialId}/quantity`, {
       params: { parent_quantity: parentQuantity, version },
     });
+    return mapBomQuantityResultFromApi((raw ?? {}) as Record<string, unknown>);
   },
   
   /**

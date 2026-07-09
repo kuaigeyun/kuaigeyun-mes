@@ -621,7 +621,7 @@ async def batch_approve_bom(
     bom_uuids: List[str] = Body(..., description="BOM UUID列表"),
     approved: bool = Body(True, description="是否通过审核"),
     recursive: bool = Body(False, description="是否递归处理子BOM"),
-    is_reverse: bool = Body(False, description="是否反审核（重置为草稿）"),
+    is_reverse: bool = Body(False, description="是否撤销审核（重置为草稿）"),
     approval_comment: Optional[str] = Body(None, description="审核意见"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)

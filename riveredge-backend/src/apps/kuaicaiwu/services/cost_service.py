@@ -527,7 +527,11 @@ class CostCalculationService(AppBaseService[CostCalculation]):
 
     async def _calculate_product_material_cost(self, tenant_id: int, product: Material, quantity: Decimal) -> Decimal:
         from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
-        from apps.kuaizhizao.utils.bom_helper import get_bom_items_by_material_id
+        from apps.kuaizhizao.utils.bom_helper import (
+            get_bom_items_by_material_id,
+            bom_line_required_quantity_decimal,
+            bom_item_base_quantity,
+        )
 
         cost_svc = InventoryCostService()
         bom_items = await get_bom_items_by_material_id(
@@ -544,8 +548,11 @@ class CostCalculationService(AppBaseService[CostCalculation]):
             component = await bom_item.component
             if not component:
                 continue
-            component_qty = Decimal(str(bom_item.quantity)) * quantity * (
-                Decimal(1) + Decimal(str(bom_item.waste_rate or 0)) / Decimal(100)
+            component_qty = bom_line_required_quantity_decimal(
+                bom_item.quantity,
+                bom_item_base_quantity(bom_item),
+                quantity,
+                Decimal(str(bom_item.waste_rate or 0)),
             )
             unit_price = await cost_svc.get_material_unit_cost(tenant_id, int(component.id))
             total += component_qty * unit_price
@@ -654,7 +661,11 @@ class CostCalculationService(AppBaseService[CostCalculation]):
 
     async def _get_product_material_cost_breakdown(self, tenant_id: int, product: Material, quantity: Decimal) -> List[Dict[str, Any]]:
         from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
-        from apps.kuaizhizao.utils.bom_helper import get_bom_items_by_material_id
+        from apps.kuaizhizao.utils.bom_helper import (
+            get_bom_items_by_material_id,
+            bom_line_required_quantity_decimal,
+            bom_item_base_quantity,
+        )
 
         cost_svc = InventoryCostService()
         bom_items = await get_bom_items_by_material_id(
@@ -665,8 +676,11 @@ class CostCalculationService(AppBaseService[CostCalculation]):
             component = await bom_item.component
             if not component:
                 continue
-            component_qty = Decimal(str(bom_item.quantity)) * quantity * (
-                Decimal(1) + Decimal(str(bom_item.waste_rate or 0)) / Decimal(100)
+            component_qty = bom_line_required_quantity_decimal(
+                bom_item.quantity,
+                bom_item_base_quantity(bom_item),
+                quantity,
+                Decimal(str(bom_item.waste_rate or 0)),
             )
             unit_price = await cost_svc.get_material_unit_cost(tenant_id, int(component.id))
             breakdown.append({

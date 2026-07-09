@@ -22,6 +22,7 @@ export interface UniImportCustomModalProps {
   initialSelectedFieldKeys?: string[];
   enableRelationImport?: boolean;
   defaultRelationEntities?: UniRelationImportEntity[];
+  availableRelationEntities?: UniRelationImportEntity[];
   defaultWriteStrategy?: UniRelationImportWriteStrategy;
   supportedStrategies?: UniRelationImportWriteStrategy[];
   initialRelationEntities?: UniRelationImportEntity[];
@@ -37,13 +38,30 @@ interface CustomImportRow {
   canSelect: boolean;
 }
 
+const ALL_RELATION_ENTITIES: UniRelationImportEntity[] = [
+  'material',
+  'processRoute',
+  'operation',
+  'performance',
+];
+
+export const normalizeRelationEntities = (
+  entities: UniRelationImportEntity[] | undefined,
+  available: UniRelationImportEntity[],
+): UniRelationImportEntity[] => {
+  const allowed = new Set(available);
+  const picked = (entities ?? []).filter((entity) => allowed.has(entity));
+  return picked.length ? picked : available;
+};
+
 export const UniImportCustomModal: React.FC<UniImportCustomModalProps> = ({
   open,
   headers,
   fieldMap,
   initialSelectedFieldKeys,
   enableRelationImport = false,
-  defaultRelationEntities = ['material', 'processRoute', 'operation', 'performance'],
+  defaultRelationEntities = ALL_RELATION_ENTITIES,
+  availableRelationEntities = ALL_RELATION_ENTITIES,
   defaultWriteStrategy = 'upsert',
   supportedStrategies = ['upsert', 'create_only', 'link_only', 'strict_fail'],
   initialRelationEntities,
@@ -70,8 +88,11 @@ export const UniImportCustomModal: React.FC<UniImportCustomModalProps> = ({
   );
   const [orderedRows, setOrderedRows] = useState<CustomImportRow[]>(allRows);
   const [selectedFieldKeys, setSelectedFieldKeys] = useState<string[]>(allFieldKeys);
-  const [relationEntities, setRelationEntities] = useState<UniRelationImportEntity[]>(
-    initialRelationEntities?.length ? initialRelationEntities : defaultRelationEntities,
+  const [relationEntities, setRelationEntities] = useState<UniRelationImportEntity[]>(() =>
+    normalizeRelationEntities(
+      initialRelationEntities?.length ? initialRelationEntities : defaultRelationEntities,
+      availableRelationEntities,
+    ),
   );
   const [writeStrategy, setWriteStrategy] = useState<UniRelationImportWriteStrategy>(
     initialWriteStrategy ?? defaultWriteStrategy,
@@ -98,7 +119,10 @@ export const UniImportCustomModal: React.FC<UniImportCustomModalProps> = ({
     setOrderedRows([...selectedRows, ...unselectedRows]);
     setSelectedFieldKeys(normalizedSelection);
     setRelationEntities(
-      initialRelationEntities?.length ? initialRelationEntities : defaultRelationEntities,
+      normalizeRelationEntities(
+        initialRelationEntities?.length ? initialRelationEntities : defaultRelationEntities,
+        availableRelationEntities,
+      ),
     );
     setWriteStrategy(initialWriteStrategy ?? defaultWriteStrategy);
     setHasInitialized(true);
@@ -112,6 +136,7 @@ export const UniImportCustomModal: React.FC<UniImportCustomModalProps> = ({
     defaultRelationEntities,
     initialWriteStrategy,
     defaultWriteStrategy,
+    availableRelationEntities,
   ]);
 
   const selectedSet = useMemo(() => new Set(selectedFieldKeys), [selectedFieldKeys]);
@@ -161,13 +186,19 @@ export const UniImportCustomModal: React.FC<UniImportCustomModalProps> = ({
   };
 
   const relationEntityOptions = useMemo(
-    () => [
-      { value: 'material', label: t('components.uniImport.relationEntityMaterial') },
-      { value: 'processRoute', label: t('components.uniImport.relationEntityProcessRoute') },
-      { value: 'operation', label: t('components.uniImport.relationEntityOperation') },
-      { value: 'performance', label: t('components.uniImport.relationEntityPerformance') },
-    ],
-    [t],
+    () =>
+      availableRelationEntities.map((value) => ({
+        value,
+        label:
+          value === 'material'
+            ? t('components.uniImport.relationEntityMaterial')
+            : value === 'processRoute'
+              ? t('components.uniImport.relationEntityProcessRoute')
+              : value === 'operation'
+                ? t('components.uniImport.relationEntityOperation')
+                : t('components.uniImport.relationEntityPerformance'),
+      })),
+    [availableRelationEntities, t],
   );
   const strategyOptions = useMemo(
     () =>
@@ -293,7 +324,11 @@ export const UniImportCustomModal: React.FC<UniImportCustomModalProps> = ({
             <Checkbox.Group
               options={relationEntityOptions}
               value={relationEntities}
-              onChange={(vals) => setRelationEntities(vals as UniRelationImportEntity[])}
+              onChange={(vals) =>
+                setRelationEntities(
+                  normalizeRelationEntities(vals as UniRelationImportEntity[], availableRelationEntities),
+                )
+              }
             />
             <Space align="center" wrap>
               <Typography.Text>{t('components.uniImport.relationStrategyTitle')}</Typography.Text>

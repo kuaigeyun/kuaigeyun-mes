@@ -548,6 +548,7 @@ export interface BOM {
   materialId: number;
   componentId: number;
   quantity: number;
+  baseQuantity?: number;
   unit?: string;
   // 损耗率和必选标识（根据优化设计规范新增）
   wasteRate: number; // 损耗率（百分比，如：5.00表示5%）
@@ -559,6 +560,7 @@ export interface BOM {
   // 版本控制
   version: string;
   bomCode?: string;
+  bomName?: string | null;
   isDefault?: boolean; // 是否为默认版本（每个物料至多一个）
   // 有效期管理
   effectiveDate?: string;
@@ -593,6 +595,7 @@ export interface BOMCreate {
   materialId: number;
   componentId: number;
   quantity: number;
+  baseQuantity?: number;
   unit?: string;
   // 损耗率和必选标识（根据优化设计规范新增）
   wasteRate?: number; // 损耗率（百分比，如：5.00表示5%）
@@ -641,6 +644,7 @@ export interface BOMGroupSummary {
   material_id: number;
   version: string;
   bom_code?: string;
+  bom_name?: string | null;
   approval_status: string;
   is_default: boolean;
   is_obsolete: boolean;
@@ -650,6 +654,7 @@ export interface BOMGroupSummary {
 export interface BOMItemCreate {
   componentId: number;
   quantity: number;
+  baseQuantity?: number;
   unit?: string;
   // 损耗率和必选标识（根据优化设计规范新增）
   wasteRate?: number; // 损耗率（百分比，如：5.00表示5%）
@@ -660,11 +665,15 @@ export interface BOMItemCreate {
   priority?: number;
   description?: string;
   remark?: string;
+  /** 物料来源（仅当子件物料主数据未配置时用于回写） */
+  sourceType?: string;
 }
 
 export interface BOMBatchCreate {
   materialId: number;
   items: BOMItemCreate[];
+  baseQuantity?: number;
+  bomName?: string | null;
   // 版本控制
   version?: string;
   bomCode?: string;
@@ -687,6 +696,10 @@ export interface BOMBatchCreate {
  */
 export interface BOMBatchImportItem {
   parentCode: string; // 父件编号（支持任意部门编号：SALE-A001、DES-A001、主编号MAT-FIN-0001）
+  version?: string; // BOM版本号（可选，同父件须一致）
+  bomCode?: string; // BOM编号（可选，同父件须一致）
+  bomName?: string; // BOM名称（可选，同父件须一致，可空）
+  baseQuantity?: number; // 基准数量（可选，同父件须一致）
   componentCode: string; // 子件编号（支持任意部门编号：PROD-A001、主编号MAT-SEMI-0001）
   quantity: number; // 子件数量（必填，数字）
   unit?: string; // 子件单位（可选，如：个、kg、m等）
@@ -711,6 +724,8 @@ export interface BOMBatchImportItem {
  */
 export interface BOMBatchImport {
   items: BOMBatchImportItem[]; // BOM导入项列表
+  baseQuantity?: number;
+  bomName?: string | null;
   version?: string; // BOM版本号（可选，默认：1.0）
   bomCode?: string; // BOM编号（可选）
   effectiveDate?: string; // 生效日期（可选）
@@ -812,6 +827,7 @@ export interface BOMHierarchyItem {
   componentCode: string;
   componentName: string;
   quantity: number;
+  baseQuantity?: number;
   unit?: string;
   wasteRate: number;
   isRequired: boolean;
@@ -838,6 +854,8 @@ export interface BOMHierarchy {
   materialCode: string;
   materialName: string;
   version: string;
+  baseQuantity?: number;
+  bomName?: string | null;
   approvalStatus?: 'draft' | 'pending' | 'approved' | 'rejected';
   items: BOMHierarchyItem[];
 }
@@ -850,11 +868,13 @@ export interface BOMQuantityComponent {
   componentId: number;
   componentCode: string;
   componentName: string;
-  baseQuantity: number; // 基础用量
-  wasteRate: number; // 损耗率
-  actualQuantity: number; // 实际用量（考虑损耗率）
+  lineQuantity: number;
+  baseQuantity: number;
+  unitQuantity: number;
+  wasteRate: number;
+  actualQuantity: number;
   unit?: string;
-  level: number; // 层级
+  level: number;
 }
 
 /**
@@ -862,8 +882,9 @@ export interface BOMQuantityComponent {
  */
 export interface BOMQuantityResult {
   materialId: number;
-  parentQuantity: number; // 父物料数量
-  components: BOMQuantityComponent[]; // 子物料用量列表
+  parentQuantity: number;
+  baseQuantity?: number;
+  components: BOMQuantityComponent[];
 }
 
 /**

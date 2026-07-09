@@ -9,6 +9,11 @@ from typing import Optional, Dict, Any, List, Literal
 from datetime import datetime, date
 from decimal import Decimal
 
+from apps.master_data.constants.material_source_type import (
+    is_canonical_material_source_type,
+    normalize_material_source_type,
+)
+
 
 class InspectionStagePolicySchema(BaseModel):
     """单场景质检策略。"""
@@ -739,6 +744,10 @@ class BOMBase(BaseModel):
     material_id: int = Field(..., description="主物料ID（父件）")
     component_id: int = Field(..., description="子物料ID（子件）")
     quantity: Decimal = Field(..., description="用量（必填，数字）")
+    base_quantity: Decimal = Field(
+        default=Decimal("1"),
+        description="基准数量（本版本用量对应的成品基数）",
+    )
     unit: Optional[str] = Field(None, max_length=20, description="单位（可选，如：个、kg、m等）")
     
     # 损耗率和必选标识（根据优化设计规范新增）
@@ -758,6 +767,7 @@ class BOMBase(BaseModel):
     # 版本控制
     version: str = Field("1.0", max_length=50, description="BOM版本号")
     bom_code: Optional[str] = Field(None, max_length=100, description="BOM编码")
+    bom_name: Optional[str] = Field(None, max_length=200, description="BOM名称（可空）")
     is_default: bool = Field(False, description="是否为默认版本（每个物料至多一个）")
     
     # 有效期管理
@@ -800,6 +810,22 @@ class BOMBase(BaseModel):
         if v <= 0:
             raise ValueError("用量必须大于0")
         return v
+
+    @validator("base_quantity")
+    def validate_base_quantity(cls, v):
+        """验证基准数量"""
+        if v is None:
+            return Decimal("1")
+        if v <= 0:
+            raise ValueError("基准数量必须大于0")
+        return v
+
+    @validator("bom_name")
+    def validate_bom_name(cls, v):
+        if v is None:
+            return None
+        stripped = str(v).strip()
+        return stripped or None
     
     @validator("unit")
     def validate_unit(cls, v):
@@ -963,11 +989,12 @@ class BOMGroupSummary(BaseModel):
     """BOM 分组摘要（按 material_id + version 一组，用于列表树按需加载）"""
     material_id: int = Field(..., description="主物料ID")
     version: str = Field(..., description="版本号")
-    bom_code: Optional[str] = Field(None, description="BOM编码")
+    bom_code: Optional[str] = Field(None, max_length=100, description="BOM编码")
     approval_status: str = Field(..., description="审核状态")
     is_default: bool = Field(False, description="是否默认版本")
     is_obsolete: bool = Field(False, description="是否已失效")
     item_count: int = Field(..., description="该版本子件数量")
+    bom_name: Optional[str] = Field(None, description="BOM名称")
 
 
 class BOMMaterialVersionItem(BaseModel):
@@ -1013,7 +1040,12 @@ class BOMItemCreate(BaseModel):
     is_default_configurable: bool = Field(False, description="配置位组内是否为默认选项")
     description: Optional[str] = Field(None, description="描述")
     remark: Optional[str] = Field(None, description="备注")
-    
+    source_type: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="物料来源类型（仅当子件物料主数据未配置来源时用于回写）",
+    )
+
     @model_validator(mode="after")
     def validate_configurable_vs_alternative(self):
         """配置位与替代料互斥"""
@@ -1042,12 +1074,30 @@ class BOMItemCreate(BaseModel):
             raise ValueError("损耗率必须在0-100之间")
         return v
 
+    @validator("source_type")
+    def validate_source_type(cls, v):
+        """验证物料来源类型（可选，用于回写未配置来源的子件）"""
+        if v is None:
+            return None
+        raw = str(v).strip()
+        if not raw:
+            return None
+        normalized = normalize_material_source_type(raw)
+        if not normalized or not is_canonical_material_source_type(normalized):
+            raise ValueError(f"无效的物料来源类型: {raw}")
+        return normalized
+
 
 class BOMBatchCreate(BaseModel):
     """批量创建BOM Schema"""
     
     material_id: int = Field(..., description="主物料ID")
     items: List[BOMItemCreate] = Field(..., min_items=1, description="子物料项列表")
+    base_quantity: Decimal = Field(
+        default=Decimal("1"),
+        gt=0,
+        description="基准数量（本版本用量对应的成品基数）",
+    )
     
     # 版本控制
     version: str = Field("1.0", max_length=50, description="BOM版本号")
@@ -1068,6 +1118,7 @@ class BOMBatchCreate(BaseModel):
     description: Optional[str] = Field(None, description="描述")
     remark: Optional[str] = Field(None, description="备注")
     is_active: bool = Field(True, description="是否启用")
+    bom_name: Optional[str] = Field(None, max_length=200, description="BOM名称（可空，未传则自动生成）")
     
     @validator("items")
     def validate_items(cls, v):
@@ -1108,8 +1159,15 @@ class BOMBatchImportItem(BaseModel):
     """
     
     parent_code: str = Field(..., description="父件编码（支持任意部门编码：SALE-A001、DES-A001、主编码MAT-FIN-0001）")
+    version: Optional[str] = Field(None, max_length=50, description="BOM版本号（可选，同父件须一致）")
+    bom_code: Optional[str] = Field(None, max_length=100, description="BOM编号（可选，同父件须一致）")
+    bom_name: Optional[str] = Field(None, max_length=200, description="BOM名称（可选，同父件须一致，可空）")
     component_code: str = Field(..., description="子件编码（支持任意部门编码：PROD-A001、主编码MAT-SEMI-0001）")
     quantity: Decimal = Field(..., description="子件数量（必填，数字）")
+    base_quantity: Optional[Decimal] = Field(
+        None,
+        description="基准数量（可选，同父件须一致；未填则用导入批次默认值）",
+    )
     unit: Optional[str] = Field(None, description="子件单位（可选，如：个、kg、m等）")
     waste_rate: Optional[Decimal] = Field(None, description="损耗率（可选，百分比，如：5%表示5.00）")
     is_required: Optional[bool] = Field(True, description="是否必选（可选，是/否，默认：是）")
@@ -1159,8 +1217,14 @@ class BOMBatchImport(BaseModel):
     """
     
     items: List[BOMBatchImportItem] = Field(..., min_items=1, description="BOM导入项列表")
+    base_quantity: Decimal = Field(
+        default=Decimal("1"),
+        gt=0,
+        description="基准数量（本版本用量对应的成品基数，行级未指定时使用）",
+    )
     version: Optional[str] = Field("1.0", max_length=50, description="BOM版本号（可选，默认：1.0）")
     bom_code: Optional[str] = Field(None, max_length=100, description="BOM编码（可选）")
+    bom_name: Optional[str] = Field(None, max_length=200, description="BOM名称（可空，未传则自动生成）")
     effective_date: Optional[datetime] = Field(None, description="生效日期（可选）")
     description: Optional[str] = Field(None, description="描述（可选）")
     version_remark: Optional[str] = Field(None, description="版本变更备注（可选，写入本版本所有BOM行）")

@@ -45,6 +45,10 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import {
+  buildMaterialSourceTypeOptions,
+  normalizeMaterialSourceType,
+} from '../../../utils/materialSourceType';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
@@ -98,6 +102,16 @@ interface BomCopySourceOption {
   label: string;
 }
 
+const buildDefaultBomName = (
+  material?: { name?: string; mainCode?: string; code?: string },
+  bomCode?: string,
+) => {
+  const mainLabel = (material?.name || material?.mainCode || material?.code || '').trim();
+  const code = (bomCode || '').trim();
+  if (mainLabel && code) return `${mainLabel} ${code}`;
+  return mainLabel || code;
+};
+
 const buildDefaultBomItem = (overrides?: Partial<Record<string, unknown>>) => ({
   componentId: undefined,
   quantity: 1,
@@ -110,8 +124,14 @@ const buildDefaultBomItem = (overrides?: Partial<Record<string, unknown>>) => ({
   priority: 0,
   description: undefined,
   remark: undefined,
+  sourceType: undefined,
   ...(overrides ?? {}),
 });
+
+const getMaterialSourceTypeFromRecord = (material?: Material | null): string => {
+  if (!material) return '';
+  return normalizeMaterialSourceType(material.sourceType ?? (material as { source_type?: string }).source_type);
+};
 
 /** 按物料分组的行：一物料一行，版本通过下拉切换，默认显示默认版本或最新版本 */
 interface MaterialBOMRow extends BOMGroupRow {
@@ -308,6 +328,7 @@ const BOMPage: React.FC = () => {
   const [selectedCopySource, setSelectedCopySource] = useState<string>();
   /** 编辑时：按主料+版本定位整份 BOM，保存时先删后批量创建 */
   const [editContext, setEditContext] = useState<{ materialId: number; version: string; uuidsToReplace: string[] } | null>(null);
+  const bomNameTouchedRef = useRef(false);
 
   const {
     customFields: bomFormCustomFields,
@@ -347,6 +368,10 @@ const BOMPage: React.FC = () => {
     const baseTemplate = buildFactoryImportTemplate(
       t,
       [
+        { field: 'bomCode', labelKey: 'app.master-data.bom.importHeaderBomCode' },
+        { field: 'bomName', labelKey: 'app.master-data.bom.importHeaderBomName' },
+        { field: 'version', labelKey: 'app.master-data.bom.importHeaderVersion' },
+        { field: 'baseQuantity', labelKey: 'app.master-data.bom.importHeaderBaseQuantity' },
         { field: 'parentCode', required: true, labelKey: 'app.master-data.bom.importHeaderParentCode' },
         { field: 'componentCode', required: true, labelKey: 'app.master-data.bom.importHeaderComponentCode' },
         { field: 'quantity', required: true, labelKey: 'app.master-data.bom.importHeaderQuantity' },
@@ -359,30 +384,18 @@ const BOMPage: React.FC = () => {
         { field: 'baseUnit', labelKey: 'app.master-data.bom.importHeaderBaseUnit' },
         { field: 'processRouteCode', labelKey: 'app.master-data.bom.importHeaderProcessRouteCode' },
         { field: 'processRouteName', labelKey: 'app.master-data.bom.importHeaderProcessRouteName' },
-        { field: 'operationCode', labelKey: 'app.master-data.bom.importHeaderOperationCode' },
-        { field: 'operationName', labelKey: 'app.master-data.bom.importHeaderOperationName' },
-        { field: 'employeeId', labelKey: 'app.master-data.bom.importHeaderEmployeeId' },
-        { field: 'employeeName', labelKey: 'app.master-data.bom.importHeaderEmployeeName' },
-        { field: 'calcMode', labelKey: 'app.master-data.bom.importHeaderCalcMode' },
-        { field: 'hourlyRate', labelKey: 'app.master-data.bom.importHeaderHourlyRate' },
-        { field: 'defaultPieceRate', labelKey: 'app.master-data.bom.importHeaderDefaultPieceRate' },
-        { field: 'baseSalary', labelKey: 'app.master-data.bom.importHeaderBaseSalary' },
       ],
       [
+        t('app.master-data.bom.importExample.bomCode'),
+        t('app.master-data.bom.importExample.bomName'),
+        t('app.master-data.bom.importExample.version'),
+        t('app.master-data.bom.importExample.baseQuantity'),
         t('app.master-data.bom.importExample.parentCode'),
         t('app.master-data.bom.importExample.componentCode'),
         t('app.master-data.bom.importExample.quantity'),
         t('app.master-data.bom.importExample.unit'),
         t('app.master-data.bom.importExample.wasteRate'),
         t('app.master-data.bom.importExample.isRequired'),
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
         '',
         '',
         '',
@@ -431,7 +444,7 @@ const BOMPage: React.FC = () => {
   
   // 递归审核选项Ref（批量操作用）
   const recursiveApprovalRef = useRef<boolean>(false);
-  // 单条反审核的递归选项Ref
+  // 单条撤销审核的递归选项Ref
   const recursiveUnapproveRef = useRef<boolean>(false);
   const [versionLoading, setVersionLoading] = useState(false);
   const [versionList, setVersionList] = useState<BOM[]>([]);
@@ -473,6 +486,33 @@ const BOMPage: React.FC = () => {
     [materials, mainMaterialScope],
   );
   
+  const sourceTypeOptions = useMemo(() => buildMaterialSourceTypeOptions(t), [t]);
+
+  const getComponentMaterialSourceType = (componentId?: number | null): string => {
+    if (componentId == null) return '';
+    return getMaterialSourceTypeFromRecord(materials.find((m) => m.id === componentId));
+  };
+
+  const patchLocalMaterialSourcesAfterSave = (
+    items: Array<{ componentId?: number; sourceType?: string }>,
+  ) => {
+    const updates = new Map<number, string>();
+    items.forEach((item) => {
+      if (!item.componentId || !item.sourceType) return;
+      if (getComponentMaterialSourceType(item.componentId)) return;
+      const normalized = normalizeMaterialSourceType(item.sourceType);
+      if (normalized) updates.set(item.componentId, normalized);
+    });
+    if (!updates.size) return;
+    setMaterials((prev) =>
+      prev.map((m) => {
+        const nextSource = updates.get(m.id);
+        if (!nextSource) return m;
+        return { ...m, sourceType: nextSource, source_type: nextSource };
+      }),
+    );
+  };
+
   // 单位字典映射（value -> label）
   const [unitValueToLabel, setUnitValueToLabel] = useState<Record<string, string>>({});
 
@@ -604,10 +644,21 @@ const BOMPage: React.FC = () => {
         formRef.current?.setFieldsValue({
           bomCode: codeResponse.code,
         });
+        regenerateBomName(codeResponse.code);
       }
     } catch (error: any) {
       console.error('获取编号规则配置或生成编号失败:', error?.message || error);
     }
+  };
+
+  const regenerateBomName = (bomCodeOverride?: string) => {
+    if (bomNameTouchedRef.current || isEdit) return;
+    const formValues = formRef.current?.getFieldsValue();
+    const materialId = formValues?.materialId;
+    const bomCode = bomCodeOverride ?? formValues?.bomCode;
+    const selectedMaterial = materialId ? materials.find((m) => m.id === materialId) : undefined;
+    const nextName = buildDefaultBomName(selectedMaterial, bomCode);
+    formRef.current?.setFieldsValue({ bomName: nextName || undefined });
   };
 
   /**
@@ -617,6 +668,7 @@ const BOMPage: React.FC = () => {
     setIsEdit(false);
     setEditContext(null);
     setCurrentBOMUuid(null);
+    bomNameTouchedRef.current = false;
     setModalVisible(true);
     resetBomFormFieldValues();
   };
@@ -631,6 +683,7 @@ const BOMPage: React.FC = () => {
         version: formRef.current?.getFieldValue('version') || '1.0',
       });
       void regenerateBOMCode();
+      regenerateBomName();
     });
   };
 
@@ -653,6 +706,7 @@ const BOMPage: React.FC = () => {
         allBomCodes: list.map(b => b.bomCode)
       });
       setIsEdit(true);
+      bomNameTouchedRef.current = true;
       setEditContext({
         materialId: first.materialId,
         version: first.version ?? '1.0',
@@ -660,19 +714,24 @@ const BOMPage: React.FC = () => {
       });
       // 确保 BOM 编号正确设置：优先使用第一个记录的 bomCode，如果不存在则尝试从其他记录中获取
       const bomCodeValue = first.bomCode ?? list.find(b => b.bomCode)?.bomCode ?? '';
-      const itemsData = list.map((b) => ({
-        componentId: b.componentId,
-        quantity: b.quantity,
-        unit: b.unit,
-        wasteRate: b.wasteRate ?? 0,
-        isRequired: b.isRequired !== false,
-        issueMethod: b.issueMethod ?? (b as { issue_method?: string }).issue_method ?? 'pick',
-        isAlternative: b.isAlternative,
-        alternativeGroupId: b.alternativeGroupId,
-        priority: b.priority,
-        description: b.description,
-        remark: b.remark,
-      }));
+      const itemsData = list.map((b) => {
+        const compMaterial = materials.find((m) => m.id === b.componentId);
+        const materialSource = getMaterialSourceTypeFromRecord(compMaterial);
+        return {
+          componentId: b.componentId,
+          quantity: b.quantity,
+          unit: b.unit,
+          wasteRate: b.wasteRate ?? 0,
+          isRequired: b.isRequired !== false,
+          issueMethod: b.issueMethod ?? (b as { issue_method?: string }).issue_method ?? 'pick',
+          isAlternative: b.isAlternative,
+          alternativeGroupId: b.alternativeGroupId,
+          priority: b.priority,
+          description: b.description,
+          remark: b.remark,
+          sourceType: materialSource || undefined,
+        };
+      });
       
       setModalVisible(true);
       // 使用 setTimeout 确保 Modal 和表单完全渲染后再设置值
@@ -682,6 +741,8 @@ const BOMPage: React.FC = () => {
           formRef.current.setFieldsValue({
             materialId: first.materialId,
             version: first.version ?? '1.0',
+            baseQuantity: first.baseQuantity ?? 1,
+            bomName: first.bomName ?? undefined,
             bomCode: bomCodeValue,
             effectiveDate: first.effectiveDate,
             expiryDate: first.expiryDate,
@@ -705,7 +766,7 @@ const BOMPage: React.FC = () => {
   };
   
   /**
-   * 处理单条反审核（按组：该 BOM 版本下所有子件行一并反审核，支持可选递归子BOM）
+   * 处理单条撤销审核（按组：该 BOM 版本下所有子件行一并撤销审核，支持可选递归子BOM）
    */
   const handleUnapproveGroup = (record: BOMGroupRow) => {
     const uuids = groupKeyToUuidsRef.current.get(record.groupKey);
@@ -950,7 +1011,7 @@ const BOMPage: React.FC = () => {
   };
 
   /**
-   * 处理批量反审核BOM
+   * 处理批量撤销审核BOM
    */
   const handleBatchUnapprove = (keys?: React.Key[]) => {
     const targetKeys = keys ?? selectedRowKeys;
@@ -1173,6 +1234,9 @@ const BOMPage: React.FC = () => {
             if (!item.componentId) throw new Error(t('app.master-data.bom.selectChildMaterial'));
             if (!item.quantity || item.quantity <= 0) throw new Error(t('app.master-data.bom.quantityMustBePositive'));
             const unitValue = (item.unit && item.unit.trim()) ? item.unit.trim() : null;
+            const materialSource = getComponentMaterialSourceType(item.componentId);
+            const formSource = normalizeMaterialSourceType(item.sourceType);
+            const sourceTypeForApi = materialSource ? null : (formSource || null);
             return {
               component_id: item.componentId,
               quantity: item.quantity,
@@ -1185,9 +1249,12 @@ const BOMPage: React.FC = () => {
               priority: item.priority || 0,
               description: item.description || null,
               remark: item.remark || null,
+              source_type: sourceTypeForApi,
             };
           }),
           version: standardValues.version || '1.0',
+          base_quantity: standardValues.baseQuantity ?? 1,
+          bom_name: standardValues.bomName != null ? String(standardValues.bomName).trim() : undefined,
           bom_code: standardValues.bomCode,
           effective_date: standardValues.effectiveDate,
           expiry_date: standardValues.expiryDate,
@@ -1217,6 +1284,8 @@ const BOMPage: React.FC = () => {
       if (headerId != null) {
         await saveBomCustomFieldValues(headerId, customData);
       }
+
+      patchLocalMaterialSourcesAfterSave(standardValues.items);
 
       setModalVisible(false);
       formRef.current?.resetFields();
@@ -1369,6 +1438,7 @@ const BOMPage: React.FC = () => {
       buildDefaultBomItem({
         componentId: material.id,
         unit: material.baseUnit ?? '',
+        sourceType: getMaterialSourceTypeFromRecord(material) || undefined,
       }),
     );
     appendBomItemsToForm(rows);
@@ -1421,11 +1491,12 @@ const BOMPage: React.FC = () => {
         messageApi.warning(t('app.master-data.bom.addAtLeastOneChild'));
         return;
       }
-      const mappedItems = sourceItems.map((item) =>
-        buildDefaultBomItem({
+      const mappedItems = sourceItems.map((item) => {
+        const compMaterial = materials.find((material) => material.id === item.componentId);
+        return buildDefaultBomItem({
           componentId: item.componentId,
           quantity: item.quantity,
-          unit: item.unit ?? (materials.find((material) => material.id === item.componentId)?.baseUnit ?? ''),
+          unit: item.unit ?? (compMaterial?.baseUnit ?? ''),
           wasteRate: item.wasteRate ?? 0,
           isRequired: item.isRequired !== false,
           issueMethod: item.issueMethod ?? 'pick',
@@ -1434,8 +1505,9 @@ const BOMPage: React.FC = () => {
           priority: item.priority ?? 0,
           description: item.description ?? undefined,
           remark: item.remark ?? undefined,
-        }),
-      );
+          sourceType: getMaterialSourceTypeFromRecord(compMaterial) || undefined,
+        });
+      });
       appendBomItemsToForm(mappedItems);
       setCopySourceModalVisible(false);
       setSelectedCopySource(undefined);
@@ -1660,6 +1732,22 @@ const BOMPage: React.FC = () => {
         }
 
         const parentCode = row[headerIndexMap['parentCode']]?.toString().trim();
+        const versionStr =
+          headerIndexMap['version'] !== undefined
+            ? row[headerIndexMap['version']]?.toString().trim()
+            : undefined;
+        const bomCodeStr =
+          headerIndexMap['bomCode'] !== undefined
+            ? row[headerIndexMap['bomCode']]?.toString().trim()
+            : undefined;
+        const bomNameStr =
+          headerIndexMap['bomName'] !== undefined
+            ? row[headerIndexMap['bomName']]?.toString().trim()
+            : undefined;
+        const baseQuantityStr =
+          headerIndexMap['baseQuantity'] !== undefined
+            ? row[headerIndexMap['baseQuantity']]?.toString().trim()
+            : undefined;
         const componentCode = row[headerIndexMap['componentCode']]?.toString().trim();
         const quantityStr = row[headerIndexMap['quantity']]?.toString().trim();
         const unit =
@@ -1724,8 +1812,23 @@ const BOMPage: React.FC = () => {
           }
         }
 
+        // 解析基准数量
+        let baseQuantity: number | undefined = undefined;
+        if (baseQuantityStr) {
+          const parsedBaseQty = parseFloat(baseQuantityStr.replace(/,/g, ''));
+          if (isNaN(parsedBaseQty) || parsedBaseQty <= 0) {
+            errors.push(`第 ${rowIndex + 3} 行：基准数量必须是大于0的数字`);
+            return;
+          }
+          baseQuantity = parsedBaseQty;
+        }
+
         importItems.push({
           parentCode,
+          version: versionStr || undefined,
+          bomCode: bomCodeStr || undefined,
+          bomName: bomNameStr !== undefined ? bomNameStr : undefined,
+          baseQuantity,
           componentCode,
           quantity,
           unit: unit || undefined,
@@ -1780,7 +1883,6 @@ const BOMPage: React.FC = () => {
       // 调用批量导入API
       const batchImportData: BOMBatchImport = {
         items: importItems,
-        version: '1.0', // 默认版本
       };
 
       const createdBoms = await bomApi.batchImport(batchImportData);
@@ -2177,6 +2279,17 @@ const BOMPage: React.FC = () => {
           );
         }
         if (r._bomVersion) return <Tag>{r._bomVersion}</Tag>;
+        return '-';
+      }
+    },
+    { 
+      title: t('app.master-data.bom.bomName'), 
+      dataIndex: 'bomName', 
+      width: 180, 
+      hideInSearch: true,
+      sorter: true,
+      render: (_, r: any) => {
+        if (isRootRow(r)) return r.bomName || r.firstItem?.bomName || '-';
         return '-';
       }
     },
@@ -2985,7 +3098,7 @@ const BOMPage: React.FC = () => {
         enableCustomImport={true}
         enableRelationImport={true}
         relationImportConfig={{
-          entities: ['material', 'processRoute', 'operation', 'performance'],
+          entities: ['material', 'processRoute'],
           defaultWriteStrategy: 'upsert',
           supportedStrategies: ['upsert', 'create_only', 'link_only', 'strict_fail'],
         }}
@@ -3139,6 +3252,7 @@ const BOMPage: React.FC = () => {
         initialValues={isEdit ? undefined : {
           isActive: true,
           version: '1.0',
+          baseQuantity: 1,
           approvalStatus: 'draft',
           items: [buildDefaultBomItem()],
         }}
@@ -3207,11 +3321,26 @@ const BOMPage: React.FC = () => {
                 autoGenerateOnCreate={!isEdit}
                 showGenerateButton={false}
                 context={context}
-                fieldProps={{ maxLength: 100 }}
+                fieldProps={{
+                  maxLength: 100,
+                  onChange: () => { if (!isEdit) regenerateBomName(); },
+                }}
               />
             );
           }}
         </ProForm.Item>
+        <ProFormText
+          name="bomName"
+          label={t('app.master-data.bom.bomName')}
+          colProps={{ span: 12 }}
+          placeholder={t('app.master-data.bom.bomNamePlaceholder')}
+          fieldProps={{
+            maxLength: 200,
+            allowClear: true,
+            onChange: () => { bomNameTouchedRef.current = true; },
+          }}
+          extra={t('app.master-data.bom.bomNameExtra')}
+        />
         <SafeProFormSelect
           name="materialId"
           label={(
@@ -3238,7 +3367,7 @@ const BOMPage: React.FC = () => {
             loading: materialsLoading,
             showSearch: true,
             filterOption: (input, option) => (option?.label as string || '').toLowerCase().includes(input.toLowerCase()),
-            onChange: () => { if (!isEdit) setTimeout(() => regenerateBOMCode(), 300); },
+            onChange: () => { if (!isEdit) { setTimeout(() => regenerateBOMCode(), 300); setTimeout(() => regenerateBomName(), 350); } },
           }}
         />
         <ProFormText
@@ -3252,8 +3381,23 @@ const BOMPage: React.FC = () => {
           ]}
           fieldProps={{
             disabled: isEdit,
-            onChange: (e) => { if (!isEdit && e?.target?.value) setTimeout(() => regenerateBOMCode(), 300); },
+            onChange: (e) => { if (!isEdit && e?.target?.value) { setTimeout(() => regenerateBOMCode(), 300); setTimeout(() => regenerateBomName(), 350); } },
           }}
+        />
+        <ProFormDigit
+          name="baseQuantity"
+          label={t('app.master-data.bom.baseQuantity')}
+          colProps={{ span: 12 }}
+          min={0.0001}
+          rules={[
+            { required: true, message: t('app.master-data.bom.baseQuantityRequired') },
+          ]}
+          fieldProps={{
+            precision: 4,
+            style: { width: '100%' },
+          }}
+          extra={t('app.master-data.bom.baseQuantityTooltip')}
+          initialValue={1}
         />
         <ProFormSelect
           name="approvalStatus"
@@ -3340,6 +3484,8 @@ const BOMPage: React.FC = () => {
                       const items = getFormItems();
                       if (!items[index]) return;
                       setItemField(index, 'unit', material?.baseUnit ?? '');
+                      const materialSource = getMaterialSourceTypeFromRecord(material as Material | null);
+                      setItemField(index, 'sourceType', materialSource || undefined);
                     }}
                   />
                 ),
@@ -3401,6 +3547,43 @@ const BOMPage: React.FC = () => {
                       min={0}
                       max={100}
                     />
+                  </AntForm.Item>
+                ),
+              },
+              {
+                title: t('app.master-data.bom.materialSource'),
+                dataIndex: 'sourceType',
+                width: 120,
+                render: (_, __, index) => (
+                  <AntForm.Item noStyle shouldUpdate>
+                    {() => {
+                      const items = getFormItems();
+                      const componentId = items[index]?.componentId;
+                      const materialSource = getComponentMaterialSourceType(componentId);
+                      const locked = !!materialSource;
+                      if (locked) {
+                        return (
+                          <Select
+                            size="small"
+                            disabled
+                            value={materialSource}
+                            options={sourceTypeOptions}
+                            style={{ width: '100%' }}
+                          />
+                        );
+                      }
+                      return (
+                        <AntForm.Item name={[index, 'sourceType']} style={{ margin: 0 }}>
+                          <Select
+                            size="small"
+                            allowClear
+                            placeholder={t('app.master-data.bom.materialSourcePlaceholder')}
+                            options={sourceTypeOptions}
+                            style={{ width: '100%' }}
+                          />
+                        </AntForm.Item>
+                      );
+                    }}
                   </AntForm.Item>
                 ),
               },
@@ -4020,12 +4203,15 @@ const BOMPage: React.FC = () => {
         {quantityResult && (
           <div style={{ marginTop: 24 }}>
             <div style={{ marginBottom: 16, padding: '12px', backgroundColor: '#f0f9ff', borderRadius: '4px', border: '1px solid #91d5ff' }}>
-              <Space>
-                <span style={{ fontWeight: 500 }}>{t('app.master-data.bom.parentQuantityResultLabel')}：</span>
-                <span>{quantityResult.parentQuantity}</span>
-                {t('app.master-data.bom.parentQuantityUnit') ? (
-                  <span style={{ color: '#999' }}>{t('app.master-data.bom.parentQuantityUnit')}</span>
-                ) : null}
+              <Space orientation="vertical" size="small">
+                <Space>
+                  <span style={{ fontWeight: 500 }}>{t('app.master-data.bom.parentQuantityResultLabel')}：</span>
+                  <span>{quantityResult.parentQuantity}</span>
+                </Space>
+                <Space>
+                  <span style={{ fontWeight: 500 }}>{t('app.master-data.bom.baseQuantity')}：</span>
+                  <span>{quantityResult.baseQuantity ?? 1}</span>
+                </Space>
               </Space>
             </div>
             
@@ -4064,8 +4250,16 @@ const BOMPage: React.FC = () => {
                               </div>
                               <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                                 <div>
+                                  <span style={{ color: '#999' }}>{t('app.master-data.bom.lineQuantityLabel')}</span>
+                                  <span style={{ marginLeft: 8 }}>{component.lineQuantity} {component.unit || ''}</span>
+                                </div>
+                                <div>
                                   <span style={{ color: '#999' }}>{t('app.master-data.bom.baseQuantityLabel')}</span>
-                                  <span style={{ marginLeft: 8 }}>{component.baseQuantity} {component.unit || ''}</span>
+                                  <span style={{ marginLeft: 8 }}>{component.baseQuantity}</span>
+                                </div>
+                                <div>
+                                  <span style={{ color: '#999' }}>{t('app.master-data.bom.unitQuantityLabel')}</span>
+                                  <span style={{ marginLeft: 8 }}>{component.unitQuantity.toFixed(6)} {component.unit || ''}</span>
                                 </div>
                                 {component.wasteRate > 0 && (
                                   <div>
@@ -4079,10 +4273,13 @@ const BOMPage: React.FC = () => {
                                     {component.actualQuantity.toFixed(4)} {component.unit || ''}
                                   </span>
                                 </div>
-                                {component.wasteRate > 0 && (
+                                {(component.wasteRate > 0 || (quantityResult.baseQuantity ?? 1) !== 1) && (
                                   <div style={{ fontSize: '12px', color: '#999', marginTop: 4 }}>
                                     {t('app.master-data.bom.quantityCalcFormula', {
+                                      line: component.lineQuantity,
                                       base: component.baseQuantity,
+                                      unit: component.unitQuantity.toFixed(6),
+                                      parent: quantityResult.parentQuantity,
                                       rate: component.wasteRate,
                                       actual: component.actualQuantity.toFixed(4),
                                     })}

@@ -16,6 +16,47 @@ from loguru import logger
 from tortoise.expressions import Q
 
 from apps.master_data.models.material import BOM
+from infra.exceptions.exceptions import ValidationError
+
+
+def bom_item_base_quantity(bom_item: BOM) -> Decimal:
+    """读取 BOM 行所属版本的基准数量（默认 1）。"""
+    value = getattr(bom_item, "base_quantity", None)
+    if value is None:
+        return Decimal("1")
+    return Decimal(str(value))
+
+
+def bom_line_unit_quantity(quantity: Decimal, base_quantity: Optional[Decimal] = None) -> Decimal:
+    """单位用量 = 行用量 / 基准数量。"""
+    base = Decimal(str(base_quantity if base_quantity is not None else 1))
+    if base <= 0:
+        raise ValidationError("基准数量必须大于 0")
+    return Decimal(str(quantity)) / base
+
+
+def bom_line_required_quantity(
+    quantity: Decimal,
+    base_quantity: Optional[Decimal],
+    parent_qty: float,
+    waste_rate: Decimal = Decimal("0"),
+) -> float:
+    """子件实际需求 = (行用量/基准数量) × 父件数量 × (1 + 损耗率%)。"""
+    unit = bom_line_unit_quantity(quantity, base_quantity)
+    waste = Decimal(str(waste_rate or 0))
+    return float(unit * Decimal(str(parent_qty)) * (Decimal("1") + waste / Decimal("100")))
+
+
+def bom_line_required_quantity_decimal(
+    quantity: Decimal,
+    base_quantity: Optional[Decimal],
+    parent_qty: Decimal,
+    waste_rate: Decimal = Decimal("0"),
+) -> Decimal:
+    """Decimal 版子件实际需求（成本核算等场景）。"""
+    unit = bom_line_unit_quantity(quantity, base_quantity)
+    waste = Decimal(str(waste_rate or 0))
+    return unit * Decimal(str(parent_qty)) * (Decimal("1") + waste / Decimal("100"))
 
 
 def _select_alternatives(bom_items: List[BOM]) -> List[BOM]:
@@ -78,7 +119,7 @@ def _select_configurable(
         result.append(default_item if default_item else group[0])
     return result
 from apps.master_data.schemas.material_schemas import BOMResponse
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import NotFoundError
 
 
 def _bom_effective_filter(as_of_date: Optional[datetime]):
@@ -329,8 +370,13 @@ async def calculate_material_requirements_from_bom(
         if not component:
             continue
         
-        required_qty = float(item.quantity) * required_quantity
-        gross_requirement = required_qty  # 暂时不考虑损耗率
+        required_qty = bom_line_required_quantity(
+            item.quantity,
+            bom_item_base_quantity(item),
+            required_quantity,
+            item.waste_rate or Decimal("0"),
+        )
+        gross_requirement = required_qty
         
         # 创建MaterialRequirement对象（兼容原格式）
         requirement = MaterialRequirement(

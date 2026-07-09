@@ -373,6 +373,8 @@ const BOMDesignerPage: React.FC = () => {
   /** 当前物料的版本列表（用于版本切换下拉） */
   const [versionOptions, setVersionOptions] = useState<Array<{ value: string; label: string; isObsolete?: boolean }>>([]);
   const [versionOptionsLoading, setVersionOptionsLoading] = useState(false);
+  const [bomBaseQuantity, setBomBaseQuantity] = useState(1);
+  const [bomName, setBomName] = useState<string | undefined>(undefined);
   /** 节点配置中通过 UniMaterialSelect 选中的物料（用于来源展示与单位选项，避免依赖全局 materials 列表） */
   const [selectedMaterialInForm, setSelectedMaterialInForm] = useState<Material | null>(null);
 
@@ -725,6 +727,8 @@ const BOMDesignerPage: React.FC = () => {
 
       // 同步实际版本：用于保存时决策
       setResolvedVersion(actualVersion);
+      setBomBaseQuantity(hierarchy.baseQuantity ?? 1);
+      setBomName(hierarchy.bomName ?? undefined);
 
       // URL 无 version 时，写入实际版本以保证刷新、分享链接正确
       if (!version) {
@@ -1448,7 +1452,7 @@ const BOMDesignerPage: React.FC = () => {
         return;
       }
       const targetVersion = resolvedVersion ?? '1.0';
-      await bomApi.batchImport({ items, version: targetVersion });
+      await bomApi.batchImport({ items, version: targetVersion, baseQuantity: bomBaseQuantity, bomName });
       messageApi.success(t('app.master-data.bom.designSaved'));
       await loadBOMData();
     } catch (error: any) {
@@ -1476,7 +1480,7 @@ const BOMDesignerPage: React.FC = () => {
         return;
       }
       const targetVersion = resolvedVersion ?? '1.0';
-      const created = await bomApi.batchImport({ items, version: targetVersion });
+      const created = await bomApi.batchImport({ items, version: targetVersion, baseQuantity: bomBaseQuantity, bomName });
       const uuids = [...new Set((created ?? []).map((b) => b.uuid).filter(Boolean))];
       if (uuids.length === 0) {
         messageApi.warning(t('app.master-data.bom.saveFailed'));
@@ -1616,7 +1620,7 @@ const BOMDesignerPage: React.FC = () => {
         const sorted = [...allBoms].sort(compareVersionDesc);
         const maxBom = sorted[0];
         const newBom = await bomApi.revise(maxBom.uuid, undefined, versionRemark || undefined);
-        await bomApi.batchImport({ items: partItems, version: newBom.version, versionRemark: versionRemark || undefined });
+        await bomApi.batchImport({ items: partItems, version: newBom.version, versionRemark: versionRemark || undefined, baseQuantity: bomBaseQuantity, bomName });
         if (isRoot) rootNewVersion = newBom.version;
       }
 
@@ -1666,7 +1670,7 @@ const BOMDesignerPage: React.FC = () => {
     }
     try {
       setCopyBomLoading(true);
-      await bomApi.batchImport({ items, version: '1.0' });
+      await bomApi.batchImport({ items, version: '1.0', baseQuantity: bomBaseQuantity, bomName });
       messageApi.success(t('app.master-data.bom.copyBomSuccess'));
       setCopyBomModalVisible(false);
       setCopyBomNewRootMaterial(null);
@@ -2741,6 +2745,28 @@ const BOMDesignerPage: React.FC = () => {
               }
             }}
             allowClear={false}
+          />
+          <Space size={4} align="center">
+            <span style={{ color: 'var(--ant-color-text-secondary)', whiteSpace: 'nowrap' }}>
+              {t('app.master-data.bom.baseQuantity')}
+            </span>
+            <InputNumber
+              min={0.0001}
+              precision={4}
+              value={bomBaseQuantity}
+              disabled={isReadOnly}
+              style={{ width: 120 }}
+              onChange={(v) => setBomBaseQuantity(typeof v === 'number' ? v : 1)}
+            />
+          </Space>
+          <Input
+            value={bomName ?? ''}
+            disabled={isReadOnly}
+            placeholder={t('app.master-data.bom.bomNamePlaceholder')}
+            style={{ width: 220 }}
+            maxLength={200}
+            allowClear
+            onChange={(e) => setBomName(e.target.value)}
           />
           {isReadOnly ? (
             <>
