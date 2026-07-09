@@ -277,10 +277,38 @@ export const UniImport: React.FC<UniImportProps> = ({
       if (!headers?.length || !selectedImportFieldKeys.length) {
         return stringRows;
       }
-      const colCount = stringRows[0]?.length ?? 0;
-      if (colCount === effectiveHeaders.length) {
-        return stringRows;
+
+      const trimTrailingEmpty = (row: string[]): string[] => {
+        let end = row.length;
+        while (end > 0 && !String(row[end - 1] ?? '').trim()) {
+          end -= 1;
+        }
+        return row.slice(0, end);
+      };
+
+      const sliceToWidth = (row: string[], width: number): string[] =>
+        Array.from({ length: width }, (_, idx) => String(row[idx] ?? ''));
+
+      // Univer 常在末尾垫空列；先按表头去尾，再判断是否已是自定义列布局。
+      const trimmedHeader = trimTrailingEmpty(stringRows[0] ?? []);
+      const effectiveCount = effectiveHeaders?.length ?? 0;
+      const sheetHeaderKeys = trimmedHeader.map((header) =>
+        resolveSystemFieldKey(String(header ?? ''), importFieldMapRef.current),
+      );
+      const alreadyProjected =
+        effectiveCount > 0 &&
+        sheetHeaderKeys.length === effectiveCount &&
+        sheetHeaderKeys.every((key, idx) => key === selectedImportFieldKeys[idx]);
+
+      // 自定义导入 / 上传 Excel 后，表格已是 effectiveHeaders 顺序，不能再用全量模板下标重排。
+      if (alreadyProjected || trimmedHeader.length !== headers.length) {
+        const width =
+          effectiveCount > 0 && trimmedHeader.length >= effectiveCount
+            ? effectiveCount
+            : trimmedHeader.length;
+        return stringRows.map((row) => sliceToWidth(row, width));
       }
+
       const selectedIndexes = selectedImportFieldKeys
         .map((key) => fieldKeyToIndex.get(key))
         .filter((idx): idx is number => idx !== undefined);
@@ -289,7 +317,7 @@ export const UniImport: React.FC<UniImportProps> = ({
       }
       return stringRows.map((row) => selectedIndexes.map((colIdx) => row?.[colIdx] ?? ''));
     },
-    [headers, selectedImportFieldKeys, effectiveHeaders.length, fieldKeyToIndex],
+    [headers, selectedImportFieldKeys, effectiveHeaders, fieldKeyToIndex],
   );
 
   const resolveHeaderFieldKeys = useCallback(

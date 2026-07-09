@@ -63,15 +63,29 @@ _SOURCE_TYPE_TO_TYPE_CODE = {
 
 
 RELATION_IMPORT_FIELD_ALIASES: Dict[str, List[str]] = {
-    "parent_code": ["父件编号", "父件编码", "parentCode", "parent_code", "parent code"],
+    "parent_code": [
+        "父件编号",
+        "父件编码",
+        "产品编号",
+        "父项编号",
+        "parentCode",
+        "parent_code",
+        "parent code",
+    ],
     "component_code": ["子件编号", "子件编码", "componentCode", "component_code", "component code"],
-    "quantity": ["子件数量", "quantity", "qty"],
-    "unit": ["子件单位", "unit"],
+    "quantity": ["子件数量", "数量", "quantity", "qty"],
+    "unit": ["子件单位", "单位", "unit"],
     "waste_rate": ["损耗率", "wasteRate", "waste_rate", "waste rate"],
     "is_required": ["是否必选", "isRequired", "is_required", "required"],
     "remark": ["备注", "remark", "notes"],
-    "material_name": ["物料名称", "materialName", "material_name", "material name"],
-    "specification": ["规格", "specification", "spec"],
+    "material_name": [
+        "物料名称",
+        "产品名称",
+        "materialName",
+        "material_name",
+        "material name",
+    ],
+    "specification": ["规格", "产品型号", "规格型号", "specification", "spec"],
     "base_unit": ["基础单位", "baseUnit", "base_unit", "base unit"],
     "process_route_code": [
         "工艺路线编码",
