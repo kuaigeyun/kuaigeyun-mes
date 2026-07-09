@@ -101,7 +101,7 @@ RELATION_IMPORT_FIELD_ALIASES: Dict[str, List[str]] = {
 }
 
 RELATION_ENTITY_REQUIRED_FIELDS: Dict[str, List[str]] = {
-    "material": ["parent_code", "component_code"],
+    "material": ["component_code"],
     "processRoute": ["process_route_code"],
     "operation": ["operation_code"],
     "performance": ["employee_id"],
@@ -5356,12 +5356,10 @@ class MaterialService:
             if canonical_idx.get(base_required) is None:
                 header_errors.append(f"缺少必需表头：{RELATION_IMPORT_FIELD_ALIASES[base_required][0]}")
 
-        for entity in entities:
-            for req in RELATION_ENTITY_REQUIRED_FIELDS.get(entity, []):
-                if canonical_idx.get(req) is None:
-                    header_errors.append(
-                        f"已选择 {entity} 关联导入，缺少必需表头：{RELATION_IMPORT_FIELD_ALIASES[req][0]}"
-                    )
+        effective_entities: Set[str] = set(entities)
+        if "processRoute" in effective_entities and canonical_idx.get("process_route_code") is None:
+            effective_entities.discard("processRoute")
+            warnings.append("未包含工艺路线编码列，已跳过工艺路线关联")
 
         if header_errors:
             summary.failed = len(header_errors)
@@ -5399,7 +5397,7 @@ class MaterialService:
                     return None
                 existing = await _resolve_material_by_code(code)
                 if existing:
-                    if "material" in entities and allow_update:
+                    if "material" in effective_entities and allow_update:
                         updates: Dict[str, Any] = {}
                         name_val = _cell(row, canonical_idx["material_name"])
                         spec_val = _cell(row, canonical_idx["specification"])
@@ -5415,7 +5413,7 @@ class MaterialService:
                             await existing.update_from_dict(updates).save()
                     return existing
 
-                if "material" not in entities:
+                if "material" not in effective_entities:
                     errors.append(f"第 {row_no} 行物料编码不存在且未启用物料导入：{code}")
                     return None
                 if not allow_create:
@@ -5436,7 +5434,7 @@ class MaterialService:
                 material_cache[code] = created
                 return created
 
-            if "processRoute" in entities:
+            if "processRoute" in effective_entities:
                 route_codes = {
                     _cell(row, canonical_idx["process_route_code"])
                     for row in business_rows
@@ -5450,7 +5448,7 @@ class MaterialService:
                     ).all()
                     route_map = {route.code: route for route in routes}
 
-            if "operation" in entities:
+            if "operation" in effective_entities:
                 operation_codes = {
                     _cell(row, canonical_idx["operation_code"])
                     for row in business_rows
@@ -5464,7 +5462,7 @@ class MaterialService:
                     ).all()
                     operation_map = {operation.code: operation for operation in operations}
 
-            if "performance" in entities:
+            if "performance" in effective_entities:
                 employee_ids = []
                 for row in business_rows:
                     raw_emp = _cell(row, canonical_idx["employee_id"])
@@ -5488,9 +5486,12 @@ class MaterialService:
                     errors.append(f"第 {row_no} 行缺少 BOM 必填字段（父件/子件/数量）")
                     continue
 
-                for entity in entities:
+                for entity in effective_entities:
                     for req in RELATION_ENTITY_REQUIRED_FIELDS.get(entity, []):
-                        if not _cell(row, canonical_idx.get(req)):
+                        col_idx = canonical_idx.get(req)
+                        if col_idx is None:
+                            continue
+                        if not _cell(row, col_idx):
                             row_has_error = True
                             errors.append(
                                 f"第 {row_no} 行缺少 {entity} 关联必填字段：{RELATION_IMPORT_FIELD_ALIASES[req][0]}"
@@ -5515,7 +5516,7 @@ class MaterialService:
                 if waste_raw and waste_rate is None:
                     continue
 
-                if "processRoute" in entities:
+                if "processRoute" in effective_entities:
                     route_code = _cell(row, canonical_idx["process_route_code"])
                     route_name = _cell(row, canonical_idx["process_route_name"]) or route_code
                     route = route_map.get(route_code)
@@ -5541,7 +5542,7 @@ class MaterialService:
                         await parent_material.update_from_dict({"process_route_id": route.id}).save()
                         summary.linked += 1
 
-                if "operation" in entities:
+                if "operation" in effective_entities:
                     operation_code = _cell(row, canonical_idx["operation_code"])
                     operation_name = _cell(row, canonical_idx["operation_name"]) or operation_code
                     operation = operation_map.get(operation_code)
@@ -5562,7 +5563,7 @@ class MaterialService:
                         await operation.update_from_dict({"name": operation_name}).save()
                         summary.updated += 1
 
-                if "performance" in entities:
+                if "performance" in effective_entities:
                     employee_raw = _cell(row, canonical_idx["employee_id"])
                     if not employee_raw.isdigit():
                         errors.append(f"第 {row_no} 行员工ID非法：{employee_raw}")

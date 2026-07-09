@@ -271,6 +271,37 @@ export const UniImport: React.FC<UniImportProps> = ({
   headersRef.current = effectiveHeaders;
   exampleRowRef.current = effectiveExampleRow;
 
+  const projectImportSheetRows = useCallback(
+    (rows: any[][]): string[][] => {
+      const stringRows = rows.map((row) => row.map((cell) => String(cell ?? '')));
+      if (!headers?.length || !selectedImportFieldKeys.length) {
+        return stringRows;
+      }
+      const colCount = stringRows[0]?.length ?? 0;
+      if (colCount === effectiveHeaders.length) {
+        return stringRows;
+      }
+      const selectedIndexes = selectedImportFieldKeys
+        .map((key) => fieldKeyToIndex.get(key))
+        .filter((idx): idx is number => idx !== undefined);
+      if (!selectedIndexes.length) {
+        return stringRows;
+      }
+      return stringRows.map((row) => selectedIndexes.map((colIdx) => row?.[colIdx] ?? ''));
+    },
+    [headers, selectedImportFieldKeys, effectiveHeaders.length, fieldKeyToIndex],
+  );
+
+  const resolveHeaderFieldKeys = useCallback(
+    (rows: string[][]): Set<string> => {
+      const headerRow = rows[0] ?? [];
+      return new Set(
+        headerRow.map((header) => resolveSystemFieldKey(String(header ?? ''), importFieldMapRef.current)),
+      );
+    },
+    [],
+  );
+
   const importPreferenceSegment = useMemo(() => {
     const raw = (customImportPreferenceKey?.trim() || location.pathname || 'default').toLowerCase();
     return raw.replace(/[^a-z0-9_-]/g, '_');
@@ -447,22 +478,35 @@ export const UniImport: React.FC<UniImportProps> = ({
   const shouldUseRelationImport = showRelationImport && customRelationEntities.length > 0 && !!onRelationImportSubmit;
   const relationEntityRequiredFieldKeys = useMemo<Record<UniRelationImportEntity, string[]>>(
     () => ({
-      material: ['parentCode', 'componentCode'],
+      material: ['componentCode'],
       processRoute: ['processRouteCode'],
       operation: ['operationCode'],
       performance: ['employeeId'],
     }),
     [],
   );
+  const resolveEffectiveRelationEntities = useCallback(
+    (headerFieldKeys: Set<string>): UniRelationImportEntity[] =>
+      customRelationEntities.filter((entity) => {
+        const required = relationEntityRequiredFieldKeys[entity] ?? [];
+        const importRequired = required.filter((key) => selectedImportFieldKeys.includes(key));
+        if (!importRequired.length) {
+          return true;
+        }
+        return importRequired.every((key) => headerFieldKeys.has(key));
+      }),
+    [customRelationEntities, selectedImportFieldKeys, relationEntityRequiredFieldKeys],
+  );
   const validateRelationPayload = useCallback(
     (rows: string[][]): string[] => {
       const errors: string[] = [];
       const headerRow = rows[0] ?? [];
-      const headerFieldKeys = new Set(
-        headerRow.map((header) => resolveSystemFieldKey(String(header ?? ''), importFieldMapRef.current)),
-      );
-      const baseRequired = ['parentCode', 'componentCode', 'quantity'];
-      const missingBase = baseRequired.filter((key) => !headerFieldKeys.has(key));
+      const headerFieldKeys = resolveHeaderFieldKeys(rows);
+      const effectiveEntities = resolveEffectiveRelationEntities(headerFieldKeys);
+
+      const bomCoreFields = ['parentCode', 'componentCode', 'quantity'] as const;
+      const selectedBomCore = bomCoreFields.filter((key) => selectedImportFieldKeys.includes(key));
+      const missingBase = selectedBomCore.filter((key) => !headerFieldKeys.has(key));
       if (missingBase.length) {
         errors.push(
           t('components.uniImport.relationMissingRequiredColumns', {
@@ -471,9 +515,10 @@ export const UniImport: React.FC<UniImportProps> = ({
         );
       }
 
-      customRelationEntities.forEach((entity) => {
+      effectiveEntities.forEach((entity) => {
         const required = relationEntityRequiredFieldKeys[entity] ?? [];
-        const missing = required.filter((key) => !headerFieldKeys.has(key));
+        const importRequired = required.filter((key) => selectedImportFieldKeys.includes(key));
+        const missing = importRequired.filter((key) => !headerFieldKeys.has(key));
         if (missing.length) {
           errors.push(
             t('components.uniImport.relationMissingEntityColumns', {
@@ -494,30 +539,41 @@ export const UniImport: React.FC<UniImportProps> = ({
       for (let rowIdx = 2; rowIdx < rows.length; rowIdx += 1) {
         const row = rows[rowIdx] ?? [];
         if (!row.some((cell) => String(cell ?? '').trim() !== '')) continue;
-        customRelationEntities.forEach((entity) => {
-          (relationEntityRequiredFieldKeys[entity] ?? []).forEach((fieldKey) => {
-            const idx = fieldIndexMap[fieldKey];
-            const val = idx === undefined ? '' : String(row[idx] ?? '').trim();
-            if (!val) {
-              errors.push(
-                t('components.uniImport.relationMissingEntityValue', {
-                  row: rowIdx + 1,
-                  entity: t(`components.uniImport.relationEntity.${entity}`),
-                  field: fieldKey,
-                }),
-              );
-            }
-          });
+        effectiveEntities.forEach((entity) => {
+          (relationEntityRequiredFieldKeys[entity] ?? [])
+            .filter((fieldKey) => selectedImportFieldKeys.includes(fieldKey))
+            .forEach((fieldKey) => {
+              const idx = fieldIndexMap[fieldKey];
+              if (idx === undefined) return;
+              const val = String(row[idx] ?? '').trim();
+              if (!val) {
+                errors.push(
+                  t('components.uniImport.relationMissingEntityValue', {
+                    row: rowIdx + 1,
+                    entity: t(`components.uniImport.relationEntity.${entity}`),
+                    field: fieldKey,
+                  }),
+                );
+              }
+            });
         });
       }
       return errors;
     },
-    [customRelationEntities, relationEntityRequiredFieldKeys, t],
+    [
+      resolveEffectiveRelationEntities,
+      resolveHeaderFieldKeys,
+      relationEntityRequiredFieldKeys,
+      selectedImportFieldKeys,
+      t,
+    ],
   );
 
   const runImportPrecheck = useCallback(
     async (data: any[][]) => {
-      const asStringRows = data.map((row) => row.map((cell) => String(cell ?? '')));
+      const asStringRows = projectImportSheetRows(
+        data.map((row) => row.map((cell) => String(cell ?? ''))),
+      );
       if (showRelationImport && customRelationEntities.length > 0 && onRelationImportPrecheck) {
         const localErrors = validateRelationPayload(asStringRows);
         if (localErrors.length) {
@@ -527,12 +583,13 @@ export const UniImport: React.FC<UniImportProps> = ({
           });
           return;
         }
+        const effectiveEntities = resolveEffectiveRelationEntities(resolveHeaderFieldKeys(asStringRows));
         setPrecheckLoading(true);
         setPrecheckResult(null);
         try {
           const relation = await onRelationImportPrecheck({
             rawRows: asStringRows,
-            entities: customRelationEntities,
+            entities: effectiveEntities,
             writeStrategy: customWriteStrategy,
           });
           setPrecheckResult({
@@ -577,6 +634,9 @@ export const UniImport: React.FC<UniImportProps> = ({
       customWriteStrategy,
       onRelationImportPrecheck,
       onImportPrecheck,
+      projectImportSheetRows,
+      resolveEffectiveRelationEntities,
+      resolveHeaderFieldKeys,
       validateRelationPayload,
       t,
     ],
@@ -596,7 +656,9 @@ export const UniImport: React.FC<UniImportProps> = ({
 
   const commitImport = async (data: any[][]) => {
     if (shouldUseRelationImport && onRelationImportSubmit) {
-      const relationRows = data.map((row) => row.map((cell) => String(cell ?? '')));
+      const relationRows = projectImportSheetRows(
+        data.map((row) => row.map((cell) => String(cell ?? ''))),
+      );
       const localErrors = validateRelationPayload(relationRows);
       if (localErrors.length) {
         setPrecheckResult({
@@ -605,9 +667,10 @@ export const UniImport: React.FC<UniImportProps> = ({
         });
         return;
       }
+      const effectiveEntities = resolveEffectiveRelationEntities(resolveHeaderFieldKeys(relationRows));
       const relationResult = await onRelationImportSubmit({
         rawRows: relationRows,
-        entities: customRelationEntities,
+        entities: effectiveEntities,
         writeStrategy: customWriteStrategy,
       });
       if (relationResult?.success !== false && !relationResult?.errors?.length && relationResult?.message) {
@@ -1011,16 +1074,9 @@ export const UniImport: React.FC<UniImportProps> = ({
         return;
       }
 
-      const projectedData =
-        selectedImportFieldKeys.length > 0 && headers?.length
-          ? (() => {
-              const selectedIndexes = selectedImportFieldKeys
-                .map((key) => fieldKeyToIndex.get(key))
-                .filter((idx): idx is number => idx !== undefined);
-              if (selectedIndexes.length === 0) return data;
-              return data.map((row) => selectedIndexes.map((colIdx) => row?.[colIdx] ?? ''));
-            })()
-          : data;
+      const projectedData = projectImportSheetRows(
+        data.map((row) => row.map((cell) => String(cell ?? ''))),
+      );
 
       if (shouldUseRelationImport) {
         const localErrors = validateRelationPayload(
