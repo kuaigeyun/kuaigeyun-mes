@@ -42,6 +42,7 @@ dependencies = [
 
 # Playwright：HTML→PDF。fast-deploy 在 PLAYWRIGHT_POSTINSTALL_ENABLE=1 时 uv sync --extra pdf 并安装 Chromium。
 # 浏览器目录见 deploy.env PLAYWRIGHT_BROWSERS_PATH（默认 .playwright-browsers/）。
+# OCR：发票 PDF 明细。fast-deploy sync_backend_deps 默认始终 --extra ocr；Linux 另装 libzbar0 + libgomp1。
 [project.optional-dependencies]
 pdf = [
     "playwright>=1.57.0,<1.58",

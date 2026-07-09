@@ -285,7 +285,7 @@ start_backend() {
     cd riveredge-backend
     export RIVEREDGE_DB_POOL_MIN="${RIVEREDGE_DB_POOL_MIN:-1}"
     export RIVEREDGE_DB_POOL_MAX="${RIVEREDGE_DB_POOL_MAX:-5}"
-    PYTHONPATH="src" nohup uv run --extra pdf uvicorn server.main:app --host 0.0.0.0 --port "${BACKEND_PORT}" --reload --reload-dir src > ../.logs/backend.log 2>&1 &
+    PYTHONPATH="src" nohup uv run --extra ocr --extra pdf uvicorn server.main:app --host 0.0.0.0 --port "${BACKEND_PORT}" --reload --reload-dir src > ../.logs/backend.log 2>&1 &
     local backend_launcher_pid=$!
     echo "${backend_launcher_pid}" > ../.logs/backend.pid
     cd ..
@@ -331,7 +331,7 @@ start_worker() {
     TASKIQ_WORKERS="${TASKIQ_WORKERS:-1}"
     export RIVEREDGE_TASKIQ_POOL_MIN="${RIVEREDGE_TASKIQ_POOL_MIN:-1}"
     export RIVEREDGE_TASKIQ_POOL_MAX="${RIVEREDGE_TASKIQ_POOL_MAX:-2}"
-    PYTHONPATH="src" nohup uv run --extra pdf taskiq worker \
+    PYTHONPATH="src" nohup uv run --extra ocr --extra pdf taskiq worker \
         --app-dir src \
         --fs-discover \
         --workers "$TASKIQ_WORKERS" \
@@ -340,7 +340,7 @@ start_worker() {
     local worker_launcher_pid=$!
 
     [ -f "../.logs/scheduler.pid" ] && rm -f "../.logs/scheduler.pid"
-    PYTHONPATH="src" nohup uv run --extra pdf taskiq scheduler \
+    PYTHONPATH="src" nohup uv run --extra ocr --extra pdf taskiq scheduler \
         --app-dir src \
         --fs-discover \
         core.tasks.taskiq_app:scheduler > ../.logs/scheduler.log 2>&1 &

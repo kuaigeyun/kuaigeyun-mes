@@ -1757,24 +1757,30 @@ cmd_configure() {
     print_configure_summary
 }
 
+# 后端 uv sync/run extras：ocr 始终开启（发票 PDF）；pdf 由 Playwright 开关控制
+backend_uv_extra_args() {
+    local extras=(--extra ocr)
+    if playwright_postinstall_enabled; then
+        extras+=(--extra pdf)
+    fi
+    printf '%s' "${extras[*]}"
+}
+
 sync_backend_deps() {
     apply_cn_mirrors
-    log_info "同步 Python 依赖..."
+    log_info "同步 Python 依赖（含发票 OCR：pymupdf + rapidocr）..."
     (
         cd "$BACKEND_DIR"
         export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
         export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
         export UV_HTTP_TIMEOUT="${UV_HTTP_TIMEOUT:-600}"
-        local sync_args=(sync --no-install-project)
-        if playwright_postinstall_enabled; then
-            sync_args+=(--extra pdf)
-        fi
-        "$(resolve_uv)" "${sync_args[@]}"
+        # shellcheck disable=SC2046
+        "$(resolve_uv)" sync --no-install-project $(backend_uv_extra_args)
     ) || { log_error "Python 依赖同步失败"; exit 1; }
     if is_windows_gitbash; then
         ensure_pyzbar_windows_native
     elif [ "$(uname -s)" = "Linux" ]; then
-        ensure_linux_zbar_runtime
+        ensure_linux_invoice_parse_runtime
     fi
 }
 
@@ -1796,9 +1802,8 @@ playwright_export_env() {
 }
 
 playwright_uv_extra_args() {
-    if playwright_postinstall_enabled; then
-        printf '%s' '--extra pdf'
-    fi
+    # 兼容旧调用：与 backend_uv_extra_args 一致（含 ocr）
+    backend_uv_extra_args
 }
 
 _playwright_chromium_probe() {
@@ -1883,7 +1888,15 @@ ensure_pyzbar_windows_native() {
     fi
 }
 
-# Linux：pyzbar 依赖系统 libzbar（发票 PDF 二维码解析）
+# Linux：发票 PDF 解析系统库 — zbar（二维码）+ libgomp（onnxruntime/OCR）
+_linux_has_lib() {
+    local name=$1
+    if command -v ldconfig >/dev/null 2>&1 && ldconfig -p 2>/dev/null | grep -q "${name}"; then
+        return 0
+    fi
+    ls /usr/lib/*/"${name}"* /usr/lib64/"${name}"* /lib/*/"${name}"* 2>/dev/null | grep -q .
+}
+
 check_zbar() {
     if is_windows_gitbash; then
         local dll="$BACKEND_DIR/.venv/Lib/site-packages/pyzbar/libzbar-64.dll"
@@ -1898,69 +1911,113 @@ check_zbar() {
         echo "ok"
         return
     fi
-    if command -v ldconfig >/dev/null 2>&1 && ldconfig -p 2>/dev/null | grep -q 'libzbar\.so'; then
+    if _linux_has_lib 'libzbar\.so'; then
         echo "ok"
-        return
+    else
+        echo "missing"
     fi
-    if ls /usr/lib/*/libzbar.so* /usr/lib64/libzbar.so* /lib/*/libzbar.so* 2>/dev/null | grep -q .; then
-        echo "ok"
-        return
-    fi
-    echo "missing"
 }
 
-install_zbar_runtime() {
+check_invoice_parse_runtime() {
+    # 系统侧：zbar + OpenMP（OCR onnxruntime）
+    if is_windows_gitbash; then
+        check_zbar
+        return
+    fi
+    if [ "$(uname -s)" != "Linux" ]; then
+        echo "ok"
+        return
+    fi
+    if [ "$(check_zbar)" != "ok" ]; then
+        echo "missing"
+        return
+    fi
+    if _linux_has_lib 'libgomp\.so'; then
+        echo "ok"
+    else
+        echo "missing"
+    fi
+}
+
+check_ocr() {
+    # Python 侧：pymupdf + rapidocr（需 uv sync --extra ocr 之后）
+    [ -d "$BACKEND_DIR" ] || { echo "missing"; return; }
+    local uv_bin
+    uv_bin="$(resolve_uv 2>/dev/null || true)"
+    [ -n "$uv_bin" ] || { echo "missing"; return; }
+    # shellcheck disable=SC2046
+    if (cd "$BACKEND_DIR" && export PYTHONPATH="$BACKEND_DIR/src" && \
+        "$uv_bin" run $(backend_uv_extra_args) python - <<'PY' >/dev/null 2>&1
+import fitz
+from rapidocr_onnxruntime import RapidOCR
+PY
+    ); then
+        echo "ok"
+    else
+        echo "missing"
+    fi
+}
+
+install_invoice_parse_runtime() {
     if is_windows_gitbash; then
         ensure_pyzbar_windows_native
         return 0
     fi
     if [ "$(uname -s)" != "Linux" ]; then
-        log_warn "当前平台无需安装系统 zbar 运行库"
+        log_warn "当前平台无需安装发票解析系统运行库"
         return 0
     fi
-    log_info "安装 zbar 运行库（pyzbar / 发票二维码解析）..."
+    log_info "安装发票解析系统库（zbar 二维码 + libgomp OCR/onnxruntime）..."
     if [ -f /etc/debian_version ]; then
         sudo apt-get update -y || true
-        sudo apt-get install -y libzbar0 || {
-            log_error "安装 libzbar0 失败，请手动执行: sudo apt-get install -y libzbar0"
+        sudo apt-get install -y libzbar0 libgomp1 || {
+            log_error "安装失败，请手动执行: sudo apt-get install -y libzbar0 libgomp1"
             return 1
         }
     elif is_linux_rhel_family || is_linux_fedora; then
         local pkg_mgr
         pkg_mgr="$(linux_pkg_manager)"
         [ -n "$pkg_mgr" ] || { log_error "未找到 dnf/yum"; return 1; }
-        # RHEL/Fedora 包名多为 zbar；部分发行版为 zbar-libs
-        sudo "$pkg_mgr" install -y zbar zbar-libs 2>/dev/null \
-            || sudo "$pkg_mgr" install -y zbar \
+        sudo "$pkg_mgr" install -y zbar zbar-libs libgomp 2>/dev/null \
+            || sudo "$pkg_mgr" install -y zbar libgomp \
             || {
-                log_error "安装 zbar 失败，请手动执行: sudo $pkg_mgr install -y zbar"
+                log_error "安装失败，请手动执行: sudo $pkg_mgr install -y zbar libgomp"
                 return 1
             }
     else
-        log_error "不支持的 Linux 发行版，请手动安装 libzbar（Debian: libzbar0；RHEL: zbar）"
+        log_error "不支持的 Linux 发行版，请手动安装 libzbar0/zbar 与 libgomp1/libgomp"
         return 1
     fi
     if command -v ldconfig >/dev/null 2>&1; then
         sudo ldconfig >/dev/null 2>&1 || true
     fi
-    if [ "$(check_zbar)" = "ok" ]; then
-        log_ok "zbar 运行库已就绪"
+    if [ "$(check_invoice_parse_runtime)" = "ok" ]; then
+        log_ok "发票解析系统库已就绪（zbar + libgomp）"
         return 0
     fi
-    log_warn "已尝试安装 zbar，但未检测到 libzbar.so；发票二维码解析可能仍不可用"
+    log_warn "已尝试安装发票解析系统库，但检测未完全通过；二维码/OCR 可能仍不可用"
     return 0
 }
 
-ensure_linux_zbar_runtime() {
+# 兼容旧函数名
+install_zbar_runtime() {
+    install_invoice_parse_runtime
+}
+
+ensure_linux_invoice_parse_runtime() {
     [ "$(uname -s)" = "Linux" ] || return 0
-    if [ "$(check_zbar)" = "ok" ]; then
+    if [ "$(check_invoice_parse_runtime)" = "ok" ]; then
         return 0
     fi
-    log_warn "未检测到 libzbar，正在安装系统运行库（发票 PDF 二维码解析需要）..."
-    install_zbar_runtime || {
-        log_warn "zbar 安装未成功，二维码图片解析不可用，但不影响后端启动"
+    log_warn "发票解析系统库不完整，正在补装（zbar + libgomp）..."
+    install_invoice_parse_runtime || {
+        log_warn "发票解析系统库安装未成功，二维码/OCR 可能不可用，但不影响后端启动"
         return 0
     }
+}
+
+ensure_linux_zbar_runtime() {
+    ensure_linux_invoice_parse_runtime
 }
 
 check_playwright() {
@@ -2290,7 +2347,7 @@ start_backend_dev() {
         cd "$BACKEND_DIR"
         export PYTHONPATH="$BACKEND_DIR/src"
         export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
-        nohup "$(resolve_uv)" run --extra pdf uvicorn server.main:app \
+        nohup "$(resolve_uv)" run $(backend_uv_extra_args) uvicorn server.main:app \
             --host 0.0.0.0 --port "$BACKEND_PORT" --reload --reload-dir src \
             > "$LOGS_DIR/backend.log" 2>&1 &
         echo $! > "$LOGS_DIR/backend.pid"
@@ -2313,12 +2370,12 @@ start_worker_dev() {
         cd "$BACKEND_DIR"
         export PYTHONPATH="$BACKEND_DIR/src"
         export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
-        nohup "$(resolve_uv)" run --extra pdf taskiq worker core.tasks.taskiq_app:broker --fs-discover \
+        nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq worker core.tasks.taskiq_app:broker --fs-discover \
             --workers "$TASKIQ_WORKERS" \
             core.tasks.taskiq_app core.tasks.worker_bootstrap core.tasks.data_backup_handlers \
             > "$LOGS_DIR/worker.log" 2>&1 &
         echo $! > "$LOGS_DIR/worker.pid"
-        nohup "$(resolve_uv)" run --extra pdf taskiq scheduler core.tasks.taskiq_app:scheduler --fs-discover \
+        nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq scheduler core.tasks.taskiq_app:scheduler --fs-discover \
             core.tasks.taskiq_app \
             > "$LOGS_DIR/scheduler.log" 2>&1 &
         echo $! > "$LOGS_DIR/scheduler.pid"
@@ -2358,7 +2415,7 @@ start_backend_prod() {
         export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
         export PYTHONPATH="$BACKEND_DIR/src"
         playwright_export_env
-        nohup "$(resolve_uv)" run --extra pdf uvicorn server.main:app \
+        nohup "$(resolve_uv)" run $(backend_uv_extra_args) uvicorn server.main:app \
             --host 127.0.0.1 --port "$BACKEND_PORT" --workers 1 \
             > "$LOGS_DIR/backend.log" 2>&1 &
         echo $! > "$LOGS_DIR/backend.pid"
@@ -2385,7 +2442,7 @@ start_worker_prod() {
             export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
             export PYTHONPATH="$BACKEND_DIR/src"
             playwright_export_env
-            nohup "$(resolve_uv)" run --extra pdf taskiq worker --app-dir src --fs-discover \
+            nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq worker --app-dir src --fs-discover \
                 --workers "$TASKIQ_WORKERS" \
                 core.tasks.taskiq_app:broker \
                 > "$LOGS_DIR/worker.log" 2>&1 &
@@ -2404,7 +2461,7 @@ start_worker_prod() {
             export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
             export PYTHONPATH="$BACKEND_DIR/src"
             playwright_export_env
-            nohup "$(resolve_uv)" run --extra pdf taskiq scheduler --app-dir src --fs-discover core.tasks.taskiq_app:scheduler \
+            nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq scheduler --app-dir src --fs-discover core.tasks.taskiq_app:scheduler \
                 > "$LOGS_DIR/scheduler.log" 2>&1 &
             echo $! > "$LOGS_DIR/scheduler.pid"
         )
@@ -3436,8 +3493,8 @@ run_install_component() {
         install_uv_shell || return 1
         return 0
     fi
-    if [ "$comp" = "zbar" ]; then
-        install_zbar_runtime || return 1
+    if [ "$comp" = "zbar" ] || [ "$comp" = "invoice-runtime" ]; then
+        install_invoice_parse_runtime || return 1
         return 0
     fi
     local cmd
@@ -3488,11 +3545,18 @@ cmd_check() {
         missing) log_warn "Chromium — 未安装（生产 start 会同步安装）" ;;
         *) log_warn "Chromium: $st" ;;
     esac
-    st="$(check_zbar)"
+    st="$(check_invoice_parse_runtime)"
     if [ "$st" = "ok" ]; then
-        log_ok "zbar (pyzbar 运行库)"
+        log_ok "发票解析系统库 (zbar + libgomp)"
     else
-        log_warn "zbar: $st（发票 PDF 二维码解析需要 libzbar0 / zbar）"
+        log_warn "发票解析系统库: $st（需 libzbar0/zbar + libgomp1/libgomp）"
+        failed=1
+    fi
+    st="$(check_ocr)"
+    if [ "$st" = "ok" ]; then
+        log_ok "发票 OCR (pymupdf + rapidocr)"
+    else
+        log_warn "发票 OCR: $st（需 uv sync --extra ocr，执行 migrate 会自动同步）"
         failed=1
     fi
     return $failed
@@ -3525,8 +3589,8 @@ cmd_install() {
     if [ "$DEPLOY_MODE" = "prod" ]; then
         run_install_component caddy "$(check_caddy)" || return 1
     fi
-    # 发票 PDF 二维码解析：Linux 需系统 libzbar；Windows 由 pyzbar 自带 DLL
-    run_install_component zbar "$(check_zbar)" || true
+    # 发票 PDF：系统库 zbar+libgomp；Python OCR 包在 migrate/sync_backend_deps 中 --extra ocr
+    run_install_component invoice-runtime "$(check_invoice_parse_runtime)" || true
     log_warn "若刚安装系统软件，请重新打开终端或刷新 PATH 后再次 check"
     cmd_check || exit 1
 }

@@ -1018,7 +1018,8 @@ function Sync-BackendDeps {
         $env:SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir
         $env:UV_LINK_MODE = 'copy'
         $env:UV_HTTP_TIMEOUT = '600'
-        $syncArgs = @('sync', '--no-install-project')
+        # ocr：发票 PDF 明细识别；pdf：Playwright HTML→PDF
+        $syncArgs = @('sync', '--no-install-project', '--extra', 'ocr')
         if (Test-PlaywrightPostInstallEnabled) { $syncArgs += '--extra', 'pdf' }
         & $uv @syncArgs
         if ($LASTEXITCODE -ne 0) { throw 'uv sync 失败' }
