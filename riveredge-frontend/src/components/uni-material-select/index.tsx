@@ -151,6 +151,38 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   const { message } = App.useApp();
   const [data, setData] = useState<Material[]>([]);
   const [loading, setLoading] = useState(false);
+  const dataIdsRef = useRef<Set<number>>(new Set());
+  const resolvingIdsRef = useRef<Set<number>>(new Set());
+  const selectedIdRef = useRef<number | undefined>(undefined);
+
+  /** Form.List 内 name 为相对路径，需拼出完整字段路径才能 watch 到当前值 */
+  const watchedName = useMemo(() => {
+    if (listFieldName != null && listFieldKey !== undefined && listFieldKey !== null) {
+      const leaf = Array.isArray(name) ? name[name.length - 1] : name;
+      return [listFieldName, listFieldKey, leaf] as NamePath;
+    }
+    return name;
+  }, [listFieldName, listFieldKey, name]);
+
+  const currentValue = Form.useWatch(watchedName, form);
+  selectedIdRef.current = (() => {
+    const id = Number(currentValue);
+    return Number.isFinite(id) && id > 0 ? id : undefined;
+  })();
+
+  const mergeMaterialsIntoData = (items: Material[]) => {
+    if (!items.length) return;
+    setData((prev) => {
+      const merged = [...prev];
+      for (const item of items) {
+        const id = Number((item as any).id);
+        if (!merged.some((m) => Number((m as any).id) === id)) {
+          merged.push(item);
+        }
+      }
+      return merged;
+    });
+  };
 
   const fetchMaterials = async (searchText: string = '') => {
     setLoading(true);
@@ -164,7 +196,18 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
       });
       const raw = response?.data || response?.items || response || [];
       const rows = Array.isArray(raw) ? raw : [];
-      setData(filterSelectableMaterials(rows, mastersOnly));
+      const next = filterSelectableMaterials(rows, mastersOnly);
+      setData((prev) => {
+        const selectedId = selectedIdRef.current;
+        if (
+          selectedId &&
+          !next.some((m) => Number((m as any).id) === selectedId)
+        ) {
+          const keep = prev.find((m) => Number((m as any).id) === selectedId);
+          if (keep) return [keep, ...next];
+        }
+        return next;
+      });
     } catch (error) {
       console.error('Failed to fetch materials:', error);
       message.error('加载物料列表失败，请稍后重试');
@@ -185,19 +228,46 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  const mergeMaterialsIntoData = (items: Material[]) => {
-    if (!items.length) return;
-    setData((prev) => {
-      const merged = [...prev];
-      for (const item of items) {
-        const id = Number((item as any).id);
-        if (!merged.some((m) => Number((m as any).id) === id)) {
-          merged.push(item);
+  useEffect(() => {
+    dataIdsRef.current = new Set(
+      data.map((m) => Number((m as any).id)).filter((id) => Number.isFinite(id) && id > 0),
+    );
+  }, [data]);
+
+  /**
+   * 编辑回填时，当前选中 ID 往往不在初始 200 条搜索结果中。
+   * 按主键精确补齐选项，避免 Select 只显示裸 ID。
+   */
+  useEffect(() => {
+    const id = Number(currentValue);
+    if (!Number.isFinite(id) || id <= 0) return;
+    if (dataIdsRef.current.has(id)) return;
+    if (fallbackOption && Number(fallbackOption.value) === id) return;
+    if (resolvingIdsRef.current.has(id)) return;
+
+    resolvingIdsRef.current.add(id);
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await materialApi.list({ ids: [id], limit: 1 });
+        if (cancelled) return;
+        const found = (result.items ?? []).find((m) => Number((m as any).id) === id);
+        if (found) {
+          mergeMaterialsIntoData([found]);
+        } else {
+          console.error('[UniMaterialSelect] selected material not found by id', id);
         }
+      } catch (error) {
+        console.error('[UniMaterialSelect] failed to resolve selected material', id, error);
+      } finally {
+        resolvingIdsRef.current.delete(id);
       }
-      return merged;
-    });
-  };
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentValue, fallbackOption]);
 
   const resolveSelectedMaterial = async (
     val: number,

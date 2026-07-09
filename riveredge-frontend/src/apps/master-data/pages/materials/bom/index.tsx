@@ -784,6 +784,11 @@ const BOMPage: React.FC = () => {
         version: first.version,
         allBomCodes: list.map(b => b.bomCode)
       });
+      // 先按子件/主件 ID 补齐物料主数据，供下拉展示与来源回填（不依赖前 1000 条缓存）
+      await ensureMaterialsByIds([
+        first.materialId,
+        ...list.map((b) => b.componentId),
+      ]);
       setIsEdit(true);
       bomNameTouchedRef.current = true;
       setEditContext({
@@ -794,7 +799,7 @@ const BOMPage: React.FC = () => {
       // 确保 BOM 编号正确设置：优先使用第一个记录的 bomCode，如果不存在则尝试从其他记录中获取
       const bomCodeValue = first.bomCode ?? list.find(b => b.bomCode)?.bomCode ?? '';
       const itemsData = list.map((b) => {
-        const compMaterial = materials.find((m) => m.id === b.componentId);
+        const compMaterial = materialsRef.current.find((m) => m.id === b.componentId);
         const materialSource = getMaterialSourceTypeFromRecord(compMaterial);
         return {
           componentId: b.componentId,
@@ -3568,7 +3573,19 @@ const BOMPage: React.FC = () => {
                 title: t('app.master-data.bom.childMaterialTitleCol'),
                 dataIndex: 'componentId',
                 width: 210,
-                render: (_, __, index) => (
+                render: (_, __, index) => {
+                  const componentId = Number(getFormItems()[index]?.componentId);
+                  const material =
+                    Number.isFinite(componentId) && componentId > 0
+                      ? materialsById.get(componentId)
+                      : undefined;
+                  const fallbackOption = material
+                    ? {
+                        value: material.id,
+                        label: formatMaterialLabel(material),
+                      }
+                    : undefined;
+                  return (
                   <UniMaterialSelect
                     name={[index, 'componentId']}
                     label=""
@@ -3580,6 +3597,7 @@ const BOMPage: React.FC = () => {
                     listFieldName="items"
                     showQuickCreate
                     showAdvancedSearch
+                    fallbackOption={fallbackOption}
                     fillMapping={{
                       unit: 'baseUnit',
                     }}
@@ -3591,7 +3609,8 @@ const BOMPage: React.FC = () => {
                       setItemField(index, 'sourceType', materialSource || undefined);
                     }}
                   />
-                ),
+                  );
+                },
               },
               {
                 title: t('app.master-data.bom.quantityLabel'),
