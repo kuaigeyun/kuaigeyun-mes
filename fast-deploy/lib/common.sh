@@ -1889,12 +1889,51 @@ ensure_pyzbar_windows_native() {
 }
 
 # Linux：发票 PDF 解析系统库 — zbar（二维码）+ libgomp（onnxruntime/OCR）
-_linux_has_lib() {
-    local name=$1
-    if command -v ldconfig >/dev/null 2>&1 && ldconfig -p 2>/dev/null | grep -q "${name}"; then
+_linux_has_shared_lib() {
+    # $1 = 库名片段，如 libzbar / libgomp（不含 .so）
+    local stem=$1
+    if command -v ldconfig >/dev/null 2>&1; then
+        if ldconfig -p 2>/dev/null | grep -F "${stem}.so" >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    if find /usr/lib /usr/lib64 /lib /lib64 -maxdepth 3 -type f \( -name "${stem}.so*" -o -name "${stem}-*.so*" \) 2>/dev/null | grep -q .; then
         return 0
     fi
-    ls /usr/lib/*/"${name}"* /usr/lib64/"${name}"* /lib/*/"${name}"* 2>/dev/null | grep -q .
+    # Debian/Ubuntu 包已装但 ldconfig 缓存未刷新时
+    if command -v dpkg-query >/dev/null 2>&1; then
+        case "$stem" in
+            libzbar)
+                dpkg-query -W -f='${Status}' libzbar0 2>/dev/null | grep -q 'install ok installed' && return 0
+                ;;
+            libgomp)
+                dpkg-query -W -f='${Status}' libgomp1 2>/dev/null | grep -q 'install ok installed' && return 0
+                ;;
+        esac
+    fi
+    if command -v rpm >/dev/null 2>&1; then
+        case "$stem" in
+            libzbar)
+                if rpm -q zbar >/dev/null 2>&1 || rpm -q zbar-libs >/dev/null 2>&1; then
+                    return 0
+                fi
+                ;;
+            libgomp)
+                if rpm -q libgomp >/dev/null 2>&1; then
+                    return 0
+                fi
+                ;;
+        esac
+    fi
+    return 1
+}
+
+_sudo_can_run() {
+    # 非交互：已有缓存凭据或 NOPASSWD
+    if sudo -n true >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
 }
 
 check_zbar() {
@@ -1911,7 +1950,7 @@ check_zbar() {
         echo "ok"
         return
     fi
-    if _linux_has_lib 'libzbar\.so'; then
+    if _linux_has_shared_lib libzbar; then
         echo "ok"
     else
         echo "missing"
@@ -1928,15 +1967,15 @@ check_invoice_parse_runtime() {
         echo "ok"
         return
     fi
-    if [ "$(check_zbar)" != "ok" ]; then
+    if ! _linux_has_shared_lib libzbar; then
         echo "missing"
         return
     fi
-    if _linux_has_lib 'libgomp\.so'; then
-        echo "ok"
-    else
+    if ! _linux_has_shared_lib libgomp; then
         echo "missing"
+        return
     fi
+    echo "ok"
 }
 
 check_ocr() {
@@ -1967,19 +2006,39 @@ install_invoice_parse_runtime() {
         log_warn "当前平台无需安装发票解析系统运行库"
         return 0
     fi
+    if [ "$(check_invoice_parse_runtime)" = "ok" ]; then
+        log_ok "发票解析系统库已就绪（zbar + libgomp）"
+        return 0
+    fi
     log_info "安装发票解析系统库（zbar 二维码 + libgomp OCR/onnxruntime）..."
+    if ! _sudo_can_run; then
+        log_error "需要 sudo 权限安装系统库（当前无免密/缓存凭据，apt 会卡住）"
+        if [ -f /etc/debian_version ]; then
+            log_error "请先手动执行: sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1"
+        else
+            log_error "请先手动执行: sudo dnf install -y zbar libgomp  （或 yum）"
+        fi
+        log_error "装完后重新执行: ./fast-deploy/deploy.sh migrate"
+        return 1
+    fi
+    export DEBIAN_FRONTEND=noninteractive
     if [ -f /etc/debian_version ]; then
-        sudo apt-get update -y || true
-        sudo apt-get install -y libzbar0 libgomp1 || {
-            log_error "安装失败，请手动执行: sudo apt-get install -y libzbar0 libgomp1"
-            return 1
-        }
+        # 不强制 update（慢且易卡镜像）；装失败再 update 重试
+        if ! sudo -n apt-get install -y libzbar0 libgomp1; then
+            log_warn "直接安装失败，尝试 apt-get update 后重试..."
+            sudo -n apt-get update -y || true
+            sudo -n apt-get install -y libzbar0 libgomp1 || {
+                log_error "安装失败，请手动执行: sudo apt-get install -y libzbar0 libgomp1"
+                return 1
+            }
+        fi
     elif is_linux_rhel_family || is_linux_fedora; then
         local pkg_mgr
         pkg_mgr="$(linux_pkg_manager)"
         [ -n "$pkg_mgr" ] || { log_error "未找到 dnf/yum"; return 1; }
-        sudo "$pkg_mgr" install -y zbar zbar-libs libgomp 2>/dev/null \
-            || sudo "$pkg_mgr" install -y zbar libgomp \
+        sudo -n "$pkg_mgr" install -y zbar libgomp 2>/dev/null \
+            || sudo -n "$pkg_mgr" install -y zbar-libs libgomp 2>/dev/null \
+            || sudo -n "$pkg_mgr" install -y zbar zbar-libs libgomp \
             || {
                 log_error "安装失败，请手动执行: sudo $pkg_mgr install -y zbar libgomp"
                 return 1
@@ -1989,13 +2048,14 @@ install_invoice_parse_runtime() {
         return 1
     fi
     if command -v ldconfig >/dev/null 2>&1; then
-        sudo ldconfig >/dev/null 2>&1 || true
+        sudo -n ldconfig >/dev/null 2>&1 || true
     fi
     if [ "$(check_invoice_parse_runtime)" = "ok" ]; then
         log_ok "发票解析系统库已就绪（zbar + libgomp）"
         return 0
     fi
-    log_warn "已尝试安装发票解析系统库，但检测未完全通过；二维码/OCR 可能仍不可用"
+    log_warn "包已尝试安装，但检测仍未通过。请检查: ldconfig -p | grep -E 'zbar|gomp'"
+    log_warn "Debian/Ubuntu: dpkg -l libzbar0 libgomp1"
     return 0
 }
 
@@ -2010,10 +2070,10 @@ ensure_linux_invoice_parse_runtime() {
         return 0
     fi
     log_warn "发票解析系统库不完整，正在补装（zbar + libgomp）..."
-    install_invoice_parse_runtime || {
+    if ! install_invoice_parse_runtime; then
         log_warn "发票解析系统库安装未成功，二维码/OCR 可能不可用，但不影响后端启动"
         return 0
-    }
+    fi
 }
 
 ensure_linux_zbar_runtime() {
