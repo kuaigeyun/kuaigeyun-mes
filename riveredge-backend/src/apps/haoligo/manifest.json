@@ -517,6 +517,65 @@
             ]
           }
         ]
+      },
+      {
+        "title": "app.haoligo.menu.finance",
+        "path": "/apps/haoligo/finance",
+        "icon": "Wallet",
+        "permission": "haoligo:finance-invoice-verify:read",
+        "sort_order": 40,
+        "children": [
+          {
+            "title": "app.haoligo.menu.finance.invoiceVerify",
+            "path": "/apps/haoligo/finance/invoice-verify",
+            "icon": "ScanLine",
+            "permission": "haoligo:finance-invoice-verify:read",
+            "sort_order": 10
+          },
+          {
+            "title": "app.haoligo.menu.finance.payments",
+            "path": "/apps/haoligo/finance/payments",
+            "icon": "Banknote",
+            "permission": "haoligo:finance-payments:read",
+            "sort_order": 20
+          },
+          {
+            "title": "app.haoligo.menu.finance.suppliers",
+            "path": "/apps/haoligo/finance/suppliers",
+            "icon": "Building2",
+            "permission": "haoligo:finance-suppliers:read",
+            "sort_order": 30
+          },
+          {
+            "title": "app.haoligo.menu.finance.supplierPrices",
+            "path": "/apps/haoligo/finance/supplier-prices",
+            "icon": "Receipt",
+            "permission": "haoligo:finance-supplier-prices:read",
+            "sort_order": 35
+          },
+          {
+            "title": "app.haoligo.menu.finance.group.reports",
+            "icon": "BarChartBig",
+            "permission": "haoligo:finance-reports-payable:read",
+            "sort_order": 40,
+            "children": [
+              {
+                "title": "app.haoligo.menu.finance.reports.payable",
+                "path": "/apps/haoligo/finance/reports/payable",
+                "icon": "PieChart",
+                "permission": "haoligo:finance-reports-payable:read",
+                "sort_order": 41
+              },
+              {
+                "title": "app.haoligo.menu.finance.reports.monthlyPayment",
+                "path": "/apps/haoligo/finance/reports/monthly-payment",
+                "icon": "CalendarDays",
+                "permission": "haoligo:finance-reports-monthly-payment:read",
+                "sort_order": 42
+              }
+            ]
+          }
+        ]
       }
     ]
   },
@@ -1854,6 +1913,35 @@
     "haoligo:workspace-dashboard:delete",
     "haoligo:workspace-dashboard:update",
     "haoligo:workspace-dashboard:import",
-    "haoligo:workspace-dashboard:export"
+    "haoligo:workspace-dashboard:export",
+    "haoligo:finance-invoice-verify:read",
+    "haoligo:finance-invoice-verify:create",
+    "haoligo:finance-invoice-verify:delete",
+    "haoligo:finance-invoice-verify:update",
+    "haoligo:finance-invoice-verify:import",
+    "haoligo:finance-invoice-verify:export",
+    "haoligo:finance-invoice-verify:print",
+    "haoligo:finance-payments:read",
+    "haoligo:finance-payments:create",
+    "haoligo:finance-payments:delete",
+    "haoligo:finance-payments:update",
+    "haoligo:finance-payments:import",
+    "haoligo:finance-payments:export",
+    "haoligo:finance-suppliers:read",
+    "haoligo:finance-suppliers:create",
+    "haoligo:finance-suppliers:delete",
+    "haoligo:finance-suppliers:update",
+    "haoligo:finance-suppliers:import",
+    "haoligo:finance-suppliers:export",
+    "haoligo:finance-supplier-prices:read",
+    "haoligo:finance-supplier-prices:create",
+    "haoligo:finance-supplier-prices:delete",
+    "haoligo:finance-supplier-prices:update",
+    "haoligo:finance-supplier-prices:import",
+    "haoligo:finance-supplier-prices:export",
+    "haoligo:finance-reports-payable:read",
+    "haoligo:finance-reports-payable:export",
+    "haoligo:finance-reports-monthly-payment:read",
+    "haoligo:finance-reports-monthly-payment:export"
   ]
 }

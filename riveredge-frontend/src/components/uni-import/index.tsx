@@ -39,6 +39,7 @@ import {
 } from './uni-import-preview-modal';
 import { getImportDataRows } from './import-preview-utils';
 import { translatePathTitle } from '../../utils/menuTranslation';
+import { spreadsheetCellToPlainString } from '../../utils/spreadsheetCellPlainString';
 import { resolveSystemFieldKey } from './apply-import-mapping';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 
@@ -215,6 +216,8 @@ export const UniImport: React.FC<UniImportProps> = ({
   const [xlsxBusy, setXlsxBusy] = useState(false);
   /** 上传/映射后的表格行；变更时 useLayoutEffect 同步重建 Univer 工作簿 */
   const [uploadedSheetRows, setUploadedSheetRows] = useState<string[][] | null>(null);
+  /** 确认导入必须读 ref：避免闭包/预览路径绕过上传原文导致 toPrecision 截断 */
+  const uploadedSheetRowsRef = useRef<string[][] | null>(null);
   const [mappingModalOpen, setMappingModalOpen] = useState(false);
   const [mappingRawRows, setMappingRawRows] = useState<string[][]>([]);
   const [customModalOpen, setCustomModalOpen] = useState(false);
@@ -373,6 +376,7 @@ export const UniImport: React.FC<UniImportProps> = ({
       setCustomRelationEntities((prev) => normalizeRelationEntities(prev, relationDefaultEntities));
       return;
     }
+    uploadedSheetRowsRef.current = null;
     setUploadedSheetRows(null);
     setMappingModalOpen(false);
     setMappingRawRows([]);
@@ -442,6 +446,7 @@ export const UniImport: React.FC<UniImportProps> = ({
     try {
       setXlsxBusy(true);
       const rows = await parseImportXlsxFile(file as File);
+      uploadedSheetRowsRef.current = rows;
       setUploadedSheetRows(rows);
       messageApi.success(t('components.uniImport.uploadSuccess'));
     } catch (error: unknown) {
@@ -474,6 +479,7 @@ export const UniImport: React.FC<UniImportProps> = ({
   };
 
   const handleMappingApply = (mappedRows: string[][]) => {
+    uploadedSheetRowsRef.current = mappedRows;
     setUploadedSheetRows(mappedRows);
     setMappingModalOpen(false);
     messageApi.success(t('components.uniImport.mappingApplySuccess'));
@@ -732,11 +738,71 @@ export const UniImport: React.FC<UniImportProps> = ({
     void commitImport(previewData);
   };
 
+  const submitParsedImportRows = (data: string[][]) => {
+    if (data.length === 0) {
+      messageApi.warning('表格中没有有效数据，请先输入数据');
+      return;
+    }
+
+    const hasDataRow =
+      data.length > 1 &&
+      data.slice(1).some(
+        (row) =>
+          row &&
+          row.some((cell) => {
+            const v = cell !== null && cell !== undefined ? String(cell).trim() : '';
+            return v !== '';
+          }),
+      );
+    if (!hasDataRow) {
+      messageApi.warning('表格中没有有效数据（所有行都为空），请先输入数据');
+      return;
+    }
+
+    const projectedData = projectImportSheetRows(
+      data.map((row) => row.map((cell) => String(cell ?? ''))),
+    );
+
+    if (shouldUseRelationImport) {
+      const localErrors = validateRelationPayload(
+        projectedData.map((row) => row.map((cell) => String(cell ?? ''))),
+      );
+      if (localErrors.length) {
+        setPrecheckResult({
+          canImport: false,
+          errors: localErrors,
+        });
+        if (enableImportPreview) {
+          setPreviewData(projectedData);
+          setPreviewModalOpen(true);
+        } else {
+          messageApi.error(localErrors[0]);
+        }
+        return;
+      }
+    }
+
+    if (enableImportPreview) {
+      openImportPreview(projectedData);
+      return;
+    }
+    void commitImport(projectedData);
+  };
+
   /**
    * 处理确认导入
    */
   const handleConfirm = () => {
     try {
+      // 上传 xlsx 时已解析为字符串矩阵；确认时必须用该原文，禁止 Univer 回读（会 toPrecision 截断）
+      const uploaded = uploadedSheetRowsRef.current;
+      if (uploaded && uploaded.length > 0) {
+        submitParsedImportRows(
+          uploaded.map((row) => row.map((cell) => String(cell ?? ''))),
+        );
+        return;
+      }
+
       const instance = univerInstanceRef.current;
 
       if (!instance) {
@@ -771,30 +837,16 @@ export const UniImport: React.FC<UniImportProps> = ({
         // 如果获取到了 worksheet，尝试使用其方法获取数据
         if (worksheet) {
           try {
-            // 方法1：尝试使用 getRangeValues 获取数据
+            // 优先 getCellMatrix / getCellData（保留 cell.v 原始精度），避免 getRangeValues 返回格式化显示值
             // @ts-ignore
-            if (typeof worksheet.getRangeValues === 'function') {
+            if (typeof worksheet.getCellMatrix === 'function') {
               // @ts-ignore
-              const rangeValues = worksheet.getRangeValues(0, 0, 999, 99); // 获取前 1000 行，100 列
-              if (rangeValues && Array.isArray(rangeValues)) {
-                data = rangeValues;
+              const cellMatrix = worksheet.getCellMatrix();
+              if (cellMatrix) {
+                data = convertCellMatrixToArray(cellMatrix);
               }
             }
 
-            // 方法2：尝试使用 getCellMatrix 获取数据
-            if (data.length === 0) {
-              // @ts-ignore
-              if (typeof worksheet.getCellMatrix === 'function') {
-                // @ts-ignore
-                const cellMatrix = worksheet.getCellMatrix();
-                if (cellMatrix) {
-                  // 将 cellMatrix 转换为二维数组
-                  data = convertCellMatrixToArray(cellMatrix);
-                }
-              }
-            }
-
-            // 方法3：尝试使用 getCellData 获取数据
             if (data.length === 0) {
               // @ts-ignore
               if (typeof worksheet.getCellData === 'function') {
@@ -806,12 +858,24 @@ export const UniImport: React.FC<UniImportProps> = ({
               }
             }
 
-            // 方法4：尝试直接访问 cellData 属性
             if (data.length === 0 && worksheet.cellData) {
               data = convertCellDataToArray(worksheet.cellData);
             }
 
-            // 方法5：尝试使用 getRange 方法获取数据
+            // getRangeValues / getRange 可能返回列格式后的显示文本，仅在前述方法不可用时使用
+            // @ts-ignore
+            if (data.length === 0 && typeof worksheet.getRangeValues === 'function') {
+              // @ts-ignore
+              const rangeValues = worksheet.getRangeValues(0, 0, 999, 99);
+              if (rangeValues && Array.isArray(rangeValues)) {
+                data = rangeValues.map((row) =>
+                  Array.isArray(row)
+                    ? row.map((cell) => spreadsheetCellToPlainString(cell))
+                    : [],
+                );
+              }
+            }
+
             if (data.length === 0) {
               // @ts-ignore
               if (typeof worksheet.getRange === 'function') {
@@ -822,7 +886,11 @@ export const UniImport: React.FC<UniImportProps> = ({
                     // @ts-ignore
                     const values = range.getValues();
                     if (values && Array.isArray(values)) {
-                      data = values;
+                      data = values.map((row) =>
+                        Array.isArray(row)
+                          ? row.map((cell) => spreadsheetCellToPlainString(cell))
+                          : [],
+                      );
                     }
                   }
                 } catch (e) {
@@ -864,9 +932,9 @@ export const UniImport: React.FC<UniImportProps> = ({
                         const cell = worksheet.getCellValue(r, c);
                         if (cell !== null && cell !== undefined) {
                           if (typeof cell === 'object') {
-                            value = cell.v !== undefined ? cell.v : (cell.m !== undefined ? cell.m : String(cell));
+                            value = spreadsheetCellToPlainString(cell);
                           } else {
-                            value = String(cell);
+                            value = spreadsheetCellToPlainString(cell);
                           }
                         }
                       }
@@ -879,9 +947,9 @@ export const UniImport: React.FC<UniImportProps> = ({
                           if (typeof cell.getValue === 'function') {
                             // @ts-ignore
                             const cellValue = cell.getValue();
-                            value = cellValue !== null && cellValue !== undefined ? String(cellValue) : '';
+                            value = cellValue !== null && cellValue !== undefined ? spreadsheetCellToPlainString(cellValue) : '';
                           } else {
-                            value = cell.v || cell.m || cell.value || '';
+                            value = spreadsheetCellToPlainString(cell);
                           }
                         }
                       }
@@ -892,7 +960,7 @@ export const UniImport: React.FC<UniImportProps> = ({
                         if (row) {
                           const cell = row[c] || (typeof row.get === 'function' ? row.get(c) : null);
                           if (cell) {
-                            value = cell.v !== undefined ? cell.v : (cell.m !== undefined ? cell.m : '');
+                            value = spreadsheetCellToPlainString(cell);
                           }
                         }
                       }
@@ -903,7 +971,7 @@ export const UniImport: React.FC<UniImportProps> = ({
                         if (row) {
                           const cell = row[c] || (typeof row.get === 'function' ? row.get(c) : null);
                           if (cell) {
-                            value = cell.v !== undefined ? cell.v : (cell.m !== undefined ? cell.m : '');
+                            value = spreadsheetCellToPlainString(cell);
                           }
                         }
                       }
@@ -958,7 +1026,11 @@ export const UniImport: React.FC<UniImportProps> = ({
               // @ts-ignore
               const rangeData = univerAPI.getRangeData(0, 0, 999, 99);
               if (rangeData && Array.isArray(rangeData)) {
-                data = rangeData;
+                data = rangeData.map((row) =>
+                  Array.isArray(row)
+                    ? row.map((cell) => spreadsheetCellToPlainString(cell))
+                    : [],
+                );
               }
             }
           } catch (e) {
@@ -1023,7 +1095,7 @@ export const UniImport: React.FC<UniImportProps> = ({
               if (row) {
                 const cell = row.getValue ? row.getValue(c) : null;
                 if (cell) {
-                  value = cell.v !== undefined ? cell.v : (cell.m !== undefined ? cell.m : '');
+                  value = spreadsheetCellToPlainString(cell);
                 }
               }
             }
@@ -1075,7 +1147,7 @@ export const UniImport: React.FC<UniImportProps> = ({
             if (row) {
               const cell = row[c.toString()];
               if (cell) {
-                value = cell.v !== undefined ? cell.v : (cell.m !== undefined ? cell.m : '');
+                value = spreadsheetCellToPlainString(cell);
               }
             }
             rowData.push(value);
@@ -1085,51 +1157,15 @@ export const UniImport: React.FC<UniImportProps> = ({
         return result;
       }
 
-      if (data.length === 0) {
-        messageApi.warning('表格中没有有效数据，请先输入数据');
-        return;
-      }
-
-      // 至少有一行数据行（表头之后）包含非空内容
-      const hasDataRow = data.length > 1 && data.slice(1).some(row =>
-        row && row.some((cell: any) => {
-          const v = cell !== null && cell !== undefined ? String(cell).trim() : '';
-          return v !== '';
-        })
+      data = data.map((row) =>
+        Array.isArray(row)
+          ? row.map((cell) => spreadsheetCellToPlainString(cell))
+          : [],
       );
-      if (!hasDataRow) {
-        messageApi.warning('表格中没有有效数据（所有行都为空），请先输入数据');
-        return;
-      }
 
-      const projectedData = projectImportSheetRows(
+      submitParsedImportRows(
         data.map((row) => row.map((cell) => String(cell ?? ''))),
       );
-
-      if (shouldUseRelationImport) {
-        const localErrors = validateRelationPayload(
-          projectedData.map((row) => row.map((cell) => String(cell ?? ''))),
-        );
-        if (localErrors.length) {
-          setPrecheckResult({
-            canImport: false,
-            errors: localErrors,
-          });
-          if (enableImportPreview) {
-            setPreviewData(projectedData);
-            setPreviewModalOpen(true);
-          } else {
-            messageApi.error(localErrors[0]);
-          }
-          return;
-        }
-      }
-
-      if (enableImportPreview) {
-        openImportPreview(projectedData);
-        return;
-      }
-      void commitImport(projectedData);
     } catch (error: any) {
       messageApi.error('获取表格数据失败：' + (error.message || '未知错误'));
     }
@@ -1258,6 +1294,10 @@ export const UniImport: React.FC<UniImportProps> = ({
           onLoadingChange={setLoading}
           instanceRef={univerInstanceRef}
           messageApi={messageApi}
+          onSheetRowsChange={(rows) => {
+            // 仅写 ref：确认导入读原文；避免 setState 重建 Univer 冲掉粘贴
+            uploadedSheetRowsRef.current = rows;
+          }}
         />
       </Modal>
       {showMappingImport && headers && headers.length > 0 && (

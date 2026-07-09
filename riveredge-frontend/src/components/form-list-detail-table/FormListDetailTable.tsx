@@ -7,7 +7,7 @@ import React, { useMemo, useState } from 'react';
 import { Form, Button, Table, Space, Typography, Modal, Select, App, theme } from 'antd';
 import { PlusOutlined, CopyOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { FormListFieldData } from 'antd/es/form';
-import type { ColumnsType } from 'antd/es/table';
+import type { ColumnsType, TableProps } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../layout-templates/constants';
 
@@ -40,6 +40,10 @@ export interface FormListDetailTableProps {
   /** 多选批量添加；配置后点击添加按钮打开选择弹窗 */
   bulkAdd?: FormListBulkAddConfig;
   pickModalZIndex?: number;
+  /** 默认 { x: 'max-content' }；传 false 时表格宽度随容器自适应 */
+  tableScroll?: TableProps<FormListFieldData>['scroll'] | false;
+  /** 表尾汇总行（基于当前明细行数据计算，非 OCR） */
+  renderSummary?: (lines: Record<string, unknown>[]) => React.ReactNode;
 }
 
 function resolveDefaultRow(
@@ -59,11 +63,14 @@ export const FormListDetailTable: React.FC<FormListDetailTableProps> = ({
   emptyText,
   bulkAdd,
   pickModalZIndex,
+  tableScroll = { x: 'max-content' },
+  renderSummary,
 }) => {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const { token } = theme.useToken();
   const form = Form.useFormInstance();
+  const lineValues = Form.useWatch(name, form) as Record<string, unknown>[] | undefined;
   const [pickOpen, setPickOpen] = useState(false);
   const [pickedValues, setPickedValues] = useState<Array<string | number>>([]);
 
@@ -204,8 +211,15 @@ export const FormListDetailTable: React.FC<FormListDetailTableProps> = ({
               rowKey="key"
               dataSource={fields}
               columns={tableColumns}
-              scroll={{ x: 'max-content' }}
+              scroll={tableScroll === false ? undefined : tableScroll}
+              style={{ width: '100%' }}
+              tableLayout="fixed"
               locale={{ emptyText: emptyText ?? t('common.noData') }}
+              summary={
+                renderSummary
+                  ? () => renderSummary(Array.isArray(lineValues) ? lineValues : [])
+                  : undefined
+              }
             />
             {errors?.length ? (
               <div style={{ marginTop: 4 }}>

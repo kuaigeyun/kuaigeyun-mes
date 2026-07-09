@@ -43,6 +43,13 @@ from apps.haoligo.api.routes_quality import router as quality_router
 from apps.haoligo.api.routes_quality_reports import router as quality_reports_router
 from apps.haoligo.api.routes_print import router as print_router
 from apps.haoligo.api.routes_config import router as config_router
+from apps.haoligo.api.routes_finance_supplier import router as finance_supplier_router
+from apps.haoligo.api.routes_finance_supplier_prices import router as finance_supplier_prices_router
+from apps.haoligo.api.routes_finance_invoice import router as finance_invoice_router
+from apps.haoligo.api.routes_finance_acceptance import router as finance_acceptance_router
+from apps.haoligo.api.routes_finance_payment import router as finance_payment_router
+from apps.haoligo.api.routes_finance_reports import monthly_router as finance_monthly_report_router
+from apps.haoligo.api.routes_finance_reports import payable_router as finance_payable_report_router
 
 router = APIRouter(tags=["App · HaoliGO"])
 
@@ -100,5 +107,12 @@ router.include_router(patrol_router)
 router.include_router(patrol_reports_router)
 router.include_router(quality_router)
 router.include_router(quality_reports_router)
+router.include_router(finance_supplier_router)
+router.include_router(finance_supplier_prices_router)
+router.include_router(finance_invoice_router)
+router.include_router(finance_acceptance_router)
+router.include_router(finance_payment_router)
+router.include_router(finance_payable_report_router)
+router.include_router(finance_monthly_report_router)
 router.include_router(print_router)
 router.include_router(config_router)

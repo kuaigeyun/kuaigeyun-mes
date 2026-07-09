@@ -796,6 +796,7 @@ export const DOCUMENT_TYPE_TO_CODE: Record<string, string> = {
   equipment_upkeep_complete: 'HAOLIGO_EQUIPMENT_UPKEEP_COMPLETE_PRINT',
   mold_maintenance_complete: 'HAOLIGO_MOLD_MAINTENANCE_COMPLETE_PRINT',
   mold_outsource_maintenance_complete: 'HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_COMPLETE_PRINT',
+  finance_material_acceptance: 'HAOLIGO_FINANCE_MATERIAL_ACCEPTANCE_PRINT',
 };
 
 export interface TemplateVariableItem {

@@ -104,7 +104,9 @@ import {
 import { buildMoldSheetAuditActionElements, MoldSheetAuditActions } from '../../../../components/MoldSheetAuditActions';
 import { rowActionKind } from '../../../../../../components/uni-action';
 import { canAuditMoldSheet } from '../../../../utils/moldSheetStatus';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { buildMoldTrialSheetListParams } from '../../../../utils/moldTrialSheetListParams';
+import { mergeProTableFilterParams, withColumnHeaderFilters } from '../../../../../../utils/proTableColumnFilters';
+import { formatDateTimeBySiteSetting } from '../../../../../../utils/format';
 import { isMoldSheetApproved, moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
 import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
@@ -130,6 +132,27 @@ const sheetStatusEnum: Record<string, { text: string }> = {
 const trialResultEnum: Record<string, { text: string }> = {
   合格: { text: '合格' },
   不合格: { text: '不合格' },
+};
+
+const productionTrialResultSearchEnum: Record<string, { text: string }> = {
+  合格: { text: '合格' },
+  不合格: { text: '不合格' },
+  未填写: { text: '未填写' },
+};
+
+const failureHandlingSearchEnum: Record<string, { text: string }> = {
+  待处理: { text: '待处理' },
+  立即送修: { text: '立即送修' },
+  已发出: { text: '已发出' },
+  调整完成: { text: '调整完成' },
+  已收回: { text: '已收回' },
+};
+
+const workflowPhaseSearchEnum: Record<string, { text: string }> = {
+  试模: { text: '试模' },
+  试模合格待试产: { text: '试模合格待试产' },
+  已结案: { text: '已结案' },
+  送修处理中: { text: '送修处理中' },
 };
 
 type PoPickerTrialFilter = 'all' | 'pending' | 'trialed';
@@ -2279,14 +2302,14 @@ const MoldTrialSheetsPage: React.FC = () => {
       dataIndex: 'keyword',
       key: 'keyword',
       hideInTable: true,
-      fieldProps: { placeholder: '单号/订单号/模具代号/名称' },
+      fieldProps: { placeholder: '单号/订单号/模具代号/名称/供应商/试模人员' },
     },
     {
       title: '试模单单号',
       dataIndex: 'sheet_no',
       key: 'sheet_no',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      hideInSearch: true,
+      fieldProps: { placeholder: '试模单单号' },
       render: (_, r) => <TrialSheetDocStackedCell row={r} />,
     },
     {
@@ -2294,14 +2317,14 @@ const MoldTrialSheetsPage: React.FC = () => {
       dataIndex: 'purchase_order_no',
       key: 'purchase_order_no',
       hideInTable: true,
-      hideInSearch: true,
+      fieldProps: { placeholder: '采购订单号' },
     },
     {
       title: '供应商',
       dataIndex: 'supplier_name',
       key: 'supplier_name',
       hideInTable: true,
-      hideInSearch: true,
+      fieldProps: { placeholder: '供应商名称' },
     },
     {
       title: '模具',
@@ -2311,7 +2334,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       width: 168,
       resizable: false,
       ellipsis: false,
-      hideInSearch: true,
+      fieldProps: { placeholder: '模具代号' },
       render: (_, r) => (
         <UniTableStackedPrimaryCell
           primary={String(r.mold_name ?? '').trim() || '—'}
@@ -2324,14 +2347,15 @@ const MoldTrialSheetsPage: React.FC = () => {
       dataIndex: 'mold_name',
       key: 'mold_name',
       hideInTable: true,
-      hideInSearch: true,
+      fieldProps: { placeholder: '模具名称' },
     },
     {
       title: '试模次数',
       dataIndex: 'trial_times',
       key: 'trial_times',
       width: 96,
-      hideInSearch: true,
+      valueType: 'digit',
+      fieldProps: { placeholder: '试模次数', min: 1, precision: 0 },
     },
     {
       title: '试模人员',
@@ -2339,76 +2363,105 @@ const MoldTrialSheetsPage: React.FC = () => {
       key: 'trial_user_name',
       width: 120,
       ellipsis: true,
-      hideInSearch: true,
+      fieldProps: { placeholder: '试模人员姓名' },
       render: (_, r) => r.trial_user_name || '—',
     },
-    {
-      title: '处理方式',
-      dataIndex: 'failure_handling',
-      key: 'failure_handling',
-      width: 96,
-      hideInSearch: true,
-      render: (_, r) => {
-        const show =
-          isProductionTrialUnqualified(r) ||
-          (r.trial_result === '不合格' && Boolean((r.failure_handling || '').trim()));
-        return show ? renderFailureHandlingCell(r.failure_handling) : '—';
+    withColumnHeaderFilters(
+      {
+        title: '处理方式',
+        dataIndex: 'failure_handling',
+        key: 'failure_handling',
+        width: 96,
+        valueType: 'select',
+        valueEnum: failureHandlingSearchEnum,
+        fieldProps: { allowClear: true },
+        render: (_, r) => {
+          const show =
+            isProductionTrialUnqualified(r) ||
+            (r.trial_result === '不合格' && Boolean((r.failure_handling || '').trim()));
+          return show ? renderFailureHandlingCell(r.failure_handling) : '—';
+        },
       },
-    },
-    {
-      title: '流程阶段',
-      dataIndex: 'workflow_phase',
-      key: 'workflow_phase',
-      width: 128,
-      hideInSearch: true,
-      render: (_, r) => {
-        const p = displayWorkflowPhaseLabel(r);
-        const color =
-          p === '送修处理中'
-            ? 'warning'
-            : p === WORKFLOW_PHASE_PENDING_PRODUCTION
-              ? 'processing'
-              : p === WORKFLOW_PHASE_CLOSED
-                ? 'default'
-                : 'blue';
-        return <Tag color={color}>{p}</Tag>;
+      failureHandlingSearchEnum,
+    ),
+    withColumnHeaderFilters(
+      {
+        title: '流程阶段',
+        dataIndex: 'workflow_phase',
+        key: 'workflow_phase',
+        width: 128,
+        valueType: 'select',
+        valueEnum: workflowPhaseSearchEnum,
+        fieldProps: { allowClear: true },
+        render: (_, r) => {
+          const p = displayWorkflowPhaseLabel(r);
+          const color =
+            p === '送修处理中'
+              ? 'warning'
+              : p === WORKFLOW_PHASE_PENDING_PRODUCTION
+                ? 'processing'
+                : p === WORKFLOW_PHASE_CLOSED
+                  ? 'default'
+                  : 'blue';
+          return <Tag color={color}>{p}</Tag>;
+        },
       },
-    },
-    {
-      title: '试模结果',
-      dataIndex: 'trial_result',
-      key: 'trial_result',
-      width: 100,
-      valueType: 'select',
-      valueEnum: trialResultEnum,
-      fieldProps: { allowClear: true },
-      render: (_, r) => (
-        <Tag color={r.trial_result === '合格' ? 'success' : 'error'}>{r.trial_result}</Tag>
-      ),
-    },
-    {
-      title: '试产检验结果',
-      dataIndex: 'production_trial_result',
-      key: 'production_trial_result',
-      width: 100,
-      hideInSearch: true,
-      render: (_, r) => {
-        const pr = (r.production_trial_result || '').trim();
-        if (!pr) return '—';
-        return <Tag color={pr === '合格' ? 'success' : 'error'}>{pr}</Tag>;
+      workflowPhaseSearchEnum,
+    ),
+    withColumnHeaderFilters(
+      {
+        title: '试模结果',
+        dataIndex: 'trial_result',
+        key: 'trial_result',
+        width: 100,
+        valueType: 'select',
+        valueEnum: trialResultEnum,
+        fieldProps: { allowClear: true },
+        render: (_, r) => (
+          <Tag color={r.trial_result === '合格' ? 'success' : 'error'}>{r.trial_result}</Tag>
+        ),
       },
-    },
+      trialResultEnum,
+    ),
+    withColumnHeaderFilters(
+      {
+        title: '试产检验结果',
+        dataIndex: 'production_trial_result',
+        key: 'production_trial_result',
+        width: 100,
+        valueType: 'select',
+        valueEnum: productionTrialResultSearchEnum,
+        fieldProps: { allowClear: true, placeholder: '请选择试产检验结果' },
+        render: (_, r) => {
+          const pr = (r.production_trial_result || '').trim();
+          if (!pr) return '—';
+          return <Tag color={pr === '合格' ? 'success' : 'error'}>{pr}</Tag>;
+        },
+      },
+      productionTrialResultSearchEnum,
+    ),
+    withColumnHeaderFilters(
+      {
+        title: '审核状态',
+        dataIndex: 'sheet_status',
+        key: 'sheet_status',
+        width: 100,
+        valueType: 'select',
+        valueEnum: sheetStatusEnum,
+        fieldProps: { allowClear: true },
+        render: (_, r) => moldSheetAuditStatusTag(r.sheet_status),
+      },
+      sheetStatusEnum,
+    ),
     {
-      title: '审核状态',
-      dataIndex: 'sheet_status',
-      key: 'sheet_status',
-      width: 100,
-      valueType: 'select',
-      valueEnum: sheetStatusEnum,
-      fieldProps: { allowClear: true },
-      render: (_, r) => moldSheetAuditStatusTag(r.sheet_status),
+      title: '创建时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: 168,
+      valueType: 'dateRange',
+      fieldProps: { placeholder: ['开始日期', '结束日期'] },
+      render: (_, r) => (r.created_at ? formatDateTimeBySiteSetting(r.created_at, '—') : '—'),
     },
-    moldDocumentCreatedAtColumn<MoldTrialSheetRow>(),
     {
       title: '操作',
       key: 'option',
@@ -2538,7 +2591,7 @@ const MoldTrialSheetsPage: React.FC = () => {
           toolBarActionsBeforeCreate={createToolbarActions}
           showDatasetConfigButton
           onDatasetConfig={handleDatasetConfig}
-          request={async (params, _sort, _filter, searchFormValues) => {
+          request={async (params, _sort, filter, searchFormValues) => {
             const current = params.current ?? 1;
             const pageSize = params.pageSize ?? 20;
             const skip = (current - 1) * pageSize;
@@ -2546,16 +2599,8 @@ const MoldTrialSheetsPage: React.FC = () => {
               const res = await listMoldTrialSheets({
                 skip,
                 limit: pageSize,
-                sheet_status:
-                  typeof searchFormValues?.sheet_status === 'string' && searchFormValues.sheet_status
-                    ? searchFormValues.sheet_status
-                    : undefined,
-                trial_result:
-                  typeof searchFormValues?.trial_result === 'string' ? searchFormValues.trial_result : undefined,
-                keyword:
-                  typeof searchFormValues?.keyword === 'string' && searchFormValues.keyword.trim()
-                    ? searchFormValues.keyword.trim()
-                    : undefined,
+                ...buildMoldTrialSheetListParams(searchFormValues as Record<string, unknown>),
+                ...mergeProTableFilterParams(filter),
               });
               return {
                 data: res.items,

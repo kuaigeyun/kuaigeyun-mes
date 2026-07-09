@@ -62,6 +62,19 @@ from apps.haoligo.models.quality import (
     HaoligoQualityIssueTracking,
 )
 from apps.haoligo.models.quality_dataset_binding import HaoligoQualityDatasetBinding
+from apps.haoligo.models.finance_payment import HaoligoFinancePayment
+from apps.haoligo.models.finance_supplier import (
+    HaoligoFinancePriceChangeLog,
+    HaoligoFinanceSupplier,
+    HaoligoFinanceSupplierPrice,
+)
+from apps.haoligo.models.finance_invoice import (
+    HaoligoFinanceAcceptanceInvoice,
+    HaoligoFinanceInvoice,
+    HaoligoFinanceInvoiceLine,
+    HaoligoFinanceMaterialAcceptance,
+    HaoligoFinanceMaterialAcceptanceLine,
+)
 
 __all__ = [
     "HaoligoEquipment",
@@ -110,4 +123,13 @@ __all__ = [
     "HaoligoCustomerComplaint",
     "HaoligoLineStopFeedback",
     "HaoligoQualityDatasetBinding",
+    "HaoligoFinanceSupplier",
+    "HaoligoFinanceSupplierPrice",
+    "HaoligoFinancePriceChangeLog",
+    "HaoligoFinanceInvoice",
+    "HaoligoFinanceInvoiceLine",
+    "HaoligoFinanceMaterialAcceptance",
+    "HaoligoFinanceMaterialAcceptanceLine",
+    "HaoligoFinanceAcceptanceInvoice",
+    "HaoligoFinancePayment",
 ]

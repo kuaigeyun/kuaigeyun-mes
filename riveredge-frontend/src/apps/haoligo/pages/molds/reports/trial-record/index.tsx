@@ -9,7 +9,7 @@ import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../../components/layout-templates';
 import { listMoldTrialSheets, type MoldTrialSheetRow } from '../../../../services/haoligo';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
-import { parseMoldReportCreatedRange } from '../../../../utils/moldReportDateRange';
+import { buildMoldTrialSheetListParams } from '../../../../utils/moldTrialSheetListParams';
 
 const trialResultEnum: Record<string, { text: string }> = {
   合格: { text: '合格' },
@@ -110,20 +110,11 @@ const MoldTrialRecordReportPage: React.FC = () => {
           const current = params.current ?? 1;
           const pageSize = params.pageSize ?? 20;
           const skip = (current - 1) * pageSize;
-          const range = parseMoldReportCreatedRange(searchFormValues as Record<string, unknown>);
           try {
             const res = await listMoldTrialSheets({
               skip,
               limit: pageSize,
-              trial_result:
-                typeof searchFormValues?.trial_result === 'string' && searchFormValues.trial_result
-                  ? searchFormValues.trial_result
-                  : undefined,
-              keyword:
-                typeof searchFormValues?.keyword === 'string' && searchFormValues.keyword.trim()
-                  ? searchFormValues.keyword.trim()
-                  : undefined,
-              ...range,
+              ...buildMoldTrialSheetListParams(searchFormValues as Record<string, unknown>),
             });
             return {
               data: res.items,

@@ -1,7 +1,7 @@
 """好力 GO — 试模单 API。"""
 
 from datetime import datetime
-from typing import Annotated, List, Literal, Optional
+from typing import Annotated, Any, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -34,10 +34,14 @@ from apps.haoligo.constants.mold_trial_failure_handling import (
     TRIAL_FAILURE_HANDLING_RECALLED,
 )
 from apps.haoligo.constants.mold_trial_workflow_phase import (
+    WORKFLOW_PHASE_ALL_VALUES,
     WORKFLOW_PHASE_CLOSED,
     WORKFLOW_PHASE_TRIAL,
     WORKFLOW_PHASE_TRIAL_PASS_PENDING_PRODUCTION,
 )
+
+WORKFLOW_PHASE_LIST_FILTER_REPAIR = "送修处理中"
+PRODUCTION_TRIAL_RESULT_UNSET = "未填写"
 from apps.haoligo.services.trial_sheet_side_effects import (
     apply_production_trial_failure_after_save,
     assert_mold_trial_process_can_start_new_sheet,
@@ -452,6 +456,28 @@ async def put_trial_dataset_binding(
     return _serialize_binding(row)
 
 
+def _repair_in_progress_display_q() -> Q:
+    return Q(sheet_status=SHEET_STATUS_APPROVED) & Q(
+        failure_handling__in=list(TRIAL_FAILURE_HANDLING_IN_PROGRESS)
+    )
+
+
+def _apply_trial_sheet_workflow_phase_filter(qs: Any, phase: str) -> Any:
+    p = phase.strip()
+    if not p:
+        return qs
+    if p == WORKFLOW_PHASE_LIST_FILTER_REPAIR:
+        return qs.filter(_repair_in_progress_display_q())
+    if p not in WORKFLOW_PHASE_ALL_VALUES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"无效的流程阶段筛选：{p}",
+        )
+    if p in (WORKFLOW_PHASE_TRIAL, WORKFLOW_PHASE_CLOSED):
+        return qs.filter(workflow_phase=p).exclude(_repair_in_progress_display_q())
+    return qs.filter(workflow_phase=p)
+
+
 @router.get("", summary="试模单分页列表")
 async def list_trial_sheets(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -468,6 +494,21 @@ async def list_trial_sheets(
         None,
         description="按不合格处理方式筛选，如：调整完成、立即送修、已收回",
     ),
+    workflow_phase: Optional[str] = Query(
+        None,
+        description="按流程阶段筛选：试模/试模合格待试产/已结案/送修处理中",
+    ),
+    production_trial_result: Optional[str] = Query(
+        None,
+        description="按试产检验结果筛选：合格/不合格/未填写",
+    ),
+    purchase_order_no: Optional[str] = Query(None, description="采购订单号（模糊）"),
+    supplier_name: Optional[str] = Query(None, description="供应商（模糊）"),
+    mold_code: Optional[str] = Query(None, description="模具代号（模糊）"),
+    mold_name: Optional[str] = Query(None, description="模具名称（模糊）"),
+    sheet_no: Optional[str] = Query(None, description="试模单单号（模糊）"),
+    trial_times: Optional[int] = Query(None, ge=1, description="试模次数（精确）"),
+    trial_user_name: Optional[str] = Query(None, description="试模人员（模糊）"),
     keyword: Optional[str] = Query(None, description="采购订单号/模具代号/名称关键字"),
     created_from: Optional[datetime] = Query(None, description="创建时间起（含）"),
     created_to: Optional[datetime] = Query(None, description="创建时间止（含）"),
@@ -490,6 +531,40 @@ async def list_trial_sheets(
                 detail=f"无效的处理方式筛选：{fh_filter}",
             )
         qs = qs.filter(failure_handling=fh_filter)
+    wf_filter = (workflow_phase or "").strip()
+    if wf_filter:
+        qs = _apply_trial_sheet_workflow_phase_filter(qs, wf_filter)
+    prod_filter = (production_trial_result or "").strip()
+    if prod_filter:
+        if prod_filter == PRODUCTION_TRIAL_RESULT_UNSET:
+            qs = qs.filter(Q(production_trial_result__isnull=True) | Q(production_trial_result=""))
+        elif prod_filter in ("合格", "不合格"):
+            qs = qs.filter(production_trial_result=prod_filter)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"无效的试产检验结果筛选：{prod_filter}",
+            )
+    po_filter = (purchase_order_no or "").strip()
+    if po_filter:
+        qs = qs.filter(purchase_order_no__icontains=po_filter)
+    supplier_filter = (supplier_name or "").strip()
+    if supplier_filter:
+        qs = qs.filter(supplier_name__icontains=supplier_filter)
+    mold_code_filter = (mold_code or "").strip()
+    if mold_code_filter:
+        qs = qs.filter(mold_code__icontains=mold_code_filter)
+    mold_name_filter = (mold_name or "").strip()
+    if mold_name_filter:
+        qs = qs.filter(mold_name__icontains=mold_name_filter)
+    sheet_no_filter = (sheet_no or "").strip()
+    if sheet_no_filter:
+        qs = qs.filter(sheet_no__icontains=sheet_no_filter)
+    if trial_times is not None:
+        qs = qs.filter(trial_times=trial_times)
+    trial_user_filter = (trial_user_name or "").strip()
+    if trial_user_filter:
+        qs = qs.filter(trial_user_name__icontains=trial_user_filter)
     qs = await apply_direct_mold_field_keyword_filter(
         qs, tenant_id, keyword, trial_sheet_header_keyword_q
     )

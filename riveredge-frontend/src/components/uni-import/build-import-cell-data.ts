@@ -1,6 +1,11 @@
 /**
  * 将导入用二维表数据转为 Univer cellData（第 1 行表头、第 2 行示例、其余为数据区）
+ * 全部单元格强制文本类型，禁止 Univer 把数字转 float 再 toPrecision 截断。
  */
+
+/** Univer CellValueType.FORCE_STRING = 4 */
+const CELL_FORCE_STRING = 4;
+
 export type ImportSheetStyles = {
   headerStyleId: string;
   exampleStyleId: string;
@@ -48,9 +53,9 @@ export function createImportSheetStyles(): ImportSheetStyles {
   return { headerStyleId, exampleStyleId, dataBorderStyleId, styles };
 }
 
-function cellValue(value: unknown): { v: string; m: string } {
+function cellValue(value: unknown): { v: string; m: string; t: number } {
   const text = value === null || value === undefined ? '' : String(value);
-  return { v: text, m: text };
+  return { v: text, m: text, t: CELL_FORCE_STRING };
 }
 
 export function buildImportCellData(options: {
@@ -60,7 +65,7 @@ export function buildImportCellData(options: {
   sheetRows?: unknown[][];
   minDataRows?: number;
 }): {
-  cellData: Record<string, Record<string, { v: unknown; m?: string; s?: string }>>;
+  cellData: Record<string, Record<string, { v: unknown; m?: string; s?: string; t?: number }>>;
   columnCount: number;
   rowCount: number;
   sheetStyles: ImportSheetStyles;
@@ -70,8 +75,8 @@ export function buildImportCellData(options: {
 
   let rows: unknown[][] = [];
   if (options.sheetRows && options.sheetRows.length > 0) {
-    rows = options.sheetRows.map(row =>
-      Array.isArray(row) ? row.map(c => (c === null || c === undefined ? '' : c)) : [],
+    rows = options.sheetRows.map((row) =>
+      Array.isArray(row) ? row.map((c) => (c === null || c === undefined ? '' : c)) : [],
     );
   } else {
     const headers = options.headers ?? [];
@@ -87,8 +92,8 @@ export function buildImportCellData(options: {
     }
   }
 
-  const columnCount = Math.max(1, ...rows.map(r => r.length));
-  const normalized = rows.map(row => {
+  const columnCount = Math.max(1, ...rows.map((r) => r.length));
+  const normalized = rows.map((row) => {
     const line = Array.from({ length: columnCount }, (_, i) => row[i] ?? '');
     return line;
   });
@@ -96,17 +101,20 @@ export function buildImportCellData(options: {
   const minDataRows = options.minDataRows ?? 100;
   const rowCount = Math.max(minDataRows, normalized.length);
 
-  const cellData: Record<string, Record<string, { v: unknown; m?: string; s?: string }>> = {};
+  const cellData: Record<
+    string,
+    Record<string, { v: unknown; m?: string; s?: string; t?: number }>
+  > = {};
 
   for (let r = 0; r < rowCount; r++) {
-    const rowCells: Record<string, { v: unknown; m?: string; s?: string }> = {};
+    const rowCells: Record<string, { v: unknown; m?: string; s?: string; t?: number }> = {};
     for (let c = 0; c < columnCount; c++) {
       const raw = normalized[r]?.[c] ?? '';
-      const { v, m } = cellValue(raw);
+      const { v, m, t } = cellValue(raw);
       let styleId = dataBorderStyleId;
       if (r === 0) styleId = headerStyleId;
       else if (r === 1 && normalized.length > 1) styleId = exampleStyleId;
-      rowCells[c.toString()] = { v, m, s: styleId };
+      rowCells[c.toString()] = { v, m, t, s: styleId };
     }
     cellData[r.toString()] = rowCells;
   }

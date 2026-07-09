@@ -8,6 +8,7 @@ HAOLIGO_PRINT_DOCUMENT_TYPE_MODULE: dict[str, str] = {
     "equipment_upkeep_complete": "equipment-documents-upkeep-complete",
     "mold_maintenance_complete": "molds-documents-upkeep-complete",
     "mold_outsource_maintenance_complete": "molds-documents-outsource-complete",
+    "finance_material_acceptance": "finance-invoice-verify",
 }
 
 # 角色权限树需展示「打印」的全部单据模块（含尚未接打印 API 的单据）
@@ -27,6 +28,7 @@ HAOLIGO_DOCUMENT_PRINT_MODULES: tuple[str, ...] = (
     "equipment-documents-upkeep-complete",
     "equipment-documents-output-record",
     "equipment-documents-status-adjustment",
+    "finance-invoice-verify",
 )
 
 

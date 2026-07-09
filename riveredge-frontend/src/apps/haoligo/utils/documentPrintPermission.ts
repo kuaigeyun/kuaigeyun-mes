@@ -13,6 +13,7 @@ const PRINT_DOCUMENT_TYPE_RESOURCE: Record<HaoligoPrintDocumentType, string> = {
   equipment_upkeep_complete: 'haoligo:equipment-documents-upkeep-complete',
   mold_maintenance_complete: HAOLIGO_RESOURCE_MOLD_UPKEEP_COMPLETE,
   mold_outsource_maintenance_complete: HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE,
+  finance_material_acceptance: 'haoligo:finance-invoice-verify',
 };
 
 /** 厂内完修单打印权限按保养/维修分属不同资源 */

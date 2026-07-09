@@ -1,12 +1,15 @@
 /**
- * 导入模板 xlsx 下载与解析（懒加载 xlsx，与 vite vendor-xlsx 分包一致）
+ * 导入模板 xlsx 下载与解析。
+ * 解析优先走 OOXML 原文（cfb），禁止 SheetJS 浮点 / 显示格式截断精度。
  */
+
+import { readXlsxWorksheetStringMatrix } from './xlsx-raw-cell-values';
 
 function trimTrailingEmptyRows(rows: unknown[][]): unknown[][] {
   let end = rows.length;
   while (end > 0) {
     const row = rows[end - 1];
-    const hasValue = row?.some(cell => String(cell ?? '').trim() !== '');
+    const hasValue = row?.some((cell) => String(cell ?? '').trim() !== '');
     if (hasValue) break;
     end -= 1;
   }
@@ -31,7 +34,7 @@ export async function downloadImportTemplateXlsx(
     throw new Error('缺少表头，无法生成模板');
   }
   const XLSX = await import('xlsx');
-  const rows: string[][] = [headers.map(h => String(h ?? ''))];
+  const rows: string[][] = [headers.map((h) => String(h ?? ''))];
   if (exampleRow?.length) {
     rows.push(normalizeRow(exampleRow, headers.length));
   }
@@ -44,27 +47,66 @@ export async function downloadImportTemplateXlsx(
   XLSX.writeFile(wb, fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`);
 }
 
-/** 解析用户上传的 xlsx/xls，返回二维数组（保留表头与示例行，供 onConfirm 按 slice(2) 约定处理） */
+function isZipXlsx(buffer: ArrayBuffer): boolean {
+  const u8 = new Uint8Array(buffer);
+  // PK\x03\x04
+  return u8.length >= 4 && u8[0] === 0x50 && u8[1] === 0x4b && u8[2] === 0x03 && u8[3] === 0x04;
+}
+
+/** 解析用户上传的 xlsx/xls，返回二维字符串数组（保留全部小数位原文） */
 export async function parseImportXlsxFile(file: File): Promise<string[][]> {
-  const XLSX = await import('xlsx');
   const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: 'array' });
+
+  // .xlsx：只信 OOXML 原文，绝不走 SheetJS 数值浮点
+  if (isZipXlsx(buffer)) {
+    const matrix = readXlsxWorksheetStringMatrix(buffer, 0);
+    const trimmed = trimTrailingEmptyRows(matrix);
+    if (trimmed.length === 0) {
+      throw new Error('Excel 中没有有效数据');
+    }
+    const columnCount = Math.max(1, ...trimmed.map((r) => (Array.isArray(r) ? r.length : 0)));
+    return trimmed.map((row) => normalizeRow(row, columnCount));
+  }
+
+  // 旧版 .xls：无 OOXML，只能用 SheetJS；数值用 toString（仍可能受 IEEE 限制）
+  const XLSX = await import('xlsx');
+  const workbook = XLSX.read(buffer, { type: 'array', raw: true, cellText: false });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
     throw new Error('Excel 文件中没有工作表');
   }
   const sheet = workbook.Sheets[sheetName];
-  const raw = XLSX.utils.sheet_to_json(sheet, {
-    header: 1,
-    defval: '',
-    raw: false,
-  }) as unknown[][];
-
-  const trimmed = trimTrailingEmptyRows(raw);
+  const ref = sheet['!ref'];
+  if (ref == null || String(ref).trim() === '') {
+    throw new Error('Excel 中没有有效数据');
+  }
+  const range = XLSX.utils.decode_range(String(ref));
+  const rows: string[][] = [];
+  for (let r = range.s.r; r <= range.e.r; r += 1) {
+    const row: string[] = [];
+    for (let c = range.s.c; c <= range.e.c; c += 1) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const cell = sheet[addr] as { t?: string; v?: unknown; w?: string } | undefined;
+      if (!cell) {
+        row.push('');
+        continue;
+      }
+      if (cell.t === 'n' && typeof cell.v === 'number') {
+        row.push(cell.v.toString());
+        continue;
+      }
+      if (cell.v != null && cell.v !== '') {
+        row.push(String(cell.v).trim().replace(/,/g, ''));
+        continue;
+      }
+      row.push(cell.w != null ? String(cell.w).trim().replace(/,/g, '') : '');
+    }
+    rows.push(row);
+  }
+  const trimmed = trimTrailingEmptyRows(rows);
   if (trimmed.length === 0) {
     throw new Error('Excel 中没有有效数据');
   }
-
-  const columnCount = Math.max(1, ...trimmed.map(r => (Array.isArray(r) ? r.length : 0)));
-  return trimmed.map(row => normalizeRow(row, columnCount));
+  const columnCount = Math.max(1, ...trimmed.map((r) => (Array.isArray(r) ? r.length : 0)));
+  return trimmed.map((row) => normalizeRow(row, columnCount));
 }

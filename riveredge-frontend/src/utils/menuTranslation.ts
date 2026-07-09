@@ -493,30 +493,67 @@ export function translatePathTitle(path: string, t: any): string {
   return path;
 }
 
+export type MenuDataItemWithLocaleKey = {
+  /** navigation-tree / manifest 同步的 name（i18n key），侧栏/Tab/面包屑唯一标题源 */
+  menuNameKey?: string;
+};
+
+function normalizeMenuPath(path: string | undefined): string {
+  return (path ?? '').replace(/\/$/, '');
+}
+
+/** 解析菜单项标题真源：优先 menuNameKey（manifest title），禁止用已译后的 name 反推 path */
+export function resolveMenuLocaleKey(item: {
+  menuNameKey?: string;
+  name?: unknown;
+  title?: unknown;
+}): string {
+  const key = typeof item.menuNameKey === 'string' ? item.menuNameKey.trim() : '';
+  if (key) return key;
+  const name = typeof item.name === 'string' ? item.name.trim() : '';
+  if (name) return name;
+  return typeof item.title === 'string' ? item.title.trim() : '';
+}
+
+/** 按菜单项真源翻译展示标题（侧栏、Tab、面包屑共用） */
+export function translateMenuItemTitle(
+  item: MenuDataItemWithLocaleKey & {
+    name?: unknown;
+    title?: unknown;
+    path?: string;
+    children?: unknown[];
+  },
+  t: (key: string, options?: { defaultValue?: string }) => string,
+  options?: { isAppRoot?: boolean },
+): string {
+  if (options?.isAppRoot) {
+    return typeof item.name === 'string' ? item.name : resolveMenuLocaleKey(item);
+  }
+  const menuNameKey = resolveMenuLocaleKey(item);
+  const itemPath = item.path;
+  if (itemPath?.startsWith('/apps/')) {
+    return translateAppMenuItemName(menuNameKey, itemPath, t, item.children);
+  }
+  return translateMenuName(menuNameKey, t, itemPath);
+}
+
 /**
- * 从菜单配置中查找页面标题（最后一道防线）
- *
- * @param path 路径
- * @param menuConfig 菜单配置
- * @param t 翻译函数
- * @returns 翻译后的标题
+ * 从菜单配置中查找页面标题（navigation-tree 为唯一数据源）
  */
 export function findMenuTitleWithTranslation(
   path: string,
   menuConfig: any[],
   t: any
 ): string {
+  const normalizedPath = normalizeMenuPath(path.split('?')[0]);
+
   const findInMenu = (items: any[] | undefined): string | null => {
     if (!items) return null;
     for (const item of items) {
-      const menuName = item.name || item.title;
       const itemPath = item.path;
-      
-      if (itemPath && itemPath.replace(/\/$/, '') === path.replace(/\/$/, '')) {
-        const isApp = itemPath.startsWith('/apps/');
-        return isApp ? translateAppMenuItemName(menuName, itemPath, t) : translateMenuName(menuName, t, itemPath);
+      if (itemPath && normalizeMenuPath(itemPath) === normalizedPath) {
+        return translateMenuItemTitle(item, t);
       }
-      
       if (item.children) {
         const found = findInMenu(item.children);
         if (found) return found;
@@ -528,19 +565,21 @@ export function findMenuTitleWithTranslation(
   const title = findInMenu(menuConfig);
   if (title) return title;
 
-  // 尝试路径翻译（如 dashboard-designer → 大屏设计器，未在菜单中注册的页面）
-  const pathTitle = translatePathTitle(path, t);
-  if (pathTitle && pathTitle.trim() !== '') return pathTitle;
-
-  // 如果没匹配到，向上溯源（解决从列表跳到未注册详情页的问题）
-  const segments = path.split('/').filter(Boolean);
+  // 未注册详情页：仅向上找已入库父级菜单，禁止 path 片段兜底
+  const segments = normalizedPath.split('/').filter(Boolean);
   if (segments.length > 1) {
     segments.pop();
     const parentPath = '/' + segments.join('/');
     if (parentPath !== '/' && parentPath !== '/apps' && parentPath !== '/system') {
-      return findMenuTitleWithTranslation(parentPath, menuConfig, t);
+      const parentTitle = findMenuTitleWithTranslation(parentPath, menuConfig, t);
+      if (parentTitle && parentTitle !== t('common.unnamedPage')) return parentTitle;
     }
   }
 
-  return translatePathTitle(path, t) || t('common.unnamedPage');
+  if (normalizedPath.startsWith('/apps/')) {
+    return t('common.unnamedPage');
+  }
+
+  const pathTitle = translatePathTitle(normalizedPath, t);
+  return pathTitle && pathTitle.trim() !== '' ? pathTitle : t('common.unnamedPage');
 }

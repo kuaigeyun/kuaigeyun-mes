@@ -702,6 +702,11 @@ MoldOperationKind = Literal[
 ]
 
 
+class MoldOperationRecordFieldOut(BaseModel):
+    label: str
+    value: str
+
+
 class MoldOperationRecordOut(BaseModel):
     """模具台账详情用：领出/还入/维保类单据摘要（按创建时间倒序合并）。"""
 
@@ -711,11 +716,123 @@ class MoldOperationRecordOut(BaseModel):
     uuid: str
     title: str
     detail: str = ""
+    fields: List[MoldOperationRecordFieldOut] = Field(default_factory=list)
     sheet_no: Optional[str] = Field(None, description="业务单号（标准编码）；历史数据可能为空")
 
 
 class MoldOperationRecordsResponse(BaseModel):
     items: List[MoldOperationRecordOut]
+
+
+_OPERATION_DETAIL_TEXT_MAX = 400
+
+
+def _clip_operation_detail_text(value: str, *, max_len: int = _OPERATION_DETAIL_TEXT_MAX) -> str:
+    s = (value or "").strip()
+    if len(s) <= max_len:
+        return s
+    return f"{s[: max_len - 1]}…"
+
+
+def _fmt_operation_decimal(value: Any) -> Optional[str]:
+    if value is None or value == "":
+        return None
+    try:
+        d = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        s = str(value).strip()
+        return s or None
+    normalized = d.normalize()
+    text = format(normalized, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _operation_field(label: str, value: Any, *, clip: bool = True) -> Optional[MoldOperationRecordFieldOut]:
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        text = _fmt_operation_decimal(value)
+    else:
+        text = str(value).strip()
+    if not text:
+        return None
+    if clip:
+        text = _clip_operation_detail_text(text)
+    return MoldOperationRecordFieldOut(label=label, value=text)
+
+
+def _build_operation_fields(*pairs: tuple[str, Any], clip_values: bool = True) -> List[MoldOperationRecordFieldOut]:
+    fields: List[MoldOperationRecordFieldOut] = []
+    for label, value in pairs:
+        field = _operation_field(label, value, clip=clip_values)
+        if field:
+            fields.append(field)
+    return fields
+
+
+def _fields_to_operation_detail(fields: List[MoldOperationRecordFieldOut]) -> str:
+    return "；".join(f"{item.label}：{item.value}" for item in fields)
+
+
+def _operation_event(
+    *,
+    kind: MoldOperationKind,
+    occurred_at: datetime,
+    record_id: int,
+    uuid: str,
+    title: str,
+    sheet_no: Optional[str],
+    field_pairs: List[tuple[str, Any]],
+) -> MoldOperationRecordOut:
+    fields = _build_operation_fields(*field_pairs)
+    return MoldOperationRecordOut(
+        kind=kind,
+        occurred_at=occurred_at,
+        record_id=record_id,
+        uuid=uuid,
+        title=title,
+        sheet_no=sheet_no,
+        fields=fields,
+        detail=_fields_to_operation_detail(fields),
+    )
+
+
+def _summarize_upkeep_record_lines(raw_lines: Any) -> Optional[str]:
+    if not isinstance(raw_lines, list) or not raw_lines:
+        return None
+    parts: List[str] = []
+    for item in raw_lines[:10]:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("param_name") or item.get("param_code") or "").strip()
+        val = str(item.get("record_value") or "").strip()
+        if name and val:
+            parts.append(f"{name}：{val}")
+    if not parts:
+        return None
+    summary = "；".join(parts)
+    if len(raw_lines) > 10:
+        summary = f"{summary}；…"
+    return summary
+
+
+def _line_repair_cost_text(raw_line: Optional[dict]) -> Optional[str]:
+    if not raw_line:
+        return None
+    cost = _fmt_operation_decimal(raw_line.get("repair_cost"))
+    if not cost:
+        return None
+    return f"{cost} 元"
+
+
+def _join_name_code(name: Any, code: Any) -> Optional[str]:
+    n = str(name or "").strip()
+    c = str(code or "").strip()
+    if n and c:
+        return f"{n}（{c}）"
+    return n or c or None
 
 
 def _line_items_contain_mold(raw, mold_code: str) -> bool:
@@ -793,171 +910,210 @@ async def list_mold_operation_records(
     events: List[MoldOperationRecordOut] = []
 
     for b in borrows:
-        parts: List[str] = []
-        dn = (b.department_name or "").strip()
-        if dn:
-            parts.append(f"领用部门：{dn}")
-        so = (b.source_order_no or "").strip()
-        if so:
-            parts.append(f"来源单号：{so}")
         events.append(
-            MoldOperationRecordOut(
+            _operation_event(
                 kind="borrow",
                 occurred_at=b.created_at,
                 record_id=b.id,
                 uuid=b.uuid,
                 sheet_no=(b.sheet_no or "").strip() or None,
                 title="领出（领用单）",
-                detail="；".join(parts),
+                field_pairs=[
+                    ("领用部门", b.department_name),
+                    ("来源制令", b.source_order_no),
+                    ("成品", _join_name_code(b.finished_product_name, b.finished_product_code)),
+                    ("计划数量", _fmt_operation_decimal(b.planned_qty)),
+                ],
             )
         )
 
     for r in returns:
-        parts = [f"制造数量：{r.manufacture_qty}"]
-        po = (r.production_order_no or "").strip()
-        if po:
-            parts.append(f"制令：{po}")
-        br = (r.borrow_sheet_no or "").strip()
-        if br:
-            parts.append(f"领用单：{br}")
-        dn = (r.issue_department_name or "").strip()
-        if dn:
-            parts.append(f"领出部门：{dn}")
         events.append(
-            MoldOperationRecordOut(
+            _operation_event(
                 kind="return",
                 occurred_at=r.created_at,
                 record_id=r.id,
                 uuid=r.uuid,
                 sheet_no=(r.sheet_no or "").strip() or None,
                 title="还入（还入单）",
-                detail="；".join(parts),
+                field_pairs=[
+                    ("制造数量", _fmt_operation_decimal(r.manufacture_qty)),
+                    ("制令单号", r.production_order_no),
+                    ("领用单号", r.borrow_sheet_no),
+                    ("领出部门", r.issue_department_name),
+                    ("成品", _join_name_code(r.finished_product_name, r.finished_product_code)),
+                    ("计划数量", _fmt_operation_decimal(r.planned_qty)),
+                ],
             )
         )
 
     for t in trials:
-        parts: List[str] = []
         tr = (t.trial_result or "").strip()
-        if tr:
-            parts.append(f"试模结果：{tr}")
-        times = t.trial_times
-        if times is not None and int(times) > 0:
-            parts.append(f"第 {int(times)} 次试模")
-        sup = (t.supplier_name or "").strip()
-        if sup:
-            parts.append(f"供应商：{sup}")
-        po = (t.purchase_order_no or "").strip()
-        if po:
-            parts.append(f"采购订单：{po}")
-        tun = (t.trial_user_name or "").strip()
-        if tun:
-            parts.append(f"试模人员：{tun}")
         fh = (t.failure_handling or "").strip()
-        if fh:
-            parts.append(f"处理方式：{fh}")
-        st = (t.sheet_status or "").strip()
-        if st:
-            parts.append(f"审核：{st}")
+        pr = (getattr(t, "production_trial_result", None) or "").strip()
+        wf = (getattr(t, "workflow_phase", None) or "").strip()
         title = "试模单"
         if tr == "不合格" and fh:
             title = f"试模单（{fh}）"
         events.append(
-            MoldOperationRecordOut(
+            _operation_event(
                 kind="trial",
                 occurred_at=t.created_at,
                 record_id=t.id,
                 uuid=t.uuid,
                 sheet_no=(t.sheet_no or "").strip() or None,
                 title=title,
-                detail="；".join(parts),
+                field_pairs=[
+                    ("试模结果", tr),
+                    ("试模次数", f"第 {int(t.trial_times)} 次" if t.trial_times else None),
+                    ("试产结果", pr),
+                    ("流程阶段", wf),
+                    ("供应商", t.supplier_name),
+                    ("采购订单", t.purchase_order_no),
+                    ("试模人员", t.trial_user_name),
+                    ("试产人员", getattr(t, "production_trial_user_name", None)),
+                    ("处理方式", fh),
+                    ("调整问题点", getattr(t, "adjustment_points", None)),
+                    ("审核状态", t.sheet_status),
+                ],
             )
         )
 
     for m in mains:
-        parts: List[str] = []
-        dn = (m.department_name or "").strip()
-        if dn:
-            parts.append(f"申请部门：{dn}")
-        parts.append(f"类型：{m.service_type}")
-        so = (m.source_order_no or "").strip()
-        if so:
-            parts.append(f"来源单号：{so}")
+        ld = _complete_line_for_mold(m.line_items, mcode)
+        st = (m.service_type or "").strip()
+        reason_label = "保养原因" if st == "保养" else "维修原因"
         events.append(
-            MoldOperationRecordOut(
+            _operation_event(
                 kind="maintenance",
                 occurred_at=m.created_at,
                 record_id=m.id,
                 uuid=m.uuid,
                 sheet_no=(m.sheet_no or "").strip() or None,
                 title="厂内维保（申请）",
-                detail="；".join(parts),
+                field_pairs=[
+                    ("类型", st),
+                    (reason_label, ld.get("repair_reason") if ld else None),
+                    ("申请部门", m.department_name),
+                    ("申请人", m.applicant_name),
+                    ("紧急程度", getattr(m, "urgency_level", None) if st == "维修" else None),
+                    ("来源单号", m.source_order_no),
+                    ("预估费用", _line_repair_cost_text(ld)),
+                    ("审核状态", m.sheet_status),
+                ],
             )
         )
 
     for m in completes:
-        parts = [f"来源单号：{m.source_order_no}", f"类型：{m.service_type}"]
-        if inhouse_complete_line_clears_total_for_mold(m, mcode):
-            parts.append("已清空总产量")
         ld = _complete_line_for_mold(m.line_items, mcode)
         stc = str(m.service_type or "").strip()
-        if ld and stc == "保养":
-            uc = str(ld.get("upkeep_content") or "").strip()
-            if uc:
-                tail = "…" if len(uc) > 120 else ""
-                parts.append(f"保养：{uc[:120]}{tail}")
-        if ld and stc == "维修":
+        field_pairs: List[tuple[str, Any]] = [
+            ("类型", stc),
+            ("来源单号", m.source_order_no),
+            ("申请部门", m.department_name),
+            ("申请人", m.applicant_name),
+            ("审核状态", getattr(m, "sheet_status", None)),
+        ]
+        if ld:
+            reason = str(ld.get("repair_reason") or "").strip()
+            if reason:
+                label = "保养原因" if stc == "保养" else "维修原因"
+                field_pairs.append((label, reason))
+        if stc == "保养":
+            if ld and inhouse_complete_line_clears_total_for_mold(m, mcode):
+                field_pairs.append(("总产量", "已清空"))
+            if ld:
+                uc = str(ld.get("upkeep_content") or "").strip()
+                if uc:
+                    field_pairs.append(("保养内容", uc))
+                upkeep_summary = _summarize_upkeep_record_lines(ld.get("upkeep_record_lines"))
+                if upkeep_summary:
+                    field_pairs.append(("保养记录", upkeep_summary))
+        elif stc == "维修" and ld:
+            rc = str(ld.get("repair_content") or "").strip()
             rr = str(ld.get("repair_result") or "").strip()
+            if rc:
+                field_pairs.append(("维修内容", rc))
             if rr:
-                parts.append(f"维修结果：{rr}")
+                field_pairs.append(("维修结果", rr))
         events.append(
-            MoldOperationRecordOut(
+            _operation_event(
                 kind="maintenance_complete",
                 occurred_at=m.created_at,
                 record_id=m.id,
                 uuid=m.uuid,
                 sheet_no=(m.sheet_no or "").strip() or None,
                 title="维保完修",
-                detail="；".join(parts),
+                field_pairs=field_pairs,
             )
         )
 
     for m in outs:
-        parts = [
-            f"外协单位：{(m.outsourced_unit_name or '').strip() or '—'}",
-            f"类型：{m.service_type}",
-        ]
-        so = (m.source_order_no or "").strip()
-        if so:
-            parts.append(f"来源单号：{so}")
+        ld = _complete_line_for_mold(m.line_items, mcode)
+        st = (m.service_type or "").strip()
+        reason_label = "保养原因" if st == "保养" else "维修原因"
+        wh = str(ld.get("mold_warehouse_name") or "").strip() if ld else ""
         events.append(
-            MoldOperationRecordOut(
+            _operation_event(
                 kind="outsource_maintenance",
                 occurred_at=m.created_at,
                 record_id=m.id,
                 uuid=m.uuid,
                 sheet_no=(m.sheet_no or "").strip() or None,
                 title="外协维修（申请）",
-                detail="；".join(parts),
+                field_pairs=[
+                    ("类型", st),
+                    ("外协单位", m.outsourced_unit_name),
+                    (reason_label, ld.get("repair_reason") if ld else None),
+                    ("申请部门", m.department_name),
+                    ("申请人", m.applicant_name),
+                    ("紧急程度", getattr(m, "urgency_level", None)),
+                    ("来源单号", m.source_order_no),
+                    ("所在仓库", wh or None),
+                    ("预估费用", _line_repair_cost_text(ld)),
+                    ("审核状态", m.sheet_status),
+                ],
             )
         )
 
     for m in out_completes:
-        parts = [
-            f"外协单位：{(m.outsourced_unit_name or '').strip() or '—'}",
-            f"来源单号：{m.source_order_no}",
-            f"类型：{m.service_type}",
+        ld = _complete_line_for_mold(m.line_items, mcode)
+        st = (m.service_type or "").strip()
+        field_pairs = [
+            ("类型", st),
+            ("外协单位", m.outsourced_unit_name),
+            ("来源单号", m.source_order_no),
+            ("申请部门", m.department_name),
+            ("申请人", m.applicant_name),
+            ("审核状态", getattr(m, "sheet_status", None)),
         ]
         if m.clear_total_production:
-            parts.append("已清空总产量")
+            field_pairs.append(("总产量", "已清空"))
+        if ld:
+            reason = str(ld.get("repair_reason") or "").strip()
+            if reason:
+                field_pairs.append(("维修原因", reason))
+            rc = str(ld.get("repair_content") or "").strip()
+            rr = str(ld.get("repair_result") or "").strip()
+            if rc:
+                field_pairs.append(("维修内容", rc))
+            if rr:
+                field_pairs.append(("维修结果", rr))
+            cost = _line_repair_cost_text(ld)
+            if cost:
+                field_pairs.append(("维修费用", cost))
+            wh = str(ld.get("mold_warehouse_name") or "").strip()
+            if wh:
+                field_pairs.append(("所在仓库", wh))
         events.append(
-            MoldOperationRecordOut(
+            _operation_event(
                 kind="outsource_maintenance_complete",
                 occurred_at=m.created_at,
                 record_id=m.id,
                 uuid=m.uuid,
                 sheet_no=(m.sheet_no or "").strip() or None,
                 title="外协维修完成",
-                detail="；".join(parts),
+                field_pairs=field_pairs,
             )
         )
 

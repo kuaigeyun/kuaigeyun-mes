@@ -17,7 +17,8 @@ export type HaoligoPrintDocumentType =
   | 'equipment_spot_check'
   | 'equipment_upkeep_complete'
   | 'mold_maintenance_complete'
-  | 'mold_outsource_maintenance_complete';
+  | 'mold_outsource_maintenance_complete'
+  | 'finance_material_acceptance';
 
 interface HaoligoDocumentPrintModalProps {
   open: boolean;
@@ -42,9 +43,89 @@ const HaoligoDocumentPrintModal: React.FC<HaoligoDocumentPrintModalProps> = ({
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>();
   const [previewHtml, setPreviewHtml] = useState('');
   const latestRef = useRef<{ templateId?: string; docId?: number }>({});
+  const printFrameRef = useRef<HTMLIFrameElement | null>(null);
 
   const effectiveId = documentId ?? undefined;
   latestRef.current = { templateId: selectedTemplateId, docId: effectiveId };
+
+  const printHtmlInHiddenFrame = (html: string) => {
+    const existing = printFrameRef.current;
+    if (existing?.parentNode) {
+      existing.parentNode.removeChild(existing);
+    }
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('title', 'haoligo-print-frame');
+    iframe.setAttribute('aria-hidden', 'true');
+    Object.assign(iframe.style, {
+      position: 'fixed',
+      right: '0',
+      bottom: '0',
+      width: '0',
+      height: '0',
+      border: '0',
+      opacity: '0',
+      pointerEvents: 'none',
+    });
+    document.body.appendChild(iframe);
+    printFrameRef.current = iframe;
+
+    const win = iframe.contentWindow;
+    const doc = iframe.contentDocument ?? win?.document;
+    if (!win || !doc) {
+      messageApi.error(t('app.haoligo.print.printFailed'));
+      iframe.remove();
+      printFrameRef.current = null;
+      return;
+    }
+
+    const cleanup = () => {
+      win.removeEventListener('afterprint', cleanup);
+      if (printFrameRef.current === iframe) {
+        iframe.remove();
+        printFrameRef.current = null;
+      }
+    };
+    win.addEventListener('afterprint', cleanup);
+
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    const waitForImages = () => {
+      const images = Array.from(doc.images);
+      if (images.length === 0) return Promise.resolve();
+      return Promise.all(
+        images.map(
+          (img) =>
+            img.complete
+              ? Promise.resolve()
+              : new Promise<void>((resolve) => {
+                  img.addEventListener('load', () => resolve(), { once: true });
+                  img.addEventListener('error', () => resolve(), { once: true });
+                }),
+        ),
+      );
+    };
+
+    void waitForImages().then(() => {
+      try {
+        win.focus();
+        win.print();
+      } catch {
+        cleanup();
+        messageApi.error(t('app.haoligo.print.printFailed'));
+      }
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (printFrameRef.current?.parentNode) {
+        printFrameRef.current.parentNode.removeChild(printFrameRef.current);
+      }
+      printFrameRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -143,17 +224,7 @@ const HaoligoDocumentPrintModal: React.FC<HaoligoDocumentPrintModalProps> = ({
         messageApi.warning(t('app.haoligo.print.emptyContent'));
         return;
       }
-      const w = window.open('', '_blank');
-      if (!w) {
-        messageApi.error(t('app.haoligo.print.popupBlocked'));
-        return;
-      }
-      w.document.write(html);
-      w.document.close();
-      w.focus();
-      w.onload = () => {
-        w.print();
-      };
+      printHtmlInHiddenFrame(html);
     } catch (e) {
       handleError(e as Error, t('app.haoligo.print.printFailed'));
     } finally {

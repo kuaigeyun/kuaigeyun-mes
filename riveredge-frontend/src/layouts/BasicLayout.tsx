@@ -37,7 +37,16 @@ import { useTranslation } from 'react-i18next';
 import { RightOutlined } from '@ant-design/icons';
 import { Icon as IconifyIcon, addCollection } from '@iconify/react/dist/offline';
 import fluentColorIcons from '@iconify-json/fluent-color/icons.json';
-import { translateMenuName, translatePathTitle, translateAppMenuItemName, extractAppCodeFromPath, findMenuTitleWithTranslation, getAppDisplayName } from '../utils/menuTranslation';
+import {
+  translateMenuName,
+  translatePathTitle,
+  translateAppMenuItemName,
+  extractAppCodeFromPath,
+  findMenuTitleWithTranslation,
+  getAppDisplayName,
+  translateMenuItemTitle,
+  type MenuDataItemWithLocaleKey,
+} from '../utils/menuTranslation';
 import { resolveCustomPageTitle } from '../utils/customPageTitle';
 import { prefetchPlugin } from '../utils/pluginLoader';
 import { prefetchKuaizhizaoRoute } from '../apps/kuaizhizao/routePrefetch';
@@ -507,6 +516,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/haoligo/molds': ManufacturingIcons.package, // 好力 GO 模具管理
       '/apps/haoligo/patrol': ManufacturingIcons.clipboardCheck, // 好力 GO 现场巡查（点检/记录）
       '/apps/haoligo/quality': ManufacturingIcons['shield-check'], // 好力 GO 品质管理
+      '/apps/haoligo/finance': ManufacturingIcons.wallet, // 好力 GO 财务管理
     };
 
     // 精确路径匹配
@@ -589,9 +599,10 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
  * 平台级 + 系统级菜单配置（原有写法，硬编号）
  * 仅应用级 APP 使用数据库统一源（manifest 同步 → core_menus）
  */
-type PermissionMenuDataItem = MenuDataItem & {
-  permissionCodes?: string[];
-};
+type PermissionMenuDataItem = MenuDataItem &
+  MenuDataItemWithLocaleKey & {
+    permissionCodes?: string[];
+  };
 
 /** 根据当前路由计算侧栏应展开的分组 key（不含叶子节点 key） */
 function computeMenuOpenKeysForPath(items: MenuDataItem[], currentPath: string): string[] {
@@ -1176,6 +1187,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           'fileSpreadsheet': ManufacturingIcons.fileSpreadsheet, // 报表中心 - 表格图标
           'fileBarChart': ManufacturingIcons.fileBarChart, // 自制报表 - 报表/图表图标
           'layoutDashboard': ManufacturingIcons.layoutDashboard, // 大屏中心
+          'Wallet': ManufacturingIcons.wallet,
+          'ScanLine': ManufacturingIcons.scanLine,
+          'Banknote': ManufacturingIcons.banknote,
+          'Building2': ManufacturingIcons.building,
+          'BarChartBig': ManufacturingIcons.chartBar,
+          'PieChart': ManufacturingIcons.pieChart,
+          'CalendarDays': ManufacturingIcons.calendar,
         };
         const IconComponent = lucideIconMap[menu.icon];
         if (IconComponent) {
@@ -1206,8 +1224,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       }
     }
 
-    // 一级菜单：若 icon 未匹配，再尝试根据名称和路径获取
-    if (depth === 0 && !iconElement) {
+    // 一级菜单：若 icon 未匹配，再尝试根据名称和路径获取（系统菜单）；应用菜单仅用 manifest icon
+    if (depth === 0 && !iconElement && !isAppMenu) {
       if (menu.name) {
         iconElement = getMenuIcon(menu.name, menu.path);
       } else if (menu.path) {
@@ -1219,19 +1237,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
 
     // 处理菜单名称翻译
-    let menuName = menu.name;
-    if (isAppMenu && menuName) {
+    const menuNameKey = menu.name;
+    let menuName = menuNameKey;
+    if (isAppMenu && menuNameKey) {
       // 应用菜单使用应用菜单翻译函数
       // 对于分组菜单（没有path），传递子菜单以便从子菜单路径提取应用code
-      menuName = translateAppMenuItemName(menuName, menu.path, t, menu.children);
-    } else if (menuName) {
+      menuName = translateAppMenuItemName(menuNameKey, menu.path, t, menu.children);
+    } else if (menuNameKey) {
       // 系统菜单使用通用菜单翻译函数
-      menuName = translateMenuName(menuName, t, menu.path);
+      menuName = translateMenuName(menuNameKey, t, menu.path);
     }
 
-    const menuItem: MenuDataItem = {
+    const menuItem: PermissionMenuDataItem = {
       path: menu.path == null ? undefined : menu.path, // 确保 path 不为 null，避免 @umijs/route-utils mergePath 报错
       name: menuName,
+      menuNameKey,
       icon: iconElement,
       key: menu.uuid || menu.path, // 添加 key 字段，ProLayout 需要
       // 如果菜单有子项，确保子项也有 key（应用菜单的子项也是应用菜单）
@@ -2171,7 +2191,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       for (const item of items) {
         const currentPath = [...path, item];
 
-        if (item.path === targetPath) {
+        if (item.path && item.path.replace(/\/$/, '') === targetPath.replace(/\/$/, '')) {
           return currentPath;
         }
 
@@ -2194,9 +2214,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         if (tempPath) {
           const parentPath = findMenuPath(breadcrumbMenuData, tempPath);
           if (parentPath) {
-            // 找到了最近的菜单父级，构造一个虚拟的菜单路径，包含当前页面
-            const currentTitle = translatePathTitle(location.pathname, t);
-            menuPath = [...parentPath, { path: location.pathname, name: currentTitle }];
+            menuPath = [...parentPath, { path: location.pathname, name: t('common.unnamedPage') }];
           }
         }
       }
@@ -2287,11 +2305,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           nodeKey.startsWith('breadcrumb-app-') ||
           (!item.path || (item.path as string).match(/^\/apps\/[^/]+$/) !== null)
         );
-        const breadcrumbTitle = isAppRootNode
-          ? (item.name as string)  // APP 根节点直接用已翻译的 name，与菜单显示保持一致
-          : isAppMenu
-            ? translateAppMenuItemName(item.name as string, item.path, t)
-            : translateMenuName(item.name as string, t, actualPath);
+        const breadcrumbTitle = translateMenuItemTitle(item as PermissionMenuDataItem, t, {
+          isAppRoot: isAppRootNode,
+        });
 
         breadcrumbItems.push({
           title: breadcrumbTitle,
@@ -2302,8 +2318,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       });
     }
 
-    // 若未命中任何菜单节点，则直接显示当前路径翻译
-    if (breadcrumbItems.length === 0) {
+    // 若未命中任何菜单节点，应用路由禁止 path 片段兜底
+    if (breadcrumbItems.length === 0 && !location.pathname.startsWith('/apps/')) {
       const translatedTitle = translatePathTitle(location.pathname, t);
       if (translatedTitle) {
         breadcrumbItems.push({

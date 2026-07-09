@@ -37,6 +37,8 @@ export interface FormModalTemplateProps {
   className?: string;
   modalRender?: (modal: React.ReactNode) => React.ReactNode;
   extraFooter?: ReactNode;
+  /** 主提交按钮之后的额外底栏（如「拒收」） */
+  extraFooterAfter?: ReactNode;
   /** 新建模式主按钮文案，默认使用 i18n submitCreate */
   submitText?: string;
   /** 隐藏默认提交按钮（仅保留取消与 extraFooter） */
@@ -79,6 +81,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   className,
   modalRender,
   extraFooter,
+  extraFooterAfter,
   submitText,
   submitHidden = false,
   afterOpenChange,
@@ -133,6 +136,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
           <Space wrap>
             {extraFooter}
             <Button onClick={handleClose}>关闭</Button>
+            {extraFooterAfter}
           </Space>
         ) : (
           <Space wrap>
@@ -145,6 +149,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
                   : submitText ?? t('components.layoutTemplates.formModal.submitCreate')) + SUBMIT_SHORTCUT_HINT}
               </Button>
             ) : null}
+            {extraFooterAfter}
           </Space>
         )
       }

@@ -75,6 +75,12 @@ const QualityLineStopsHandlePage = lazy(() => import('./pages/quality/line-stops
 const QualityIssueReportPage = lazy(() => import('./pages/quality/reports/issues'));
 const QualityComplaintReportPage = lazy(() => import('./pages/quality/reports/complaints'));
 const QualityLineStopReportPage = lazy(() => import('./pages/quality/reports/line-stops'));
+const FinanceInvoiceVerifyPage = lazy(() => import('./pages/finance/invoice-verify'));
+const FinancePaymentsPage = lazy(() => import('./pages/finance/payments'));
+const FinanceSuppliersPage = lazy(() => import('./pages/finance/suppliers'));
+const FinanceSupplierPricesPage = lazy(() => import('./pages/finance/supplier-prices'));
+const FinancePayableReportPage = lazy(() => import('./pages/finance/reports/payable'));
+const FinanceMonthlyPaymentReportPage = lazy(() => import('./pages/finance/reports/monthly-payment'));
 const HaoligoApp: React.FC = () => (
   <Routes>
     <Route element={<HaoligoAppLayout />}>
@@ -268,6 +274,45 @@ const HaoligoApp: React.FC = () => (
         <Route path="reports/issues" element={withPageSuspense(QualityIssueReportPage)} />
         <Route path="reports/complaints" element={withPageSuspense(QualityComplaintReportPage)} />
         <Route path="reports/line-stops" element={withPageSuspense(QualityLineStopReportPage)} />
+      </Route>
+      <Route path="finance" element={<Outlet />}>
+        <Route index element={<Navigate to="/apps/haoligo/finance/invoice-verify" replace />} />
+        <Route
+          path="invoice-verify"
+          element={withHaoligoPermission(
+            'haoligo:finance-invoice-verify:read',
+            withPageSuspense(FinanceInvoiceVerifyPage),
+          )}
+        />
+        <Route
+          path="payments"
+          element={withHaoligoPermission('haoligo:finance-payments:read', withPageSuspense(FinancePaymentsPage))}
+        />
+        <Route
+          path="suppliers"
+          element={withHaoligoPermission('haoligo:finance-suppliers:read', withPageSuspense(FinanceSuppliersPage))}
+        />
+        <Route
+          path="supplier-prices"
+          element={withHaoligoPermission(
+            'haoligo:finance-supplier-prices:read',
+            withPageSuspense(FinanceSupplierPricesPage),
+          )}
+        />
+        <Route
+          path="reports/payable"
+          element={withHaoligoPermission(
+            'haoligo:finance-reports-payable:read',
+            withPageSuspense(FinancePayableReportPage),
+          )}
+        />
+        <Route
+          path="reports/monthly-payment"
+          element={withHaoligoPermission(
+            'haoligo:finance-reports-monthly-payment:read',
+            withPageSuspense(FinanceMonthlyPaymentReportPage),
+          )}
+        />
       </Route>
       <Route index element={<HaoligoDefaultRedirect />} />
     </Route>

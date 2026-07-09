@@ -402,3 +402,183 @@ HAOLIGO_PRESET_PRINT_TEMPLATES = [
         "is_active": True,
     },
 ]
+
+_FINANCE_ACCEPTANCE_SHEET_BODY = """
+  <div class="acc-sheet-inner">
+    <div class="acc-header-company">{{ company_name }}</div>
+    <div class="acc-header-address">{{ company_address }}</div>
+    <div class="acc-title-block">
+      <div class="acc-title">材 料 验 收 单</div>
+      <div class="acc-invoice-no">发票号：{{ invoice_nos or '—' }}</div>
+    </div>
+    <div class="acc-meta-row">
+      <span>制单人员：{{ preparer_name or '—' }}</span>
+    </div>
+    <div class="acc-supplier-row">
+      <span>供应商名称：{{ supplier_name or '—' }}</span>
+      <span>制单日期：{{ sheet_date or '—' }}</span>
+    </div>
+    <table class="acc-table">
+      <thead>
+        <tr>
+          <th class="col-no">序号</th>
+          <th class="col-code">物料编码</th>
+          <th class="col-name">产品名称及规格</th>
+          <th class="col-qty">送货数量</th>
+          <th class="col-unit">单位</th>
+          <th class="col-price">不含税单价</th>
+          <th class="col-amt">金额</th>
+          <th class="col-remark">备注</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for line in page.line_items %}
+        <tr>
+          <td class="center">{{ line.line_no or '' }}</td>
+          <td class="center">&nbsp;</td>
+          <td>{{ line.product_name_spec or '' }}</td>
+          <td class="num">{{ line.quantity_display or '' }}</td>
+          <td class="center">{{ line.unit or '' }}</td>
+          <td class="num">{{ line.unit_price_display or '' }}</td>
+          <td class="num">{{ line.amount_display or '' }}</td>
+          <td>{{ line.remark or '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="acc-total-row">
+      <span class="acc-total-upper">金额合计（大写）：{{ total_amount_uppercase or '—' }}</span>
+      <span class="acc-total-lower">小写金额：{{ total_amount_display or '—' }}</span>
+    </div>
+    <div class="acc-footer-row">
+      <span>备&nbsp;&nbsp;&nbsp;&nbsp;注：{{ remark or '' }}</span>
+      <span>验票人签字：{{ verifier_name or '' }}</span>
+    </div>
+  </div>
+"""
+
+FINANCE_MATERIAL_ACCEPTANCE_PRINT_CONTENT = (
+    """
+<style>
+  @page { size: A4 portrait; margin: 6mm 8mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: "SimSun", "宋体", "Microsoft YaHei", serif;
+    font-size: 9pt; color: #000; line-height: 1.2;
+  }
+  .a4-dual-page {
+    width: 100%;
+    height: 285mm;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+  }
+  .a4-dual-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  .acc-copy {
+    flex: 0 0 50%;
+    height: 50%;
+    max-height: 50%;
+    min-height: 0;
+    overflow: hidden;
+    padding: 1.5mm 0 2mm;
+    display: flex;
+    flex-direction: column;
+  }
+  .acc-copy + .acc-copy {
+    border-top: 1px dashed #999;
+    padding-top: 3mm;
+  }
+  .acc-sheet-inner {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .acc-header-company {
+    text-align: center; font-size: 12pt; font-weight: 700;
+    letter-spacing: 1px; margin: 0 0 1px; line-height: 1.15;
+  }
+  .acc-header-address {
+    text-align: center; font-size: 8.5pt; margin: 0 0 3px; line-height: 1.15;
+  }
+  /* 标题与公司名同轴居中；发票号绝对定位到右侧，不挤偏标题 */
+  .acc-title-block {
+    position: relative;
+    margin-bottom: 2px;
+    min-height: 16px;
+  }
+  .acc-title {
+    text-align: center; font-size: 12pt; font-weight: 700;
+    letter-spacing: 6px; line-height: 1.15;
+  }
+  .acc-invoice-no {
+    position: absolute; right: 0; bottom: 0;
+    font-size: 9pt; white-space: nowrap;
+  }
+  .acc-meta-row {
+    display: flex; justify-content: flex-end; font-size: 9pt; margin-bottom: 2px;
+  }
+  .acc-supplier-row {
+    display: flex; justify-content: space-between; font-size: 9pt;
+    margin-bottom: 2px; gap: 8px;
+  }
+  table.acc-table {
+    width: 100%; border-collapse: collapse; table-layout: fixed;
+    font-size: 7.5pt; flex: 1 1 auto; min-height: 0;
+  }
+  table.acc-table th, table.acc-table td {
+    border: 1px solid #000; padding: 0 2px; vertical-align: middle;
+    word-break: break-all; line-height: 1.1; height: 3.6mm;
+  }
+  table.acc-table th { font-weight: 700; text-align: center; background: #fff; }
+  .col-no { width: 5%; } .col-code { width: 10%; } .col-name { width: 28%; }
+  .col-qty { width: 10%; } .col-unit { width: 7%; } .col-price { width: 14%; }
+  .col-amt { width: 12%; } .col-remark { width: 14%; }
+  .center { text-align: center; } .num { text-align: right; white-space: nowrap; }
+  .acc-total-row {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-top: 2px; font-size: 8.5pt; gap: 8px; flex: 0 0 auto;
+  }
+  .acc-total-upper { flex: 1 1 auto; min-width: 0; word-break: break-all; }
+  .acc-total-lower { white-space: nowrap; flex: 0 0 auto; }
+  .acc-footer-row {
+    display: flex; justify-content: space-between; margin-top: 2px;
+    font-size: 9pt; gap: 8px; flex: 0 0 auto;
+  }
+</style>
+{% for page in line_pages %}
+<div class="a4-dual-page">
+  <div class="acc-copy">"""
+    + _FINANCE_ACCEPTANCE_SHEET_BODY
+    + """</div>
+  <div class="acc-copy">"""
+    + _FINANCE_ACCEPTANCE_SHEET_BODY
+    + """</div>
+</div>
+{% endfor %}
+"""
+)
+
+HAOLIGO_PRESET_PRINT_TEMPLATES.append(
+    {
+        "name": "材料验收单（A4双联）",
+        "code": "HAOLIGO_FINANCE_MATERIAL_ACCEPTANCE_PRINT",
+        "type": "html",
+        "description": "材料验收单打印（对齐客户 Excel 模板；A4 一页上下双联）",
+        "content": FINANCE_MATERIAL_ACCEPTANCE_PRINT_CONTENT,
+        "config": {
+            "document_type": "finance_material_acceptance",
+            "engine": "jinja2",
+            "strict_variables": False,
+            "page": {"size": "A4", "orientation": "portrait", "margin": "8mm 10mm"},
+        },
+        "is_active": True,
+    },
+)

@@ -38,6 +38,7 @@ SUPPORTED_DOCUMENT_TYPES = frozenset(
         "equipment_upkeep_complete",
         "mold_maintenance_complete",
         "mold_outsource_maintenance_complete",
+        "finance_material_acceptance",
     }
 )
 
@@ -46,6 +47,7 @@ DOCUMENT_TEMPLATE_CODES = {
     "equipment_upkeep_complete": "HAOLIGO_EQUIPMENT_UPKEEP_COMPLETE_PRINT",
     "mold_maintenance_complete": "HAOLIGO_MOLD_MAINTENANCE_COMPLETE_PRINT",
     "mold_outsource_maintenance_complete": "HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_COMPLETE_PRINT",
+    "finance_material_acceptance": "HAOLIGO_FINANCE_MATERIAL_ACCEPTANCE_PRINT",
 }
 
 
@@ -231,6 +233,8 @@ class HaoligoDocumentPrintService:
             return await self._format_mold_maintenance_complete(tenant_id, document_id, print_user=print_user)
         if document_type == "mold_outsource_maintenance_complete":
             return await self._format_mold_outsource_complete(tenant_id, document_id, print_user=print_user)
+        if document_type == "finance_material_acceptance":
+            return await self._format_finance_material_acceptance(tenant_id, document_id, print_user=print_user)
         raise ValidationError(f"不支持的单据类型: {document_type}")
 
     async def _format_equipment_spot_check(
@@ -440,4 +444,127 @@ class HaoligoDocumentPrintService:
             "before_photos": _photo_items(getattr(out, "source_header_attachment_file_uuids", None)),
             "after_photos": _photo_items(getattr(out, "header_attachment_file_uuids", None)),
             "is_outsource": is_outsource,
+        }
+
+    async def _format_finance_material_acceptance(
+        self,
+        tenant_id: int,
+        document_id: int,
+        *,
+        print_user: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        from decimal import Decimal
+
+        from apps.haoligo.constants.finance_print import (
+            HAOLIGO_FINANCE_ACCEPTANCE_PRINT_LINES_PER_PAGE,
+            HAOLIGO_FINANCE_PRINT_COMPANY_ADDRESS,
+            HAOLIGO_FINANCE_PRINT_COMPANY_NAME,
+        )
+        from apps.haoligo.models.finance_invoice import (
+            HaoligoFinanceAcceptanceInvoice,
+            HaoligoFinanceMaterialAcceptance,
+            HaoligoFinanceMaterialAcceptanceLine,
+        )
+        from apps.haoligo.services.finance_supplier_price import get_supplier_or_404
+        from apps.haoligo.utils.amount_uppercase_cn import amount_to_cn_uppercase
+
+        row = await tenant_alive(HaoligoFinanceMaterialAcceptance, tenant_id).filter(id=document_id).first()
+        if not row:
+            raise NotFoundError("材料验收单不存在")
+        supplier = await get_supplier_or_404(tenant_id, row.supplier_id)
+        line_rows = await HaoligoFinanceMaterialAcceptanceLine.filter(
+            tenant_id=tenant_id, acceptance_id=row.id, deleted_at__isnull=True
+        ).order_by("line_no", "id")
+        links = await HaoligoFinanceAcceptanceInvoice.filter(
+            tenant_id=tenant_id, acceptance_id=row.id, deleted_at__isnull=True
+        ).prefetch_related("invoice")
+        invoice_nos: list[str] = []
+        for lk in links:
+            inv = getattr(lk, "invoice", None)
+            if inv and inv.invoice_no and inv.invoice_no not in invoice_nos:
+                invoice_nos.append(inv.invoice_no)
+
+        def _fmt_qty(v: Any) -> str:
+            d = Decimal(str(v or 0))
+            s = format(d.normalize(), "f")
+            return s.rstrip("0").rstrip(".") if "." in s else s
+
+        def _fmt_money(v: Any) -> str:
+            return format(Decimal(str(v or 0)).quantize(Decimal("0.01")), "f")
+
+        def _fmt_unit_price(v: Any) -> str:
+            d = Decimal(str(v or 0))
+            s = format(d.normalize(), "f")
+            return s.rstrip("0").rstrip(".") if "." in s else s
+
+        all_lines: List[Dict[str, Any]] = []
+        for ln in line_rows:
+            spec = (ln.spec or "").strip()
+            name = (ln.material_name or "").strip()
+            product = f"{name} {spec}".strip() if spec else name
+            all_lines.append(
+                {
+                    "line_no": ln.line_no,
+                    # 打印模板物料编码列留空（与客户纸质验收单习惯一致）
+                    "material_code": "",
+                    "product_name_spec": product,
+                    "quantity_display": _fmt_qty(ln.quantity),
+                    "unit": ln.unit or "",
+                    "unit_price_display": _fmt_unit_price(ln.unit_price),
+                    "amount_display": _fmt_money(ln.amount),
+                    "remark": "",
+                }
+            )
+
+        per_page = HAOLIGO_FINANCE_ACCEPTANCE_PRINT_LINES_PER_PAGE
+        if not all_lines:
+            chunks: List[List[Dict[str, Any]]] = [[]]
+        else:
+            chunks = [all_lines[i : i + per_page] for i in range(0, len(all_lines), per_page)]
+
+        empty_line = {
+            "line_no": "",
+            "material_code": "",
+            "product_name_spec": "",
+            "quantity_display": "",
+            "unit": "",
+            "unit_price_display": "",
+            "amount_display": "",
+            "remark": "",
+        }
+        line_pages: List[Dict[str, Any]] = []
+        for chunk in chunks:
+            padded = list(chunk)
+            while len(padded) < per_page:
+                padded.append(dict(empty_line))
+            line_pages.append({"line_items": padded})
+
+        # 兼容旧模板变量：首页明细
+        line_items = line_pages[0]["line_items"] if line_pages else []
+
+        total = Decimal(str(row.total_amount or 0))
+        sheet_date = row.acceptance_date.isoformat() if row.acceptance_date else _fmt_dt(row.created_at)[:10]
+        tenant_name = await _tenant_display_name(tenant_id)
+
+        return {
+            "document_id": row.id,
+            "document_type": "finance_material_acceptance",
+            "company_name": HAOLIGO_FINANCE_PRINT_COMPANY_NAME or tenant_name,
+            "company_address": HAOLIGO_FINANCE_PRINT_COMPANY_ADDRESS,
+            "invoice_nos": "-".join(invoice_nos) if invoice_nos else "",
+            "preparer_name": (print_user or "").strip(),
+            "verifier_name": (print_user or "").strip(),
+            "supplier_name": supplier.supplier_name,
+            "supplier_code": supplier.supplier_code,
+            "sheet_no": row.sheet_no,
+            "sheet_date": sheet_date,
+            "total_amount": float(total),
+            "total_amount_display": _fmt_money(total),
+            "total_amount_uppercase": amount_to_cn_uppercase(total),
+            "remark": (row.remark or "").strip(),
+            "line_items": line_items,
+            "line_pages": line_pages,
+            "line_count": len(all_lines),
+            "print_time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "print_user": (print_user or "").strip(),
         }

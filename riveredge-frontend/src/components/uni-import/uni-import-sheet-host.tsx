@@ -1,7 +1,6 @@
 /**
  * Univer 表格宿主：必须作为 Modal 子树挂载。
- * rc-dialog + destroyOnHidden 在 open 首帧 animatedVisible 仍为 false 时不渲染 body，
- * 初始化只能在本组件 mount 后的 useLayoutEffect 中执行。
+ * 粘贴：监听 BeforeClipboardPaste，取消默认粘贴，用 HTML x:num 完整数值强制文本写入。
  */
 import React, { useLayoutEffect, useRef } from 'react';
 import { Spin, theme } from 'antd';
@@ -14,10 +13,10 @@ import {
   type UniverSheetInstance,
 } from '../univer/bootstrap-sheet';
 import { buildImportCellData } from './build-import-cell-data';
+import { pasteClipboardAsForceString } from './paste-import-text';
 
 const UNIVER_COPY_COMMAND = 'univer.command.copy';
 const UNIVER_CUT_COMMAND = 'univer.command.cut';
-const UNIVER_PASTE_COMMAND = 'univer.command.paste';
 
 function isKeyboardEventInSheetContainer(container: HTMLElement, event: KeyboardEvent): boolean {
   const target = event.target;
@@ -39,7 +38,6 @@ function safeDisposeUniver(instance: UniverSheetInstance | null | undefined) {
   try {
     instance.univer.dispose();
   } catch (error: unknown) {
-    // 幂等清理：避免在节点已被移除时抛出 removeChild 竞态错误
     const msg = error instanceof Error ? error.message : String(error);
     if (!msg.includes("Failed to execute 'removeChild' on 'Node'")) {
       console.warn('univer dispose failed:', error);
@@ -66,6 +64,8 @@ export interface UniImportSheetHostProps {
   onLoadingChange: (loading: boolean) => void;
   instanceRef: React.MutableRefObject<UniverSheetInstance | null>;
   messageApi: MessageInstance;
+  /** 粘贴后同步字符串矩阵（剪贴板原文），供确认导入使用 */
+  onSheetRowsChange?: (rows: string[][]) => void;
 }
 
 export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
@@ -78,12 +78,22 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
   onLoadingChange,
   instanceRef,
   messageApi,
+  onSheetRowsChange,
 }) => {
   const { token } = theme.useToken();
   const containerRef = useRef<HTMLDivElement>(null);
   const mountSeqRef = useRef(0);
   const keyDownHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
+  const pasteHandlerRef = useRef<((e: ClipboardEvent) => void) | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const eventDisposableRef = useRef<{ dispose?: () => void } | null>(null);
+  const onSheetRowsChangeRef = useRef(onSheetRowsChange);
+  onSheetRowsChangeRef.current = onSheetRowsChange;
+  const precisionRowsRef = useRef<string[][] | null>(uploadedSheetRows);
+
+  useLayoutEffect(() => {
+    precisionRowsRef.current = uploadedSheetRows;
+  }, [uploadedSheetRows]);
 
   useLayoutEffect(() => {
     const containerEl = containerRef.current;
@@ -116,6 +126,38 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
       messageApi.error('表格加载失败：' + msg);
       return undefined;
     }
+
+    let pasteInFlight = false;
+    let lastPasteAt = 0;
+    const pastePreservingPrecision = (clipboard: {
+      html?: string | null;
+      plain?: string | null;
+    }) => {
+      const now = Date.now();
+      // BeforeClipboardPaste 与 document paste 可能连打两次，100ms 内只处理一次
+      if (pasteInFlight || now - lastPasteAt < 100) return false;
+      pasteInFlight = true;
+      try {
+        const current = instanceRef.current;
+        if (!current?.univerAPI) return false;
+        const seed =
+          precisionRowsRef.current ??
+          (headers && headers.length
+            ? [
+                headers.map((h) => String(h ?? '')),
+                (exampleRow ?? []).map((c) => String(c ?? '')),
+              ]
+            : []);
+        const merged = pasteClipboardAsForceString(current.univerAPI, clipboard, seed);
+        if (!merged) return false;
+        precisionRowsRef.current = merged;
+        onSheetRowsChangeRef.current?.(merged);
+        lastPasteAt = now;
+        return true;
+      } finally {
+        pasteInFlight = false;
+      }
+    };
 
     runAfterUniverSheetsRenderServiceInit(() => {
       if (!active || !pendingInstance) {
@@ -155,6 +197,29 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
         instanceRef.current = instance;
         relayoutUniverSheet(instance);
 
+        // 官方粘贴前钩子：取消默认粘贴，改用 HTML x:num 完整精度写入
+        try {
+          const api = instance.univerAPI as any;
+          const eventName = api.Event?.BeforeClipboardPaste ?? 'BeforeClipboardPaste';
+          if (typeof api.addEvent === 'function') {
+            eventDisposableRef.current = api.addEvent(
+              eventName,
+              (params: { text?: string; html?: string; cancel?: boolean }) => {
+                params.cancel = true;
+                const ok = pastePreservingPrecision({
+                  html: params.html ?? '',
+                  plain: params.text ?? '',
+                });
+                if (!ok) {
+                  messageApi.warning('粘贴失败，请改用「上传 Excel」以保留完整精度');
+                }
+              },
+            );
+          }
+        } catch (error) {
+          console.warn('register BeforeClipboardPaste failed:', error);
+        }
+
         const containerForResize = containerRef.current;
         if (containerForResize) {
           resizeObserverRef.current?.disconnect();
@@ -168,24 +233,45 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
           resizeObserverRef.current = observer;
         }
 
+        // 兜底：若 Univer 未触发 BeforeClipboardPaste，仍拦截原生 paste
+        const handlePaste = (e: ClipboardEvent) => {
+          const container = containerRef.current;
+          if (!container) return;
+          const inSheet =
+            (e.target instanceof Node && container.contains(e.target)) ||
+            (document.activeElement instanceof Node &&
+              container.contains(document.activeElement)) ||
+            document.activeElement === container;
+          if (!inSheet) return;
+
+          const html = e.clipboardData?.getData('text/html') ?? '';
+          const plain = e.clipboardData?.getData('text/plain') ?? '';
+          if (!html && !plain) return;
+
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          e.stopPropagation();
+
+          const ok = pastePreservingPrecision({ html, plain });
+          if (!ok) {
+            messageApi.warning('粘贴失败，请改用「上传 Excel」以保留完整精度');
+          }
+        };
+
         const handleKeyDown = (e: KeyboardEvent) => {
           const container = containerRef.current;
           if (!container || !isKeyboardEventInSheetContainer(container, e)) return;
 
           if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.defaultPrevented) {
             const key = e.key.toLowerCase();
-            if (key === 'c' || key === 'v' || key === 'x') {
+            if (key === 'c' || key === 'x') {
               const current = instanceRef.current;
               if (current?.univerAPI) {
                 e.preventDefault();
                 e.stopPropagation();
-                const commandId =
-                  key === 'c'
-                    ? UNIVER_COPY_COMMAND
-                    : key === 'v'
-                      ? UNIVER_PASTE_COMMAND
-                      : UNIVER_CUT_COMMAND;
-                void current.univerAPI.executeCommand(commandId);
+                void current.univerAPI.executeCommand(
+                  key === 'c' ? UNIVER_COPY_COMMAND : UNIVER_CUT_COMMAND,
+                );
                 return;
               }
             }
@@ -200,14 +286,18 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
         };
 
         keyDownHandlerRef.current = handleKeyDown;
+        pasteHandlerRef.current = handlePaste;
         document.addEventListener('keydown', handleKeyDown, true);
+        document.addEventListener('paste', handlePaste, true);
 
         focusSheetContainer(containerEl);
 
         if (!sheetRows) {
           if (headers && headers.length > 0) {
             if (exampleRow && exampleRow.length > 0) {
-              messageApi.success('表格已加载，表头和示例数据已自动填充，请从第三行开始填写数据');
+              messageApi.success(
+                '表格已加载。从 Excel 粘贴会保留完整小数；更稳妥请用「上传 Excel」',
+              );
             } else {
               messageApi.success('表格已加载，表头已自动填充，请从第二行开始填写数据');
             }
@@ -231,10 +321,17 @@ export const UniImportSheetHost: React.FC<UniImportSheetHostProps> = ({
       active = false;
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
+      eventDisposableRef.current?.dispose?.();
+      eventDisposableRef.current = null;
       const keyDownHandler = keyDownHandlerRef.current;
       if (keyDownHandler) {
         document.removeEventListener('keydown', keyDownHandler, true);
         keyDownHandlerRef.current = null;
+      }
+      const pasteHandler = pasteHandlerRef.current;
+      if (pasteHandler) {
+        document.removeEventListener('paste', pasteHandler, true);
+        pasteHandlerRef.current = null;
       }
       const instance = instanceRef.current ?? pendingInstance;
       if (instance) {

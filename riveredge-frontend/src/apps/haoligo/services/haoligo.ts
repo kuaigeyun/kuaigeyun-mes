@@ -2251,6 +2251,7 @@ export interface MoldOperationRecordRow {
   uuid: string;
   title: string;
   detail: string;
+  fields?: Array<{ label: string; value: string }>;
   /** 标准业务单号；历史数据可能为空 */
   sheet_no?: string | null;
 }
@@ -2424,6 +2425,16 @@ export function listMoldTrialSheets(params?: {
   sheet_status?: string;
   trial_result?: string;
   keyword?: string;
+  failure_handling?: string;
+  workflow_phase?: string;
+  production_trial_result?: string;
+  purchase_order_no?: string;
+  supplier_name?: string;
+  sheet_no?: string;
+  mold_code?: string;
+  mold_name?: string;
+  trial_times?: number;
+  trial_user_name?: string;
   /** ISO8601，含边界由前端按日起止传入 */
   created_from?: string;
   created_to?: string;
@@ -3361,4 +3372,595 @@ export function loadHaoligoNotificationRulePresets(): Promise<{
   total_rules: number;
 }> {
   return apiRequest(`${PREFIX}/config/notification-rules/load-presets`, { method: 'POST' });
+}
+
+/** 财务 — 材料供应商 */
+export interface FinanceSupplierRow {
+  id: number;
+  uuid: string;
+  supplier_code: string;
+  supplier_name: string;
+  tax_no?: string | null;
+  contact_name?: string | null;
+  contact_phone?: string | null;
+  payment_terms_days: number;
+  settlement_method?: string | null;
+  is_active: boolean;
+  remark?: string | null;
+}
+
+export type FinanceSupplierCreatePayload = Omit<FinanceSupplierRow, 'id' | 'uuid'>;
+export type FinanceSupplierUpdatePayload = Partial<FinanceSupplierCreatePayload>;
+
+export interface FinanceSupplierPriceRow {
+  id: number;
+  uuid: string;
+  supplier_id: number;
+  material_code: string;
+  material_name: string;
+  spec?: string | null;
+  unit?: string | null;
+  unit_price: number;
+  price_type: '含税' | '不含税';
+  tax_rate?: number | null;
+  material_id?: number | null;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  is_active: boolean;
+  remark?: string | null;
+}
+
+export type FinanceSupplierPriceCreatePayload = Omit<
+  FinanceSupplierPriceRow,
+  'id' | 'uuid' | 'supplier_id' | 'effective_from' | 'effective_to' | 'is_active'
+>;
+
+export interface FinancePriceChangeLogRow {
+  id: number;
+  uuid: string;
+  supplier_id: number;
+  supplier_price_id?: number | null;
+  previous_price_id?: number | null;
+  material_code: string;
+  material_name: string;
+  old_unit_price?: number | null;
+  new_unit_price: number;
+  change_source: string;
+  operator_user_name?: string | null;
+  remark?: string | null;
+  created_at: string;
+}
+
+export function listFinanceSuppliers(params?: {
+  keyword?: string;
+  is_active?: boolean;
+}): Promise<FinanceSupplierRow[]> {
+  return apiRequest(`${PREFIX}/finance/suppliers`, { params });
+}
+
+export function getFinanceSupplier(rowId: number): Promise<FinanceSupplierRow> {
+  return apiRequest(`${PREFIX}/finance/suppliers/${rowId}`);
+}
+
+export function createFinanceSupplier(body: FinanceSupplierCreatePayload): Promise<FinanceSupplierRow> {
+  return apiRequest(`${PREFIX}/finance/suppliers`, { method: 'POST', data: body });
+}
+
+export function updateFinanceSupplier(
+  rowId: number,
+  body: FinanceSupplierUpdatePayload,
+): Promise<FinanceSupplierRow> {
+  return apiRequest(`${PREFIX}/finance/suppliers/${rowId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteFinanceSupplier(rowId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/finance/suppliers/${rowId}`, { method: 'DELETE' });
+}
+
+export function batchDeleteFinanceSuppliers(ids: number[]): Promise<{ deleted_count: number }> {
+  return apiRequest(`${PREFIX}/finance/suppliers/batch-delete`, { method: 'POST', data: { ids } });
+}
+
+export interface FinanceSupplierImportRowPayload {
+  supplier_code: string;
+  supplier_name: string;
+  tax_no?: string | null;
+  contact_name?: string | null;
+  contact_phone?: string | null;
+  payment_terms_days?: number;
+  settlement_method?: string | null;
+  is_active?: boolean;
+  remark?: string | null;
+}
+
+export interface FinanceSupplierImportResult {
+  created_count: number;
+  failed_count: number;
+  errors: string[];
+}
+
+export function importFinanceSuppliers(rows: FinanceSupplierImportRowPayload[]): Promise<FinanceSupplierImportResult> {
+  return apiRequest(`${PREFIX}/finance/suppliers/import`, { method: 'POST', data: { rows } });
+}
+
+export function listFinanceSupplierPrices(
+  supplierId: number,
+  params?: { keyword?: string; include_history?: boolean },
+): Promise<FinanceSupplierPriceRow[]> {
+  return apiRequest(`${PREFIX}/finance/suppliers/${supplierId}/prices`, { params });
+}
+
+export function createFinanceSupplierPrice(
+  supplierId: number,
+  body: FinanceSupplierPriceCreatePayload,
+): Promise<FinanceSupplierPriceRow> {
+  return apiRequest(`${PREFIX}/finance/suppliers/${supplierId}/prices`, { method: 'POST', data: body });
+}
+
+export function quickAddFinanceSupplierPrice(
+  supplierId: number,
+  body: FinanceSupplierPriceCreatePayload,
+): Promise<FinanceSupplierPriceRow> {
+  return apiRequest(`${PREFIX}/finance/suppliers/${supplierId}/prices/quick-add`, {
+    method: 'POST',
+    data: body,
+  });
+}
+
+export function changeFinanceSupplierPrice(
+  priceId: number,
+  body: { unit_price: number; remark?: string | null },
+): Promise<FinanceSupplierPriceRow> {
+  return apiRequest(`${PREFIX}/finance/supplier-prices/${priceId}/change-price`, {
+    method: 'POST',
+    data: body,
+  });
+}
+
+/** 财务 — 供应商价格明细（跨供应商单价清单，供发票核对） */
+export interface FinanceSupplierPriceLedgerRow {
+  id: number;
+  uuid: string;
+  supplier_id: number;
+  supplier_code: string;
+  supplier_name: string;
+  material_code: string;
+  material_name: string;
+  spec?: string | null;
+  unit?: string | null;
+  unit_price: string;
+  price_type: '含税' | '不含税';
+  tax_rate?: number | null;
+  is_active: boolean;
+  remark?: string | null;
+}
+
+export type FinanceSupplierPriceLedgerCreatePayload = {
+  supplier_id: number;
+  spec: string;
+  unit_price: string;
+  price_type?: '含税' | '不含税';
+  unit?: string | null;
+  tax_rate?: number | null;
+  remark?: string | null;
+};
+
+export type FinanceSupplierPriceLedgerUpdatePayload = Partial<
+  Omit<FinanceSupplierPriceLedgerCreatePayload, 'supplier_id'>
+> & {
+  change_source?: string | null;
+};
+
+export interface FinanceSupplierPriceImportRowPayload {
+  supplier_name: string;
+  spec: string;
+  unit_price: string;
+  remark?: string | null;
+}
+
+export interface FinanceSupplierPriceImportResult {
+  created_count: number;
+  updated_count: number;
+  suppliers_created_count: number;
+  failed_count: number;
+  errors: string[];
+}
+
+export function listFinanceSupplierPriceLedger(params?: {
+  keyword?: string;
+  supplier_id?: number;
+  include_history?: boolean;
+}): Promise<FinanceSupplierPriceLedgerRow[]> {
+  return apiRequest(`${PREFIX}/finance/supplier-prices`, { params });
+}
+
+export function createFinanceSupplierPriceLedger(
+  body: FinanceSupplierPriceLedgerCreatePayload,
+): Promise<FinanceSupplierPriceLedgerRow> {
+  return apiRequest(`${PREFIX}/finance/supplier-prices`, { method: 'POST', data: body });
+}
+
+export function updateFinanceSupplierPriceLedger(
+  priceId: number,
+  body: FinanceSupplierPriceLedgerUpdatePayload,
+): Promise<FinanceSupplierPriceLedgerRow> {
+  return apiRequest(`${PREFIX}/finance/supplier-prices/${priceId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteFinanceSupplierPriceLedger(priceId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/finance/supplier-prices/${priceId}`, { method: 'DELETE' });
+}
+
+export function batchDeleteFinanceSupplierPriceLedger(
+  ids: number[],
+): Promise<{ deleted_count: number }> {
+  return apiRequest(`${PREFIX}/finance/supplier-prices/batch-delete`, { method: 'POST', data: { ids } });
+}
+
+export function importFinanceSupplierPrices(
+  rows: FinanceSupplierPriceImportRowPayload[],
+): Promise<FinanceSupplierPriceImportResult> {
+  return apiRequest(`${PREFIX}/finance/supplier-prices/import`, { method: 'POST', data: { rows } });
+}
+
+export function listFinancePriceChangeLogs(
+  supplierId: number,
+  params?: { material_code?: string },
+): Promise<FinancePriceChangeLogRow[]> {
+  return apiRequest(`${PREFIX}/finance/suppliers/${supplierId}/price-change-logs`, { params });
+}
+
+/** 财务 — 发票验票 */
+export interface FinanceInvoiceLineRow {
+  id: number;
+  uuid: string;
+  line_no: number;
+  material_code: string;
+  material_name: string;
+  spec?: string | null;
+  unit?: string | null;
+  quantity: number;
+  invoice_unit_price: string;
+  tax_amount?: number | null;
+  system_unit_price?: string | null;
+  price_diff_amount?: string | null;
+  price_diff_ratio?: number | null;
+  line_status: string;
+  supplier_price_id?: number | null;
+  reject_reason?: string | null;
+}
+
+export interface FinanceInvoiceRow {
+  id: number;
+  uuid: string;
+  supplier_id: number;
+  supplier_code?: string | null;
+  supplier_name?: string | null;
+  invoice_no: string;
+  invoice_code?: string | null;
+  invoice_date?: string | null;
+  total_amount: number;
+  status: string;
+  reject_reason?: string | null;
+  remark?: string | null;
+  line_count?: number;
+  lines?: FinanceInvoiceLineRow[];
+}
+
+export type FinanceInvoiceLinePayload = Omit<
+  FinanceInvoiceLineRow,
+  'id' | 'uuid' | 'system_unit_price' | 'price_diff_amount' | 'price_diff_ratio' | 'line_status' | 'supplier_price_id' | 'reject_reason'
+>;
+
+export type FinanceInvoiceCreatePayload = {
+  supplier_id: number;
+  invoice_no: string;
+  invoice_code?: string | null;
+  invoice_date?: string | null;
+  total_amount?: number | null;
+  qr_raw_text?: string | null;
+  remark?: string | null;
+  /** 有值则整票保存为已拒收 */
+  reject_reason?: string | null;
+  lines: FinanceInvoiceLinePayload[];
+};
+
+export interface FinanceAcceptanceLineRow {
+  id: number;
+  uuid: string;
+  line_no: number;
+  material_code: string;
+  material_name: string;
+  spec?: string | null;
+  unit?: string | null;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+  source_invoice_line_ids?: number[] | null;
+}
+
+export interface FinanceAcceptanceRow {
+  id: number;
+  uuid: string;
+  sheet_no: string;
+  supplier_id: number;
+  supplier_code?: string | null;
+  supplier_name?: string | null;
+  acceptance_date?: string | null;
+  total_amount: number;
+  status: string;
+  reject_reason?: string | null;
+  remark?: string | null;
+  pdf_file_uuid?: string | null;
+  invoice_ids?: number[];
+  lines?: FinanceAcceptanceLineRow[];
+}
+
+export function parseFinanceInvoiceQr(body: { qr_text: string }): Promise<Record<string, unknown>> {
+  return apiRequest(`${PREFIX}/finance/invoices/parse`, { method: 'POST', data: body });
+}
+
+export async function parseFinanceInvoicePdf(
+  file: File,
+  options?: { excludeInvoiceId?: number | null },
+): Promise<Record<string, unknown>> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const excludeInvoiceId = options?.excludeInvoiceId;
+  return apiRequest(`${PREFIX}/finance/invoices/parse-pdf`, {
+    method: 'POST',
+    body: formData,
+    params:
+      excludeInvoiceId != null && Number.isFinite(excludeInvoiceId)
+        ? { exclude_invoice_id: excludeInvoiceId }
+        : undefined,
+  });
+}
+
+export function listFinanceInvoices(params?: {
+  supplier_id?: number;
+  status?: string;
+  keyword?: string;
+  skip?: number;
+  limit?: number;
+}): Promise<FinanceInvoiceRow[]> {
+  return apiRequest(`${PREFIX}/finance/invoices`, { params });
+}
+
+export function getFinanceInvoice(invoiceId: number): Promise<FinanceInvoiceRow> {
+  return apiRequest(`${PREFIX}/finance/invoices/${invoiceId}`);
+}
+
+export function createFinanceInvoice(body: FinanceInvoiceCreatePayload): Promise<FinanceInvoiceRow> {
+  return apiRequest(`${PREFIX}/finance/invoices`, { method: 'POST', data: body });
+}
+
+export function updateFinanceInvoice(
+  invoiceId: number,
+  body: FinanceInvoiceCreatePayload,
+): Promise<FinanceInvoiceRow> {
+  return apiRequest(`${PREFIX}/finance/invoices/${invoiceId}`, { method: 'PUT', data: body });
+}
+
+export function verifyFinanceInvoice(invoiceId: number): Promise<FinanceInvoiceRow> {
+  return apiRequest(`${PREFIX}/finance/invoices/${invoiceId}/verify`, { method: 'POST' });
+}
+
+export function rejectFinanceInvoice(invoiceId: number, body: { reject_reason: string }): Promise<FinanceInvoiceRow> {
+  return apiRequest(`${PREFIX}/finance/invoices/${invoiceId}/reject`, { method: 'POST', data: body });
+}
+
+export function rejectFinanceInvoiceLine(
+  invoiceId: number,
+  lineId: number,
+  body: { reject_reason: string },
+): Promise<FinanceInvoiceLineRow> {
+  return apiRequest(`${PREFIX}/finance/invoices/${invoiceId}/lines/${lineId}/reject`, {
+    method: 'POST',
+    data: body,
+  });
+}
+
+export function changeFinanceInvoiceLinePrice(
+  invoiceId: number,
+  lineId: number,
+  body: { new_unit_price: string; apply_to_price_list?: boolean; remark?: string | null },
+): Promise<FinanceInvoiceRow> {
+  return apiRequest(`${PREFIX}/finance/invoices/${invoiceId}/lines/${lineId}/change-price`, {
+    method: 'POST',
+    data: body,
+  });
+}
+
+export function quickAddFinanceInvoiceLinePrice(
+  invoiceId: number,
+  lineId: number,
+  body?: { price_type?: '含税' | '不含税'; tax_rate?: number | null },
+): Promise<FinanceInvoiceRow> {
+  return apiRequest(`${PREFIX}/finance/invoices/${invoiceId}/lines/${lineId}/quick-add-price`, {
+    method: 'POST',
+    data: body ?? {},
+  });
+}
+
+/** 录入发票时：未登记规格以当前发票单价写入供应商价格明细（验票模块权限） */
+export function registerFinanceInvoiceSupplierPrice(body: {
+  supplier_id: number;
+  spec: string;
+  unit_price: string;
+  material_code?: string | null;
+  material_name?: string | null;
+  unit?: string | null;
+  price_type?: '含税' | '不含税';
+  tax_rate?: number | null;
+}): Promise<{
+  id: number;
+  supplier_id: number;
+  material_code: string;
+  material_name: string;
+  spec?: string | null;
+  unit?: string | null;
+  unit_price: string;
+  price_type: string;
+}> {
+  return apiRequest(`${PREFIX}/finance/invoices/register-price`, { method: 'POST', data: body });
+}
+
+export function deleteFinanceInvoice(invoiceId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/finance/invoices/${invoiceId}`, { method: 'DELETE' });
+}
+
+export function listFinanceAcceptances(params?: {
+  supplier_id?: number;
+  status?: string;
+  skip?: number;
+  limit?: number;
+}): Promise<FinanceAcceptanceRow[]> {
+  return apiRequest(`${PREFIX}/finance/material-acceptances`, { params });
+}
+
+export function getFinanceAcceptance(acceptanceId: number): Promise<FinanceAcceptanceRow> {
+  return apiRequest(`${PREFIX}/finance/material-acceptances/${acceptanceId}`);
+}
+
+export function createFinanceAcceptance(body: {
+  invoice_ids: number[];
+  acceptance_date?: string | null;
+  remark?: string | null;
+}): Promise<FinanceAcceptanceRow> {
+  return apiRequest(`${PREFIX}/finance/material-acceptances`, { method: 'POST', data: body });
+}
+
+/** 按单张发票获取或生成验收单（打印验收单） */
+export function getOrCreateFinanceAcceptanceFromInvoice(
+  invoiceId: number,
+): Promise<FinanceAcceptanceRow> {
+  return apiRequest(`${PREFIX}/finance/material-acceptances/from-invoice/${invoiceId}`, {
+    method: 'POST',
+  });
+}
+
+export function confirmFinanceAcceptance(acceptanceId: number): Promise<FinanceAcceptanceRow> {
+  return apiRequest(`${PREFIX}/finance/material-acceptances/${acceptanceId}/confirm`, { method: 'POST' });
+}
+
+export function saveFinanceAcceptancePdf(acceptanceId: number): Promise<FinanceAcceptanceRow> {
+  return apiRequest(`${PREFIX}/finance/material-acceptances/${acceptanceId}/save-pdf`, { method: 'POST' });
+}
+
+export function deleteFinanceAcceptance(acceptanceId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/finance/material-acceptances/${acceptanceId}`, { method: 'DELETE' });
+}
+
+/** 财务 — 付款记录 */
+export interface FinancePaymentRow {
+  id: number;
+  uuid: string;
+  supplier_id: number;
+  supplier_code?: string | null;
+  supplier_name?: string | null;
+  payment_date: string;
+  amount: number;
+  payment_method: string;
+  contract_no?: string | null;
+  remark?: string | null;
+  acceptance_id?: number | null;
+  acceptance_sheet_no?: string | null;
+  invoice_id?: number | null;
+  invoice_no?: string | null;
+}
+
+export type FinancePaymentCreatePayload = {
+  supplier_id: number;
+  payment_date: string;
+  amount: number;
+  payment_method: '银行转账' | '承兑汇票' | '现金' | '支票' | '其他';
+  contract_no?: string | null;
+  remark?: string | null;
+  acceptance_id?: number | null;
+  invoice_id?: number | null;
+};
+
+export type FinancePaymentUpdatePayload = Partial<FinancePaymentCreatePayload>;
+
+export interface FinancePayableReportRow {
+  supplier_id: number;
+  supplier_code: string;
+  supplier_name: string;
+  payment_terms_days: number;
+  total_payable: number;
+  total_paid: number;
+  balance: number;
+  overdue_amount: number;
+  due_this_month_amount: number;
+  oldest_unpaid_due_date?: string | null;
+  invoice_count: number;
+  payment_count: number;
+}
+
+export interface FinanceMonthlyPaymentDetailRow {
+  invoice_id: number;
+  invoice_no: string;
+  supplier_id: number;
+  supplier_code: string;
+  supplier_name: string;
+  payment_terms_days: number;
+  invoice_date: string;
+  due_date: string;
+  original_amount: number;
+  paid_amount: number;
+  remaining_amount: number;
+}
+
+export interface FinanceMonthlyPaymentSummary {
+  year: number;
+  month: number;
+  total_remaining: number;
+  row_count: number;
+  rows: FinanceMonthlyPaymentDetailRow[];
+}
+
+export function listFinancePayments(params?: {
+  supplier_id?: number;
+  keyword?: string;
+  payment_date_from?: string;
+  payment_date_to?: string;
+  skip?: number;
+  limit?: number;
+}): Promise<FinancePaymentRow[]> {
+  return apiRequest(`${PREFIX}/finance/payments`, { params });
+}
+
+export function getFinancePayment(paymentId: number): Promise<FinancePaymentRow> {
+  return apiRequest(`${PREFIX}/finance/payments/${paymentId}`);
+}
+
+export function createFinancePayment(body: FinancePaymentCreatePayload): Promise<FinancePaymentRow> {
+  return apiRequest(`${PREFIX}/finance/payments`, { method: 'POST', data: body });
+}
+
+export function updateFinancePayment(
+  paymentId: number,
+  body: FinancePaymentUpdatePayload,
+): Promise<FinancePaymentRow> {
+  return apiRequest(`${PREFIX}/finance/payments/${paymentId}`, { method: 'PATCH', data: body });
+}
+
+export function deleteFinancePayment(paymentId: number): Promise<void> {
+  return apiRequest(`${PREFIX}/finance/payments/${paymentId}`, { method: 'DELETE' });
+}
+
+export function getFinancePayableReport(params?: {
+  supplier_id?: number;
+  keyword?: string;
+}): Promise<FinancePayableReportRow[]> {
+  return apiRequest(`${PREFIX}/finance/reports/payable`, { params });
+}
+
+export function getFinanceMonthlyPaymentReport(params?: {
+  year?: number;
+  month?: number;
+  supplier_id?: number;
+}): Promise<FinanceMonthlyPaymentSummary> {
+  return apiRequest(`${PREFIX}/finance/reports/monthly-payment`, { params });
 }

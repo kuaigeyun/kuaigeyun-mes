@@ -143,6 +143,42 @@ const moldOperationKindColors: Record<MoldOperationRecordRow['kind'], string> = 
   outsource_maintenance_complete: 'magenta',
 };
 
+function MoldOperationRecordDetails({ record }: { record: MoldOperationRecordRow }) {
+  const rows =
+    record.fields && record.fields.length > 0
+      ? record.fields
+      : record.detail
+        ? record.detail.split('；').map((chunk) => {
+            const idx = chunk.indexOf('：');
+            if (idx <= 0) return { label: '摘要', value: chunk.trim() };
+            return { label: chunk.slice(0, idx).trim(), value: chunk.slice(idx + 1).trim() };
+          })
+        : [];
+  if (rows.length === 0) return null;
+  return (
+    <div
+      style={{
+        marginTop: 6,
+        display: 'grid',
+        gridTemplateColumns: 'auto 1fr',
+        columnGap: 8,
+        rowGap: 4,
+        fontSize: 13,
+        lineHeight: 1.5,
+      }}
+    >
+      {rows.map((row) => (
+        <React.Fragment key={`${record.uuid}-${row.label}-${row.value}`}>
+          <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap' }}>
+            {row.label}
+          </Typography.Text>
+          <Typography.Text style={{ wordBreak: 'break-word' }}>{row.value}</Typography.Text>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
 function numOrUndef(v: unknown): number | undefined {
   if (v === null || v === undefined || v === '') return undefined;
   const n = Number(v);
@@ -1353,11 +1389,7 @@ const MoldLedgerPage: React.FC = () => {
                             </Typography.Text>
                           </div>
                           <Typography.Text strong>{e.title}</Typography.Text>
-                          {e.detail ? (
-                            <div style={{ marginTop: 4, fontSize: 13 }}>
-                              <Typography.Text type="secondary">{e.detail}</Typography.Text>
-                            </div>
-                          ) : null}
+                          <MoldOperationRecordDetails record={e} />
                         </div>
                       ),
                     }))}
