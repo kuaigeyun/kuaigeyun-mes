@@ -1888,9 +1888,9 @@ ensure_pyzbar_windows_native() {
     fi
 }
 
-# Linux：发票 PDF 解析系统库 — zbar（二维码）+ libgomp（onnxruntime/OCR）
+# Linux：发票 PDF 解析系统库 — zbar + libgomp + libGL（opencv/cv2）
 _linux_has_shared_lib() {
-    # $1 = 库名片段，如 libzbar / libgomp（不含 .so）
+    # $1 = 库名片段，如 libzbar / libgomp / libGL（不含 .so）
     local stem=$1
     if command -v ldconfig >/dev/null 2>&1; then
         if ldconfig -p 2>/dev/null | grep -F "${stem}.so" >/dev/null 2>&1; then
@@ -1909,6 +1909,10 @@ _linux_has_shared_lib() {
             libgomp)
                 dpkg-query -W -f='${Status}' libgomp1 2>/dev/null | grep -q 'install ok installed' && return 0
                 ;;
+            libGL)
+                dpkg-query -W -f='${Status}' libgl1 2>/dev/null | grep -q 'install ok installed' && return 0
+                dpkg-query -W -f='${Status}' libgl1-mesa-glx 2>/dev/null | grep -q 'install ok installed' && return 0
+                ;;
         esac
     fi
     if command -v rpm >/dev/null 2>&1; then
@@ -1920,6 +1924,11 @@ _linux_has_shared_lib() {
                 ;;
             libgomp)
                 if rpm -q libgomp >/dev/null 2>&1; then
+                    return 0
+                fi
+                ;;
+            libGL)
+                if rpm -q mesa-libGL >/dev/null 2>&1 || rpm -q libglvnd-glx >/dev/null 2>&1; then
                     return 0
                 fi
                 ;;
@@ -1958,7 +1967,7 @@ check_zbar() {
 }
 
 check_invoice_parse_runtime() {
-    # 系统侧：zbar + OpenMP（OCR onnxruntime）
+    # 系统侧：zbar + OpenMP + libGL（opencv-python 仍可能需要；headless 可不依赖但保留兼容）
     if is_windows_gitbash; then
         check_zbar
         return
@@ -1972,6 +1981,11 @@ check_invoice_parse_runtime() {
         return
     fi
     if ! _linux_has_shared_lib libgomp; then
+        echo "missing"
+        return
+    fi
+    # libGL：opencv-python 需要；若已切到 opencv-python-headless 可缺省，但仍建议安装
+    if ! _linux_has_shared_lib libGL; then
         echo "missing"
         return
     fi
@@ -2010,52 +2024,55 @@ install_invoice_parse_runtime() {
         log_ok "发票解析系统库已就绪（zbar + libgomp）"
         return 0
     fi
-    log_info "安装发票解析系统库（zbar 二维码 + libgomp OCR/onnxruntime）..."
+    log_info "安装发票解析系统库（zbar + libgomp + libGL）..."
     if ! _sudo_can_run; then
         log_error "需要 sudo 权限安装系统库（当前无免密/缓存凭据，apt 会卡住）"
         if [ -f /etc/debian_version ]; then
-            log_error "请先手动执行: sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1"
+            log_error "请先手动执行: sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1 libgl1"
         else
-            log_error "请先手动执行: sudo dnf install -y zbar libgomp  （或 yum）"
+            log_error "请先手动执行: sudo dnf install -y zbar libgomp mesa-libGL  （或 yum）"
         fi
         log_error "装完后重新执行: ./fast-deploy/deploy.sh migrate"
         return 1
     fi
     export DEBIAN_FRONTEND=noninteractive
     if [ -f /etc/debian_version ]; then
-        # 不强制 update（慢且易卡镜像）；装失败再 update 重试
-        if ! sudo -n apt-get install -y libzbar0 libgomp1; then
-            log_warn "直接安装失败，尝试 apt-get update 后重试..."
+        # Ubuntu 22.04+: libgl1；旧版兼容 libgl1-mesa-glx
+        local deb_pkgs=(libzbar0 libgomp1 libgl1)
+        if ! sudo -n apt-get install -y "${deb_pkgs[@]}"; then
+            log_warn "直接安装失败，尝试 apt-get update 后重试（含 libgl1-mesa-glx 兼容）..."
             sudo -n apt-get update -y || true
-            sudo -n apt-get install -y libzbar0 libgomp1 || {
-                log_error "安装失败，请手动执行: sudo apt-get install -y libzbar0 libgomp1"
-                return 1
-            }
+            sudo -n apt-get install -y libzbar0 libgomp1 libgl1 \
+                || sudo -n apt-get install -y libzbar0 libgomp1 libgl1-mesa-glx \
+                || {
+                    log_error "安装失败，请手动执行: sudo apt-get install -y libzbar0 libgomp1 libgl1"
+                    return 1
+                }
         fi
     elif is_linux_rhel_family || is_linux_fedora; then
         local pkg_mgr
         pkg_mgr="$(linux_pkg_manager)"
         [ -n "$pkg_mgr" ] || { log_error "未找到 dnf/yum"; return 1; }
-        sudo -n "$pkg_mgr" install -y zbar libgomp 2>/dev/null \
-            || sudo -n "$pkg_mgr" install -y zbar-libs libgomp 2>/dev/null \
-            || sudo -n "$pkg_mgr" install -y zbar zbar-libs libgomp \
+        sudo -n "$pkg_mgr" install -y zbar libgomp mesa-libGL 2>/dev/null \
+            || sudo -n "$pkg_mgr" install -y zbar-libs libgomp libglvnd-glx 2>/dev/null \
+            || sudo -n "$pkg_mgr" install -y zbar zbar-libs libgomp mesa-libGL \
             || {
-                log_error "安装失败，请手动执行: sudo $pkg_mgr install -y zbar libgomp"
+                log_error "安装失败，请手动执行: sudo $pkg_mgr install -y zbar libgomp mesa-libGL"
                 return 1
             }
     else
-        log_error "不支持的 Linux 发行版，请手动安装 libzbar0/zbar 与 libgomp1/libgomp"
+        log_error "不支持的 Linux 发行版，请手动安装 libzbar0、libgomp1、libgl1"
         return 1
     fi
     if command -v ldconfig >/dev/null 2>&1; then
         sudo -n ldconfig >/dev/null 2>&1 || true
     fi
     if [ "$(check_invoice_parse_runtime)" = "ok" ]; then
-        log_ok "发票解析系统库已就绪（zbar + libgomp）"
+        log_ok "发票解析系统库已就绪（zbar + libgomp + libGL）"
         return 0
     fi
-    log_warn "包已尝试安装，但检测仍未通过。请检查: ldconfig -p | grep -E 'zbar|gomp'"
-    log_warn "Debian/Ubuntu: dpkg -l libzbar0 libgomp1"
+    log_warn "包已尝试安装，但检测仍未通过。请检查: ldconfig -p | grep -E 'zbar|gomp|libGL'"
+    log_warn "Debian/Ubuntu: dpkg -l libzbar0 libgomp1 libgl1"
     return 0
 }
 

@@ -42,7 +42,8 @@ dependencies = [
 
 # Playwright：HTML→PDF。fast-deploy 在 PLAYWRIGHT_POSTINSTALL_ENABLE=1 时 uv sync --extra pdf 并安装 Chromium。
 # 浏览器目录见 deploy.env PLAYWRIGHT_BROWSERS_PATH（默认 .playwright-browsers/）。
-# OCR：发票 PDF 明细。fast-deploy sync_backend_deps 默认始终 --extra ocr；Linux 另装 libzbar0 + libgomp1。
+# OCR：发票 PDF 明细。fast-deploy sync_backend_deps 默认始终 --extra ocr。
+# Linux 系统库：libzbar0 + libgomp1 + libgl1（opencv）；Python 侧强制 opencv-python-headless，避免无头服务器缺 libGL。
 [project.optional-dependencies]
 pdf = [
     "playwright>=1.57.0,<1.58",
@@ -50,6 +51,7 @@ pdf = [
 ocr = [
     "pymupdf>=1.24.0",
     "rapidocr-onnxruntime>=1.3.0",
+    "opencv-python-headless>=4.8.0",
 ]
 dev = [
     "black>=23.0.0",
@@ -118,3 +120,7 @@ src_folder = "./src"
 # UV 静态版本管理配置
 # 使用 uv.lock 锁定依赖版本，不发布包，不生成 egg-info
 # 通过 uv sync --no-install-project 同步依赖，避免安装项目本身
+# rapidocr 依赖 opencv-python（需 libGL）；生产无头机改用 headless，并禁止再装带 GUI 的 opencv-python
+override-dependencies = [
+    "opencv-python ; python_version < '0'",
+]

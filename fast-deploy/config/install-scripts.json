@@ -42,26 +42,26 @@
     },
     "zbar": {
       "windows": "fast-deploy 由 ensure_pyzbar_windows_native 重装 pyzbar（自带 libzbar DLL）",
-      "linux": "sudo apt-get install -y libzbar0 libgomp1 || sudo dnf install -y zbar libgomp",
-      "ubuntu22": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1",
-      "debian": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1",
-      "rhel": "sudo dnf install -y zbar libgomp || sudo yum install -y zbar libgomp",
-      "fedora": "sudo dnf install -y zbar libgomp"
+      "linux": "sudo apt-get install -y libzbar0 libgomp1 libgl1 || sudo dnf install -y zbar libgomp mesa-libGL",
+      "ubuntu22": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1 libgl1",
+      "debian": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1 libgl1",
+      "rhel": "sudo dnf install -y zbar libgomp mesa-libGL || sudo yum install -y zbar libgomp mesa-libGL",
+      "fedora": "sudo dnf install -y zbar libgomp mesa-libGL"
     },
     "invoice-runtime": {
       "windows": "fast-deploy：pyzbar DLL + uv sync --extra ocr",
-      "linux": "sudo apt-get install -y libzbar0 libgomp1 && uv sync --extra ocr",
-      "ubuntu22": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1",
-      "debian": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1",
-      "rhel": "sudo dnf install -y zbar libgomp || sudo yum install -y zbar libgomp",
-      "fedora": "sudo dnf install -y zbar libgomp"
+      "linux": "sudo apt-get install -y libzbar0 libgomp1 libgl1 && uv sync --extra ocr",
+      "ubuntu22": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1 libgl1",
+      "debian": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1 libgl1",
+      "rhel": "sudo dnf install -y zbar libgomp mesa-libGL || sudo yum install -y zbar libgomp mesa-libGL",
+      "fedora": "sudo dnf install -y zbar libgomp mesa-libGL"
     }
   },
   "scripts_cn": {
     "node": "sudo apt update && sudo apt install -y nodejs npm",
     "python": "sudo apt update && sudo apt install -y python3 python3-venv python3-pip",
     "uv": "pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple uv 2>/dev/null || python3 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple uv",
-    "zbar": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1",
-    "invoice-runtime": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1"
+    "zbar": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1 libgl1",
+    "invoice-runtime": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1 libgl1"
   }
 }
