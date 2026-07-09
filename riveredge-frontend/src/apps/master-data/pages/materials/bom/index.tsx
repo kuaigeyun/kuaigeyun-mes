@@ -488,9 +488,16 @@ const BOMPage: React.FC = () => {
   const [parentQuantity, setParentQuantity] = useState<number>(1.0);
   const quantityFormRef = useRef<ProFormInstance>();
   
-  // 物料列表（用于下拉选择）
+  // 物料列表（表单下拉 + 列表展示名称；列表展示按 BOM 引用 ID 补齐，不依赖前 1000 条）
   const [materials, setMaterials] = useState<Material[]>([]);
+  const materialsRef = useRef<Material[]>([]);
+  materialsRef.current = materials;
   const [materialsLoading, setMaterialsLoading] = useState(false);
+  const materialsById = useMemo(() => {
+    const map = new Map<number, Material>();
+    materials.forEach((m) => map.set(m.id, m));
+    return map;
+  }, [materials]);
   const [mainMaterialScope, setMainMaterialScope] = useState<'make' | 'all'>('make');
   const mainMaterialOptions = useMemo(
     () =>
@@ -563,7 +570,7 @@ const BOMPage: React.FC = () => {
   }, [currentUser]);
 
   /**
-   * 加载物料列表
+   * 加载物料列表（表单下拉初始范围；列表名称展示另按 BOM 引用 ID 精确补齐）
    */
   useEffect(() => {
     const loadMaterials = async () => {
@@ -579,6 +586,60 @@ const BOMPage: React.FC = () => {
     };
     loadMaterials();
   }, []);
+
+  const ensureMaterialsByIds = async (ids: Iterable<number>): Promise<Material[]> => {
+    const uniqueIds = Array.from(
+      new Set(
+        Array.from(ids)
+          .map((id) => Number(id))
+          .filter((id) => Number.isFinite(id) && id > 0),
+      ),
+    );
+    if (!uniqueIds.length) return materialsRef.current;
+
+    const existing = new Map(materialsRef.current.map((m) => [m.id, m]));
+    const missing = uniqueIds.filter((id) => !existing.has(id));
+    if (!missing.length) return materialsRef.current;
+
+    const chunkSize = 500;
+    const fetched: Material[] = [];
+    for (let i = 0; i < missing.length; i += chunkSize) {
+      const chunk = missing.slice(i, i + chunkSize);
+      const result = await materialApi.list({ ids: chunk, limit: chunk.length });
+      fetched.push(...(result.items ?? []));
+    }
+
+    const merged = [...materialsRef.current];
+    const seen = new Set(merged.map((m) => m.id));
+    fetched.forEach((m) => {
+      if (!seen.has(m.id)) {
+        merged.push(m);
+        seen.add(m.id);
+      }
+    });
+    materialsRef.current = merged;
+    setMaterials(merged);
+    return merged;
+  };
+
+  const collectBomMaterialIds = (
+    rows: Array<MaterialBOMRow | BOMGroupRow | BOM | Record<string, unknown>>,
+  ): number[] => {
+    const ids = new Set<number>();
+    const walk = (nodes: any[] | undefined) => {
+      (nodes ?? []).forEach((node) => {
+        if (node?.materialId != null) ids.add(Number(node.materialId));
+        if (node?.material_id != null) ids.add(Number(node.material_id));
+        if (node?.componentId != null) ids.add(Number(node.componentId));
+        if (node?.component_id != null) ids.add(Number(node.component_id));
+        if (Array.isArray(node?.children)) walk(node.children);
+        if (Array.isArray(node?.items)) walk(node.items);
+        if (Array.isArray(node?.versions)) walk(node.versions);
+      });
+    };
+    walk(rows);
+    return Array.from(ids);
+  };
 
   useEffect(() => {
     if (!(modalVisible && !isEdit)) return;
@@ -1136,13 +1197,21 @@ const BOMPage: React.FC = () => {
         const convertToTreeData = (items: BOMHierarchyItem[], parentPath: string = ''): DataNode[] => {
           return items.map((item, index) => {
             const currentPath = parentPath ? `${parentPath}/${index}` : `${index}`;
-            // 直接使用后端返回的 componentCode 和 componentName，如果不存在则尝试从 materials 中查找
+            // 直接使用后端返回的 componentCode 和 componentName（与层级接口同源）
             let materialName = '';
             if (item.componentCode && item.componentName) {
               materialName = `${item.componentCode} - ${item.componentName}`;
             } else if (item.componentId) {
-              const material = materials.find(m => m.id === item.componentId);
-              materialName = material ? `${material.code} - ${material.name}` : `${t('app.master-data.bom.materialIdPrefix')}: ${item.componentId}`;
+              const material = materialsById.get(item.componentId);
+              if (material) {
+                materialName = `${material.code || material.mainCode || ''} - ${material.name}`;
+              } else {
+                console.error('[BOM] hierarchy material master missing', item.componentId);
+                materialName = t('app.master-data.bom.materialNameMissing', {
+                  id: item.componentId,
+                  defaultValue: `物料主数据未加载（ID: ${item.componentId}）`,
+                });
+              }
             } else {
               materialName = t('app.master-data.bom.materialIdUnknown');
             }
@@ -1332,11 +1401,18 @@ const BOMPage: React.FC = () => {
 
   /**
    * 获取物料名称（用于列表主物料/子物料列展示）
+   * 列表请求会先按 BOM 引用 ID 精确补齐物料主数据；此处不再用「物料ID」软兜底掩盖未加载。
    */
   const getMaterialName = (materialId: number | undefined | null): string => {
     if (materialId == null) return '-';
-    const material = materials.find(m => m.id === materialId);
-    if (!material) return `${t('app.master-data.bom.materialIdPrefix')}: ${materialId}`;
+    const material = materialsById.get(materialId);
+    if (!material) {
+      console.error('[BOM] material master missing for display', materialId);
+      return t('app.master-data.bom.materialNameMissing', {
+        id: materialId,
+        defaultValue: `物料主数据未加载（ID: ${materialId}）`,
+      });
+    }
     const code = material.code || material.mainCode || '';
     const spec = material.specification ? ` (${material.specification})` : '';
     return `${code} - ${material.name}${spec}`;
@@ -1609,10 +1685,10 @@ const BOMPage: React.FC = () => {
     });
 
     /** 按物料编号排序子件；同编号时按 path / priority / id 稳定排序，避免乱序 */
-    const getComponentCode = (componentId: number) =>
-      materials.find((m) => m.id === componentId)?.mainCode ||
-      materials.find((m) => m.id === componentId)?.code ||
-      '';
+    const getComponentCode = (componentId: number) => {
+      const mat = materialsRef.current.find((m) => m.id === componentId);
+      return mat?.mainCode || mat?.code || '';
+    };
     const sortItemsByCode = (items: BOM[] | undefined): BOM[] => {
       const list = [...(items ?? [])];
       return list.sort((a, b) => {
@@ -2904,9 +2980,12 @@ const BOMPage: React.FC = () => {
                 }
                 groupKeyToUuidsRef.current = keyToUuids;
                 // 传入完整 groupRows 作为 allGroupRows，否则成品下的半成品无法展开
+                const resolvedMaterials = await ensureMaterialsByIds(
+                  collectBomMaterialIds([...filteredGroupRows, ...groupRows]),
+                );
                 const materialRows = groupBomsByMaterial(filteredGroupRows, selectedVersionByMaterial, groupRows);
                 return enrichBomListPage(
-                  pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, materials)
+                  pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, resolvedMaterials)
                 );
               }
               throw apiErr;
@@ -2959,9 +3038,12 @@ const BOMPage: React.FC = () => {
                   filteredGroupRows = filteredGroupRows.filter((r) => r.approvalStatus === searchFormValues.approvalStatus);
                 }
                 groupKeyToUuidsRef.current = keyToUuids;
+                const resolvedMaterials = await ensureMaterialsByIds(
+                  collectBomMaterialIds([...filteredGroupRows, ...groupRows]),
+                );
                 const materialRows = groupBomsByMaterial(filteredGroupRows, selectedVersionByMaterial, groupRows);
                 return enrichBomListPage(
-                  pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, materials)
+                  pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, resolvedMaterials)
                 );
               }
               throw batchErr;
@@ -3064,9 +3146,12 @@ const BOMPage: React.FC = () => {
               frontierSemiIds = nextFrontier;
             }
             groupKeyToUuidsRef.current = keyToUuids;
+            const resolvedMaterials = await ensureMaterialsByIds(
+              collectBomMaterialIds([...displayGroupRows, ...allGroupRowsForNesting]),
+            );
             const materialRows = groupBomsByMaterial(displayGroupRows, selectedVersionByMaterial, allGroupRowsForNesting);
             return enrichBomListPage(
-              pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, materials)
+              pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, resolvedMaterials)
             );
           } catch (error: any) {
             console.error('获取BOM列表失败:', error);

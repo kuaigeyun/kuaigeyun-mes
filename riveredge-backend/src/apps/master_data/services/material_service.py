@@ -78,6 +78,10 @@ RELATION_IMPORT_FIELD_ALIASES: Dict[str, List[str]] = {
     "waste_rate": ["损耗率", "wasteRate", "waste_rate", "waste rate"],
     "is_required": ["是否必选", "isRequired", "is_required", "required"],
     "remark": ["备注", "remark", "notes"],
+    "bom_code": ["BOM编号", "BOM编码", "bomCode", "bom_code", "bom code"],
+    "bom_name": ["BOM名称", "bomName", "bom_name", "bom name"],
+    "version": ["版本号", "版本", "version"],
+    "base_quantity": ["基准数量", "baseQuantity", "base_quantity", "base quantity"],
     "material_name": [
         "物料名称",
         "产品名称",
@@ -2024,6 +2028,7 @@ class MaterialService:
         created_end_date: Optional[str] = None,
         updated_start_date: Optional[str] = None,
         updated_end_date: Optional[str] = None,
+        ids: Optional[List[int]] = None,
     ) -> MaterialListResponse:
         """
         获取物料列表
@@ -2042,6 +2047,7 @@ class MaterialService:
             brand: 品牌（可选，模糊匹配）
             model: 型号（可选，模糊匹配）
             base_unit: 基础单位（可选，精确匹配）
+            ids: 按物料主键批量精确查询（可选，用于 BOM 等场景补齐名称）
 
         Returns:
             MaterialListResponse: 物料列表响应（含总数）
@@ -2050,6 +2056,12 @@ class MaterialService:
             tenant_id=tenant_id,
             deleted_at__isnull=True
         )
+
+        if ids is not None:
+            unique_ids = list(dict.fromkeys(int(i) for i in ids if i is not None))
+            if not unique_ids:
+                return MaterialListResponse(items=[], total=0)
+            query = query.filter(id__in=unique_ids)
 
         if no_group:
             query = query.filter(group_id__isnull=True)
@@ -3804,6 +3816,7 @@ class MaterialService:
                 "material_id": b.material_id,
                 "component_id": b.component_id,
                 "quantity": b.quantity,
+                "base_quantity": getattr(b, "base_quantity", None) or Decimal("1"),
                 "unit": (b.unit and str(b.unit).strip()) or None,
                 "waste_rate": getattr(b, "waste_rate", None) or Decimal("0"),
                 "is_required": getattr(b, "is_required", True),
@@ -3811,6 +3824,7 @@ class MaterialService:
                 "path": b.path,
                 "version": b.version or "1.0",
                 "bom_code": b.bom_code,
+                "bom_name": getattr(b, "bom_name", None),
                 "is_default": getattr(b, "is_default", False),
                 "effective_date": b.effective_date,
                 "expiry_date": b.expiry_date,
@@ -3853,6 +3867,7 @@ class MaterialService:
             SELECT material_id, version,
                    MAX(bom_code) AS bom_code,
                    MAX(bom_name) AS bom_name,
+                   MAX(base_quantity) AS base_quantity,
                    MAX(approval_status) AS approval_status,
                    BOOL_OR(is_default) AS is_default,
                    BOOL_OR(is_obsolete) AS is_obsolete,
@@ -3875,10 +3890,11 @@ class MaterialService:
                     "version": r[1] or "1.0",
                     "bom_code": r[2],
                     "bom_name": r[3],
-                    "approval_status": (r[4] or "draft").lower(),
-                    "is_default": bool(r[5]) if r[5] is not None else False,
-                    "is_obsolete": bool(r[6]) if r[6] is not None else False,
-                    "item_count": int(r[7]) if r[7] is not None else 0,
+                    "base_quantity": r[4],
+                    "approval_status": (r[5] or "draft").lower(),
+                    "is_default": bool(r[6]) if r[6] is not None else False,
+                    "is_obsolete": bool(r[7]) if r[7] is not None else False,
+                    "item_count": int(r[8]) if r[8] is not None else 0,
                 }
                 for r in raw
             ]
@@ -3943,6 +3959,7 @@ class MaterialService:
                 "material_id": b.material_id,
                 "component_id": b.component_id,
                 "quantity": b.quantity,
+                "base_quantity": getattr(b, "base_quantity", None) or Decimal("1"),
                 "unit": (b.unit and str(b.unit).strip()) or None,
                 "waste_rate": getattr(b, "waste_rate", None) or Decimal("0"),
                 "is_required": getattr(b, "is_required", True),
@@ -3950,6 +3967,7 @@ class MaterialService:
                 "path": b.path,
                 "version": b.version or "1.0",
                 "bom_code": b.bom_code,
+                "bom_name": getattr(b, "bom_name", None),
                 "is_default": getattr(b, "is_default", False),
                 "effective_date": b.effective_date,
                 "expiry_date": b.expiry_date,
@@ -5631,6 +5649,28 @@ class MaterialService:
 
                 required_val = _cell(row, canonical_idx["is_required"]).lower()
                 is_required = required_val not in ("否", "false", "0", "no", "n")
+
+                version_val = _cell(row, canonical_idx.get("version")) or None
+                bom_code_val = _cell(row, canonical_idx.get("bom_code")) or None
+                bom_name_raw = _cell(row, canonical_idx.get("bom_name"))
+                # 有列但为空时传 ""，让 resolve_version_bom_name 区分「未传」与「显式清空」
+                bom_name_val = (
+                    bom_name_raw
+                    if canonical_idx.get("bom_name") is not None
+                    else None
+                )
+                base_qty_raw = _cell(row, canonical_idx.get("base_quantity"))
+                base_qty_val = (
+                    _parse_decimal(base_qty_raw, "基准数量", row_no, errors)
+                    if base_qty_raw
+                    else None
+                )
+                if base_qty_raw and base_qty_val is None:
+                    continue
+                if base_qty_val is not None and base_qty_val <= 0:
+                    errors.append(f"第 {row_no} 行基准数量必须大于 0")
+                    continue
+
                 bom_payload.append(
                     {
                         "parent_code": parent_code,
@@ -5640,6 +5680,10 @@ class MaterialService:
                         "waste_rate": waste_rate,
                         "is_required": is_required,
                         "remark": _cell(row, canonical_idx["remark"]) or None,
+                        "version": version_val,
+                        "bom_code": bom_code_val,
+                        "bom_name": bom_name_val,
+                        "base_quantity": base_qty_val,
                     }
                 )
 

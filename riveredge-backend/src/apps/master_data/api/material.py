@@ -1542,6 +1542,7 @@ async def list_materials(
     brand: Optional[str] = Query(None, description="品牌（模糊匹配）"),
     model: Optional[str] = Query(None, description="型号（模糊匹配）"),
     base_unit: Optional[str] = Query(None, alias="baseUnit", description="基础单位（精确匹配）"),
+    ids: Optional[List[int]] = Query(None, description="物料主键ID列表（精确匹配，用于按引用补齐）"),
     sort_by: Optional[str] = Query(
         None,
         alias="sortBy",
@@ -1573,7 +1574,7 @@ async def list_materials(
     获取物料列表
 
     - **skip**: 跳过数量（默认：0）
-    - **limit**: 限制数量（默认：100，最大：1000）
+    - **limit**: 限制数量（默认：100，最大：2000）
     - **group_id**: 物料分组ID（可选，用于过滤）
     - **is_active**: 是否启用（可选）
     - **keyword**: 搜索关键词（物料编码、名称或规格）
@@ -1584,11 +1585,16 @@ async def list_materials(
     - **brand**: 品牌（可选，模糊匹配）
     - **model**: 型号（可选，模糊匹配）
     - **base_unit**: 基础单位（可选，精确匹配）
+    - **ids**: 物料主键ID列表（可选，精确匹配）
     """
+    effective_limit = limit
+    if ids:
+        # 按 ID 精确查询时，默认一次返回全部命中行（仍受 le=2000 约束）
+        effective_limit = min(2000, max(limit, len(ids)))
     return await MaterialService.list_materials(
         tenant_id,
         skip,
-        limit,
+        effective_limit,
         group_id,
         is_active,
         keyword,
@@ -1608,6 +1614,7 @@ async def list_materials(
         created_end_date,
         updated_start_date,
         updated_end_date,
+        ids,
     )
 
 

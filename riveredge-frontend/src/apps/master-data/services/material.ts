@@ -293,10 +293,15 @@ export const materialApi = {
     if (!params) {
       return unwrap(await api.get('/apps/master-data/materials'));
     }
-    const { sortBy, sortOrder, treeView, mastersOnly, ...rest } = params;
+    const { sortBy, sortOrder, treeView, mastersOnly, ids, ...rest } = params;
     const limit = clampMaterialListLimit((rest as Record<string, unknown>).limit);
     const backendParams: Record<string, unknown> =
       limit != null ? { ...rest, limit } : { ...rest };
+    if (ids?.length) {
+      backendParams.ids = ids;
+      // 按 ID 查询时一次取齐本批，避免默认 limit=100 截断
+      backendParams.limit = clampMaterialListLimit(Math.max(limit ?? 0, ids.length)) ?? ids.length;
+    }
     if (sortBy != null && sortBy !== '') backendParams.sort_by = sortBy;
     if (sortOrder != null && sortOrder !== '') backendParams.sort_order = sortOrder;
     if (treeView) backendParams.treeView = true;

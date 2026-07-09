@@ -320,6 +320,8 @@ export interface MaterialListParams {
   code?: string;
   name?: string;
   sourceType?: string; // 物料来源类型（Make/Buy/Outsource/Phantom）
+  /** 按物料主键精确查询（BOM 列表按引用补齐名称） */
+  ids?: number[];
   /** 后端：main_code | name | created_at | updated_at */
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
@@ -645,6 +647,7 @@ export interface BOMGroupSummary {
   version: string;
   bom_code?: string;
   bom_name?: string | null;
+  base_quantity?: number | null;
   approval_status: string;
   is_default: boolean;
   is_obsolete: boolean;

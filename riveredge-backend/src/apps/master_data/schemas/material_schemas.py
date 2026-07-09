@@ -995,6 +995,7 @@ class BOMGroupSummary(BaseModel):
     is_obsolete: bool = Field(False, description="是否已失效")
     item_count: int = Field(..., description="该版本子件数量")
     bom_name: Optional[str] = Field(None, description="BOM名称")
+    base_quantity: Optional[Decimal] = Field(None, description="基准数量")
 
 
 class BOMMaterialVersionItem(BaseModel):
