@@ -709,6 +709,7 @@ wizard_env_scan() {
     fi
     st="$(check_playwright)"; wizard_report_component "Playwright" "$st"; [ "$st" = "ok" ] || [ "$st" = "skipped" ] || failed=1
     st="$(check_playwright_chromium)"; wizard_report_component "Chromium" "$st"
+    st="$(check_zbar)"; wizard_report_component "zbar (发票二维码)" "$st"; [ "$st" = "ok" ] || failed=1
     if [ "$failed" -eq 0 ]; then
         wizard_say_ok "环境检测通过，所有依赖已满足"
     else
@@ -980,6 +981,7 @@ wizard_component_display_name() {
         uv) echo "uv" ;;
         postgresql) echo "PostgreSQL 15+" ;;
         caddy) echo "Caddy" ;;
+        zbar) echo "zbar (发票二维码)" ;;
         *) echo "$1" ;;
     esac
 }
@@ -1025,6 +1027,12 @@ wizard_install_method_hint() {
                     ;;
             esac
             ;;
+        zbar)
+            case "$plat" in
+                rhel|fedora) echo "dnf/yum 安装 zbar" ;;
+                *) echo "apt 安装 libzbar0" ;;
+            esac
+            ;;
         *) echo "" ;;
     esac
 }
@@ -1046,6 +1054,7 @@ wizard_install_deps() {
     if [ "$DEPLOY_MODE" = "prod" ]; then
         st="$(check_caddy)"; [ "$st" != "ok" ] && plan+=("caddy:$st")
     fi
+    st="$(check_zbar)"; [ "$st" != "ok" ] && plan+=("zbar:$st")
 
     if [ "${#plan[@]}" -eq 0 ]; then
         wizard_say_ok "所有依赖已就绪，无需安装"

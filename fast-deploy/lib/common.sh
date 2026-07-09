@@ -1773,6 +1773,8 @@ sync_backend_deps() {
     ) || { log_error "Python 依赖同步失败"; exit 1; }
     if is_windows_gitbash; then
         ensure_pyzbar_windows_native
+    elif [ "$(uname -s)" = "Linux" ]; then
+        ensure_linux_zbar_runtime
     fi
 }
 
@@ -1879,6 +1881,86 @@ ensure_pyzbar_windows_native() {
     else
         log_warn "仍未找到 libzbar-64.dll，二维码图片解析不可用"
     fi
+}
+
+# Linux：pyzbar 依赖系统 libzbar（发票 PDF 二维码解析）
+check_zbar() {
+    if is_windows_gitbash; then
+        local dll="$BACKEND_DIR/.venv/Lib/site-packages/pyzbar/libzbar-64.dll"
+        if [ -f "$dll" ]; then
+            echo "ok"
+        else
+            echo "missing"
+        fi
+        return
+    fi
+    if [ "$(uname -s)" != "Linux" ]; then
+        echo "ok"
+        return
+    fi
+    if command -v ldconfig >/dev/null 2>&1 && ldconfig -p 2>/dev/null | grep -q 'libzbar\.so'; then
+        echo "ok"
+        return
+    fi
+    if ls /usr/lib/*/libzbar.so* /usr/lib64/libzbar.so* /lib/*/libzbar.so* 2>/dev/null | grep -q .; then
+        echo "ok"
+        return
+    fi
+    echo "missing"
+}
+
+install_zbar_runtime() {
+    if is_windows_gitbash; then
+        ensure_pyzbar_windows_native
+        return 0
+    fi
+    if [ "$(uname -s)" != "Linux" ]; then
+        log_warn "当前平台无需安装系统 zbar 运行库"
+        return 0
+    fi
+    log_info "安装 zbar 运行库（pyzbar / 发票二维码解析）..."
+    if [ -f /etc/debian_version ]; then
+        sudo apt-get update -y || true
+        sudo apt-get install -y libzbar0 || {
+            log_error "安装 libzbar0 失败，请手动执行: sudo apt-get install -y libzbar0"
+            return 1
+        }
+    elif is_linux_rhel_family || is_linux_fedora; then
+        local pkg_mgr
+        pkg_mgr="$(linux_pkg_manager)"
+        [ -n "$pkg_mgr" ] || { log_error "未找到 dnf/yum"; return 1; }
+        # RHEL/Fedora 包名多为 zbar；部分发行版为 zbar-libs
+        sudo "$pkg_mgr" install -y zbar zbar-libs 2>/dev/null \
+            || sudo "$pkg_mgr" install -y zbar \
+            || {
+                log_error "安装 zbar 失败，请手动执行: sudo $pkg_mgr install -y zbar"
+                return 1
+            }
+    else
+        log_error "不支持的 Linux 发行版，请手动安装 libzbar（Debian: libzbar0；RHEL: zbar）"
+        return 1
+    fi
+    if command -v ldconfig >/dev/null 2>&1; then
+        sudo ldconfig >/dev/null 2>&1 || true
+    fi
+    if [ "$(check_zbar)" = "ok" ]; then
+        log_ok "zbar 运行库已就绪"
+        return 0
+    fi
+    log_warn "已尝试安装 zbar，但未检测到 libzbar.so；发票二维码解析可能仍不可用"
+    return 0
+}
+
+ensure_linux_zbar_runtime() {
+    [ "$(uname -s)" = "Linux" ] || return 0
+    if [ "$(check_zbar)" = "ok" ]; then
+        return 0
+    fi
+    log_warn "未检测到 libzbar，正在安装系统运行库（发票 PDF 二维码解析需要）..."
+    install_zbar_runtime || {
+        log_warn "zbar 安装未成功，二维码图片解析不可用，但不影响后端启动"
+        return 0
+    }
 }
 
 check_playwright() {
@@ -3354,6 +3436,10 @@ run_install_component() {
         install_uv_shell || return 1
         return 0
     fi
+    if [ "$comp" = "zbar" ]; then
+        install_zbar_runtime || return 1
+        return 0
+    fi
     local cmd
     cmd="$(get_install_command "$comp")"
     [ -n "$cmd" ] || { log_error "无 $comp 的安装命令"; return 1; }
@@ -3402,6 +3488,13 @@ cmd_check() {
         missing) log_warn "Chromium — 未安装（生产 start 会同步安装）" ;;
         *) log_warn "Chromium: $st" ;;
     esac
+    st="$(check_zbar)"
+    if [ "$st" = "ok" ]; then
+        log_ok "zbar (pyzbar 运行库)"
+    else
+        log_warn "zbar: $st（发票 PDF 二维码解析需要 libzbar0 / zbar）"
+        failed=1
+    fi
     return $failed
 }
 
@@ -3432,6 +3525,8 @@ cmd_install() {
     if [ "$DEPLOY_MODE" = "prod" ]; then
         run_install_component caddy "$(check_caddy)" || return 1
     fi
+    # 发票 PDF 二维码解析：Linux 需系统 libzbar；Windows 由 pyzbar 自带 DLL
+    run_install_component zbar "$(check_zbar)" || true
     log_warn "若刚安装系统软件，请重新打开终端或刷新 PATH 后再次 check"
     cmd_check || exit 1
 }
