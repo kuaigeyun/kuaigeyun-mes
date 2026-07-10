@@ -749,23 +749,43 @@ const DemandComputationPage: React.FC = () => {
   const [searchParams] = useSearchParams()
   const actionRef = useRef<ActionType>(null)
   const formRef = useRef<any>(null)
-  const computationRowsByIdRef = useRef<Map<string, DemandComputation>>(new Map())
-  const listRequestSeqRef = useRef(0)
-  const [listRevision, setListRevision] = useState(0)
+  /** 列表当前页数据（唯一源：UniTable onTableDataChange，与表格展示一致） */
+  const [tableComputations, setTableComputations] = useState<DemandComputation[]>([])
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  const [selectedComputationForToolbar, setSelectedComputationForToolbar] = useState<DemandComputation | null>(null)
   const computationPerms = useResourcePermissions(DEMAND_COMPUTATION_RESOURCE)
 
-  const resolveComputationRowByKey = useCallback((key: React.Key): DemandComputation | null => {
-    const row = computationRowsByIdRef.current.get(String(key))
-    return row ?? null
-  }, [])
+  const resolveSelectedComputation = useCallback(
+    (keys: React.Key[], rows: DemandComputation[]) => {
+      if (keys.length !== 1) return null
+      return rows.find((row) => String(row.id) === String(keys[0])) ?? null
+    },
+    [],
+  )
+
+  const handleRowSelectionChange = useCallback(
+    (keys: React.Key[]) => {
+      setSelectedRowKeys(keys)
+      setSelectedComputationForToolbar(resolveSelectedComputation(keys, tableComputations))
+    },
+    [resolveSelectedComputation, tableComputations],
+  )
+
+  useEffect(() => {
+    if (selectedRowKeys.length !== 1) {
+      setSelectedComputationForToolbar(null)
+      return
+    }
+    const row = resolveSelectedComputation(selectedRowKeys, tableComputations)
+    if (row) setSelectedComputationForToolbar(row)
+  }, [resolveSelectedComputation, selectedRowKeys, tableComputations])
 
   const selectedComputationsForBatch = React.useMemo(
     () =>
       selectedRowKeys
-        .map((key) => resolveComputationRowByKey(key))
+        .map((key) => tableComputations.find((row) => String(row.id) === String(key)) ?? null)
         .filter((row): row is DemandComputation => row != null),
-    [listRevision, resolveComputationRowByKey, selectedRowKeys],
+    [selectedRowKeys, tableComputations],
   )
 
   const invalidateStatistics = () => {
@@ -774,6 +794,7 @@ const DemandComputationPage: React.FC = () => {
 
   const handleComputationBatchSuccess = useCallback(() => {
     setSelectedRowKeys([])
+    setSelectedComputationForToolbar(null)
     invalidateStatistics()
     actionRef.current?.reload()
   }, [queryClient])
@@ -2020,12 +2041,9 @@ const DemandComputationPage: React.FC = () => {
     [computationPerms.canAction, computationPerms.canDelete, computationPerms.canUpdate, handleDelete, handleDetail, handleExecute, handleRecompute, messageApi, demandComputationLifecycleValueEnum, t],
   )
 
-  const selectedComputationForToolbar = useMemo(() => {
-    if (selectedRowKeys.length !== 1) return null
-    return resolveComputationRowByKey(selectedRowKeys[0]) ?? null
-  }, [listRevision, resolveComputationRowByKey, selectedRowKeys])
-
-  const canUseToolbarPush = selectedComputationForToolbar ? isComputationCompleted(selectedComputationForToolbar.computation_status) : false
+  const canUseToolbarPush = selectedComputationForToolbar
+    ? isComputationCompleted(selectedComputationForToolbar.computation_status)
+    : false
 
   const [toolbarPushOptions, setToolbarPushOptions] = useState<PushOptions | null>(null)
 
@@ -2211,26 +2229,17 @@ const DemandComputationPage: React.FC = () => {
               : apiParams.created_start_date
           }
 
-          const requestSeq = ++listRequestSeqRef.current
           const result = await listDemandComputations(apiParams)
-          if (requestSeq === listRequestSeqRef.current) {
-            const rows = result.data || []
-            computationRowsByIdRef.current = new Map(
-              rows
-                .filter((row: DemandComputation) => row.id != null)
-                .map((row: DemandComputation) => [String(row.id), row]),
-            )
-            setListRevision((revision) => revision + 1)
-          }
           return {
             data: result.data || [],
             success: result.success,
             total: result.total || 0,
           }
         }}
+        onTableDataChange={setTableComputations}
         rowKey="id"
         selectedRowKeys={selectedRowKeys}
-        onRowSelectionChange={setSelectedRowKeys}
+        onRowSelectionChange={handleRowSelectionChange}
         enableRowSelection={true}
         showDeleteButton={computationPerms.canDelete}
         onDelete={async (keys) => {
