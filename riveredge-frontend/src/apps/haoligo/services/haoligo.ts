@@ -3643,6 +3643,7 @@ export interface FinanceInvoiceRow {
   status: string;
   reject_reason?: string | null;
   remark?: string | null;
+  qr_raw_text?: string | null;
   line_count?: number;
   lines?: FinanceInvoiceLineRow[];
 }

@@ -125,6 +125,7 @@ class FinanceInvoiceOut(BaseModel):
     status: str
     reject_reason: Optional[str] = None
     remark: Optional[str] = None
+    qr_raw_text: Optional[str] = None
     line_count: int = 0
     lines: List[FinanceInvoiceLineOut] = Field(default_factory=list)
 
@@ -298,6 +299,7 @@ async def _serialize_invoice(row: HaoligoFinanceInvoice, *, with_lines: bool = F
         status=row.status,
         reject_reason=row.reject_reason,
         remark=row.remark,
+        qr_raw_text=row.qr_raw_text,
         line_count=line_count,
         lines=lines,
     )

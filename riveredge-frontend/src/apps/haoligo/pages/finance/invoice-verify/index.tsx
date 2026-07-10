@@ -445,6 +445,9 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
   const [createLoading, setCreateLoading] = useState(false);
   const [parseLoading, setParseLoading] = useState(false);
   const [createFormLines, setCreateFormLines] = useState<Record<string, unknown>[]>([]);
+  const [pendingCreateFormValues, setPendingCreateFormValues] = useState<Record<string, unknown> | null>(
+    null,
+  );
   const [editingInvoiceId, setEditingInvoiceId] = useState<number | null>(null);
 
   const [detailOpen, setDetailOpen] = useState(false);
@@ -512,18 +515,16 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
   const closeCreateModal = () => {
     setCreateOpen(false);
     setCreateFormLines([]);
+    setPendingCreateFormValues(null);
     setEditingInvoiceId(null);
   };
 
   const openCreate = () => {
-    formRef.current?.resetFields();
     setExtraSupplierOption(null);
     setSupplierPriceList([]);
     setEditingInvoiceId(null);
     const initialLines = [{ line_no: 1, quantity: 1 }];
-    formRef.current?.setFieldsValue({
-      lines: initialLines,
-    });
+    setPendingCreateFormValues({ lines: initialLines });
     setCreateFormLines(initialLines);
     setCreateOpen(true);
   };
@@ -562,15 +563,16 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
           : null,
       );
       await reloadSupplierPrices(full.supplier_id);
-      formRef.current?.setFieldsValue({
+      const formValues = {
         supplier_id: full.supplier_id,
         invoice_no: full.invoice_no,
         invoice_code: full.invoice_code,
         invoice_date: full.invoice_date ? dayjs(full.invoice_date) : undefined,
-        qr_raw_text: undefined,
+        qr_raw_text: full.qr_raw_text?.trim() || undefined,
         remark: full.remark,
         lines,
-      });
+      };
+      setPendingCreateFormValues(formValues);
       setCreateFormLines(lines);
       setCreateOpen(true);
     } catch (e) {
@@ -997,6 +999,16 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
         title={editingInvoiceId != null ? '编辑发票' : '录入发票'}
         open={createOpen}
         onClose={closeCreateModal}
+        afterOpenChange={(open) => {
+          if (open && pendingCreateFormValues) {
+            formRef.current?.setFieldsValue(pendingCreateFormValues);
+            return;
+          }
+          if (!open) {
+            setPendingCreateFormValues(null);
+            formRef.current?.resetFields?.();
+          }
+        }}
         formRef={formRef}
         loading={createLoading}
         isEdit={editingInvoiceId != null}
