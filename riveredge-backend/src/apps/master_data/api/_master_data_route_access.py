@@ -15,6 +15,7 @@ _PATH_MODULE_RULES: tuple[tuple[str, str], ...] = (
     ("/operations", "process:operation"),
     ("/route-templates", "process:route"),
     ("/routes", "process:route"),
+    ("/product-process", "process:route"),
     ("/sop", "process:sop"),
     ("/warehouses", "warehouse:warehouse"),
     ("/storage-areas", "warehouse:storage-area"),

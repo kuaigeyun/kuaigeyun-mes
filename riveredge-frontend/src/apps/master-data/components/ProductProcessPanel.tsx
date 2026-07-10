@@ -93,12 +93,67 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
     [],
   );
 
-  const buildUserIdToUuidMap = useCallback(async () => {
-    const usersRes = await searchUserDisplay({ page: 1, page_size: 200 });
-    const map = new Map<number, string>();
-    (usersRes?.items ?? []).forEach((u) => map.set(u.id, u.uuid));
-    return map;
+  const buildUserIdToUuidMap = useCallback(async (): Promise<Map<number, string>> => {
+    try {
+      const usersRes = await searchUserDisplay({ page: 1, page_size: 200 });
+      const map = new Map<number, string>();
+      (usersRes?.items ?? []).forEach((u) => map.set(u.id, u.uuid));
+      return map;
+    } catch {
+      // 人员展示搜索依赖 system:user:display/read；缺失时不应阻断路线工序模板导入
+      return new Map();
+    }
   }, []);
+
+  const loadAllOperations = useCallback(async () => {
+    return unwrapProcessPagedList(await operationApi.list({ limit: 1000, isActive: true }));
+  }, []);
+
+  const resolveProcessRouteDetail = useCallback(async (uuid: string): Promise<ProcessRoute> => {
+    try {
+      return await processRouteApi.get(uuid);
+    } catch (getError) {
+      const cached = processRoutesRef.current.find((route) => route.uuid === uuid);
+      const cachedSequence = cached?.operation_sequence ?? cached?.operationSequence;
+      if (cached && cachedSequence) {
+        return cached;
+      }
+      throw getError;
+    }
+  }, []);
+
+  const importLinesFromRoute = useCallback(
+    async (uuid: string) => {
+      try {
+        const template = await processRouteApi.getOperationTemplate(uuid);
+        setAllowOperationJump(Boolean(template.allowOperationJump));
+        setLines((template.lines ?? []).map((ln) => productProcessLineFromApi(ln)));
+        return;
+      } catch {
+        // 旧版后端无 operation-template 时回退客户端解析
+      }
+
+      const detail = await resolveProcessRouteDetail(uuid);
+      const jump = Boolean(
+        (detail as { allow_operation_jump?: boolean }).allow_operation_jump ??
+          (detail as { allowOperationJump?: boolean }).allowOperationJump,
+      );
+      const userIdToUuid = await buildUserIdToUuidMap();
+      const operationSequence =
+        detail.operation_sequence ??
+        (detail as { operationSequence?: unknown }).operationSequence;
+      const nextLines = await linesFromProcessRoute(
+        operationSequence,
+        jump,
+        t,
+        loadAllOperations,
+        userIdToUuid,
+      );
+      setAllowOperationJump(jump);
+      setLines(nextLines);
+    },
+    [buildUserIdToUuidMap, loadAllOperations, resolveProcessRouteDetail, t],
+  );
 
   const loadConfig = useCallback(async (options?: { force?: boolean }) => {
     const mat = materialRef.current;
@@ -107,8 +162,9 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
     setLoading(true);
     try {
       const data = await productProcessApi.get(mat.uuid);
+      if (!options?.force && isDirtyRef.current) return;
       const userIdToUuid = await buildUserIdToUuidMap();
-      const allOps = unwrapProcessPagedList(await operationApi.list({ limit: 1000, is_active: true }));
+      const allOps = await loadAllOperations();
       const byUuid: Record<string, (typeof allOps)[0]> = {};
       for (const o of allOps) byUuid[o.uuid] = o;
       const enriched = (data.lines ?? []).map((ln) =>
@@ -120,12 +176,14 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
       applyConfig(processRouteUuid, data.allowOperationJump, enriched);
     } catch (e: unknown) {
       messageApi.error((e as Error).message || t('common.loadFailed'));
-      const fallbackRoute = resolveEffectiveProcessRouteUuid(mat, processRoutesRef.current);
-      applyConfig(fallbackRoute, false, []);
+      if (!isDirtyRef.current) {
+        const fallbackRoute = resolveEffectiveProcessRouteUuid(mat, processRoutesRef.current);
+        applyConfig(fallbackRoute, false, []);
+      }
     } finally {
       setLoading(false);
     }
-  }, [applyConfig, messageApi, t, buildUserIdToUuidMap]);
+  }, [applyConfig, messageApi, t, buildUserIdToUuidMap, loadAllOperations]);
 
   useEffect(() => {
     if (processRoutesLoading || !material.uuid) return;
@@ -135,29 +193,8 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [material.uuid, processRoutesLoading]);
 
-  const importLinesFromRoute = useCallback(
-    async (uuid: string) => {
-      const detail = await processRouteApi.get(uuid);
-      const jump = Boolean(
-        (detail as { allow_operation_jump?: boolean }).allow_operation_jump ??
-          (detail as { allowOperationJump?: boolean }).allowOperationJump,
-      );
-      const userIdToUuid = await buildUserIdToUuidMap();
-      const nextLines = await linesFromProcessRoute(
-        detail.operation_sequence ?? (detail as { operationSequence?: unknown }).operationSequence,
-        jump,
-        t,
-        async () => unwrapProcessPagedList(await operationApi.list({ limit: 1000, is_active: true })),
-        userIdToUuid,
-      );
-      setAllowOperationJump(jump);
-      setLines(nextLines);
-    },
-    [t, buildUserIdToUuidMap],
-  );
-
   useEffect(() => {
-    if (!routeUuid || loading) return;
+    if (!routeUuid) return;
     // 已有产品工艺行时不再从路线模板覆盖（仅在没有行时才自动导入）
     if (lines.length > 0) {
       routeImportRef.current = routeUuid;
@@ -166,9 +203,10 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
     if (routeImportRef.current === routeUuid) return;
     routeImportRef.current = routeUuid;
     void importLinesFromRoute(routeUuid).catch(() => {
+      routeImportRef.current = undefined;
       messageApi.warning(t('app.master-data.productProcess.routeImportFailed'));
     });
-  }, [routeUuid, loading, lines.length, importLinesFromRoute, messageApi, t]);
+  }, [routeUuid, lines.length, importLinesFromRoute, messageApi, t]);
 
   const handleRouteSelect = (uuid: string | undefined) => {
     routeImportRef.current = '';

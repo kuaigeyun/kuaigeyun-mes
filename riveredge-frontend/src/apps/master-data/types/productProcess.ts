@@ -32,3 +32,8 @@ export type MaterialProductProcessSave = {
   allowOperationJump: boolean;
   lines: ProductProcessLine[];
 };
+
+export type ProcessRouteOperationTemplate = {
+  allowOperationJump: boolean;
+  lines: ProductProcessLine[];
+};

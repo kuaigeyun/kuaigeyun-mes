@@ -5,6 +5,21 @@ import { displayMinutesToHours, hoursToDisplayMinutes } from './manufacturingTim
 
 type SeqInput = unknown;
 
+/** 兼容 JSON 字符串或已解析对象 */
+export function normalizeOperationSequenceInput(seq: unknown): unknown {
+  if (seq == null) return seq;
+  if (typeof seq === 'string') {
+    const trimmed = seq.trim();
+    if (!trimmed) return null;
+    try {
+      return JSON.parse(trimmed) as unknown;
+    } catch {
+      return null;
+    }
+  }
+  return seq;
+}
+
 function toOpItemBase(
   op: {
     uuid: string;
@@ -54,14 +69,15 @@ export async function parseOperationSequenceFromRoute(
   t: TFunction,
   loadAllOperations: () => Promise<Operation[]>,
 ): Promise<OperationItem[]> {
-  if (!seq) return [];
+  const normalized = normalizeOperationSequenceInput(seq);
+  if (!normalized) return [];
   const allOps = await loadAllOperations();
   let sequenceData: unknown[] = [];
 
-  if (Array.isArray(seq)) {
-    sequenceData = seq;
-  } else if (typeof seq === 'object' && seq !== null) {
-    const seqObj = seq as Record<string, unknown>;
+  if (Array.isArray(normalized)) {
+    sequenceData = normalized;
+  } else if (typeof normalized === 'object' && normalized !== null) {
+    const seqObj = normalized as Record<string, unknown>;
     if (Array.isArray(seqObj.operations)) {
       sequenceData = seqObj.operations;
     } else if (Array.isArray(seqObj.sequence)) {

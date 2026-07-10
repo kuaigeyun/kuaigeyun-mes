@@ -32,6 +32,7 @@ from apps.master_data.schemas.process_route_change_schemas import (
 from apps.master_data.schemas.material_product_process_schemas import (
     MaterialProductProcessResponse,
     MaterialProductProcessSave,
+    ProcessRouteOperationTemplateResponse,
 )
 from apps.master_data.services.material_product_process_service import MaterialProductProcessService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -675,6 +676,30 @@ async def delete_process_route_change(
     try:
         await ProcessRouteChangeService.delete_change(tenant_id, change_uuid)
         return {"message": "删除成功"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get(
+    "/routes/{process_route_uuid}/operation-template",
+    response_model=ProcessRouteOperationTemplateResponse,
+    summary="Get process route operation template for product process import",
+)
+async def get_process_route_operation_template(
+    process_route_uuid: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """解析工艺路线工序模板（服务端展开工序主数据，仅需 route:read）。"""
+    try:
+        allow_jump, lines = await MaterialProductProcessService.get_template_lines_for_route_uuid(
+            tenant_id,
+            str(process_route_uuid),
+        )
+        return ProcessRouteOperationTemplateResponse(
+            allow_operation_jump=allow_jump,
+            lines=lines,
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

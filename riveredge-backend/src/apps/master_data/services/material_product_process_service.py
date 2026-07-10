@@ -676,6 +676,23 @@ class MaterialProductProcessService:
         return await MaterialProductProcessService.get_for_material(tenant_id, material_uuid)
 
     @staticmethod
+    async def get_template_lines_for_route_uuid(
+        tenant_id: int,
+        route_uuid: str,
+    ) -> tuple[bool, List[ProductProcessLineSchema]]:
+        """解析工艺路线工序模板（不含物料计件单价，供产品工艺页导入）。"""
+        route = await ProcessRoute.filter(
+            uuid=route_uuid,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not route:
+            raise NotFoundError(f"工艺路线 {route_uuid} 不存在")
+        allow_jump = bool(getattr(route, "allow_operation_jump", False))
+        lines = await _compose_lines(tenant_id, 0, route, None)
+        return allow_jump, lines
+
+    @staticmethod
     async def _sync_piece_rates(
         tenant_id: int,
         material: Material,

@@ -32,6 +32,7 @@ import type {
   SOPExecutionListParams,
   SOPNodeCompleteRequest,
 } from '../types/process';
+import type { ProcessRouteOperationTemplate } from '../types/productProcess';
 
 /** 创建工艺路线新版本（请求体，与后端对齐） */
 export interface ProcessRouteVersionCreate {
@@ -208,6 +209,13 @@ export const processRouteApi = {
    */
   get: async (uuid: string): Promise<ProcessRoute> => {
     return api.get(`/apps/master-data/process/routes/${uuid}`);
+  },
+
+  /**
+   * 获取工艺路线工序模板（产品工艺导入，服务端解析，仅需 route:read）
+   */
+  getOperationTemplate: async (uuid: string): Promise<ProcessRouteOperationTemplate> => {
+    return api.get(`/apps/master-data/process/routes/${uuid}/operation-template`);
   },
 
   /**

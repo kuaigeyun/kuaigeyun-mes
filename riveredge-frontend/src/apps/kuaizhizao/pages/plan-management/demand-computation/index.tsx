@@ -749,16 +749,23 @@ const DemandComputationPage: React.FC = () => {
   const [searchParams] = useSearchParams()
   const actionRef = useRef<ActionType>(null)
   const formRef = useRef<any>(null)
-  const lastComputationsCacheRef = useRef<DemandComputation[]>([])
+  const computationRowsByIdRef = useRef<Map<string, DemandComputation>>(new Map())
+  const listRequestSeqRef = useRef(0)
+  const [listRevision, setListRevision] = useState(0)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const computationPerms = useResourcePermissions(DEMAND_COMPUTATION_RESOURCE)
+
+  const resolveComputationRowByKey = useCallback((key: React.Key): DemandComputation | null => {
+    const row = computationRowsByIdRef.current.get(String(key))
+    return row ?? null
+  }, [])
 
   const selectedComputationsForBatch = React.useMemo(
     () =>
       selectedRowKeys
-        .map((key) => lastComputationsCacheRef.current.find((row) => String(row.id) === String(key)))
+        .map((key) => resolveComputationRowByKey(key))
         .filter((row): row is DemandComputation => row != null),
-    [selectedRowKeys],
+    [listRevision, resolveComputationRowByKey, selectedRowKeys],
   )
 
   const invalidateStatistics = () => {
@@ -2015,10 +2022,8 @@ const DemandComputationPage: React.FC = () => {
 
   const selectedComputationForToolbar = useMemo(() => {
     if (selectedRowKeys.length !== 1) return null
-    const id = Number(selectedRowKeys[0])
-    if (!Number.isFinite(id) || id <= 0) return null
-    return lastComputationsCacheRef.current.find((row) => row.id === id) ?? null
-  }, [selectedRowKeys])
+    return resolveComputationRowByKey(selectedRowKeys[0]) ?? null
+  }, [listRevision, resolveComputationRowByKey, selectedRowKeys])
 
   const canUseToolbarPush = selectedComputationForToolbar ? isComputationCompleted(selectedComputationForToolbar.computation_status) : false
 
@@ -2206,8 +2211,17 @@ const DemandComputationPage: React.FC = () => {
               : apiParams.created_start_date
           }
 
+          const requestSeq = ++listRequestSeqRef.current
           const result = await listDemandComputations(apiParams)
-          lastComputationsCacheRef.current = result.data || []
+          if (requestSeq === listRequestSeqRef.current) {
+            const rows = result.data || []
+            computationRowsByIdRef.current = new Map(
+              rows
+                .filter((row: DemandComputation) => row.id != null)
+                .map((row: DemandComputation) => [String(row.id), row]),
+            )
+            setListRevision((revision) => revision + 1)
+          }
           return {
             data: result.data || [],
             success: result.success,

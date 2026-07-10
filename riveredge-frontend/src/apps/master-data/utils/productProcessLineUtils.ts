@@ -3,7 +3,7 @@ import type { Operation } from '../types/process';
 import type { ProductProcessLine } from '../types/productProcess';
 import type { OperationItem } from '../components/OperationSequenceEditor';
 import { hoursToDisplayMinutes } from './manufacturingTimeUnits';
-import { parseOperationSequenceFromRoute } from './processRouteSequenceUtils';
+import { parseOperationSequenceFromRoute, normalizeOperationSequenceInput } from './processRouteSequenceUtils';
 
 function readIdList(...candidates: unknown[]): number[] {
   for (const c of candidates) {
@@ -108,8 +108,11 @@ export function enrichLineFromOperation(
 }
 
 function parseSequenceToRowDicts(seq: unknown): Record<string, unknown>[] {
-  if (!seq) return [];
+  const normalized = normalizeOperationSequenceInput(seq);
+  if (!normalized) return [];
   const result: Record<string, unknown>[] = [];
+
+  seq = normalized;
 
   if (Array.isArray(seq)) {
     for (const item of seq) {
@@ -249,11 +252,21 @@ export async function linesFromProcessRoute(
   loadAllOperations: () => Promise<Operation[]>,
   userIdToUuid?: Map<number, string>,
 ): Promise<ProductProcessLine[]> {
-  const all = await loadAllOperations();
+  const normalizedSequence = normalizeOperationSequenceInput(operationSequence);
+  const rowDicts = parseSequenceToRowDicts(normalizedSequence);
+
+  const loadOperationsSafe = async (): Promise<Operation[]> => {
+    try {
+      return await loadAllOperations();
+    } catch {
+      return [];
+    }
+  };
+
+  const all = rowDicts.length ? await loadOperationsSafe() : await loadOperationsSafe();
   const byUuid: Record<string, Operation> = {};
   for (const o of all) byUuid[o.uuid] = o;
 
-  const rowDicts = parseSequenceToRowDicts(operationSequence);
   let lines: ProductProcessLine[];
   if (rowDicts.length) {
     lines = rowDicts
@@ -265,14 +278,14 @@ export async function linesFromProcessRoute(
           (Number.isFinite(opId) ? all.find((o) => o.id === opId) : undefined);
         const resolvedUid = uid || op?.uuid || '';
         return buildLineFromRowAndOperation(
-          resolvedUuid ? { ...row, uuid: resolvedUuid, operation_uuid: resolvedUuid } : row,
+          resolvedUid ? { ...row, uuid: resolvedUid, operation_uuid: resolvedUid } : row,
           op,
           userIdToUuid,
         );
       })
       .filter((ln) => ln.operationUuid);
   } else {
-    const items = await parseOperationSequenceFromRoute(operationSequence, t, async () => all);
+    const items = await parseOperationSequenceFromRoute(normalizedSequence, t, loadOperationsSafe);
     lines = operationItemsToLines(items, byUuid, userIdToUuid);
   }
 

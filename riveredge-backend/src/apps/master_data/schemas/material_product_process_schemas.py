@@ -45,3 +45,12 @@ class MaterialProductProcessSave(BaseModel):
     process_route_uuid: Optional[str] = Field(None, alias="processRouteUuid")
     allow_operation_jump: bool = Field(False, alias="allowOperationJump")
     lines: List[ProductProcessLineSchema] = Field(default_factory=list)
+
+
+class ProcessRouteOperationTemplateResponse(BaseModel):
+    """工艺路线工序模板（产品工艺导入用，仅需 route:read）"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    allow_operation_jump: bool = Field(False, alias="allowOperationJump")
+    lines: List[ProductProcessLineSchema] = Field(default_factory=list)
