@@ -521,6 +521,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         total = await qs.count()
         order_clause = order_by if order_by else "-contract_date"
         rows = await qs.order_by(order_clause, "-id").offset(skip).limit(limit)
+        await self._reconcile_stale_contract_releases(tenant_id, list(rows))
         capability_ctx_by_contract_id: dict[int, dict[str, Any]] = {}
         if rows:
             contract_ids = [int(r.id) for r in rows if r.id is not None]
@@ -577,6 +578,8 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
         if not contract:
             raise NotFoundError("销售合同不存在")
+        await self._normalize_contract_release_after_downstream_removed(contract)
+        contract = await SalesContract.get(tenant_id=tenant_id, id=contract_id)
         items = None
         milestones = None
         if include_items:
@@ -879,6 +882,10 @@ class SalesContractService(AppBaseService[SalesContract]):
         )
         if not contract:
             raise NotFoundError("销售合同不存在")
+        await self._normalize_contract_release_after_downstream_removed(
+            contract, operator_id=operator_id
+        )
+        contract = await SalesContract.get(tenant_id=tenant_id, id=contract_id)
         assert_sales_contract_capability(contract, "revoke_approval")
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "sales_contract"
@@ -945,6 +952,105 @@ class SalesContractService(AppBaseService[SalesContract]):
             contract.status = "已完成"
             await contract.save(update_fields=["status", "updated_at"])
 
+    @staticmethod
+    async def _is_downstream_target_active(
+        tenant_id: int, target_type: str, target_id: int
+    ) -> bool:
+        tid = int(target_id)
+        if tid <= 0:
+            return False
+        tt = str(target_type or "").strip().lower()
+        if tt == "sales_order":
+            from apps.kuaizhizao.models.sales_order import SalesOrder
+
+            return await SalesOrder.filter(
+                tenant_id=tenant_id, id=tid, deleted_at__isnull=True
+            ).exists()
+        if tt == "work_order":
+            from apps.kuaizhizao.models.work_order import WorkOrder
+
+            return await WorkOrder.filter(
+                tenant_id=tenant_id, id=tid, deleted_at__isnull=True
+            ).exists()
+        return True
+
+    async def _contract_has_active_downstream(
+        self, tenant_id: int, contract_id: int
+    ) -> bool:
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+
+        if await SalesOrder.filter(
+            tenant_id=tenant_id,
+            contract_id=contract_id,
+            deleted_at__isnull=True,
+        ).exists():
+            return True
+        relations = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="sales_contract",
+            source_id=contract_id,
+            relation_mode="push",
+        ).values_list("target_type", "target_id")
+        for target_type, target_id in relations:
+            if await self._is_downstream_target_active(tenant_id, target_type, target_id):
+                return True
+        return False
+
+    async def _reset_contract_release_state(
+        self,
+        contract: SalesContract,
+        *,
+        operator_id: Optional[int] = None,
+    ) -> None:
+        contract.released_quantity = Decimal("0")
+        contract.released_amount = Decimal("0")
+        if (contract.status or "") == "执行中":
+            contract.status = "已生效"
+        if operator_id:
+            contract.updated_by = operator_id
+        await contract.save(
+            update_fields=[
+                "released_quantity",
+                "released_amount",
+                "status",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        await SalesContractItem.filter(
+            tenant_id=contract.tenant_id, contract_id=contract.id
+        ).update(released_quantity=Decimal("0"))
+
+    async def _normalize_contract_release_after_downstream_removed(
+        self,
+        contract: SalesContract,
+        *,
+        operator_id: Optional[int] = None,
+    ) -> None:
+        rel_qty = Decimal(str(contract.released_quantity or 0))
+        rel_amt = Decimal(str(contract.released_amount or 0))
+        if rel_qty <= 0 and rel_amt <= 0:
+            if (contract.status or "") == "执行中":
+                contract.status = "已生效"
+                if operator_id:
+                    contract.updated_by = operator_id
+                await contract.save(
+                    update_fields=["status", "updated_by", "updated_at"]
+                )
+            return
+        if await self._contract_has_active_downstream(contract.tenant_id, int(contract.id)):
+            return
+        await self._reset_contract_release_state(contract, operator_id=operator_id)
+
+    async def _reconcile_stale_contract_releases(
+        self, tenant_id: int, contracts: List[SalesContract]
+    ) -> None:
+        for contract in contracts:
+            if contract.id is None:
+                continue
+            await self._normalize_contract_release_after_downstream_removed(contract)
+
     async def _apply_release_to_contract(
         self,
         contract: SalesContract,
@@ -1006,6 +1112,14 @@ class SalesContractService(AppBaseService[SalesContract]):
         )
         if (contract.status or "") in ("已关闭", "已完成"):
             contract.status = "执行中"
+        elif (
+            Decimal(str(contract.released_quantity or 0)) <= 0
+            and Decimal(str(contract.released_amount or 0)) <= 0
+        ):
+            contract.released_quantity = Decimal("0")
+            contract.released_amount = Decimal("0")
+            if (contract.status or "") == "执行中":
+                contract.status = "已生效"
         if operator_id:
             contract.updated_by = operator_id
         await contract.save(
@@ -1019,6 +1133,9 @@ class SalesContractService(AppBaseService[SalesContract]):
                     )
                     await ci.save(update_fields=["released_quantity", "updated_at"])
                     break
+        await self._normalize_contract_release_after_downstream_removed(
+            contract, operator_id=operator_id
+        )
 
     async def close_contract(
         self, tenant_id: int, contract_id: int, operator_id: int, reason: Optional[str] = None

@@ -35,6 +35,11 @@ class OutsourceWorkOrderBase(BaseModel):
     supplier_code: str = Field(..., description="委外供应商编码")
     supplier_name: str = Field(..., description="委外供应商名称")
     outsource_operation: Optional[str] = Field(None, description="委外工序")
+    outsource_operation_name: Optional[str] = Field(
+        None,
+        alias="outsourceOperationName",
+        description="委外工序名称（展示用；outsource_operation 为工序 UUID 时由后端解析）",
+    )
     unit_price: Optional[Decimal] = Field(None, description="委外单价")
     total_amount: Decimal = Field(Decimal("0"), description="委外总金额")
     status: str = Field("draft", description="委外工单状态")

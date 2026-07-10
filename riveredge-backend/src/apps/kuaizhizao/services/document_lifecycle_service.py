@@ -2283,8 +2283,57 @@ def get_other_outbound_lifecycle(
 
 
 def get_outsource_work_order_lifecycle(record: Any) -> Dict[str, Any]:
-    """委外工单生命周期（复用工单逻辑）"""
-    return get_work_order_lifecycle(record)
+    """委外工单生命周期：草稿→已下达→执行中→已完成/已取消。"""
+    status = _norm(getattr(record, "status", None))
+    status_map = {
+        "draft": "draft",
+        "released": "released",
+        "in_progress": "in_progress",
+        "completed": "completed",
+        "cancelled": "cancelled",
+        "草稿": "draft",
+        "已下达": "released",
+        "执行中": "in_progress",
+        "已完成": "completed",
+        "已取消": "cancelled",
+    }
+    key = status_map.get(status, "draft")
+    stage_defs = [
+        {"key": "draft", "label": "草稿"},
+        {"key": "released", "label": "已下达"},
+        {"key": "in_progress", "label": "执行中"},
+        {"key": "completed", "label": "已完成"},
+    ]
+    is_exception = key == "cancelled"
+    if is_exception:
+        main_stages = [
+            {"key": "draft", "label": "草稿", "status": "pending"},
+            {"key": "released", "label": "已下达", "status": "pending"},
+            {"key": "in_progress", "label": "执行中", "status": "pending"},
+            {"key": "cancelled", "label": "已取消", "status": "active"},
+        ]
+        stage_name = "已取消"
+    else:
+        main_stages = _build_main_stages(stage_defs, key, is_exception=False)
+        stage_name = next((s["label"] for s in stage_defs if s["key"] == key), key)
+
+    suggestions: List[str] = []
+    if key == "draft":
+        suggestions = ["下达"]
+    elif key == "released":
+        suggestions = ["委外发料", "委外收货", "取消"]
+    elif key == "in_progress":
+        suggestions = ["委外发料", "委外收货", "强制结案"]
+
+    return {
+        "current_stage_key": key if not is_exception else "cancelled",
+        "current_stage_name": stage_name,
+        "status": "exception" if is_exception else "success" if key == "completed" else "active" if key == "in_progress" else "normal",
+        "main_stages": main_stages,
+        "sub_stages": None,
+        "next_step_suggestions": suggestions,
+        "milestones": [],
+    }
 
 
 def get_outsource_order_lifecycle(record: Any) -> Dict[str, Any]:

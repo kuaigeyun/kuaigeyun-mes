@@ -24,7 +24,6 @@ from apps.kuaizhizao.services.demand_source_chain_service import DemandSourceCha
 from apps.kuaizhizao.services.outsource_service import OutsourceService
 from apps.kuaizhizao.services.outsource_work_order_service import OutsourceWorkOrderService, OUTSOURCE_WORK_ORDER_SORTABLE_FIELDS
 from apps.kuaizhizao.services.outsource_material_issue_service import OutsourceMaterialIssueService
-from apps.kuaizhizao.services.outsource_material_receipt_service import OutsourceMaterialReceiptService
 from apps.kuaizhizao.services.outsource_material_return_service import OutsourceMaterialReturnService
 from apps.kuaizhizao.services.outsource_product_return_service import OutsourceProductReturnService
 from apps.kuaizhizao.services.outsource_collaboration_service import OutsourceCollaborationService
@@ -45,7 +44,6 @@ from apps.kuaizhizao.services.defect_record_service import DefectRecordService
 work_order_service = WorkOrderService()
 outsource_work_order_service = OutsourceWorkOrderService()
 outsource_material_issue_service = OutsourceMaterialIssueService()
-outsource_material_receipt_service = OutsourceMaterialReceiptService()
 outsource_material_return_service = OutsourceMaterialReturnService()
 outsource_product_return_service = OutsourceProductReturnService()
 defect_record_service = DefectRecordService()
@@ -106,10 +104,6 @@ from apps.kuaizhizao.schemas.outsource_work_order import (
     OutsourceMaterialIssuePreviewResponse,
     OutsourceMaterialIssueBatchCreate,
     OutsourceMaterialIssueBatchResponse,
-    OutsourceMaterialReceiptCreate,
-    OutsourceMaterialReceiptUpdate,
-    OutsourceMaterialReceiptResponse,
-    OutsourceMaterialReceiptPreviewResponse,
     OutsourceMaterialReturnCreate,
     OutsourceMaterialReturnResponse,
     OutsourceMaterialReturnPreviewResponse,
@@ -3175,6 +3169,93 @@ async def delete_outsource_work_order(
         raise _http_exception_with_trace(400, str(e), "/outsource-work-orders/{work_order_id}", tenant_id)
 
 
+@router.post(
+    "/outsource-work-orders/{work_order_id}/release",
+    response_model=OutsourceWorkOrderResponse,
+    summary="Release outsourced work order",
+)
+async def release_outsource_work_order(
+    work_order_id: int = Path(..., description="工单委外ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceWorkOrderResponse:
+    """下达委外工单（draft → released）。"""
+    try:
+        return await outsource_work_order_service.release_outsource_work_order(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            released_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404, str(e), "/outsource-work-orders/{work_order_id}/release", tenant_id
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(
+            400, str(e), "/outsource-work-orders/{work_order_id}/release", tenant_id
+        )
+
+
+@router.post(
+    "/outsource-work-orders/{work_order_id}/cancel",
+    response_model=OutsourceWorkOrderResponse,
+    summary="Cancel outsourced work order",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outsource-order:revoke"))],
+)
+async def cancel_outsource_work_order(
+    work_order_id: int = Path(..., description="工单委外ID"),
+    reason: Optional[str] = Body(None, embed=True),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceWorkOrderResponse:
+    """取消委外工单（草稿或未发料/收货的已下达）。"""
+    try:
+        return await outsource_work_order_service.cancel_outsource_work_order(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            cancelled_by=current_user.id,
+            reason=reason,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404, str(e), "/outsource-work-orders/{work_order_id}/cancel", tenant_id
+        )
+    except (ValidationError, BusinessLogicError) as e:
+        raise _http_exception_with_trace(
+            400, str(e), "/outsource-work-orders/{work_order_id}/cancel", tenant_id
+        )
+
+
+@router.post(
+    "/outsource-work-orders/{work_order_id}/close",
+    response_model=OutsourceWorkOrderResponse,
+    summary="Force close outsourced work order",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outsource-order:approve"))],
+)
+async def close_outsource_work_order(
+    work_order_id: int = Path(..., description="工单委外ID"),
+    reason: str = Body(..., embed=True, min_length=1),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceWorkOrderResponse:
+    """强制结案（短收/终止，不再继续收货）。"""
+    try:
+        return await outsource_work_order_service.close_outsource_work_order(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            closed_by=current_user.id,
+            reason=reason,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404, str(e), "/outsource-work-orders/{work_order_id}/close", tenant_id
+        )
+    except (ValidationError, BusinessLogicError) as e:
+        raise _http_exception_with_trace(
+            400, str(e), "/outsource-work-orders/{work_order_id}/close", tenant_id
+        )
+
+
 # ==================== 委外发料 API ====================
 
 @router.get(
@@ -3335,149 +3416,7 @@ async def complete_outsource_material_issue(
         raise _http_exception_with_trace(400, str(e), "/outsource-material-issues/{issue_id}/complete", tenant_id)
 
 
-# ==================== 委外收货 API ====================
-
-@router.post("/outsource-material-receipts", response_model=OutsourceMaterialReceiptResponse, summary="Create subcontract receipt")
-async def create_outsource_material_receipt(
-    data: OutsourceMaterialReceiptCreate,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> OutsourceMaterialReceiptResponse:
-    """
-    创建委外收货单
-
-    - **data**: 委外收货创建数据
-    - **current_user**: 当前用户
-    - **tenant_id**: 当前组织ID
-
-    返回创建的委外收货单信息。
-    """
-    try:
-        return await outsource_material_receipt_service.create_material_receipt(
-            tenant_id=tenant_id,
-            receipt_data=data,
-            created_by=current_user.id
-        )
-    except ValidationError as e:
-        raise _http_exception_with_trace(400, str(e), "/outsource-material-receipts", tenant_id)
-    except NotFoundError as e:
-        raise _http_exception_with_trace(404, str(e), "/outsource-material-receipts", tenant_id)
-
-
-@router.get("/outsource-material-receipts", response_model=List[OutsourceMaterialReceiptResponse], summary="List subcontract receipts")
-async def list_outsource_material_receipts(
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    outsource_work_order_id: Optional[int] = Query(None, description="工单委外ID筛选"),
-    status: Optional[str] = Query(None, description="状态筛选"),
-    keyword: Optional[str] = Query(None, description="关键词搜索"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> List[OutsourceMaterialReceiptResponse]:
-    """
-    获取委外收货单列表
-
-    - **skip**: 跳过数量
-    - **limit**: 限制数量
-    - **outsource_work_order_id**: 工单委外ID筛选
-    - **status**: 状态筛选
-    - **keyword**: 关键词搜索
-    - **current_user**: 当前用户
-    - **tenant_id**: 当前组织ID
-
-    返回委外收货单列表。
-    """
-    try:
-        return await outsource_material_receipt_service.list_material_receipts(
-            tenant_id=tenant_id,
-            skip=skip,
-            limit=limit,
-            outsource_work_order_id=outsource_work_order_id,
-            status=status,
-            keyword=keyword,
-        )
-    except Exception as e:
-        logger.error(f"获取委外收货单列表失败: {e}")
-        raise _http_exception_with_trace(500, str(e), "/outsource-material-receipts", tenant_id)
-
-
-@router.get("/outsource-material-receipts/{receipt_id}", response_model=OutsourceMaterialReceiptResponse, summary="Get subcontract receipt")
-async def get_outsource_material_receipt(
-    receipt_id: int = Path(..., description="委外收货单ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> OutsourceMaterialReceiptResponse:
-    """
-    获取委外收货单详情
-
-    - **receipt_id**: 委外收货单ID
-    - **current_user**: 当前用户
-    - **tenant_id**: 当前组织ID
-
-    返回委外收货单详情。
-    """
-    try:
-        return await outsource_material_receipt_service.get_material_receipt(
-            tenant_id=tenant_id,
-            receipt_id=receipt_id
-        )
-    except NotFoundError as e:
-        raise _http_exception_with_trace(404, str(e), "/outsource-material-receipts/{receipt_id}", tenant_id)
-
-
-@router.post("/outsource-material-receipts/{receipt_id}/complete", response_model=OutsourceMaterialReceiptResponse, summary="Complete subcontract receipt")
-async def complete_outsource_material_receipt(
-    receipt_id: int = Path(..., description="委外收货单ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> OutsourceMaterialReceiptResponse:
-    """
-    完成委外收货（更新状态为completed，记录收货时间和收货人）
-
-    - **receipt_id**: 委外收货单ID
-    - **current_user**: 当前用户
-    - **tenant_id**: 当前组织ID
-
-    返回更新后的委外收货单信息。
-    """
-    try:
-        return await outsource_material_receipt_service.complete_material_receipt(
-            tenant_id=tenant_id,
-            receipt_id=receipt_id,
-            completed_by=current_user.id
-        )
-    except NotFoundError as e:
-        raise _http_exception_with_trace(404, str(e), "/outsource-material-receipts/{receipt_id}/complete", tenant_id)
-    except BusinessLogicError as e:
-        raise _http_exception_with_trace(400, str(e), "/outsource-material-receipts/{receipt_id}/complete", tenant_id)
-
-
 # ==================== 委外退料 / 委外退货 API ====================
-
-@router.get(
-    "/outsource-work-orders/{work_order_id}/receipt-preview",
-    response_model=OutsourceMaterialReceiptPreviewResponse,
-    summary="Preview subcontract material receipt lines",
-)
-async def get_outsource_material_receipt_preview(
-    work_order_id: int = Path(..., description="委外工单ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> OutsourceMaterialReceiptPreviewResponse:
-    try:
-        return await outsource_material_receipt_service.get_receipt_preview(
-            tenant_id=tenant_id,
-            outsource_work_order_id=work_order_id,
-        )
-    except NotFoundError as e:
-        raise _http_exception_with_trace(
-            404, str(e), "/outsource-work-orders/{work_order_id}/receipt-preview", tenant_id
-        )
-    except BusinessLogicError as e:
-        raise _http_exception_with_trace(
-            400, str(e), "/outsource-work-orders/{work_order_id}/receipt-preview", tenant_id
-        )
-
 
 @router.get(
     "/outsource-work-orders/{work_order_id}/material-return-preview",

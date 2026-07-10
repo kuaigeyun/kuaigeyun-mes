@@ -27,6 +27,8 @@ from apps.kuaizhizao.schemas.outsource_work_order import (
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
+from apps.kuaizhizao.utils.outsource_work_order_state import resolve_outsource_work_order_product_unit
+
 
 class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
     def __init__(self):
@@ -84,6 +86,7 @@ class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
         )
 
         lines: List[OutsourceProductReturnPreviewLine] = []
+        product_unit = await resolve_outsource_work_order_product_unit(tenant_id, owo)
         for receipt in receipts:
             received = Decimal(str(receipt.quantity or 0))
             returned = returned_by_receipt.get(int(receipt.id), Decimal("0"))
@@ -96,7 +99,7 @@ class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
                     receipt_code=receipt.code,
                     product_code=owo.product_code or "",
                     product_name=owo.product_name or "",
-                    unit=receipt.unit or owo.unit or "件",
+                    unit=receipt.unit or product_unit,
                     received_quantity=received,
                     returned_quantity=returned,
                     returnable_quantity=returnable,

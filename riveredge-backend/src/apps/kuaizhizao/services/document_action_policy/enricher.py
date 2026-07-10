@@ -637,21 +637,21 @@ def enrich_purchase_inquiry_list_capabilities(
 
 
 async def _purchase_order_has_outstanding(tenant_id: int, order_id: int) -> bool:
-    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem, effective_po_item_outstanding
 
     items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
-    return any(float(i.outstanding_quantity or 0) > 0 for i in items)
+    return any(float(effective_po_item_outstanding(i)) > 0 for i in items)
 
 
 async def _purchase_order_outstanding_by_ids(tenant_id: int, order_ids: List[int]) -> dict[int, bool]:
-    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem, effective_po_item_outstanding
 
     if not order_ids:
         return {}
     items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id__in=order_ids).all()
     result: dict[int, bool] = {oid: False for oid in order_ids}
     for item in items:
-        if float(item.outstanding_quantity or 0) > 0:
+        if float(effective_po_item_outstanding(item)) > 0:
             result[int(item.order_id)] = True
     return result
 
@@ -660,7 +660,7 @@ async def _purchase_order_pushable_receipt_outstanding_by_ids(
     tenant_id: int, order_ids: List[int]
 ) -> dict[int, bool]:
     """任意订单行存在可下推入库余量（未入库 - 未完成入库单占用）。"""
-    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem, effective_po_item_outstanding
     from apps.kuaizhizao.services.warehouse_service import occupied_purchase_receipt_qty_by_po_item_ids
 
     if not order_ids:
@@ -669,7 +669,7 @@ async def _purchase_order_pushable_receipt_outstanding_by_ids(
     occupied_by_item = await occupied_purchase_receipt_qty_by_po_item_ids(tenant_id, order_ids)
     result: dict[int, bool] = {oid: False for oid in order_ids}
     for item in items:
-        outstanding = float(item.outstanding_quantity or 0)
+        outstanding = float(effective_po_item_outstanding(item))
         if outstanding <= 0:
             continue
         occupied = float(occupied_by_item.get(int(item.id), 0))

@@ -103,7 +103,7 @@ def derive_sales_contract_capabilities(
     rel_amt = Decimal(str(getattr(contract, "released_amount", 0) or 0))
     revoke_allowed = False
     revoke_reason = "sales_contract.revoke_approval.not_allowed"
-    if st != "已生效":
+    if st not in ("已生效", "执行中"):
         revoke_reason = "sales_contract.revoke_approval.not_effective"
     elif not _is_approved(review_status):
         revoke_reason = "sales_contract.revoke_approval.not_allowed"

@@ -434,7 +434,10 @@ class DocumentPushPullService:
         from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition, PurchaseRequisitionItem
         from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
         from apps.kuaizhizao.schemas.purchase_requisition import PurchaseRequisitionCreate, PurchaseRequisitionItemCreate
-        from apps.kuaizhizao.utils.material_source_helper import SOURCE_TYPE_BUY
+        from apps.kuaizhizao.utils.material_source_helper import (
+            SOURCE_TYPE_BUY,
+            resolve_computation_item_source_config,
+        )
         from apps.master_data.models.material import Material
 
         computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
@@ -470,8 +473,8 @@ class DocumentPushPullService:
         for item in buy_items:
             supplier_id = None
             if item.material_source_config:
-                src_config = item.material_source_config.get("source_config", {})
-                supplier_id = src_config.get("default_supplier_id")
+                sc = resolve_computation_item_source_config(item.material_source_config)
+                supplier_id = sc.get("default_supplier_id")
 
             material = material_by_id.get(int(item.material_id)) if item.material_id is not None else None
             material_code = str(item.material_code or "").strip()

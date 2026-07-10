@@ -16,6 +16,7 @@ from decimal import Decimal
 
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
+from tortoise import Tortoise
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
@@ -31,6 +32,8 @@ from apps.kuaizhizao.schemas.outsource_work_order import (
     OutsourceMaterialIssueBatchResponse,
 )
 from loguru import logger
+
+from apps.kuaizhizao.utils.outsource_work_order_state import apply_outsource_work_order_execution_start
 
 
 class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
@@ -63,57 +66,59 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
         Raises:
             ValidationError: 数据验证失败
         """
+        outsource_work_order = await OutsourceWorkOrder.filter(
+            tenant_id=tenant_id,
+            id=issue_data.outsource_work_order_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not outsource_work_order:
+            raise NotFoundError(f"委外工单ID {issue_data.outsource_work_order_id} 不存在")
+
+        from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
+            assert_outsource_work_order_capability,
+        )
+
+        assert_outsource_work_order_capability(outsource_work_order, "push_outsource_issue")
+
+        user_info = await self.get_user_info(created_by)
+        stock_payload: Optional[Dict[str, Any]] = None
+        response: Optional[OutsourceMaterialIssueResponse] = None
+
         async with in_transaction():
-            # 验证委外工单是否存在
-            outsource_work_order = await OutsourceWorkOrder.filter(
+            conn = Tortoise.get_connection("default")
+            await conn.execute_query("SET LOCAL lock_timeout = '8000'")
+            locked_work_order = await OutsourceWorkOrder.filter(
                 tenant_id=tenant_id,
                 id=issue_data.outsource_work_order_id,
-                deleted_at__isnull=True
-            ).first()
-
-            if not outsource_work_order:
+                deleted_at__isnull=True,
+            ).select_for_update().first()
+            if not locked_work_order:
                 raise NotFoundError(f"委外工单ID {issue_data.outsource_work_order_id} 不存在")
 
-            from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
-                assert_outsource_work_order_capability,
-            )
-
-            assert_outsource_work_order_capability(outsource_work_order, "push_outsource_issue")
-
-            # 处理编码
             code = issue_data.code
             if not code:
-                # 自动生成编码（格式：OWI-日期-序号）
                 today = datetime.now().strftime("%Y%m%d")
                 existing_codes = await OutsourceMaterialIssue.filter(
                     tenant_id=tenant_id,
                     code__startswith=f"OWI-{today}",
-                    deleted_at__isnull=True
+                    deleted_at__isnull=True,
                 ).order_by("-code").limit(1).values_list("code", flat=True)
-                
                 if existing_codes:
                     last_code = existing_codes[0]
                     last_seq = int(last_code.split("-")[-1]) if last_code.split("-")[-1].isdigit() else 0
                     seq = last_seq + 1
                 else:
                     seq = 1
-                
                 code = f"OWI-{today}-{seq:04d}"
             else:
-                # 验证编码唯一性
                 existing = await OutsourceMaterialIssue.filter(
                     tenant_id=tenant_id,
                     code=code,
-                    deleted_at__isnull=True
+                    deleted_at__isnull=True,
                 ).first()
-                
                 if existing:
                     raise ValidationError(f"委外发料单编码 {code} 已存在")
 
-            # 获取创建人信息
-            user_info = await self.get_user_info(created_by)
-
-            # 创建委外发料单（创建即扣库存，标记为已完成）
             now = datetime.now()
             material_issue = await OutsourceMaterialIssue.create(
                 tenant_id=tenant_id,
@@ -140,30 +145,34 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
                 created_by_name=user_info["name"],
             )
 
-            # 更新委外工单的已发料数量
-            outsource_work_order.issued_quantity = (
-                (outsource_work_order.issued_quantity or Decimal("0")) + issue_data.quantity
+            locked_work_order.issued_quantity = (
+                (locked_work_order.issued_quantity or Decimal("0")) + issue_data.quantity
             )
-            await outsource_work_order.save()
-
-            # 调用统一库存服务扣减库存
-            from apps.kuaizhizao.services.inventory_service import InventoryService
-
-            await InventoryService.decrease_stock(
-                tenant_id=tenant_id,
-                material_id=issue_data.material_id,
-                quantity=issue_data.quantity,
-                warehouse_id=issue_data.warehouse_id,
-                batch_no=getattr(issue_data, "batch_number", None),
-                source_type="outsource_material_issue",
-                source_doc_id=material_issue.id,
-                source_doc_code=code,
-            )
+            apply_outsource_work_order_execution_start(locked_work_order, now=now)
+            await locked_work_order.save()
 
             logger.info(f"创建委外发料单成功: {code}")
 
             await material_issue.refresh_from_db()
-            return OutsourceMaterialIssueResponse.model_validate(material_issue)
+            response = OutsourceMaterialIssueResponse.model_validate(material_issue)
+            stock_payload = {
+                "tenant_id": tenant_id,
+                "material_id": issue_data.material_id,
+                "quantity": issue_data.quantity,
+                "warehouse_id": issue_data.warehouse_id,
+                "batch_no": getattr(issue_data, "batch_number", None),
+                "source_type": "outsource_material_issue",
+                "source_doc_id": material_issue.id,
+                "source_doc_code": code,
+            }
+
+        if stock_payload:
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+
+            await InventoryService.decrease_stock(**stock_payload)
+        if response is None:
+            raise BusinessLogicError("委外发料创建失败")
+        return response
 
     @staticmethod
     def _should_issue_for_outsource(issue_method: Optional[str], source_type: Optional[str]) -> bool:

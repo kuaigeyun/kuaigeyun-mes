@@ -457,6 +457,33 @@ const SalesOrdersPage: React.FC = () => {
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
+  /** 上一次订单头交货日期，用于改表头时同步曾跟随表头的明细行 */
+  const lastHeaderDeliveryRef = useRef<ReturnType<typeof dayjs> | null>(null);
+
+  const applyHeaderDeliveryToItemLines = useCallback((delivery: unknown) => {
+    const coerced = coerceFormDate(delivery);
+    if (coerced == null) return;
+    const prevHeader = lastHeaderDeliveryRef.current;
+    const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+    if (!items.length) return;
+    let changed = false;
+    const next = items.map((it: Record<string, unknown>) => {
+      const lineDate = coerceFormDate(it.delivery_date);
+      if (lineDate == null) {
+        changed = true;
+        return { ...it, delivery_date: coerced };
+      }
+      if (prevHeader && lineDate.isSame(prevHeader, 'day')) {
+        changed = true;
+        return { ...it, delivery_date: coerced };
+      }
+      return it;
+    });
+    lastHeaderDeliveryRef.current = coerced;
+    if (changed) {
+      formRef.current?.setFieldsValue({ items: next });
+    }
+  }, []);
 
   const {
     customFields: salesOrderFormCustomFields,
@@ -752,10 +779,23 @@ const SalesOrdersPage: React.FC = () => {
    * 处理新建销售订单
    * 若启用编号规则，用 testGenerateCode 预填订单编号（不占用序号）
    */
-  const defaultOrderItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '', required_quantity: 1, delivery_date: dayjs(), unit_price: 0, tax_rate: 0, variant_attributes: '', notes: '' };
+  const defaultOrderItem = {
+    material_id: undefined,
+    material_code: '',
+    material_name: '',
+    material_spec: '',
+    material_unit: '',
+    required_quantity: 1,
+    delivery_date: undefined,
+    unit_price: 0,
+    tax_rate: 0,
+    variant_attributes: '',
+    notes: '',
+  };
 
   async function initSalesOrderCreateForm(options?: { customerId?: number }) {
     setFormEditOrder(null);
+    lastHeaderDeliveryRef.current = null;
     resetSalesOrderFormFieldValues();
     formRef.current?.resetFields();
     setTimeout(() => {
@@ -898,6 +938,7 @@ const SalesOrdersPage: React.FC = () => {
       };
       window.setTimeout(() => {
         formRef.current?.setFieldsValue(formData);
+        lastHeaderDeliveryRef.current = coerceFormDate(formData.delivery_date);
         lastPriceTypeRef.current = normalizeSalesPriceType((formData as any)?.price_type);
         if (orderId != null) {
           loadSalesOrderFormFieldValues(orderId).then((fieldFormValues) => {
@@ -1192,7 +1233,7 @@ const SalesOrdersPage: React.FC = () => {
           material_unit: (it as any).material_unit,
           conversion_factor: conversionFactor,
           required_quantity: q(it),
-          delivery_date: deliveryDateStr ?? mainDeliveryStr ?? formatDateTime(dayjs(), 'YYYY-MM-DD'),
+          delivery_date: deliveryDateStr ?? mainDeliveryStr,
           unit_price: p(it),
           tax_rate: taxR(it),
           item_amount: line.incl,
@@ -2469,8 +2510,6 @@ const SalesOrdersPage: React.FC = () => {
   const appendOrderItemsFromMaterials = React.useCallback(
     async (selected: Material[]) => {
       const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
-      const mainDelivery = formRef.current?.getFieldValue('delivery_date');
-      const defaultDelivery = coerceFormDate(mainDelivery) ?? dayjs();
       const customerId = formRef.current?.getFieldValue('customer_id');
       const orderDate = formRef.current?.getFieldValue('order_date');
       const asOf = orderDate != null ? (dayjs.isDayjs(orderDate) ? orderDate : dayjs(orderDate)) : dayjs();
@@ -2492,7 +2531,7 @@ const SalesOrdersPage: React.FC = () => {
           material_spec: m.specification ?? '',
           material_unit: m.baseUnit ?? '',
           required_quantity: 1,
-          delivery_date: defaultDelivery,
+          delivery_date: coerceFormDate(formRef.current?.getFieldValue('delivery_date')) ?? undefined,
           unit_price: pricing.unitPrice,
           tax_rate: pricing.taxRate,
           variant_attributes: undefined,
@@ -2523,8 +2562,7 @@ const SalesOrdersPage: React.FC = () => {
   );
 
   const appendEmptyOrderItem = React.useCallback(() => {
-    const mainDelivery = formRef.current?.getFieldValue('delivery_date');
-    const defaultDelivery = coerceFormDate(mainDelivery) ?? dayjs();
+    const headerDelivery = coerceFormDate(formRef.current?.getFieldValue('delivery_date')) ?? undefined;
     const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))];
     items.push({
       material_id: undefined,
@@ -2533,7 +2571,7 @@ const SalesOrdersPage: React.FC = () => {
       material_spec: '',
       material_unit: '',
       required_quantity: 0,
-      delivery_date: defaultDelivery,
+      delivery_date: headerDelivery,
       unit_price: 0,
       tax_rate: 0,
       variant_attributes: '',
@@ -3338,15 +3376,13 @@ const SalesOrdersPage: React.FC = () => {
               fieldName: 'delivery_date',
               baseFieldName: 'order_date',
               t,
+              onApply: (date) => {
+                formRef.current?.setFieldValue?.('delivery_date', date);
+                applyHeaderDeliveryToItemLines(date);
+              },
               fieldProps: {
-                onChange: (val: unknown) => {
-                  const coerced = coerceFormDate(val);
-                  if (coerced == null) return;
-                  const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
-                  if (items.length) {
-                    const next = items.map((it: any) => ({ ...it, delivery_date: coerced }));
-                    formRef.current?.setFieldsValue({ items: next });
-                  }
+                onChange: (value: unknown) => {
+                  applyHeaderDeliveryToItemLines(value);
                 },
               },
             })}
@@ -3750,7 +3786,15 @@ const SalesOrdersPage: React.FC = () => {
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item
                           name={[index, 'delivery_date']}
-                          rules={[{ required: true, message: t('common.required') }]}
+                          rules={[
+                            {
+                              validator: async (_, value) => {
+                                const headerDelivery = coerceFormDate(formRef.current?.getFieldValue('delivery_date'));
+                                if (coerceFormDate(value) != null || headerDelivery != null) return;
+                                throw new Error(t('common.required'));
+                              },
+                            },
+                          ]}
                           style={{ margin: 0 }}
                           getValueProps={(value) => ({ value: coerceFormDate(value) ?? undefined })}
                           normalize={(value) => coerceFormDate(value) ?? undefined}
@@ -3759,6 +3803,8 @@ const SalesOrdersPage: React.FC = () => {
                             size={DOCUMENT_DETAIL_CONTROL_SIZE}
                             style={DOCUMENT_DETAIL_DATE_PICKER_STYLE}
                             format="YYYY-MM-DD"
+                            placeholder={t('components.uniQuery.datePlaceholder')}
+                            allowClear
                             getForm={() => formRef.current}
                             baseFieldName="order_date"
                             t={t}
@@ -3822,22 +3868,18 @@ const SalesOrdersPage: React.FC = () => {
                   )}
                   columns={orderDetailColumns}
                   disabledAdd
-                  initialValue={() => {
-                    const mainDelivery = formRef.current?.getFieldValue('delivery_date');
-                    const defaultDelivery = coerceFormDate(mainDelivery) ?? dayjs();
-                    return {
-                      material_id: undefined,
-                      material_code: '',
-                      material_name: '',
-                      material_spec: '',
-                      material_unit: '',
-                      required_quantity: 0,
-                      delivery_date: defaultDelivery,
-                      unit_price: 0,
-                      tax_rate: 0,
-                      variant_attributes: '',
-                    };
-                  }}
+                  initialValue={() => ({
+                    material_id: undefined,
+                    material_code: '',
+                    material_name: '',
+                    material_spec: '',
+                    material_unit: '',
+                    required_quantity: 0,
+                    delivery_date: coerceFormDate(formRef.current?.getFieldValue('delivery_date')) ?? undefined,
+                    unit_price: 0,
+                    tax_rate: 0,
+                    variant_attributes: '',
+                  })}
                   tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
                 />
                 </>

@@ -913,6 +913,15 @@ const InboundPage: React.FC = () => {
       }
       return;
     }
+    if (
+      record.receipt_type === 'outsource_receipt' ||
+      record.receipt_type === 'sales_return' ||
+      record.receipt_type === 'other_inbound' ||
+      record.receipt_type === 'material_return'
+    ) {
+      await openSimpleConfirmPreview(record);
+      return;
+    }
     await proceedOpenConfirmPreview(record, purchaseReceiptHandoff);
   };
 
@@ -1006,6 +1015,12 @@ const InboundPage: React.FC = () => {
     if (handledDirectConfirmKeyRef.current === key) return;
     handledDirectConfirmKeyRef.current = key;
     navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+    if (dc.receipt_type === 'outsource_receipt') {
+      messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.outsourceReceiptConfirmed'));
+      invalidateMenuBadgeCounts();
+      void actionRef.current?.reload?.();
+      return;
+    }
     void openConfirmPreview(
       { id: dc.id, receipt_type: dc.receipt_type } as InboundOrder,
       dc.purchaseReceiptHandoff,

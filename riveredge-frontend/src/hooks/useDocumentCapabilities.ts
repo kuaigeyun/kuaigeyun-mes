@@ -435,7 +435,7 @@ export const SALES_CONTRACT_CAPABILITY_REASON_MESSAGES: Record<string, string> =
   'sales_contract.withdraw_submit.not_pending': '仅待审核合同可撤回提交',
   'sales_contract.approve.not_pending': '仅待审核合同可审批',
   'sales_contract.reject.not_pending': '仅待审核合同可驳回',
-  'sales_contract.revoke_approval.not_effective': '仅已生效且未下推的合同可撤回审核',
+  'sales_contract.revoke_approval.not_effective': '仅已生效/执行中且无有效下推单据的合同可撤回审核',
   'sales_contract.revoke_approval.has_release': '合同已有释放记录，无法撤回审核',
   'sales_contract.revoke_approval.not_allowed': '当前状态不可撤回审核',
   'sales_contract.push.not_effective': '合同须已生效后方可下推销售订单',
@@ -1142,6 +1142,16 @@ export const OUTSOURCE_WORK_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, str
   'outsource_work_order.push_outsource_material_return.frozen': '委外工单已冻结，不可退料',
   'outsource_work_order.push_outsource_product_return.not_allowed': '当前状态不可委外退货',
   'outsource_work_order.push_outsource_product_return.frozen': '委外工单已冻结，不可退货',
+  'outsource_work_order.cancel.not_allowed': '当前状态不可取消委外工单',
+  'outsource_work_order.cancel.already_cancelled': '委外工单已取消',
+  'outsource_work_order.cancel.completed': '已完成的委外工单不能取消',
+  'outsource_work_order.cancel.in_progress_use_close': '执行中的委外工单不能取消，请使用强制结案',
+  'outsource_work_order.cancel.has_activity': '已发料或已收货的委外工单不能取消，请使用强制结案',
+  'outsource_work_order.close.not_allowed': '当前状态不可强制结案',
+  'outsource_work_order.close.already_completed': '委外工单已完成',
+  'outsource_work_order.close.cancelled': '已取消的委外工单不能结案',
+  'outsource_work_order.close.fully_received': '委外数量已全部收货，无需强制结案',
+  'outsource_work_order.close.no_activity_use_cancel': '未发生发料/收货时请使用取消，而非强制结案',
 };
 
 export function outsourceWorkOrderCapabilityReasonMessage(

@@ -41,11 +41,18 @@ import {
   Dropdown,
   Empty,
   Spin,
+  Space,
   Table,
+  Input,
   theme as AntdTheme,
 } from 'antd';
-import { EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { EditOutlined, EyeOutlined, SendOutlined, StopOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  MaterialStackedCell,
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../services/dataDictionary';
 import { mapSystemDictionaryItemOptions } from '../../../../../utils/systemDictionaryI18n';
@@ -109,6 +116,7 @@ interface OutsourceWorkOrder {
   supplierCode?: string;
   supplierName?: string;
   outsourceOperation?: string;
+  outsourceOperationName?: string;
   unitPrice?: number;
   totalAmount?: number;
   status?: string;
@@ -139,6 +147,7 @@ interface OutsourceWorkOrder {
   supplier_code?: string;
   supplier_name?: string;
   outsource_operation?: string;
+  outsource_operation_name?: string;
   unit_price?: number;
   total_amount?: number;
   planned_start_date?: string;
@@ -153,6 +162,8 @@ interface OutsourceWorkOrder {
   capabilities?: {
     push_outsource_issue?: { allowed?: boolean; reason?: string };
     push_outsource_receipt?: { allowed?: boolean; reason?: string };
+    cancel?: { allowed?: boolean; reason?: string };
+    close?: { allowed?: boolean; reason?: string };
   };
 }
 
@@ -164,6 +175,21 @@ function unwrapMaterialList(response: unknown): any[] {
     if (Array.isArray(r.items)) return r.items;
   }
   return [];
+}
+
+function getOutsourceOperationDisplay(
+  record: Pick<
+    OutsourceWorkOrder,
+    'outsourceOperationName' | 'outsource_operation_name' | 'outsourceOperation' | 'outsource_operation'
+  >,
+): string {
+  return (
+    record.outsourceOperationName ||
+    record.outsource_operation_name ||
+    record.outsourceOperation ||
+    record.outsource_operation ||
+    '-'
+  );
 }
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
@@ -208,7 +234,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const { t } = useTranslation();
   const pushToInboundAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_outsource_work_order');
   const pushToOutboundAction = resolveKuaizhizaoDocumentAction(t, 'outbound.pull_from_outsource_work_order');
-  const { message: messageApi } = App.useApp();
+  const { message: messageApi, modal } = App.useApp();
   const { token } = AntdTheme.useToken();
   const outsourceWorkOrderDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
@@ -289,6 +315,10 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
   type OutsourcePushPreviewKind = 'outbound_issue' | 'inbound_receipt';
   const [pushPreviewOpen, setPushPreviewOpen] = useState(false);
+  const [closeModalOpen, setCloseModalOpen] = useState(false);
+  const [closeModalRecord, setCloseModalRecord] = useState<OutsourceWorkOrder | null>(null);
+  const [closeReason, setCloseReason] = useState('');
+  const [closeSubmitting, setCloseSubmitting] = useState(false);
   const [pushPreviewLoading, setPushPreviewLoading] = useState(false);
   const [pushPreviewKind, setPushPreviewKind] = useState<OutsourcePushPreviewKind | null>(null);
   const [pushPreviewWorkOrderId, setPushPreviewWorkOrderId] = useState<number | null>(null);
@@ -435,7 +465,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       {
         title: t('app.kuaizhizao.outsourceWorkOrder.colOperation'),
         dataIndex: ['outsourceOperation', 'outsource_operation'] as any,
-        render: (_, record) => record.outsourceOperation || record.outsource_operation || '-',
+        render: (_, record) => getOutsourceOperationDisplay(record),
       },
       {
         title: t('app.kuaizhizao.outsourceWorkOrder.colUnitPrice'),
@@ -663,6 +693,92 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       }, 100);
     } catch (error) {
       messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.fetchDetailFailed'));
+    }
+  };
+
+  /**
+   * 下达委外工单（draft → released）
+   */
+  const handleRelease = async (record: OutsourceWorkOrder) => {
+    if (record.id == null) return;
+    try {
+      const updated = await outsourceWorkOrderApi.release(String(record.id));
+      messageApi.success(t('app.kuaizhizao.outsourceWorkOrder.releaseSuccess'));
+      setStatsVersion((v) => v + 1);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      if (workOrderDetail?.id === record.id) {
+        setWorkOrderDetail(updated);
+        setOwoTrackingRefreshKey((k) => k + 1);
+      }
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.outsourceWorkOrder.releaseFailed')));
+    }
+  };
+
+  const refreshAfterStatusChange = (updated: OutsourceWorkOrder, recordId?: number) => {
+    setStatsVersion((v) => v + 1);
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+    if (workOrderDetail?.id === recordId || workOrderDetail?.id === updated.id) {
+      setWorkOrderDetail(updated);
+      setOwoTrackingRefreshKey((k) => k + 1);
+    }
+  };
+
+  const handleCancel = (record: OutsourceWorkOrder) => {
+    if (record.id == null) return;
+    if (record.capabilities?.cancel?.allowed !== true) {
+      const reason = outsourceWorkOrderCapabilityReasonMessage(record.capabilities?.cancel?.reason, t);
+      if (reason) messageApi.warning(reason);
+      return;
+    }
+    modal.confirm({
+      title: t('app.kuaizhizao.outsourceWorkOrder.actionCancel'),
+      content: t('app.kuaizhizao.outsourceWorkOrder.confirmCancel'),
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          const updated = await outsourceWorkOrderApi.cancel(String(record.id));
+          messageApi.success(t('app.kuaizhizao.outsourceWorkOrder.cancelSuccess'));
+          refreshAfterStatusChange(updated, record.id);
+        } catch (error: unknown) {
+          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.outsourceWorkOrder.cancelFailed')));
+        }
+      },
+    });
+  };
+
+  const openCloseModal = (record: OutsourceWorkOrder) => {
+    if (record.capabilities?.close?.allowed !== true) {
+      const reason = outsourceWorkOrderCapabilityReasonMessage(record.capabilities?.close?.reason, t);
+      if (reason) messageApi.warning(reason);
+      return;
+    }
+    setCloseModalRecord(record);
+    setCloseReason('');
+    setCloseModalOpen(true);
+  };
+
+  const handleCloseConfirm = async () => {
+    const reason = closeReason.trim();
+    if (!reason) {
+      messageApi.warning(t('app.kuaizhizao.outsourceWorkOrder.closeReasonRequired'));
+      return;
+    }
+    if (closeModalRecord?.id == null) return;
+    setCloseSubmitting(true);
+    try {
+      const updated = await outsourceWorkOrderApi.close(String(closeModalRecord.id), reason);
+      messageApi.success(t('app.kuaizhizao.outsourceWorkOrder.closeSuccess'));
+      setCloseModalOpen(false);
+      setCloseModalRecord(null);
+      setCloseReason('');
+      refreshAfterStatusChange(updated, closeModalRecord.id);
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.outsourceWorkOrder.closeFailed')));
+    } finally {
+      setCloseSubmitting(false);
     }
   };
 
@@ -1148,6 +1264,58 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         {t('common.edit')}
       </Button>
     );
+    if (record.status === 'draft') {
+      nodes.push(
+        <Button
+          {...rowActionKind('submit')}
+          key="release"
+          type="link"
+          size="small"
+          icon={<SendOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleRelease(record);
+          }}
+        >
+          {t('app.kuaizhizao.outsourceWorkOrder.actionRelease')}
+        </Button>,
+      );
+    }
+    if (record.capabilities?.cancel?.allowed === true) {
+      nodes.push(
+        <Button
+          {...rowActionKind('revoke')}
+          key="cancel"
+          type="link"
+          size="small"
+          danger
+          icon={<CloseCircleOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleCancel(record);
+          }}
+        >
+          {t('app.kuaizhizao.outsourceWorkOrder.actionCancel')}
+        </Button>,
+      );
+    }
+    if (record.capabilities?.close?.allowed === true) {
+      nodes.push(
+        <Button
+          {...rowActionKind('approve')}
+          key="close"
+          type="link"
+          size="small"
+          icon={<StopOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            openCloseModal(record);
+          }}
+        >
+          {t('app.kuaizhizao.outsourceWorkOrder.actionClose')}
+        </Button>,
+      );
+    }
     return nodes;
   };
 
@@ -1215,7 +1383,22 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         width: 200,
         ellipsis: true,
         sorter: true,
+        hideInTable: true,
         hideInSearch: false,
+      },
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colProduct'),
+        key: 'product_stacked',
+        dataIndex: 'product_name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, record) => (
+          <MaterialStackedCell
+            material_name={record.productName || record.product_name}
+            material_code={record.productCode || record.product_code}
+          />
+        ),
       },
       {
         title: t('app.kuaizhizao.outsourceWorkOrder.colProductCode'),
@@ -1223,15 +1406,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         width: 128,
         ellipsis: true,
         sorter: true,
+        hideInTable: true,
         hideInSearch: true,
-        render: (_, record) => {
-          const c = record.productCode || record.product_code;
-          return (
-            <Typography.Text copyable={{ text: String(c ?? '') }} ellipsis>
-              {c ?? '-'}
-            </Typography.Text>
-          );
-        },
       },
       {
         title: t('app.kuaizhizao.outsourceWorkOrder.colProductName'),
@@ -1239,8 +1415,44 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         width: 200,
         ellipsis: true,
         sorter: true,
+        hideInTable: true,
         hideInSearch: false,
-        render: (_, record) => record.productName || record.product_name,
+      },
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colSupplierOperation'),
+        key: 'supplier_operation_stacked',
+        dataIndex: 'supplier_name',
+        minWidth: 180,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        ellipsis: false,
+        hideInSearch: true,
+        render: (_, record) => (
+          <UniTableStackedPrimaryCell
+            primary={getOutsourceOperationDisplay(record)}
+            secondary={String(record.supplierName || record.supplier_name || '').trim() || '-'}
+            secondaryCopyable={false}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colSupplier'),
+        dataIndex: 'supplier_id',
+        width: 150,
+        ellipsis: true,
+        hideInTable: true,
+        hideInSearch: false,
+        valueType: 'select',
+        valueEnum: supplierSearchValueEnum,
+      },
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colOperation'),
+        dataIndex: 'outsource_operation',
+        width: 150,
+        ellipsis: true,
+        sorter: true,
+        hideInTable: true,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.outsourceWorkOrder.colQuantity'),
@@ -1249,25 +1461,6 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         sorter: true,
         hideInSearch: true,
         render: (_, record) => (record.quantity != null ? Number(record.quantity).toFixed(2) : '-'),
-      },
-      {
-        title: t('app.kuaizhizao.outsourceWorkOrder.colSupplier'),
-        dataIndex: 'supplier_id',
-        width: 150,
-        ellipsis: true,
-        hideInSearch: false,
-        valueType: 'select',
-        valueEnum: supplierSearchValueEnum,
-        render: (_, record) => record.supplierName || record.supplier_name || '-',
-      },
-      {
-        title: t('app.kuaizhizao.outsourceWorkOrder.colOperation'),
-        dataIndex: 'outsource_operation',
-        width: 150,
-        ellipsis: true,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, record) => record.outsourceOperation || record.outsource_operation,
       },
       {
         title: t('app.kuaizhizao.outsourceWorkOrder.colUnitPrice'),
@@ -1336,17 +1529,35 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         },
       },
       {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colPlannedRange'),
+        key: 'planned_range_stacked',
+        dataIndex: 'planned_start_date',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, record) => {
+          const start = record.plannedStartDate || record.planned_start_date;
+          const end = record.plannedEndDate || record.planned_end_date;
+          return (
+            <UniTableStackedPrimaryCell
+              primary={start ? formatDateTime(start, 'YYYY-MM-DD HH:mm:ss') : '-'}
+              secondary={end ? formatDateTime(end, 'YYYY-MM-DD HH:mm:ss') : '-'}
+              secondaryCopyable={false}
+              uniformText
+            />
+          );
+        },
+      },
+      {
         title: t('app.kuaizhizao.outsourceWorkOrder.colPlannedStart'),
         dataIndex: 'planned_start_date',
         valueType: 'dateTime',
         width: 132,
         uniTableKeepWidth: true,
         sorter: true,
+        hideInTable: true,
         hideInSearch: true,
-        render: (_, record) => {
-          const date = record.plannedStartDate || record.planned_start_date;
-          return date ? formatDateTime(date, 'YYYY-MM-DD HH:mm:ss') : '-';
-        },
       },
       {
         title: t('app.kuaizhizao.outsourceWorkOrder.colPlannedEnd'),
@@ -1355,11 +1566,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         width: 132,
         uniTableKeepWidth: true,
         sorter: true,
+        hideInTable: true,
         hideInSearch: true,
-        render: (_, record) => {
-          const date = record.plannedEndDate || record.planned_end_date;
-          return date ? formatDateTime(date, 'YYYY-MM-DD HH:mm:ss') : '-';
-        },
       },
       {
         title: t('app.kuaizhizao.outsourceWorkOrder.colUpdatedAt'),
@@ -1543,10 +1751,6 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           onDelete={handleDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.outsourceWorkOrder.confirmBatchDelete', { count })}
           scroll={{ x: 2000 }}
-          onRow={(record) => ({
-            onClick: () => void handleDetail(record),
-            style: { cursor: 'pointer' },
-          })}
         />
       </ListPageTemplate>
 
@@ -1796,6 +2000,27 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         columns={[]}
         column={3}
         dataSource={workOrderDetail || undefined}
+        extra={
+          workOrderDetail ? (
+            <Space>
+              {workOrderDetail.status === 'draft' ? (
+                <Button type="primary" icon={<SendOutlined />} onClick={() => void handleRelease(workOrderDetail)}>
+                  {t('app.kuaizhizao.outsourceWorkOrder.actionRelease')}
+                </Button>
+              ) : null}
+              {workOrderDetail.capabilities?.cancel?.allowed === true ? (
+                <Button danger icon={<CloseCircleOutlined />} onClick={() => handleCancel(workOrderDetail)}>
+                  {t('app.kuaizhizao.outsourceWorkOrder.actionCancel')}
+                </Button>
+              ) : null}
+              {workOrderDetail.capabilities?.close?.allowed === true ? (
+                <Button icon={<StopOutlined />} onClick={() => openCloseModal(workOrderDetail)}>
+                  {t('app.kuaizhizao.outsourceWorkOrder.actionClose')}
+                </Button>
+              ) : null}
+            </Space>
+          ) : null
+        }
         customContent={
           workOrderDetail && (
             <>
@@ -1979,6 +2204,30 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             ) : null}
           </div>
         ) : null}
+      </Modal>
+
+      <Modal
+        title={t('app.kuaizhizao.outsourceWorkOrder.actionClose')}
+        open={closeModalOpen}
+        destroyOnClose
+        confirmLoading={closeSubmitting}
+        okText={t('app.kuaizhizao.outsourceWorkOrder.actionClose')}
+        cancelText={t('common.cancel')}
+        onCancel={() => {
+          if (closeSubmitting) return;
+          setCloseModalOpen(false);
+          setCloseModalRecord(null);
+          setCloseReason('');
+        }}
+        onOk={() => void handleCloseConfirm()}
+      >
+        <Typography.Paragraph>{t('app.kuaizhizao.outsourceWorkOrder.confirmClose')}</Typography.Paragraph>
+        <Input.TextArea
+          rows={3}
+          value={closeReason}
+          onChange={(e) => setCloseReason(e.target.value)}
+          placeholder={t('app.kuaizhizao.outsourceWorkOrder.closeReasonPlaceholder')}
+        />
       </Modal>
     </>
   );

@@ -246,6 +246,11 @@
     overflow: hidden;
   }
 
+  > .ant-card-body.multi-tab-list-page-card-body {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
   > .ant-card-body:has(.multi-tab-list-page-tab-pane) {
     display: flex;
     flex-direction: column;
@@ -255,6 +260,8 @@
 .multi-tab-list-page-tab-pane {
   flex: 1;
   min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* 特殊布局 Modal 排除限高（如 MobileDevicePreview、工位机 kiosk 等） */

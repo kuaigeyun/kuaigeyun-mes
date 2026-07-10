@@ -46,8 +46,17 @@ from apps.kuaizhizao.utils.material_source_helper import (
     get_material_source_config,
     SOURCE_TYPE_OUTSOURCE,
 )
-from core.services.business.code_generation_service import CodeGenerationService
-from loguru import logger
+from apps.kuaizhizao.utils.outsource_operation_helper import (
+    build_outsource_operation_label_map,
+    display_outsource_operation,
+    normalize_outsource_operation_value,
+)
+from apps.kuaizhizao.utils.outsource_work_order_state import (
+    apply_outsource_work_order_execution_start,
+    apply_outsource_work_order_receipt_completion,
+    outsource_work_order_has_execution_activity,
+    outsource_work_order_is_fully_received,
+)
 
 OUTSOURCE_WORK_ORDER_SORTABLE_FIELDS = frozenset({
     "code",
@@ -77,6 +86,35 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
 
     处理委外工单相关的所有业务逻辑。
     """
+
+    async def _attach_outsource_operation_names(
+        self,
+        tenant_id: int,
+        responses: List[OutsourceWorkOrderResponse],
+    ) -> List[OutsourceWorkOrderResponse]:
+        label_map = await build_outsource_operation_label_map(
+            tenant_id,
+            [r.outsource_operation for r in responses],
+        )
+        return [
+            r.model_copy(
+                update={
+                    "outsource_operation_name": display_outsource_operation(
+                        r.outsource_operation,
+                        label_map,
+                    )
+                }
+            )
+            for r in responses
+        ]
+
+    async def _to_response(
+        self,
+        tenant_id: int,
+        work_order: OutsourceWorkOrder,
+    ) -> OutsourceWorkOrderResponse:
+        resp = OutsourceWorkOrderResponse.model_validate(work_order)
+        return (await self._attach_outsource_operation_names(tenant_id, [resp]))[0]
 
     def __init__(self):
         super().__init__(OutsourceWorkOrder)
@@ -230,6 +268,11 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
             if not allow_draft and not outsource_operation:
                 raise ValidationError("委外工序不能为空，请在物料配置中设置或创建时提供")
 
+            outsource_operation = await normalize_outsource_operation_value(
+                tenant_id,
+                outsource_operation,
+            )
+
             # 计算总金额
             total_amount = Decimal("0")
             if unit_price:
@@ -262,7 +305,7 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
 
             logger.info(f"创建委外工单成功: {code} - {material.name} ({supplier_name})")
             
-            return OutsourceWorkOrderResponse.model_validate(outsource_work_order)
+            return await self._to_response(tenant_id, outsource_work_order)
 
     async def update_outsource_work_order(
         self,
@@ -303,6 +346,8 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
 
             # 更新字段
             update_data = work_order_data.model_dump(exclude_unset=True)
+            if "status" in update_data:
+                raise ValidationError("委外工单状态不可直接修改，请使用下达/取消/结案等操作")
             
             # 如果更新了数量或单价，重新计算总金额
             if "quantity" in update_data or "unit_price" in update_data:
@@ -324,7 +369,7 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
 
             logger.info(f"更新委外工单成功: {outsource_work_order.code}")
             
-            return OutsourceWorkOrderResponse.model_validate(outsource_work_order)
+            return await self._to_response(tenant_id, outsource_work_order)
 
     async def release_outsource_work_order(
         self,
@@ -350,7 +395,102 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
         await outsource_work_order.save()
 
         logger.info(f"下达委外工单成功: {outsource_work_order.code}")
-        return OutsourceWorkOrderResponse.model_validate(outsource_work_order)
+        return await self._to_response(tenant_id, outsource_work_order)
+
+    async def cancel_outsource_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        cancelled_by: int,
+        reason: Optional[str] = None,
+    ) -> OutsourceWorkOrderResponse:
+        """取消委外工单（草稿或未发生发料/收货的已下达）。"""
+        async with in_transaction():
+            outsource_work_order = await OutsourceWorkOrder.filter(
+                tenant_id=tenant_id,
+                id=work_order_id,
+                deleted_at__isnull=True,
+            ).first()
+            if not outsource_work_order:
+                raise NotFoundError(f"委外工单ID {work_order_id} 不存在")
+
+            from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
+                assert_outsource_work_order_capability,
+            )
+
+            assert_outsource_work_order_capability(outsource_work_order, "cancel")
+
+            status = str(outsource_work_order.status or "").strip()
+            if status == "cancelled":
+                raise ValidationError("委外工单已取消")
+            if status == "completed":
+                raise ValidationError("已完成的委外工单不能取消")
+            if status == "in_progress":
+                raise ValidationError("执行中的委外工单不能取消，请使用强制结案")
+            if status == "released" and outsource_work_order_has_execution_activity(outsource_work_order):
+                raise ValidationError("已发料或已收货的委外工单不能取消，请使用强制结案")
+
+            user_info = await self.get_user_info(cancelled_by)
+            outsource_work_order.status = "cancelled"
+            if reason and str(reason).strip():
+                prefix = f"[取消] {str(reason).strip()}"
+                existing = (outsource_work_order.remarks or "").strip()
+                outsource_work_order.remarks = f"{prefix}\n{existing}".strip() if existing else prefix
+            outsource_work_order.updated_by = cancelled_by
+            outsource_work_order.updated_by_name = user_info["name"]
+            await outsource_work_order.save()
+
+            logger.info(f"取消委外工单成功: {outsource_work_order.code}")
+            return await self._to_response(tenant_id, outsource_work_order)
+
+    async def close_outsource_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        closed_by: int,
+        reason: str,
+    ) -> OutsourceWorkOrderResponse:
+        """强制结案（短收/终止执行，不再继续收货）。"""
+        reason_text = (reason or "").strip()
+        if not reason_text:
+            raise ValidationError("强制结案须填写原因")
+
+        async with in_transaction():
+            outsource_work_order = await OutsourceWorkOrder.filter(
+                tenant_id=tenant_id,
+                id=work_order_id,
+                deleted_at__isnull=True,
+            ).first()
+            if not outsource_work_order:
+                raise NotFoundError(f"委外工单ID {work_order_id} 不存在")
+
+            from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
+                assert_outsource_work_order_capability,
+            )
+
+            assert_outsource_work_order_capability(outsource_work_order, "close")
+
+            status = str(outsource_work_order.status or "").strip()
+            if status in ("completed", "cancelled"):
+                raise ValidationError("当前状态不可强制结案")
+            if outsource_work_order_is_fully_received(outsource_work_order):
+                raise ValidationError("委外数量已全部收货，无需强制结案")
+
+            user_info = await self.get_user_info(closed_by)
+            now = datetime.now()
+            if status == "released":
+                apply_outsource_work_order_execution_start(outsource_work_order, now=now)
+            outsource_work_order.status = "completed"
+            outsource_work_order.actual_end_date = now
+            prefix = f"[强制结案] {reason_text}"
+            existing = (outsource_work_order.remarks or "").strip()
+            outsource_work_order.remarks = f"{prefix}\n{existing}".strip() if existing else prefix
+            outsource_work_order.updated_by = closed_by
+            outsource_work_order.updated_by_name = user_info["name"]
+            await outsource_work_order.save()
+
+            logger.info(f"强制结案委外工单成功: {outsource_work_order.code}")
+            return await self._to_response(tenant_id, outsource_work_order)
 
     async def list_outsource_work_orders(
         self,
@@ -435,6 +575,7 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
         )
 
         responses = [OutsourceWorkOrderResponse.model_validate(wo) for wo in work_orders]
+        responses = await self._attach_outsource_operation_names(tenant_id, responses)
         enriched = enrich_outsource_work_order_list_capabilities(work_orders, responses)
 
         return OutsourceWorkOrderListResponse(
@@ -470,7 +611,13 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
         if not work_order:
             raise NotFoundError(f"委外工单ID {work_order_id} 不存在")
 
-        return OutsourceWorkOrderResponse.model_validate(work_order)
+        resp = await self._to_response(tenant_id, work_order)
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_outsource_work_order_list_capabilities,
+        )
+
+        enriched = enrich_outsource_work_order_list_capabilities([work_order], [resp])
+        return enriched[0]
 
     async def delete_outsource_work_order(
         self,
@@ -499,9 +646,11 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
         if not work_order:
             raise NotFoundError(f"委外工单ID {work_order_id} 不存在")
 
-        # 检查状态，已完成的委外工单不能删除
-        if work_order.status == "completed":
-            raise BusinessLogicError("已完成的委外工单不能删除")
+        status = str(work_order.status or "").strip()
+        if status not in ("draft", "cancelled"):
+            raise BusinessLogicError("仅草稿或已取消的委外工单可删除")
+        if status == "cancelled" and outsource_work_order_has_execution_activity(work_order):
+            raise BusinessLogicError("已发生发料或收货的委外工单不能删除")
 
         # 软删除
         from datetime import datetime

@@ -58,6 +58,7 @@ import type { Material } from '../../../../master-data/types/material';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus } from '../../../utils/workOrderLifecycle';
 
 interface BatchingOrder {
   id?: number;
@@ -128,6 +129,28 @@ const BatchingCenterPage: React.FC = () => {
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [searchParams] = useSearchParams();
   const materialCenterTabs = useMemo(() => getMaterialCenterTabs(t), [t]);
+  const workOrderStatusValueEnum = useMemo(() => buildWorkOrderLifecycleValueEnum(t), [t]);
+
+  const renderWorkOrderStatusTag = useCallback(
+    (status?: string | null) => {
+      const raw = String(status ?? '').trim();
+      if (!raw) return '-';
+      const item = workOrderStatusValueEnum[raw];
+      if (item) {
+        const colorByProStatus: Record<string, string> = {
+          Default: 'default',
+          Processing: 'processing',
+          Success: 'success',
+          Error: 'error',
+          Warning: 'warning',
+        };
+        return <Tag color={colorByProStatus[item.status ?? 'Default']}>{item.text}</Tag>;
+      }
+      const label = translateWorkOrderLifecycleStatus(t, raw);
+      return <Tag>{label}</Tag>;
+    },
+    [t, workOrderStatusValueEnum],
+  );
   const initialTab = useMemo(() => {
     const tab = searchParams.get('tab');
     if (tab && materialCenterTabs.some((item) => item.key === tab)) {
@@ -573,7 +596,13 @@ const BatchingCenterPage: React.FC = () => {
         columns={[
           { title: t('app.kuaizhizao.warehouseCommon.colWorkOrderCode'), dataIndex: 'code', width: 180 },
           { title: t('app.kuaizhizao.warehouseCommon.colWorkOrderName'), dataIndex: 'name', width: 220 },
-          { title: t('app.kuaizhizao.warehouseCommon.colStatus'), dataIndex: 'status', width: 140 },
+          {
+            title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+            dataIndex: 'status',
+            width: 140,
+            align: 'center' as const,
+            render: (_: unknown, r: PullWorkOrderCandidate) => renderWorkOrderStatusTag(r.status),
+          },
           { title: t('app.kuaizhizao.batchingCenter.requiredQty'), dataIndex: 'planned_quantity', width: 120 },
           {
             title: t('app.kuaizhizao.batchingCenter.pullGateStatus'),

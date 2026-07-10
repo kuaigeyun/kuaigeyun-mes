@@ -50,7 +50,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
     current_stage_name: stageName,
     status: isException ? 'exception' : stageName === '已完成' ? 'success' : stageName === '执行中' ? 'active' : 'normal',
     main_stages: mainStages,
-    next_step_suggestions: stageName === '草稿' ? ['下达'] : stageName === '执行中' ? ['发料', '收货', '完成'] : [],
+    next_step_suggestions: stageName === '草稿' ? ['下达'] : stageName === '已下达' ? ['委外发料', '委外收货', '取消'] : stageName === '执行中' ? ['委外发料', '委外收货', '强制结案'] : [],
   };
 }
 

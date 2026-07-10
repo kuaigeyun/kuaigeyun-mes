@@ -21,7 +21,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 from infra.models.user import User as CurrentUser
 from loguru import logger
 
-from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem, PurchaseOrderChange
+from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem, PurchaseOrderChange, effective_po_item_outstanding
 from apps.master_data.models.supplier import Supplier
 from apps.master_data.models.material import Material
 from apps.kuaizhizao.schemas.purchase import (
@@ -1186,7 +1186,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         for item in order_items:
             ordered = float(item.ordered_quantity or 0)
             received = float(item.received_quantity or 0)
-            outstanding = float(item.outstanding_quantity or 0)
+            outstanding = float(effective_po_item_outstanding(item))
             if outstanding <= 0:
                 continue
             occupied = occupied_by_item.get(int(item.id), 0.0)
@@ -1307,7 +1307,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             tenant_id, order_id, subtract_draft_occupied=True
         )
         preview_items = await self._enrich_po_push_preview_items_with_warehouse(tenant_id, preview_items)
-        has_raw_outstanding = any(float(i.outstanding_quantity or 0) > 0 for i in order_items)
+        has_raw_outstanding = any(float(effective_po_item_outstanding(i)) > 0 for i in order_items)
         has_pushable = bool(preview_items)
         assert_purchase_order_capability(
             order_model,
@@ -1532,9 +1532,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         occupied_by_item = await occupied_purchase_receipt_qty_by_po_item_ids(
             tenant_id, [order_id]
         )
-        has_raw_outstanding = any(float(item.outstanding_quantity or 0) > 0 for item in order_items)
+        has_raw_outstanding = any(float(effective_po_item_outstanding(item)) > 0 for item in order_items)
         has_pushable = any(
-            float(item.outstanding_quantity or 0)
+            float(effective_po_item_outstanding(item))
             - float(occupied_by_item.get(int(item.id), 0))
             > 0
             for item in order_items
@@ -1566,14 +1566,15 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         for item in order_items:
             if qty_keys is not None and item.id not in qty_keys:
                 continue
+            item_outstanding = effective_po_item_outstanding(item)
             if receipt_quantities and item.id in receipt_quantities:
                 receipt_quantity = Decimal(str(receipt_quantities[item.id]))
             else:
-                receipt_quantity = item.outstanding_quantity
+                receipt_quantity = item_outstanding
             if receipt_quantity <= 0:
                 continue
             occupied = Decimal(str(occupied_by_item.get(int(item.id), 0)))
-            max_pushable = item.outstanding_quantity - occupied
+            max_pushable = item_outstanding - occupied
             if max_pushable <= 0:
                 continue
             if receipt_quantity > max_pushable:
@@ -1694,9 +1695,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         occupied_by_item = await occupied_purchase_receipt_qty_by_po_item_ids(
             tenant_id, [order_id]
         )
-        has_raw_outstanding = any(float(item.outstanding_quantity or 0) > 0 for item in order_items)
+        has_raw_outstanding = any(float(effective_po_item_outstanding(item)) > 0 for item in order_items)
         has_pushable = any(
-            float(item.outstanding_quantity or 0)
+            float(effective_po_item_outstanding(item))
             - float(occupied_by_item.get(int(item.id), 0))
             > 0
             for item in order_items
@@ -1724,18 +1725,19 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         for item in order_items:
             if qty_keys is not None and item.id not in qty_keys:
                 continue
+            item_outstanding = effective_po_item_outstanding(item)
             # 确定入库数量
             if receipt_quantities and item.id in receipt_quantities:
                 receipt_quantity = Decimal(str(receipt_quantities[item.id]))
             else:
-                receipt_quantity = item.outstanding_quantity
+                receipt_quantity = item_outstanding
             
             # 跳过数量为0的明细
             if receipt_quantity <= 0:
                 continue
             
             occupied = Decimal(str(occupied_by_item.get(int(item.id), 0)))
-            max_pushable = item.outstanding_quantity - occupied
+            max_pushable = item_outstanding - occupied
             if max_pushable <= 0:
                 continue
 
@@ -2070,7 +2072,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         """
         from apps.kuaizhizao.services.receipt_notice_service import ReceiptNoticeService
         from apps.kuaizhizao.schemas.receipt_notice import ReceiptNoticeCreate, ReceiptNoticeItemCreate
-        from apps.kuaizhizao.services.warehouse_service import _resolve_warehouse_name_by_id
+        from apps.kuaizhizao.services.warehouse_service import (
+            _resolve_warehouse_name_by_id,
+            sync_purchase_order_receipt_quantities,
+        )
         from apps.master_data.services.material_service import (
             resolve_primary_default_warehouse_from_material,
         )
@@ -2080,8 +2085,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if not order_model:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
+        await sync_purchase_order_receipt_quantities(tenant_id, order_id)
         order_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
-        has_outstanding = any(float(item.outstanding_quantity or 0) > 0 for item in order_items)
+        has_outstanding = any(float(effective_po_item_outstanding(item)) > 0 for item in order_items)
         has_receipt_notice = await self._purchase_order_has_receipt_notice(tenant_id, order_id)
         assert_purchase_order_capability(
             order_model,
@@ -2104,7 +2110,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         material_fallback = await self._load_material_fallback_for_po_items(tenant_id, order_items)
 
         def _resolve_notice_qty(po_item: PurchaseOrderItem) -> float:
-            base = float(po_item.outstanding_quantity or 0)
+            base = float(effective_po_item_outstanding(po_item))
             if not notice_quantities or not isinstance(notice_quantities, dict):
                 return base
             raw = notice_quantities.get(po_item.id)
@@ -2126,7 +2132,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             qty = _resolve_notice_qty(item)
             if qty <= 0:
                 continue
-            outstanding_qty = float(item.outstanding_quantity or 0)
+            outstanding_qty = float(effective_po_item_outstanding(item))
             if qty > outstanding_qty:
                 raise ValidationError(f"物料 {item.material_code} 的通知数量 {qty} 超过未入库数量 {outstanding_qty}")
             if not item.material_id:

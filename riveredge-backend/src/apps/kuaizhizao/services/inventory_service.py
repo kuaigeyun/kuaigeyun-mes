@@ -133,20 +133,19 @@ class InventoryService:
             await batch.save()
             return
         try:
-            async with in_transaction():
-                await MaterialBatch.create(
-                    tenant_id=tenant_id,
-                    material_id=material_id,
-                    batch_no=bn,
-                    quantity=quantity,
-                    status="in_stock",
-                    production_date=ledger_production_date,
-                    ownership_type=own["ownership_type"],
-                    customer_id=own["customer_id"],
-                    customer_name=customer_name,
-                    source_doc_id=source_doc_id,
-                    source_doc_code=source_doc_code,
-                )
+            await MaterialBatch.create(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                batch_no=bn,
+                quantity=quantity,
+                status="in_stock",
+                production_date=ledger_production_date,
+                ownership_type=own["ownership_type"],
+                customer_id=own["customer_id"],
+                customer_name=customer_name,
+                source_doc_id=source_doc_id,
+                source_doc_code=source_doc_code,
+            )
         except IntegrityError:
             batch = await MaterialBatch.filter(
                 tenant_id=tenant_id,

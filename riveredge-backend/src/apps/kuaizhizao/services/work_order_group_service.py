@@ -286,8 +286,6 @@ class WorkOrderGroupService(AppBaseService):
                 continue
 
             st = node.get("source_type")
-            if generate_mode == "work_order_only" and st == SOURCE_TYPE_OUTSOURCE:
-                continue
             if generate_mode == "outsource_only" and st != SOURCE_TYPE_OUTSOURCE:
                 continue
 

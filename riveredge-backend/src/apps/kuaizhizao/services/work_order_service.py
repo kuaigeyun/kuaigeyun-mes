@@ -499,25 +499,24 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         route_def_t = tuple_from_model(process_route)
         wo_head_t = tuple_from_model(work_order)
         
-        # 计算计划时间
-        planned_start = work_order.planned_start_date or datetime.now()
-        current_time = planned_start
-        
-        # 创建工单工序单
-        work_order_operations = []
+        from apps.kuaizhizao.utils.work_order_operation_scheduling import (
+            build_operation_time_slots,
+            operation_total_hours,
+        )
+
+        prepared_ops: List[Dict[str, Any]] = []
         for op_data in operation_list:
             op_id = op_data["operation_id"]
             if op_id not in operation_map:
                 logger.warning(f"工序ID {op_id} 不存在，跳过")
                 continue
-            
+
             operation = operation_map[op_id]
             extra_data = op_data.get("extra_data", {})
-            
-            # 默认资源绑定逻辑：工艺路线实例数据 > 工序主数据默认设置 > 工单整单设置
+
             workshop_id = extra_data.get("workshop_id") or (operation.default_workshop_ids[0] if operation.default_workshop_ids else None) or work_order.workshop_id
             workshop_name = extra_data.get("workshop_name") or workshop_names.get(workshop_id) or work_order.workshop_name
-            
+
             work_center_id = extra_data.get("work_center_id") or (operation.default_work_center_ids[0] if operation.default_work_center_ids else None) or work_order.work_center_id
             work_center_name = extra_data.get("work_center_name") or center_names.get(work_center_id) or work_order.work_center_name
 
@@ -535,8 +534,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             standard_time = extra_data.get("standard_time")
             setup_time = extra_data.get("setup_time")
-            
-            # 从额外数据中获取报工类型；跳转由工单/路线级控制；节点工序仅来自路线序列项
+
             reporting_type = extra_data.get("reporting_type") or extra_data.get("reportingType") or "quantity"
             allow_jump = False
             is_node = extra_data.get("is_node_operation")
@@ -557,20 +555,48 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 line_t,
                 False,
             )
-            
-            # 计算计划时间
-            # 准备时间
-            setup_hours = float(setup_time) if setup_time else 0
-            # 标准工时（小时/件）
+
+            total_hours = operation_total_hours(setup_time, standard_time, work_order.quantity)
             standard_hours_per_unit = float(standard_time) if standard_time else 0
-            # 总工时 = 准备时间 + 标准工时 * 数量
-            total_hours = setup_hours + (standard_hours_per_unit * float(work_order.quantity))
-            
-            from datetime import timedelta
-            planned_start_date = current_time
-            planned_end_date = current_time + timedelta(hours=total_hours)
-            
-            # 创建工序单
+            setup_hours = float(setup_time) if setup_time else 0
+
+            prepared_ops.append({
+                "op_data": op_data,
+                "operation": operation,
+                "workshop_id": workshop_id,
+                "workshop_name": workshop_name,
+                "work_center_id": work_center_id,
+                "work_center_name": work_center_name,
+                "assigned_worker_id": assigned_worker_id,
+                "assigned_worker_name": assigned_worker_name,
+                "assigned_team_id": assigned_team_id,
+                "assigned_team_name": assigned_team_name,
+                "assigned_station_id": assigned_station_id,
+                "assigned_station_name": assigned_station_name,
+                "assigned_equipment_id": assigned_equipment_id,
+                "assigned_equipment_name": assigned_equipment_name,
+                "reporting_type": reporting_type,
+                "allow_jump": allow_jump,
+                "is_node": is_node,
+                "orm": orm,
+                "orv": orv,
+                "total_hours": total_hours,
+                "standard_hours_per_unit": standard_hours_per_unit,
+                "setup_hours": setup_hours,
+            })
+
+        time_slots = build_operation_time_slots(
+            [row["total_hours"] for row in prepared_ops],
+            planned_start=work_order.planned_start_date,
+            planned_end=work_order.planned_end_date,
+        )
+
+        work_order_operations = []
+        for idx, row in enumerate(prepared_ops):
+            operation = row["operation"]
+            op_data = row["op_data"]
+            planned_start_date, planned_end_date = time_slots[idx]
+
             work_order_op = await WorkOrderOperation.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -580,41 +606,39 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 operation_code=operation.code,
                 operation_name=operation.name,
                 sequence=op_data["sequence"],
-                workshop_id=workshop_id,
-                workshop_name=workshop_name,
-                work_center_id=work_center_id,
-                work_center_name=work_center_name,
-                assigned_worker_id=assigned_worker_id,
-                assigned_worker_name=assigned_worker_name,
-                assigned_team_id=assigned_team_id,
-                assigned_team_name=assigned_team_name,
-                assigned_station_id=assigned_station_id,
-                assigned_station_name=assigned_station_name,
-                assigned_equipment_id=assigned_equipment_id,
-                assigned_equipment_name=assigned_equipment_name,
+                workshop_id=row["workshop_id"],
+                workshop_name=row["workshop_name"],
+                work_center_id=row["work_center_id"],
+                work_center_name=row["work_center_name"],
+                assigned_worker_id=row["assigned_worker_id"],
+                assigned_worker_name=row["assigned_worker_name"],
+                assigned_team_id=row["assigned_team_id"],
+                assigned_team_name=row["assigned_team_name"],
+                assigned_station_id=row["assigned_station_id"],
+                assigned_station_name=row["assigned_station_name"],
+                assigned_equipment_id=row["assigned_equipment_id"],
+                assigned_equipment_name=row["assigned_equipment_name"],
                 planned_start_date=planned_start_date,
                 planned_end_date=planned_end_date,
-                standard_time=Decimal(str(standard_hours_per_unit)) if standard_hours_per_unit else None,
-                setup_time=Decimal(str(setup_hours)) if setup_hours else None,
-                reporting_type=reporting_type,
-                allow_jump=allow_jump,
-                is_node_operation=is_node,
-                over_report_mode=orm,
-                over_report_value=orv,
+                standard_time=Decimal(str(row["standard_hours_per_unit"])) if row["standard_hours_per_unit"] else None,
+                setup_time=Decimal(str(row["setup_hours"])) if row["setup_hours"] else None,
+                reporting_type=row["reporting_type"],
+                allow_jump=row["allow_jump"],
+                is_node_operation=row["is_node"],
+                over_report_mode=row["orm"],
+                over_report_value=row["orv"],
                 status='pending',
                 created_by=created_by,
                 created_by_name=user_info["name"],
             )
-            
+
             work_order_operations.append(work_order_op)
-            
-            # 下一道工序的开始时间 = 当前工序的结束时间
-            current_time = planned_end_date
         
-        # 更新工单的计划结束时间（最后一道工序的结束时间）
-        if work_order_operations:
-            last_op = work_order_operations[-1]
-            work_order.planned_end_date = last_op.planned_end_date
+        # 更新工单计划时间：有交期锚点时保持 planned_end 不后移
+        if work_order_operations and time_slots:
+            work_order.planned_start_date = time_slots[0][0]
+            if work_order.planned_end_date is None:
+                work_order.planned_end_date = time_slots[-1][1]
             await work_order.save()
         
         logger.info(f"为工单 {work_order.code} 自动生成了 {len(work_order_operations)} 个工序单")
@@ -638,20 +662,26 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         if not operations:
             return
-        planned_start = work_order.planned_start_date or datetime.now()
-        current_time = planned_start
-        quantity = float(work_order.planned_quantity or work_order.quantity or 1)
+        from apps.kuaizhizao.utils.work_order_operation_scheduling import (
+            build_operation_time_slots,
+            operation_total_hours,
+        )
 
-        for op in sorted(operations, key=lambda x: x.sequence):
-            setup_hours = float(op.setup_time) if op.setup_time else 0
-            standard_hours_per_unit = float(op.standard_time) if op.standard_time else 0
-            total_hours = setup_hours + (standard_hours_per_unit * quantity)
-            if total_hours <= 0:
-                total_hours = 1.0
+        sorted_ops = sorted(operations, key=lambda x: x.sequence)
+        durations = [
+            operation_total_hours(op.setup_time, op.standard_time, work_order.planned_quantity or work_order.quantity)
+            for op in sorted_ops
+        ]
+        time_slots = build_operation_time_slots(
+            durations,
+            planned_start=work_order.planned_start_date,
+            planned_end=work_order.planned_end_date,
+        )
 
-            planned_start_date = current_time
-            planned_end_date = current_time + timedelta(hours=total_hours)
-
+        for idx, op in enumerate(sorted_ops):
+            if idx >= len(time_slots):
+                break
+            planned_start_date, planned_end_date = time_slots[idx]
             await WorkOrderOperation.filter(
                 tenant_id=tenant_id,
                 id=op.id,
@@ -659,15 +689,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 planned_start_date=planned_start_date,
                 planned_end_date=planned_end_date,
             )
-            current_time = planned_end_date
 
-        last_op = operations[-1] if operations else None
-        if last_op:
-            wo_planned_end = current_time
-            await WorkOrder.filter(tenant_id=tenant_id, id=work_order.id).update(
-                planned_end_date=wo_planned_end,
-                updated_by=updated_by,
-            )
+        if time_slots:
+            wo_updates: Dict[str, Any] = {"planned_start_date": time_slots[0][0], "updated_by": updated_by}
+            if work_order.planned_end_date is None:
+                wo_updates["planned_end_date"] = time_slots[-1][1]
+            await WorkOrder.filter(tenant_id=tenant_id, id=work_order.id).update(**wo_updates)
 
     async def create_work_order(
         self,
@@ -1066,11 +1093,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         work_order_operations.append(work_order_op)
                         current_time = planned_end_date
                     
-                    # 更新工单的计划结束时间（最后一道工序的结束时间）
+                    # 更新工单计划时间：有交期锚点时不后移交期
                     if work_order_operations:
-                        last_op = work_order_operations[-1]
-                        work_order.planned_end_date = last_op.planned_end_date
-                        await work_order.save()
+                        if work_order.planned_end_date:
+                            await self.compute_and_apply_operation_planned_times(
+                                tenant_id,
+                                work_order,
+                                work_order_operations,
+                                updated_by=created_by,
+                            )
+                        else:
+                            last_op = work_order_operations[-1]
+                            work_order.planned_end_date = last_op.planned_end_date
+                            await work_order.save()
                     
                     logger.info(f"工单 {work_order.code} 已创建 {len(work_order_operations)} 个工序单（使用提供的工序）")
                 except Exception as e:

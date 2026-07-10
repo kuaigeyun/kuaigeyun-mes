@@ -10,6 +10,17 @@ Date: 2025-12-30
 from tortoise import fields
 from core.models.base import BaseModel
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+from decimal import Decimal
+
+
+def effective_po_item_outstanding(item: "PurchaseOrderItem") -> Decimal:
+    """未到货数量：优先 stored outstanding；为 0 且仍有订单余量时用 ordered - received 推算。"""
+    ordered = Decimal(str(item.ordered_quantity or 0))
+    received = Decimal(str(item.received_quantity or 0))
+    stored = Decimal(str(item.outstanding_quantity or 0))
+    if stored > 0:
+        return stored
+    return max(Decimal("0"), ordered - received)
 
 
 class PurchaseOrder(BaseModel):

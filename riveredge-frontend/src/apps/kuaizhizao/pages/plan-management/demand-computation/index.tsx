@@ -34,7 +34,6 @@ import {
   Input,
   Select,
   Tabs,
-  Radio,
   Empty,
   Row,
   Col,
@@ -93,6 +92,7 @@ import {
   getDemandComputationStatistics,
   type PushOptions,
   type PushPreview,
+  type ComputationPushPreviewItem,
   listComputationRecalcHistory,
   getComputationSnapshot,
   getPushRecords,
@@ -124,6 +124,8 @@ import { bomApi } from '../../../../master-data/services/material'
 import { warehouseApi } from '../../../../master-data/services/warehouse'
 import ComputationHistoryTab from './ComputationHistoryTab'
 import { MrpParametersCustomerGuideTrigger } from './MrpParametersCustomerGuide'
+import { buildDemandPushPreviewSummary } from './pushPreviewSummary'
+import { renderPushPreviewTargetBadge } from './pushPreviewTargetBadge'
 import { formatDateBySiteSetting, formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format'
 import { extractProTableSort } from '../../../../../utils/tableQueryKey'
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate'
@@ -928,6 +930,10 @@ const DemandComputationPage: React.FC = () => {
   const [pushPanelSubmitting, setPushPanelSubmitting] = useState(false)
   const [pushPreviewLoadError, setPushPreviewLoadError] = useState<string | null>(null)
   const [pushMode, setPushMode] = useState<'draft' | 'confirm'>('draft')
+  const pushPreviewMergedSummary = useMemo(
+    () => (pushPreviewData ? buildDemandPushPreviewSummary(pushPreviewData, t) : null),
+    [pushPreviewData, t],
+  )
 
   type SourcePullPreviewKind = 'demand' | 'sales_order' | 'sales_forecast'
   const [sourcePullPreviewOpen, setSourcePullPreviewOpen] = useState(false)
@@ -2748,29 +2754,38 @@ const DemandComputationPage: React.FC = () => {
                     <div style={{ color: '#666' }}>{t('app.kuaizhizao.demandComputation.productionPathDesc')}</div>
                   </div>
                 )}
-                {pushOptions.purchase_choices.length > 0 && (
-                  <div>
-                    <div style={{ fontWeight: 'bold', marginBottom: 8 }}>{t('app.kuaizhizao.demandComputation.purchasePath')}</div>
-                    <Radio.Group
-                      value={pushConfig.purchase}
-                      onChange={e => setPushConfig(c => ({ ...c, purchase: e.target.value }))}
-                    >
-                      <Radio value="requisition">{t('app.kuaizhizao.demandComputation.purchaseRequisition')}</Radio>
-                      <Radio value="purchase_order">{t('app.kuaizhizao.demandComputation.purchaseOrderOnly')}</Radio>
-                    </Radio.Group>
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 24 }}>
+                  {pushOptions.purchase_choices.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                      <span style={{ fontWeight: 'bold' }}>{t('app.kuaizhizao.demandComputation.purchasePath')}</span>
+                      <ThemedSegmented
+                        size="small"
+                        value={pushConfig.purchase ?? pushOptions.default_purchase ?? 'requisition'}
+                        onChange={(val) =>
+                          setPushConfig((c) => ({
+                            ...c,
+                            purchase: val as 'requisition' | 'purchase_order',
+                          }))
+                        }
+                        options={[
+                          { label: t('app.kuaizhizao.demandComputation.purchaseRequisition'), value: 'requisition' },
+                          { label: t('app.kuaizhizao.demandComputation.purchaseOrderOnly'), value: 'purchase_order' },
+                        ]}
+                      />
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                    <span>{t('app.kuaizhizao.salesOrder.pushModeLabel')}</span>
+                    <ThemedSegmented
+                      size="small"
+                      value={pushMode}
+                      onChange={(val) => setPushMode(val as 'draft' | 'confirm')}
+                      options={[
+                        { label: t('app.kuaizhizao.salesOrder.pushModeDraft'), value: 'draft' },
+                        { label: t('app.kuaizhizao.salesOrder.pushModeConfirm'), value: 'confirm' },
+                      ]}
+                    />
                   </div>
-                )}
-                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                  <span>{t('app.kuaizhizao.salesOrder.pushModeLabel')}</span>
-                  <ThemedSegmented
-                    size="small"
-                    value={pushMode}
-                    onChange={(val) => setPushMode(val as 'draft' | 'confirm')}
-                    options={[
-                      { label: t('app.kuaizhizao.salesOrder.pushModeDraft'), value: 'draft' },
-                      { label: t('app.kuaizhizao.salesOrder.pushModeConfirm'), value: 'confirm' },
-                    ]}
-                  />
                 </div>
                 <p style={{ fontSize: 12, color: '#666' }}>
                   {t('app.kuaizhizao.demandComputation.pushOutsourceHint')}
@@ -2779,8 +2794,10 @@ const DemandComputationPage: React.FC = () => {
             )}
             {pushPreviewData && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {pushPreviewData.summary ? (
-                  <p style={{ marginBottom: 0, fontWeight: 500 }}>{pushPreviewData.summary}</p>
+                {pushPreviewMergedSummary ? (
+                  <Typography.Text strong style={{ display: 'block' }}>
+                    {pushPreviewMergedSummary}
+                  </Typography.Text>
                 ) : null}
                 {pushPreviewData.has_blocking_issues && pushPreviewData.blocking_reason ? (
                   <Alert
@@ -2817,19 +2834,9 @@ const DemandComputationPage: React.FC = () => {
                       {
                         title: t('app.kuaizhizao.demandComputation.pushPreviewColTarget'),
                         dataIndex: 'target_document',
-                        width: 110,
-                        render: (v: string) => {
-                          if (v === 'outsource_work_order') {
-                            return t('app.kuaizhizao.workOrder.computationPullPreviewTargetOutsource')
-                          }
-                          if (v === 'purchase_requisition') {
-                            return t('app.kuaizhizao.demandComputation.pushPreviewTargetPurchaseRequisition')
-                          }
-                          if (v === 'purchase_order') {
-                            return t('app.kuaizhizao.demandComputation.pushPreviewTargetPurchaseOrder')
-                          }
-                          return t('app.kuaizhizao.workOrder.computationPullPreviewTargetWorkOrder')
-                        },
+                        width: 120,
+                        render: (v: ComputationPushPreviewItem['target_document']) =>
+                          renderPushPreviewTargetBadge(v, t),
                       },
                       {
                         title: t('app.kuaizhizao.salesOrder.quantity'),
@@ -2857,24 +2864,6 @@ const DemandComputationPage: React.FC = () => {
                     description={t('app.kuaizhizao.demandComputation.pushPreviewNoLines')}
                   />
                 )}
-                <p style={{ marginBottom: 0 }}>{t('app.kuaizhizao.demandComputation.pushWillGenerate')}</p>
-                <ul style={{ margin: 0, paddingLeft: 20 }}>
-                  {pushPreviewData.work_order_count > 0 && (
-                    <li>{t('app.kuaizhizao.demandComputation.pushWorkOrders', { count: pushPreviewData.work_order_count })}</li>
-                  )}
-                  {pushPreviewData.outsource_work_order_count > 0 && (
-                    <li>
-                      {t('app.kuaizhizao.demandComputation.pushOutsourceWorkOrders', { count: pushPreviewData.outsource_work_order_count })}
-                      {pushPreviewData.validation_failures?.length ? t('app.kuaizhizao.demandComputation.pushOutsourceDraftHint') : ''}
-                    </li>
-                  )}
-                  {pushPreviewData.purchase_requisition_count > 0 && (
-                    <li>{t('app.kuaizhizao.demandComputation.pushPurchaseRequisitions', { count: pushPreviewData.purchase_requisition_count })}</li>
-                  )}
-                  {pushPreviewData.purchase_order_count > 0 && (
-                    <li>{t('app.kuaizhizao.demandComputation.pushPurchaseOrders', { count: pushPreviewData.purchase_order_count })}</li>
-                  )}
-                </ul>
                 {pushPreviewData.validation_failures && pushPreviewData.validation_failures.length > 0 && (
                   <Alert
                     type="warning"

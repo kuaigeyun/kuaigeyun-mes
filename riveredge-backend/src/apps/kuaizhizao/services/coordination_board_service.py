@@ -773,7 +773,7 @@ class CoordinationBoardService:
         no_supplier = [
             i
             for i in unpushed_buy
-            if not ((i.material_source_config or {}).get("source_config") or {}).get(
+            if not resolve_computation_item_source_config(i.material_source_config).get(
                 "default_supplier_id"
             )
         ]
@@ -1470,7 +1470,10 @@ class CoordinationBoardService:
         sales_order_id: Optional[int],
         demand: Any,
     ) -> Tuple[str, str, List[str], List[int]]:
-        from apps.kuaizhizao.utils.material_source_helper import get_material_source_type
+        from apps.kuaizhizao.utils.material_source_helper import (
+            get_material_source_type,
+            resolve_computation_item_source_config,
+        )
         from apps.master_data.services.material_service import MaterialService
 
         lines = await self._get_order_line_materials(tenant_id, sales_order_id, demand)

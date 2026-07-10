@@ -60,6 +60,8 @@ def resolve_kuaizhizao_module_action(
         return "execute"
     if "/cancel-customer-confirm" in p:
         return "execute"
+    if "/close" in p:
+        return "execute"
     m = (method or "").upper()
     if m == "GET":
         return "read"

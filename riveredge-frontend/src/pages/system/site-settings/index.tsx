@@ -2066,8 +2066,10 @@ const SiteSettingsPage: React.FC = () => {
       form={form}
       layout="vertical"
       initialValues={formInitialValues}
+      style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}
     >
       <MultiTabListPageTemplate
+        style={{ flex: 1, minHeight: 0 }}
         activeTabKey={activeTabKey}
         onTabChange={setActiveTabKey}
         tabs={[

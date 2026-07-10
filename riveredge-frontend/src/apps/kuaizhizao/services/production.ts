@@ -188,6 +188,27 @@ export const outsourceWorkOrderApi = {
   get: async (id: string) => {
     return apiRequest(`/apps/kuaizhizao/outsource-work-orders/${id}`, { method: 'GET' });
   },
+
+  // 下达委外工单（draft → released）
+  release: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-work-orders/${id}/release`, { method: 'POST' });
+  },
+
+  // 取消委外工单
+  cancel: async (id: string, reason?: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-work-orders/${id}/cancel`, {
+      method: 'POST',
+      data: { reason: reason ?? null },
+    });
+  },
+
+  // 强制结案
+  close: async (id: string, reason: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-work-orders/${id}/close`, {
+      method: 'POST',
+      data: { reason },
+    });
+  },
 };
 
 // 委外发料相关接口
@@ -230,9 +251,24 @@ export const outsourceMaterialReceiptApi = {
     return apiRequest('/apps/kuaizhizao/outsource-material-receipts', { method: 'GET', params });
   },
 
-  // 创建委外收货单
+  // 创建委外收货单（30s 超时，避免代理/后端异常时无限转圈）
   create: async (data: any) => {
-    return apiRequest('/apps/kuaizhizao/outsource-material-receipts', { method: 'POST', data });
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 30_000);
+    try {
+      return await apiRequest('/apps/kuaizhizao/outsource-material-receipts', {
+        method: 'POST',
+        data,
+        signal: controller.signal,
+      });
+    } catch (error: unknown) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error('委外收货提交超时，请确认后端已重启并重试');
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
   },
 
   // 获取委外收货单详情

@@ -2677,7 +2677,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             ).order_by('-created_at').first()
             
             planned_qty = wf.get("planned_qty") or work_order.quantity
-            inspection_quantity = reporting.completed_quantity if reporting else planned_qty
+            inspection_quantity = reporting.reported_quantity if reporting else planned_qty
 
             template = await _resolve_inspection_template_fields(
                 tenant_id,
@@ -2786,7 +2786,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             op_id = int(row.operation_id) if row.operation_id is not None else None
             if op_id is None or op_id in qty_by_op:
                 continue
-            qty_by_op[op_id] = float(row.completed_quantity or 0)
+            qty_by_op[op_id] = float(row.reported_quantity or 0)
         return qty_by_op
 
     async def _build_pull_preview_items_for_work_order_ipqc(

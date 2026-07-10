@@ -33,11 +33,20 @@ from apps.kuaizhizao.utils.material_source_helper import (
     validate_material_source_config,
     get_material_source_config,
     expand_bom_with_source_control,
+    resolve_computation_item_source_config,
     SOURCE_TYPE_MAKE,
     SOURCE_TYPE_BUY,
     SOURCE_TYPE_PHANTOM,
     SOURCE_TYPE_OUTSOURCE,
     SOURCE_TYPE_CONFIGURE,
+)
+from apps.kuaizhizao.utils.mrp_scheduling_helper import (
+    apply_bom_pegged_production_schedules,
+    compute_backward_production_schedule,
+    merge_requirement_delivery_date,
+    planning_date_to_work_order_end,
+    planning_date_to_work_order_start,
+    resolve_demand_item_delivery_date,
 )
 from apps.kuaizhizao.utils.inventory_helper import (
     get_material_inventory_info,
@@ -1407,6 +1416,12 @@ class DemandComputationService:
         if not demand_items:
             logger.warning(f"需求明细为空，计算ID: {computation.id}")
             return
+
+        demand_by_id: Dict[int, Demand] = {}
+        for demand_id in demand_id_list:
+            demand_row = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id)
+            if demand_row:
+                demand_by_id[demand_row.id] = demand_row
         
         # 2. 计算参数（库存相关开关、BOM版本、4M 开关供后续排产扩展）
         computation_params = computation.computation_params or {}
@@ -1445,11 +1460,18 @@ class DemandComputationService:
             if did not in bucket["demand_item_ids"]:
                 bucket["demand_item_ids"].append(did)
 
+        def _link_bom_parent_material(bucket: dict, req: dict) -> None:
+            pid = req.get("parent_material_id") or req.get("phantom_material_id")
+            if pid is None:
+                return
+            parents = bucket.setdefault("parent_material_ids", set())
+            parents.add(int(pid))
+
         # 4. 处理每个需求明细
         for demand_item in demand_items:
             material_id = demand_item.material_id
             required_quantity = float(demand_item.required_quantity or 0)
-            delivery_date = getattr(demand_item, "delivery_date", None)
+            delivery_date = resolve_demand_item_delivery_date(demand_item, demand_by_id)
 
             if required_quantity <= 0:
                 continue
@@ -1511,8 +1533,20 @@ class DemandComputationService:
                             "required_quantity": 0.0,
                             "unit": req.get("unit"),
                             "delivery_date": delivery_date,
+                            "bom_level": req.get("level", 0),
                         }
+                    else:
+                        all_material_requirements[req_material_id]["delivery_date"] = (
+                            merge_requirement_delivery_date(
+                                all_material_requirements[req_material_id].get("delivery_date"),
+                                delivery_date,
+                            )
+                        )
                     all_material_requirements[req_material_id]["required_quantity"] += req["required_quantity"]
+                    _link_bom_parent_material(all_material_requirements[req_material_id], req)
+                    lvl = req.get("level", 0)
+                    prev = all_material_requirements[req_material_id].get("bom_level", lvl)
+                    all_material_requirements[req_material_id]["bom_level"] = min(prev, lvl)
                     _append_demand_item_id(all_material_requirements[req_material_id], demand_item.id)
 
             elif source_type == SOURCE_TYPE_CONFIGURE:
@@ -1545,8 +1579,20 @@ class DemandComputationService:
                             "required_quantity": 0.0,
                             "unit": req.get("unit"),
                             "delivery_date": delivery_date,
+                            "bom_level": req.get("level", 0),
                         }
+                    else:
+                        all_material_requirements[req_material_id]["delivery_date"] = (
+                            merge_requirement_delivery_date(
+                                all_material_requirements[req_material_id].get("delivery_date"),
+                                delivery_date,
+                            )
+                        )
                     all_material_requirements[req_material_id]["required_quantity"] += req["required_quantity"]
+                    _link_bom_parent_material(all_material_requirements[req_material_id], req)
+                    lvl = req.get("level", 0)
+                    prev = all_material_requirements[req_material_id].get("bom_level", lvl)
+                    all_material_requirements[req_material_id]["bom_level"] = min(prev, lvl)
                     _append_demand_item_id(all_material_requirements[req_material_id], demand_item.id)
 
             else:
@@ -1560,7 +1606,15 @@ class DemandComputationService:
                         "required_quantity": 0.0,
                         "unit": material.base_unit,
                         "delivery_date": delivery_date,
+                        "bom_level": 0,
                     }
+                else:
+                    all_material_requirements[material_id]["delivery_date"] = (
+                        merge_requirement_delivery_date(
+                            all_material_requirements[material_id].get("delivery_date"),
+                            delivery_date,
+                        )
+                    )
                 all_material_requirements[material_id]["required_quantity"] += required_quantity
                 _append_demand_item_id(all_material_requirements[material_id], demand_item.id)
 
@@ -1611,8 +1665,20 @@ class DemandComputationService:
                                 "required_quantity": 0.0,
                                 "unit": req.get("unit"),
                                 "delivery_date": delivery_date,
+                                "bom_level": req.get("level", 0),
                             }
+                        else:
+                            all_material_requirements[req_material_id]["delivery_date"] = (
+                                merge_requirement_delivery_date(
+                                    all_material_requirements[req_material_id].get("delivery_date"),
+                                    delivery_date,
+                                )
+                            )
                         all_material_requirements[req_material_id]["required_quantity"] += req["required_quantity"]
+                        _link_bom_parent_material(all_material_requirements[req_material_id], req)
+                        lvl = req.get("level", 0)
+                        prev = all_material_requirements[req_material_id].get("bom_level", lvl)
+                        all_material_requirements[req_material_id]["bom_level"] = min(prev, lvl)
                         _append_demand_item_id(all_material_requirements[req_material_id], demand_item.id)
         
         in_transit_map = await batch_sum_open_supply_quantities(
@@ -1621,7 +1687,11 @@ class DemandComputationService:
 
         netting_params_for_supply = _netting_params_for_mrp_supply(computation_params)
 
-        # 5. 生成计算结果明细
+        # 5. 生成计算结果明细（先倒排，再 BOM 挂接，最后落库）
+        pegging_rows: Dict[int, Dict[str, Any]] = {}
+        pending_items: List[Dict[str, Any]] = []
+        schedule_today = date.today()
+
         for material_id, req_info in all_material_requirements.items():
             # 获取物料信息
             material = await Material.get_or_none(tenant_id=tenant_id, id=material_id)
@@ -1686,35 +1756,43 @@ class DemandComputationService:
             except (TypeError, ValueError):
                 schedule_buffer_days = 0
 
+            resolved_source_config = resolve_computation_item_source_config(source_config)
+            production_lead_time = int(resolved_source_config.get("production_lead_time") or 0)
+            purchase_lead_time = int(resolved_source_config.get("purchase_lead_time") or 0)
+            outsource_lead_time = int(resolved_source_config.get("outsource_lead_time") or 0)
+
             if source_type == SOURCE_TYPE_MAKE:
                 # 自制件建议工单量不再被来源校验结果阻断：
                 # 校验失败仅用于提示（source_validation_*），避免半成品因配置不完整被直接算成“-”。
                 if planning_qty > 0:
                     suggested_work_order_quantity = Decimal(str(planning_qty))
                     planned_production = Decimal(str(planning_qty))
-                    production_lead_time = source_config.get("source_config", {}).get("production_lead_time", 3)
-                    if delivery_date:
-                        production_completion_date = delivery_date
-                        total_lt = int(production_lead_time) + schedule_buffer_days
-                        production_start_date = delivery_date - timedelta(days=total_lt)
+                    production_start_date, production_completion_date = compute_backward_production_schedule(
+                        delivery_date,
+                        production_lead_time,
+                        schedule_buffer_days,
+                        today=schedule_today,
+                    )
             elif source_type == SOURCE_TYPE_BUY:
                 if planning_qty > 0:
                     suggested_purchase_order_quantity = Decimal(str(planning_qty))
                     planned_procurement = Decimal(str(planning_qty))
-                    purchase_lead_time = source_config.get("source_config", {}).get("purchase_lead_time", 7)
-                    if delivery_date:
-                        procurement_completion_date = delivery_date
-                        total_lt = int(purchase_lead_time) + schedule_buffer_days
-                        procurement_start_date = delivery_date - timedelta(days=total_lt)
+                    procurement_start_date, procurement_completion_date = compute_backward_production_schedule(
+                        delivery_date,
+                        purchase_lead_time,
+                        schedule_buffer_days,
+                        today=schedule_today,
+                    )
             elif source_type == SOURCE_TYPE_OUTSOURCE:
                 if planning_qty > 0:
                     suggested_work_order_quantity = Decimal(str(planning_qty))
                     planned_production = Decimal(str(planning_qty))
-                    outsource_lead_time = source_config.get("source_config", {}).get("outsource_lead_time", 5)
-                    if delivery_date:
-                        production_completion_date = delivery_date
-                        total_lt = int(outsource_lead_time) + schedule_buffer_days
-                        production_start_date = delivery_date - timedelta(days=total_lt)
+                    production_start_date, production_completion_date = compute_backward_production_schedule(
+                        delivery_date,
+                        outsource_lead_time,
+                        schedule_buffer_days,
+                        today=schedule_today,
+                    )
 
             if computation_params.get("apply_lot_sizing", True):
                 min_l, max_l, mul_l = _extract_lot_rules(material, source_type, computation_params)
@@ -1744,25 +1822,85 @@ class DemandComputationService:
                 )
                 supply_for_detail["lines_zh"] = _lines
 
+            pegging_rows[material_id] = {
+                "bom_level": req_info.get("bom_level", 0),
+                "parent_material_ids": set(req_info.get("parent_material_ids") or ()),
+                "source_type": source_type,
+                "planning_qty": planning_qty,
+                "production_lead_time": production_lead_time,
+                "purchase_lead_time": purchase_lead_time,
+                "outsource_lead_time": outsource_lead_time,
+                "schedule_buffer_days": schedule_buffer_days,
+                "production_start_date": production_start_date,
+                "production_completion_date": production_completion_date,
+                "procurement_start_date": procurement_start_date,
+                "procurement_completion_date": procurement_completion_date,
+            }
+
+            pending_items.append({
+                "material_id": material_id,
+                "material_code": req_info["material_code"],
+                "material_name": req_info["material_name"],
+                "material_spec": material.specification,
+                "material_unit": req_info["unit"],
+                "gross_requirement": gross_requirement,
+                "available_inventory": available_inventory,
+                "net_requirement": net_requirement,
+                "safety_stock": safety_stock,
+                "reorder_point": reorder_point,
+                "delivery_date": delivery_date,
+                "planned_production": planned_production,
+                "planned_procurement": planned_procurement,
+                "production_start_date": production_start_date,
+                "production_completion_date": production_completion_date,
+                "procurement_start_date": procurement_start_date,
+                "procurement_completion_date": procurement_completion_date,
+                "suggested_work_order_quantity": suggested_work_order_quantity,
+                "suggested_purchase_order_quantity": suggested_purchase_order_quantity,
+                "source_type": source_type,
+                "source_config": source_config,
+                "validation_passed": validation_passed,
+                "validation_errors": validation_errors,
+                "demand_item_ids": req_info.get("demand_item_ids"),
+                "supply_for_detail": supply_for_detail,
+                "in_transit_qty": in_transit_qty,
+                "reserved_qty": reserved_qty,
+                "inventory_info": inventory_info,
+            })
+
+        apply_bom_pegged_production_schedules(pegging_rows, today=schedule_today)
+
+        for pending in pending_items:
+            material_id = pending["material_id"]
+            peg = pegging_rows.get(material_id) or {}
+            production_start_date = peg.get("production_start_date", pending["production_start_date"])
+            production_completion_date = peg.get("production_completion_date", pending["production_completion_date"])
+            procurement_start_date = peg.get("procurement_start_date", pending["procurement_start_date"])
+            procurement_completion_date = peg.get("procurement_completion_date", pending["procurement_completion_date"])
+            planned_production = pending["planned_production"]
+            planned_procurement = pending["planned_procurement"]
+            suggested_work_order_quantity = pending["suggested_work_order_quantity"]
+            suggested_purchase_order_quantity = pending["suggested_purchase_order_quantity"]
+
             await DemandComputationItem.create(
                 tenant_id=tenant_id,
                 computation_id=computation.id,
                 material_id=material_id,
-                material_code=req_info["material_code"],
-                material_name=req_info["material_name"],
-                material_spec=material.specification,
-                material_unit=req_info["unit"],
-                required_quantity=Decimal(str(gross_requirement)),
-                available_inventory=Decimal(str(available_inventory)),
-                net_requirement=Decimal(str(net_requirement)),
-                gross_requirement=Decimal(str(gross_requirement)),
-                safety_stock=Decimal(str(safety_stock))
+                material_code=pending["material_code"],
+                material_name=pending["material_name"],
+                material_spec=pending["material_spec"],
+                material_unit=pending["material_unit"],
+                required_quantity=Decimal(str(pending["gross_requirement"])),
+                available_inventory=Decimal(str(pending["available_inventory"])),
+                net_requirement=Decimal(str(pending["net_requirement"])),
+                gross_requirement=Decimal(str(pending["gross_requirement"])),
+                safety_stock=Decimal(str(pending["safety_stock"]))
                 if netting_params_for_supply.get("include_safety_stock", True)
                 else None,
-                reorder_point=Decimal(str(reorder_point))
+                reorder_point=Decimal(str(pending["reorder_point"]))
                 if netting_params_for_supply.get("include_reorder_point", False)
                 else None,
-                delivery_date=delivery_date,
+                delivery_date=pending["delivery_date"],
                 planned_production=planned_production if planned_production > 0 else None,
                 planned_procurement=planned_procurement if planned_procurement > 0 else None,
                 production_start_date=production_start_date,
@@ -1771,17 +1909,17 @@ class DemandComputationService:
                 procurement_completion_date=procurement_completion_date,
                 suggested_work_order_quantity=suggested_work_order_quantity if suggested_work_order_quantity > 0 else None,
                 suggested_purchase_order_quantity=suggested_purchase_order_quantity if suggested_purchase_order_quantity > 0 else None,
-                material_source_type=source_type,
-                material_source_config=source_config,
-                source_validation_passed=validation_passed,
-                source_validation_errors=validation_errors if not validation_passed else None,
-                demand_item_ids=req_info.get("demand_item_ids"),
+                material_source_type=pending["source_type"],
+                material_source_config=pending["source_config"],
+                source_validation_passed=pending["validation_passed"],
+                source_validation_errors=pending["validation_errors"] if not pending["validation_passed"] else None,
+                demand_item_ids=pending["demand_item_ids"],
                 detail_results={
-                    "in_transit_quantity": in_transit_qty,
-                    "reserved_quantity": reserved_qty,
-                    "on_hand": _safe_float(inventory_info.get("on_hand")),
-                    "inventory_breakdown": inventory_info.get("breakdown") or {},
-                    "supply_calculation": supply_for_detail,
+                    "in_transit_quantity": pending["in_transit_qty"],
+                    "reserved_quantity": pending["reserved_qty"],
+                    "on_hand": _safe_float(pending["inventory_info"].get("on_hand")),
+                    "inventory_breakdown": pending["inventory_info"].get("breakdown") or {},
+                    "supply_calculation": pending["supply_for_detail"],
                 },
             )
 
@@ -2227,8 +2365,8 @@ class DemandComputationService:
                 if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
                     supplier_id = None
                     if item.material_source_config:
-                        source_config = item.material_source_config.get("source_config", {})
-                        supplier_id = source_config.get("default_supplier_id")
+                        sc = resolve_computation_item_source_config(item.material_source_config)
+                        supplier_id = sc.get("default_supplier_id")
                     if supplier_id:
                         if supplier_id not in purchase_items_by_supplier:
                             purchase_items_by_supplier[supplier_id] = []
@@ -2299,8 +2437,8 @@ class DemandComputationService:
                 if item.material_id not in already_pushed_po_material_ids and item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
                     supplier_id = None
                     if item.material_source_config:
-                        source_config = item.material_source_config.get("source_config", {})
-                        supplier_id = source_config.get("default_supplier_id")
+                        sc = resolve_computation_item_source_config(item.material_source_config)
+                        supplier_id = sc.get("default_supplier_id")
                     if supplier_id:
                         if supplier_id not in purchase_items_by_supplier:
                             purchase_items_by_supplier[supplier_id] = []
@@ -2645,10 +2783,8 @@ class DemandComputationService:
                     outsource_count += 1
             elif st == SOURCE_TYPE_BUY:
                 if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
-                    supplier_id = None
-                    if item.material_source_config:
-                        sc = item.material_source_config.get("source_config", {})
-                        supplier_id = sc.get("default_supplier_id")
+                    sc = resolve_computation_item_source_config(item.material_source_config)
+                    supplier_id = sc.get("default_supplier_id")
                     if supplier_id:
                         purchase_items_with_supplier += 1
                     else:
@@ -2852,8 +2988,6 @@ class DemandComputationService:
                 ]
                 for node in wo_nodes:
                     st = node.get("source_type")
-                    if generate_mode == "work_order_only" and st == SOURCE_TYPE_OUTSOURCE:
-                        continue
                     if generate_mode == "outsource_only" and st != SOURCE_TYPE_OUTSOURCE:
                         continue
                     mid = int(node["material_id"])
@@ -3045,7 +3179,7 @@ class DemandComputationService:
             qty = float(item.suggested_purchase_order_quantity or 0)
             if qty <= 0:
                 continue
-            sc = (item.material_source_config or {}).get("source_config", {})
+            sc = resolve_computation_item_source_config(item.material_source_config)
             if not sc.get("default_supplier_id"):
                 continue
             material = material_by_id.get(int(item.material_id)) if item.material_id is not None else None
@@ -3148,7 +3282,7 @@ class DemandComputationService:
                         })
             elif st == SOURCE_TYPE_BUY:
                 if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
-                    sc = (item.material_source_config or {}).get("source_config", {})
+                    sc = resolve_computation_item_source_config(item.material_source_config)
                     if sc.get("default_supplier_id"):
                         purchase_items_with_supplier += 1
                     else:
@@ -3166,7 +3300,7 @@ class DemandComputationService:
             supplier_ids = set()
             for item in items:
                 if item.material_source_type == SOURCE_TYPE_BUY and item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
-                    sc = (item.material_source_config or {}).get("source_config", {})
+                    sc = resolve_computation_item_source_config(item.material_source_config)
                     sid = sc.get("default_supplier_id")
                     if sid:
                         supplier_ids.add(sid)
@@ -3393,13 +3527,9 @@ class DemandComputationService:
                         f"{so.order_code} · {so.customer_name}" if so.customer_name else so.order_code
                     )
 
-            # 确定计划时间（如果有LRP的日期信息）
-            planned_start_date = None
-            planned_end_date = None
-            if item.production_start_date:
-                planned_start_date = item.production_start_date
-            if item.production_completion_date:
-                planned_end_date = item.production_completion_date
+            # 确定计划时间（交期锚定倒排结果）
+            planned_start_date = planning_date_to_work_order_start(item.production_start_date)
+            planned_end_date = planning_date_to_work_order_end(item.production_completion_date)
             
             # 创建工单（物料来源控制增强）
             remarks = f"从需求计算 {computation.computation_code} 自动生成"
@@ -3489,10 +3619,9 @@ class DemandComputationService:
             from apps.master_data.models.supplier import Supplier
             
             # 从物料来源配置获取委外供应商信息（get_material_source_config 返回的结构）
-            mc = item.material_source_config or {}
-            source_config = mc.get("source_config", mc)
-            outsource_supplier_id = mc.get("outsource_supplier_id") or source_config.get("outsource_supplier_id")
-            outsource_operation = mc.get("outsource_operation") or source_config.get("outsource_operation", "")
+            mc = resolve_computation_item_source_config(item.material_source_config)
+            outsource_supplier_id = mc.get("outsource_supplier_id")
+            outsource_operation = mc.get("outsource_operation", "")
             used_placeholder_supplier = False
 
             # allow_draft 时允许无供应商，使用占位供应商
@@ -3519,24 +3648,18 @@ class DemandComputationService:
                     )
             
             supplier_code = getattr(supplier, "code", None) or str(outsource_supplier_id)
-            supplier_name = getattr(supplier, "name", None) or source_config.get("outsource_supplier_name", "待指定")
+            supplier_name = getattr(supplier, "name", None) or mc.get("outsource_supplier_name", "待指定")
             
             quantity = float(item.suggested_work_order_quantity or 0)
-            unit_price = Decimal(str(mc.get("outsource_price") or source_config.get("outsource_price", 0)))
+            unit_price = Decimal(str(mc.get("outsource_price") or 0))
             total_amount = Decimal(str(quantity)) * unit_price
             
             planned_start_date = None
             planned_end_date = None
             if item.production_start_date:
-                planned_start_date = datetime.combine(
-                    item.production_start_date,
-                    datetime.min.time()
-                )
+                planned_start_date = planning_date_to_work_order_start(item.production_start_date)
             if item.production_completion_date:
-                planned_end_date = datetime.combine(
-                    item.production_completion_date,
-                    datetime.min.time()
-                )
+                planned_end_date = planning_date_to_work_order_end(item.production_completion_date)
             
             work_order_data = OutsourceWorkOrderCreate(
                 product_id=item.material_id,
@@ -3629,7 +3752,7 @@ class DemandComputationService:
             unit_price = Decimal(0)
             
             if item.material_source_type == "Buy" and item.material_source_config:
-                source_config = item.material_source_config.get("source_config", {})
+                source_config = resolve_computation_item_source_config(item.material_source_config)
                 supplier_id = source_config.get("default_supplier_id")
                 supplier_name = source_config.get("default_supplier_name", "待指定供应商")
                 unit_price = Decimal(str(source_config.get("purchase_price", 0)))
@@ -3644,7 +3767,7 @@ class DemandComputationService:
                 # 从物料来源配置获取采购提前期
                 lead_time_days = 7  # 默认7天
                 if item.material_source_config:
-                    source_config = item.material_source_config.get("source_config", {})
+                    source_config = resolve_computation_item_source_config(item.material_source_config)
                     lead_time_days = source_config.get("purchase_lead_time", 7)
                 delivery_date = date.today() + timedelta(days=lead_time_days)
             
@@ -3676,6 +3799,7 @@ class DemandComputationService:
                 material_name=item.material_name,
                 material_spec=item.material_spec,
                 ordered_quantity=Decimal(str(quantity)),
+                outstanding_quantity=Decimal(str(quantity)),
                 unit=item.material_unit,
                 unit_price=unit_price,
                 total_price=Decimal(str(total_price)),
@@ -3735,7 +3859,7 @@ class DemandComputationService:
                 # 如果供应商不存在，尝试从第一个物料的配置中获取供应商名称
                 supplier_name = "待指定供应商"
                 if items and items[0].material_source_config:
-                    source_config = items[0].material_source_config.get("source_config", {})
+                    source_config = resolve_computation_item_source_config(items[0].material_source_config)
                     supplier_name = source_config.get("default_supplier_name", "待指定供应商")
             else:
                 supplier_name = supplier.name
@@ -3763,7 +3887,7 @@ class DemandComputationService:
                 # 从物料来源配置获取采购提前期
                 lead_time_days = 7  # 默认7天
                 if items and items[0].material_source_config:
-                    source_config = items[0].material_source_config.get("source_config", {})
+                    source_config = resolve_computation_item_source_config(items[0].material_source_config)
                     lead_time_days = source_config.get("purchase_lead_time", 7)
                 delivery_date = date.today() + timedelta(days=lead_time_days)
             
@@ -3792,7 +3916,7 @@ class DemandComputationService:
                 # 从物料来源配置获取采购价格（物料来源控制增强）
                 unit_price = Decimal(0)
                 if item.material_source_type == "Buy" and item.material_source_config:
-                    source_config = item.material_source_config.get("source_config", {})
+                    source_config = resolve_computation_item_source_config(item.material_source_config)
                     unit_price = Decimal(str(source_config.get("purchase_price", 0)))
                 
                 # 计算数量和总价
@@ -3808,6 +3932,7 @@ class DemandComputationService:
                     material_name=item.material_name,
                     material_spec=item.material_spec,
                     ordered_quantity=quantity,
+                    outstanding_quantity=quantity,
                     unit=item.material_unit,
                     unit_price=unit_price,
                     total_price=total_price,

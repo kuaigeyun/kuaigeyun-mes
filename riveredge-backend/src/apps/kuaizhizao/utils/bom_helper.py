@@ -27,6 +27,26 @@ def bom_item_base_quantity(bom_item: BOM) -> Decimal:
     return Decimal(str(value))
 
 
+def bom_component_lines_filter(header: BOM, material_id: int) -> Dict[str, Any]:
+    """
+    同一 BOM 版本下子件行的查询条件。
+
+    升版后可能共用 bom_code 但 version 不同；仅按 bom_code 会混入旧版明细导致 MRP 重复累计。
+    """
+    kwargs: Dict[str, Any] = {
+        "tenant_id": header.tenant_id,
+        "material_id": material_id,
+        "deleted_at__isnull": True,
+    }
+    if header.bom_code:
+        kwargs["bom_code"] = header.bom_code
+        if header.version:
+            kwargs["version"] = header.version
+    else:
+        kwargs["version"] = header.version
+    return kwargs
+
+
 def bom_line_unit_quantity(quantity: Decimal, base_quantity: Optional[Decimal] = None) -> Decimal:
     """单位用量 = 行用量 / 基准数量。"""
     base = Decimal(str(base_quantity if base_quantity is not None else 1))
@@ -239,21 +259,8 @@ async def get_bom_items_by_material_id(
     if not bom:
         return []
     
-    # 获取该 BOM 下的所有明细：优先用 bom_code 关联；bom_code 为空时用 material_id+version 关联（兼容历史数据）
-    if bom.bom_code:
-        items_query = BOM.filter(
-            tenant_id=tenant_id,
-            material_id=material_id,
-            bom_code=bom.bom_code,
-            deleted_at__isnull=True
-        )
-    else:
-        items_query = BOM.filter(
-            tenant_id=tenant_id,
-            material_id=material_id,
-            version=bom.version,
-            deleted_at__isnull=True
-        )
+    # 获取该 BOM 下的所有明细：优先用 bom_code+version；bom_code 为空时用 material_id+version
+    items_query = BOM.filter(**bom_component_lines_filter(bom, material_id))
     eff_filter = _bom_effective_filter(as_of_date)
     if eff_filter:
         items_query = items_query.filter(eff_filter)

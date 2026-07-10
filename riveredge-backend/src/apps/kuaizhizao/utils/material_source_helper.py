@@ -34,6 +34,7 @@ from apps.kuaizhizao.utils.bom_helper import (
     _bom_effective_filter,
     bom_line_required_quantity,
     bom_item_base_quantity,
+    bom_component_lines_filter,
 )
 
 
@@ -162,6 +163,16 @@ SOURCE_TYPE_PHANTOM = "Phantom"  # 虚拟件
 SOURCE_TYPE_OUTSOURCE = "Outsource"  # 委外件
 SOURCE_TYPE_CONFIGURE = "Configure"  # 已废弃，仅兼容历史 BOM 展开逻辑
 SOURCE_TYPE_SERVICE = "Service"  # 服务
+
+# MRP 多阶展开：仅自制/委外/历史配置件需递归子 BOM；采购件/服务按整件采购，不再拆子件（避免与同级 BOM 行重复累计）
+_MRP_RECURSE_SOURCE_TYPES = frozenset(
+    {SOURCE_TYPE_MAKE, SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE}
+)
+
+
+def _should_recurse_child_bom_in_mrp(source_type: Optional[str]) -> bool:
+    return (source_type or "") in _MRP_RECURSE_SOURCE_TYPES
+
 
 VALID_SOURCE_TYPES = list(CANONICAL_SOURCE_TYPES)
 
@@ -347,7 +358,7 @@ async def expand_bom_with_source_control(
     """
     展开BOM（物料来源控制）
 
-    - **flatten_intermediate_subassemblies=False**（MRP/缺料等）：与历史逻辑一致——虚拟件穿透；非虚拟子件先记一行，若存在 BOM 再递归展开下层（子件为虚拟件则只展开不重复本行逻辑）。
+    - **flatten_intermediate_subassemblies=False**（MRP/缺料等）：虚拟件穿透；自制/委外子件先记一行再递归子 BOM；**采购件/服务仅记一行不拆子 BOM**（避免整件采购与子件同行重复累计）。
     - **flatten_intermediate_subassemblies=True**（工单齐套/叫料）：虚拟件下仅虚拟件/配置件继续穿透，其余子件单行不拆子 BOM；非虚拟父件下同理。
 
     Args:
@@ -403,21 +414,8 @@ async def expand_bom_with_source_control(
             logger.warning(f"虚拟件没有BOM，物料ID: {material_id}")
             return []
         
-        # 获取该 BOM 下的所有明细：优先用 bom_code；bom_code 为空时用 material_id+version
-        if target_bom.bom_code:
-            bom_items_query = BOM.filter(
-                tenant_id=tenant_id,
-                material_id=material_id,
-                bom_code=target_bom.bom_code,
-                deleted_at__isnull=True
-            )
-        else:
-            bom_items_query = BOM.filter(
-                tenant_id=tenant_id,
-                material_id=material_id,
-                version=target_bom.version,
-                deleted_at__isnull=True
-            )
+        # 获取该 BOM 下的所有明细：优先用 bom_code+version；bom_code 为空时用 material_id+version
+        bom_items_query = BOM.filter(**bom_component_lines_filter(target_bom, material_id))
         eff_filter = _bom_effective_filter(as_of_date)
         if eff_filter:
             bom_items_query = bom_items_query.filter(eff_filter)
@@ -504,13 +502,15 @@ async def expand_bom_with_source_control(
                         requirements.append(_bom_leaf_requirement(
                             bom_item, component, component_qty, level + 1,
                             from_phantom=True, phantom_material_id=material_id,
+                            parent_material_id=material_id,
                         ))
                 else:
                     requirements.append(_bom_leaf_requirement(
                         bom_item, component, component_qty, level + 1,
                         from_phantom=True, phantom_material_id=material_id,
+                        parent_material_id=material_id,
                     ))
-                    if await _child_has_any_approved_bom_row(
+                    if _should_recurse_child_bom_in_mrp(ct) and await _child_has_any_approved_bom_row(
                         tenant_id, component.id, only_approved, as_of_date
                     ):
                         child_requirements = await expand_bom_with_source_control(**_expand_kw)
@@ -527,21 +527,8 @@ async def expand_bom_with_source_control(
     if not target_bom:
         return []
     
-    # 获取该 BOM 下的所有明细：优先用 bom_code；bom_code 为空时用 material_id+version（兼容历史数据）
-    if target_bom.bom_code:
-        bom_items_query = BOM.filter(
-            tenant_id=tenant_id,
-            material_id=material_id,
-            bom_code=target_bom.bom_code,
-            deleted_at__isnull=True
-        )
-    else:
-        bom_items_query = BOM.filter(
-            tenant_id=tenant_id,
-            material_id=material_id,
-            version=target_bom.version,
-            deleted_at__isnull=True
-        )
+    # 获取该 BOM 下的所有明细：优先用 bom_code+version；bom_code 为空时用 material_id+version
+    bom_items_query = BOM.filter(**bom_component_lines_filter(target_bom, material_id))
     eff_filter = _bom_effective_filter(as_of_date)
     if eff_filter:
         bom_items_query = bom_items_query.filter(eff_filter)
@@ -618,8 +605,9 @@ async def expand_bom_with_source_control(
             else:
                 requirements.append(_bom_leaf_requirement(
                     bom_item, component, component_qty, level + 1, from_phantom=False,
+                    parent_material_id=material_id,
                 ))
-                if await _child_has_any_approved_bom_row(
+                if _should_recurse_child_bom_in_mrp(component_source_type) and await _child_has_any_approved_bom_row(
                     tenant_id, component.id, only_approved, as_of_date
                 ):
                     child_requirements = await expand_bom_with_source_control(
@@ -632,6 +620,65 @@ async def expand_bom_with_source_control(
                     requirements.extend(child_requirements)
 
     return requirements
+
+
+def normalize_source_config_payload(
+    raw: Optional[Dict[str, Any]],
+    *,
+    _depth: int = 0,
+) -> Dict[str, Any]:
+    """
+    展平 material.source_config 或快照中多余的 {\"source_config\": {...}} 嵌套。
+    部分历史/配置件物料主数据仅在最内层保存 default_supplier_id 等字段。
+    """
+    if not raw or not isinstance(raw, dict) or _depth > 3:
+        return {}
+    if any(
+        key in raw
+        for key in (
+            "default_supplier_id",
+            "outsource_supplier_id",
+            "purchase_lead_time",
+            "production_lead_time",
+            "outsource_lead_time",
+            "source_types",
+            "manufacturing_mode",
+        )
+    ):
+        return raw
+    nested = raw.get("source_config")
+    if isinstance(nested, dict):
+        return normalize_source_config_payload(nested, _depth=_depth + 1)
+    return raw
+
+
+def resolve_computation_item_source_config(
+    material_source_config: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    从 DemandComputationItem.material_source_config 解析可用的扁平来源配置。
+    合并 get_material_source_config 顶层字段与内层 source_config。
+    """
+    if not material_source_config or not isinstance(material_source_config, dict):
+        return {}
+    cfg = material_source_config
+    inner_raw = cfg.get("source_config")
+    inner = normalize_source_config_payload(inner_raw if isinstance(inner_raw, dict) else None)
+    merged = dict(inner)
+    for key in (
+        "default_supplier_id",
+        "default_supplier_name",
+        "outsource_supplier_id",
+        "outsource_supplier_name",
+        "purchase_lead_time",
+        "production_lead_time",
+        "outsource_lead_time",
+        "purchase_price",
+        "outsource_price",
+    ):
+        if cfg.get(key) is not None:
+            merged[key] = cfg[key]
+    return merged
 
 
 async def get_material_source_config(
@@ -653,7 +700,7 @@ async def get_material_source_config(
         return None
     
     source_type = material.source_type
-    source_config = material.source_config or {}
+    source_config = normalize_source_config_payload(material.source_config or {})
     
     config = {
         "source_type": source_type,

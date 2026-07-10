@@ -9,13 +9,15 @@ Author: Auto (AI Assistant)
 Date: 2026-01-16
 """
 
+import asyncio
 import uuid
 from datetime import datetime, timedelta
-from typing import List, Optional
 from decimal import Decimal
+from typing import Any, Dict, List, Optional
 
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
+from tortoise import Tortoise
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
@@ -29,6 +31,14 @@ from apps.kuaizhizao.schemas.outsource_work_order import (
     OutsourceMaterialReceiptResponse,
 )
 from loguru import logger
+
+from core.utils.timezone_utils import to_site_date
+
+from apps.kuaizhizao.utils.outsource_work_order_state import (
+    apply_outsource_work_order_execution_start,
+    apply_outsource_work_order_receipt_completion,
+    resolve_outsource_work_order_product_unit,
+)
 
 
 class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
@@ -68,6 +78,7 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
         received = Decimal(str(owo.received_quantity or 0))
         pending = max(Decimal("0"), ordered - received)
         message = None
+        product_unit = await resolve_outsource_work_order_product_unit(tenant_id, owo)
         lines: List[OutsourceMaterialReceiptPreviewLine] = []
         if pending > 0:
             lines.append(
@@ -75,7 +86,7 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                     product_id=int(owo.product_id or 0),
                     product_code=str(owo.product_code or ""),
                     product_name=str(owo.product_name or ""),
-                    unit=str(owo.unit or "件"),
+                    unit=product_unit,
                     ordered_quantity=ordered,
                     received_quantity=received,
                     pending_quantity=pending,
@@ -91,11 +102,74 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
             message=message,
         )
 
+    async def _generate_outsource_receipt_code(self, tenant_id: int) -> str:
+        today = datetime.now().strftime("%Y%m%d")
+        existing_codes = await OutsourceMaterialReceipt.filter(
+            tenant_id=tenant_id,
+            code__startswith=f"OWR-{today}",
+            deleted_at__isnull=True,
+        ).order_by("-code").limit(1).values_list("code", flat=True)
+        if existing_codes:
+            last_code = existing_codes[0]
+            last_seq = int(last_code.split("-")[-1]) if last_code.split("-")[-1].isdigit() else 0
+            seq = last_seq + 1
+        else:
+            seq = 1
+        return f"OWR-{today}-{seq:04d}"
+
+    @staticmethod
+    def _collect_exception_text(exc: BaseException) -> str:
+        parts: list[str] = []
+        seen: set[int] = set()
+        current: BaseException | None = exc
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            parts.append(str(current))
+            current = current.__cause__ or current.__context__
+        return " ".join(parts).lower()
+
+    @classmethod
+    def _is_row_lock_unavailable(cls, exc: BaseException) -> bool:
+        msg = cls._collect_exception_text(exc)
+        return (
+            "could not obtain lock" in msg
+            or "lock timeout" in msg
+            or "55p03" in msg
+            or "locknotavailable" in msg
+            or "apps_kuaizhizao_outsource_work_orders" in msg
+        )
+
+    _OUTSOURCE_WO_LOCK_BUSY_MSG = (
+        "委外工单正被其他未提交的数据库事务占用（通常是历史卡住的发料/入库请求）。"
+        "请稍后重试；若仍失败，请让管理员在 PostgreSQL 执行："
+        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+        "WHERE datname = current_database() AND state = 'idle in transaction' AND pid <> pg_backend_pid();"
+    )
+
+    async def _acquire_outsource_work_order_row_lock(
+        self,
+        *,
+        tenant_id: int,
+        outsource_work_order_id: int,
+    ) -> OutsourceWorkOrder:
+        conn = Tortoise.get_connection("default")
+        await conn.execute_query("SET LOCAL lock_timeout = '8000'")
+        locked_work_order = await OutsourceWorkOrder.filter(
+            tenant_id=tenant_id,
+            id=outsource_work_order_id,
+            deleted_at__isnull=True,
+        ).select_for_update().first()
+        if not locked_work_order:
+            raise NotFoundError(f"委外工单ID {outsource_work_order_id} 不存在")
+        return locked_work_order
+
     async def create_material_receipt(
         self,
         tenant_id: int,
         receipt_data: OutsourceMaterialReceiptCreate,
-        created_by: int
+        created_by: int,
+        *,
+        created_by_name: Optional[str] = None,
     ) -> OutsourceMaterialReceiptResponse:
         """
         创建委外收货单
@@ -111,135 +185,224 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
         Raises:
             ValidationError: 数据验证失败
         """
-        async with in_transaction():
-            # 验证委外工单是否存在
-            outsource_work_order = await OutsourceWorkOrder.filter(
+        outsource_work_order = await OutsourceWorkOrder.filter(
+            tenant_id=tenant_id,
+            id=receipt_data.outsource_work_order_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not outsource_work_order:
+            raise NotFoundError(f"委外工单ID {receipt_data.outsource_work_order_id} 不存在")
+
+        from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
+            assert_outsource_work_order_capability,
+        )
+
+        assert_outsource_work_order_capability(outsource_work_order, "push_outsource_receipt")
+
+        if receipt_data.quantity <= 0:
+            raise ValidationError("收货数量必须大于 0")
+
+        product_id = outsource_work_order.product_id
+        if product_id and not receipt_data.warehouse_id:
+            raise ValidationError("请选择入库仓库")
+
+        if receipt_data.code:
+            existing = await OutsourceMaterialReceipt.filter(
                 tenant_id=tenant_id,
-                id=receipt_data.outsource_work_order_id,
-                deleted_at__isnull=True
+                code=receipt_data.code,
+                deleted_at__isnull=True,
             ).first()
+            if existing:
+                raise ValidationError(f"委外收货单编码 {receipt_data.code} 已存在")
 
-            if not outsource_work_order:
-                raise NotFoundError(f"委外工单ID {receipt_data.outsource_work_order_id} 不存在")
+        receiver_name = (created_by_name or "").strip()
+        if not receiver_name:
+            user_info = await self.get_user_info(created_by)
+            receiver_name = user_info["name"]
 
-            from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
-                assert_outsource_work_order_capability,
-            )
-
-            assert_outsource_work_order_capability(outsource_work_order, "push_outsource_receipt")
-
-            # 验证收货数量不能超过委外数量
-            if receipt_data.quantity > outsource_work_order.quantity:
-                raise ValidationError(
-                    f"收货数量 {receipt_data.quantity} 不能超过委外数量 {outsource_work_order.quantity}"
+        stock_payload: Optional[Dict[str, Any]] = None
+        payable_payload: Optional[Dict[str, Any]] = None
+        response: Optional[OutsourceMaterialReceiptResponse] = None
+        try:
+            async with in_transaction():
+                locked_work_order = await self._acquire_outsource_work_order_row_lock(
+                    tenant_id=tenant_id,
+                    outsource_work_order_id=receipt_data.outsource_work_order_id,
                 )
 
-            # 处理编码
-            code = receipt_data.code
-            if not code:
-                # 自动生成编码（格式：OWR-日期-序号）
-                today = datetime.now().strftime("%Y%m%d")
-                existing_codes = await OutsourceMaterialReceipt.filter(
+                ordered_qty = Decimal(str(locked_work_order.quantity or 0))
+                received_qty = Decimal(str(locked_work_order.received_quantity or 0))
+                pending_qty = max(Decimal("0"), ordered_qty - received_qty)
+                if receipt_data.quantity > pending_qty:
+                    raise ValidationError(
+                        f"收货数量 {receipt_data.quantity} 不能超过待收数量 {pending_qty}"
+                    )
+
+                code = receipt_data.code or await self._generate_outsource_receipt_code(tenant_id)
+                now = datetime.now()
+                material_receipt = await OutsourceMaterialReceipt.create(
                     tenant_id=tenant_id,
-                    code__startswith=f"OWR-{today}",
-                    deleted_at__isnull=True
-                ).order_by("-code").limit(1).values_list("code", flat=True)
-                
-                if existing_codes:
-                    last_code = existing_codes[0]
-                    last_seq = int(last_code.split("-")[-1]) if last_code.split("-")[-1].isdigit() else 0
-                    seq = last_seq + 1
-                else:
-                    seq = 1
-                
-                code = f"OWR-{today}-{seq:04d}"
-            else:
-                # 验证编码唯一性
-                existing = await OutsourceMaterialReceipt.filter(
-                    tenant_id=tenant_id,
+                    uuid=str(uuid.uuid4()),
                     code=code,
-                    deleted_at__isnull=True
-                ).first()
-                
-                if existing:
-                    raise ValidationError(f"委外收货单编码 {code} 已存在")
+                    outsource_work_order_id=receipt_data.outsource_work_order_id,
+                    outsource_work_order_code=receipt_data.outsource_work_order_code,
+                    quantity=receipt_data.quantity,
+                    qualified_quantity=receipt_data.qualified_quantity,
+                    unqualified_quantity=receipt_data.unqualified_quantity,
+                    unit=receipt_data.unit,
+                    warehouse_id=receipt_data.warehouse_id,
+                    warehouse_name=receipt_data.warehouse_name,
+                    location_id=receipt_data.location_id,
+                    location_name=receipt_data.location_name,
+                    batch_number=receipt_data.batch_number,
+                    status="completed",
+                    received_at=now,
+                    received_by=created_by,
+                    received_by_name=receiver_name,
+                    remarks=receipt_data.remarks,
+                    created_by=created_by,
+                    created_by_name=receiver_name,
+                )
 
-            # 获取创建人信息
-            user_info = await self.get_user_info(created_by)
+                locked_work_order.received_quantity = (
+                    (locked_work_order.received_quantity or Decimal("0")) + receipt_data.quantity
+                )
+                locked_work_order.qualified_quantity = (
+                    (locked_work_order.qualified_quantity or Decimal("0")) + receipt_data.qualified_quantity
+                )
+                locked_work_order.unqualified_quantity = (
+                    (locked_work_order.unqualified_quantity or Decimal("0")) + receipt_data.unqualified_quantity
+                )
 
-            # 创建委外收货单（创建即入库，标记为已完成）
-            now = datetime.now()
-            material_receipt = await OutsourceMaterialReceipt.create(
-                tenant_id=tenant_id,
-                uuid=str(uuid.uuid4()),
-                code=code,
-                outsource_work_order_id=receipt_data.outsource_work_order_id,
-                outsource_work_order_code=receipt_data.outsource_work_order_code,
-                quantity=receipt_data.quantity,
-                qualified_quantity=receipt_data.qualified_quantity,
-                unqualified_quantity=receipt_data.unqualified_quantity,
-                unit=receipt_data.unit,
-                warehouse_id=receipt_data.warehouse_id,
-                warehouse_name=receipt_data.warehouse_name,
-                location_id=receipt_data.location_id,
-                location_name=receipt_data.location_name,
-                batch_number=receipt_data.batch_number,
-                status="completed",
-                received_at=now,
-                received_by=created_by,
-                received_by_name=user_info["name"],
-                remarks=receipt_data.remarks,
-                created_by=created_by,
-                created_by_name=user_info["name"],
-            )
+                apply_outsource_work_order_execution_start(locked_work_order, now=now)
+                apply_outsource_work_order_receipt_completion(locked_work_order, now=now)
 
-            # 更新委外工单的已收货数量、合格数量、不合格数量
-            outsource_work_order.received_quantity = (
-                (outsource_work_order.received_quantity or Decimal("0")) + receipt_data.quantity
-            )
-            outsource_work_order.qualified_quantity = (
-                (outsource_work_order.qualified_quantity or Decimal("0")) + receipt_data.qualified_quantity
-            )
-            outsource_work_order.unqualified_quantity = (
-                (outsource_work_order.unqualified_quantity or Decimal("0")) + receipt_data.unqualified_quantity
-            )
+                await locked_work_order.save()
 
-            # 如果已收货数量达到委外数量，自动更新状态为completed
-            if outsource_work_order.received_quantity >= outsource_work_order.quantity:
-                outsource_work_order.status = "completed"
-                outsource_work_order.actual_end_date = datetime.now()
+                logger.info(f"创建委外收货单成功: {code}")
 
-            await outsource_work_order.save()
+                await material_receipt.refresh_from_db()
+                response = OutsourceMaterialReceiptResponse.model_validate(material_receipt)
+                if product_id:
+                    stock_payload = {
+                        "tenant_id": tenant_id,
+                        "material_id": int(product_id),
+                        "quantity": receipt_data.qualified_quantity or receipt_data.quantity,
+                        "warehouse_id": receipt_data.warehouse_id,
+                        "batch_no": getattr(receipt_data, "batch_number", None),
+                        "source_type": "outsource_material_receipt",
+                        "source_doc_id": material_receipt.id,
+                        "source_doc_code": code,
+                        "ledger_production_date": to_site_date(now),
+                    }
+                payable_payload = {
+                    "tenant_id": tenant_id,
+                    "receipt_id": int(material_receipt.id),
+                    "outsource_work_order_id": int(locked_work_order.id),
+                    "created_by": created_by,
+                    "qualified_quantity": receipt_data.qualified_quantity,
+                    "quantity": receipt_data.quantity,
+                }
+        except Exception as exc:
+            if self._is_row_lock_unavailable(exc):
+                raise BusinessLogicError(self._OUTSOURCE_WO_LOCK_BUSY_MSG) from exc
+            raise
 
-            # 调用统一库存服务增加库存（委外收货为成品入库）
+        self._schedule_stock_for_outsource_receipt(stock_payload)
+        if payable_payload:
+            self._schedule_auto_payable_for_outsource_receipt(**payable_payload)
+        if response is None:
+            raise BusinessLogicError("委外收货创建失败")
+        return response
+
+    def _schedule_stock_for_outsource_receipt(self, payload: Optional[Dict[str, Any]]) -> None:
+        """库存入库异步执行，避免阻塞 HTTP 响应或占满连接池。"""
+        if not payload:
+            return
+
+        async def _run() -> None:
             from apps.kuaizhizao.services.inventory_service import InventoryService
 
-            product_id = outsource_work_order.product_id
-            if product_id:
+            try:
                 await InventoryService.increase_stock(
-                    tenant_id=tenant_id,
-                    material_id=product_id,
-                    quantity=receipt_data.qualified_quantity or receipt_data.quantity,
-                    warehouse_id=receipt_data.warehouse_id,
-                    batch_no=getattr(receipt_data, "batch_number", None),
-                    source_type="outsource_material_receipt",
-                    source_doc_id=material_receipt.id,
-                    source_doc_code=code,
+                    tenant_id=int(payload["tenant_id"]),
+                    material_id=int(payload["material_id"]),
+                    quantity=payload["quantity"],
+                    warehouse_id=payload["warehouse_id"],
+                    batch_no=payload["batch_no"],
+                    source_type=payload["source_type"],
+                    source_doc_id=payload["source_doc_id"],
+                    source_doc_code=payload["source_doc_code"],
+                    ledger_production_date=payload["ledger_production_date"],
+                )
+            except Exception as exc:
+                logger.error(
+                    "委外收货异步入库失败 doc=%s id=%s: %s",
+                    payload.get("source_doc_code"),
+                    payload.get("source_doc_id"),
+                    exc,
                 )
 
-            logger.info(f"创建委外收货单成功: {code}")
-
-            await material_receipt.refresh_from_db()
-            response = OutsourceMaterialReceiptResponse.model_validate(material_receipt)
-
-        await self._maybe_auto_create_payable_for_outsource_receipt(
-            tenant_id=tenant_id,
-            material_receipt=material_receipt,
-            outsource_work_order=outsource_work_order,
-            receipt_data=receipt_data,
-            created_by=created_by,
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        loop.create_task(
+            _run(),
+            name=f"outsource-receipt-stock-{payload.get('source_doc_id')}",
         )
-        return response
+
+    def _schedule_auto_payable_for_outsource_receipt(
+        self,
+        *,
+        tenant_id: int,
+        receipt_id: int,
+        outsource_work_order_id: int,
+        created_by: int,
+        qualified_quantity: Decimal,
+        quantity: Decimal,
+    ) -> None:
+        """应付单生成不阻塞收货 API 响应。"""
+
+        async def _run() -> None:
+            try:
+                material_receipt = await OutsourceMaterialReceipt.filter(
+                    tenant_id=tenant_id,
+                    id=receipt_id,
+                    deleted_at__isnull=True,
+                ).first()
+                outsource_work_order = await OutsourceWorkOrder.filter(
+                    tenant_id=tenant_id,
+                    id=outsource_work_order_id,
+                    deleted_at__isnull=True,
+                ).first()
+                if not material_receipt or not outsource_work_order:
+                    return
+                receipt_data = OutsourceMaterialReceiptCreate(
+                    outsource_work_order_id=outsource_work_order_id,
+                    outsource_work_order_code=str(outsource_work_order.code or ""),
+                    quantity=quantity,
+                    qualified_quantity=qualified_quantity,
+                    unqualified_quantity=Decimal("0"),
+                    unit=str(material_receipt.unit or "件"),
+                    warehouse_id=material_receipt.warehouse_id,
+                    warehouse_name=material_receipt.warehouse_name,
+                )
+                await self._maybe_auto_create_payable_for_outsource_receipt(
+                    tenant_id=tenant_id,
+                    material_receipt=material_receipt,
+                    outsource_work_order=outsource_work_order,
+                    receipt_data=receipt_data,
+                    created_by=created_by,
+                )
+            except Exception as exc:
+                logger.warning("委外收货异步生成应付单失败 receipt_id=%s: %s", receipt_id, exc)
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        loop.create_task(_run(), name=f"outsource-receipt-payable-{receipt_id}")
 
     async def _maybe_auto_create_payable_for_outsource_receipt(
         self,
@@ -444,10 +607,11 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
             assert_inbound_hub_capability,
         )
 
-        assert_inbound_hub_capability(receipt, "confirm", receipt_type="outsource_receipt")
-
         if receipt.status == "completed":
-            raise BusinessLogicError("委外收货单已完成，不能重复完成")
+            await receipt.refresh_from_db()
+            return OutsourceMaterialReceiptResponse.model_validate(receipt)
+
+        assert_inbound_hub_capability(receipt, "confirm", receipt_type="outsource_receipt")
 
         # 获取完成人信息
         user_info = await self.get_user_info(completed_by)

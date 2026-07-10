@@ -24,10 +24,7 @@ import {
 } from '../../../services/production';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
-import {
-  buildReceiptLineFromWorkOrder,
-  type OutsourceReceiptLine,
-} from '../../../components/OutsourceReceiptFormContent';
+import type { OutsourceReceiptLine } from '../../../components/OutsourceReceiptFormContent';
 import type { InboundOutsourcePullType } from './inboundCreateConfig';
 import { inboundReceiptTypeLabel } from './inboundHubTypes';
 import type { InboundReceiptType } from './inboundHubTypes';
@@ -84,7 +81,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
   const initRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [submittingAction, setSubmittingAction] = useState<'draft' | 'confirm' | null>(null);
   const [workOrder, setWorkOrder] = useState<Record<string, unknown> | null>(null);
   const [receiptLine, setReceiptLine] = useState<OutsourceReceiptLine | null>(null);
   const [previewLines, setPreviewLines] = useState<PreviewLine[]>([]);
@@ -190,8 +187,36 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
         setWarehouseOptions(mapWarehouseSelectOptions(whRes));
 
         if (pullType === 'outsource_receipt') {
-          const line = buildReceiptLineFromWorkOrder(wo);
-          setReceiptLine({ ...line, receiptQuantity: 0, qualifiedQuantity: 0, unqualifiedQuantity: 0 });
+          const preview = (await outsourceMaterialReceiptApi.receiptPreview(woId)) as {
+            lines?: Array<Record<string, unknown>>;
+            data?: { lines?: Array<Record<string, unknown>>; message?: string };
+            message?: string;
+          };
+          const lines = preview?.lines ?? preview?.data?.lines ?? [];
+          if (!lines.length) {
+            messageApi.warning(
+              preview?.message ||
+                preview?.data?.message ||
+                t('app.kuaizhizao.warehouseInbound.entry.outsource.noReceiptQty'),
+            );
+            leavePage();
+            return;
+          }
+          const line0 = lines[0];
+          const pending = Number(line0.pending_quantity ?? line0.pendingQuantity ?? 0);
+          setReceiptLine({
+            key: Number(line0.product_id ?? line0.productId ?? woId),
+            productId: line0.product_id != null ? Number(line0.product_id) : undefined,
+            productCode: String(line0.product_code ?? line0.productCode ?? ''),
+            productName: String(line0.product_name ?? line0.productName ?? ''),
+            unit: String(line0.unit ?? '件'),
+            orderedQuantity: Number(line0.ordered_quantity ?? line0.orderedQuantity ?? 0),
+            receivedQuantity: Number(line0.received_quantity ?? line0.receivedQuantity ?? 0),
+            pendingQuantity: pending,
+            receiptQuantity: pending,
+            qualifiedQuantity: pending,
+            unqualifiedQuantity: 0,
+          });
           setPreviewLines([]);
         } else if (pullType === 'outsource_material_return') {
           const preview = (await outsourceMaterialReturnApi.returnPreview(woId)) as {
@@ -432,22 +457,38 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
   );
 
   const submit = async (mode: 'draft' | 'confirm') => {
+    if (submittingAction) return;
     if (!workOrder) return;
     if (needsWarehouse && (!warehouseId || !(warehouseId > 0))) {
       messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.outsource.selectWarehouse'));
       return;
     }
+    if (pullType === 'outsource_receipt') {
+      if (!receiptLine || receiptLine.receiptQuantity <= 0) {
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.outsource.noReceiptQty'));
+        return;
+      }
+    } else if (pullType === 'outsource_material_return') {
+      const hasQty = previewLines.some((line) => line.issue_id && line.return_quantity > 0);
+      if (!hasQty) {
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.outsource.fillMaterialReturnQty'));
+        return;
+      }
+    } else {
+      const hasQty = previewLines.some((line) => line.receipt_id && line.return_quantity > 0);
+      if (!hasQty) {
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.outsource.fillProductReturnQty'));
+        return;
+      }
+    }
+
     const whOpt = warehouseOptions.find((w) => w.value === warehouseId);
 
-    setSubmitting(true);
+    setSubmittingAction(mode);
     try {
       const createdIds: number[] = [];
 
       if (pullType === 'outsource_receipt') {
-        if (!receiptLine || receiptLine.receiptQuantity <= 0) {
-          messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.outsource.noReceiptQty'));
-          return;
-        }
         const created = (await outsourceMaterialReceiptApi.create({
           outsource_work_order_id: woId,
           outsource_work_order_code: woCode,
@@ -457,14 +498,15 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           unit: receiptLine.unit || '件',
           warehouse_id: warehouseId,
           warehouse_name: whOpt?.name,
-          notes: notes.trim() || undefined,
-        })) as { id?: number; receipt_code?: string };
+          remarks: notes.trim() || undefined,
+        })) as { id?: number; code?: string; receipt_code?: string };
         if (created?.id != null) createdIds.push(Number(created.id));
+        const receiptCode = created.code ?? created.receipt_code;
         if (mode === 'draft') {
           messageApi.success(
             t('app.kuaizhizao.warehouseInbound.entry.outsource.receiptDraftCreated', {
-              code: created.receipt_code
-                ? t('app.kuaizhizao.warehouseInbound.entry.purchase.draftCreatedSuffix', { code: created.receipt_code })
+              code: receiptCode
+                ? t('app.kuaizhizao.warehouseInbound.entry.purchase.draftCreatedSuffix', { code: receiptCode })
                 : '',
             }),
           );
@@ -514,7 +556,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
             outsource_work_order_code: woCode,
             outsource_material_receipt_id: line.receipt_id,
             quantity: line.return_quantity,
-            unit: line.unit || String(workOrder.unit ?? '件'),
+            unit: line.unit || '件',
             notes: notes.trim() || undefined,
           })) as { id?: number };
           if (created?.id != null) createdIds.push(Number(created.id));
@@ -531,7 +573,10 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
       invalidateMenuBadgeCounts();
       clearDraft();
       if (mode === 'confirm') {
-        if (createdIds.length === 1) {
+        if (pullType === 'outsource_receipt') {
+          messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.outsourceReceiptConfirmed'));
+          leavePage();
+        } else if (createdIds.length === 1) {
           navigate(INBOUND_LIST_PATH, {
             state: {
               inboundDirectConfirm: {
@@ -548,9 +593,17 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
         leavePage();
       }
     } catch (e: unknown) {
-      messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseInbound.msg.saveFailed'));
+      const err = e as { message?: string; response?: { data?: { detail?: string | { message?: string } } } };
+      const detail = err?.response?.data?.detail;
+      const detailMessage =
+        typeof detail === 'string'
+          ? detail
+          : detail && typeof detail === 'object' && typeof detail.message === 'string'
+            ? detail.message
+            : undefined;
+      messageApi.error(detailMessage || err?.message || t('app.kuaizhizao.warehouseInbound.msg.saveFailed'));
     } finally {
-      setSubmitting(false);
+      setSubmittingAction(null);
     }
   };
 
@@ -565,13 +618,22 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
             </Typography.Title>
           </Space>
           <Space wrap>
-            <Button disabled={submitting || loading} onClick={leavePage}>
+            <Button disabled={submittingAction !== null || loading} onClick={leavePage}>
               {t('app.kuaizhizao.warehouseInbound.action.cancel')}
             </Button>
-            <Button loading={submitting} disabled={loading} onClick={() => void submit('draft')}>
+            <Button
+              loading={submittingAction === 'draft'}
+              disabled={loading || submittingAction !== null}
+              onClick={() => void submit('draft')}
+            >
               {t('app.kuaizhizao.warehouseInbound.action.generateDraft')}
             </Button>
-            <Button type="primary" loading={submitting} disabled={loading} onClick={() => void submit('confirm')}>
+            <Button
+              type="primary"
+              loading={submittingAction === 'confirm'}
+              disabled={loading || submittingAction !== null}
+              onClick={() => void submit('confirm')}
+            >
               {t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
             </Button>
           </Space>
