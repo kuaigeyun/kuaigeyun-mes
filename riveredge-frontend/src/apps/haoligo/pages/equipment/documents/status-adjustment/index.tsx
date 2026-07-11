@@ -34,7 +34,11 @@ import {
   HAOLIGO_EQUIPMENT_OPERATIONAL_STATUS_DICT,
   useEquipmentOperationalStatusLabels,
 } from '../../../../utils/equipmentOperationalStatus';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { haoligoDocumentCreatorColumn, moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import {
+  HaoligoDocumentCreatorFormField,
+  haoligoDocumentCreatorFormValue,
+} from '../../../../components/HaoligoDocumentCreatorDetailField';
 import { formatDateTime } from '../../../../../../utils/format';
 
 const StatusAdjustmentDocumentsPage: React.FC = () => {
@@ -127,12 +131,24 @@ const StatusAdjustmentDocumentsPage: React.FC = () => {
       setCurrentEquipmentStatus(row.old_operational_status ?? null);
       setSavedNewStatus(row.new_operational_status);
       setTimeout(() => {
-        formRef.current?.setFieldsValue({
-          equipment_id: row.equipment_id,
-          new_operational_status: row.new_operational_status,
-          recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
-          remark: row.remark,
-        });
+        formRef.current?.setFieldsValue(
+          view
+            ? haoligoDocumentCreatorFormValue(
+                {
+                  equipment_id: row.equipment_id,
+                  new_operational_status: row.new_operational_status,
+                  recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
+                  remark: row.remark,
+                },
+                row,
+              )
+            : {
+                equipment_id: row.equipment_id,
+                new_operational_status: row.new_operational_status,
+                recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
+                remark: row.remark,
+              },
+        );
       }, 0);
     } catch (e) {
       messageApi.error((e as Error).message || t('app.haoligo.equipment.loadFailed'));
@@ -180,6 +196,7 @@ const StatusAdjustmentDocumentsPage: React.FC = () => {
         ellipsis: true,
         hideInSearch: true,
       },
+      haoligoDocumentCreatorColumn<EquipmentStatusAdjustmentRow>(),
       moldDocumentCreatedAtColumn<EquipmentStatusAdjustmentRow>(),
       {
         title: t('app.haoligo.equipment.documents.colActions'),
@@ -383,6 +400,7 @@ const StatusAdjustmentDocumentsPage: React.FC = () => {
               <Col span={24}>
                 <ProFormTextArea name="remark" label={t('app.haoligo.equipment.documents.colRemark')} fieldProps={{ rows: 3 }} />
               </Col>
+              <HaoligoDocumentCreatorFormField visible={detailMode} />
             </Row>
           </ProForm>
         </Spin>

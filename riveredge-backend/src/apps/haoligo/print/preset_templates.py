@@ -437,10 +437,10 @@ _FINANCE_ACCEPTANCE_SHEET_BODY = """
           <td class="center">{{ line.line_no or '' }}</td>
           <td class="center">&nbsp;</td>
           <td>{{ line.product_name_spec or '' }}</td>
-          <td class="num">{{ line.quantity_display or '' }}</td>
+          <td class="center">{{ line.quantity_display or '' }}</td>
           <td class="center">{{ line.unit or '' }}</td>
-          <td class="num">{{ line.unit_price_display or '' }}</td>
-          <td class="num">{{ line.amount_display or '' }}</td>
+          <td class="center">{{ line.unit_price_display or '' }}</td>
+          <td class="center">{{ line.amount_display or '' }}</td>
           <td>{{ line.remark or '' }}</td>
         </tr>
         {% endfor %}

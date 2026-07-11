@@ -9,6 +9,7 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._creator import resolve_creator_name
 from apps.haoligo.api._equipment_sheet_code import generate_equipment_sheet_no
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.api._users import resolve_tenant_user
@@ -63,6 +64,7 @@ class HazardOut(BaseModel):
     responsible_name: Optional[str] = None
     report_enabled: bool = False
     report_notify_user_ids: List[int] = Field(default_factory=list)
+    creator_name: Optional[str] = None
 
 
 class HazardCreate(BaseModel):
@@ -248,6 +250,7 @@ async def _serialize_hazard(
     data["issue_type_codes"] = codes
     if codes and not data.get("issue_type_code"):
         data["issue_type_code"] = codes[0]
+    data["creator_name"] = resolve_creator_name(registrant_name=data.get("registrant_name"))
     return HazardOut(**data)
 
 

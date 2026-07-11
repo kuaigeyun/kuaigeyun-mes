@@ -62,7 +62,11 @@ import { useGlobalStore } from '../../../../../../stores';
 import { MoldAttachmentImagePreview } from '../../../../components/MoldAttachmentImagePreview';
 import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
 import { SecurePictureCardUpload } from '../../../../components/SecurePictureCardUpload';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { haoligoDocumentCreatorColumn, moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import {
+  HaoligoDocumentCreatorFormField,
+  haoligoDocumentCreatorFormValue,
+} from '../../../../components/HaoligoDocumentCreatorDetailField';
 import { useEquipmentOperationalStatusLabels } from '../../../../utils/equipmentOperationalStatus';
 import {
   formatMultiselectMeasuredValue,
@@ -323,14 +327,28 @@ const SpotCheckDocumentsPage: React.FC = () => {
           planLabel || (row.inspection_param_set_id ? `ID ${row.inspection_param_set_id}` : undefined),
       });
       const notifyIds = row.report_notify_user_ids || [];
-      setEditFormInitialValues({
-        equipment_id: row.equipment_id,
-        inspection_param_set_id: row.inspection_param_set_id ?? undefined,
-        recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
-        applied_operational_status: row.applied_operational_status ?? undefined,
-        report_enabled: row.report_enabled,
-        report_notify_user_ids: notifyIds,
-      });
+      setEditFormInitialValues(
+        view
+          ? haoligoDocumentCreatorFormValue(
+              {
+                equipment_id: row.equipment_id,
+                inspection_param_set_id: row.inspection_param_set_id ?? undefined,
+                recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
+                applied_operational_status: row.applied_operational_status ?? undefined,
+                report_enabled: row.report_enabled,
+                report_notify_user_ids: notifyIds,
+              },
+              row,
+            )
+          : {
+              equipment_id: row.equipment_id,
+              inspection_param_set_id: row.inspection_param_set_id ?? undefined,
+              recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
+              applied_operational_status: row.applied_operational_status ?? undefined,
+              report_enabled: row.report_enabled,
+              report_notify_user_ids: notifyIds,
+            },
+      );
       setModalOpen(true);
       if (notifyIds.length) {
         void listHaoligoNotifyUserOptions({ selected_user_ids: notifyIds, limit: 80 }).then((users) => {
@@ -423,6 +441,7 @@ const SpotCheckDocumentsPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) => (r.report_enabled ? t('app.haoligo.equipment.documents.yes') : t('app.haoligo.equipment.documents.no')),
       },
+      haoligoDocumentCreatorColumn<EquipmentSpotCheckRow>(),
       moldDocumentCreatedAtColumn<EquipmentSpotCheckRow>(),
       {
         title: t('app.haoligo.equipment.documents.colActions'),
@@ -1062,6 +1081,7 @@ const SpotCheckDocumentsPage: React.FC = () => {
                   }
                 </ProFormDependency>
               </Col>
+              <HaoligoDocumentCreatorFormField visible={detailMode} />
             </Row>
           </ProForm>
         </Spin>

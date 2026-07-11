@@ -592,6 +592,7 @@ export interface EquipmentSpotCheckRow {
   report_enabled: boolean;
   report_notify_user_ids: number[];
   created_at: string;
+  creator_name?: string | null;
   lines?: EquipmentSpotCheckLineRow[];
 }
 
@@ -715,6 +716,7 @@ export interface EquipmentRoutePatrolRow {
   report_enabled: boolean;
   report_notify_user_ids: number[];
   created_at: string;
+  creator_name?: string | null;
   lines?: EquipmentRoutePatrolLineRow[];
 }
 
@@ -800,6 +802,7 @@ export interface EquipmentUpkeepSheetRow {
   created_at: string;
   /** 是否可发起维保完成：尚无未删除的关联完成单 */
   can_complete?: boolean;
+  creator_name?: string | null;
 }
 
 export type EquipmentUpkeepSheetCreatePayload = {
@@ -886,6 +889,7 @@ export interface EquipmentUpkeepCompleteSheetRow {
   reporter_user_id: number;
   complete_notify_user_ids?: number[];
   created_at: string;
+  creator_name?: string | null;
 }
 
 export type EquipmentUpkeepRecordLinePayload = {
@@ -1006,6 +1010,7 @@ export interface EquipmentOutputRecordRow {
   reporter_user_id: number;
   dataset_snapshot?: Record<string, unknown> | null;
   created_at: string;
+  creator_name?: string | null;
 }
 
 export type EquipmentOutputRecordCreatePayload = {
@@ -1169,6 +1174,7 @@ export interface EquipmentStatusAdjustmentRow {
   remark?: string | null;
   reporter_user_id: number;
   created_at: string;
+  creator_name?: string | null;
 }
 
 export type EquipmentStatusAdjustmentCreatePayload = {
@@ -1265,6 +1271,7 @@ export interface EquipmentAcceptanceSheetRow {
   ledger_action?: string | null;
   reporter_user_id: number;
   created_at: string;
+  creator_name?: string | null;
   rounds?: EquipmentAcceptanceRoundRow[];
 }
 
@@ -1455,6 +1462,7 @@ export interface QualityTicketBaseRow {
   close_confirmed_at?: string | null;
   close_confirmer_user_id?: number | null;
   created_at?: string | null;
+  creator_name?: string | null;
 }
 
 export interface QualityIssueRow extends QualityTicketBaseRow {
@@ -2354,6 +2362,7 @@ export interface MoldTrialSheetRow {
   audited_at?: string | null;
   audited_by_user_id?: number | null;
   created_at?: string | null;
+  creator_name?: string | null;
 }
 
 export type MoldTrialSheetCreatePayload = {
@@ -2585,6 +2594,7 @@ export interface MoldOutsourceMaintenanceSheetRow {
   can_complete?: boolean;
   /** 维修进度：维修中 / 完修待审 / 维修完成 */
   repair_status?: string | null;
+  creator_name?: string | null;
 }
 
 export type OutsourceMaintLinePayload = {
@@ -2701,6 +2711,7 @@ export interface MoldMaintenanceSheetRow {
   created_at?: string | null;
   /** 是否可发起完修/完成保养：已通过且尚无未删除的关联完修单 */
   can_complete?: boolean;
+  creator_name?: string | null;
 }
 
 export type MoldMaintLinePayload = {
@@ -2826,6 +2837,7 @@ export interface MoldMaintenanceCompleteSheetRow {
   primary_mold_code?: string | null;
   complete_notify_user_ids?: number[];
   created_at?: string | null;
+  creator_name?: string | null;
 }
 
 export type MoldUpkeepRecordLinePayload = {
@@ -2940,6 +2952,7 @@ export interface MoldOutsourceMaintenanceCompleteSheetRow {
   audited_by_user_id?: number | null;
   complete_notify_user_ids?: number[];
   created_at?: string | null;
+  creator_name?: string | null;
 }
 
 export type MoldOutsourceCompleteLinePayload = {
@@ -3072,6 +3085,7 @@ export interface MoldBorrowSheetRow {
   finished_product_name?: string | null;
   planned_qty?: string | null;
   created_at?: string | null;
+  creator_name?: string | null;
 }
 
 export type MoldBorrowSheetCreatePayload = {
@@ -3179,6 +3193,7 @@ export interface MoldReturnSheetRow {
   planned_qty?: string | null;
   manufacture_qty: string;
   created_at?: string | null;
+  creator_name?: string | null;
 }
 
 export type MoldReturnSheetCreatePayload = {
@@ -3267,6 +3282,7 @@ export interface HazardRow {
   responsible_name?: string | null;
   report_enabled?: boolean;
   report_notify_user_ids?: number[];
+  creator_name?: string | null;
 }
 
 export function listHazardReports(params?: {
@@ -3646,6 +3662,7 @@ export interface FinanceInvoiceRow {
   qr_raw_text?: string | null;
   line_count?: number;
   lines?: FinanceInvoiceLineRow[];
+  creator_name?: string | null;
 }
 
 export type FinanceInvoiceLinePayload = Omit<
@@ -3869,6 +3886,7 @@ export interface FinancePaymentRow {
   acceptance_sheet_no?: string | null;
   invoice_id?: number | null;
   invoice_no?: string | null;
+  creator_name?: string | null;
 }
 
 export type FinancePaymentCreatePayload = {

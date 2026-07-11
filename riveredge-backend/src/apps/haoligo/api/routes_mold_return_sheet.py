@@ -19,6 +19,7 @@ from apps.haoligo.api._mold_processing_time import (
     outstanding_borrow_ids_for_tenant,
     recompute_mold_processing_time_minutes,
 )
+from apps.haoligo.api._creator import current_user_creator_name, resolve_creator_name
 from apps.haoligo.api._mold_ledger_sync import sync_mold_ledger_status_for_mold_code
 from apps.haoligo.api._mold_sheet_code import generate_mold_sheet_no
 from apps.haoligo.api._qs import tenant_alive
@@ -61,6 +62,7 @@ class MoldReturnSheetOut(BaseModel):
     planned_qty: Optional[Decimal] = None
     manufacture_qty: Decimal
     created_at: datetime
+    creator_name: Optional[str] = None
 
 
 class MoldReturnSheetCreate(BaseModel):
@@ -221,6 +223,7 @@ def _serialize(row: HaoligoMoldReturnSheet) -> MoldReturnSheetOut:
         planned_qty=row.planned_qty,
         manufacture_qty=row.manufacture_qty,
         created_at=row.created_at,
+        creator_name=resolve_creator_name(created_by_name=getattr(row, "created_by_name", None)),
     )
 
 
@@ -364,16 +367,19 @@ async def borrow_lookup_for_return_sheet(
 async def create_return_sheet(
     body: MoldReturnSheetCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     async with in_transaction():
         try:
             sheet_no = await generate_mold_sheet_no(tenant_id, HAOLIGO_MOLD_RETURN_SHEET_NO)
         except ValidationError as e:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        creator_id, creator_name = current_user_creator_name(user)
         row = await HaoligoMoldReturnSheet.create(
             tenant_id=tenant_id,
             sheet_no=sheet_no,
+            created_by_user_id=creator_id,
+            created_by_name=creator_name,
             production_order_no=_strip_opt(body.production_order_no),
             borrow_sheet_no=_strip_opt(body.borrow_sheet_no),
             issue_department_uuid=_strip_opt(body.issue_department_uuid),

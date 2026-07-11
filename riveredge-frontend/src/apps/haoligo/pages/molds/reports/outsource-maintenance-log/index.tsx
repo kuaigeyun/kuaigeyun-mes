@@ -11,7 +11,7 @@ import {
   listMoldOutsourceMaintenanceCompleteSheets,
   type MoldOutsourceMaintenanceCompleteSheetRow,
 } from '../../../../services/haoligo';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { haoligoDocumentCreatorColumn, moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
 import { parseMoldReportCreatedRange } from '../../../../utils/moldReportDateRange';
 
@@ -54,7 +54,7 @@ const MoldOutsourceMaintenanceLogReportPage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
     },
-    { title: '申请人', dataIndex: 'applicant_name', width: 100, ellipsis: true, hideInSearch: true },
+    haoligoDocumentCreatorColumn<MoldOutsourceMaintenanceCompleteSheetRow>(),
     { title: '申请部门', dataIndex: 'department_name', width: 120, ellipsis: true, hideInSearch: true },
     { title: '维修/保养', dataIndex: 'service_type', width: 100, hideInSearch: true },
     {

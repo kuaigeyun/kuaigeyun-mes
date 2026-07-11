@@ -9,6 +9,7 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._creator import resolve_creator_name
 from apps.haoligo.api._mold_sheet_keyword import (
     apply_mold_line_items_sheet_keyword_filter,
     inhouse_maintenance_header_keyword_q,
@@ -318,6 +319,7 @@ class MoldMaintenanceCompleteSheetOut(BaseModel):
     primary_mold_code: Optional[str] = Field(None, description="首行模具代号")
     complete_notify_user_ids: List[int] = Field(default_factory=list)
     created_at: datetime
+    creator_name: Optional[str] = None
 
 
 class MoldMaintenanceCompleteSheetCreate(BaseModel):
@@ -425,6 +427,7 @@ async def _serialize(row: HaoligoMoldMaintenanceCompleteSheet) -> MoldMaintenanc
         primary_mold_code=_primary_mold(enriched_lines),
         complete_notify_user_ids=normalize_report_user_ids(getattr(row, "complete_notify_user_ids", None)),
         created_at=row.created_at,
+        creator_name=resolve_creator_name(applicant_name=_strip_opt(getattr(row, "applicant_name", None))),
     )
 
 

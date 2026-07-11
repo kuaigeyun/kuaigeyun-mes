@@ -321,13 +321,15 @@ export const IssueRegisterFormBody: React.FC<IssueRegisterFormBodyProps> = ({
             <Upload {...uploadProps}>+</Upload>
           )}
         </ProForm.Item>
-        <ProFormSelect
-          name="registrant_user_id"
-          label="登记人"
-          placeholder="请选择"
-          options={userOptions}
-          fieldProps={{ showSearch: true, optionFilterProp: 'label', disabled: readOnly }}
-        />
+        {!readOnly ? (
+          <ProFormSelect
+            name="registrant_user_id"
+            label="登记人"
+            placeholder="请选择"
+            options={userOptions}
+            fieldProps={{ showSearch: true, optionFilterProp: 'label' }}
+          />
+        ) : null}
         <ProFormSwitch
           name="report_enabled"
           label="是否上报"
@@ -349,6 +351,7 @@ export const IssueRegisterFormBody: React.FC<IssueRegisterFormBodyProps> = ({
             ) : null
           }
         </ProFormDependency>
+        {readOnly ? <ProFormText label="创建人" name="creator_name" readonly /> : null}
       </div>
     </>
   );

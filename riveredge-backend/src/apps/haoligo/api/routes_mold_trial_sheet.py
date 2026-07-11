@@ -22,6 +22,7 @@ from apps.haoligo.api._data_scope import (
     assert_trial_supplier_code_writable,
     user_is_external_partner,
 )
+from apps.haoligo.api._creator import resolve_creator_name
 from apps.haoligo.api._mold_sheet_code import generate_mold_sheet_no
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.api.routes_mold_maintenance_sheet import _resolve_applicant_only
@@ -147,6 +148,7 @@ class MoldTrialSheetOut(BaseModel):
     audited_at: Optional[datetime] = None
     audited_by_user_id: Optional[int] = None
     created_at: datetime
+    creator_name: Optional[str] = None
 
 
 class MoldTrialSheetCreate(BaseModel):
@@ -395,6 +397,7 @@ async def _serialize(row: HaoligoMoldTrialSheet) -> MoldTrialSheetOut:
         audited_at=getattr(row, "audited_at", None),
         audited_by_user_id=getattr(row, "audited_by_user_id", None),
         created_at=row.created_at,
+        creator_name=resolve_creator_name(trial_user_name=row.trial_user_name),
     )
 
 

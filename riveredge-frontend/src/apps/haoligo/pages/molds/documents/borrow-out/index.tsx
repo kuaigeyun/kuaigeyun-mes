@@ -40,7 +40,11 @@ import {
   type MoldRow,
 } from '../../../../services/haoligo';
 import { fetchMoldsForPicker } from '../../../../utils/moldPicker';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { haoligoDocumentCreatorColumn, moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import {
+  HaoligoDocumentCreatorFormField,
+  haoligoDocumentCreatorFormValue,
+} from '../../../../components/HaoligoDocumentCreatorDetailField';
 import { executeDatasetQuery, getDatasetByUuid, getDatasetList } from '../../../../../../services/dataset';
 import { extractSqlNamedParams } from '../../../../../../utils/extractSqlNamedParams';
 
@@ -469,7 +473,7 @@ const MoldBorrowOutPage: React.FC = () => {
       setIsDetailView(detailOnly);
       setIsEdit(true);
       setEditId(d.id);
-      setFormInitialValues({
+      const sheetFormValues = {
         source_order_no: d.source_order_no ?? undefined,
         department_uuid: d.department_uuid ?? undefined,
         mold_code: d.mold_code,
@@ -477,7 +481,10 @@ const MoldBorrowOutPage: React.FC = () => {
         finished_product_code: d.finished_product_code ?? undefined,
         finished_product_name: d.finished_product_name ?? undefined,
         planned_qty: d.planned_qty != null ? Number(d.planned_qty) : undefined,
-      });
+      };
+      setFormInitialValues(
+        detailOnly ? haoligoDocumentCreatorFormValue(sheetFormValues, d) : sheetFormValues,
+      );
       await loadDepartments();
       setModalVisible(true);
     } catch (e) {
@@ -622,6 +629,7 @@ const MoldBorrowOutPage: React.FC = () => {
     { title: '成品代号', dataIndex: 'finished_product_code', width: 120, ellipsis: true, hideInSearch: true },
     { title: '成品名称', dataIndex: 'finished_product_name', width: 140, ellipsis: true, hideInSearch: true },
     { title: '计划数量', dataIndex: 'planned_qty', width: 100, hideInSearch: true },
+    haoligoDocumentCreatorColumn<MoldBorrowSheetRow>(),
     moldDocumentCreatedAtColumn<MoldBorrowSheetRow>(),
     {
       title: '操作',
@@ -865,6 +873,7 @@ const MoldBorrowOutPage: React.FC = () => {
                   />
                 </Col>
               )}
+              <HaoligoDocumentCreatorFormField visible={isDetailView} />
             </Row>
           </ProForm>
         </div>

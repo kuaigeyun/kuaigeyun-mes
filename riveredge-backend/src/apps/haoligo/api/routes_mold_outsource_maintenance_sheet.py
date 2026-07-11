@@ -10,6 +10,7 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._creator import resolve_creator_name
 from apps.haoligo.api._mold_sheet_keyword import (
     apply_mold_line_items_sheet_keyword_filter,
     outsource_maintenance_header_keyword_q,
@@ -230,6 +231,7 @@ class MoldOutsourceMaintenanceSheetOut(BaseModel):
         None,
         description="维修进度：维修中/完修待审/维修完成（仅审核已通过且为维修类时有值）",
     )
+    creator_name: Optional[str] = None
 
 
 class MoldOutsourceMaintenanceSheetCreate(BaseModel):
@@ -435,6 +437,7 @@ async def _serialize(
             service_type=row.service_type or "",
             linked_complete_status=linked_complete_status,
         ),
+        creator_name=resolve_creator_name(applicant_name=row.applicant_name),
     )
 
 

@@ -13,6 +13,7 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._creator import batch_lookup_user_names, resolve_creator_name
 from apps.haoligo.api._equipment_sheet_code import generate_equipment_sheet_no
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.api.equipment_maintenance_equipment_status import adjust_equipment_used_yield
@@ -522,6 +523,7 @@ class SpotCheckOut(BaseModel):
     report_enabled: bool = False
     report_notify_user_ids: List[int] = Field(default_factory=list)
     created_at: datetime
+    creator_name: Optional[str] = None
     lines: List[SpotCheckLineOut] = Field(default_factory=list)
 
 
@@ -589,7 +591,14 @@ async def _run_spot_check_side_effects(
         )
 
 
-async def _serialize_spot_check(row: HaoligoEquipmentSpotCheck, *, with_lines: bool) -> SpotCheckOut:
+async def _serialize_spot_check(
+    row: HaoligoEquipmentSpotCheck,
+    *,
+    with_lines: bool,
+    user_names: dict[int, str] | None = None,
+) -> SpotCheckOut:
+    if user_names is None:
+        user_names = await batch_lookup_user_names(row.tenant_id, [row.reporter_user_id])
     await row.fetch_related("equipment")
     eq = row.equipment
     lines_out: List[SpotCheckLineOut] = []
@@ -646,6 +655,7 @@ async def _serialize_spot_check(row: HaoligoEquipmentSpotCheck, *, with_lines: b
         report_enabled=row.report_enabled,
         report_notify_user_ids=normalize_report_user_ids(row.report_notify_user_ids),
         created_at=row.created_at,
+        creator_name=resolve_creator_name(reporter_user_id=row.reporter_user_id, user_names=user_names),
         lines=lines_out,
     )
 
@@ -732,7 +742,8 @@ async def list_spot_checks(
         )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
-    items = [await _serialize_spot_check(r, with_lines=False) for r in rows]
+    user_names = await batch_lookup_user_names(tenant_id, [r.reporter_user_id for r in rows])
+    items = [await _serialize_spot_check(r, with_lines=False, user_names=user_names) for r in rows]
     return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 
@@ -1032,6 +1043,7 @@ class RoutePatrolOut(BaseModel):
     report_enabled: bool = False
     report_notify_user_ids: List[int] = Field(default_factory=list)
     created_at: datetime
+    creator_name: Optional[str] = None
     lines: List[RoutePatrolLineOut] = Field(default_factory=list)
 
 
@@ -1061,7 +1073,14 @@ async def _route_patrol_report_fields(
     return report_enabled, user_ids
 
 
-async def _serialize_route_patrol(row: HaoligoEquipmentRoutePatrol, *, with_lines: bool) -> RoutePatrolOut:
+async def _serialize_route_patrol(
+    row: HaoligoEquipmentRoutePatrol,
+    *,
+    with_lines: bool,
+    user_names: dict[int, str] | None = None,
+) -> RoutePatrolOut:
+    if user_names is None:
+        user_names = await batch_lookup_user_names(row.tenant_id, [row.reporter_user_id])
     await row.fetch_related("patrol_route", "patrol_route__workshop")
     pr = row.patrol_route
     workshop_id: Optional[int] = None
@@ -1112,6 +1131,7 @@ async def _serialize_route_patrol(row: HaoligoEquipmentRoutePatrol, *, with_line
         report_enabled=row.report_enabled,
         report_notify_user_ids=normalize_report_user_ids(row.report_notify_user_ids),
         created_at=row.created_at,
+        creator_name=resolve_creator_name(reporter_user_id=row.reporter_user_id, user_names=user_names),
         lines=lines_out,
     )
 
@@ -1174,7 +1194,8 @@ async def list_route_patrols(
         qs = qs.filter(Q(sheet_no__icontains=k) | Q(patrol_route__code__icontains=k) | Q(patrol_route__name__icontains=k))
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
-    items = [await _serialize_route_patrol(r, with_lines=False) for r in rows]
+    user_names = await batch_lookup_user_names(tenant_id, [r.reporter_user_id for r in rows])
+    items = [await _serialize_route_patrol(r, with_lines=False, user_names=user_names) for r in rows]
     return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 
@@ -1408,6 +1429,7 @@ class OutputRecordOut(BaseModel):
     reporter_user_id: int
     dataset_snapshot: Optional[dict] = None
     created_at: datetime
+    creator_name: Optional[str] = None
 
 
 class OutputRecordCreate(BaseModel):
@@ -1489,7 +1511,13 @@ class OutputRecordUpdate(BaseModel):
         return normalize_report_user_ids(v)
 
 
-async def _serialize_output_record(row: HaoligoEquipmentOutputRecord) -> OutputRecordOut:
+async def _serialize_output_record(
+    row: HaoligoEquipmentOutputRecord,
+    *,
+    user_names: dict[int, str] | None = None,
+) -> OutputRecordOut:
+    if user_names is None:
+        user_names = await batch_lookup_user_names(row.tenant_id, [row.reporter_user_id])
     await row.fetch_related("equipment")
     eq = row.equipment
     return OutputRecordOut(
@@ -1516,6 +1544,7 @@ async def _serialize_output_record(row: HaoligoEquipmentOutputRecord) -> OutputR
         reporter_user_id=row.reporter_user_id,
         dataset_snapshot=row.dataset_snapshot,
         created_at=row.created_at,
+        creator_name=resolve_creator_name(reporter_user_id=row.reporter_user_id, user_names=user_names),
     )
 
 
@@ -1560,8 +1589,9 @@ async def list_output_records(
         )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
+    user_names = await batch_lookup_user_names(tenant_id, [r.reporter_user_id for r in rows])
     return {
-        "items": [await _serialize_output_record(r) for r in rows],
+        "items": [await _serialize_output_record(r, user_names=user_names) for r in rows],
         "total": total,
         "skip": skip,
         "limit": limit,

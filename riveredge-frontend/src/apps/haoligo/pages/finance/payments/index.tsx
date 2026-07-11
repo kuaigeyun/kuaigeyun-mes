@@ -27,8 +27,8 @@ import {
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { haoligoDocumentCreatorColumn, resolveHaoligoDocumentCreatorName } from '../../../utils/documentTableColumns';
 import {
-  createFinancePayment,
   deleteFinancePayment,
   listFinanceInvoices,
   listFinancePayments,
@@ -170,6 +170,7 @@ const FinancePaymentsPage: React.FC = () => {
     { title: '合同号', dataIndex: 'contract_no', render: (_, r) => r.contract_no || '—' },
     { title: '关联发票', dataIndex: 'invoice_no', render: (_, r) => r.invoice_no || '—' },
     { title: '备注', dataIndex: 'remark', render: (_, r) => r.remark || '—' },
+    { title: '创建人', dataIndex: 'creator_name', render: (_, r) => resolveHaoligoDocumentCreatorName(r) },
   ];
 
   const columns: ProColumns<FinancePaymentRow>[] = [
@@ -216,6 +217,7 @@ const FinancePaymentsPage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => r.invoice_no || '—',
     },
+    haoligoDocumentCreatorColumn<FinancePaymentRow>(),
     {
       title: '操作',
       valueType: 'option',

@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from tortoise import timezone
 from tortoise.expressions import Q
 
+from apps.haoligo.api._creator import current_user_creator_name, resolve_creator_name
 from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.constants.finance_payment import FINANCE_PAYMENT_METHODS
@@ -45,6 +46,7 @@ class FinancePaymentOut(BaseModel):
     acceptance_sheet_no: Optional[str] = None
     invoice_id: Optional[int] = None
     invoice_no: Optional[str] = None
+    creator_name: Optional[str] = None
 
 
 class FinancePaymentCreate(BaseModel):
@@ -98,6 +100,7 @@ async def _serialize_payment(row: HaoligoFinancePayment) -> FinancePaymentOut:
         acceptance_sheet_no=acceptance_sheet_no,
         invoice_id=row.invoice_id,
         invoice_no=invoice_no,
+        creator_name=resolve_creator_name(created_by_name=getattr(row, "created_by_name", None)),
     )
 
 
@@ -163,7 +166,7 @@ async def get_finance_payment(
 async def create_finance_payment(
     body: FinancePaymentCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     if body.payment_method not in FINANCE_PAYMENT_METHODS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="付款方式无效")
@@ -174,9 +177,12 @@ async def create_finance_payment(
         acceptance_id=body.acceptance_id,
         invoice_id=body.invoice_id,
     )
+    creator_id, creator_name = current_user_creator_name(user)
     row = await HaoligoFinancePayment.create(
         tenant_id=tenant_id,
         supplier_id=body.supplier_id,
+        created_by_user_id=creator_id,
+        created_by_name=creator_name,
         payment_date=body.payment_date,
         amount=body.amount,
         payment_method=body.payment_method,

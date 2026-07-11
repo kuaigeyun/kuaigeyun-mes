@@ -9,6 +9,7 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._creator import resolve_creator_name
 from apps.haoligo.api._equipment_sheet_code import generate_equipment_sheet_no
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.api._source_sheet_delete_guard import assert_no_active_child_sheet_by_fk
@@ -96,6 +97,7 @@ class EquipmentUpkeepSheetOut(BaseModel):
         False,
         description="是否可发起维保完成：尚无未删除的关联完成单",
     )
+    creator_name: Optional[str] = None
 
 
 class EquipmentUpkeepSheetCreate(BaseModel):
@@ -196,6 +198,7 @@ async def _serialize(
         complete_notify_user_ids=normalize_report_user_ids(getattr(row, "complete_notify_user_ids", None)),
         created_at=row.created_at,
         can_complete=int(row.id) not in (linked_complete_ids or set()),
+        creator_name=resolve_creator_name(applicant_name=row.applicant_name),
     )
 
 

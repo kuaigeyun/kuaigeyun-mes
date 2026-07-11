@@ -12,6 +12,7 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._creator import batch_lookup_user_names, resolve_creator_name
 from apps.haoligo.api._equipment_sheet_code import generate_equipment_sheet_no
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
@@ -158,6 +159,7 @@ class AcceptanceSheetOut(BaseModel):
     ledger_action: str = LEDGER_ACTION_NONE
     reporter_user_id: int
     created_at: datetime
+    creator_name: Optional[str] = None
     rounds: List[AcceptanceRoundOut] = Field(default_factory=list)
 
 
@@ -280,7 +282,13 @@ async def _serialize_round(row: HaoligoEquipmentAcceptanceRound) -> AcceptanceRo
     )
 
 
-async def _serialize_sheet(row: HaoligoEquipmentAcceptanceSheet) -> AcceptanceSheetOut:
+async def _serialize_sheet(
+    row: HaoligoEquipmentAcceptanceSheet,
+    *,
+    user_names: dict[int, str] | None = None,
+) -> AcceptanceSheetOut:
+    if user_names is None:
+        user_names = await batch_lookup_user_names(row.tenant_id, [row.reporter_user_id])
     await row.fetch_related("equipment", "rounds")
     eq = row.equipment
     rounds = sorted(row.rounds or [], key=lambda r: r.round_no)
@@ -304,6 +312,7 @@ async def _serialize_sheet(row: HaoligoEquipmentAcceptanceSheet) -> AcceptanceSh
         ledger_action=(row.ledger_action or LEDGER_ACTION_NONE).strip(),
         reporter_user_id=row.reporter_user_id,
         created_at=row.created_at,
+        creator_name=resolve_creator_name(reporter_user_id=row.reporter_user_id, user_names=user_names),
         rounds=[await _serialize_round(r) for r in rounds],
     )
 
@@ -344,8 +353,9 @@ async def list_acceptance_sheets(
         )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
+    user_names = await batch_lookup_user_names(tenant_id, [r.reporter_user_id for r in rows])
     return {
-        "items": [await _serialize_sheet(r) for r in rows],
+        "items": [await _serialize_sheet(r, user_names=user_names) for r in rows],
         "total": total,
         "skip": skip,
         "limit": limit,

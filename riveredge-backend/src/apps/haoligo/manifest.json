@@ -845,6 +845,61 @@
                 "internal_only": true
               }
             ]
+          },
+          {
+            "key": "finance",
+            "title": "财务",
+            "hide_when_external_partner": true,
+            "entries": [
+              {
+                "key": "invoice-verify",
+                "label": "发票验票",
+                "icon": "file-document-outline",
+                "route": "/finance/invoice-verify",
+                "permission": "haoligo:finance-invoice-verify:read",
+                "internal_only": true
+              },
+              {
+                "key": "supplier-prices",
+                "label": "供应商价格",
+                "icon": "currency-cny",
+                "route": "/finance/supplier-prices",
+                "permission": "haoligo:finance-supplier-prices:read",
+                "internal_only": true
+              },
+              {
+                "key": "payments",
+                "label": "付款记录",
+                "icon": "cash-multiple",
+                "route": "/finance/payments",
+                "permission": "haoligo:finance-payments:read",
+                "internal_only": true
+              },
+              {
+                "key": "suppliers",
+                "label": "供应商台账",
+                "icon": "truck-delivery-outline",
+                "route": "/finance/suppliers",
+                "permission": "haoligo:finance-suppliers:read",
+                "internal_only": true
+              },
+              {
+                "key": "payable-report",
+                "label": "应付款报表",
+                "icon": "chart-bar",
+                "route": "/finance/reports/payable",
+                "permission": "haoligo:finance-reports-payable:read",
+                "internal_only": true
+              },
+              {
+                "key": "monthly-payment-report",
+                "label": "本月付款明细",
+                "icon": "calendar-month-outline",
+                "route": "/finance/reports/monthly-payment",
+                "permission": "haoligo:finance-reports-monthly-payment:read",
+                "internal_only": true
+              }
+            ]
           }
         ]
       },

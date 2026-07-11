@@ -12,6 +12,10 @@ import dayjs from 'dayjs';
 import { UniTable } from '../../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
+import { haoligoDocumentCreatorColumn } from '../../../../utils/documentTableColumns';
+import {
+  haoligoDocumentCreatorFormValue,
+} from '../../../../components/HaoligoDocumentCreatorDetailField';
 import {
   createHazardReport,
   deleteHazardReport,
@@ -121,17 +125,34 @@ const PatrolIssueRegisterPage: React.FC = () => {
         issueTypes,
         detail.problem_summary,
       );
-      setFormInitialValues({
-        workshop_id: detail.workshop_id ?? undefined,
-        equipment_id: detail.equipment_id ?? undefined,
-        reported_at: detail.reported_at ? dayjs(detail.reported_at) : undefined,
-        workshop_area: detail.workshop_area ?? undefined,
-        issue_type_codes: dictCodes,
-        custom_issue_items: customIssueItems,
-        registrant_user_id: detail.registrant_user_id ?? undefined,
-        report_enabled: detail.report_enabled ?? false,
-        report_notify_user_ids: detail.report_notify_user_ids ?? [],
-      });
+      setFormInitialValues(
+        detailOnly
+          ? haoligoDocumentCreatorFormValue(
+              {
+                workshop_id: detail.workshop_id ?? undefined,
+                equipment_id: detail.equipment_id ?? undefined,
+                reported_at: detail.reported_at ? dayjs(detail.reported_at) : undefined,
+                workshop_area: detail.workshop_area ?? undefined,
+                issue_type_codes: dictCodes,
+                custom_issue_items: customIssueItems,
+                registrant_user_id: detail.registrant_user_id ?? undefined,
+                report_enabled: detail.report_enabled ?? false,
+                report_notify_user_ids: detail.report_notify_user_ids ?? [],
+              },
+              detail,
+            )
+          : {
+              workshop_id: detail.workshop_id ?? undefined,
+              equipment_id: detail.equipment_id ?? undefined,
+              reported_at: detail.reported_at ? dayjs(detail.reported_at) : undefined,
+              workshop_area: detail.workshop_area ?? undefined,
+              issue_type_codes: dictCodes,
+              custom_issue_items: customIssueItems,
+              registrant_user_id: detail.registrant_user_id ?? undefined,
+              report_enabled: detail.report_enabled ?? false,
+              report_notify_user_ids: detail.report_notify_user_ids ?? [],
+            },
+      );
       setModalVisible(true);
     } catch (e) {
       messageApi.error((e as Error).message || '加载失败');
@@ -269,7 +290,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => formatIssueTypeLabels(hazardIssueTypeCodes(r), issueTypes, r.problem_summary),
     },
-    { title: '登记人', dataIndex: 'registrant_name', width: 100, ellipsis: true, hideInSearch: true },
+    haoligoDocumentCreatorColumn<HazardRow>(),
     {
       title: '责任人',
       dataIndex: 'responsible_name',

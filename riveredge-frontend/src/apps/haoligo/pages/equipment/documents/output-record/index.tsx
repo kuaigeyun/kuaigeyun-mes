@@ -48,7 +48,11 @@ import {
   formatEquipmentOutputQty,
   roundEquipmentOutputQty,
 } from '../../../../utils/equipmentOutputQty';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { haoligoDocumentCreatorColumn, moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import {
+  HaoligoDocumentCreatorFormField,
+  haoligoDocumentCreatorFormValue,
+} from '../../../../components/HaoligoDocumentCreatorDetailField';
 import { executeDatasetQuery, getDatasetByUuid, getDatasetList } from '../../../../../../services/dataset';
 import { extractSqlNamedParams } from '../../../../../../utils/extractSqlNamedParams';
 import { formatDateTime } from '../../../../../../utils/format';
@@ -378,21 +382,42 @@ const OutputRecordDocumentsPage: React.FC = () => {
       const row = await getEquipmentOutputRecord(id);
       setDatasetSnapshot((row.dataset_snapshot as Record<string, unknown>) || null);
       setTimeout(() => {
-        formRef.current?.setFieldsValue({
-          equipment_id: row.equipment_id,
-          recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
-          work_order_no: row.work_order_no,
-          finished_product_code: row.finished_product_code ?? undefined,
-          finished_product_name: row.finished_product_name ?? undefined,
-          planned_qty: roundEquipmentOutputQty(row.planned_qty),
-          completed_qty: roundEquipmentOutputQty(row.completed_qty) ?? 0,
-          startup_at: row.startup_at ? dayjs(row.startup_at) : undefined,
-          completed_at: row.completed_at ? dayjs(row.completed_at) : undefined,
-          operator_name: row.operator_name,
-          team_leader_name: row.team_leader_name,
-          remark: row.remark,
-          notify_user_ids: row.notify_user_ids?.length ? row.notify_user_ids : [...outputNotifyDefaults],
-        });
+        formRef.current?.setFieldsValue(
+          view
+            ? haoligoDocumentCreatorFormValue(
+                {
+                  equipment_id: row.equipment_id,
+                  recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
+                  work_order_no: row.work_order_no,
+                  finished_product_code: row.finished_product_code ?? undefined,
+                  finished_product_name: row.finished_product_name ?? undefined,
+                  planned_qty: roundEquipmentOutputQty(row.planned_qty),
+                  completed_qty: roundEquipmentOutputQty(row.completed_qty) ?? 0,
+                  startup_at: row.startup_at ? dayjs(row.startup_at) : undefined,
+                  completed_at: row.completed_at ? dayjs(row.completed_at) : undefined,
+                  operator_name: row.operator_name,
+                  team_leader_name: row.team_leader_name,
+                  remark: row.remark,
+                  notify_user_ids: row.notify_user_ids?.length ? row.notify_user_ids : [...outputNotifyDefaults],
+                },
+                row,
+              )
+            : {
+                equipment_id: row.equipment_id,
+                recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
+                work_order_no: row.work_order_no,
+                finished_product_code: row.finished_product_code ?? undefined,
+                finished_product_name: row.finished_product_name ?? undefined,
+                planned_qty: roundEquipmentOutputQty(row.planned_qty),
+                completed_qty: roundEquipmentOutputQty(row.completed_qty) ?? 0,
+                startup_at: row.startup_at ? dayjs(row.startup_at) : undefined,
+                completed_at: row.completed_at ? dayjs(row.completed_at) : undefined,
+                operator_name: row.operator_name,
+                team_leader_name: row.team_leader_name,
+                remark: row.remark,
+                notify_user_ids: row.notify_user_ids?.length ? row.notify_user_ids : [...outputNotifyDefaults],
+              },
+        );
       }, 0);
     } catch (e) {
       messageApi.error((e as Error).message || t('app.haoligo.equipment.loadFailed'));
@@ -520,6 +545,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) => (r.remark?.trim() ? r.remark : '—'),
       },
+      haoligoDocumentCreatorColumn<EquipmentOutputRecordRow>(),
       moldDocumentCreatedAtColumn<EquipmentOutputRecordRow>(),
       {
         title: t('app.haoligo.equipment.documents.colActions'),
@@ -939,6 +965,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
                 fieldProps={{ rows: 3, style: { width: '100%' } }}
               />
             </Col>
+            <HaoligoDocumentCreatorFormField visible={detailMode} />
           </Row>
           </ProForm>
       </Modal>

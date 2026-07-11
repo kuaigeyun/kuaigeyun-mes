@@ -44,6 +44,25 @@ def test_parse_seller_name_from_ocr_rows_seller_section():
     assert parse_seller_name_from_ocr_rows(rows) == "广州市邦程橡塑新材料有限公司"
 
 
+def test_parse_invoice_lines_temperature_protector_merged_name_spec():
+    """常州鑫都电器样票：OCR 将项目名称与规格型号粘连在同一格。"""
+    rows = [
+        ["项目名称", "规格型号", "单位", "数量", "单价", "金额", "税率", "税额"],
+        ["*家用电器配件*温度保护器125度塑壳", "个", "1000", "1.23", "1230.00", "13%", "159.90"],
+        ["*家用电器配件*温度保护器140度特厚", "个", "2000", "2.34", "4680.00", "13%", "608.40"],
+        ["*家用电器配件*温度保护器125度塑壳剥线头", "个", "3000", "3.45", "10350.00", "13%", "1345.50"],
+        ["价税合计", "313886.70"],
+    ]
+    lines = parse_invoice_lines_from_ocr_rows(rows)
+    assert len(lines) == 3
+    assert lines[0]["material_name"] == "温度保护器"
+    assert lines[0]["spec"] == "125度塑壳"
+    assert lines[1]["material_name"] == "温度保护器"
+    assert lines[1]["spec"] == "140度特厚"
+    assert lines[2]["material_name"] == "温度保护器"
+    assert lines[2]["spec"] == "125度塑壳剥线头"
+
+
 def test_parse_invoice_lines_rubber_tube_with_numeric_spec_and_gen_unit():
     """浙江韦氏电器样票：纯数字规格 074300021 + 单位「根」。"""
     rows = [

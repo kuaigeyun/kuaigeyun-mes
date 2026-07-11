@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_valid
 from tortoise import timezone
 from tortoise.expressions import Q
 
+from apps.haoligo.api._creator import current_user_creator_name, resolve_creator_name
 from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.constants.finance_invoice import (
@@ -128,6 +129,7 @@ class FinanceInvoiceOut(BaseModel):
     qr_raw_text: Optional[str] = None
     line_count: int = 0
     lines: List[FinanceInvoiceLineOut] = Field(default_factory=list)
+    creator_name: Optional[str] = None
 
 
 class FinanceInvoiceCreate(BaseModel):
@@ -302,6 +304,7 @@ async def _serialize_invoice(row: HaoligoFinanceInvoice, *, with_lines: bool = F
         qr_raw_text=row.qr_raw_text,
         line_count=line_count,
         lines=lines,
+        creator_name=resolve_creator_name(created_by_name=getattr(row, "created_by_name", None)),
     )
 
 
@@ -429,7 +432,7 @@ async def get_finance_invoice(
 async def create_finance_invoice(
     body: FinanceInvoiceCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     await get_supplier_or_404(tenant_id, body.supplier_id)
     structured = parse_structured_invoice_payload(
@@ -458,9 +461,12 @@ async def create_finance_invoice(
     invoice_status = (
         FINANCE_INVOICE_STATUS_REJECTED if reject_reason else FINANCE_INVOICE_STATUS_PENDING
     )
+    creator_id, creator_name = current_user_creator_name(user)
     invoice = await HaoligoFinanceInvoice.create(
         tenant_id=tenant_id,
         supplier_id=body.supplier_id,
+        created_by_user_id=creator_id,
+        created_by_name=creator_name,
         invoice_no=structured["invoice_no"],
         invoice_code=structured.get("invoice_code"),
         invoice_date=structured.get("invoice_date") or body.invoice_date,

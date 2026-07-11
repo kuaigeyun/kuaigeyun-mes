@@ -107,6 +107,11 @@ import { canAuditMoldSheet } from '../../../../utils/moldSheetStatus';
 import { buildMoldTrialSheetListParams } from '../../../../utils/moldTrialSheetListParams';
 import { mergeProTableFilterParams, withColumnHeaderFilters } from '../../../../../../utils/proTableColumnFilters';
 import { formatDateTimeBySiteSetting } from '../../../../../../utils/format';
+import { haoligoDocumentCreatorColumn } from '../../../../utils/documentTableColumns';
+import {
+  HaoligoDocumentCreatorFormField,
+  haoligoDocumentCreatorFormValue,
+} from '../../../../components/HaoligoDocumentCreatorDetailField';
 import { isMoldSheetApproved, moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
 import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
@@ -1728,7 +1733,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         .filter((x) => x.value > 0 && x.label.trim());
       notifyOptions.forEach((o) => pendingNotifyLabelRef.set(o.value, o.label));
       setPendingNotifyPresetOptions(notifyOptions);
-      setFormInitialValues({
+      const trialFormValues = {
         purchase_order_no: detail.purchase_order_no,
         supplier_name: detail.supplier_name ?? undefined,
         mold_code: detail.mold_code ?? undefined,
@@ -1750,7 +1755,10 @@ const MoldTrialSheetsPage: React.FC = () => {
             : trialSubmittedNotifyDefaults) ?? [],
         repair_warehouse_id: detail.repair_warehouse_id ?? undefined,
         adjustment_points: detail.adjustment_points ?? undefined,
-      });
+      };
+      setFormInitialValues(
+        detailOnly ? haoligoDocumentCreatorFormValue(trialFormValues, detail) : trialFormValues,
+      );
       setModalVisible(true);
     } catch (e) {
       messageApi.error((e as Error).message || '加载试模单失败');
@@ -2357,15 +2365,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       valueType: 'digit',
       fieldProps: { placeholder: '试模次数', min: 1, precision: 0 },
     },
-    {
-      title: '试模人员',
-      dataIndex: 'trial_user_name',
-      key: 'trial_user_name',
-      width: 120,
-      ellipsis: true,
-      fieldProps: { placeholder: '试模人员姓名' },
-      render: (_, r) => r.trial_user_name || '—',
-    },
+    haoligoDocumentCreatorColumn<MoldTrialSheetRow>(),
     withColumnHeaderFilters(
       {
         title: '处理方式',
@@ -3182,6 +3182,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                 trialUserPresets,
               )
             : null}
+          <HaoligoDocumentCreatorFormField visible={isDetailView} />
         </Row>
       </FormModalTemplate>
 

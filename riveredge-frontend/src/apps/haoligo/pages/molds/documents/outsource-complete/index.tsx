@@ -54,7 +54,11 @@ import {
   type MoldOutsourceMaintenanceCompleteSheetUpdatePayload,
   type MoldOutsourceMaintenanceSheetRow,
 } from '../../../../services/haoligo';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { haoligoDocumentCreatorColumn, moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import {
+  HaoligoDocumentCreatorFormField,
+  haoligoDocumentCreatorFormValue,
+} from '../../../../components/HaoligoDocumentCreatorDetailField';
 import { OUTSOURCE_COMPLETE_SOURCE_MAINTENANCE_PARAM } from '../../../../utils/outsourceCompleteNavigation';
 import { rowActionKind } from '../../../../../../components/uni-action';
 import { useGlobalStore } from '../../../../../../stores/globalStore';
@@ -562,7 +566,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
           item_attachments: await uuidsToSecureUploadFileList(it.attachment_file_uuids),
         })),
       );
-      setFormInitialValues({
+      const sheetFormValues = {
         source_outsource_maintenance_sheet_id: d.source_outsource_maintenance_sheet_id ?? undefined,
         source_order_no: d.source_order_no,
         applicant_user_id: d.applicant_user_id ?? undefined,
@@ -572,7 +576,10 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
         complete_notify_user_ids:
           d.complete_notify_user_ids?.length ? d.complete_notify_user_ids : [...completeNotifyDefaults],
         line_items,
-      });
+      };
+      setFormInitialValues(
+        detailOnly ? haoligoDocumentCreatorFormValue(sheetFormValues, d) : sheetFormValues,
+      );
       if (d.source_outsource_maintenance_sheet_id != null) {
         const byMold: Record<string, string[]> = {};
         for (const it of d.line_items || []) {
@@ -879,7 +886,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       hideInSearch: true,
     },
     { title: '来源单号', dataIndex: 'source_order_no', width: 160, ellipsis: true, copyable: true },
-    { title: '申请人', dataIndex: 'applicant_name', width: 100, ellipsis: true, hideInSearch: true },
+    haoligoDocumentCreatorColumn<MoldOutsourceMaintenanceCompleteSheetRow>(),
     { title: '申请部门', dataIndex: 'department_name', width: 120, ellipsis: true, hideInSearch: true },
     { title: '外协单位', dataIndex: 'outsourced_unit_name', width: 140, ellipsis: true },
     {
@@ -1220,6 +1227,9 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
                 seedUserIds={completeNotifyDefaults}
                 searchUsers={searchCompleteNotifyUsers}
               />
+              <Row gutter={16}>
+                <HaoligoDocumentCreatorFormField visible={isDetailView} />
+              </Row>
 
               {beforeAttachmentPreview?.header?.length ? (
                 <div

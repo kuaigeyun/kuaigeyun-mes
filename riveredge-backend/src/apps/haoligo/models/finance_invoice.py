@@ -39,6 +39,8 @@ class HaoligoFinanceInvoice(HaoligoTenantModel):
     status = fields.CharField(max_length=16, default="已登记", description="状态")
     reject_reason = fields.TextField(null=True, description="拒收原因")
     remark = fields.TextField(null=True, description="备注")
+    created_by_user_id = fields.IntField(null=True, description="创建人用户 ID")
+    created_by_name = fields.CharField(max_length=100, null=True, description="创建人显示名")
 
 
 class HaoligoFinanceInvoiceLine(HaoligoTenantModel):

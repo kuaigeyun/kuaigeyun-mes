@@ -56,7 +56,11 @@ import { rowActionKind } from '../../../../../../components/uni-action';
 import { useGlobalStore } from '../../../../../../stores/globalStore';
 import { canAuditMoldSheet } from '../../../../utils/moldSheetStatus';
 import { MoldSheetDetailAuditFooter } from '../../../../components/MoldSheetDetailAuditFooter';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { haoligoDocumentCreatorColumn, moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import {
+  HaoligoDocumentCreatorFormField,
+  haoligoDocumentCreatorFormValue,
+} from '../../../../components/HaoligoDocumentCreatorDetailField';
 import { isMoldSheetApproved, moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
 import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
 import {
@@ -366,7 +370,7 @@ export function MoldMaintenanceSheetPage({
                 item_attachments: await uuidsToSecureUploadFileList(it.attachment_file_uuids),
               })),
             );
-        setFormInitialValues({
+        const sheetFormValues = {
           service_type: d.service_type,
           applicant_user_id: d.applicant_user_id ?? undefined,
           department_uuid: initDept,
@@ -377,7 +381,10 @@ export function MoldMaintenanceSheetPage({
           submitted_notify_user_ids:
             d.submitted_notify_user_ids?.length ? d.submitted_notify_user_ids : [...maintSubmittedNotifyDefaults],
           line_items,
-        });
+        };
+        setFormInitialValues(
+          detailOnly ? haoligoDocumentCreatorFormValue(sheetFormValues, d) : sheetFormValues,
+        );
         startTransition(() => setFormOptionsReady(true));
       } catch (e) {
         messageApi.error((e as Error).message || '加载维保单失败');
@@ -596,7 +603,7 @@ export function MoldMaintenanceSheetPage({
       hideInSearch: true,
     },
     { title: '申请部门', dataIndex: 'department_name', width: 180, ellipsis: true },
-    { title: '申请人', dataIndex: 'applicant_name', width: 120, ellipsis: true, hideInSearch: true },
+    haoligoDocumentCreatorColumn<MoldMaintenanceSheetRow>(),
     { title: '来源单号', dataIndex: 'source_order_no', width: 140, ellipsis: true, copyable: true },
     ...(serviceType === '维修'
       ? [
@@ -910,6 +917,7 @@ export function MoldMaintenanceSheetPage({
                   searchMaintNotifyUsers(keyword, selectedIds)
                 }
               />
+              <HaoligoDocumentCreatorFormField visible={isDetailView} />
             </Row>
 
             <Divider titlePlacement="left">模具明细</Divider>

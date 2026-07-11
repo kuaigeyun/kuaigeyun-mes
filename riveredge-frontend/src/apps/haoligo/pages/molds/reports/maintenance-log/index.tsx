@@ -11,7 +11,7 @@ import {
   listMoldMaintenanceCompleteSheets,
   type MoldMaintenanceCompleteSheetRow,
 } from '../../../../services/haoligo';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { haoligoDocumentCreatorColumn, moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { parseMoldReportCreatedRange } from '../../../../utils/moldReportDateRange';
 
 const serviceTypeEnum: Record<string, { text: string }> = {
@@ -45,7 +45,7 @@ const MoldInhouseMaintenanceLogReportPage: React.FC = () => {
       hideInSearch: true,
     },
     { title: '来源单号', dataIndex: 'source_order_no', width: 160, ellipsis: true, hideInSearch: true },
-    { title: '申请人', dataIndex: 'applicant_name', width: 100, ellipsis: true, hideInSearch: true },
+    haoligoDocumentCreatorColumn<MoldMaintenanceCompleteSheetRow>(),
     { title: '申请部门', dataIndex: 'department_name', width: 120, ellipsis: true, hideInSearch: true },
     {
       title: '维修/保养',

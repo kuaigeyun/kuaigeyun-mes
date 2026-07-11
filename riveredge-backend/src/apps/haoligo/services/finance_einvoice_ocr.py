@@ -85,6 +85,8 @@ _UNIT_WORDS = frozenset(
     }
 )
 _SPEC_CODE_RE = re.compile(r"^[\dA-Za-z][\dA-Za-z\-\.]{3,31}$")
+_INVOICE_SPEC_SUFFIX_RE = re.compile(r"^(\d+度[\u4e00-\u9fffA-Za-z0-9\(\)（）]+)$")
+_MERGED_NAME_SPEC_RE = re.compile(r"^(\*[^*]+\*.+?)(\d+度.+)$")
 _NUM_RE = re.compile(r"^[\d,]+(?:\.\d+)?$")
 _PCT_RE = re.compile(r"^(\d+(?:\.\d+)?)%$")
 
@@ -102,6 +104,18 @@ def _price_literal_from_text(text: str | None, decimal: Decimal | None) -> str |
 
 def _is_known_unit(text: str) -> bool:
     return text.strip() in _UNIT_WORDS
+
+
+def _looks_like_invoice_spec(text: str) -> bool:
+    """数电票规格型号：字母型号、纯数字编码、或「125度塑壳」类中文规格。"""
+    text = text.strip()
+    if not text or _is_known_unit(text) or _PCT_RE.match(text):
+        return False
+    if _INVOICE_SPEC_SUFFIX_RE.match(text):
+        return True
+    if _SPEC_CODE_RE.match(text.replace(",", "")):
+        return True
+    return _looks_like_spec(text)
 
 
 def _looks_like_spec(text: str) -> bool:
@@ -125,7 +139,24 @@ def _looks_like_spec_at(cells: list[str], idx: int) -> bool:
         return True
     if idx + 1 < len(cells) and _is_known_unit(cells[idx + 1]):
         return bool(_SPEC_CODE_RE.match(text.replace(",", "")))
-    return False
+    return _looks_like_invoice_spec(text)
+
+
+def _split_merged_name_and_spec(raw_name: str) -> tuple[str, str]:
+    """项目名称列与规格型号粘连时，按「数字+度」等票面规格特征拆回两列。"""
+    text = raw_name.strip()
+    if not text:
+        return text, ""
+    m = _MERGED_NAME_SPEC_RE.match(text)
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+    m2 = re.match(r"^(.+?)(\d+度.+)$", text)
+    if m2:
+        name_part = m2.group(1).strip()
+        spec_part = m2.group(2).strip()
+        if len(name_part) >= 2 and _looks_like_invoice_spec(spec_part):
+            return name_part, spec_part
+    return text, ""
 
 
 def ocr_available() -> bool:
@@ -456,9 +487,10 @@ def _parse_invoice_detail_row(cells: list[str]) -> dict[str, Any] | None:
         return None
 
     name = cells[0]
+    name, merged_spec = _split_merged_name_and_spec(name)
     idx = 1
-    spec = ""
-    if idx < len(cells) and _looks_like_spec_at(cells, idx):
+    spec = merged_spec
+    if not spec and idx < len(cells) and _looks_like_spec_at(cells, idx):
         spec = cells[idx]
         idx += 1
 

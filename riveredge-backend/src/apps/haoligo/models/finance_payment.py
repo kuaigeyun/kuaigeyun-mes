@@ -43,3 +43,5 @@ class HaoligoFinancePayment(HaoligoTenantModel):
         on_delete=fields.SET_NULL,
         description="可选关联发票",
     )
+    created_by_user_id = fields.IntField(null=True, description="创建人用户 ID")
+    created_by_name = fields.CharField(max_length=100, null=True, description="创建人显示名")

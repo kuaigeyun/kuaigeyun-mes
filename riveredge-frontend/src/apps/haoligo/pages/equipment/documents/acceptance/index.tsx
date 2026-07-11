@@ -27,7 +27,7 @@ import {
   type EquipmentAcceptanceSheetRow,
   type EquipmentAcceptanceWorkflowStatus,
 } from '../../../../services/haoligo';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { haoligoDocumentCreatorColumn, moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { formatDateTime } from '../../../../../../utils/format';
 import { HAOLIGO_RESOURCE_EQUIPMENT_ACCEPTANCE } from '../../../../constants/documentPermissionResources';
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
@@ -235,6 +235,7 @@ const AcceptanceDocumentsPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) => (r.arrived_at ? formatDateTime(r.arrived_at, 'YYYY-MM-DD HH:mm') : '—'),
       },
+      haoligoDocumentCreatorColumn<EquipmentAcceptanceSheetRow>(),
       moldDocumentCreatedAtColumn<EquipmentAcceptanceSheetRow>(),
       {
         title: t('app.haoligo.equipment.documents.colActions'),

@@ -59,6 +59,7 @@ import {
 } from '../../../../utils/equipmentAcceptance';
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
 import { formatDateTime } from '../../../../../../utils/format';
+import { HaoligoDocumentCreatorDescriptionsItem } from '../../../../components/HaoligoDocumentCreatorDetailField';
 import { SecurePictureCardUpload } from '../../../../components/SecurePictureCardUpload';
 import { MoldAttachmentImagePreview } from '../../../../components/MoldAttachmentImagePreview';
 import { uploadFile, type FileUploadResponse } from '../../../../../../services/file';
@@ -526,6 +527,7 @@ const AcceptanceDetailPanel: React.FC<AcceptanceDetailPanelProps> = ({
         <Descriptions.Item label={t('app.haoligo.equipment.ledger.title')}>
           {detail.equipment_asset_code || '—'}
         </Descriptions.Item>
+        <HaoligoDocumentCreatorDescriptionsItem row={detail} />
       </Descriptions>
 
       {(status === 'commissioning' || status === 'draft') && currentRound ? (

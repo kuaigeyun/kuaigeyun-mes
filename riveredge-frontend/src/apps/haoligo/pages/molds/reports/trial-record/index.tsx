@@ -8,7 +8,7 @@ import { App, Tag } from 'antd';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../../components/layout-templates';
 import { listMoldTrialSheets, type MoldTrialSheetRow } from '../../../../services/haoligo';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { haoligoDocumentCreatorColumn, moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { buildMoldTrialSheetListParams } from '../../../../utils/moldTrialSheetListParams';
 
 const trialResultEnum: Record<string, { text: string }> = {
@@ -75,14 +75,7 @@ const MoldTrialRecordReportPage: React.FC = () => {
       width: 96,
       hideInSearch: true,
     },
-    {
-      title: '试模人员',
-      dataIndex: 'trial_user_name',
-      width: 120,
-      ellipsis: true,
-      hideInSearch: true,
-      render: (_, r) => r.trial_user_name || '—',
-    },
+    haoligoDocumentCreatorColumn<MoldTrialSheetRow>(),
     {
       title: '试模结果',
       dataIndex: 'trial_result',

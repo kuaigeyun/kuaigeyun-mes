@@ -10,6 +10,7 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._creator import resolve_creator_name
 from apps.haoligo.api._equipment_sheet_code import generate_equipment_sheet_no
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.api.equipment_maintenance_equipment_status import (
@@ -238,6 +239,7 @@ class EquipmentUpkeepCompleteSheetOut(BaseModel):
     reporter_user_id: int
     complete_notify_user_ids: List[int] = Field(default_factory=list)
     created_at: datetime
+    creator_name: Optional[str] = None
 
     @field_validator("header_attachment_file_uuids", "source_header_attachment_file_uuids", mode="before")
     @classmethod
@@ -354,6 +356,7 @@ async def _serialize(row: HaoligoEquipmentUpkeepCompleteSheet) -> EquipmentUpkee
         reporter_user_id=row.reporter_user_id,
         complete_notify_user_ids=normalize_report_user_ids(getattr(row, "complete_notify_user_ids", None)),
         created_at=row.created_at,
+        creator_name=resolve_creator_name(applicant_name=row.applicant_name),
     )
 
 

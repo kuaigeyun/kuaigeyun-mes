@@ -17,6 +17,8 @@ import {
   updateHazardReport,
   type HazardRow,
 } from '../../../services/haoligo';
+import { haoligoDocumentCreatorColumn } from '../../../utils/documentTableColumns';
+import { HaoligoDocumentCreatorDescriptionsItem } from '../../../components/HaoligoDocumentCreatorDetailField';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { searchUserNameOptions } from '../../../../../utils/userDisplay';
 import { formDateTimeToIso } from '../shared/datetimeHelpers';
@@ -184,6 +186,7 @@ const PatrolHazardsPage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => hazardIssueTypeCodes(r).join('、') || '—',
     },
+    haoligoDocumentCreatorColumn<HazardRow>(),
     { title: '解决方案', dataIndex: 'solution_note', ellipsis: true, hideInSearch: true },
     { title: '处理人', dataIndex: 'handler_name', width: 100, ellipsis: true, hideInSearch: true },
     {
@@ -296,11 +299,11 @@ const PatrolHazardsPage: React.FC = () => {
             <Descriptions.Item label="问题类型">
               {hazardIssueTypeCodes(contextRow).join('、') || '—'}
             </Descriptions.Item>
-            <Descriptions.Item label="登记人">{contextRow.registrant_name ?? '—'}</Descriptions.Item>
             <Descriptions.Item label="责任人">{contextRow.responsible_name?.trim() || '—'}</Descriptions.Item>
             <Descriptions.Item label="问题描述" span={2}>
               {contextRow.problem_summary?.trim() ? contextRow.problem_summary : '—'}
             </Descriptions.Item>
+            <HaoligoDocumentCreatorDescriptionsItem row={contextRow} />
           </Descriptions>
           <div style={{ marginBottom: 16 }}>
             <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>

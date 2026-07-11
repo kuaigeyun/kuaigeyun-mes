@@ -36,3 +36,5 @@ class HaoligoMoldReturnSheet(HaoligoTenantModel):
         default=Decimal("0"),
         description="制造数量（还入）",
     )
+    created_by_user_id = fields.IntField(null=True, description="创建人用户 ID")
+    created_by_name = fields.CharField(max_length=100, null=True, description="创建人显示名")

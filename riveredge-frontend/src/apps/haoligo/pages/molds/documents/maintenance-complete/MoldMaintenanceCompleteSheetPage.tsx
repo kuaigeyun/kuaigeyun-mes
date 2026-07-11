@@ -25,7 +25,11 @@ import type { ColumnsType } from 'antd/es/table';
 import { App, Alert, Button, Col, Divider, Input, Modal, Row, Space, Spin, Table, Tooltip, Typography, Upload } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import HaoligoDocumentPrintModal from '../../../../components/HaoligoDocumentPrintModal';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { haoligoDocumentCreatorColumn, moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import {
+  HaoligoDocumentCreatorFormField,
+  haoligoDocumentCreatorFormValue,
+} from '../../../../components/HaoligoDocumentCreatorDetailField';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
 import { UniTable } from '../../../../../../components/uni-table';
 import { UniTableStackedPrimaryCell } from '../../../../../../components/uni-table/stackedPrimaryColumn';
@@ -646,7 +650,7 @@ export function MoldMaintenanceCompleteSheetPage({
           item_attachments: await uuidsToSecureUploadFileList(it.attachment_file_uuids),
         })),
       );
-      setFormInitialValues({
+      const sheetFormValues = {
         source_maintenance_sheet_id: d.source_maintenance_sheet_id ?? undefined,
         source_order_no: d.source_order_no,
         service_type: d.service_type,
@@ -655,7 +659,10 @@ export function MoldMaintenanceCompleteSheetPage({
         complete_notify_user_ids:
           d.complete_notify_user_ids?.length ? d.complete_notify_user_ids : [...completeNotifyDefaults],
         line_items,
-      });
+      };
+      setFormInitialValues(
+        detailOnly ? haoligoDocumentCreatorFormValue(sheetFormValues, d) : sheetFormValues,
+      );
       if (d.source_maintenance_sheet_id != null) {
         const byMold: Record<string, string[]> = {};
         for (const it of d.line_items || []) {
@@ -1035,7 +1042,7 @@ export function MoldMaintenanceCompleteSheetPage({
       hideInSearch: true,
     },
     { title: '来源单号', dataIndex: 'source_order_no', width: 160, ellipsis: true, copyable: true },
-    { title: '申请人', dataIndex: 'applicant_name', width: 100, ellipsis: true, hideInSearch: true },
+    haoligoDocumentCreatorColumn<MoldMaintenanceCompleteSheetRow>(),
     { title: '申请部门', dataIndex: 'department_name', width: 120, ellipsis: true, hideInSearch: true },
     {
       title: serviceType === '保养' ? '保养内容' : '维修摘要',
@@ -1322,6 +1329,9 @@ export function MoldMaintenanceCompleteSheetPage({
               seedUserIds={completeNotifyDefaults}
               searchUsers={searchCompleteNotifyUsers}
             />
+            <Row gutter={16}>
+              <HaoligoDocumentCreatorFormField visible={isDetailView} />
+            </Row>
 
             {beforeAttachmentPreview?.header?.length ? (
               <div

@@ -10,6 +10,7 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._creator import resolve_creator_name
 from apps.haoligo.api._mold_sheet_keyword import (
     apply_mold_line_items_sheet_keyword_filter,
     inhouse_maintenance_header_keyword_q,
@@ -274,6 +275,7 @@ class MoldMaintenanceSheetOut(BaseModel):
         False,
         description="是否可发起完修/完成保养：已通过且尚无未删除的关联完修单",
     )
+    creator_name: Optional[str] = None
 
 
 async def _linked_maintenance_ids_with_complete(tenant_id: int) -> set[int]:
@@ -383,6 +385,7 @@ def _serialize(
         submitted_notify_user_ids=normalize_report_user_ids(getattr(row, "submitted_notify_user_ids", None)),
         created_at=row.created_at,
         can_complete=_row_can_complete(row, linked_ids=linked),
+        creator_name=resolve_creator_name(applicant_name=row.applicant_name),
     )
 
 

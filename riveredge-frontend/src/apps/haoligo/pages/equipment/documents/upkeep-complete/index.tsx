@@ -51,7 +51,11 @@ import { ReadonlyAttachmentStrip } from '../../../../components/ReadonlyAttachme
 import { PatrolImagePreview } from '../../../patrol/shared/PatrolImagePreview';
 import { normUploadUuids, uuidsToSecureUploadFileList } from '../../../patrol/shared/uploadHelpers';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { haoligoDocumentCreatorColumn, moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import {
+  HaoligoDocumentCreatorFormField,
+  haoligoDocumentCreatorFormValue,
+} from '../../../../components/HaoligoDocumentCreatorDetailField';
 import { EquipmentUpkeepRecordFields } from '../../../../components/EquipmentUpkeepRecordFields';
 import { getBusinessConfig } from '../../../../../../services/businessConfig';
 import {
@@ -461,7 +465,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
               : '';
         setEquipmentDisplay(eqLabel);
         setSourceUpkeepParamSetId(d.source_upkeep_param_set_id ?? d.upkeep_param_set_id ?? null);
-        setFormInitialValues({
+        const sheetFormValues = {
           service_type: st,
           source_upkeep_sheet_id: d.source_upkeep_sheet_id ?? undefined,
           equipment_id: d.equipment_id ?? undefined,
@@ -479,7 +483,10 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
           header_attachments: await uuidsToSecureUploadFileList(d.header_attachment_file_uuids),
           complete_notify_user_ids:
             d.complete_notify_user_ids?.length ? d.complete_notify_user_ids : [...completeNotifyDefaults],
-        });
+        };
+        setFormInitialValues(
+          detailOnly ? haoligoDocumentCreatorFormValue(sheetFormValues, d) : sheetFormValues,
+        );
         startTransition(() => setFormOptionsReady(true));
       } catch (e) {
         messageApi.error((e as Error).message || t('app.haoligo.equipment.loadFailed'));
@@ -687,13 +694,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
       width: 160,
       ellipsis: true,
     },
-    {
-      title: t('app.haoligo.equipment.upkeep.applicant'),
-      dataIndex: 'applicant_name',
-      width: 100,
-      ellipsis: true,
-      hideInSearch: true,
-    },
+    haoligoDocumentCreatorColumn<EquipmentUpkeepCompleteSheetRow>(),
     {
       title: t('app.haoligo.equipment.upkeepComplete.upkeepContent'),
       dataIndex: 'completion_content',
@@ -922,6 +923,9 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
                 seedUserIds={completeNotifyDefaults}
                 searchUsers={searchCompleteNotifyUsers}
               />
+              <Row gutter={16}>
+                <HaoligoDocumentCreatorFormField visible={isDetailView} />
+              </Row>
 
               {(beforePreview || isEdit) && formServiceType ? (
                 <>

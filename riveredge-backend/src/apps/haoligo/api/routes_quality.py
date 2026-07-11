@@ -13,6 +13,7 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.haoligo.api._creator import resolve_creator_name
 from apps.haoligo.api._erp_mold_code import parse_erp_mold_code
 from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from apps.haoligo.api._qs import tenant_alive
@@ -91,6 +92,7 @@ class QualityBaseOut(BaseModel):
     close_confirmed_at: Optional[datetime] = None
     close_confirmer_user_id: Optional[int] = None
     created_at: Optional[datetime] = None
+    creator_name: Optional[str] = None
 
     @field_validator("uuid", mode="before")
     @classmethod
@@ -629,6 +631,7 @@ async def _serialize_common(row: Any, tenant_id: int, out_model: Callable[..., _
         data["equipment_asset_code"] = code
         data["equipment_name"] = name
     data["notify_user_ids"] = normalize_report_user_ids(data.get("notify_user_ids"))
+    data["creator_name"] = resolve_creator_name(registrant_name=data.get("registrant_name"))
     return out_model(**data)
 
 

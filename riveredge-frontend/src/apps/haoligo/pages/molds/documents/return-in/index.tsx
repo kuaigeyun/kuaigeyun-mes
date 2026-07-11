@@ -35,7 +35,11 @@ import {
   type MoldReturnSheetRow,
   type MoldRow,
 } from '../../../../services/haoligo';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { haoligoDocumentCreatorColumn, moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import {
+  HaoligoDocumentCreatorFormField,
+  haoligoDocumentCreatorFormValue,
+} from '../../../../components/HaoligoDocumentCreatorDetailField';
 import { fetchMoldsForPicker } from '../../../../utils/moldPicker';
 
 function flattenDepartmentOptions(items: DepartmentTreeItem[]): { label: string; value: string }[] {
@@ -140,7 +144,7 @@ const MoldReturnInPage: React.FC = () => {
       setIsDetailView(detailOnly);
       setIsEdit(true);
       setEditId(d.id);
-      setFormInitialValues({
+      const sheetFormValues = {
         production_order_no: d.production_order_no ?? undefined,
         borrow_sheet_no: d.borrow_sheet_no ?? undefined,
         issue_department_uuid: d.issue_department_uuid ?? undefined,
@@ -150,7 +154,10 @@ const MoldReturnInPage: React.FC = () => {
         finished_product_name: d.finished_product_name ?? undefined,
         planned_qty: d.planned_qty != null ? Number(d.planned_qty) : undefined,
         manufacture_qty: d.manufacture_qty != null ? Number(d.manufacture_qty) : undefined,
-      });
+      };
+      setFormInitialValues(
+        detailOnly ? haoligoDocumentCreatorFormValue(sheetFormValues, d) : sheetFormValues,
+      );
       await loadDepartments();
       setModalVisible(true);
     } catch (e) {
@@ -345,6 +352,7 @@ const MoldReturnInPage: React.FC = () => {
     { title: '成品名称', dataIndex: 'finished_product_name', width: 130, ellipsis: true, hideInSearch: true },
     { title: '计划数量', dataIndex: 'planned_qty', width: 100, hideInSearch: true },
     { title: '制造数量', dataIndex: 'manufacture_qty', width: 100, hideInSearch: true },
+    haoligoDocumentCreatorColumn<MoldReturnSheetRow>(),
     moldDocumentCreatedAtColumn<MoldReturnSheetRow>(),
     {
       title: '操作',
@@ -577,6 +585,7 @@ const MoldReturnInPage: React.FC = () => {
                   fieldProps={{ precision: 4, min: 0, style: { width: '100%' } }}
                 />
               </Col>
+              <HaoligoDocumentCreatorFormField visible={isDetailView} />
             </Row>
           </ProForm>
         </div>

@@ -42,7 +42,11 @@ import { formatDateTime } from '../../../../../../utils/format';
 import { uploadFile, type FileUploadResponse } from '../../../../../../services/file';
 import { MoldAttachmentImagePreview } from '../../../../components/MoldAttachmentImagePreview';
 import { SecurePictureCardUpload } from '../../../../components/SecurePictureCardUpload';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { haoligoDocumentCreatorColumn, moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import {
+  HaoligoDocumentCreatorFormField,
+  haoligoDocumentCreatorFormValue,
+} from '../../../../components/HaoligoDocumentCreatorDetailField';
 import { useEquipmentOperationalStatusLabels } from '../../../../utils/equipmentOperationalStatus';
 import { ThemedSegmented } from '../../../../../../components/themed-segmented';
 import {
@@ -240,12 +244,24 @@ const RoutePatrolDocumentsPage: React.FC = () => {
           const users = await listHaoligoNotifyUserOptions({ selected_user_ids: notifyIds, limit: 80 });
           for (const u of users) reportUserLabelRef.current.set(u.id, u.label);
         }
-        formRef.current?.setFieldsValue({
-          patrol_route_id: row.patrol_route_id,
-          recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
-          report_enabled: row.report_enabled,
-          report_notify_user_ids: notifyIds,
-        });
+        formRef.current?.setFieldsValue(
+          view
+            ? haoligoDocumentCreatorFormValue(
+                {
+                  patrol_route_id: row.patrol_route_id,
+                  recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
+                  report_enabled: row.report_enabled,
+                  report_notify_user_ids: notifyIds,
+                },
+                row,
+              )
+            : {
+                patrol_route_id: row.patrol_route_id,
+                recorded_at: row.recorded_at ? dayjs(row.recorded_at) : undefined,
+                report_enabled: row.report_enabled,
+                report_notify_user_ids: notifyIds,
+              },
+        );
       }, 0);
     } catch (e) {
       messageApi.error((e as Error).message || t('app.haoligo.equipment.loadFailed'));
@@ -288,6 +304,7 @@ const RoutePatrolDocumentsPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) => (r.report_enabled ? t('app.haoligo.equipment.documents.yes') : t('app.haoligo.equipment.documents.no')),
       },
+      haoligoDocumentCreatorColumn<EquipmentRoutePatrolRow>(),
       moldDocumentCreatedAtColumn<EquipmentRoutePatrolRow>(),
       {
         title: t('app.haoligo.equipment.documents.colActions'),
@@ -707,6 +724,9 @@ const RoutePatrolDocumentsPage: React.FC = () => {
                   }
                 </ProFormDependency>
               </Col>
+            </Row>
+            <Row gutter={[16, 8]}>
+              <HaoligoDocumentCreatorFormField visible={detailMode} />
             </Row>
           </ProForm>
         </Spin>

@@ -46,8 +46,8 @@ import FinanceSupplierSelect, {
   HAOLIGO_RESOURCE_FINANCE_SUPPLIERS,
   type FinanceSupplierSelectRef,
 } from '../../../components/FinanceSupplierSelect';
+import { haoligoDocumentCreatorColumn, resolveHaoligoDocumentCreatorName } from '../../../utils/documentTableColumns';
 import {
-  createFinanceInvoice,
   deleteFinanceInvoice,
   getFinanceInvoice,
   getOrCreateFinanceAcceptanceFromInvoice,
@@ -175,7 +175,10 @@ const InvoiceLineUnitPriceInput: React.FC<{
     name={[rowIndex, 'invoice_unit_price']}
     rules={[{ required: true, message: '必填' }]}
     formItemProps={{ noStyle: true }}
-    fieldProps={{ style: { width: '100%' } }}
+    fieldProps={{
+      style: { width: '100%', fontVariantNumeric: 'tabular-nums' },
+      styles: { input: { textOverflow: 'clip' } },
+    }}
   />
 );
 
@@ -194,7 +197,7 @@ const InvoiceLineCompareCell: React.FC<{
   onReloadPrices: () => Promise<void>;
   canUpdate: boolean;
 }> = ({ rowIndex, priceIndex, onReloadPrices, canUpdate }) => {
-  const { message: messageApi } = App.useApp();
+  const { message: messageApi, modal } = App.useApp();
   const form = Form.useFormInstance();
   const line = Form.useWatch(['lines', rowIndex], form) as Record<string, unknown> | undefined;
   const supplierId = Form.useWatch('supplier_id', form);
@@ -204,6 +207,76 @@ const InvoiceLineCompareCell: React.FC<{
   );
   const invoicePriceText = parseFinanceUnitPriceCell(line?.invoice_unit_price);
   const [updating, setUpdating] = useState(false);
+
+  const resolveRegisterContext = () => {
+    const sid = Number(supplierId ?? 0);
+    if (!sid) {
+      messageApi.warning('请先选择材料供应商');
+      return null;
+    }
+    const spec = String(line?.spec ?? line?.material_code ?? line?.material_name ?? '').trim();
+    if (!spec) {
+      messageApi.warning('规格不能为空，无法登记');
+      return null;
+    }
+    let unitPrice: string;
+    try {
+      unitPrice = normalizeFinanceUnitPriceInput(line?.invoice_unit_price);
+    } catch {
+      messageApi.warning('发票单价无效，无法登记');
+      return null;
+    }
+    return {
+      sid,
+      spec,
+      unitPrice,
+      materialCode: String(line?.material_code ?? '').trim() || spec,
+      materialName: String(line?.material_name ?? '').trim() || spec,
+      unit: String(line?.unit ?? '').trim() || null,
+    };
+  };
+
+  const registerCurrentPrice = (ctx: NonNullable<ReturnType<typeof resolveRegisterContext>>) => {
+    setUpdating(true);
+    void (async () => {
+      try {
+        await registerFinanceInvoiceSupplierPrice({
+          supplier_id: ctx.sid,
+          spec: ctx.spec,
+          unit_price: ctx.unitPrice,
+          material_code: ctx.materialCode,
+          material_name: ctx.materialName,
+          unit: ctx.unit,
+          price_type: '不含税',
+        });
+        messageApi.success('已按当前发票单价登记到供应商价格明细');
+        await onReloadPrices();
+      } catch (e) {
+        messageApi.error((e as Error).message || '登记失败');
+      } finally {
+        setUpdating(false);
+      }
+    })();
+  };
+
+  const updateLedgerPrice = (supplierPriceId: number, newPrice: string) => {
+    setUpdating(true);
+    void (async () => {
+      try {
+        await updateFinanceSupplierPriceLedger(supplierPriceId, {
+          unit_price: newPrice,
+          change_source: '验票改价',
+          remark: '发票录入改价',
+        });
+        messageApi.success('已更改单价并写入清单（历史价格已保留）');
+        await onReloadPrices();
+      } catch (e) {
+        messageApi.error((e as Error).message || '改价失败');
+      } finally {
+        setUpdating(false);
+      }
+    })();
+  };
 
   if (compare.status === '一致') {
     return <Tag color="success">一致</Tag>;
@@ -219,43 +292,20 @@ const InvoiceLineCompareCell: React.FC<{
             loading={updating}
             style={{ paddingInline: 0, height: 'auto' }}
             onClick={() => {
-              void (async () => {
-                const sid = Number(supplierId ?? 0);
-                if (!sid) {
-                  messageApi.warning('请先选择材料供应商');
-                  return;
-                }
-                const spec = String(line?.spec ?? line?.material_code ?? line?.material_name ?? '').trim();
-                if (!spec) {
-                  messageApi.warning('规格不能为空，无法登记');
-                  return;
-                }
-                let unitPrice: string;
-                try {
-                  unitPrice = normalizeFinanceUnitPriceInput(line?.invoice_unit_price);
-                } catch {
-                  messageApi.warning('发票单价无效，无法登记');
-                  return;
-                }
-                setUpdating(true);
-                try {
-                  await registerFinanceInvoiceSupplierPrice({
-                    supplier_id: sid,
-                    spec,
-                    unit_price: unitPrice,
-                    material_code: String(line?.material_code ?? '').trim() || spec,
-                    material_name: String(line?.material_name ?? '').trim() || spec,
-                    unit: String(line?.unit ?? '').trim() || null,
-                    price_type: '不含税',
-                  });
-                  messageApi.success('已按当前发票单价登记到供应商价格明细');
-                  await onReloadPrices();
-                } catch (e) {
-                  messageApi.error((e as Error).message || '登记失败');
-                } finally {
-                  setUpdating(false);
-                }
-              })();
+              const ctx = resolveRegisterContext();
+              if (!ctx) return;
+              modal.confirm({
+                title: '登记供应商单价',
+                content: (
+                  <Typography.Paragraph style={{ marginBottom: 0 }}>
+                    规格「{ctx.spec}」尚未登记单价。确认按发票单价{' '}
+                    <Typography.Text strong>{formatFinanceUnitPrice(ctx.unitPrice)}</Typography.Text>{' '}
+                    写入供应商价格明细？
+                  </Typography.Paragraph>
+                ),
+                okText: '确认登记',
+                onOk: () => registerCurrentPrice(ctx),
+              });
             }}
           >
             以当前价格登记
@@ -284,23 +334,27 @@ const InvoiceLineCompareCell: React.FC<{
             loading={updating}
             style={{ paddingInline: 0, height: 'auto' }}
             onClick={() => {
-              void (async () => {
-                setUpdating(true);
-                try {
-                  const newPrice = normalizeFinanceUnitPriceInput(line?.invoice_unit_price);
-                  await updateFinanceSupplierPriceLedger(compare.supplierPriceId!, {
-                    unit_price: newPrice,
-                    change_source: '验票改价',
-                    remark: '发票录入改价',
-                  });
-                  messageApi.success('已更改单价并写入清单（历史价格已保留）');
-                  await onReloadPrices();
-                } catch (e) {
-                  messageApi.error((e as Error).message || '改价失败');
-                } finally {
-                  setUpdating(false);
-                }
-              })();
+              let newPrice: string;
+              try {
+                newPrice = normalizeFinanceUnitPriceInput(line?.invoice_unit_price);
+              } catch {
+                messageApi.warning('发票单价无效，无法改价');
+                return;
+              }
+              const spec = String(line?.spec ?? line?.material_code ?? line?.material_name ?? '').trim() || '—';
+              modal.confirm({
+                title: '更改供应商单价',
+                content: (
+                  <Typography.Paragraph style={{ marginBottom: 0 }}>
+                    规格「{spec}」单价与发票不一致。确认将清单单价从{' '}
+                    <Typography.Text strong>{formatFinanceUnitPrice(compare.systemUnitPrice)}</Typography.Text>{' '}
+                    改为发票单价{' '}
+                    <Typography.Text strong>{formatFinanceUnitPrice(newPrice)}</Typography.Text>？历史价格将保留。
+                  </Typography.Paragraph>
+                ),
+                okText: '确认改价',
+                onOk: () => updateLedgerPrice(compare.supplierPriceId!, newPrice),
+              });
             }}
           >
             更改单价
@@ -894,6 +948,7 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => invoiceStatusTag(r.status),
     },
+    haoligoDocumentCreatorColumn<FinanceInvoiceRow>(),
     {
       title: '操作',
       valueType: 'option',
@@ -1112,7 +1167,7 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
             {
               title: '规格',
               key: 'spec',
-              width: '20%',
+              width: '18%',
               render: (field) => (
                 <ProFormText
                   name={[field.name, 'spec']}
@@ -1152,7 +1207,7 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
             {
               title: '发票单价',
               key: 'invoice_unit_price',
-              width: '12%',
+              width: 200,
               align: 'right',
               render: (field) => <InvoiceLineUnitPriceInput rowIndex={field.name} />,
             },
@@ -1186,7 +1241,7 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
             {
               title: '比对结果',
               key: 'compare_result',
-              width: '18%',
+              width: '16%',
               render: (field) => (
                 <InvoiceLineCompareCell
                   rowIndex={field.name}
@@ -1245,6 +1300,8 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
               <Typography.Text strong>
                 ¥ {Number(detailInvoice.total_amount).toFixed(2)}
               </Typography.Text>
+              <Typography.Text type="secondary">创建人</Typography.Text>
+              <Typography.Text>{resolveHaoligoDocumentCreatorName(detailInvoice)}</Typography.Text>
             </Space>
             <Table
               size="small"

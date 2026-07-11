@@ -24,3 +24,5 @@ class HaoligoMoldBorrowSheet(HaoligoTenantModel):
     finished_product_code = fields.CharField(max_length=128, null=True, description="成品代号")
     finished_product_name = fields.CharField(max_length=200, null=True, description="成品名称")
     planned_qty = fields.DecimalField(max_digits=18, decimal_places=4, null=True, description="计划数量")
+    created_by_user_id = fields.IntField(null=True, description="创建人用户 ID")
+    created_by_name = fields.CharField(max_length=100, null=True, description="创建人显示名")

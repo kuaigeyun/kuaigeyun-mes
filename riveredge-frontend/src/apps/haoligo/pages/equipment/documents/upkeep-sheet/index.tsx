@@ -51,7 +51,11 @@ import {
 import { PatrolImagePreview } from '../../../patrol/shared/PatrolImagePreview';
 import { normUploadUuids, uuidsToSecureUploadFileList } from '../../../patrol/shared/uploadHelpers';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { haoligoDocumentCreatorColumn, moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import {
+  HaoligoDocumentCreatorFormField,
+  haoligoDocumentCreatorFormValue,
+} from '../../../../components/HaoligoDocumentCreatorDetailField';
 import {
   HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_COMPLETE,
   HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_SHEET,
@@ -292,7 +296,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
         const preset = presetFromApplicantRow(d);
         await preloadFormOptions(preset ? [preset] : undefined);
         const initDept = resolveInitDepartmentUuid(d.applicant_user_id, d.department_uuid);
-        setFormInitialValues({
+        const sheetFormValues = {
           service_type: (d.service_type || '保养').trim() === '维修' ? '维修' : '保养',
           applicant_user_id: d.applicant_user_id ?? undefined,
           department_uuid: initDept,
@@ -302,7 +306,10 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
           header_attachments: await uuidsToSecureUploadFileList(d.header_attachment_file_uuids),
           complete_notify_user_ids:
             d.complete_notify_user_ids?.length ? d.complete_notify_user_ids : [...upkeepSheetNotifyDefaults],
-        });
+        };
+        setFormInitialValues(
+          detailOnly ? haoligoDocumentCreatorFormValue(sheetFormValues, d) : sheetFormValues,
+        );
         await syncEquipmentWorkshop(d.equipment_id);
         startTransition(() => setFormOptionsReady(true));
       } catch (e) {
@@ -468,13 +475,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
       width: 180,
       ellipsis: true,
     },
-    {
-      title: t('app.haoligo.equipment.upkeep.applicant'),
-      dataIndex: 'applicant_name',
-      width: 120,
-      ellipsis: true,
-      hideInSearch: true,
-    },
+    haoligoDocumentCreatorColumn<EquipmentUpkeepSheetRow>(),
     {
       title: t('app.haoligo.equipment.documents.colEquipment'),
       dataIndex: 'equipment_asset_code',
@@ -801,6 +802,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
                     }
                   </ProFormDependency>
                 </Col>
+                <HaoligoDocumentCreatorFormField visible={isDetailView} />
               </Row>
             </ProForm>
           )}

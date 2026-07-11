@@ -39,6 +39,8 @@ import { QualityTicketOverdueNotifySettingModal } from './QualityTicketOverdueNo
 import { getQualityComplaintOverdueNotifyIds } from '../../../utils/qualityComplaintOverdueNotifyDefaults';
 import { getQualityIssueOverdueNotifyIdsForKind, resolveQualityIssueKindForOverdueNotify } from '../../../utils/qualityIssueOverdueNotifyDefaults';
 import { getQualityLineStopOverdueNotifyIdsForKind } from '../../../utils/qualityLineStopOverdueNotifyDefaults';
+import { haoligoDocumentCreatorColumn } from '../../../utils/documentTableColumns';
+import { HaoligoDocumentCreatorDescriptionsItem } from '../../../components/HaoligoDocumentCreatorDetailField';
 
 type WorkflowStep = 'temporary' | 'long_term' | 'close' | 'measures';
 
@@ -484,6 +486,7 @@ export function QualityTicketPage<T extends BaseRow>({
       ...(isLineStopList
         ? [{ title: '停线开始', dataIndex: 'stop_started_at', hideInSearch: true, valueType: 'dateTime' as const, width: 170 }]
         : []),
+      haoligoDocumentCreatorColumn<T>(),
       { title: '反馈时间', dataIndex: 'reported_at', hideInSearch: true, valueType: 'dateTime', width: 170 },
       ...(isLineStopList ? [] : [{ title: '计划完成', dataIndex: 'due_at', hideInSearch: true, valueType: 'dateTime' as const, width: 170 }]),
       {
@@ -1183,6 +1186,7 @@ export function QualityTicketPage<T extends BaseRow>({
         </Descriptions.Item>,
       );
     }
+    items.push(<HaoligoDocumentCreatorDescriptionsItem key="creator" row={d} />);
     return (
       <Col span={FORM_LAYOUT.FULL_COL_SPAN}>
         <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>
@@ -1668,6 +1672,13 @@ export function QualityTicketPage<T extends BaseRow>({
               <ProFormDateTimePicker name="due_at" label="计划完成时间" colProps={{ span: 12 }} fieldProps={dateTimeFieldProps} />
             ) : null}
           </>
+        ) : null}
+        {detailMode && loadedDetail ? (
+          <Col span={12}>
+            <Descriptions size="small" bordered>
+              <HaoligoDocumentCreatorDescriptionsItem row={loadedDetail} />
+            </Descriptions>
+          </Col>
         ) : null}
       </FormModalTemplate>
 
