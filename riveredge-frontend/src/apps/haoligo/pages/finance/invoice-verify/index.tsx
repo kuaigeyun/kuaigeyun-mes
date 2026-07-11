@@ -10,11 +10,11 @@ import {
   ProFormDatePicker,
   ProFormDigit,
   ProFormInstance,
-  ProFormSelect,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import {
+  Alert,
   App,
   Button,
   Col,
@@ -42,6 +42,10 @@ import { UniTable } from '../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import HaoligoDocumentPrintModal from '../../../components/HaoligoDocumentPrintModal';
+import FinanceSupplierSelect, {
+  HAOLIGO_RESOURCE_FINANCE_SUPPLIERS,
+  type FinanceSupplierSelectRef,
+} from '../../../components/FinanceSupplierSelect';
 import {
   createFinanceInvoice,
   deleteFinanceInvoice,
@@ -433,13 +437,16 @@ function lineStatusTag(status: string) {
 const FinanceInvoiceVerifyPage: React.FC = () => {
   const { message: messageApi, modal } = App.useApp();
   const perms = useResourcePermissions(HAOLIGO_FINANCE_INVOICE_VERIFY_RESOURCE);
+  const supplierPerms = useResourcePermissions(HAOLIGO_RESOURCE_FINANCE_SUPPLIERS);
   const invoiceActionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
+  const supplierSelectRef = useRef<FinanceSupplierSelectRef>(null);
 
   const [suppliers, setSuppliers] = useState<FinanceSupplierRow[]>([]);
   const [extraSupplierOption, setExtraSupplierOption] = useState<{ label: string; value: number } | null>(
     null,
   );
+  const [unmatchedParsedSupplierName, setUnmatchedParsedSupplierName] = useState('');
   const [supplierPriceList, setSupplierPriceList] = useState<FinanceSupplierPriceLedgerRow[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
@@ -458,26 +465,6 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
   const [printAcceptanceId, setPrintAcceptanceId] = useState<number | null>(null);
   const [printAcceptanceTitle, setPrintAcceptanceTitle] = useState('材料验收单打印');
   const [printAcceptanceLoadingId, setPrintAcceptanceLoadingId] = useState<number | null>(null);
-
-  const supplierOptions = useMemo(() => {
-    const opts = suppliers.map((s) => ({
-      label: s.supplier_name,
-      value: s.id,
-    }));
-    if (extraSupplierOption && !opts.some((o) => o.value === extraSupplierOption.value)) {
-      return [extraSupplierOption, ...opts];
-    }
-    return opts;
-  }, [suppliers, extraSupplierOption]);
-
-  const loadSuppliers = useCallback(async () => {
-    try {
-      const rows = await listFinanceSuppliers({ is_active: true });
-      setSuppliers(rows);
-    } catch {
-      setSuppliers([]);
-    }
-  }, []);
 
   const reloadSupplierPrices = useCallback(async (supplierId?: number) => {
     const sid =
@@ -508,19 +495,17 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
     [perms.canUpdate, createOpen, createFormLines, supplierPriceIndex],
   );
 
-  React.useEffect(() => {
-    void loadSuppliers();
-  }, [loadSuppliers]);
-
   const closeCreateModal = () => {
     setCreateOpen(false);
     setCreateFormLines([]);
     setPendingCreateFormValues(null);
     setEditingInvoiceId(null);
+    setUnmatchedParsedSupplierName('');
   };
 
   const openCreate = () => {
     setExtraSupplierOption(null);
+    setUnmatchedParsedSupplierName('');
     setSupplierPriceList([]);
     setEditingInvoiceId(null);
     const initialLines = [{ line_no: 1, quantity: 1 }];
@@ -600,7 +585,12 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
       setExtraSupplierOption({ value: supplierId, label: supplierName });
     }
     if (supplierId) {
+      setUnmatchedParsedSupplierName('');
       await reloadSupplierPrices(supplierId);
+    } else if (supplierName) {
+      setUnmatchedParsedSupplierName(supplierName);
+    } else {
+      setUnmatchedParsedSupplierName('');
     }
     const mappedLines =
       lines && lines.length > 0
@@ -1035,23 +1025,54 @@ const FinanceInvoiceVerifyPage: React.FC = () => {
             </Button>
           </Upload>
         </Space>
+        {unmatchedParsedSupplierName ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={`未在台账找到供应商「${unmatchedParsedSupplierName}」`}
+            description={
+              supplierPerms.canCreate
+                ? '可在下方材料供应商下拉中选择「快速新建」当场维护，或点击右侧按钮直接创建。'
+                : '请手工选择已有供应商，或联系管理员先在供应商台账维护。'
+            }
+            action={
+              supplierPerms.canCreate ? (
+                <Button
+                  size="small"
+                  type="primary"
+                  onClick={() => supplierSelectRef.current?.openQuickCreate(unmatchedParsedSupplierName)}
+                >
+                  快速新建
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : null}
         <Row gutter={16}>
-          <Col span={6}>
-            <ProFormSelect
-              name="supplier_id"
-              label="材料供应商"
-              rules={[{ required: true, message: '请选择供应商' }]}
-              options={supplierOptions}
-              showSearch
-              fieldProps={{
-                optionFilterProp: 'label',
-                style: { width: '100%' },
-                onChange: (value) => {
-                  void reloadSupplierPrices(Number(value));
-                },
-              }}
-            />
-          </Col>
+          <FinanceSupplierSelect
+            ref={supplierSelectRef}
+            colProps={{ span: 6 }}
+            formRef={formRef}
+            name="supplier_id"
+            label="材料供应商"
+            rules={[{ required: true, message: '请选择供应商' }]}
+            extraOption={extraSupplierOption}
+            quickCreateDefaultName={unmatchedParsedSupplierName}
+            quickCreatePopoverZIndex={2100}
+            onOptionsLoaded={setSuppliers}
+            onChange={(value) => {
+              if (value) {
+                setUnmatchedParsedSupplierName('');
+              }
+              void reloadSupplierPrices(Number(value));
+            }}
+            onSupplierCreated={(row) => {
+              setUnmatchedParsedSupplierName('');
+              setExtraSupplierOption(null);
+              void reloadSupplierPrices(row.id);
+            }}
+          />
           <Col span={6}>
             <ProFormText name="invoice_no" label="发票号码" rules={[{ required: true }]} />
           </Col>

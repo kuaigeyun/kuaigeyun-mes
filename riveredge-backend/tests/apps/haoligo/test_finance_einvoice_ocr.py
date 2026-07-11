@@ -44,6 +44,34 @@ def test_parse_seller_name_from_ocr_rows_seller_section():
     assert parse_seller_name_from_ocr_rows(rows) == "广州市邦程橡塑新材料有限公司"
 
 
+def test_parse_invoice_lines_rubber_tube_with_numeric_spec_and_gen_unit():
+    """浙江韦氏电器样票：纯数字规格 074300021 + 单位「根」。"""
+    rows = [
+        ["项目名称", "规格型号", "单位", "数量", "单价", "金额", "税率", "税额"],
+        [
+            "*橡胶制品*倍科橡胶管 (2000610200)",
+            "074300021",
+            "根",
+            "23400",
+            "0.95",
+            "22230.00",
+            "13%",
+            "2889.90",
+        ],
+        ["价税合计", "25119.90"],
+    ]
+    lines = parse_invoice_lines_from_ocr_rows(rows)
+    assert len(lines) == 1
+    assert lines[0]["material_name"] == "倍科橡胶管 (2000610200)"
+    assert lines[0]["material_code"] == "074300021"
+    assert lines[0]["spec"] == "074300021"
+    assert lines[0]["unit"] == "根"
+    assert lines[0]["quantity"] == Decimal("23400")
+    assert lines[0]["invoice_unit_price"] == Decimal("0.95")
+    assert lines[0]["line_amount"] == Decimal("22230.00")
+    assert lines[0]["tax_amount"] == Decimal("2889.90")
+
+
 def test_parse_invoice_lines_from_ocr_rows():
     rows = [
         ["项目名称", "规格型号", "单位", "数量", "单价", "金额", "税率", "税额"],

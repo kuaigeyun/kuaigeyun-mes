@@ -57,7 +57,34 @@ def _fix_common_ocr_name_errors(name: str) -> str:
         fixed = "无卤阻燃" + fixed[len("无卤燃") :]
     return fixed
 
-_UNIT_WORDS = frozenset({"千克", "干克", "个", "件", "吨", "套", "米", "台", "批", "箱"})
+_UNIT_WORDS = frozenset(
+    {
+        "千克",
+        "干克",
+        "个",
+        "件",
+        "吨",
+        "套",
+        "米",
+        "台",
+        "批",
+        "箱",
+        "根",
+        "卷",
+        "张",
+        "块",
+        "支",
+        "条",
+        "包",
+        "袋",
+        "瓶",
+        "桶",
+        "片",
+        "副",
+        "只",
+    }
+)
+_SPEC_CODE_RE = re.compile(r"^[\dA-Za-z][\dA-Za-z\-\.]{3,31}$")
 _NUM_RE = re.compile(r"^[\d,]+(?:\.\d+)?$")
 _PCT_RE = re.compile(r"^(\d+(?:\.\d+)?)%$")
 
@@ -73,14 +100,32 @@ def _price_literal_from_text(text: str | None, decimal: Decimal | None) -> str |
     return None
 
 
+def _is_known_unit(text: str) -> bool:
+    return text.strip() in _UNIT_WORDS
+
+
 def _looks_like_spec(text: str) -> bool:
     text = text.strip()
-    if not text or text in _UNIT_WORDS or _PCT_RE.match(text):
+    if not text or _is_known_unit(text) or _PCT_RE.match(text):
         return False
     if re.search(r"[A-Za-z]", text):
         return True
     first = text.split()[0]
     return not _NUM_RE.match(first.replace(",", ""))
+
+
+def _looks_like_spec_at(cells: list[str], idx: int) -> bool:
+    """规格型号列：含字母型号，或纯数字物料编码且下一列为单位。"""
+    if idx >= len(cells):
+        return False
+    text = cells[idx].strip()
+    if not text:
+        return False
+    if _looks_like_spec(text):
+        return True
+    if idx + 1 < len(cells) and _is_known_unit(cells[idx + 1]):
+        return bool(_SPEC_CODE_RE.match(text.replace(",", "")))
+    return False
 
 
 def ocr_available() -> bool:
@@ -413,12 +458,12 @@ def _parse_invoice_detail_row(cells: list[str]) -> dict[str, Any] | None:
     name = cells[0]
     idx = 1
     spec = ""
-    if idx < len(cells) and _looks_like_spec(cells[idx]):
+    if idx < len(cells) and _looks_like_spec_at(cells, idx):
         spec = cells[idx]
         idx += 1
 
     unit: str | None = None
-    if idx < len(cells) and cells[idx] in _UNIT_WORDS:
+    if idx < len(cells) and _is_known_unit(cells[idx]):
         unit = "千克" if cells[idx] == "干克" else cells[idx]
         idx += 1
 
