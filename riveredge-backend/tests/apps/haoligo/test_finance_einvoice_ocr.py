@@ -63,6 +63,76 @@ def test_parse_invoice_lines_temperature_protector_merged_name_spec():
     assert lines[2]["spec"] == "125度塑壳剥线头"
 
 
+def test_parse_invoice_lines_rubber_ring_merged_name_spec_code():
+    """宜兴森兴样票：OCR 将规格编码 071700003 粘连在项目名称末尾。"""
+    rows = [
+        ["项目名称", "规格型号", "单位", "数量", "单价", "金额", "税率", "税额"],
+        ["*橡胶制品*橡胶圈13.6*071700003", "只", "1700000", "0.0342", "58140.00", "13%", "7558.20"],
+        ["*橡胶制品*橡胶圈13.6*071700052", "只", "70000", "0.0432", "3024.00", "13%", "393.12"],
+        ["价税合计", "61164.00"],
+    ]
+    lines = parse_invoice_lines_from_ocr_rows(rows)
+    assert len(lines) == 2
+    assert lines[0]["material_name"] == "橡胶圈13.6*"
+    assert lines[0]["spec"] == "071700003"
+    assert lines[0]["material_code"] == "071700003"
+    assert lines[1]["material_name"] == "橡胶圈13.6*"
+    assert lines[1]["spec"] == "071700052"
+
+
+def test_parse_invoice_lines_continued_on_second_page():
+    """多页发票：第二页续表明细应合并解析。"""
+    rows = [
+        ["项目名称", "规格型号", "单位", "数量", "单价", "金额", "税率", "税额"],
+        ["*橡胶制品*密封筒", "070400001", "只", "1000000", "0.142", "142000.00", "13%", "18460.00"],
+        ["项目名称", "规格型号", "单位", "数量", "单价", "金额", "税率", "税额"],
+        ["*橡胶制品*小天鹅减震垫071800025", "只", "30000", "0.7548", "22644.00", "13%", "2943.72"],
+        ["价税合计", "164644.00"],
+    ]
+    lines = parse_invoice_lines_from_ocr_rows(rows)
+    assert len(lines) == 2
+    assert lines[0]["material_name"] == "密封筒"
+    assert lines[1]["material_name"] == "小天鹅减震垫"
+    assert lines[1]["spec"] == "071800025"
+
+
+def test_split_trailing_digit_spec():
+    from apps.haoligo.services.finance_einvoice_ocr import _split_trailing_digit_spec
+
+    name, spec = _split_trailing_digit_spec("*橡胶制品*橡胶圈13.6*071700003")
+    assert name == "*橡胶制品*橡胶圈13.6*"
+    assert spec == "071700003"
+    name2, spec2 = _split_trailing_digit_spec("*橡胶制品*小天鹅减震垫071800025")
+    assert name2 == "*橡胶制品*小天鹅减震垫"
+    assert spec2 == "071800025"
+    name3, spec3 = _split_trailing_digit_spec("*橡胶制品*阻燃PA6")
+    assert name3 == "*橡胶制品*阻燃PA6"
+    assert spec3 == ""
+
+
+def test_resolve_name_and_spec_prefers_spec_column():
+    from apps.haoligo.services.finance_einvoice_ocr import _resolve_name_and_spec
+
+    name, spec = _resolve_name_and_spec("*塑料制品*阻燃PA6", "4002SGO 4Y L12")
+    assert name == "*塑料制品*阻燃PA6"
+    assert spec == "4002SGO 4Y L12"
+    name2, spec2 = _resolve_name_and_spec("*塑料制品*阻燃PBT", "3001C G30 3NC")
+    assert spec2 == "3001C G30 3NC"
+
+
+def test_parse_invoice_lines_layout_spec_column_alphanumeric():
+    """规格列独立识别：字母数字型号不应依赖末尾数字规则。"""
+    rows = [
+        ["项目名称", "规格型号", "单位", "数量", "单价", "金额", "税率", "税额"],
+        ["*塑料制品*阻燃PA6", "4002SGO 4Y L12", "千克", "1000", "26.1061946902655", "26106.19", "13%", "3393.81"],
+        ["价税合计", "26106.19"],
+    ]
+    lines = parse_invoice_lines_from_ocr_rows(rows)
+    assert len(lines) == 1
+    assert lines[0]["material_name"] == "阻燃PA6"
+    assert lines[0]["spec"] == "4002SGO 4Y L12"
+
+
 def test_parse_invoice_lines_rubber_tube_with_numeric_spec_and_gen_unit():
     """浙江韦氏电器样票：纯数字规格 074300021 + 单位「根」。"""
     rows = [

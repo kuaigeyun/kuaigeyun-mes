@@ -87,8 +87,31 @@ _UNIT_WORDS = frozenset(
 _SPEC_CODE_RE = re.compile(r"^[\dA-Za-z][\dA-Za-z\-\.]{3,31}$")
 _INVOICE_SPEC_SUFFIX_RE = re.compile(r"^(\d+度[\u4e00-\u9fffA-Za-z0-9\(\)（）]+)$")
 _MERGED_NAME_SPEC_RE = re.compile(r"^(\*[^*]+\*.+?)(\d+度.+)$")
+_TRAILING_DIGIT_SPEC_RE = re.compile(r"^(.+?)(\d{6,12})$")
 _NUM_RE = re.compile(r"^[\d,]+(?:\.\d+)?$")
 _PCT_RE = re.compile(r"^(\d+(?:\.\d+)?)%$")
+
+# 数电票明细表头 → 列序（用于 OCR 坐标分列）
+_DETAIL_COLUMN_KEYS: tuple[str, ...] = (
+    "name",
+    "spec",
+    "unit",
+    "quantity",
+    "price",
+    "amount",
+    "tax_rate",
+    "tax",
+)
+_DETAIL_HEADER_ALIASES: dict[str, tuple[str, ...]] = {
+    "name": ("项目名称",),
+    "spec": ("规格型号",),
+    "unit": ("单位",),
+    "quantity": ("数量",),
+    "price": ("单价",),
+    "amount": ("金额",),
+    "tax_rate": ("税率/征收率", "税率", "征收率"),
+    "tax": ("税额",),
+}
 
 
 def _price_literal_from_text(text: str | None, decimal: Decimal | None) -> str | None:
@@ -157,6 +180,165 @@ def _split_merged_name_and_spec(raw_name: str) -> tuple[str, str]:
         if len(name_part) >= 2 and _looks_like_invoice_spec(spec_part):
             return name_part, spec_part
     return text, ""
+
+
+def _split_trailing_digit_spec(raw_name: str) -> tuple[str, str]:
+    """项目名称列末尾粘连纯数字规格编码（如 橡胶圈13.6*071700003）。"""
+    text = raw_name.strip()
+    if not text or "*" not in text:
+        return text, ""
+    m = _TRAILING_DIGIT_SPEC_RE.match(text)
+    if not m:
+        return text, ""
+    name_part, spec_part = m.group(1).strip(), m.group(2).strip()
+    if len(name_part) < 2 or _NUM_RE.match(name_part.replace(",", "")):
+        return text, ""
+    if not _SPEC_CODE_RE.match(spec_part):
+        return text, ""
+    return name_part, spec_part
+
+
+def _strip_tax_category_prefix(raw_name: str) -> str:
+    """去掉 *大类* 前缀，便于判断名称/规格分界。"""
+    text = raw_name.strip()
+    m = re.match(r"\*[^*]+\*(.+)", text)
+    return m.group(1).strip() if m and m.group(1).strip() else text
+
+
+def _split_merged_name_spec_fallback(raw_name: str) -> tuple[str, str]:
+    """
+    规格列缺失时，从粘连的项目名称推断规格（兜底，按置信度依次尝试）。
+
+    列坐标分列仍是主路径；此处仅处理 OCR 把两列合成一个文本框的情况。
+    """
+    text = raw_name.strip()
+    if not text:
+        return text, ""
+
+    name, spec = _split_merged_name_and_spec(text)
+    if spec:
+        return name, spec
+
+    name, spec = _split_trailing_digit_spec(text)
+    if spec:
+        return name, spec
+
+    core = _strip_tax_category_prefix(text)
+    if core != text:
+        _, core_spec = _split_merged_name_and_spec(core)
+        if not core_spec:
+            _, core_spec = _split_trailing_digit_spec(f"*{core}")
+        if core_spec:
+            prefix = text[: len(text) - len(core)]
+            return prefix + core[: len(core) - len(core_spec)].rstrip("*"), core_spec
+
+    # 末尾字母数字规格：须高置信，避免误拆中文名称
+    m = re.match(r"^(.+?)([A-Z0-9][A-Z0-9\-\./ ]{3,31})$", core)
+    if m:
+        name_part, spec_part = m.group(1).strip(), m.group(2).strip()
+        if (
+            len(name_part) >= 2
+            and re.search(r"[A-Za-z]", spec_part)
+            and re.search(r"\d", spec_part)
+            and _looks_like_invoice_spec(spec_part)
+            and not name_part.endswith("(")
+        ):
+            if text.startswith("*"):
+                cat = re.match(r"(\*[^*]+\*)", text)
+                prefix = cat.group(1) if cat else ""
+                return f"{prefix}{name_part}", spec_part
+            return name_part, spec_part
+
+    return text, ""
+
+
+def _spec_cell_trusted(spec: str) -> bool:
+    """OCR 规格列单元格是否可信（仅过滤空值/单位/单字碎片；不做材质名硬编码）。"""
+    text = str(spec or "").strip()
+    if not text or _is_known_unit(text):
+        return False
+    if len(text) <= 2 and not _SPEC_CODE_RE.match(text.replace(",", "")):
+        return False
+    return bool(_looks_like_invoice_spec(text) or _looks_like_spec(text) or _SPEC_CODE_RE.match(text.replace(",", "")))
+
+
+def _resolve_name_and_spec(raw_name: str, spec_cell: str | None) -> tuple[str, str]:
+    """
+    确定项目名称与规格型号。
+
+    1. 规格列有独立 OCR 文本 → 直接采用（最稳定，与规格是数字/字母/中文无关）
+    2. 规格列为空 → 文本兜底拆分
+    """
+    spec = str(spec_cell or "").strip()
+    name = raw_name.strip()
+    if _spec_cell_trusted(spec):
+        return name, spec
+    return _split_merged_name_spec_fallback(name)
+
+
+def _layout_detail_row(cells: list[str]) -> list[str]:
+    """补齐数电票明细固定列位：名称/规格/单位/数量/单价/金额/税率/税额。"""
+    row = [str(c).strip() if c else "" for c in cells[:8]]
+    while len(row) < 8:
+        row.append("")
+    return row
+
+
+def _uses_layout_columns(cells: list[str]) -> bool:
+    """是否按固定列位解析（分列 OCR 或已补齐的 layout 行）。"""
+    if len(cells) < 3:
+        return False
+    col1 = str(cells[1]).strip()
+    if not col1:
+        return True
+    if _looks_like_spec_at(cells, 1):
+        return True
+    return _is_known_unit(col1)
+
+
+def _merge_layout_fragment(buf: list[str], frag: list[str]) -> list[str]:
+    """将 OCR 续行片段按列位合并进上一行（规格/单位/金额尾段）。"""
+    buf = _layout_detail_row(buf)
+    tokens = [str(t).strip() for t in frag if t and str(t).strip()]
+    if not tokens:
+        return buf
+
+    if len(tokens) == 1:
+        tok = tokens[0]
+        if _looks_like_invoice_spec(tok) and not _is_known_unit(tok):
+            buf[1] = f"{buf[1]} {tok}".strip() if buf[1] else tok
+            return buf
+        if _is_known_unit(tok) and not buf[2]:
+            buf[2] = tok
+            return buf
+        for col in range(3, 8):
+            if not buf[col]:
+                buf[col] = tok
+                return buf
+        return buf
+
+    ti = 0
+    while ti < len(tokens):
+        tok = tokens[ti]
+        placed = False
+        if not buf[1] and _looks_like_spec_at(tokens, ti) and not _is_known_unit(tok):
+            buf[1] = tok
+            ti += 1
+            placed = True
+        elif not buf[2] and _is_known_unit(tok):
+            buf[2] = tok
+            ti += 1
+            placed = True
+        else:
+            for col in range(3, 8):
+                if not buf[col]:
+                    buf[col] = tok
+                    ti += 1
+                    placed = True
+                    break
+        if not placed:
+            ti += 1
+    return buf
 
 
 def ocr_available() -> bool:
@@ -369,6 +551,20 @@ def _company_names_in_row(cells: list[str]) -> list[str]:
     return out
 
 
+def _is_invoice_table_end_row(cells: list[str]) -> bool:
+    """明细表结束：价税合计，或末页带金额的合计行（分页续表中间的「合计」不算）。"""
+    joined = " ".join(cells)
+    if "价税合计" in joined:
+        return True
+    norm = _normalize_party_marker(joined)
+    if "合计" not in norm:
+        return False
+    amount_cells = sum(
+        1 for c in cells if c and _NUM_RE.match(str(c).replace(",", "").replace(" ", ""))
+    )
+    return amount_cells >= 1
+
+
 def _is_detail_table_row(cells: list[str]) -> bool:
     joined = " ".join(cells)
     return "项目名称" in joined and ("规格型号" in joined or "单价" in joined)
@@ -464,18 +660,111 @@ def parse_seller_name_from_ocr_rows(rows: list[list[str]]) -> str | None:
     return None
 
 
-def _group_ocr_rows(ocr_result: list[Any], *, y_bucket: int = 15) -> list[list[str]]:
-    buckets: dict[int, list[tuple[float, str]]] = defaultdict(list)
+def _normalize_header_token(text: str) -> str:
+    return re.sub(r"\s+", "", (text or "").strip())
+
+
+def _match_detail_header_key(text: str) -> str | None:
+    norm = _normalize_header_token(text)
+    if not norm:
+        return None
+    for key, aliases in _DETAIL_HEADER_ALIASES.items():
+        for alias in aliases:
+            if norm == _normalize_header_token(alias) or alias in text:
+                return key
+    return None
+
+
+def _extract_detail_column_boundaries(
+    ocr_result: list[Any], *, y_bucket: int
+) -> list[float] | None:
+    """从明细表头 OCR 框的 x 坐标推算列分界（数电票列宽固定）。"""
+    by_y: dict[int, list[tuple[float, str]]] = defaultdict(list)
     for box, text, _score in ocr_result:
         if not text or not str(text).strip():
             continue
         y_center = sum(p[1] for p in box) / 4
+        x_center = sum(p[0] for p in box) / 4
+        y_key = round(y_center / y_bucket) * y_bucket
+        by_y[y_key].append((x_center, str(text).strip()))
+
+    for y_key in sorted(by_y):
+        col_x: dict[str, float] = {}
+        for x_center, token in by_y[y_key]:
+            key = _match_detail_header_key(token)
+            if key and key not in col_x:
+                col_x[key] = x_center
+        if "name" not in col_x:
+            continue
+        if "spec" not in col_x and "unit" not in col_x and "price" not in col_x:
+            continue
+        ordered_x = [col_x[k] for k in _DETAIL_COLUMN_KEYS if k in col_x]
+        if len(ordered_x) < 2:
+            continue
+        return [(ordered_x[i] + ordered_x[i + 1]) / 2 for i in range(len(ordered_x) - 1)]
+    return None
+
+
+def _column_index_for_x(x: float, boundaries: list[float]) -> int:
+    for idx, bound in enumerate(boundaries):
+        if x < bound:
+            return idx
+    return len(boundaries)
+
+
+def _column_index_for_box(x_left: float, x_center: float, boundaries: list[float]) -> int:
+    """窄文本框优先按左边界落列，宽框跨列时仍归名称列以便文本兜底拆分。"""
+    idx_left = _column_index_for_x(x_left, boundaries)
+    idx_center = _column_index_for_x(x_center, boundaries)
+    if idx_left != idx_center and idx_left == 0:
+        return 0
+    return idx_center
+
+
+def _group_ocr_rows(
+    ocr_result: list[Any],
+    *,
+    y_bucket: int = 15,
+    column_boundaries: list[float] | None = None,
+) -> list[list[str]]:
+    """按 y 分行；若提供表头列界则按 x 落入固定列宽，避免项目名称与规格型号混为一格。"""
+    if not column_boundaries:
+        buckets: dict[int, list[tuple[float, str]]] = defaultdict(list)
+        for box, text, _score in ocr_result:
+            if not text or not str(text).strip():
+                continue
+            y_center = sum(p[1] for p in box) / 4
+            x_left = min(p[0] for p in box)
+            buckets[round(y_center / y_bucket) * y_bucket].append((x_left, str(text).strip()))
+        rows: list[list[str]] = []
+        for _y in sorted(buckets):
+            cells = [t for _x, t in sorted(buckets[_y], key=lambda item: item[0])]
+            if cells:
+                rows.append(cells)
+        return rows
+
+    row_cols: dict[int, dict[int, list[tuple[float, str]]]] = defaultdict(lambda: defaultdict(list))
+    num_cols = len(column_boundaries) + 1
+    for box, text, _score in ocr_result:
+        if not text or not str(text).strip():
+            continue
+        y_center = sum(p[1] for p in box) / 4
+        x_center = sum(p[0] for p in box) / 4
         x_left = min(p[0] for p in box)
-        buckets[round(y_center / y_bucket) * y_bucket].append((x_left, str(text).strip()))
+        y_key = round(y_center / y_bucket) * y_bucket
+        col_idx = _column_index_for_box(x_left, x_center, column_boundaries)
+        row_cols[y_key][col_idx].append((x_left, str(text).strip()))
+
     rows: list[list[str]] = []
-    for _y in sorted(buckets):
-        cells = [t for _x, t in sorted(buckets[_y], key=lambda item: item[0])]
-        if cells:
+    for _y in sorted(row_cols):
+        cols = row_cols[_y]
+        if not cols:
+            continue
+        cells: list[str] = []
+        for col_idx in range(num_cols):
+            parts = [t for _x, t in sorted(cols.get(col_idx, []), key=lambda item: item[0])]
+            cells.append(" ".join(parts).strip())
+        if any(c.strip() for c in cells):
             rows.append(cells)
     return rows
 
@@ -486,12 +775,18 @@ def _parse_invoice_detail_row(cells: list[str]) -> dict[str, Any] | None:
     if any(k in cells[0] for k in ("项目名称", "规格型号", "合计")):
         return None
 
-    name = cells[0]
-    name, merged_spec = _split_merged_name_and_spec(name)
+    spec_cell = ""
+    if len(cells) > 1 and _looks_like_spec_at(cells, 1):
+        spec_cell = cells[1]
+    name, spec = _resolve_name_and_spec(cells[0], spec_cell)
+
     idx = 1
-    spec = merged_spec
-    if not spec and idx < len(cells) and _looks_like_spec_at(cells, idx):
-        spec = cells[idx]
+    if spec_cell and _spec_cell_trusted(spec_cell):
+        idx = 2
+    elif not spec and len(cells) > 1 and _looks_like_spec_at(cells, 1):
+        idx = 2
+
+    while idx < len(cells) and not str(cells[idx]).strip():
         idx += 1
 
     unit: str | None = None
@@ -554,7 +849,7 @@ def _merge_split_ocr_table_rows(rows: list[list[str]]) -> list[list[str]]:
         if not in_table:
             i += 1
             continue
-        if "价税合计" in joined or (joined.startswith("合") and "计" in joined):
+        if _is_invoice_table_end_row(cells):
             merged.append(cells)
             break
         if cells and "*" in cells[0]:
@@ -562,10 +857,9 @@ def _merge_split_ocr_table_rows(rows: list[list[str]]) -> list[list[str]]:
             j = i + 1
             while j < len(rows):
                 nxt = rows[j]
-                nxt_joined = " ".join(nxt)
-                if nxt and "*" in nxt[0]:
+                if _is_invoice_table_end_row(nxt):
                     break
-                if "价税合计" in nxt_joined or (nxt_joined.startswith("合") and "计" in nxt_joined):
+                if nxt and "*" in nxt[0]:
                     break
                 if _parse_invoice_detail_row(buf):
                     break
@@ -594,7 +888,7 @@ def parse_invoice_lines_from_ocr_rows(rows: list[list[str]]) -> list[dict[str, A
             continue
         if not in_table:
             continue
-        if "价税合计" in joined or (joined.startswith("合") and "计" in joined):
+        if _is_invoice_table_end_row(cells):
             break
         parsed = _parse_invoice_detail_row(cells)
         if parsed:
@@ -603,14 +897,16 @@ def parse_invoice_lines_from_ocr_rows(rows: list[list[str]]) -> list[dict[str, A
     return lines
 
 
-def _render_pdf_first_page(pdf_bytes: bytes, *, dpi: int = _OCR_RENDER_DPI) -> Any:
+def _render_pdf_page(pdf_bytes: bytes, page_index: int, *, dpi: int = _OCR_RENDER_DPI) -> Any:
     if not PYMUPDF_AVAILABLE or fitz is None:
         raise RuntimeError("pymupdf 未安装")
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     try:
         if doc.page_count < 1:
             raise ValueError("PDF 无页面")
-        page = doc[0]
+        if page_index < 0 or page_index >= doc.page_count:
+            raise ValueError("PDF 页码无效")
+        page = doc[page_index]
         matrix = fitz.Matrix(dpi / 72, dpi / 72)
         pix = page.get_pixmap(matrix=matrix, alpha=False)
         if Image is None:
@@ -620,22 +916,74 @@ def _render_pdf_first_page(pdf_bytes: bytes, *, dpi: int = _OCR_RENDER_DPI) -> A
         doc.close()
 
 
+def _render_pdf_first_page(pdf_bytes: bytes, *, dpi: int = _OCR_RENDER_DPI) -> Any:
+    return _render_pdf_page(pdf_bytes, 0, dpi=dpi)
+
+
+def _ocr_image_rows(
+    image: Any,
+    *,
+    dpi: int,
+    column_boundaries: list[float] | None = None,
+) -> tuple[list[list[str]], list[float] | None]:
+    if RapidOCR is None:
+        return [], column_boundaries
+    y_bucket = _y_bucket_for_dpi(dpi)
+    ocr = RapidOCR()
+    result, _ = ocr(image)
+    if not result:
+        return [], column_boundaries
+    bounds = _extract_detail_column_boundaries(result, y_bucket=y_bucket)
+    # 平铺分行 + 续行合并更稳；列界仅用于诊断/后续增强，不参与主路径
+    rows = _group_ocr_rows(result, y_bucket=y_bucket, column_boundaries=None)
+    return rows, bounds
+
+
+def _is_detail_table_header_row(cells: list[str]) -> bool:
+    joined = " ".join(cells)
+    return "项目名称" in joined and ("规格型号" in joined or "单价" in joined)
+
+
+def _ocr_pdf_all_pages_rows(pdf_bytes: bytes) -> list[list[str]]:
+    """PDF 全部页面 OCR → 按行分组；首页表头定列宽，多页续表合并。"""
+    if not ocr_available() or fitz is None:
+        return []
+    dpi = _OCR_RENDER_DPI
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    try:
+        page_count = doc.page_count
+    finally:
+        doc.close()
+    if page_count < 1:
+        return []
+
+    all_rows: list[list[str]] = []
+    column_boundaries: list[float] | None = None
+    for page_index in range(page_count):
+        image = _preprocess_ocr_image(_render_pdf_page(pdf_bytes, page_index, dpi=dpi))
+        page_rows, column_boundaries = _ocr_image_rows(
+            image, dpi=dpi, column_boundaries=column_boundaries
+        )
+        for cells in page_rows:
+            if page_index > 0 and _is_detail_table_header_row(cells):
+                continue
+            all_rows.append(cells)
+    return all_rows
+
+
 def _ocr_pdf_first_page_rows(pdf_bytes: bytes) -> list[list[str]]:
-    """PDF 第一页 OCR → 按行分组的文本单元格。"""
+    """PDF 第一页 OCR → 按行分组的文本单元格（用于销售方等页头信息）。"""
     if not ocr_available() or RapidOCR is None:
         return []
     dpi = _OCR_RENDER_DPI
     image = _preprocess_ocr_image(_render_pdf_first_page(pdf_bytes, dpi=dpi))
-    ocr = RapidOCR()
-    result, _ = ocr(image)
-    if not result:
-        return []
-    return _group_ocr_rows(result, y_bucket=_y_bucket_for_dpi(dpi))
+    rows, _ = _ocr_image_rows(image, dpi=dpi)
+    return rows
 
 
 def extract_invoice_lines_from_pdf_bytes(pdf_bytes: bytes) -> list[dict[str, Any]]:
-    """PDF 第一页 OCR → 数电票明细行（本地，无第三方云 API）。"""
-    rows = _ocr_pdf_first_page_rows(pdf_bytes)
+    """PDF 全部页面 OCR → 数电票明细行（本地，无第三方云 API）。"""
+    rows = _ocr_pdf_all_pages_rows(pdf_bytes)
     if not rows:
         return []
     return parse_invoice_lines_from_ocr_rows(rows)

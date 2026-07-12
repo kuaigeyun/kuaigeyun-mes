@@ -245,13 +245,19 @@ def extract_seller_name_from_pdf_text(pdf_bytes: bytes) -> str | None:
 
 
 def parse_einvoice_pdf_bytes(pdf_bytes: bytes) -> dict[str, Any]:
-    """上传 PDF → 提取 QR 补全发票头；若已安装 OCR 依赖则尝试识别明细行。"""
+    """上传 PDF → 提取 QR；优先文本层解析明细，无文本层时回退 OCR。"""
     from apps.haoligo.services.finance_einvoice_ocr import (
+        _ocr_pdf_all_pages_rows,
         _ocr_pdf_first_page_rows,
-        extract_seller_name_from_pdf_ocr,
         ocr_available,
         parse_invoice_lines_from_ocr_rows,
         parse_seller_name_from_ocr_rows,
+    )
+    from apps.haoligo.services.finance_einvoice_pdf_text import (
+        extract_invoice_lines_from_pdf_text_layer,
+        extract_seller_name_from_pdf_text_layer,
+        pdf_has_detail_text_layer,
+        pdf_text_layer_available,
     )
 
     if not pdf_bytes:
@@ -268,27 +274,40 @@ def parse_einvoice_pdf_bytes(pdf_bytes: bytes) -> dict[str, Any]:
         parsed["alternate_qr_texts"] = qr_texts[1:]
 
     seller_name = extract_seller_name_from_pdf_text(pdf_bytes)
-    ocr_rows = _ocr_pdf_first_page_rows(pdf_bytes) if ocr_available() else []
-    if not seller_name and ocr_rows:
-        seller_name = parse_seller_name_from_ocr_rows(ocr_rows)
+    if not seller_name and pdf_text_layer_available():
+        seller_name = extract_seller_name_from_pdf_text_layer(pdf_bytes)
+    if not seller_name and ocr_available():
+        ocr_header_rows = _ocr_pdf_first_page_rows(pdf_bytes)
+        if ocr_header_rows:
+            seller_name = parse_seller_name_from_ocr_rows(ocr_header_rows)
     if seller_name:
         parsed["supplier_name"] = seller_name
 
-    if ocr_rows:
-        ocr_lines = parse_invoice_lines_from_ocr_rows(ocr_rows)
-    else:
-        ocr_lines = []
-    if ocr_lines:
+    text_lines: list[dict[str, Any]] = []
+    if pdf_text_layer_available() and pdf_has_detail_text_layer(pdf_bytes):
+        text_lines = extract_invoice_lines_from_pdf_text_layer(pdf_bytes)
+
+    ocr_lines: list[dict[str, Any]] = []
+    if not text_lines and ocr_available():
+        ocr_rows = _ocr_pdf_all_pages_rows(pdf_bytes)
+        if ocr_rows:
+            ocr_lines = parse_invoice_lines_from_ocr_rows(ocr_rows)
+
+    if text_lines:
+        parsed["lines"] = text_lines
+        parsed["needs_lines"] = False
+        parsed["parse_source"] = "pdf_qr_text"
+    elif ocr_lines:
         parsed["lines"] = ocr_lines
         parsed["needs_lines"] = False
         parsed["parse_source"] = "pdf_qr_ocr"
     else:
         parsed["needs_lines"] = True
         parsed["parse_source"] = "pdf_qr"
-        if ocr_available():
+        if pdf_text_layer_available() or ocr_available():
             parsed["line_parse_hint"] = "未能从 PDF 识别明细，请手工录入"
         else:
-            parsed["line_parse_hint"] = "后端未安装 OCR 依赖（uv sync --extra ocr），明细请手工录入"
+            parsed["line_parse_hint"] = "后端未安装 PDF 文本/OCR 依赖（uv sync --extra ocr），明细请手工录入"
     return parsed
 
 
