@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import secrets
 from typing import Any
 from urllib.parse import quote
@@ -125,3 +126,166 @@ async def find_user_by_wecom_userid(*, tenant_id: int, wecom_userid: str) -> Use
         if bound and bound.lower() == target:
             return user
     return None
+
+
+def _normalize_phone(value: str | None) -> str | None:
+    if not value or not isinstance(value, str):
+        return None
+    digits = re.sub(r"\D", "", value.strip())
+    if len(digits) < 7:
+        return None
+    return digits
+
+
+def _normalize_email(value: str | None) -> str | None:
+    if not value or not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    return normalized or None
+
+
+async def fetch_wecom_member_contact(*, tenant_id: int, wecom_userid: str) -> dict[str, str | None]:
+    """读取企微通讯录成员手机号/邮箱，用于首次扫码自动绑定。"""
+    token = await fetch_wecom_access_token_for_tenant(tenant_id)
+    resp = await get_http_client().get(
+        "https://qyapi.weixin.qq.com/cgi-bin/user/get",
+        params={"access_token": token, "userid": wecom_userid},
+        timeout=10.0,
+    )
+    data = resp.json()
+    if data.get("errcode") != 0:
+        logger.warning("企微通讯录读取成员失败 tenant={} userid={}: {}", tenant_id, wecom_userid, data)
+        return {"mobile": None, "email": None}
+    mobile = _normalize_phone(data.get("mobile") if isinstance(data.get("mobile"), str) else None)
+    email = _normalize_email(
+        data.get("email") if isinstance(data.get("email"), str) else None
+    ) or _normalize_email(data.get("biz_mail") if isinstance(data.get("biz_mail"), str) else None)
+    return {"mobile": mobile, "email": email}
+
+
+async def _list_active_tenant_users(tenant_id: int) -> list[User]:
+    return await User.filter(
+        tenant_id=tenant_id,
+        is_active=True,
+        deleted_at__isnull=True,
+    )
+
+
+def _dedupe_users(users: list[User]) -> list[User]:
+    seen: set[int] = set()
+    result: list[User] = []
+    for user in users:
+        if user.id in seen:
+            continue
+        seen.add(user.id)
+        result.append(user)
+    return result
+
+
+async def find_users_by_phone(*, tenant_id: int, phone: str | None) -> list[User]:
+    normalized = _normalize_phone(phone)
+    if not normalized:
+        return []
+    matched: list[User] = []
+    for user in await _list_active_tenant_users(tenant_id):
+        if _normalize_phone(user.phone) == normalized:
+            matched.append(user)
+    return matched
+
+
+async def find_users_by_email(*, tenant_id: int, email: str | None) -> list[User]:
+    normalized = _normalize_email(email)
+    if not normalized:
+        return []
+    matched: list[User] = []
+    for user in await _list_active_tenant_users(tenant_id):
+        if _normalize_email(user.email) == normalized:
+            matched.append(user)
+    return matched
+
+
+async def find_users_by_username(*, tenant_id: int, username: str | None) -> list[User]:
+    if not username or not isinstance(username, str) or not username.strip():
+        return []
+    target = username.strip().lower()
+    matched: list[User] = []
+    for user in await _list_active_tenant_users(tenant_id):
+        if user.username.strip().lower() == target:
+            matched.append(user)
+    return matched
+
+
+async def bind_wecom_userid_to_user(*, user: User, wecom_userid: str) -> User:
+    bound = wecom_userid.strip()
+    if not bound:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="企业微信 UserID 无效")
+    existing = _extract_wecom_user_id(user)
+    if existing and existing.lower() != bound.lower():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="该账号已绑定其他企业微信用户",
+        )
+    contact = user.contact_info if isinstance(user.contact_info, dict) else {}
+    user.contact_info = {**contact, "wecom_userid": bound}
+    await user.save(update_fields=["contact_info", "updated_at"])
+    return user
+
+
+async def resolve_user_for_wecom_login(*, tenant_id: int, wecom_userid: str) -> User:
+    """
+    企微扫码登录用户解析：已绑定则直接返回；否则按通讯录手机号/邮箱/账号自动绑定。
+    """
+    bound_user = await find_user_by_wecom_userid(tenant_id=tenant_id, wecom_userid=wecom_userid)
+    if bound_user:
+        return bound_user
+
+    contact = await fetch_wecom_member_contact(tenant_id=tenant_id, wecom_userid=wecom_userid)
+    candidates = _dedupe_users(
+        [
+            *(await find_users_by_phone(tenant_id=tenant_id, phone=contact.get("mobile"))),
+            *(await find_users_by_email(tenant_id=tenant_id, email=contact.get("email"))),
+            *(await find_users_by_username(tenant_id=tenant_id, username=wecom_userid)),
+        ]
+    )
+
+    if len(candidates) == 1:
+        user = candidates[0]
+        existing = _extract_wecom_user_id(user)
+        if existing and existing.lower() != wecom_userid.lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="匹配到的系统账号已绑定其他企业微信用户",
+            )
+        return await bind_wecom_userid_to_user(user=user, wecom_userid=wecom_userid)
+
+    if len(candidates) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="匹配到多个系统账号，请联系管理员处理后再使用企业微信登录",
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=(
+            "未能自动绑定企业微信账号，请确认系统用户手机号或邮箱与企微通讯录一致，"
+            "或在个人资料中扫码绑定"
+        ),
+    )
+
+
+async def bind_wecom_user_for_current_user(
+    *,
+    tenant_id: int,
+    user: User,
+    wecom_userid: str,
+) -> User:
+    """已登录用户在个人资料中扫码绑定企微。"""
+    if user.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="组织上下文不匹配")
+    existing = await find_user_by_wecom_userid(tenant_id=tenant_id, wecom_userid=wecom_userid)
+    if existing and existing.id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="该企业微信账号已绑定其他用户",
+        )
+    return await bind_wecom_userid_to_user(user=user, wecom_userid=wecom_userid)

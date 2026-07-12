@@ -61,3 +61,21 @@ export async function changePassword(data: ChangePasswordData): Promise<{ messag
     data,
   });
 }
+
+export interface BindWecomAccountResponse {
+  wecom_userid: string;
+  message: string;
+}
+
+/**
+ * 已登录用户扫码绑定企业微信
+ */
+export async function bindWecomAccount(data: {
+  code: string;
+  state?: string;
+}): Promise<BindWecomAccountResponse> {
+  return apiRequest<BindWecomAccountResponse>('/auth/wecom/bind', {
+    method: 'POST',
+    data,
+  });
+}

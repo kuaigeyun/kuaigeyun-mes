@@ -5,10 +5,14 @@
  * 支持头像上传、个人简介编辑、联系方式编辑。
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormTextArea, ProFormText, ProFormInstance } from '@ant-design/pro-components';
-import { App, Card, message, Upload, Space, Button, Row, Col, Divider, Typography, theme, Form, Tabs, Descriptions, Grid, Spin } from 'antd';
+import { App, Card, message, Upload, Space, Button, Row, Col, Divider, Typography, theme, Form, Tabs, Descriptions, Grid, Spin, Modal } from 'antd';
+import { WWLoginLangType } from '@wecom/jssdk';
+import { WecomWWLoginPanel } from '../../../components/WecomWWLoginPanel';
+import { getWecomWWLoginConfig, type WeComWWLoginConfigResponse } from '../../../services/publicAuth';
+import { saveWecomOAuthState } from '../../../utils/wecomAuth';
 import { ThemedSegmented } from '../../../components/themed-segmented';
 import { UserOutlined, UploadOutlined, DeleteOutlined, SyncOutlined } from '@ant-design/icons';
 
@@ -24,6 +28,7 @@ import {
   getUserProfile,
   updateUserProfile,
   changePassword,
+  bindWecomAccount,
   UserProfile,
   UpdateUserProfileData,
 } from '../../../services/userProfile';
@@ -47,7 +52,7 @@ const { Title, Text } = Typography;
  * 个人资料页面组件
  */
 const UserProfilePage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
   const screens = Grid.useBreakpoint();
@@ -66,8 +71,58 @@ const UserProfilePage: React.FC = () => {
   /** 用户主动清除头像后，不再自动展示 DiceBear 默认图 */
   const [suppressAutoAvatar, setSuppressAutoAvatar] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('basic');
+  const [wecomBindModalOpen, setWecomBindModalOpen] = useState(false);
+  const [wecomBindLoading, setWecomBindLoading] = useState(false);
+  const [wecomBindConfig, setWecomBindConfig] = useState<WeComWWLoginConfigResponse | null>(null);
   const setGlobalUser = useGlobalStore((s) => s.setCurrentUser);
   const currentUser = useGlobalStore((s) => s.currentUser);
+
+  const boundWecomUserid = profileData?.contact_info?.wecom_userid?.trim() || '';
+
+  const handleOpenWecomBind = useCallback(async () => {
+    const tenantId = getTenantId();
+    if (!tenantId) {
+      messageApi.warning(t('pages.personal.profile.wecomBindFailed'));
+      return;
+    }
+    try {
+      setWecomBindLoading(true);
+      const redirectUri = `${window.location.origin}/personal/profile?provider=wecom_bind`;
+      const config = await getWecomWWLoginConfig({
+        redirect_uri: redirectUri,
+        tenant_id: tenantId,
+      });
+      saveWecomOAuthState(config.state);
+      setWecomBindConfig(config);
+      setWecomBindModalOpen(true);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : t('pages.personal.profile.wecomBindFailed');
+      messageApi.error(errMsg);
+    } finally {
+      setWecomBindLoading(false);
+    }
+  }, [messageApi, t]);
+
+  const handleWecomBindSuccess = useCallback(async (code: string) => {
+    if (!wecomBindConfig) return;
+    try {
+      setWecomBindLoading(true);
+      const result = await bindWecomAccount({ code, state: wecomBindConfig.state });
+      messageApi.success(t('pages.personal.profile.wecomBindSuccess'));
+      setWecomBindModalOpen(false);
+      setWecomBindConfig(null);
+      const updatedData = await getUserProfile();
+      setProfileData(updatedData);
+      formRef.current?.setFieldsValue({
+        contact_wecom_userid: result.wecom_userid,
+      });
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : t('pages.personal.profile.wecomBindFailed');
+      messageApi.error(errMsg);
+    } finally {
+      setWecomBindLoading(false);
+    }
+  }, [messageApi, t, wecomBindConfig]);
 
   /**
    * 加载个人资料
@@ -469,9 +524,6 @@ const UserProfilePage: React.FC = () => {
       }
       if (values.contact_address !== undefined && values.contact_address !== null) {
         contact_info.address = values.contact_address.trim() || null;
-      }
-      if (values.contact_wecom_userid !== undefined && values.contact_wecom_userid !== null) {
-        contact_info.wecom_userid = values.contact_wecom_userid.trim() || null;
       }
       
       // 只发送可编辑的字段：username、email、full_name、phone、bio、gender、contact_info
@@ -964,16 +1016,21 @@ const UserProfilePage: React.FC = () => {
                 }}
               />
               
-              <ProFormText
-                name="contact_wecom_userid"
+              <Form.Item
                 label={t('pages.personal.profile.wecomUserid')}
-                placeholder={t('pages.personal.profile.wecomUseridPlaceholder')}
                 tooltip={t('pages.personal.profile.wecomUseridHint')}
-                fieldProps={{
-                  maxLength: 64,
-                  style: { width: 280 },
-                }}
-              />
+              >
+                <Space direction="vertical" size={8}>
+                  <Text type={boundWecomUserid ? undefined : 'secondary'}>
+                    {boundWecomUserid
+                      ? t('pages.personal.profile.wecomBound', { userid: boundWecomUserid })
+                      : t('pages.personal.profile.wecomNotBound')}
+                  </Text>
+                  <Button loading={wecomBindLoading} onClick={() => void handleOpenWecomBind()}>
+                    {t('pages.personal.profile.wecomBindButton')}
+                  </Button>
+                </Space>
+              </Form.Item>
               
               <ProFormText
                 name="contact_address"
@@ -1062,6 +1119,42 @@ const UserProfilePage: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      <Modal
+        title={t('pages.personal.profile.wecomBindModalTitle')}
+        open={wecomBindModalOpen}
+        onCancel={() => {
+          setWecomBindModalOpen(false);
+          setWecomBindConfig(null);
+        }}
+        footer={null}
+        destroyOnHidden
+        width={420}
+      >
+        <Typography.Paragraph type="secondary" style={{ textAlign: 'center', marginBottom: 12 }}>
+          {t('pages.personal.profile.wecomBindModalHint')}
+        </Typography.Paragraph>
+        {wecomBindConfig && (
+          <WecomWWLoginPanel
+            corpId={wecomBindConfig.corp_id}
+            agentId={wecomBindConfig.agent_id}
+            redirectUri={wecomBindConfig.redirect_uri}
+            state={wecomBindConfig.state}
+            lang={i18n.language.startsWith('zh') ? WWLoginLangType.zh : WWLoginLangType.en}
+            onSuccess={(code) => {
+              void handleWecomBindSuccess(code);
+            }}
+            onFail={(err) => {
+              console.error('WeCom bind failed', err);
+              messageApi.error(t('pages.personal.profile.wecomBindFailed'));
+            }}
+            onInitError={(error) => {
+              console.error('Failed to initialize WeCom bind panel', error);
+              messageApi.error(t('pages.personal.profile.wecomBindFailed'));
+            }}
+          />
+        )}
+      </Modal>
     </div>
   );
 };

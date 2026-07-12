@@ -39,10 +39,11 @@ from infra.api.deps.services import get_auth_service_with_fallback, get_biometri
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthenticationError
 from core.services.integration.wecom_oauth_service import (
+    bind_wecom_user_for_current_user,
     build_wecom_oauth_authorize_url,
     decode_wecom_oauth_state,
     encode_wecom_oauth_state,
-    find_user_by_wecom_userid,
+    resolve_user_for_wecom_login,
     resolve_wecom_user_id_from_code,
 )
 from core.services.integration.wecom_integration import get_wecom_credentials
@@ -76,6 +77,11 @@ class WeComWWLoginConfigResponse(BaseModel):
     agent_id: int
     redirect_uri: str
     state: str
+
+
+class WeComBindResponse(BaseModel):
+    wecom_userid: str
+    message: str = "企业微信账号绑定成功"
 
 
 # 创建路由
@@ -211,15 +217,28 @@ async def wecom_callback(
         )
 
     wecom_userid = await resolve_wecom_user_id_from_code(tenant_id=tenant_id, code=data.code)
-    user = await find_user_by_wecom_userid(tenant_id=tenant_id, wecom_userid=wecom_userid)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="未找到绑定该企业微信账号的用户，请在用户资料 contact_info 中配置 wecom_userid",
-        )
+    user = await resolve_user_for_wecom_login(tenant_id=tenant_id, wecom_userid=wecom_userid)
 
     result = await auth_service.generate_login_result(user, request, tenant_id)
     return LoginResponse(**result)
+
+
+@router.post("/wecom/bind", response_model=WeComBindResponse)
+async def wecom_bind(
+    data: WeComCallbackRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    已登录用户在个人资料中扫码绑定企业微信（写入 contact_info.wecom_userid）。
+    """
+    wecom_userid = await resolve_wecom_user_id_from_code(tenant_id=tenant_id, code=data.code)
+    await bind_wecom_user_for_current_user(
+        tenant_id=tenant_id,
+        user=current_user,
+        wecom_userid=wecom_userid,
+    )
+    return WeComBindResponse(wecom_userid=wecom_userid)
 
 
 @router.get("/me", response_model=CurrentUserResponse)
