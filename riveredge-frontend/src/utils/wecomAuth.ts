@@ -4,7 +4,13 @@ const WECOM_OAUTH_STATE_KEY = 'wecom_oauth_state';
 
 export function isWeComBrowser(): boolean {
   if (typeof navigator === 'undefined') return false;
-  return /wxwork/i.test(navigator.userAgent);
+  const ua = navigator.userAgent;
+  return /wxwork/i.test(ua) || /wecom/i.test(ua);
+}
+
+/** 企微 H5 OAuth 回调地址（不含 query，tenant 写入 state） */
+export function buildWecomMobileOAuthRedirectUri(pathname: string): string {
+  return `${window.location.origin}${pathname}`;
 }
 
 export function saveWecomOAuthState(state: string): void {

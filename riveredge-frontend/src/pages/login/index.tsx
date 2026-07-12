@@ -43,7 +43,7 @@ import {
   tenantNameFromLoginResponse,
 } from '../../services/publicAuth';
 import { switchTenant } from '../../services/auth';
-import { setToken, setTenantId, setUserInfo, getTenantId } from '../../utils/auth';
+import { setToken, setTenantId, setUserInfo, getTenantId, getToken } from '../../utils/auth';
 import { clearSessionScopedQueries } from '../../utils/clearSessionQueries';
 import { applySessionUserAfterLogin } from '../../utils/restoredUser';
 import { getImmediatePostLoginHomePath, refinePostLoginHomeInBackground } from '../../utils/tenantHomePath';
@@ -1408,6 +1408,55 @@ export default function LoginPage() {
       };
 
       void handleWecomCallback();
+      return;
+    }
+
+    // 企微内打开移动端 H5 被重定向到登录页时，自动发起 OAuth（免密）
+    if (isWeComBrowser() && !getToken() && !code && !provider) {
+      const redirect = urlParams.get('redirect')?.trim();
+      if (redirect?.startsWith('/m/')) {
+        let tenantId: number | null = null;
+        try {
+          const redirectUrl = new URL(redirect, window.location.origin);
+          const tid = redirectUrl.searchParams.get('tenant_id');
+          if (tid) {
+            const parsed = Number(tid);
+            if (Number.isFinite(parsed) && parsed > 0) {
+              tenantId = parsed;
+            }
+          }
+        } catch {
+          tenantId = null;
+        }
+        if (!tenantId) {
+          const stored = getTenantId();
+          if (stored && stored > 0) {
+            tenantId = stored;
+          }
+        }
+        if (tenantId) {
+          sessionStorage.setItem('wecom_mobile_tenant_id', String(tenantId));
+          void (async () => {
+            try {
+              message.loading(t('pages.login.loading'), 0);
+              const postRedirect = redirect;
+              const redirectUri = `${window.location.origin}/login?provider=wecom_work`;
+              const { authorize_url, state: oauthState } = await getWecomAuthorizeUrl({
+                redirect_uri: redirectUri,
+                tenant_id: tenantId,
+                redirect: postRedirect,
+              });
+              saveWecomOAuthState(oauthState);
+              message.destroy();
+              window.location.href = authorize_url;
+            } catch (error: unknown) {
+              message.destroy();
+              const errMsg = error instanceof Error ? error.message : t('pages.login.wecomRedirectFailed');
+              message.error(errMsg);
+            }
+          })();
+        }
+      }
     }
   }, []);
 
