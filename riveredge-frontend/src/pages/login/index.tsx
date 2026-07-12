@@ -1411,8 +1411,8 @@ export default function LoginPage() {
       return;
     }
 
-    // 企微内打开移动端 H5 被重定向到登录页时，自动发起 OAuth（免密）
-    if (isWeComBrowser() && !getToken() && !code && !provider) {
+    // 从企微 H5 重定向到登录页时，自动发起 OAuth（不依赖 UA，兼容 PC 企微内置浏览器）
+    if (!getToken() && !code && !provider) {
       const redirect = urlParams.get('redirect')?.trim();
       if (redirect?.startsWith('/m/')) {
         let tenantId: number | null = null;

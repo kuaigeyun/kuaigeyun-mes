@@ -5,7 +5,17 @@ const WECOM_OAUTH_STATE_KEY = 'wecom_oauth_state';
 export function isWeComBrowser(): boolean {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent;
-  return /wxwork/i.test(ua) || /wecom/i.test(ua);
+  if (/wxwork/i.test(ua) || /wecom/i.test(ua)) return true;
+  if (typeof window !== 'undefined') {
+    const w = window as Window & { ww?: unknown; WeixinJSBridge?: unknown };
+    if (w.ww || w.WeixinJSBridge) return true;
+  }
+  return false;
+}
+
+export function shouldAutoWecomOAuth(pathname: string): boolean {
+  // /m/ 为企微 H5 专用入口；不依赖 UA（PC 企微内置浏览器可能不含 wxwork）
+  return pathname.startsWith('/m/');
 }
 
 /** 企微 H5 OAuth 回调地址（不含 query，tenant 写入 state） */

@@ -11,8 +11,8 @@ import {
   buildWecomMobileOAuthRedirectUri,
   consumeWecomOAuthState,
   decodeWecomOAuthState,
-  isWeComBrowser,
   saveWecomOAuthState,
+  shouldAutoWecomOAuth,
   stripOAuthQueryFromUrl,
 } from '../../../utils/wecomAuth';
 import {
@@ -87,7 +87,7 @@ export const MobileAuthGuard: React.FC<MobileAuthGuardProps> = ({ children }) =>
         }
       }
 
-      if (isWeComBrowser() && tenantId) {
+      if (tenantId && shouldAutoWecomOAuth(location.pathname)) {
         try {
           const redirectPath = location.pathname;
           const redirectUri = buildWecomMobileOAuthRedirectUri(redirectPath);
