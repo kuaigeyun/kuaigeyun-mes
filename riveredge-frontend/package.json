@@ -66,6 +66,7 @@
         "eslint-plugin-react": "^7.37.5",
         "eslint-plugin-react-hooks": "^7.1.1",
         "framer-motion": "11.5.4",
+        "html5-qrcode": "^2.3.8",
         "i18next": "23.15.2",
         "lottie-react": "^2.4.1",
         "lucide-react": "^0.556.0",

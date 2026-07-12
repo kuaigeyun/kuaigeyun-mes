@@ -5,6 +5,9 @@ import { KUAIZHIZAO_MOBILE_EQUIPMENT_BASE } from './paths';
 
 const WorkbenchPage = React.lazy(() => import('./pages/Workbench'));
 const ScanPage = React.lazy(() => import('./pages/Scan'));
+const SpotCheckListPage = React.lazy(() => import('./pages/SpotCheckListPage'));
+const FaultListPage = React.lazy(() => import('./pages/FaultListPage'));
+const MaintenanceReminderListPage = React.lazy(() => import('./pages/MaintenanceReminderListPage'));
 const HubPage = React.lazy(() => import('./pages/Hub'));
 const SpotCheckPage = React.lazy(() => import('./pages/SpotCheckForm'));
 const FaultPage = React.lazy(() => import('./pages/FaultForm'));
@@ -20,6 +23,9 @@ const KuaizhizaoMobileEquipmentRoutes: React.FC = () => (
     <Routes>
       <Route index element={withMobileSuspense(<WorkbenchPage />)} />
       <Route path="scan" element={withMobileSuspense(<ScanPage />)} />
+      <Route path="spot-checks" element={withMobileSuspense(<SpotCheckListPage />)} />
+      <Route path="faults" element={withMobileSuspense(<FaultListPage />)} />
+      <Route path="maintenance-reminders" element={withMobileSuspense(<MaintenanceReminderListPage />)} />
       <Route path=":uuid" element={withMobileSuspense(<HubPage />)} />
       <Route path=":uuid/spot-check" element={withMobileSuspense(<SpotCheckPage />)} />
       <Route path=":uuid/fault" element={withMobileSuspense(<FaultPage />)} />

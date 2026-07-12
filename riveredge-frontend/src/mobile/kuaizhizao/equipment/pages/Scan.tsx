@@ -1,12 +1,13 @@
 import React, { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { App, Card } from 'antd';
+import { App } from 'antd';
 import { MobileEquipmentLayout } from '../MobileEquipmentLayout';
+import { MobileCameraQrScanner } from '../components/MobileCameraQrScanner';
 import { buildMobileEquipmentHubPath } from '../paths';
-import { QRCodeScanner } from '../../../../components/qrcode';
-import { qrcodeApi, type QRCodeParseResponse } from '../../../../services/qrcode';
+import { qrcodeApi } from '../../../../services/qrcode';
 import { tryParseEquipmentQrText } from '../parseEquipmentQr';
+import { extractEquipmentUuidFromQrResponse } from '../equipmentQrNavigation';
 
 const MobileEquipmentScanPage: React.FC = () => {
   const { t } = useTranslation();
@@ -14,18 +15,18 @@ const MobileEquipmentScanPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const navigateEquipmentQr = (response: QRCodeParseResponse) => {
-    if (response.qrcode_type !== 'EQ') {
-      messageApi.warning(t('pages.qrcode.scan.unknownType', { type: response.qrcode_type }));
-      return;
-    }
-    const equipmentUuid = response.data?.equipment_uuid;
+  const navigateEquipmentQr = (response: Parameters<typeof extractEquipmentUuidFromQrResponse>[0]) => {
+    const equipmentUuid = extractEquipmentUuidFromQrResponse(response);
     if (!equipmentUuid) {
-      messageApi.error(t('pages.qrcode.scan.equipmentDataIncomplete'));
+      if (response.qrcode_type !== 'EQ') {
+        messageApi.warning(t('pages.qrcode.scan.unknownType', { type: response.qrcode_type }));
+      } else {
+        messageApi.error(t('pages.qrcode.scan.equipmentDataIncomplete'));
+      }
       return;
     }
     messageApi.success(t('pages.qrcode.scan.navigatingToEquipment'));
-    navigate(buildMobileEquipmentHubPath(String(equipmentUuid)));
+    navigate(buildMobileEquipmentHubPath(equipmentUuid));
   };
 
   const parseText = async (text: string) => {
@@ -53,9 +54,7 @@ const MobileEquipmentScanPage: React.FC = () => {
 
   return (
     <MobileEquipmentLayout title={t('app.kuaizhizao.mobileEquipment.scanTitle')}>
-      <Card>
-        <QRCodeScanner onScanSuccess={navigateEquipmentQr} showResult />
-      </Card>
+      <MobileCameraQrScanner onScanSuccess={navigateEquipmentQr} />
     </MobileEquipmentLayout>
   );
 };
