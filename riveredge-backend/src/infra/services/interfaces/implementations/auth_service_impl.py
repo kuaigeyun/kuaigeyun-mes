@@ -7,7 +7,11 @@ Author: Luigi Lu
 Date: 2025-12-27
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+
+from starlette.requests import Request
+
+from infra.models.user import User
 from infra.services.interfaces.service_interface import AuthServiceInterface
 from infra.services.auth_service import AuthService
 
@@ -73,5 +77,18 @@ class AuthServiceImpl(AuthServiceInterface):
             current_user=current_user,
             target_tenant_id=target_tenant_id,
             request=request,
+        )
+
+    async def generate_login_result(
+        self,
+        user: User,
+        request: Optional[Request] = None,
+        tenant_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """OAuth / 生物识别等免密登录路径签发 JWT。"""
+        return await self._auth_service.generate_login_result(
+            user,
+            request=request,
+            tenant_id=tenant_id,
         )
 
