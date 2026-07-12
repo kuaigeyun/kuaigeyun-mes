@@ -97,8 +97,11 @@ class EquipmentService:
         limit: int = 100,
         type: Optional[str] = None,
         category: Optional[str] = None,
+        equipment_nature: Optional[str] = None,
         status: Optional[str] = None,
         is_active: Optional[bool] = None,
+        workshop_id: Optional[int] = None,
+        production_line_id: Optional[int] = None,
         workstation_id: Optional[int] = None,
         search: Optional[str] = None,
         keyword: Optional[str] = None,
@@ -126,16 +129,22 @@ class EquipmentService:
             query = query.filter(type=type)
         if category:
             query = query.filter(category=category)
+        if equipment_nature:
+            query = query.filter(equipment_nature=equipment_nature)
         if status:
             query = query.filter(status=status)
         if is_active is not None:
             query = query.filter(is_active=is_active)
+        if workshop_id is not None:
+            query = query.filter(workshop_id=workshop_id)
+        if production_line_id is not None:
+            query = query.filter(production_line_id=production_line_id)
         if workstation_id:
             query = query.filter(workstation_id=workstation_id)
         query = apply_equipment_keyword_filter(
             query,
             pick_search_keyword(keyword, search),
-            ["code", "name", "serial_no"],
+            ["code", "name", "serial_number"],
         )
         query = apply_equipment_created_date_range(
             query,

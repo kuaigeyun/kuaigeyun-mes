@@ -9,16 +9,14 @@ import { renderRowActionsOverflow, rowActionKind } from '../../../../../componen
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useRef, useState, useMemo, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import type { DescriptionsProps } from 'antd';
 import {
   ActionType,
   ProColumns,
-  ProDescriptionsItemProps,
+  ProFormInstance,
   ProFormText,
-  ProFormSelect,
   ProFormDatePicker,
   ProFormDigit,
   ProFormTextArea,
@@ -27,97 +25,49 @@ import {
 import {
   App,
   Button,
-  Tag,
   Modal,
-  Tabs,
-  Table,
-  Form,
-  Input,
-  DatePicker,
-  Select,
   Row,
   Col,
-  Descriptions,
   Typography,
-  Empty,
-  Spin,
-  Upload,
-  theme as AntdTheme,
 } from 'antd';
-import { UploadOutlined } from '@ant-design/icons';
-import { uploadMultipleFiles } from '../../../../../services/file';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { getEquipmentAssetLifecycle } from '../../../utils/equipmentLifecycle';
-import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
-import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { equipmentApi } from '../../../services/equipment';
-import { inspectionSchemesApi, schemeBindingsApi } from '../../../services/equipmentOps';
-import { workshopApi, factoryListItems } from '../../../../master-data/services/factory';
+import { buildEquipmentDetailPath } from './equipmentPaths';
+import EquipmentCardQrModal, { type EquipmentCardItem } from './EquipmentCardQrModal';
+import EquipmentFactoryBindingFields from '../../../components/EquipmentFactoryBindingFields';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
+import { factoryListItems, productionLineApi, workshopApi } from '../../../../master-data/services/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
-import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import dayjs from 'dayjs';
-import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
-import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   CustomFieldsFormSection,
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {
-  MASTER_DATA_PINNED_ACTIVE_FIELD,
   buildActiveStatusValueEnum,
+  buildEquipmentNatureValueEnum,
   normalizeEquipmentListResponse,
   resolveLedgerListParams,
+  EQUIPMENT_LEDGER_GROUP_PINNED_FIELD,
+  type EquipmentLedgerGroupMode,
 } from '../../../utils/equipmentListCore';
 
 const EQUIPMENT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_equipment';
-
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-  dataSource: T,
-  cols: ProDescriptionsItemProps<T>[]
-): NonNullable<DescriptionsProps['items']> {
-  return cols.map((col, index) => {
-    const dataIndex = col.dataIndex as keyof T | undefined;
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-    let content: React.ReactNode = value as React.ReactNode;
-    if (col.valueType === 'date' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD');
-    }
-    if (col.valueType === 'dateTime' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-    }
-    if (col.render && dataSource != null) {
-      content = (col.render as (dom: React.ReactNode, entity: T, i: number) => React.ReactNode)(
-        content,
-        dataSource,
-        index,
-      );
-    }
-    return {
-      key: String(col.key ?? col.dataIndex ?? index),
-      label: col.title as React.ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
-      span: col.span ?? 1,
-    };
-  });
-}
 
 function renderEquipmentRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   return renderRowActionsOverflow(nodes, { keyPrefix });
@@ -142,6 +92,10 @@ interface Equipment {
   technical_parameters?: any;
   workshop_id?: number;
   workshop_name?: string;
+  production_line_id?: number;
+  production_line_code?: string;
+  production_line_name?: string;
+  equipment_nature?: string;
   workstation_id?: number;
   workstation_code?: string;
   workstation_name?: string;
@@ -159,6 +113,7 @@ interface Equipment {
 
 const EquipmentPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t, i18n } = useTranslation();
 
   const equipmentImportTemplate = useMemo(
@@ -170,6 +125,7 @@ const EquipmentPage: React.FC = () => {
           { field: 'name', required: true, labelKey: 'app.kuaizhizao.equipment.import.name', aliases: ['设备名称', '名称'] },
           { field: 'type', labelKey: 'app.kuaizhizao.equipment.import.type', aliases: ['设备类型', '类型'] },
           { field: 'category', labelKey: 'app.kuaizhizao.equipment.import.category', aliases: ['设备分类', '分类'] },
+          { field: 'equipment_nature', labelKey: 'app.kuaizhizao.equipment.import.nature', aliases: ['设备性质', '性质'] },
           { field: 'brand', labelKey: 'app.kuaizhizao.equipment.import.brand', aliases: ['品牌'] },
           { field: 'model', labelKey: 'app.kuaizhizao.equipment.import.model', aliases: ['型号'] },
         ],
@@ -178,6 +134,7 @@ const EquipmentPage: React.FC = () => {
           t('app.kuaizhizao.equipment.importExample.name'),
           t('app.kuaizhizao.equipment.importExample.type'),
           t('app.kuaizhizao.equipment.importExample.category'),
+          t('app.kuaizhizao.equipment.importExample.nature'),
           t('app.kuaizhizao.equipment.importExample.brand'),
           t('app.kuaizhizao.equipment.importExample.model'),
         ],
@@ -185,10 +142,14 @@ const EquipmentPage: React.FC = () => {
     [t, i18n.language],
   );
   const { message: messageApi } = App.useApp();
-  const { token } = AntdTheme.useToken();
-  const equipmentDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
-  const [, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const searchFormRef = useRef<ProFormInstance>();
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [qrModalVisible, setQrModalVisible] = useState(false);
+  const [qrModalEquipments, setQrModalEquipments] = useState<EquipmentCardItem[]>([]);
+  const [ledgerGroupMode, setLedgerGroupMode] = useState<EquipmentLedgerGroupMode>('nature');
+  const [workshopGroupOptions, setWorkshopGroupOptions] = useState<Array<{ id: number; name: string }>>([]);
+  const [productionLineGroupOptions, setProductionLineGroupOptions] = useState<Array<{ id: number; name: string; code?: string }>>([]);
 
   // Modal 相关状态（创建/编辑设备）
   const [modalVisible, setModalVisible] = useState(false);
@@ -196,29 +157,6 @@ const EquipmentPage: React.FC = () => {
   const [currentEquipment, setCurrentEquipment] = useState<Equipment | null>(null);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const formRef = useRef<any>(null);
-
-  // Drawer 相关状态（详情查看）
-  const [drawerVisible, setDrawerVisible] = useState(false);
-  const [equipmentDetail, setEquipmentDetail] = useState<Equipment | null>(null);
-
-  const [eqTrackingRefreshKey, setEqTrackingRefreshKey] = useState(0);
-  const [boundSchemeIds, setBoundSchemeIds] = useState<number[]>([]);
-  const [schemeSelectOptions, setSchemeSelectOptions] = useState<{ label: string; value: number }[]>([]);
-  const [schemeBindingsSaving, setSchemeBindingsSaving] = useState(false);
-
-  const equipmentTracking = useDocumentTracking(
-    drawerVisible && equipmentDetail?.id ? 'equipment' : undefined,
-    equipmentDetail?.id,
-    eqTrackingRefreshKey,
-  );
-
-  // 追溯相关状态
-  const [traceVisible, setTraceVisible] = useState(false);
-  const [traceData, setTraceData] = useState<any>(null);
-
-  // 校验记录 Modal
-  const [calibModalVisible, setCalibModalVisible] = useState(false);
-  const [calibForm] = Form.useForm();
 
   const {
     customFields: equipmentFormCustomFields,
@@ -233,9 +171,6 @@ const EquipmentPage: React.FC = () => {
     customFields: equipmentListCustomFields,
     generateCustomFieldColumns: generateEquipmentCustomFieldColumns,
     enrichRecordsWithCustomFields: enrichEquipmentRecordsWithCustomFields,
-    customFieldValues: equipmentDetailCustomFieldValues,
-    loadFieldValuesForDetail: loadEquipmentFieldValuesForDetail,
-    resetDetailFieldValues: resetEquipmentDetailFieldValues,
   } = useCustomFieldsForList<Equipment>({ tableName: EQUIPMENT_CUSTOM_FIELD_TABLE });
 
   useEffect(() => {
@@ -243,6 +178,26 @@ const EquipmentPage: React.FC = () => {
       setTimeout(() => actionRef.current?.reload(), 200);
     }
   }, [equipmentListCustomFields.length]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [workshopsRes, linesRes] = await Promise.all([
+          workshopApi.list({ limit: 1000, is_active: true }),
+          productionLineApi.list({ limit: 1000, is_active: true }),
+        ]);
+        setWorkshopGroupOptions(
+          factoryListItems(workshopsRes).map((ws) => ({ id: ws.id, name: ws.name })),
+        );
+        setProductionLineGroupOptions(
+          factoryListItems(linesRes).map((line) => ({ id: line.id, name: line.name, code: line.code })),
+        );
+      } catch {
+        setWorkshopGroupOptions([]);
+        setProductionLineGroupOptions([]);
+      }
+    })();
+  }, []);
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
@@ -287,8 +242,16 @@ const EquipmentPage: React.FC = () => {
         warranty_period: detail.warranty_period,
         workshop_id: detail.workshop_id,
         workshop_name: detail.workshop_name,
+        production_line_id: detail.production_line_id,
+        production_line_code: detail.production_line_code,
+        production_line_name: detail.production_line_name,
+        equipment_nature: detail.equipment_nature,
         workstation_id: detail.workstation_id,
+        workstation_code: detail.workstation_code,
+        workstation_name: detail.workstation_name,
         work_center_id: detail.work_center_id,
+        work_center_code: detail.work_center_code,
+        work_center_name: detail.work_center_name,
         status: detail.status,
         is_active: detail.is_active,
         description: detail.description,
@@ -301,39 +264,23 @@ const EquipmentPage: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    const openEditUuid = (location.state as { openEditUuid?: string } | null)?.openEditUuid;
+    if (!openEditUuid) return;
+    navigate(location.pathname, { replace: true, state: null });
+    void handleEdit({ uuid: openEditUuid } as Equipment);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, location.pathname]);
+
   /**
    * 处理查看详情
    */
-  const handleDetail = async (record: Equipment) => {
-    try {
-      if (!record.uuid) {
-        messageApi.error(t('app.kuaizhizao.equipment.uuidNotFound'));
-        return;
-      }
-      const detail = await equipmentApi.get(record.uuid);
-      setEquipmentDetail(detail);
-      setDrawerVisible(true);
-      setEqTrackingRefreshKey((k) => k + 1);
-      if (detail.id != null) {
-        await loadEquipmentFieldValuesForDetail(detail.id);
-        const [bindings, schemesRes] = await Promise.all([
-          schemeBindingsApi.list({ equipment_id: detail.id, scheme_type: 'spot_check' }),
-          inspectionSchemesApi.list({ limit: 1000, is_active: true }),
-        ]);
-        setBoundSchemeIds((bindings ?? []).map((b: { scheme_id: number }) => b.scheme_id));
-        setSchemeSelectOptions(
-          (schemesRes.items ?? []).map((s: { id: number; code: string; name: string }) => ({
-            label: `${s.code} - ${s.name}`,
-            value: s.id,
-          })),
-        );
-      } else {
-        setBoundSchemeIds([]);
-        setSchemeSelectOptions([]);
-      }
-    } catch (error) {
-      messageApi.error(t('app.kuaizhizao.equipment.getDetailFailed'));
+  const handleDetail = (record: Equipment) => {
+    if (!record.uuid) {
+      messageApi.error(t('app.kuaizhizao.equipment.uuidNotFound'));
+      return;
     }
+    navigate(buildEquipmentDetailPath(record.uuid));
   };
 
   /**
@@ -350,10 +297,6 @@ const EquipmentPage: React.FC = () => {
           }
           messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
           setSelectedRowKeys([]);
-          if (equipmentDetail?.uuid && keys.map(String).includes(String(equipmentDetail.uuid))) {
-            setDrawerVisible(false);
-            setEquipmentDetail(null);
-          }
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('common.deleteFailed'));
@@ -363,53 +306,52 @@ const EquipmentPage: React.FC = () => {
   };
 
   /**
-   * 处理查看设备追溯
+   * 处理查看设备追溯（跳转详情 Tab）
    */
-  const handleTrace = async (record: Equipment) => {
+  const handleTrace = (record: Equipment) => {
+    if (!record.uuid) {
+      messageApi.error(t('app.kuaizhizao.equipment.uuidNotFound'));
+      return;
+    }
+    navigate(buildEquipmentDetailPath(record.uuid, 'faults_repairs'));
+  };
+
+  const handleBatchPrintEquipmentCards = async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.equipment.selectEquipmentForQrcode'));
+      return;
+    }
     try {
-      if (!record.uuid) {
-        messageApi.error(t('app.kuaizhizao.equipment.uuidNotFound'));
+      const equipments = await Promise.all(
+        selectedRowKeys.map(async (key) => {
+          try {
+            return await equipmentApi.get(String(key));
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const valid = equipments.filter((eq): eq is Equipment => eq != null && !!eq.uuid);
+      if (valid.length === 0) {
+        messageApi.error(t('app.kuaizhizao.equipment.getSelectedFailed'));
         return;
       }
-      const data = await equipmentApi.getTrace(record.uuid);
-      setTraceData(data);
-      setTraceVisible(true);
+      setQrModalEquipments(
+        valid.map((eq) => ({
+          uuid: eq.uuid!,
+          code: eq.code,
+          name: eq.name,
+          type: eq.type,
+          workshop_name: eq.workshop_name,
+          production_line_name: eq.production_line_name,
+          status: eq.status,
+        })),
+      );
+      setQrModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.equipment.getTraceFailed'));
+      messageApi.error(error?.message || t('app.kuaizhizao.equipment.qrcodeFailed'));
     }
   };
-
-  const handleCreateCalibration = () => {
-    calibForm.resetFields();
-    calibForm.setFieldsValue({ calibration_date: dayjs(), result: '合格' });
-    setCalibModalVisible(true);
-  };
-
-  const handleSubmitCalibration = async () => {
-    try {
-      const values = await calibForm.validateFields();
-      const equipmentUuid = traceData?.equipment?.uuid;
-      if (!equipmentUuid) return;
-      const data = {
-        calibration_date: values.calibration_date?.format?.('YYYY-MM-DD') || values.calibration_date,
-        result: values.result,
-        certificate_no: values.certificate_no,
-        expiry_date: values.expiry_date?.format?.('YYYY-MM-DD') || values.expiry_date,
-        remark: values.remark,
-        attachments: normalizeDocumentAttachments(values.attachments),
-      };
-      await equipmentApi.createCalibration(equipmentUuid, data);
-      messageApi.success(t('app.kuaizhizao.equipment.calibrationSaved'));
-      setCalibModalVisible(false);
-      const refreshed = await equipmentApi.getTrace(equipmentUuid);
-      setTraceData(refreshed);
-    } catch (e: any) {
-      if (e?.errorFields) return;
-      messageApi.error(e?.message || t('common.saveFailed'));
-    }
-  };
-
-  useSubmitShortcut(handleSubmitCalibration, calibModalVisible);
 
   /**
    * 处理提交表单（创建/更新）
@@ -444,132 +386,11 @@ const EquipmentPage: React.FC = () => {
       formRef.current?.resetFields();
       resetEquipmentFormFieldValues();
       actionRef.current?.reload();
-      if (editedUuid && equipmentDetail?.uuid === editedUuid) {
-        try {
-          const fresh = await equipmentApi.get(editedUuid);
-          setEquipmentDetail(fresh);
-          setEqTrackingRefreshKey((k) => k + 1);
-        } catch {
-          /* ignore */
-        }
-      }
     } catch (error: any) {
       messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     }
   };
-
-  const detailBaseColumns: ProDescriptionsItemProps<Equipment>[] = useMemo(
-    () => [
-    {
-      title: t('app.kuaizhizao.equipment.colCode'),
-      dataIndex: 'code',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.code ?? '') }}>{r.code ?? '-'}</Typography.Text>
-      ),
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colName'),
-      dataIndex: 'name',
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colType'),
-      dataIndex: 'type',
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colCategory'),
-      dataIndex: 'category',
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colBrand'),
-      dataIndex: 'brand',
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colModel'),
-      dataIndex: 'model',
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colSerialNumber'),
-      dataIndex: 'serial_number',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.serial_number ?? '') }}>{r.serial_number ?? '-'}</Typography.Text>
-      ),
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colManufacturer'),
-      dataIndex: 'manufacturer',
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colSupplier'),
-      dataIndex: 'supplier',
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colPurchaseDate'),
-      dataIndex: 'purchase_date',
-      valueType: 'date',
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colInstallationDate'),
-      dataIndex: 'installation_date',
-      valueType: 'date',
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colWarrantyPeriod'),
-      dataIndex: 'warranty_period',
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colWorkshop'),
-      dataIndex: 'workshop_name',
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colWorkstation'),
-      dataIndex: 'workstation_name',
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colWorkCenter'),
-      dataIndex: 'work_center_name',
-    },
-    {
-      title: t('common.status'),
-      dataIndex: 'status',
-      render: (_, record) => {
-        const status = record.status;
-        const statusMap: Record<string, { text: string; color: string }> = {
-          正常: { text: t('app.kuaizhizao.equipment.statusNormal'), color: 'success' },
-          维修中: { text: t('app.kuaizhizao.equipment.statusRepairing'), color: 'warning' },
-          停用: { text: t('app.kuaizhizao.equipment.statusDisabled'), color: 'default' },
-          报废: { text: t('app.kuaizhizao.equipment.statusScrapped'), color: 'error' },
-        };
-        const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
-      },
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colIsActive'),
-      dataIndex: 'is_active',
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('app.kuaizhizao.equipment.isActiveEnabled') : t('app.kuaizhizao.equipment.isActiveDisabled')}
-        </Tag>
-      ),
-    },
-    {
-      title: t('app.kuaizhizao.equipment.fieldDescription'),
-      dataIndex: 'description',
-    },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      valueType: 'dateTime',
-    },
-    {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      valueType: 'dateTime',
-    },
-    ],
-    [t]
-  );
 
   const renderEquipmentRowNodes = (record: Equipment): React.ReactNode[] => {
     const nodes: React.ReactNode[] = [
@@ -632,6 +453,8 @@ const EquipmentPage: React.FC = () => {
 
   const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
 
+  const equipmentNatureValueEnum = useMemo(() => buildEquipmentNatureValueEnum(t), [t]);
+
   const equipmentStatusValueEnum = useMemo(
     () => ({
       正常: { text: t('app.kuaizhizao.equipment.statusNormal') },
@@ -640,6 +463,79 @@ const EquipmentPage: React.FC = () => {
       报废: { text: t('app.kuaizhizao.equipment.statusScrapped') },
     }),
     [t],
+  );
+
+  const workshopTabsValueEnum = useMemo(() => {
+    const map: Record<string, { text: string }> = {};
+    for (const ws of workshopGroupOptions) {
+      map[String(ws.id)] = { text: ws.name };
+    }
+    return map;
+  }, [workshopGroupOptions]);
+
+  const productionLineTabsValueEnum = useMemo(() => {
+    const map: Record<string, { text: string }> = {};
+    for (const line of productionLineGroupOptions) {
+      map[String(line.id)] = { text: line.code ? `${line.code} - ${line.name}` : line.name };
+    }
+    return map;
+  }, [productionLineGroupOptions]);
+
+  const ledgerPinnedTabsField = EQUIPMENT_LEDGER_GROUP_PINNED_FIELD[ledgerGroupMode];
+
+  const ledgerPinnedTabsValueEnum = useMemo(() => {
+    switch (ledgerGroupMode) {
+      case 'nature':
+        return equipmentNatureValueEnum;
+      case 'active':
+        return activeStatusValueEnum;
+      case 'status':
+        return equipmentStatusValueEnum;
+      case 'workshop':
+        return workshopTabsValueEnum;
+      case 'production_line':
+        return productionLineTabsValueEnum;
+      default:
+        return equipmentNatureValueEnum;
+    }
+  }, [
+    ledgerGroupMode,
+    equipmentNatureValueEnum,
+    activeStatusValueEnum,
+    equipmentStatusValueEnum,
+    workshopTabsValueEnum,
+    productionLineTabsValueEnum,
+  ]);
+
+  const handleLedgerGroupModeChange = useCallback((mode: EquipmentLedgerGroupMode) => {
+    const nextField = EQUIPMENT_LEDGER_GROUP_PINNED_FIELD[mode];
+    const clearFields = Object.fromEntries(
+      Object.values(EQUIPMENT_LEDGER_GROUP_PINNED_FIELD)
+        .filter((field) => field !== nextField)
+        .map((field) => [field, undefined]),
+    );
+    searchFormRef.current?.setFieldsValue(clearFields);
+    setLedgerGroupMode(mode);
+    actionRef.current?.reload();
+  }, []);
+
+  const ledgerGroupSegment = useMemo(
+    () => (
+      <ThemedSegmented<EquipmentLedgerGroupMode>
+        surfaceBackground
+        size="middle"
+        value={ledgerGroupMode}
+        onChange={(v) => handleLedgerGroupModeChange(v as EquipmentLedgerGroupMode)}
+        options={[
+          { label: t('app.kuaizhizao.equipment.ledgerGroupNature'), value: 'nature' },
+          { label: t('app.kuaizhizao.equipment.ledgerGroupActive'), value: 'active' },
+          { label: t('app.kuaizhizao.equipment.ledgerGroupStatus'), value: 'status' },
+          { label: t('app.kuaizhizao.equipment.ledgerGroupWorkshop'), value: 'workshop' },
+          { label: t('app.kuaizhizao.equipment.ledgerGroupProductionLine'), value: 'production_line' },
+        ]}
+      />
+    ),
+    [t, ledgerGroupMode, handleLedgerGroupModeChange],
   );
 
   /**
@@ -685,6 +581,30 @@ const EquipmentPage: React.FC = () => {
       search: { order: 23 } as ProColumns['search'],
     },
     {
+      title: t('app.kuaizhizao.equipment.colEquipmentNature'),
+      dataIndex: 'equipment_nature',
+      valueType: 'select',
+      valueEnum: equipmentNatureValueEnum,
+      hideInTable: true,
+      search: { order: 19 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.equipment.colWorkshop'),
+      dataIndex: 'workshop_id',
+      valueType: 'select',
+      valueEnum: workshopTabsValueEnum,
+      hideInTable: true,
+      search: { order: 24 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.equipment.colProductionLine'),
+      dataIndex: 'production_line_id',
+      valueType: 'select',
+      valueEnum: productionLineTabsValueEnum,
+      hideInTable: true,
+      search: { order: 25 } as ProColumns['search'],
+    },
+    {
       title: t('app.kuaizhizao.equipment.colCode'),
       dataIndex: 'code',
       width: 140,
@@ -721,6 +641,13 @@ const EquipmentPage: React.FC = () => {
       hideInSearch: true,
     },
     {
+      title: t('app.kuaizhizao.equipment.colEquipmentNature'),
+      dataIndex: 'equipment_nature',
+      width: 110,
+      hideInSearch: true,
+      render: (_, r) => r.equipment_nature ?? '-',
+    },
+    {
       title: t('app.kuaizhizao.equipment.colBrand'),
       dataIndex: 'brand',
       width: 100,
@@ -747,6 +674,13 @@ const EquipmentPage: React.FC = () => {
       title: t('app.kuaizhizao.equipment.colWorkshop'),
       dataIndex: 'workshop_name',
       width: 120,
+      ellipsis: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.equipment.colProductionLine'),
+      dataIndex: 'production_line_name',
+      width: 140,
       ellipsis: true,
       hideInSearch: true,
     },
@@ -778,161 +712,25 @@ const EquipmentPage: React.FC = () => {
         renderEquipmentRowActions(renderEquipmentRowNodes(record), `eq-${record.uuid ?? 'row'}`),
     },
   ];
-  }, [equipmentListCustomFields, generateEquipmentCustomFieldColumns, t, activeStatusValueEnum, equipmentStatusValueEnum]);
+  }, [
+    equipmentListCustomFields,
+    generateEquipmentCustomFieldColumns,
+    t,
+    activeStatusValueEnum,
+    equipmentStatusValueEnum,
+    equipmentNatureValueEnum,
+    workshopTabsValueEnum,
+    productionLineTabsValueEnum,
+  ]);
 
-  const calibrationResultOptions = useMemo(
-    () => [
-      { label: t('app.kuaizhizao.equipment.resultPass'), value: '合格' },
-      { label: t('app.kuaizhizao.equipment.resultFail'), value: '不合格' },
-      { label: t('app.kuaizhizao.equipment.resultRestricted'), value: '限制使用' },
-    ],
-    [t],
+  const equipmentCardToolbar = useMemo(
+    () => (
+      <Button key="equipment-card-qr" icon={<QrcodeOutlined />} onClick={() => void handleBatchPrintEquipmentCards()}>
+        {t('app.kuaizhizao.equipment.printEquipmentCards')}
+      </Button>
+    ),
+    [t, selectedRowKeys],
   );
-
-  const traceMaintenancePlanColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.equipment.traceColPlanNo'), dataIndex: 'plan_no', width: 140 },
-      { title: t('app.kuaizhizao.equipment.traceColPlanName'), dataIndex: 'plan_name', width: 200 },
-      { title: t('app.kuaizhizao.equipment.traceColPlanType'), dataIndex: 'plan_type', width: 120 },
-      { title: t('app.kuaizhizao.equipment.traceColMaintenanceType'), dataIndex: 'maintenance_type', width: 120 },
-      { title: t('common.status'), dataIndex: 'status', width: 100, render: (status: string) => <Tag>{status}</Tag> },
-      { title: t('app.kuaizhizao.equipment.traceColPlannedStartDate'), dataIndex: 'planned_start_date', width: 120 },
-      { title: t('app.kuaizhizao.equipment.traceColPlannedEndDate'), dataIndex: 'planned_end_date', width: 120 },
-      { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
-    ],
-    [t],
-  );
-
-  const traceMaintenanceExecutionColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.equipment.traceColExecutionNo'), dataIndex: 'execution_no', width: 140 },
-      { title: t('app.kuaizhizao.equipment.traceColExecutionDate'), dataIndex: 'execution_date', width: 120 },
-      { title: t('app.kuaizhizao.equipment.traceColExecutor'), dataIndex: 'executor_name', width: 100 },
-      { title: t('app.kuaizhizao.equipment.traceColExecutionResult'), dataIndex: 'execution_result', width: 120 },
-      { title: t('common.status'), dataIndex: 'status', width: 100, render: (status: string) => <Tag>{status}</Tag> },
-      { title: t('app.kuaizhizao.equipment.traceColMaintenanceCost'), dataIndex: 'maintenance_cost', width: 100, render: (cost: number) => cost ? `¥${cost}` : '-' },
-      { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
-    ],
-    [t],
-  );
-
-  const traceFaultColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.equipment.traceColFaultNo'), dataIndex: 'fault_no', width: 140 },
-      { title: t('app.kuaizhizao.equipment.traceColFaultDate'), dataIndex: 'fault_date', width: 120 },
-      { title: t('app.kuaizhizao.equipment.traceColFaultType'), dataIndex: 'fault_type', width: 120 },
-      { title: t('app.kuaizhizao.equipment.traceColFaultLevel'), dataIndex: 'fault_level', width: 100, render: (level: string) => <Tag>{level}</Tag> },
-      { title: t('common.status'), dataIndex: 'status', width: 100, render: (status: string) => <Tag>{status}</Tag> },
-      { title: t('app.kuaizhizao.equipment.traceColRepairRequired'), dataIndex: 'repair_required', width: 100, render: (required: boolean) => <Tag color={required ? 'warning' : 'success'}>{required ? t('app.kuaizhizao.equipment.yes') : t('app.kuaizhizao.equipment.no')}</Tag> },
-      { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
-    ],
-    [t],
-  );
-
-  const traceRepairColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.equipment.traceColRepairNo'), dataIndex: 'repair_no', width: 140 },
-      { title: t('app.kuaizhizao.equipment.traceColRepairDate'), dataIndex: 'repair_date', width: 120 },
-      { title: t('app.kuaizhizao.equipment.traceColRepairType'), dataIndex: 'repair_type', width: 120 },
-      { title: t('app.kuaizhizao.equipment.traceColRepairer'), dataIndex: 'repairer_name', width: 100 },
-      { title: t('app.kuaizhizao.equipment.traceColRepairDuration'), dataIndex: 'repair_duration', width: 120 },
-      { title: t('app.kuaizhizao.equipment.traceColRepairCost'), dataIndex: 'repair_cost', width: 100, render: (cost: number) => cost ? `¥${cost}` : '-' },
-      { title: t('common.status'), dataIndex: 'status', width: 100, render: (status: string) => <Tag>{status}</Tag> },
-      { title: t('app.kuaizhizao.equipment.traceColRepairResult'), dataIndex: 'repair_result', width: 120 },
-      { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
-    ],
-    [t],
-  );
-
-  const traceCalibrationColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.equipment.traceColCalibrationDate'), dataIndex: 'calibration_date', width: 120 },
-      { title: t('app.kuaizhizao.equipment.traceColResult'), dataIndex: 'result', width: 100, render: (r: string) => <Tag>{r}</Tag> },
-      { title: t('app.kuaizhizao.equipment.traceColCertificateNo'), dataIndex: 'certificate_no', width: 140 },
-      { title: t('app.kuaizhizao.equipment.traceColExpiryDate'), dataIndex: 'expiry_date', width: 120 },
-      { title: t('app.kuaizhizao.equipment.traceColRemark'), dataIndex: 'remark', ellipsis: true },
-      { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
-    ],
-    [t],
-  );
-
-  const traceTabItems = useMemo(() => {
-    if (!traceData) return [];
-    return [
-      {
-        key: 'maintenance_plans',
-        label: t('app.kuaizhizao.equipment.tabMaintenancePlans', { count: traceData.maintenance_plans?.length || 0 }),
-        children: (
-          <Table
-            dataSource={traceData.maintenance_plans || []}
-            columns={traceMaintenancePlanColumns}
-            rowKey="uuid"
-            pagination={false}
-            size="small"
-          />
-        ),
-      },
-      {
-        key: 'maintenance_executions',
-        label: t('app.kuaizhizao.equipment.tabMaintenanceExecutions', { count: traceData.maintenance_executions?.length || 0 }),
-        children: (
-          <Table
-            dataSource={traceData.maintenance_executions || []}
-            columns={traceMaintenanceExecutionColumns}
-            rowKey="uuid"
-            pagination={false}
-            size="small"
-          />
-        ),
-      },
-      {
-        key: 'equipment_faults',
-        label: t('app.kuaizhizao.equipment.tabFaults', { count: traceData.equipment_faults?.length || 0 }),
-        children: (
-          <Table
-            dataSource={traceData.equipment_faults || []}
-            columns={traceFaultColumns}
-            rowKey="uuid"
-            pagination={false}
-            size="small"
-          />
-        ),
-      },
-      {
-        key: 'equipment_repairs',
-        label: t('app.kuaizhizao.equipment.tabRepairs', { count: traceData.equipment_repairs?.length || 0 }),
-        children: (
-          <Table
-            dataSource={traceData.equipment_repairs || []}
-            columns={traceRepairColumns}
-            rowKey="uuid"
-            pagination={false}
-            size="small"
-          />
-        ),
-      },
-      {
-        key: 'equipment_calibrations',
-        label: t('app.kuaizhizao.equipment.tabCalibrations', { count: traceData.equipment_calibrations?.length || 0 }),
-        children: (
-          <>
-            <div style={{ marginBottom: 12 }}>
-              <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleCreateCalibration}>
-                {t('app.kuaizhizao.equipment.createCalibration')}
-              </Button>
-            </div>
-            <Table
-              dataSource={traceData.equipment_calibrations || []}
-              columns={traceCalibrationColumns}
-              rowKey="uuid"
-              pagination={false}
-              size="small"
-            />
-          </>
-        ),
-      },
-    ];
-  }, [traceData, t, traceMaintenancePlanColumns, traceMaintenanceExecutionColumns, traceFaultColumns, traceRepairColumns, traceCalibrationColumns]);
 
   return (
     <>
@@ -941,10 +739,13 @@ const EquipmentPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.equipment.title')}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment"
           actionRef={actionRef}
+          formRef={searchFormRef}
           rowKey="uuid"
           columns={columns}
           showAdvancedSearch={true}
-          pinnedTabsField={MASTER_DATA_PINNED_ACTIVE_FIELD}
+          betweenFuzzyAndAdvancedButtons={ledgerGroupSegment}
+          pinnedTabsField={ledgerPinnedTabsField}
+          pinnedTabsValueEnum={ledgerPinnedTabsValueEnum}
           skipFuzzyPinyinClientFilter
           request={async (params, sort, _filter, searchFormValues) => {
             try {
@@ -1017,6 +818,10 @@ const EquipmentPage: React.FC = () => {
                   headerIndexMap.category !== undefined
                     ? String(row[headerIndexMap.category] ?? '').trim() || undefined
                     : undefined,
+                equipment_nature:
+                  headerIndexMap.equipment_nature !== undefined
+                    ? String(row[headerIndexMap.equipment_nature] ?? '').trim() || undefined
+                    : undefined,
                 brand:
                   headerIndexMap.brand !== undefined
                     ? String(row[headerIndexMap.brand] ?? '').trim() || undefined
@@ -1074,6 +879,7 @@ const EquipmentPage: React.FC = () => {
               messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
+          toolbar={{ actions: [equipmentCardToolbar] }}
           scroll={{ x: 2000 }}
         />
       </ListPageTemplate>
@@ -1169,66 +975,15 @@ const EquipmentPage: React.FC = () => {
             />
           </Col>
           <Col span={12}>
-            <ProFormSelect
-              name="workshop_id"
-              label={t('app.kuaizhizao.equipment.fieldWorkshop')}
-              placeholder={t('app.kuaizhizao.equipment.phWorkshop')}
-              request={async () => {
-                try {
-                  const workshops = factoryListItems(await workshopApi.list({ limit: 1000, is_active: true }));
-                  return workshops.map((ws: { id: number; name: string }) => ({
-                    label: ws.name,
-                    value: ws.id,
-                    workshop: ws,
-                  }));
-                } catch {
-                  return [];
-                }
-              }}
-              fieldProps={{
-                style: { width: '100%' },
-                allowClear: true,
-                onChange: (_value: number | undefined, option: { workshop?: { name?: string } } | { workshop?: { name?: string } }[]) => {
-                  const selected = Array.isArray(option) ? option[0] : option;
-                  formRef.current?.setFieldsValue({
-                    workshop_name: selected?.workshop?.name ?? null,
-                  });
-                },
-              }}
-            />
-            <ProFormText name="workshop_name" hidden />
-          </Col>
-          <Col span={12}>
-            <ProFormSelect
-              name="workstation_id"
-              label={t('app.kuaizhizao.equipment.fieldWorkstation')}
-              placeholder={t('app.kuaizhizao.equipment.phWorkstation')}
-              request={async () => {
-                try {
-                  await workshopApi.list({ limit: 1000 });
-                  return [];
-                } catch (error) {
-                  return [];
-                }
-              }}
-              fieldProps={{ style: { width: '100%' } }}
+            <DictionarySelect
+              dictionaryCode="EQUIPMENT_NATURE"
+              name="equipment_nature"
+              label={t('app.kuaizhizao.equipment.fieldEquipmentNature')}
+              placeholder={t('common.selectField', { field: t('app.kuaizhizao.equipment.fieldEquipmentNature') })}
+              formRef={formRef}
             />
           </Col>
-          <Col span={12}>
-            <ProFormSelect
-              name="work_center_id"
-              label={t('app.kuaizhizao.equipment.fieldWorkCenter')}
-              placeholder={t('app.kuaizhizao.equipment.phWorkCenter')}
-              request={async () => {
-                try {
-                  return [];
-                } catch (error) {
-                  return [];
-                }
-              }}
-              fieldProps={{ style: { width: '100%' } }}
-            />
-          </Col>
+          <EquipmentFactoryBindingFields formRef={formRef} embedInParentRow />
           <Col span={12}>
             <DictionarySelect
               dictionaryCode="EQUIPMENT_STATUS"
@@ -1263,203 +1018,14 @@ const EquipmentPage: React.FC = () => {
         </Row>
       </FormModalTemplate>
 
-      {/* 设备详情 Drawer */}
-      <DetailDrawerTemplate
-        title={t('app.kuaizhizao.equipment.detail')}
-        open={drawerVisible}
-        zIndex={equipmentDetailDrawerZIndex}
+      <EquipmentCardQrModal
+        open={qrModalVisible}
+        equipments={qrModalEquipments}
         onClose={() => {
-          setDrawerVisible(false);
-          setEquipmentDetail(null);
-          setBoundSchemeIds([]);
-          resetEquipmentDetailFieldValues();
+          setQrModalVisible(false);
+          setQrModalEquipments([]);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        column={3}
-        dataSource={equipmentDetail || undefined}
-        customContent={
-          equipmentDetail ? (
-            <>
-              <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={buildDescriptionItemsFromColumns(equipmentDetail, detailBaseColumns)}
-                />
-              </DetailDrawerSection>
-              {hasCustomFieldsDetailContent(equipmentListCustomFields, equipmentDetailCustomFieldValues) ? (
-                <DetailDrawerSection title={t('app.master-data.customFields')}>
-                  <CustomFieldsDetailSection
-                    customFields={equipmentListCustomFields}
-                    customFieldValues={equipmentDetailCustomFieldValues}
-                  />
-                </DetailDrawerSection>
-              ) : null}
-              <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lc = getEquipmentAssetLifecycle(equipmentDetail as Record<string, unknown>);
-                    const mainStages = lc.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        showLabels
-                        status={lc.status}
-                        nextStepSuggestions={lc.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                  {equipmentDetail.id != null ? (
-                    <DetailDrawerInlineFullChain
-                      documentType="equipment"
-                      documentId={equipmentDetail.id}
-                      active={drawerVisible}
-                      selfDocumentId={equipmentDetail.id}
-                      renderBriefActions={(doc) => (
-                        <EquipmentTraceBriefPrimaryActions
-                          doc={doc}
-                          t={t}
-                          navigate={navigate}
-                          closeDrawer={() => {
-                            setDrawerVisible(false);
-                            setEquipmentDetail(null);
-                          }}
-                        />
-                      )}
-                    />
-                  ) : null}
-                </div>
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.kuaizhizao.equipmentOps.schemeBindings.title')}>
-                <Select
-                  mode="multiple"
-                  style={{ width: '100%' }}
-                  placeholder={t('app.kuaizhizao.equipmentOps.schemeBindings.selectSchemes')}
-                  options={schemeSelectOptions}
-                  value={boundSchemeIds}
-                  onChange={setBoundSchemeIds}
-                />
-                <div style={{ marginTop: 12 }}>
-                  <Button
-                    type="primary"
-                    loading={schemeBindingsSaving}
-                    disabled={equipmentDetail.id == null}
-                    onClick={async () => {
-                      if (equipmentDetail.id == null) return;
-                      setSchemeBindingsSaving(true);
-                      try {
-                        await schemeBindingsApi.bulkReplace({
-                          equipment_id: equipmentDetail.id,
-                          scheme_type: 'spot_check',
-                          scheme_ids: boundSchemeIds,
-                        });
-                        messageApi.success(t('app.kuaizhizao.equipmentOps.schemeBindings.saveSuccess'));
-                      } catch (error: any) {
-                        messageApi.error(error?.message || t('common.operationFailed'));
-                      } finally {
-                        setSchemeBindingsSaving(false);
-                      }
-                    }}
-                  >
-                    {t('common.save')}
-                  </Button>
-                </div>
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.equipment.noDetailLines')} />
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
-                {equipmentTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {equipmentTracking.error && !equipmentTracking.loading && (
-                  <Typography.Text type="danger">{equipmentTracking.error}</Typography.Text>
-                )}
-                {equipmentTracking.data && !equipmentTracking.loading && (
-                  <DocumentTrackingTimelineBody data={equipmentTracking.data} />
-                )}
-                {!equipmentTracking.loading && !equipmentTracking.data && !equipmentTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.equipment.noTimeline')} />
-                )}
-              </DetailDrawerSection>
-            </>
-          ) : null
-        }
       />
-
-      {/* 设备追溯 Modal */}
-      <Modal
-        title={t('app.kuaizhizao.equipment.traceTitle', { name: traceData?.equipment?.name || '' })}
-        open={traceVisible}
-        onCancel={() => {
-          setTraceVisible(false);
-          setTraceData(null);
-        }}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        footer={[
-          <Button {...rowActionKind('close')} key="close" onClick={() => {
-            setTraceVisible(false);
-            setTraceData(null);
-          }}>
-            {t('common.close')}
-          </Button>,
-        ]}
-      >
-        {traceData && (
-          <Tabs
-            defaultActiveKey="maintenance_plans"
-            items={traceTabItems}
-          />
-        )}
-      </Modal>
-
-      <Modal title={t('app.kuaizhizao.equipment.createCalibration')} open={calibModalVisible} onOk={handleSubmitCalibration} okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT} onCancel={() => setCalibModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
-        <Form form={calibForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Form.Item name="calibration_date" label={t('app.kuaizhizao.equipment.calibrationDate')} rules={[{ required: true }]}>
-            <DatePicker style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="result" label={t('app.kuaizhizao.equipment.calibrationResult')} rules={[{ required: true }]}>
-            <Select options={calibrationResultOptions} />
-          </Form.Item>
-          <Form.Item name="certificate_no" label={t('app.kuaizhizao.equipment.certificateNo')}>
-            <Input placeholder={t('app.kuaizhizao.equipment.phCertificateNo')} />
-          </Form.Item>
-          <Form.Item name="expiry_date" label={t('app.kuaizhizao.equipment.expiryDate')}>
-            <FutureDatePicker
-              getForm={() => calibForm}
-              baseFieldName="calibration_date"
-              t={t}
-              style={{ width: '100%' }}
-            />
-          </Form.Item>
-          <Form.Item
-            name="attachments"
-            label={t('app.kuaizhizao.equipment.attachments')}
-            valuePropName="fileList"
-            getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
-          >
-            <Upload
-              multiple
-              customRequest={async (options) => {
-                const res = await uploadMultipleFiles([options.file as File], {
-                  category: 'equipment_calibration_attachments',
-                });
-                options.onSuccess?.(res[0], options.file as any);
-              }}
-            >
-              <Button icon={<UploadOutlined />}>{t('app.kuaizhizao.equipment.upload')}</Button>
-            </Upload>
-          </Form.Item>
-          <Form.Item name="remark" label={t('app.kuaizhizao.equipment.traceColRemark')}>
-            <Input.TextArea rows={2} placeholder={t('app.kuaizhizao.equipment.phRemark')} />
-          </Form.Item>
-        </Form>
-      </Modal>
     </>
   );
 };

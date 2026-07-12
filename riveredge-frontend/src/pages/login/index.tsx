@@ -6,7 +6,7 @@
  * 右侧：登录表单区
  */
 
-import { Form, Input, App, Typography, Button, Space, Tooltip, ConfigProvider } from 'antd';
+import { Form, Input, App, Typography, Button, Space, Tooltip, ConfigProvider, Modal, AutoComplete } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -19,7 +19,9 @@ import {
   DownloadOutlined,
   AppstoreOutlined,
 } from '@ant-design/icons';
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
+import { WecomWWLoginPanel } from '../../components/WecomWWLoginPanel';
+import { WWLoginLangType } from '@wecom/jssdk';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 const LottiePlayer = lazy(() => import('lottie-react').then((m) => ({ default: m.default })));
 import {
@@ -29,13 +31,18 @@ import {
   login,
   guestLogin,
   wechatLoginCallback,
+  getWecomAuthorizeUrl,
+  getWecomWWLoginConfig,
+  wecomLoginCallback,
+  checkTenantDomain,
   type TenantCheckResponse,
   type TenantSearchOption,
   type OrganizationRegisterRequest,
   type LoginResponse,
+  type WeComWWLoginConfigResponse,
   tenantNameFromLoginResponse,
 } from '../../services/publicAuth';
-import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
+import { setToken, setTenantId, setUserInfo, getTenantId } from '../../utils/auth';
 import { clearSessionScopedQueries } from '../../utils/clearSessionQueries';
 import { applySessionUserAfterLogin } from '../../utils/restoredUser';
 import { getImmediatePostLoginHomePath, refinePostLoginHomeInBackground } from '../../utils/tenantHomePath';
@@ -48,6 +55,13 @@ const LazyRegisterDrawer = lazy(() => import('./RegisterDrawer'));
 import { theme } from 'antd';
 import { getPlatformSettingsPublic, type PlatformSettings } from '../../services/publicPlatformSettings';
 import { getBuildProvenance } from '../../services/platformSettings';
+import {
+  consumeWecomOAuthState,
+  decodeWecomOAuthState,
+  isWeComBrowser,
+  saveWecomOAuthState,
+  stripOAuthQueryFromUrl,
+} from '../../utils/wecomAuth';
 import { getLoginClientDownloads } from '../../services/clientRelease';
 import { applyFavicon } from '../../utils/favicon';
 import { LoginDescriptionContent } from '../../components/login-page-editor';
@@ -648,6 +662,11 @@ export default function LoginPage() {
   const [tenantSearchOptions, setTenantSearchOptions] = useState<TenantSearchOption[]>([]);
   const [searchingTenant, setSearchingTenant] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<TenantSearchOption | null>(null);
+  const [wecomTenantModalOpen, setWecomTenantModalOpen] = useState(false);
+  const [wecomTenantKeyword, setWecomTenantKeyword] = useState('');
+  const [wecomTenantPick, setWecomTenantPick] = useState<TenantSearchOption | null>(null);
+  const [wecomQrModalOpen, setWecomQrModalOpen] = useState(false);
+  const [wecomWWLoginConfig, setWecomWWLoginConfig] = useState<WeComWWLoginConfigResponse | null>(null);
 
   // 频繁操作检测状态
   const [loginFailCount, setLoginFailCount] = useState(0);
@@ -1085,6 +1104,10 @@ export default function LoginPage() {
       message.error(t('pages.login.loginFailed'));
     }
   };
+  const handleLoginSuccessRef = useRef(handleLoginSuccess);
+  useEffect(() => {
+    handleLoginSuccessRef.current = handleLoginSuccess;
+  });
 
   /**
    * 处理微信登录
@@ -1124,6 +1147,143 @@ export default function LoginPage() {
   };
 
   /**
+   * 企业微信 OAuth 登录（依赖租户已配置 type=wecom 应用连接器）
+   */
+  const handleWecomPanelLoginSuccess = useCallback(async (code: string, state: string) => {
+    if (!consumeWecomOAuthState(state)) {
+      message.error(t('pages.login.wecomVerifyFailed'));
+      return;
+    }
+
+    try {
+      message.loading(t('pages.login.loading'), 0);
+      const decoded = decodeWecomOAuthState(state);
+      const response = await wecomLoginCallback({
+        code,
+        state,
+        tenant_id: decoded?.tenant_id,
+      });
+      message.destroy();
+      setWecomQrModalOpen(false);
+      setWecomWWLoginConfig(null);
+      const postRedirect = decoded?.redirect?.trim();
+      if (postRedirect) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('redirect', postRedirect);
+        window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+      }
+      handleLoginSuccessRef.current(response);
+    } catch (error: any) {
+      message.destroy();
+      let errorMessage = t('pages.login.wecomLoginFailed');
+      if (error?.response?.data) {
+        const errorData = error.response.data;
+        if (errorData.error?.message) {
+          errorMessage = errorData.error.message;
+        } else if (errorData.detail) {
+          errorMessage = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      message.error(errorMessage);
+    }
+  }, [message, t]);
+
+  const startWecomOAuthLogin = useCallback(async (tenantId: number) => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const postRedirect = urlParams.get('redirect')?.trim() || '';
+    const redirectUri = `${window.location.origin}/login?provider=wecom_work`;
+
+    if (!isWeComBrowser()) {
+      const config = await getWecomWWLoginConfig({
+        redirect_uri: redirectUri,
+        tenant_id: tenantId,
+        redirect: postRedirect,
+      });
+      saveWecomOAuthState(config.state);
+      sessionStorage.setItem('wecom_mobile_tenant_id', String(tenantId));
+      setWecomWWLoginConfig(config);
+      setWecomQrModalOpen(true);
+      return;
+    }
+
+    const { authorize_url, state } = await getWecomAuthorizeUrl({
+      redirect_uri: redirectUri,
+      tenant_id: tenantId,
+      redirect: postRedirect,
+    });
+    saveWecomOAuthState(state);
+    sessionStorage.setItem('wecom_mobile_tenant_id', String(tenantId));
+    window.location.href = authorize_url;
+  }, []);
+
+  const resolveWecomLoginTenantId = useCallback(async (): Promise<number | null> => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (selectedTenant?.tenant_id) {
+      return selectedTenant.tenant_id;
+    }
+    const urlTenantId = urlParams.get('tenant_id');
+    if (urlTenantId) {
+      const parsed = Number(urlTenantId);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+    const storedTenantId = getTenantId();
+    if (storedTenantId && storedTenantId > 0) {
+      return storedTenantId;
+    }
+    const domainFromQuery = urlParams.get('tenant_domain')?.trim().toLowerCase();
+    const domainFromPath = resolveTenantDomain(window.location.pathname, window.location.search);
+    const domain = domainFromQuery || domainFromPath;
+    if (domain) {
+      try {
+        const check = await checkTenantDomain(domain);
+        if (check.exists && check.tenant_id) {
+          return check.tenant_id;
+        }
+      } catch {
+        // 域名解析失败时继续走组织选择
+      }
+    }
+    return null;
+  }, [selectedTenant]);
+
+  const handleWechatWorkLogin = async () => {
+    try {
+      const tenantId = await resolveWecomLoginTenantId();
+      if (!tenantId) {
+        setWecomTenantPick(null);
+        setWecomTenantKeyword('');
+        setWecomTenantModalOpen(true);
+        return;
+      }
+      await startWecomOAuthLogin(tenantId);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : t('pages.login.wecomRedirectFailed');
+      message.error(errMsg);
+    }
+  };
+
+  const handleConfirmWecomTenant = async () => {
+    const tenantId = wecomTenantPick?.tenant_id;
+    if (!tenantId) {
+      message.warning(t('pages.login.wecomSelectTenant'));
+      return;
+    }
+    try {
+      setWecomTenantModalOpen(false);
+      await startWecomOAuthLogin(tenantId);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : t('pages.login.wecomRedirectFailed');
+      message.error(errMsg);
+    }
+  };
+
+  /**
    * 处理社交登录
    * 
    * @param provider - 社交登录提供商（wechat, qq, wechat_work, dingtalk, feishu）
@@ -1131,6 +1291,10 @@ export default function LoginPage() {
   const handleSocialLogin = (provider: 'wechat' | 'qq' | 'wechat_work' | 'dingtalk' | 'feishu') => {
     if (provider === 'wechat') {
       handleWechatLogin();
+      return;
+    }
+    if (provider === 'wechat_work') {
+      void handleWechatWorkLogin();
     }
   };
 
@@ -1190,6 +1354,59 @@ export default function LoginPage() {
       };
 
       handleWechatCallback();
+      return;
+    }
+
+    if (provider === 'wecom_work' && code && state) {
+      if (!consumeWecomOAuthState(state)) {
+        message.error(t('pages.login.wecomVerifyFailed'));
+        window.history.replaceState({}, '', '/login');
+        return;
+      }
+
+      const handleWecomCallback = async () => {
+        try {
+          message.loading(t('pages.login.loading'), 0);
+          const decoded = decodeWecomOAuthState(state);
+          const response = await wecomLoginCallback({
+            code,
+            state,
+            tenant_id: decoded?.tenant_id,
+          });
+          message.destroy();
+          const postRedirect = decoded?.redirect?.trim();
+          if (postRedirect) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('redirect', postRedirect);
+            url.searchParams.delete('code');
+            url.searchParams.delete('state');
+            url.searchParams.delete('provider');
+            window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+          } else {
+            stripOAuthQueryFromUrl();
+          }
+          handleLoginSuccess(response);
+        } catch (error: any) {
+          message.destroy();
+          let errorMessage = t('pages.login.wecomLoginFailed');
+          if (error?.response?.data) {
+            const errorData = error.response.data;
+            if (errorData.error?.message) {
+              errorMessage = errorData.error.message;
+            } else if (errorData.detail) {
+              errorMessage = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+            } else if (errorData.message) {
+              errorMessage = errorData.message;
+            }
+          } else if (error?.message) {
+            errorMessage = error.message;
+          }
+          message.error(errorMessage);
+          window.history.replaceState({}, '', '/login');
+        }
+      };
+
+      void handleWecomCallback();
     }
   }, []);
 
@@ -2273,6 +2490,89 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+
+      {/* 企业微信 PC 扫码登录 */}
+      <Modal
+        title={t('pages.login.wecomQrLoginTitle')}
+        open={wecomQrModalOpen}
+        onCancel={() => {
+          setWecomQrModalOpen(false);
+          setWecomWWLoginConfig(null);
+        }}
+        footer={null}
+        destroyOnHidden
+        width={420}
+      >
+        <Typography.Paragraph type="secondary" style={{ textAlign: 'center', marginBottom: 12 }}>
+          {t('pages.login.wecomQrLoginHint')}
+        </Typography.Paragraph>
+        {wecomWWLoginConfig && (
+          <WecomWWLoginPanel
+            corpId={wecomWWLoginConfig.corp_id}
+            agentId={wecomWWLoginConfig.agent_id}
+            redirectUri={wecomWWLoginConfig.redirect_uri}
+            state={wecomWWLoginConfig.state}
+            lang={i18n.language.startsWith('zh') ? WWLoginLangType.zh : WWLoginLangType.en}
+            onSuccess={(code) => {
+              void handleWecomPanelLoginSuccess(code, wecomWWLoginConfig.state);
+            }}
+            onFail={(err) => {
+              console.error('WeCom WWLogin failed', err);
+              message.error(t('pages.login.wecomLoginFailed'));
+            }}
+            onInitError={(error) => {
+              console.error('Failed to initialize WeCom WWLogin', error);
+              message.error(t('pages.login.wecomPanelLoadFailed'));
+            }}
+          />
+        )}
+      </Modal>
+
+      {/* 企业微信登录 — 组织选择（主登录页无组织字段时使用） */}
+      <Modal
+        title={t('pages.login.wecomSelectTenantModalTitle')}
+        open={wecomTenantModalOpen}
+        onOk={() => void handleConfirmWecomTenant()}
+        onCancel={() => setWecomTenantModalOpen(false)}
+        okText={t('pages.login.wecomSelectTenantConfirm')}
+        cancelText={t('common.cancel')}
+        destroyOnHidden
+      >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          {t('pages.login.wecomSelectTenantModalHint')}
+        </Typography.Paragraph>
+        <AutoComplete
+          style={{ width: '100%' }}
+          options={(tenantSearchOptions || []).map((tenant) => ({
+            value: tenant.tenant_domain,
+            label: `${tenant.tenant_name} (${tenant.tenant_domain})`,
+            tenant,
+          }))}
+          onSearch={(value) => {
+            setWecomTenantKeyword(value);
+            void handleSearchTenant(value);
+          }}
+          onSelect={(value, option) => {
+            const tenant = (option as { tenant?: TenantSearchOption }).tenant
+              ?? tenantSearchOptions.find((item) => item.tenant_domain === value);
+            if (tenant) {
+              setWecomTenantPick(tenant);
+              setSelectedTenant(tenant);
+            }
+          }}
+          value={wecomTenantPick ? `${wecomTenantPick.tenant_name} (${wecomTenantPick.tenant_domain})` : wecomTenantKeyword}
+          onChange={(value) => {
+            if (!value) {
+              setWecomTenantPick(null);
+              setWecomTenantKeyword('');
+            } else {
+              setWecomTenantKeyword(value);
+            }
+          }}
+        >
+          <Input placeholder={t('pages.login.wecomTenantDomainPlaceholder')} />
+        </AutoComplete>
+      </Modal>
 
       {/* 组织选择弹窗 - 懒加载，仅多组织登录时加载 */}
       {loginResponse && (

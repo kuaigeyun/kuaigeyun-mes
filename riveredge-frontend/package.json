@@ -55,6 +55,7 @@
         "@univerjs/presets": "^0.12.4",
         "@univerjs/sheets-ui": "^0.12.4",
         "@univerjs/ui": "^0.12.4",
+        "@wecom/jssdk": "^2.4.2",
         "ahooks": "^3.9.6",
         "antd": "^6.4.4",
         "browser-image-compression": "^2.0.2",

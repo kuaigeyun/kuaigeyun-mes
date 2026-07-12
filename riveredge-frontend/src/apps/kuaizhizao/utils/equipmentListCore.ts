@@ -316,10 +316,37 @@ export function resolveApprovalDocListParams(
 
 export const MASTER_DATA_PINNED_ACTIVE_FIELD = 'is_active';
 
+export type EquipmentLedgerGroupMode = 'nature' | 'active' | 'status' | 'workshop' | 'production_line';
+
+export const EQUIPMENT_LEDGER_GROUP_PINNED_FIELD: Record<EquipmentLedgerGroupMode, string> = {
+  nature: 'equipment_nature',
+  active: 'is_active',
+  status: 'status',
+  workshop: 'workshop_id',
+  production_line: 'production_line_id',
+};
+
+function pickNumber(searchFormValues: Record<string, unknown> | null | undefined, key: string) {
+  const v = searchFormValues?.[key];
+  if (v == null || v === '') return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 export function buildActiveStatusValueEnum(t: TFunction): Record<string, { text: string }> {
   return {
     true: { text: t('common.enabled') },
     false: { text: t('common.disabled') },
+  };
+}
+
+/** 与系统字典 EQUIPMENT_NATURE 项一致，供 pinned tabs / 列表 valueEnum 使用 */
+export function buildEquipmentNatureValueEnum(_t: TFunction): Record<string, { text: string }> {
+  return {
+    通用设备: { text: '通用设备' },
+    测量设备: { text: '测量设备' },
+    特种设备: { text: '特种设备' },
+    其他: { text: '其他' },
   };
 }
 
@@ -354,7 +381,7 @@ export function resolveMasterDataListParams(
 export function resolveLedgerListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
-): Record<string, string | boolean | undefined> {
+): Record<string, string | boolean | number | undefined> {
   const s = searchFormValues ?? {};
   const base = resolveMasterDataListParams(searchFormValues, sort);
   return {
@@ -362,6 +389,9 @@ export function resolveLedgerListParams(
     status: typeof s.status === 'string' && s.status ? s.status : undefined,
     type: typeof s.type === 'string' && s.type ? s.type : undefined,
     category: typeof s.category === 'string' && s.category ? s.category : undefined,
+    equipment_nature: typeof s.equipment_nature === 'string' && s.equipment_nature ? s.equipment_nature : undefined,
+    workshop_id: pickNumber(s, 'workshop_id'),
+    production_line_id: pickNumber(s, 'production_line_id'),
   };
 }
 

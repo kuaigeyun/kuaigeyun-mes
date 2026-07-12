@@ -47,6 +47,7 @@ class MaintenanceReminderService:
         """
         now = datetime.now()
         reminder_count = 0
+        created_reminders: list[MaintenanceReminder] = []
 
         # 获取所有已发布且未完成的维护计划
         maintenance_plans = await MaintenancePlan.filter(
@@ -117,6 +118,7 @@ class MaintenanceReminderService:
                 )
                 await reminder.save()
                 reminder_count += 1
+                created_reminders.append(reminder)
 
                 logger.info(f"创建维护提醒: {plan.plan_no} - {reminder_type}, 距离到期: {days_until_due}天")
 
@@ -128,6 +130,7 @@ class MaintenanceReminderService:
             "success": True,
             "checked_count": len(maintenance_plans),
             "reminder_count": reminder_count,
+            "created_reminders": created_reminders,
             "timestamp": to_api_isoformat(now),
         }
 

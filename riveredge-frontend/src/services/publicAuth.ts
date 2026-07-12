@@ -156,8 +156,60 @@ export async function wechatLoginCallback(code: string): Promise<LoginResponse> 
   return publicRequest<LoginResponse>('/auth/wechat/callback', { method: 'POST', data: { code } });
 }
 
+export interface WeComAuthorizeUrlResponse {
+  authorize_url: string;
+  state: string;
+}
+
+export async function getWecomAuthorizeUrl(params: {
+  redirect_uri: string;
+  tenant_id: number;
+  redirect?: string;
+}): Promise<WeComAuthorizeUrlResponse> {
+  return publicRequest<WeComAuthorizeUrlResponse>('/auth/wecom/authorize-url', {
+    params: {
+      redirect_uri: params.redirect_uri,
+      tenant_id: params.tenant_id,
+      redirect: params.redirect,
+    },
+  });
+}
+
+export interface WeComWWLoginConfigResponse {
+  corp_id: string;
+  agent_id: number;
+  redirect_uri: string;
+  state: string;
+}
+
+export async function getWecomWWLoginConfig(params: {
+  redirect_uri: string;
+  tenant_id: number;
+  redirect?: string;
+}): Promise<WeComWWLoginConfigResponse> {
+  return publicRequest<WeComWWLoginConfigResponse>('/auth/wecom/wwlogin-config', {
+    params: {
+      redirect_uri: params.redirect_uri,
+      tenant_id: params.tenant_id,
+      redirect: params.redirect,
+    },
+  });
+}
+
+export async function wecomLoginCallback(data: {
+  code: string;
+  state?: string;
+  tenant_id?: number;
+}): Promise<LoginResponse> {
+  return publicRequest<LoginResponse>('/auth/wecom/callback', { method: 'POST', data });
+}
+
 export async function searchTenants(keyword: string): Promise<TenantSearchResponse> {
   return publicRequest<TenantSearchResponse>('/tenants/search', { params: { keyword, page: 1, page_size: 10 } });
+}
+
+export async function checkTenantDomain(domain: string): Promise<TenantCheckResponse> {
+  return publicRequest<TenantCheckResponse>(`/tenants/check-domain/${encodeURIComponent(domain.trim())}`);
 }
 
 export async function registerPersonal(data: PersonalRegisterRequest): Promise<PersonalRegisterResponse> {

@@ -38,6 +38,14 @@ from core.api.deps.deps import get_current_tenant
 from infra.api.deps.services import get_auth_service_with_fallback, get_biometric_service
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthenticationError
+from core.services.integration.wecom_oauth_service import (
+    build_wecom_oauth_authorize_url,
+    decode_wecom_oauth_state,
+    encode_wecom_oauth_state,
+    find_user_by_wecom_userid,
+    resolve_wecom_user_id_from_code,
+)
+from core.services.integration.wecom_integration import get_wecom_credentials
 
 
 class RefreshTokenBody(BaseModel):
@@ -48,6 +56,26 @@ class RefreshTokenBody(BaseModel):
         validation_alias=AliasChoices("token", "refresh_token"),
         description="当前 JWT，可通过 token 或 refresh_token 字段传入",
     )
+
+
+class WeComCallbackRequest(BaseModel):
+    """企业微信 OAuth 回调。"""
+
+    code: str = Field(..., min_length=1, description="企业微信 OAuth code")
+    state: str | None = Field(None, description="OAuth state（含 tenant_id / redirect）")
+    tenant_id: int | None = Field(None, description="组织 ID（state 缺失时必填）")
+
+
+class WeComAuthorizeUrlResponse(BaseModel):
+    authorize_url: str
+    state: str
+
+
+class WeComWWLoginConfigResponse(BaseModel):
+    corp_id: str
+    agent_id: int
+    redirect_uri: str
+    state: str
 
 
 # 创建路由
@@ -114,6 +142,83 @@ async def guest_login(
     免注册体验登录接口
     """
     result = await auth_service.guest_login(request)
+    return LoginResponse(**result)
+
+
+@router.get("/wecom/authorize-url", response_model=WeComAuthorizeUrlResponse)
+async def wecom_authorize_url(
+    redirect_uri: str = Query(..., min_length=1, description="OAuth 回调地址（前端页面 URL）"),
+    tenant_id: int = Query(..., ge=1, description="组织 ID"),
+    redirect: str | None = Query(None, description="登录成功后前端跳转路径"),
+):
+    """
+    获取企业微信 OAuth 授权地址（依赖租户已配置 type=wecom 应用连接器）。
+    """
+    post_login_redirect = (redirect or "").strip()
+    state = encode_wecom_oauth_state(tenant_id=tenant_id, redirect=post_login_redirect)
+    authorize_url = await build_wecom_oauth_authorize_url(
+        tenant_id=tenant_id,
+        redirect_uri=redirect_uri.strip(),
+        state=state,
+    )
+    return WeComAuthorizeUrlResponse(authorize_url=authorize_url, state=state)
+
+
+@router.get("/wecom/wwlogin-config", response_model=WeComWWLoginConfigResponse)
+async def wecom_wwlogin_config(
+    redirect_uri: str = Query(..., min_length=1, description="WWLogin 回调地址（前端页面 URL）"),
+    tenant_id: int = Query(..., ge=1, description="组织 ID"),
+    redirect: str | None = Query(None, description="登录成功后前端跳转路径"),
+):
+    """
+    获取企业微信 PC 端 WWLogin 扫码登录配置（不返回 corp_secret）。
+    """
+    creds = await get_wecom_credentials(tenant_id)
+    if not creds:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="未配置启用的企业微信连接器，无法发起扫码登录",
+        )
+    state = encode_wecom_oauth_state(
+        tenant_id=tenant_id,
+        redirect=(redirect or "").strip(),
+    )
+    return WeComWWLoginConfigResponse(
+        corp_id=creds.corp_id,
+        agent_id=creds.agent_id,
+        redirect_uri=redirect_uri.strip(),
+        state=state,
+    )
+
+
+@router.post("/wecom/callback", response_model=LoginResponse)
+async def wecom_callback(
+    data: WeComCallbackRequest,
+    request: Request,
+    auth_service: Any = Depends(get_auth_service_with_fallback),
+):
+    """
+    企业微信 OAuth 回调：用 code 换取 userid，匹配本地用户并签发 JWT。
+    """
+    tenant_id = data.tenant_id
+    if data.state:
+        decoded = decode_wecom_oauth_state(data.state)
+        tenant_id = decoded["tenant_id"]
+    if tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="缺少组织 ID，请重新发起企业微信登录",
+        )
+
+    wecom_userid = await resolve_wecom_user_id_from_code(tenant_id=tenant_id, code=data.code)
+    user = await find_user_by_wecom_userid(tenant_id=tenant_id, wecom_userid=wecom_userid)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="未找到绑定该企业微信账号的用户，请在用户资料 contact_info 中配置 wecom_userid",
+        )
+
+    result = await auth_service.generate_login_result(user, request, tenant_id)
     return LoginResponse(**result)
 
 

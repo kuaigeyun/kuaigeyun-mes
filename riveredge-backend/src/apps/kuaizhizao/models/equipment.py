@@ -64,6 +64,8 @@ class Equipment(BaseModel):
             ("type",),
             ("category",),
             ("workshop_id",),
+            ("production_line_id",),
+            ("equipment_nature",),
             ("workstation_id",),
             ("work_center_id",),
             ("status",),
@@ -97,6 +99,14 @@ class Equipment(BaseModel):
     # 关联车间（可选）
     workshop_id = fields.IntField(null=True, description="关联车间ID（可选）")
     workshop_name = fields.CharField(max_length=200, null=True, description="关联车间名称")
+
+    # 使用产线 / 线组（可选）
+    production_line_id = fields.IntField(null=True, description="使用产线ID（线组，可选）")
+    production_line_code = fields.CharField(max_length=50, null=True, description="使用产线编码")
+    production_line_name = fields.CharField(max_length=200, null=True, description="使用产线名称")
+
+    # 设备性质（通用设备、测量设备等）
+    equipment_nature = fields.CharField(max_length=50, null=True, description="设备性质（如：通用设备、测量设备）")
 
     # 关联工位（可选）
     workstation_id = fields.IntField(null=True, description="关联工位ID（可选，关联到工位）")

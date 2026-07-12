@@ -206,6 +206,17 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
         ],
     },
     {
+        "code": "EQUIPMENT_NATURE",
+        "name": "设备性质",
+        "description": "设备台账分组与分类使用的设备性质",
+        "items": [
+            {"label": "通用设备", "value": "通用设备", "description": "通用生产设备", "sort_order": 1},
+            {"label": "测量设备", "value": "测量设备", "description": "计量与测量类设备", "sort_order": 2},
+            {"label": "特种设备", "value": "特种设备", "description": "特种设备", "sort_order": 3},
+            {"label": "其他", "value": "其他", "description": "其他性质", "sort_order": 4},
+        ],
+    },
+    {
         "code": "MOLD_TYPE",
         "name": "模具类型",
         "description": "模具管理中的模具类型",

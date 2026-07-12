@@ -138,6 +138,16 @@ class UserProfileService:
         
         # 更新字段：将空字符串转换为 None，确保数据库字段能正确更新
         for key, value in update_data.items():
+            if key == "contact_info" and isinstance(value, dict):
+                existing = admin.contact_info if isinstance(admin.contact_info, dict) else {}
+                merged = {**existing, **value}
+                cleaned = {
+                    k: v
+                    for k, v in merged.items()
+                    if v is not None and not (isinstance(v, str) and not v.strip())
+                }
+                setattr(admin, key, cleaned or None)
+                continue
             # 如果值是空字符串，转换为 None（数据库字段允许 null）
             if isinstance(value, str) and value.strip() == '':
                 setattr(admin, key, None)
@@ -227,6 +237,16 @@ class UserProfileService:
         
         # 处理字段更新：将空字符串转换为 None，确保数据库字段能正确更新
         for key, value in update_data.items():
+            if key == "contact_info" and isinstance(value, dict):
+                existing = user.contact_info if isinstance(user.contact_info, dict) else {}
+                merged = {**existing, **value}
+                cleaned = {
+                    k: v
+                    for k, v in merged.items()
+                    if v is not None and not (isinstance(v, str) and not v.strip())
+                }
+                setattr(user, key, cleaned or None)
+                continue
             # 如果值是空字符串，转换为 None（数据库字段允许 null）
             if isinstance(value, str) and value.strip() == '':
                 setattr(user, key, None)

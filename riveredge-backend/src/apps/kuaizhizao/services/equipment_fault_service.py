@@ -11,6 +11,7 @@ from typing import List, Optional
 from datetime import datetime
 from decimal import Decimal
 from tortoise.exceptions import IntegrityError
+from loguru import logger
 
 from apps.kuaizhizao.models.equipment_fault import EquipmentFault, EquipmentRepair
 from apps.kuaizhizao.models.equipment import Equipment
@@ -23,6 +24,7 @@ from apps.kuaizhizao.schemas.equipment_fault import (
 )
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 class EquipmentFaultService:
@@ -84,6 +86,21 @@ class EquipmentFaultService:
                 **data.model_dump(exclude_none=True, exclude={'equipment_uuid'})
             )
             await fault.save()
+
+            from apps.kuaizhizao.services.equipment_mobile_notification import notify_equipment_fault_reported
+
+            reporter = None
+            if created_by:
+                reporter = await User.filter(id=created_by, tenant_id=tenant_id).first()
+            try:
+                await notify_equipment_fault_reported(
+                    tenant_id=tenant_id,
+                    fault=fault,
+                    reporter=reporter,
+                )
+            except Exception as exc:
+                logger.warning("设备报修通知派发失败 tenant={}: {}", tenant_id, exc)
+
             return fault
         except IntegrityError:
             raise ValidationError(f"设备故障记录编号 {data.fault_no} 已存在")

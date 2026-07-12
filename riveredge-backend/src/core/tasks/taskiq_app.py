@@ -168,6 +168,16 @@ async def maintenance_reminder_daily_tick() -> dict:
     return await run_maintenance_reminder_scheduler()
 
 
+@task(schedule=[{"cron": "30 8 * * *"}])
+async def equipment_supervision_daily_tick() -> dict:
+    """每天 8:30 投递 equipment-supervision/check（点检督促）。"""
+    from apps.kuaizhizao.workflows.functions.equipment_supervision_workflow import (
+        run_equipment_supervision_scheduler,
+    )
+
+    return await run_equipment_supervision_scheduler()
+
+
 @task(schedule=[{"cron": "*/30 * * * *"}])
 async def work_order_score_recalc_tick() -> dict:
     """每 30 分钟批量重算 released 工单综合分。"""

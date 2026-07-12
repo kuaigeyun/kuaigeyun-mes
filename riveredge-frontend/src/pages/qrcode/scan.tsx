@@ -14,6 +14,8 @@ import { App, Card, Spin, message } from 'antd';
 import { QRCodeScanner } from '../../components/qrcode';
 import { qrcodeApi, type QRCodeParseResponse } from '../../services/qrcode';
 import { buildDocumentQrcodeNavigateUrl } from '../../apps/kuaizhizao/utils/documentQrcodeRoutes';
+import { buildMobileEquipmentHubPath } from '../../mobile/kuaizhizao/equipment/paths';
+import { buildEquipmentDetailPath } from '../../apps/kuaizhizao/pages/equipment-management/equipment/equipmentPaths';
 
 /**
  * 二维码扫描页面组件
@@ -67,10 +69,14 @@ const QRCodeScanPage: React.FC = () => {
           break;
         }
         case 'EQ': {
-          // 设备码：跳转到设备详情
           const equipmentUuid = data.equipment_uuid;
           if (equipmentUuid) {
-            navigate(`/system/equipment?uuid=${equipmentUuid}&action=detail`);
+            const mobileContext = window.location.pathname.startsWith('/m/kuaizhizao/equipment');
+            navigate(
+              mobileContext
+                ? buildMobileEquipmentHubPath(String(equipmentUuid))
+                : buildEquipmentDetailPath(String(equipmentUuid)),
+            );
             messageApi.success(t('pages.qrcode.scan.navigatingToEquipment'));
           } else {
             messageApi.error(t('pages.qrcode.scan.equipmentDataIncomplete'));

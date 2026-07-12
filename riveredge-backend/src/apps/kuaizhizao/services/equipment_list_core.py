@@ -55,7 +55,8 @@ SPARE_PART_MASTER_SORTABLE_FIELDS = frozenset({
     "part_no", "part_name", "category", "brand", "is_active", "created_at", "updated_at",
 })
 EQUIPMENT_LEDGER_SORTABLE_FIELDS = frozenset({
-    "code", "name", "type", "category", "status", "is_active", "created_at", "updated_at",
+    "code", "name", "type", "category", "equipment_nature", "status", "is_active",
+    "workshop_name", "production_line_name", "created_at", "updated_at",
 })
 MOLD_LEDGER_SORTABLE_FIELDS = frozenset({
     "code", "name", "status", "is_active", "created_at", "updated_at",

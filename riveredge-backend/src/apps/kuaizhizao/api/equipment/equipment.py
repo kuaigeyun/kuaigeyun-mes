@@ -14,6 +14,13 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from apps.kuaizhizao.models.equipment import Equipment, EquipmentCalibration
 from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan, MaintenanceExecution
 from apps.kuaizhizao.models.equipment_fault import EquipmentFault, EquipmentRepair
+from apps.kuaizhizao.models.equipment_ops import (
+    EquipmentSpotCheck,
+    EquipmentRoutePatrol,
+    EquipmentRoutePatrolLine,
+    EquipmentScrapApplication,
+)
+from apps.kuaizhizao.models.spare_part import SparePartRequisition
 from apps.kuaizhizao.schemas.equipment import (
     EquipmentCreate,
     EquipmentUpdate,
@@ -85,8 +92,11 @@ async def list_equipment(
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     type: Optional[str] = Query(None, description="设备类型（可选）"),
     category: Optional[str] = Query(None, description="设备分类（可选）"),
+    equipment_nature: Optional[str] = Query(None, description="设备性质（可选）"),
     status: Optional[str] = Query(None, description="设备状态（可选）"),
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
+    workshop_id: Optional[int] = Query(None, description="车间ID（可选）"),
+    production_line_id: Optional[int] = Query(None, description="产线ID（线组，可选）"),
     workstation_id: Optional[int] = Query(None, description="工位ID（可选）"),
     search: Optional[str] = Query(None, description="搜索关键词（可选，搜索编码、名称）"),
     keyword: Optional[str] = Query(None, description="模糊搜索（与 search 等价）"),
@@ -124,8 +134,11 @@ async def list_equipment(
         limit=limit,
         type=type,
         category=category,
+        equipment_nature=equipment_nature,
         status=status,
         is_active=is_active,
+        workshop_id=workshop_id,
+        production_line_id=production_line_id,
         workstation_id=workstation_id,
         search=search,
         keyword=keyword,
@@ -400,7 +413,39 @@ async def get_equipment_trace(
             equipment_id=equipment.id,
             deleted_at__isnull=True
         ).order_by("-calibration_date").limit(50)
-        
+
+        spot_checks = await EquipmentSpotCheck.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True,
+        ).order_by("-check_date", "-created_at").limit(50)
+
+        patrol_line_ids = await EquipmentRoutePatrolLine.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True,
+        ).values_list("route_patrol_id", flat=True)
+        patrol_ids = list(dict.fromkeys(patrol_line_ids))
+        route_patrols: list[EquipmentRoutePatrol] = []
+        if patrol_ids:
+            route_patrols = await EquipmentRoutePatrol.filter(
+                tenant_id=tenant_id,
+                id__in=patrol_ids,
+                deleted_at__isnull=True,
+            ).order_by("-patrol_date", "-created_at").limit(50)
+
+        spare_part_requisitions = await SparePartRequisition.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True,
+        ).order_by("-created_at").limit(50)
+
+        scrap_applications = await EquipmentScrapApplication.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True,
+        ).order_by("-created_at").limit(50)
+
         return {
             "equipment": {
                 "uuid": equipment.uuid,
@@ -474,6 +519,58 @@ async def get_equipment_trace(
                     "created_at": to_api_isoformat(calib.created_at),
                 }
                 for calib in equipment_calibrations
+            ],
+            "spot_checks": [
+                {
+                    "id": row.id,
+                    "document_no": row.document_no,
+                    "check_date": to_api_isoformat(row.check_date) if row.check_date else None,
+                    "inspector_name": row.inspector_name,
+                    "status": row.status,
+                    "has_abnormality": row.has_abnormality,
+                    "abnormality_description": row.abnormality_description,
+                    "created_at": to_api_isoformat(row.created_at),
+                }
+                for row in spot_checks
+            ],
+            "route_patrols": [
+                {
+                    "id": row.id,
+                    "document_no": row.document_no,
+                    "route_code": row.route_code,
+                    "route_name": row.route_name,
+                    "patrol_date": to_api_isoformat(row.patrol_date) if row.patrol_date else None,
+                    "inspector_name": row.inspector_name,
+                    "status": row.status,
+                    "has_abnormality": row.has_abnormality,
+                    "created_at": to_api_isoformat(row.created_at),
+                }
+                for row in route_patrols
+            ],
+            "spare_part_requisitions": [
+                {
+                    "id": row.id,
+                    "requisition_no": row.requisition_no,
+                    "purpose": row.purpose,
+                    "applicant_name": row.applicant_name,
+                    "status": row.status,
+                    "approved_at": to_api_isoformat(row.approved_at) if row.approved_at else None,
+                    "created_at": to_api_isoformat(row.created_at),
+                }
+                for row in spare_part_requisitions
+            ],
+            "scrap_applications": [
+                {
+                    "id": row.id,
+                    "application_no": row.application_no,
+                    "reason": row.reason,
+                    "scrap_date": to_api_isoformat(row.scrap_date) if row.scrap_date else None,
+                    "applicant_name": row.applicant_name,
+                    "status": row.status,
+                    "approved_at": to_api_isoformat(row.approved_at) if row.approved_at else None,
+                    "created_at": to_api_isoformat(row.created_at),
+                }
+                for row in scrap_applications
             ],
         }
     except NotFoundError as e:

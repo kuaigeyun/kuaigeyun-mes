@@ -71,6 +71,7 @@ from .initial_data.initial_data import router as initial_data_router
 from .line_side_warehouses.line_side_warehouses import router as line_side_warehouse_router, backflush_router
 # 导入应用中心管理路由
 from .management import router as management_router
+from .routes_mobile import router as mobile_router
 
 # 创建主路由
 router = APIRouter(tags=["App · Kuaige Zhizao · MES"])
@@ -135,6 +136,9 @@ router.include_router(initial_data_router)
 router.include_router(line_side_warehouse_router)
 router.include_router(backflush_router)
 router.include_router(management_router)
+
+# 移动端 H5（企微工作台）
+router.include_router(mobile_router)
 
 # 注册追溯管理路由
 from .traceability.traceability import router as traceability_router

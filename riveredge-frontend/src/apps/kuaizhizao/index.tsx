@@ -81,6 +81,7 @@ const SPCMonitorPage = lazy(() => import('./pages/quality-management/spc-monitor
 // 设备管理页面
 const EquipmentDashboardPage = lazy(() => import('./pages/equipment-management/dashboard'));
 const EquipmentPage = lazy(() => import('./pages/equipment-management/equipment'));
+const EquipmentDetailPage = lazy(() => import('./pages/equipment-management/equipment/detail'));
 const EquipmentFaultsPage = lazy(() => import('./pages/equipment-management/equipment-faults'));
 const MaintenancePlansPage = lazy(() => import('./pages/equipment-management/maintenance-plans'));
 const MoldsPage = lazy(() => import('./pages/equipment-management/molds'));
@@ -354,6 +355,7 @@ const KuaizhizaoApp: React.FC = () => {
 
       {/* 设备管理路由 */}
       <Route path="equipment-management/dashboard" element={withPageSuspense(EquipmentDashboardPage)} />
+      <Route path="equipment-management/equipment/:uuid" element={withPageSuspense(EquipmentDetailPage)} />
       <Route path="equipment-management/equipment" element={withPageSuspense(EquipmentPage)} />
       <Route path="equipment-management/equipment-faults" element={withPageSuspense(EquipmentFaultsPage)} />
       <Route path="equipment-management/maintenance-plans" element={withPageSuspense(MaintenancePlansPage)} />

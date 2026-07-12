@@ -8,6 +8,7 @@ from typing import Any, Dict
 from loguru import logger
 
 from apps.kuaizhizao.services.maintenance_reminder_service import MaintenanceReminderService
+from apps.kuaizhizao.services.equipment_supervision_service import dispatch_maintenance_supervision
 from core.tasks.dispatcher import TaskEvent, dispatch_event
 from core.tasks.event_compat import Event, TriggerEvent
 from core.utils.timezone_utils import to_api_isoformat
@@ -49,8 +50,24 @@ async def maintenance_reminder_checker_function(event: Event) -> Dict[str, Any]:
             tenant_id=tenant_id,
             advance_days=advance_days,
         )
-        logger.info(f"维护提醒检查完成: 租户 {tenant_id}, 创建提醒数: {result['reminder_count']}")
-        return {"success": True, "tenant_id": tenant_id, **result}
+        supervision = await dispatch_maintenance_supervision(
+            tenant_id=tenant_id,
+            created_reminders=result.get("created_reminders") or [],
+        )
+        logger.info(
+            "维护提醒检查完成: 租户 {} 创建提醒数: {} 督促: {}",
+            tenant_id,
+            result["reminder_count"],
+            supervision,
+        )
+        return {
+            "success": True,
+            "tenant_id": tenant_id,
+            "checked_count": result["checked_count"],
+            "reminder_count": result["reminder_count"],
+            "timestamp": result["timestamp"],
+            "supervision": supervision,
+        }
     except Exception as e:
         logger.error(f"维护提醒检查失败: 租户 {tenant_id}, 错误: {e}")
         return {"success": False, "tenant_id": tenant_id, "error": str(e)}

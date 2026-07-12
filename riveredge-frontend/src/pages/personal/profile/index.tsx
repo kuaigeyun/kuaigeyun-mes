@@ -118,6 +118,7 @@ const UserProfilePage: React.FC = () => {
         contact_wechat: data.contact_info?.wechat || '',
         contact_qq: data.contact_info?.qq || '',
         contact_address: data.contact_info?.address || '',
+        contact_wecom_userid: data.contact_info?.wecom_userid || '',
       });
       
       // 设置头像预览 URL
@@ -469,6 +470,9 @@ const UserProfilePage: React.FC = () => {
       if (values.contact_address !== undefined && values.contact_address !== null) {
         contact_info.address = values.contact_address.trim() || null;
       }
+      if (values.contact_wecom_userid !== undefined && values.contact_wecom_userid !== null) {
+        contact_info.wecom_userid = values.contact_wecom_userid.trim() || null;
+      }
       
       // 只发送可编辑的字段：username、email、full_name、phone、bio、gender、contact_info
       // 注意：avatar 已经在上传时自动保存，这里不再发送
@@ -537,6 +541,7 @@ const UserProfilePage: React.FC = () => {
           contact_wechat: updatedData.contact_info?.wechat || '',
           contact_qq: updatedData.contact_info?.qq || '',
           contact_address: updatedData.contact_info?.address || '',
+          contact_wecom_userid: updatedData.contact_info?.wecom_userid || '',
         });
         
         // 如果后端有头像，尝试加载；如果加载失败，保留当前预览
@@ -658,6 +663,9 @@ const UserProfilePage: React.FC = () => {
                     {profileData.contact_info.address && (
                       <div>{t('pages.personal.profile.address')}：{profileData.contact_info.address}</div>
                     )}
+                    {profileData.contact_info.wecom_userid && (
+                      <div>{t('pages.personal.profile.wecomUserid')}：{profileData.contact_info.wecom_userid}</div>
+                    )}
                   </div>
                 </Descriptions.Item>
               )}
@@ -718,6 +726,7 @@ const UserProfilePage: React.FC = () => {
                         contact_wechat: profileData?.contact_info?.wechat || '',
                         contact_qq: profileData?.contact_info?.qq || '',
                         contact_address: profileData?.contact_info?.address || '',
+                        contact_wecom_userid: profileData?.contact_info?.wecom_userid || '',
                       }}
                       submitter={{
                         searchConfig: {
@@ -951,6 +960,17 @@ const UserProfilePage: React.FC = () => {
                 placeholder={t('pages.personal.profile.qq')}
                 fieldProps={{
                   maxLength: 20,
+                  style: { width: 280 },
+                }}
+              />
+              
+              <ProFormText
+                name="contact_wecom_userid"
+                label={t('pages.personal.profile.wecomUserid')}
+                placeholder={t('pages.personal.profile.wecomUseridPlaceholder')}
+                tooltip={t('pages.personal.profile.wecomUseridHint')}
+                fieldProps={{
+                  maxLength: 64,
                   style: { width: 280 },
                 }}
               />
