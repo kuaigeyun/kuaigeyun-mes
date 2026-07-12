@@ -122,6 +122,7 @@ function resolveTenantDomain(pathname: string, search: string): string | null {
     'personal',
     'init',
     'lock-screen',
+    'm',
   ]);
   if (!reserved.has(segments[0])) return segments[0].toLowerCase();
   if (segments[0] === 'login' && segments[1] && !reserved.has(segments[1])) return segments[1].toLowerCase();

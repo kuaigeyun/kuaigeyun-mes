@@ -73,6 +73,7 @@ function resolveTenantDomain(pathname: string, search: string): string | null {
     'personal',
     'init',
     'lock-screen',
+    'm',
   ]);
   // 支持 /kgsoft 或 /kgsoft/login 两种组织访问形态
   if (!reserved.has(segments[0])) return segments[0].toLowerCase();
