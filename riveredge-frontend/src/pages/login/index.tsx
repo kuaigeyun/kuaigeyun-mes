@@ -42,6 +42,7 @@ import {
   type WeComWWLoginConfigResponse,
   tenantNameFromLoginResponse,
 } from '../../services/publicAuth';
+import { switchTenant } from '../../services/auth';
 import { setToken, setTenantId, setUserInfo, getTenantId } from '../../utils/auth';
 import { clearSessionScopedQueries } from '../../utils/clearSessionQueries';
 import { applySessionUserAfterLogin } from '../../utils/restoredUser';
@@ -1734,17 +1735,19 @@ export default function LoginPage() {
    * @param tenantId - 选中的组织 ID
    */
   const handleTenantSelect = async (tenantId: number) => {
-    if (!loginResponse || !loginCredentials) {
+    if (!loginResponse) {
+      message.error(t('pages.login.tenantSelectFailed'));
       return;
     }
 
     try {
-      // 使用选中的组织 ID 重新登录（后端会根据 tenant_id 生成新的 Token）
-      const response = await login({
-        username: loginCredentials.username,
-        password: loginCredentials.password,
-        tenant_id: tenantId, // 传递选中的组织 ID
-      });
+      const response = loginCredentials
+        ? await login({
+            username: loginCredentials.username,
+            password: loginCredentials.password,
+            tenant_id: tenantId,
+          })
+        : await switchTenant(tenantId);
 
       if (response && response.access_token) {
         // 保存新的 Token（包含选中的组织 ID）
