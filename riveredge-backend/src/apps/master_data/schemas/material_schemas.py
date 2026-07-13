@@ -203,7 +203,7 @@ class MaterialBase(BaseModel):
     defaults: Optional[Dict[str, Any]] = Field(None, description="默认值设置（JSON格式），包含财务、采购、销售、库存、生产的默认值")
     
     # 物料来源控制（核心功能，新增）
-    source_type: Optional[str] = Field(None, alias="sourceType", max_length=20, description="物料来源类型（Make/Buy/Phantom/Outsource）：Make(自制件)、Buy(采购件)、Phantom(虚拟件)、Outsource(委外件)")
+    source_type: str = Field(..., alias="sourceType", max_length=20, description="物料来源类型（Make/Buy/Phantom/Outsource）：Make(自制件)、Buy(采购件)、Phantom(虚拟件)、Outsource(委外件)")
     source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式），自制件含 manufacturing_mode、工艺路线、BOM等；采购件含供应商；委外件含委外供应商/工序等")
     
     # 质检选项（简易质检：只管合格数量；方案质检：与快制造质检模块联动）
@@ -234,6 +234,16 @@ class MaterialBase(BaseModel):
         if not v or not v.strip():
             raise ValueError("基础单位不能为空")
         return v.strip()
+
+    @validator("source_type")
+    def validate_source_type_required(cls, v):
+        """创建物料时来源类型必填且须为规范值"""
+        if v is None or not str(v).strip():
+            raise ValueError("物料来源类型不能为空")
+        normalized = normalize_material_source_type(v)
+        if not normalized or not is_canonical_material_source_type(normalized):
+            raise ValueError(f"无效的物料来源类型: {v}")
+        return normalized
 
 
 class MaterialCreate(MaterialBase):
@@ -1044,7 +1054,7 @@ class BOMItemCreate(BaseModel):
     source_type: Optional[str] = Field(
         None,
         max_length=20,
-        description="物料来源类型（仅当子件物料主数据未配置来源时用于回写）",
+        description="已废弃：子件来源类型以物料主数据为唯一真源，本字段不再参与回写",
     )
 
     @model_validator(mode="after")
@@ -1077,12 +1087,12 @@ class BOMItemCreate(BaseModel):
 
     @validator("source_type")
     def validate_source_type(cls, v):
-        """验证物料来源类型（可选，用于回写未配置来源的子件）"""
+        """更新时若传入 source_type，须为规范非空值，禁止清空。"""
         if v is None:
             return None
         raw = str(v).strip()
         if not raw:
-            return None
+            raise ValueError("物料来源类型不能为空")
         normalized = normalize_material_source_type(raw)
         if not normalized or not is_canonical_material_source_type(normalized):
             raise ValueError(f"无效的物料来源类型: {raw}")

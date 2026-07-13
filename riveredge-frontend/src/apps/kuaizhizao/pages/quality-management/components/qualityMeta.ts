@@ -309,7 +309,8 @@ export const QUALITY_INSPECTION_AUDIT_PENDING_STATUSES = ['待审核', '已检�
 export type QualityInspectionAuditEntityType =
   | 'incoming_inspection'
   | 'process_inspection'
-  | 'finished_goods_inspection';
+  | 'finished_goods_inspection'
+  | 'oqc_inspection';
 
 export function qualityInspectionUniAuditProps(opts: {
   entityType: QualityInspectionAuditEntityType;

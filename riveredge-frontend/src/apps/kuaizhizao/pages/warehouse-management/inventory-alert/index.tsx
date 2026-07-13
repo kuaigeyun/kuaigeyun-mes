@@ -11,7 +11,7 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Button, Space, Popconfirm, Typography } from 'antd';
+import { App, Button, Space, Popconfirm, Typography, Row, Col } from 'antd';
 import { WarningOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -23,8 +23,10 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, MultiTabListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { inventoryAlertApi } from '../../../services/inventory-alert';
-import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
-import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { materialGroupApi } from '../../../../master-data/services/material';
+import { formatMaterialGroupLabel } from '../../../../master-data/types/material';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { formatDateTime } from '../../../../../utils/format';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
@@ -74,6 +76,8 @@ interface InventoryAlertRule {
   material_id?: number;
   material_code?: string;
   material_name?: string;
+  material_group_id?: number;
+  material_group_name?: string;
   warehouse_id?: number;
   warehouse_name?: string;
   threshold_type?: string;
@@ -176,6 +180,15 @@ const InventoryAlertPage: React.FC = () => {
     [t],
   );
 
+  const ruleMaterialFallbackOption = useMemo(() => {
+    const materialId = pendingRuleFormValues?.material_id;
+    if (!materialId) return undefined;
+    const code = pendingRuleFormValues?.material_code ?? '';
+    const name = pendingRuleFormValues?.material_name ?? '';
+    const label = [code, name].filter(Boolean).join(' - ') || String(materialId);
+    return { value: Number(materialId), label };
+  }, [pendingRuleFormValues]);
+
   /**
    * 处理编辑预警规则
    */
@@ -187,6 +200,8 @@ const InventoryAlertPage: React.FC = () => {
       setPendingRuleFormValues({
         name: detail.name,
         alert_type: detail.alert_type,
+        material_group_id: detail.material_group_id,
+        material_group_name: detail.material_group_name,
         material_id: detail.material_id,
         material_code: detail.material_code,
         material_name: detail.material_name,
@@ -198,7 +213,6 @@ const InventoryAlertPage: React.FC = () => {
         notify_users: detail.notify_users,
         notify_roles: detail.notify_roles,
         remarks: detail.remarks,
-        attachments: mapAttachmentsToUploadList(detail.attachments),
       });
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.inventoryAlert.msgGetRuleFailed'));
@@ -219,13 +233,14 @@ const InventoryAlertPage: React.FC = () => {
           notify_users: values.notify_users,
           notify_roles: values.notify_roles,
           remarks: values.remarks,
-          attachments: normalizeDocumentAttachments(values.attachments),
         });
         messageApi.success(t('app.kuaizhizao.inventoryAlert.msgRuleUpdateSuccess'));
       } else {
         await inventoryAlertApi.createRule({
           name: values.name,
           alert_type: values.alert_type,
+          material_group_id: values.material_group_id,
+          material_group_name: values.material_group_name,
           material_id: values.material_id,
           material_code: values.material_code,
           material_name: values.material_name,
@@ -237,7 +252,6 @@ const InventoryAlertPage: React.FC = () => {
           notify_users: values.notify_users,
           notify_roles: values.notify_roles,
           remarks: values.remarks,
-          attachments: normalizeDocumentAttachments(values.attachments),
         });
         messageApi.success(t('app.kuaizhizao.inventoryAlert.msgRuleCreateSuccess'));
       }
@@ -465,6 +479,13 @@ const InventoryAlertPage: React.FC = () => {
       valueEnum: alertTypeEnum,
     },
     {
+      title: t('app.master-data.materialForm.materialGroup'),
+      dataIndex: 'material_group_name',
+      width: 140,
+      ellipsis: true,
+      render: (_, r) => r.material_group_name || '-',
+    },
+    {
       title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
       dataIndex: 'material_name',
       width: 150,
@@ -688,6 +709,9 @@ const InventoryAlertPage: React.FC = () => {
         onFinish={handleRuleSubmit}
         formRef={formRef}
         width={MODAL_CONFIG.STANDARD_WIDTH}
+        layout="vertical"
+        grid={false}
+        isEdit={!!currentRuleId}
       >
         <ProFormText
           name="name"
@@ -695,70 +719,110 @@ const InventoryAlertPage: React.FC = () => {
           placeholder={t('app.kuaizhizao.inventoryAlert.formRuleNamePlaceholder')}
           rules={[{ required: true, message: t('app.kuaizhizao.inventoryAlert.formRuleNameRequired') }]}
         />
-        <ProFormSelect
-          name="alert_type"
-          label={t('app.kuaizhizao.inventoryAlert.formAlertType')}
-          options={[
-            { label: t('app.kuaizhizao.inventoryAlert.alertTypeLowStock'), value: 'low_stock' },
-            { label: t('app.kuaizhizao.inventoryAlert.alertTypeHighStock'), value: 'high_stock' },
-            { label: t('app.kuaizhizao.inventoryAlert.alertTypeExpired'), value: 'expired' },
-          ]}
-          rules={[{ required: true, message: t('app.kuaizhizao.inventoryAlert.formAlertTypeRequired') }]}
-          disabled={!!currentRuleId}
-        />
-        <ProFormText
-          name="material_id"
-          label={t('app.kuaizhizao.inventoryAlert.formMaterialId')}
-          placeholder={t('app.kuaizhizao.inventoryAlert.formMaterialIdPlaceholder')}
-        />
-        <ProFormText
-          name="material_code"
-          label={t('app.kuaizhizao.warehouseReports.colMaterialCode')}
-          placeholder={t('app.kuaizhizao.inventoryAlert.formMaterialCodePlaceholder')}
-        />
-        <ProFormText
-          name="material_name"
-          label={t('app.kuaizhizao.warehouseReports.colMaterialName')}
-          placeholder={t('app.kuaizhizao.inventoryAlert.formMaterialNamePlaceholder')}
-        />
-        <ProFormText
-          name="warehouse_id"
-          label={t('app.kuaizhizao.inventoryAlert.formWarehouseId')}
-          placeholder={t('app.kuaizhizao.inventoryAlert.formWarehouseIdPlaceholder')}
-        />
-        <ProFormText
-          name="warehouse_name"
-          label={t('app.kuaizhizao.inventoryAlert.formWarehouseName')}
-          placeholder={t('app.kuaizhizao.inventoryAlert.formWarehouseNamePlaceholder')}
-        />
-        <ProFormSelect
-          name="threshold_type"
-          label={t('app.kuaizhizao.inventoryAlert.formThresholdType')}
-          options={[
-            { label: t('app.kuaizhizao.inventoryAlert.thresholdTypeQuantity'), value: 'quantity' },
-            { label: t('app.kuaizhizao.inventoryAlert.thresholdTypePercentage'), value: 'percentage' },
-            { label: t('app.kuaizhizao.inventoryAlert.thresholdTypeDays'), value: 'days' },
-          ]}
-          rules={[{ required: true, message: t('app.kuaizhizao.inventoryAlert.formThresholdTypeRequired') }]}
-        />
-        <ProFormDigit
-          name="threshold_value"
-          label={t('app.kuaizhizao.inventoryAlert.formThresholdValue')}
-          placeholder={t('app.kuaizhizao.inventoryAlert.formThresholdValuePlaceholder')}
-          rules={[{ required: true, message: t('app.kuaizhizao.inventoryAlert.formThresholdValueRequired') }]}
-          min={0}
-          fieldProps={{ precision: 2 }}
-        />
-        <ProFormSwitch
-          name="is_enabled"
-          label={t('app.kuaizhizao.inventoryAlert.formIsEnabled')}
-        />
-        <DocumentAttachmentsField category="inventory_alert_rule_attachments" />
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSelect
+              name="alert_type"
+              label={t('app.kuaizhizao.inventoryAlert.formAlertType')}
+              options={[
+                { label: t('app.kuaizhizao.inventoryAlert.alertTypeLowStock'), value: 'low_stock' },
+                { label: t('app.kuaizhizao.inventoryAlert.alertTypeHighStock'), value: 'high_stock' },
+                { label: t('app.kuaizhizao.inventoryAlert.alertTypeExpired'), value: 'expired' },
+              ]}
+              rules={[{ required: true, message: t('app.kuaizhizao.inventoryAlert.formAlertTypeRequired') }]}
+              disabled={!!currentRuleId}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="material_group_id"
+              label={t('app.master-data.materialForm.materialGroup')}
+              placeholder={t('app.master-data.materialForm.materialGroupPlaceholder')}
+              disabled={!!currentRuleId}
+              showSearch
+              allowClear
+              request={async () => {
+                const groups = await materialGroupApi.list({ limit: 1000 });
+                return (groups ?? []).map((g) => ({
+                  label: formatMaterialGroupLabel(g),
+                  value: g.id,
+                }));
+              }}
+              fieldProps={{
+                onChange: (value: number | undefined, option: { label?: string } | undefined) => {
+                  formRef.current?.setFieldsValue({
+                    material_group_name: value ? (option?.label ?? undefined) : undefined,
+                  });
+                },
+              }}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <UniMaterialSelect
+              name="material_id"
+              label={t('app.kuaizhizao.warehouseCommon.colMaterial')}
+              placeholder={t('app.kuaizhizao.warehouseCommon.selectMaterial')}
+              disabled={!!currentRuleId}
+              showQuickCreate
+              showAdvancedSearch
+              fillMapping={{
+                material_code: 'mainCode',
+                material_name: 'name',
+              }}
+              fallbackOption={ruleMaterialFallbackOption}
+            />
+          </Col>
+          <Col span={12}>
+            <UniWarehouseSelect
+              name="warehouse_id"
+              label={t('app.kuaizhizao.warehouseReports.colWarehouse')}
+              placeholder={t('app.kuaizhizao.warehouseCommon.selectWarehouse')}
+              disabled={!!currentRuleId}
+              onChange={(_value, warehouse) => {
+                formRef.current?.setFieldsValue({ warehouse_name: warehouse?.name ?? undefined });
+              }}
+            />
+          </Col>
+        </Row>
+        <ProFormText name="material_code" hidden />
+        <ProFormText name="material_name" hidden />
+        <ProFormText name="material_group_name" hidden />
+        <ProFormText name="warehouse_name" hidden />
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSelect
+              name="threshold_type"
+              label={t('app.kuaizhizao.inventoryAlert.formThresholdType')}
+              options={[
+                { label: t('app.kuaizhizao.inventoryAlert.thresholdTypeQuantity'), value: 'quantity' },
+                { label: t('app.kuaizhizao.inventoryAlert.thresholdTypePercentage'), value: 'percentage' },
+                { label: t('app.kuaizhizao.inventoryAlert.thresholdTypeDays'), value: 'days' },
+              ]}
+              rules={[{ required: true, message: t('app.kuaizhizao.inventoryAlert.formThresholdTypeRequired') }]}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDigit
+              name="threshold_value"
+              label={t('app.kuaizhizao.inventoryAlert.formThresholdValue')}
+              placeholder={t('app.kuaizhizao.inventoryAlert.formThresholdValuePlaceholder')}
+              rules={[{ required: true, message: t('app.kuaizhizao.inventoryAlert.formThresholdValueRequired') }]}
+              min={0}
+              fieldProps={{ precision: 2 }}
+            />
+          </Col>
+        </Row>
         <ProFormTextArea
           name="remarks"
           label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
           placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')}
           fieldProps={{ rows: 3 }}
+        />
+        <ProFormSwitch
+          name="is_enabled"
+          label={t('app.kuaizhizao.inventoryAlert.formIsEnabled')}
         />
       </FormModalTemplate>
 

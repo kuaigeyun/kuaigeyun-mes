@@ -94,10 +94,15 @@ export interface OQCInspection {
   shipment_notice_code?: string;
   sales_order_code?: string;
   customer_name?: string;
+  inspector_name?: string;
+  inspection_time?: string;
   inspection_standard?: string;
   other_checks?: Record<string, unknown>;
   attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
   created_at?: string;
+  updated_at?: string;
+  lifecycle?: { main_stages?: Array<unknown> };
+  audit?: Record<string, unknown>;
   capabilities?: {
     conduct?: { allowed?: boolean; reason?: string };
     delete?: { allowed?: boolean; reason?: string };

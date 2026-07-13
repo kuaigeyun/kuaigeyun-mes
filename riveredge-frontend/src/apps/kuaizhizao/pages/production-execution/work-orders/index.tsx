@@ -946,7 +946,6 @@ function WorkOrderProductCodeCell({
   record: WorkOrder
   primaryExtra?: React.ReactNode
 }) {
-  const { t } = useTranslation()
   const { token } = theme.useToken()
   const secondaryTextStyle = getWorkOrderStackedSecondaryTextStyle(token)
   const secondaryTagStyle = getWorkOrderStackedSecondaryTagStyle(token)
@@ -961,11 +960,6 @@ function WorkOrderProductCodeCell({
           <>
             {renderWorkOrderPriorityTag(record.priority, secondaryTagStyle)}
             {renderWorkOrderTreeChildTags(record, secondaryTagStyle)}
-            {isWorkOrderPlannedEndOverdue(record) ? (
-              <Tag color="error" style={secondaryTagStyle}>
-                {t('app.kuaizhizao.workOrder.tagOverdue')}
-              </Tag>
-            ) : null}
             {record.is_frozen ? (
               <Tag color="warning" style={secondaryTagStyle}>
                 已冻结
@@ -1211,23 +1205,13 @@ function WorkOrderListPrimaryCell({ record }: { record: WorkOrder }) {
 }
 
 function WorkOrderTreeProductCodeCell({ record }: { record: WorkOrder }) {
-  const { t } = useTranslation()
   const { token } = theme.useToken()
   const secondaryTagStyle = getWorkOrderStackedSecondaryTagStyle(token)
   return (
     <UniTableStackedPrimaryCell
       primary={String(record.product_name ?? record.product_code ?? '').trim() || '-'}
       secondary={String(record.code ?? '')}
-      secondaryExtra={
-        <>
-          {renderWorkOrderPriorityTag(record.priority, secondaryTagStyle)}
-          {isWorkOrderPlannedEndOverdue(record) ? (
-            <Tag color="error" style={secondaryTagStyle}>
-              {t('app.kuaizhizao.workOrder.tagOverdue')}
-            </Tag>
-          ) : null}
-        </>
-      }
+      secondaryExtra={renderWorkOrderPriorityTag(record.priority, secondaryTagStyle)}
     />
   )
 }

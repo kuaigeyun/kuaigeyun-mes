@@ -4,11 +4,13 @@
 
 import { createLifecycleResolver } from './createLifecycleResolver';
 
+const P = 'app.kuaizhizao.warehouseOtherInbound';
+
 export const getOtherInboundLifecycle = createLifecycleResolver({
   stageDefs: [
-    { key: 'pending_inbound', label: '待入库' },
-    { key: 'received', label: '已入库' },
-    { key: 'cancelled', label: '已取消' },
+    { key: 'pending_inbound', label: '待入库', labelKey: `${P}.status.pending` },
+    { key: 'received', label: '已入库', labelKey: `${P}.status.posted` },
+    { key: 'cancelled', label: '已取消', labelKey: `${P}.status.cancelled` },
   ],
   statusToKey: {
     待入库: 'pending_inbound',

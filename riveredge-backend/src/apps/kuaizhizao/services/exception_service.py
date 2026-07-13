@@ -220,7 +220,9 @@ class ExceptionService:
         order_by: Optional[str] = None,
     ) -> tuple[List[MaterialShortageExceptionListResponse], int]:
         """
-        获取缺料异常列表
+        获取缺料异常列表（只读已持久化记录，不在列表请求中触发全量缺料检测）。
+
+        缺料检测由定时任务 / 显式 detect API 写入；列表接口仅查询数据库。
 
         Args:
             tenant_id: 租户ID
@@ -233,11 +235,6 @@ class ExceptionService:
         Returns:
             (列表, 总数)
         """
-        await self.detect_material_shortage(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-        )
-
         query = MaterialShortageException.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,

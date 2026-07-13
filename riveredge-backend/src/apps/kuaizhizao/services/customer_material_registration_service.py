@@ -196,6 +196,11 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 parsed = _parse_serial_numbers(getattr(it, "serial_numbers", None))
                 row.serial_numbers = parsed or None
                 data.items.append(row)
+        from apps.kuaizhizao.services.document_lifecycle_service import (
+            get_customer_material_registration_lifecycle,
+        )
+
+        data.lifecycle = get_customer_material_registration_lifecycle(registration, milestones=[])
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_customer_material_registration_capabilities_on_response,
         )
@@ -485,6 +490,12 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
             enrich_customer_material_registration_list_capabilities,
         )
         responses = [CustomerMaterialRegistrationListResponse.model_validate(reg) for reg in registrations]
+        from apps.kuaizhizao.services.document_lifecycle_service import (
+            get_customer_material_registration_lifecycle,
+        )
+
+        for registration, resp in zip(registrations, responses):
+            resp.lifecycle = get_customer_material_registration_lifecycle(registration, milestones=[])
         enriched = enrich_customer_material_registration_list_capabilities(registrations, responses)
         return enriched, total
 

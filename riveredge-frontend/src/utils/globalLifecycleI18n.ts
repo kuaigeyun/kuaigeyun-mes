@@ -139,6 +139,7 @@ export const LIFECYCLE_ONLY_STAGE_KEYS = [
   'reviewed',
   'accepted',
   'sent',
+  'signed',
 ] as const;
 
 /**
@@ -182,6 +183,7 @@ export const LIFECYCLE_ZH_LABEL_TO_KEY: Record<string, string> = {
   已借出: 'borrowed',
   待发货: 'pending_ship',
   待发送: 'pending_send',
+  已签收: 'signed',
   待收货: 'pending_receive',
   待归还: 'pending_material_return',
   已通知: 'notified',

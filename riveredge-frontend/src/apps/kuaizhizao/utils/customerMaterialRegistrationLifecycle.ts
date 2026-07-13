@@ -4,11 +4,13 @@
 
 import { createLifecycleResolver } from './createLifecycleResolver';
 
+const P = 'app.kuaizhizao.warehouseCommon';
+
 export const getCustomerMaterialRegistrationLifecycle = createLifecycleResolver({
   stageDefs: [
-    { key: 'pending_inbound', label: '待入库' },
-    { key: 'processed', label: '已入库' },
-    { key: 'cancelled', label: '已取消' },
+    { key: 'pending_inbound', label: '待入库', labelKey: `${P}.statusPendingInbound` },
+    { key: 'processed', label: '已入库', labelKey: `${P}.statusInbound` },
+    { key: 'cancelled', label: '已取消', labelKey: `${P}.statusCancelled` },
   ],
   statusToKey: {
     pending: 'pending_inbound',

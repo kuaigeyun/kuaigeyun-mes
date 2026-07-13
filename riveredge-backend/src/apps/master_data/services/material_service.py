@@ -22,6 +22,7 @@ from apps.master_data.constants.material_source_type import (
     LEGACY_SOURCE_TYPE_CONFIGURE,
     is_canonical_material_source_type,
     normalize_material_source_type,
+    require_canonical_material_source_type,
 )
 from apps.master_data.models.process import ProcessRoute, Operation
 from apps.master_data.models.employee_performance import EmployeePerformanceConfig
@@ -1107,6 +1108,11 @@ class MaterialService:
 
         _normalize_material_logistics_fields(material_data, for_create=True)
         _apply_canonical_material_source_type(material_data)
+        material_data["source_type"] = require_canonical_material_source_type(
+            material_data.get("source_type"),
+            material_code=material_data.get("main_code") or material_data.get("code"),
+            material_name=material_data.get("name"),
+        )
         
         # 同步 code：主物料 code=main_code；属性 SKU 在创建循环内分配唯一编码
         is_variant_sku = bool(material_data.get("variant_attributes"))
@@ -3569,30 +3575,49 @@ class MaterialService:
         return version, bom_code, bom_name, parent_base_qty
 
     @staticmethod
-    async def _writeback_component_source_types_from_bom_items(
+    def _assert_bom_components_have_source_type(components: List[Material]) -> None:
+        """BOM 子件须在物料主数据已维护来源类型，禁止在 BOM 保存/审核时静默回写或兜底。"""
+        missing_labels: List[str] = []
+        for component in components:
+            try:
+                require_canonical_material_source_type(
+                    component.source_type,
+                    material_id=component.id,
+                    material_code=component.main_code or component.code,
+                    material_name=component.name,
+                )
+            except ValidationError:
+                label = component.main_code or component.code or str(component.id)
+                if component.name:
+                    label = f"{label}（{component.name}）"
+                missing_labels.append(label)
+        if missing_labels:
+            preview = "、".join(missing_labels[:10])
+            suffix = f" 等共 {len(missing_labels)} 个" if len(missing_labels) > 10 else ""
+            raise ValidationError(
+                f"以下 BOM 子件未配置物料来源类型：{preview}{suffix}，请在物料主数据中维护 source_type"
+            )
+
+    @staticmethod
+    async def _assert_bom_version_components_have_source_type(
         tenant_id: int,
-        items: List[Any],
-        components: List[Material],
+        material_id: int,
+        version: str,
     ) -> None:
-        """子件物料未配置来源时，将 BOM 行上的 source_type 回写至物料主数据。"""
-        component_map = {c.id: c for c in components}
-        for item in items:
-            raw_source = getattr(item, "source_type", None)
-            if not raw_source:
-                continue
-            component = component_map.get(item.component_id)
-            if not component:
-                continue
-            existing = normalize_material_source_type(getattr(component, "source_type", None))
-            if existing:
-                continue
-            patch: Dict[str, Any] = {"source_type": str(raw_source).strip()}
-            _apply_canonical_material_source_type(patch)
-            new_source = patch.get("source_type")
-            if not new_source:
-                continue
-            component.source_type = new_source
-            await component.save(update_fields=["source_type", "updated_at"])
+        component_ids = await BOM.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            version=version,
+            deleted_at__isnull=True,
+        ).values_list("component_id", flat=True)
+        if not component_ids:
+            return
+        components = await Material.filter(
+            tenant_id=tenant_id,
+            id__in=list(component_ids),
+            deleted_at__isnull=True,
+        ).all()
+        MaterialService._assert_bom_components_have_source_type(list(components))
 
     @staticmethod
     async def create_bom_batch(
@@ -3635,11 +3660,7 @@ class MaterialService:
         if missing_ids:
             raise ValidationError(f"子物料 {missing_ids} 不存在")
         
-        await MaterialService._writeback_component_source_types_from_bom_items(
-            tenant_id,
-            data.items,
-            list(components),
-        )
+        MaterialService._assert_bom_components_have_source_type(list(components))
         
         # 检查主物料和子物料不能相同
         if data.material_id in component_ids:
@@ -4162,6 +4183,13 @@ class MaterialService:
         
         if not bom:
             raise NotFoundError(f"BOM {bom_uuid} 不存在")
+
+        if approved:
+            await MaterialService._assert_bom_version_components_have_source_type(
+                tenant_id,
+                bom.material_id,
+                bom.version,
+            )
         
         from tortoise import timezone
         bom.approval_status = "approved" if approved else "rejected"
@@ -4253,6 +4281,15 @@ class MaterialService:
             new_status = "rejected"
 
         if target_ids:
+            if approved and not is_reverse:
+                version_pairs = {(b.material_id, b.version) for b in boms}
+                for material_id, version in version_pairs:
+                    await MaterialService._assert_bom_version_components_have_source_type(
+                        tenant_id,
+                        material_id,
+                        version,
+                    )
+
             # Prepare for bulk update
             update_data = {
                 "approval_status": new_status,

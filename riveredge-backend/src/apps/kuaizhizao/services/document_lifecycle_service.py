@@ -1360,6 +1360,51 @@ def get_shipment_notice_lifecycle(
     }
 
 
+DELIVERY_NOTICE_MAIN_STAGES = [
+    {"key": "pending_send", "label": "待发送"},
+    {"key": "sent", "label": "已发送"},
+    {"key": "signed", "label": "已签收"},
+]
+
+
+def get_delivery_notice_lifecycle(
+    record: Any,
+    milestones: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """送货单生命周期：待发送→已发送→已签收。"""
+    status = _norm(getattr(record, "status", None))
+    milestones = milestones or []
+    status_map = {
+        "待发送": "pending_send",
+        "已发送": "sent",
+        "已签收": "signed",
+        "pending_send": "pending_send",
+        "sent": "sent",
+        "signed": "signed",
+    }
+    key = status_map.get(status, "pending_send")
+    stage_name_map = {
+        "pending_send": "待发送",
+        "sent": "已发送",
+        "signed": "已签收",
+    }
+    stage_name = stage_name_map.get(key, status or "待发送")
+    next_step_suggestions: List[str] = []
+    if key == "pending_send":
+        next_step_suggestions = ["发送"]
+    elif key == "sent":
+        next_step_suggestions = ["签收"]
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "success" if key == "signed" else "normal",
+        "main_stages": _build_main_stages(DELIVERY_NOTICE_MAIN_STAGES, key),
+        "sub_stages": None,
+        "next_step_suggestions": next_step_suggestions,
+        "milestones": milestones,
+    }
+
+
 # ---------------------------------------------------------------------------
 # 销售/采购变更单生命周期
 # ---------------------------------------------------------------------------
@@ -2247,6 +2292,48 @@ def get_other_inbound_lifecycle(
         "current_stage_name": stage_name,
         "status": "exception" if key == "cancelled" else "success" if key == "received" else "normal",
         "main_stages": _build_main_stages(OTHER_INBOUND_MAIN_STAGES, key, is_exception=(key == "cancelled")),
+        "sub_stages": None,
+        "next_step_suggestions": ["确认入库"] if key == "pending_inbound" else [],
+        "milestones": milestones,
+    }
+
+
+CUSTOMER_MATERIAL_REGISTRATION_MAIN_STAGES = [
+    {"key": "pending_inbound", "label": "待入库"},
+    {"key": "processed", "label": "已入库"},
+    {"key": "cancelled", "label": "已取消"},
+]
+
+
+def get_customer_material_registration_lifecycle(
+    record: Any,
+    milestones: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """代工来料（客供料登记）生命周期计算"""
+    status = _norm(getattr(record, "status", None))
+    milestones = milestones or []
+    status_map = {
+        "pending": "pending_inbound",
+        "processed": "processed",
+        "cancelled": "cancelled",
+        "待入库": "pending_inbound",
+        "已入库": "processed",
+        "已取消": "cancelled",
+    }
+    key = status_map.get(status, "pending_inbound")
+    stage_name_map = {
+        "pending_inbound": "待入库",
+        "processed": "已入库",
+        "cancelled": "已取消",
+    }
+    stage_name = stage_name_map.get(key, status or "待入库")
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if key == "cancelled" else "success" if key == "processed" else "normal",
+        "main_stages": _build_main_stages(
+            CUSTOMER_MATERIAL_REGISTRATION_MAIN_STAGES, key, is_exception=(key == "cancelled")
+        ),
         "sub_stages": None,
         "next_step_suggestions": ["确认入库"] if key == "pending_inbound" else [],
         "milestones": milestones,

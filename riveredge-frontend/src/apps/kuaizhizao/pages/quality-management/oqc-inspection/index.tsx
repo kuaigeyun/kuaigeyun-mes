@@ -1,10 +1,11 @@
-import { rowActionKind } from '../../../../../components/uni-action';
-import React, { useMemo, useRef, useState } from 'react';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDigit, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
-import { Alert, App, Button, Empty, Modal, Space, Spin, Table, Typography } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Alert, App, Button, Empty, Modal, Spin, Table, Typography } from 'antd';
+import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { MaterialStackedCell, UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
@@ -12,7 +13,7 @@ import {
   stackedPrimarySecondaryColumn,
   unqualifiedQuantityColumnProps,
 } from '../components/qualityTableColumns';
-import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { DetailDrawerTemplate, FormModalTemplate, ListPageTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { OQCInspection, qualityImprovementApi } from '../../../services/quality-improvement';
 import type { DocumentPushPreview } from '../../../services/purchase-requisition';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
@@ -30,8 +31,10 @@ import { useTranslation } from 'react-i18next';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
+import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
 import {
-  buildOqcInspectionStatusValueEnum,
+  buildQualityInspectionDocStatusValueEnum,
+  buildQualityInspectionQualityStatusValueEnum,
   normalizeQualityInspectionListResponse,
   QUALITY_INSPECTION_PINNED_STATUS_FIELD,
   resolveQualityInspectionListParams,
@@ -40,10 +43,17 @@ import {
   getQualityInspectionResultValueEnum,
   getQualityQualityStatusValueEnum,
   getQualityReleaseDecisionValueEnum,
+  qualityInspectionUniAuditProps,
+  renderQualityQualityStatusTag,
+  renderQualityResultTag,
   renderReleaseDecisionTag,
 } from '../components/qualityMeta';
 
 const OQC_RESOURCE = 'kuaizhizao:quality-management-oqc-inspection';
+
+function renderOqcRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
+  return renderRowActionsOverflow(nodes, { keyPrefix });
+}
 
 type OqcPullSourceCandidate = {
   id: number;
@@ -65,12 +75,18 @@ const OQCInspectionPage: React.FC = () => {
     () => createListAuditPhaseColumn<OQCInspection>({ t, auditEnabled: oqcAuditEnabled }),
     [t, oqcAuditEnabled],
   );
-  const oqcStatusValueEnum = useMemo(() => buildOqcInspectionStatusValueEnum(t), [t]);
+  const inspectionDocStatusValueEnum = useMemo(() => buildQualityInspectionDocStatusValueEnum(t), [t]);
+  const inspectionQualityStatusValueEnum = useMemo(
+    () => buildQualityInspectionQualityStatusValueEnum(t),
+    [t],
+  );
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<OQCInspection[]>([]);
   const conductFormRef = useRef<any>(null);
   const [conductVisible, setConductVisible] = useState(false);
   const [currentRow, setCurrentRow] = useState<OQCInspection | null>(null);
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailRecord, setDetailRecord] = useState<OQCInspection | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const selectedRecordsForBatch = useMemo(
     () =>
@@ -221,6 +237,80 @@ const OQCInspectionPage: React.FC = () => {
   });
   pullFromSalesDeliveryCloseRef.current = pullFromSalesDeliveryQuery.closeModal;
 
+  const openConductModal = useCallback((row: OQCInspection) => {
+    setCurrentRow(row);
+    setConductVisible(true);
+    setTimeout(
+      () =>
+        conductFormRef.current?.setFieldsValue({
+          inspection_result: row.inspection_result || '合格',
+          quality_status: row.quality_status || '合格',
+          release_decision: row.release_decision || 'pending',
+          qualified_quantity: row.qualified_quantity,
+          unqualified_quantity: row.unqualified_quantity,
+          attachments: mapAttachmentsToUploadList(row.attachments),
+        }),
+      50,
+    );
+  }, []);
+
+  const handleDetail = useCallback((record: OQCInspection) => {
+    setDetailRecord(record);
+    setDetailDrawerVisible(true);
+  }, []);
+
+  const renderOqcRowNodes = useCallback(
+    (record: OQCInspection): React.ReactNode[] => {
+      const gates = oqcInspectionRowGates(record, oqcPerms, t);
+      if (gates.conduct.allowed) {
+        return [
+          <Button
+            {...rowActionKind('execute')}
+            key="inspect"
+            size="small"
+            type="primary"
+            disabled={gates.conduct.disabled}
+            title={gates.conduct.title}
+            onClick={(e) => {
+              e.stopPropagation();
+              openConductModal(record);
+            }}
+          >
+            {t('app.kuaizhizao.quality.oqc.actions.conduct')}
+          </Button>,
+        ];
+      }
+      const nodes: React.ReactNode[] = [
+        <Button
+          {...rowActionKind('read')}
+          key="detail"
+          size="small"
+          type="link"
+          icon={<EyeOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDetail(record);
+          }}
+        >
+          {t('app.kuaizhizao.quality.common.actions.detail')}
+        </Button>,
+        <UniWorkflowActions
+          {...rowActionKind('skip')}
+          key="wf"
+          record={record}
+          {...qualityInspectionUniAuditProps({
+            entityType: 'oqc_inspection',
+            resourcePrefix: OQC_RESOURCE,
+            entityName: t('app.kuaizhizao.quality.common.entity.oqcInspection'),
+            onSuccess: () => actionRef.current?.reload(),
+          })}
+        />,
+      ];
+      return nodes;
+    },
+    [handleDetail, oqcPerms, openConductModal, t],
+  );
+
   const columns: ProColumns<OQCInspection>[] = useMemo(
     () => [
       {
@@ -232,7 +322,7 @@ const OQCInspectionPage: React.FC = () => {
         search: { order: 10 } as ProColumns['search'],
       },
       {
-        title: t('app.kuaizhizao.quality.common.columns.createdAt'),
+        title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
         dataIndex: 'created_at_range',
         valueType: 'dateRange',
         hideInTable: true,
@@ -243,9 +333,17 @@ const OQCInspectionPage: React.FC = () => {
         title: t('app.kuaizhizao.quality.common.columns.status'),
         dataIndex: 'status',
         valueType: 'select',
-        valueEnum: oqcStatusValueEnum,
+        valueEnum: inspectionDocStatusValueEnum,
         hideInTable: true,
         search: { order: 20 } as ProColumns['search'],
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.qualityStatus'),
+        dataIndex: 'quality_status',
+        valueType: 'select',
+        valueEnum: inspectionQualityStatusValueEnum,
+        hideInTable: true,
+        search: { order: 21 } as ProColumns['search'],
       },
       {
         title: t('app.kuaizhizao.quality.common.columns.inspectionCode'),
@@ -313,80 +411,74 @@ const OQCInspectionPage: React.FC = () => {
         hideInSearch: true,
         render: (_, row) => renderReleaseDecisionTag(t, row.release_decision),
       },
-      ...(oqcAuditColumn ? [oqcAuditColumn] : []),
       {
-        title: t('app.kuaizhizao.quality.common.columns.status'),
-        dataIndex: 'status',
-        width: 90,
+        title: t('app.kuaizhizao.quality.common.columns.inspectionResult'),
+        dataIndex: 'inspection_result',
+        width: 100,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) => renderQualityResultTag(t, r.inspection_result),
       },
       {
-        title: t('app.kuaizhizao.quality.common.columns.createdAt'),
-        dataIndex: 'created_at',
+        title: t('app.kuaizhizao.quality.common.columns.qualityStatus'),
+        dataIndex: 'quality_status',
+        width: 100,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => renderQualityQualityStatusTag(t, r.quality_status),
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.inspectionTime'),
+        dataIndex: 'inspection_time',
         width: 132,
         uniTableKeepWidth: true,
+        valueType: 'dateTime',
         sorter: true,
         hideInSearch: true,
-        defaultSortOrder: 'descend',
-        render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
+        render: (_, r) => (r.inspection_time ? formatDateTime(r.inspection_time, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
-        title: t('app.kuaizhizao.quality.common.columns.actions'),
-        valueType: 'option',
-        width: 200,
-        render: (_, row) => {
-          const gates = oqcInspectionRowGates(row, oqcPerms, t);
+        title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
+        dataIndex: 'updated_at',
+        width: 132,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        sorter: true,
+        defaultSortOrder: 'descend',
+        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      ...(oqcAuditColumn ? [oqcAuditColumn] : []),
+      {
+        title: t('app.kuaizhizao.quality.common.columns.lifecycle'),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        align: 'left',
+        hideInSearch: true,
+        render: (_, record) => {
+          const lifecycle = getIncomingInspectionLifecycle(record as Record<string, unknown>);
           return (
-          <Space>
-            {gates.conduct.allowed && (
-              <Button
-                key="submit"
-                {...rowActionKind('submit')}
-                disabled={gates.conduct.disabled}
-                title={gates.conduct.title}
-                onClick={() => {
-                  setCurrentRow(row);
-                  setConductVisible(true);
-                  setTimeout(
-                    () =>
-                      conductFormRef.current?.setFieldsValue({
-                        inspection_result: row.inspection_result || '合格',
-                        quality_status: row.quality_status || '合格',
-                        release_decision: row.release_decision || 'pending',
-                        qualified_quantity: row.qualified_quantity,
-                        unqualified_quantity: row.unqualified_quantity,
-                        attachments: mapAttachmentsToUploadList(row.attachments),
-                      }),
-                    50,
-                  );
-                }}
-              >
-                {t('app.kuaizhizao.quality.oqc.actions.conduct')}
-              </Button>
-            )}
-            <UniWorkflowActions
-              {...rowActionKind('skip')}
-              key="wf"
-              record={row}
-              entityName={t('app.kuaizhizao.quality.common.entity.oqcInspection')}
-              statusField="status"
-              reviewStatusField="review_status"
-              draftStatuses={[]}
-              pendingStatuses={['待审核', '已检验']}
-              approvedStatuses={['已审核']}
-              rejectedStatuses={['已驳回']}
-              theme="link"
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
               size="small"
-              resourcePrefix={OQC_RESOURCE}
-              onSuccess={() => actionRef.current?.reload()}
+              showCircleTooltip={false}
             />
-          </Space>
           );
         },
       },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.actions'),
+        key: 'action',
+        width: 240,
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_, record) => renderOqcRowActions(renderOqcRowNodes(record), `oqc-${record.id ?? 'row'}`),
+      },
     ],
-    [t, oqcPerms, oqcAuditColumn, oqcStatusValueEnum],
+    [t, oqcAuditColumn, inspectionDocStatusValueEnum, inspectionQualityStatusValueEnum, renderOqcRowNodes],
   );
 
   return (
@@ -628,6 +720,54 @@ const OQCInspectionPage: React.FC = () => {
             </div>
           ) : null}
         </Modal>
+
+        <DetailDrawerTemplate
+          title={t('app.kuaizhizao.quality.common.modal.detailTitle', { code: detailRecord?.inspection_code || '' })}
+          open={detailDrawerVisible}
+          onClose={() => {
+            setDetailDrawerVisible(false);
+            setDetailRecord(null);
+          }}
+          width={DRAWER_CONFIG.HALF_WIDTH}
+          columns={[]}
+          customContent={
+            detailRecord ? (
+              <div style={{ padding: '16px 0' }}>
+                <p><strong>{t('app.kuaizhizao.quality.common.columns.inspectionCode')}:</strong> {detailRecord.inspection_code}</p>
+                <p><strong>{t('app.kuaizhizao.quality.oqc.columns.shipmentNotice')}:</strong> {detailRecord.shipment_notice_code || '-'}</p>
+                <p><strong>{t('app.kuaizhizao.quality.oqc.columns.salesOrder')}:</strong> {detailRecord.sales_order_code || '-'}</p>
+                <p><strong>{t('app.kuaizhizao.quality.oqc.columns.customer')}:</strong> {detailRecord.customer_name || '-'}</p>
+                <p><strong>{t('app.kuaizhizao.quality.common.columns.materialCode')}:</strong> {detailRecord.material_code}</p>
+                <p><strong>{t('app.kuaizhizao.quality.common.columns.materialName')}:</strong> {detailRecord.material_name}</p>
+                <p><strong>{t('app.kuaizhizao.quality.common.columns.inspectionQty')}:</strong> {detailRecord.inspection_quantity}</p>
+                <p><strong>{t('app.kuaizhizao.quality.common.columns.qualifiedQty')}:</strong> {detailRecord.qualified_quantity}</p>
+                <p><strong>{t('app.kuaizhizao.quality.common.columns.unqualifiedQty')}:</strong> {detailRecord.unqualified_quantity}</p>
+                <p><strong>{t('app.kuaizhizao.quality.common.columns.inspectionResult')}:</strong> {renderQualityResultTag(t, detailRecord.inspection_result)}</p>
+                <p><strong>{t('app.kuaizhizao.quality.common.columns.qualityStatus')}:</strong> {renderQualityQualityStatusTag(t, detailRecord.quality_status)}</p>
+                <p><strong>{t('app.kuaizhizao.quality.oqc.columns.releaseDecision')}:</strong> {renderReleaseDecisionTag(t, detailRecord.release_decision)}</p>
+                <p><strong>{t('app.kuaizhizao.quality.common.columns.inspectionTime')}:</strong> {detailRecord.inspection_time ? formatDateTime(detailRecord.inspection_time, 'YYYY-MM-DD HH:mm:ss') : '-'}</p>
+                <div style={{ marginTop: 16 }}>
+                  <Typography.Text strong>{t('app.kuaizhizao.quality.common.columns.lifecycle')}</Typography.Text>
+                  <div style={{ marginTop: 8 }}>
+                    {(() => {
+                      const lifecycle = getIncomingInspectionLifecycle(detailRecord as Record<string, unknown>);
+                      return (
+                        <UniLifecycle
+                          percent={lifecycle.percent}
+                          stageName={lifecycle.stageName}
+                          status={lifecycle.status}
+                          subStages={lifecycle.subStages}
+                          showLabel
+                          size="small"
+                        />
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+            ) : null
+          }
+        />
 
         <FormModalTemplate
           title={t('app.kuaizhizao.quality.oqc.modal.conductTitle', { code: currentRow?.inspection_code || '' })}

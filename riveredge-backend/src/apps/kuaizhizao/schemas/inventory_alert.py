@@ -28,6 +28,8 @@ class InventoryAlertRuleBase(BaseModel):
     material_id: Optional[int] = Field(None, description="物料ID（可选）")
     material_code: Optional[str] = Field(None, description="物料编码（可选）")
     material_name: Optional[str] = Field(None, description="物料名称（可选）")
+    material_group_id: Optional[int] = Field(None, description="物料分组ID（可选）")
+    material_group_name: Optional[str] = Field(None, description="物料分组名称（可选）")
     warehouse_id: Optional[int] = Field(None, description="仓库ID（可选）")
     warehouse_name: Optional[str] = Field(None, description="仓库名称（可选）")
     threshold_type: str = Field(..., description="阈值类型（quantity/percentage/days）")

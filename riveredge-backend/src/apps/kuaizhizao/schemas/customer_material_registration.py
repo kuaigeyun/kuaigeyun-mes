@@ -168,6 +168,7 @@ class CustomerMaterialRegistrationResponse(CustomerMaterialRegistrationBase):
     items: Optional[List[CustomerMaterialRegistrationItemResponse]] = Field(None, description="明细行")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    lifecycle: Optional[Dict[str, Any]] = Field(None, description="生命周期（后端计算，供 UniLifecycle 展示）")
     capabilities: Optional[CustomerMaterialRegistrationCapabilities] = Field(
         None, description="业务态 capabilities（document_action_policy）",
     )

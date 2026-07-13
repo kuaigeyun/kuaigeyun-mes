@@ -52,6 +52,7 @@ class InventoryAlertRule(BaseModel):
             ("tenant_id",),
             ("alert_type",),
             ("material_id",),
+            ("material_group_id",),
             ("warehouse_id",),
             ("is_enabled",),
             ("created_at",),
@@ -71,6 +72,8 @@ class InventoryAlertRule(BaseModel):
     material_id = fields.IntField(null=True, description="物料ID（可选，如果为空则适用于所有物料）")
     material_code = fields.CharField(max_length=50, null=True, description="物料编码（可选）")
     material_name = fields.CharField(max_length=200, null=True, description="物料名称（可选）")
+    material_group_id = fields.IntField(null=True, description="物料分组ID（可选，如果为空则不限分组）")
+    material_group_name = fields.CharField(max_length=200, null=True, description="物料分组名称（可选）")
 
     # 仓库信息（可选）
     warehouse_id = fields.IntField(null=True, description="仓库ID（可选，如果为空则适用于所有仓库）")

@@ -67,19 +67,21 @@ export function DashboardTodoListItem({
           ) : null}
         </div>
       </div>
-      {showHandleButton && onHandle ? (
-        <Button
-          size="small"
-          type="primary"
-          className="dashboard-todo-item__action"
-          onClick={(e) => {
-            e.stopPropagation();
-            onHandle(item.id);
-          }}
-        >
-          {t('pages.dashboard.handle')}
-        </Button>
-      ) : null}
+      <div className="dashboard-todo-item__aside">
+        {showHandleButton && onHandle ? (
+          <Button
+            size="small"
+            type="primary"
+            className="dashboard-todo-item__action"
+            onClick={(e) => {
+              e.stopPropagation();
+              onHandle(item.id);
+            }}
+          >
+            {t('pages.dashboard.handle')}
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

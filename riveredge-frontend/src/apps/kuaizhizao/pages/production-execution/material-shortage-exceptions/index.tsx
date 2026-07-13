@@ -7,7 +7,7 @@
  * @date 2025-01-15
  */
 
-import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
@@ -130,22 +130,18 @@ const MaterialShortageExceptionsPage: React.FC = () => {
     setDetailDrawerVisible(true);
   };
 
-  useEffect(() => {
-    const loadMaterials = async () => {
+  const openHandleModal = async (record: MaterialShortageException, action: string) => {
+    setCurrentRecord(record);
+    setCurrentAction(action);
+    setHandleModalVisible(true);
+    if (action === 'substitute' && materialList.length === 0) {
       try {
         const materials = await materialApi.list({ isActive: true });
         setMaterialList(materials);
       } catch (error) {
         console.error('获取物料列表失败:', error);
       }
-    };
-    loadMaterials();
-  }, []);
-
-  const openHandleModal = (record: MaterialShortageException, action: string) => {
-    setCurrentRecord(record);
-    setCurrentAction(action);
-    setHandleModalVisible(true);
+    }
     setTimeout(() => {
       handleFormRef.current?.resetFields();
     }, 100);

@@ -72,6 +72,9 @@ function mergeTranslationsWithMenuPriority(
       key.startsWith('app.kuaizhizao.shipmentNotice.') ||
       key.startsWith('app.kuaizhizao.quotation.') ||
       key.startsWith('app.kuaizhizao.sales.common.') ||
+      key.startsWith('app.kuaizhizao.warehouseOtherInbound.') ||
+      key.startsWith('app.kuaizhizao.warehouseOtherOutbound.') ||
+      key.startsWith('app.kuaizhizao.warehouseMaterialReturn.') ||
       key.startsWith('pages.system.applications.') ||
       key.startsWith('components.tenantSelection.') ||
       key.startsWith('pages.personal.messages.') ||

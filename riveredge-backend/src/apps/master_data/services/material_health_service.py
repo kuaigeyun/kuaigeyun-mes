@@ -92,7 +92,7 @@ class MaterialHealthService:
             findings.append(("warning", "groupId", "未归属物料分组，不利于编码与报表归类"))
 
         if not (m.source_type or "").strip():
-            findings.append(("warning", "sourceType", "未设置物料来源类型（自制/采购/委外等）"))
+            findings.append(("error", "sourceType", "未设置物料来源类型（自制/采购/委外等）"))
 
         if not (m.specification or "").strip():
             findings.append(("info", "specification", "规格为空，同类物料不易区分"))

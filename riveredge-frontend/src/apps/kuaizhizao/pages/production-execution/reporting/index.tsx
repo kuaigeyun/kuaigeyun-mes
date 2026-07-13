@@ -1292,19 +1292,10 @@ const ReportingPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.workReporting.colReviewStatus'),
       dataIndex: 'status',
-      width: 100,
-      hideInSearch: false,
       valueType: 'select',
       valueEnum: reportingStatusValueEnum,
-      render: (s) => {
-        const m: Record<string, { text: string; color: string }> = {
-          pending: { text: t('app.kuaizhizao.workReporting.statusPending'), color: 'default' },
-          approved: { text: t('app.kuaizhizao.workReporting.statusApproved'), color: 'success' },
-          rejected: { text: t('app.kuaizhizao.workReporting.statusRejected'), color: 'error' },
-        };
-        const x = m[String(s)] || { text: String(s ?? '-'), color: 'default' };
-        return <Tag color={x.color}>{x.text}</Tag>;
-      },
+      hideInTable: true,
+      hideInSearch: false,
     },
     ...(reportingAuditColumn ? [reportingAuditColumn] : []),
     {

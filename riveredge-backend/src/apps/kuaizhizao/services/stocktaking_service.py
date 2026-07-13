@@ -510,12 +510,14 @@ class StocktakingService(AppBaseService[Stocktaking]):
         total = await query.count()
         stocktakings = await query.order_by(order_clause).offset(skip).limit(limit)
 
-        # 返回分页响应
-        from typing import List
-        return StocktakingListResponse(
-            items=[StocktakingResponse.model_validate(st) for st in stocktakings],
-            total=total
-        )
+        from apps.kuaizhizao.services.document_lifecycle_service import get_stocktaking_lifecycle
+
+        items: list[StocktakingResponse] = []
+        for stocktaking in stocktakings:
+            resp = StocktakingResponse.model_validate(stocktaking)
+            resp.lifecycle = get_stocktaking_lifecycle(stocktaking, milestones=[])
+            items.append(resp)
+        return StocktakingListResponse(items=items, total=total)
 
     async def add_stocktaking_items(
         self,

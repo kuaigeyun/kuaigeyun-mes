@@ -51,8 +51,11 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         return "bin_relocation" if transfer.from_warehouse_id == transfer.to_warehouse_id else "transfer"
 
     def _to_transfer_response(self, transfer: InventoryTransfer) -> InventoryTransferResponse:
+        from apps.kuaizhizao.services.document_lifecycle_service import get_inventory_transfer_lifecycle
+
         resp = InventoryTransferResponse.model_validate(transfer)
         resp.transfer_mode = self._infer_transfer_mode(transfer)
+        resp.lifecycle = get_inventory_transfer_lifecycle(transfer, milestones=[])
         return resp
 
     @staticmethod

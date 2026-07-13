@@ -81,6 +81,8 @@ class InventoryAlertRuleService(AppBaseService[InventoryAlertRule]):
                 material_id=rule_data.material_id,
                 material_code=rule_data.material_code,
                 material_name=rule_data.material_name,
+                material_group_id=rule_data.material_group_id,
+                material_group_name=rule_data.material_group_name,
                 warehouse_id=rule_data.warehouse_id,
                 warehouse_name=rule_data.warehouse_name,
                 threshold_type=rule_data.threshold_type,

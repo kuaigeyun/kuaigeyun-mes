@@ -371,9 +371,15 @@ const SalesDashboard: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesDashboard.colOrderCode'),
         dataIndex: 'order_code',
-        width: 110,
+        width: 136,
+        ellipsis: true,
         render: (text: string) => (
-          <a onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-orders')}>{text}</a>
+          <a
+            style={{ whiteSpace: 'nowrap' }}
+            onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-orders')}
+          >
+            {text}
+          </a>
         ),
       },
       {
@@ -384,10 +390,10 @@ const SalesDashboard: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesDashboard.colDeliveryDate'),
         dataIndex: 'delivery_date',
-        width: 88,
+        width: 104,
         render: (date: string | null, record: { delivery_date?: string | null }) =>
           date ? (
-            <span>
+            <span style={{ whiteSpace: 'nowrap' }}>
               {formatDateTime(date, 'MM-DD')}
               {isDeliveryOverdue(record.delivery_date) ? (
                 <Tag color="error" style={{ marginLeft: 4, fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>
@@ -402,8 +408,10 @@ const SalesDashboard: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesDashboard.deliveryProgress'),
         dataIndex: 'delivery_progress',
-        width: 72,
-        render: (val: number | null) => `${Number(val ?? 0)}%`,
+        width: 76,
+        render: (val: number | null) => (
+          <span style={{ whiteSpace: 'nowrap' }}>{`${Number(val ?? 0)}%`}</span>
+        ),
       },
     ],
     [navigate, t],
@@ -556,6 +564,7 @@ const SalesDashboard: React.FC = () => {
           >
             <Table
               size="small"
+              tableLayout="fixed"
               dataSource={pendingDeliveryOrders.slice(0, 8)}
               pagination={false}
               rowKey="id"

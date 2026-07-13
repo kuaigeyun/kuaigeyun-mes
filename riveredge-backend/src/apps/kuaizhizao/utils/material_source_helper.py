@@ -27,6 +27,7 @@ from apps.master_data.models.material import Material, BOM
 from apps.master_data.constants.material_source_type import (
     CANONICAL_SOURCE_TYPES,
     normalize_material_source_type,
+    require_canonical_material_source_type,
 )
 from apps.kuaizhizao.utils.bom_helper import (
     _select_alternatives,
@@ -59,7 +60,12 @@ def _bom_leaf_requirement(
         "material_id": component.id,
         "material_code": component.main_code or component.code,
         "material_name": component.name,
-        "source_type": component.source_type,
+        "source_type": require_canonical_material_source_type(
+            component.source_type,
+            material_id=component.id,
+            material_code=component.main_code or component.code,
+            material_name=component.name,
+        ),
         "required_quantity": component_qty,
         "unit": bom_item.unit or component.base_unit,
         "level": level,

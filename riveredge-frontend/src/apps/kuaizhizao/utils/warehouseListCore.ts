@@ -46,7 +46,7 @@ export function buildOtherOutboundStatusValueEnum(t: TFunction): Record<string, 
 }
 
 export function buildMaterialBorrowStatusValueEnum(t: TFunction): Record<string, { text: string }> {
-  const P = 'app.kuaizhizao.warehouseMaterialBorrow.status';
+  const P = 'app.kuaizhizao.materialBorrow.status';
   return {
     待借出: { text: t(`${P}.pending`) },
     已借出: { text: t(`${P}.borrowed`) },

@@ -8,7 +8,7 @@ Date: 2026-02-19
 """
 
 from datetime import datetime, date
-from typing import Optional, List
+from typing import Optional, List, Any, Dict
 from pydantic import Field
 from core.schemas.base import BaseSchema
 from apps.kuaizhizao.services.document_action_policy.types import SalesDeliveryPullCapabilities
@@ -56,6 +56,7 @@ class DeliveryNoticeResponse(DeliveryNoticeBase):
     total_amount: float = Field(0, description="总金额")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    lifecycle: Optional[Dict[str, Any]] = Field(None, description="生命周期（后端计算，供 UniLifecycle 展示）")
 
     class Config:
         from_attributes = True

@@ -301,6 +301,7 @@ async def calculate_material_requirements_from_bom(
     from apps.kuaizhizao.schemas.bom import MaterialRequirement
     from apps.kuaizhizao.utils.material_source_helper import expand_bom_with_source_control
     from apps.kuaizhizao.utils.issue_method_resolver import resolve_issue_method
+    from apps.master_data.constants.material_source_type import require_canonical_material_source_type
 
     # 始终优先按来源控制展开 BOM：穿透虚拟件（Phantom）、处理配置件/配置位与子件递归。
     # 此前仅在传入 variant/config 时才展开，导致齐套/叫料等界面把虚拟件当作单行实体、库存为 0。
@@ -327,7 +328,7 @@ async def calculate_material_requirements_from_bom(
                     "material_id": mid,
                     "material_code": item.get("material_code", ""),
                     "material_name": item.get("material_name", ""),
-                    "source_type": item.get("source_type", "Buy"),
+                    "source_type": item.get("source_type"),
                     "issue_method": item.get("issue_method"),
                     "required_quantity": 0.0,
                     "unit": item.get("unit", ""),
@@ -341,7 +342,12 @@ async def calculate_material_requirements_from_bom(
                 component_id=req["material_id"],
                 component_code=req["material_code"],
                 component_name=req["material_name"],
-                component_type=req["source_type"],
+                component_type=require_canonical_material_source_type(
+                    req.get("source_type"),
+                    material_id=req["material_id"],
+                    material_code=req["material_code"],
+                    material_name=req["material_name"],
+                ),
                 gross_requirement=req["required_quantity"],
                 net_requirement=req["required_quantity"],
                 available_inventory=0.0,
@@ -390,7 +396,12 @@ async def calculate_material_requirements_from_bom(
             component_id=item.component_id,
             component_code=component.code,
             component_name=component.name,
-            component_type=(component.source_type or "Buy") if hasattr(component, "source_type") else "Buy",
+            component_type=require_canonical_material_source_type(
+                component.source_type,
+                material_id=component.id,
+                material_code=component.code,
+                material_name=component.name,
+            ),
             gross_requirement=gross_requirement,
             net_requirement=gross_requirement,  # 暂时不考虑库存和计划入库
             available_inventory=0.0,  # TODO: 从库存系统获取

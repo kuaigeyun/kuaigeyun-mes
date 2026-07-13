@@ -8109,6 +8109,10 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         item_counts = await batch_document_item_counts(
             tenant_id, OtherInboundItem, "inbound_id", [r.id for r in inbounds]
         )
+        from apps.kuaizhizao.services.document_lifecycle_service import get_other_inbound_lifecycle
+
+        for inbound, resp in zip(inbounds, responses):
+            resp.lifecycle = get_other_inbound_lifecycle(inbound, milestones=[])
         enriched = enrich_inbound_hub_list_capabilities(
             inbounds, responses, "other_inbound", item_counts=item_counts
         )

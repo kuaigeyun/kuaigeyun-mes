@@ -206,10 +206,14 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
 
         total = await query.count()
         orders = await query.order_by(order_clause).offset(skip).limit(limit)
-        return AssemblyOrderListResponse(
-            items=[AssemblyOrderResponse.model_validate(o) for o in orders],
-            total=total
-        )
+        from apps.kuaizhizao.services.document_lifecycle_service import get_assembly_order_lifecycle
+
+        items: list[AssemblyOrderResponse] = []
+        for order in orders:
+            resp = AssemblyOrderResponse.model_validate(order)
+            resp.lifecycle = get_assembly_order_lifecycle(order, milestones=[])
+            items.append(resp)
+        return AssemblyOrderListResponse(items=items, total=total)
 
     async def create_assembly_order_item(
         self,
