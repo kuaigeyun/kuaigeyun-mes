@@ -61,6 +61,16 @@ class SalesForecastService(AppBaseService[SalesForecast]):
     def __init__(self):
         super().__init__(SalesForecast)
 
+    async def _hydrate_forecast_item_snapshots(
+        self, tenant_id: int, items: List[SalesForecastItem]
+    ) -> None:
+        """按 material_id 回填预测明细物料快照（编码/名称/单位），与仓储单据一致。"""
+        if not items:
+            return
+        from apps.kuaizhizao.services.warehouse_service import _hydrate_item_material_snapshot
+
+        await _hydrate_item_material_snapshot(tenant_id, items)
+
     def _is_forecast_pushed_to_computation(self, forecast: Any, demand: Optional[Demand] = None) -> bool:
         if bool(getattr(forecast, "planning_pushed_to_computation", False)):
             return True
@@ -155,13 +165,17 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             
             # 创建预测明细（如果提供了items）
             items_data = forecast_data.model_dump().get('items', [])
+            created_items: List[SalesForecastItem] = []
             if items_data:
                 for item_data in items_data:
-                    await SalesForecastItem.create(
-                        tenant_id=tenant_id,
-                        forecast_id=forecast.id,
-                        **item_data
+                    created_items.append(
+                        await SalesForecastItem.create(
+                            tenant_id=tenant_id,
+                            forecast_id=forecast.id,
+                            **item_data,
+                        )
                     )
+                await self._hydrate_forecast_item_snapshots(tenant_id, created_items)
 
             # 与提交流程一致：蓝图配置无需审核时，创建后自动审核通过。
             # 不再自动联动需求池（Demand），避免形成「预测→需求计划」隐式链路。
@@ -204,6 +218,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             raise NotFoundError(f"销售预测不存在: {forecast_id}")
         resp = SalesForecastResponse.model_validate(forecast)
         item_rows = await SalesForecastItem.filter(tenant_id=tenant_id, forecast_id=forecast_id).order_by("forecast_date").all()
+        await self._hydrate_forecast_item_snapshots(tenant_id, item_rows)
         resp.items = [SalesForecastItemResponse.model_validate(it) for it in item_rows]
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_forecast_lifecycle, get_document_milestones
         milestones = await get_document_milestones(forecast.tenant_id, "sales_forecast", forecast.id)
@@ -286,6 +301,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             forecast_ids = [f.id for f in forecasts]
             if forecast_ids:
                 all_items = await SalesForecastItem.filter(tenant_id=tenant_id, forecast_id__in=forecast_ids).order_by('forecast_date').all()
+                await self._hydrate_forecast_item_snapshots(tenant_id, all_items)
                 for item in all_items:
                     items_by_forecast.setdefault(item.forecast_id, []).append(item)
 
@@ -478,12 +494,16 @@ class SalesForecastService(AppBaseService[SalesForecast]):
 
             if items_data is not None:
                 await SalesForecastItem.filter(tenant_id=tenant_id, forecast_id=forecast_id).delete()
+                recreated_items: List[SalesForecastItem] = []
                 for item_data in items_data:
-                    await SalesForecastItem.create(
-                        tenant_id=tenant_id,
-                        forecast_id=forecast_id,
-                        **item_data
+                    recreated_items.append(
+                        await SalesForecastItem.create(
+                            tenant_id=tenant_id,
+                            forecast_id=forecast_id,
+                            **item_data,
+                        )
                     )
+                await self._hydrate_forecast_item_snapshots(tenant_id, recreated_items)
 
             updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
         # 只要有关联需求，预测任意保存都同步需求内容，使需求管理动态随上游变化
@@ -741,12 +761,15 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 forecast_id=forecast_id,
                 **item_data.model_dump(exclude_unset=True)
             )
+            await self._hydrate_forecast_item_snapshots(tenant_id, [item])
             return SalesForecastItemResponse.model_validate(item)
 
     async def get_forecast_items(self, tenant_id: int, forecast_id: int) -> List[SalesForecastItemResponse]:
         """获取销售预测明细"""
         items = await SalesForecastItem.filter(tenant_id=tenant_id, forecast_id=forecast_id).order_by('forecast_date')
-        return [SalesForecastItemResponse.model_validate(item) for item in items]
+        item_list = list(items)
+        await self._hydrate_forecast_item_snapshots(tenant_id, item_list)
+        return [SalesForecastItemResponse.model_validate(item) for item in item_list]
 
     async def submit_forecast(self, tenant_id: int, forecast_id: int, submitted_by: int) -> SalesForecastResponse:
         """

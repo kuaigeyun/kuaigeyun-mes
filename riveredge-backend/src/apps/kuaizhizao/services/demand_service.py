@@ -1795,17 +1795,25 @@ class DemandService(AppBaseService[Demand]):
                 tenant_id=tenant_id, demand_id=demand_id
             ).exists()
 
-        status_ok = demand.status in (DemandStatus.AUDITED, DemandStatus.CONFIRMED)
-        review_ok = demand.review_status == ReviewStatus.APPROVED
-        push_allowed = status_ok and review_ok and not already_pushed
+        from apps.kuaizhizao.services.document_action_policy.demand import (
+            demand_allows_computation_merge,
+        )
+
+        merge_ok = demand_allows_computation_merge(demand)
+        push_allowed = merge_ok and not already_pushed
 
         blocking_reason = None
         if already_pushed:
             blocking_reason = "demand.push_computation.already_pushed"
-        elif not status_ok:
-            blocking_reason = "demand.push_computation.not_audited"
-        elif not review_ok:
-            blocking_reason = "demand.push_computation.not_approved"
+        elif not merge_ok:
+            from apps.kuaizhizao.constants import REVIEW_STATUS_ALIASES
+
+            review_raw = str(getattr(demand, "review_status", "") or "").strip()
+            review_norm = REVIEW_STATUS_ALIASES.get(review_raw, review_raw.upper())
+            if review_norm != ReviewStatus.APPROVED.value:
+                blocking_reason = "demand.push_computation.not_approved"
+            else:
+                blocking_reason = "demand.push_computation.not_audited"
 
         material_ids = [
             int(it.material_id)
@@ -1891,11 +1899,14 @@ class DemandService(AppBaseService[Demand]):
         if not demand:
             raise NotFoundError("需求", str(demand_id))
 
-        if demand.status not in (DemandStatus.AUDITED, DemandStatus.CONFIRMED):
-            raise ValidationError(f"只能下推已审核/已确认的需求，当前状态：{demand.status}")
+        from apps.kuaizhizao.services.document_action_policy.demand import (
+            demand_allows_computation_merge,
+        )
 
-        if demand.review_status != ReviewStatus.APPROVED:
-            raise ValidationError(f"只能下推审核通过的需求，当前审核状态：{demand.review_status}")
+        if not demand_allows_computation_merge(demand):
+            raise ValidationError(
+                f"只能下推已审核/已确认的需求，当前状态：{demand.status}，审核状态：{demand.review_status}"
+            )
 
         if demand.pushed_to_computation:
             from apps.kuaizhizao.models.demand_computation import DemandComputation

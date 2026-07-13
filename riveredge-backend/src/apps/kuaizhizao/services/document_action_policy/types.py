@@ -420,7 +420,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "demand_computation.execute.not_allowed": "只能执行进行中或失败状态的计算",
     "demand_computation.recompute.not_allowed": "只能对已完成或失败的计算执行重新计算",
     "demand_computation.compare.not_completed": "只能对比已完成的需求计算",
-    "demand.merge_computation.not_audited": "只能对已审核通过的需求合并计算",
+    "demand.merge_computation.not_audited": "只能对已审核或已确认的需求合并计算",
     "purchase_requisition.update.not_allowed": "当前状态不可编辑采购申请",
     "purchase_requisition.delete.not_allowed": "当前状态不可删除采购申请",
     "purchase_requisition.submit.not_draft": "只有草稿状态可提交",

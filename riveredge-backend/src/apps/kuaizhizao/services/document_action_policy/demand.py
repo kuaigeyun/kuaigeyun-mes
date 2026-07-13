@@ -6,7 +6,12 @@ from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
 
-from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, normalize_status
+from apps.kuaizhizao.constants import (
+    DemandStatus,
+    LEGACY_AUDITED_VALUES,
+    ReviewStatus,
+    normalize_status,
+)
 from apps.kuaizhizao.services.document_action_policy.types import (
     ActionCapability,
     CAPABILITY_REASON_MESSAGES,
@@ -27,10 +32,24 @@ def _norm_review_status(review_status: Any) -> str:
     return REVIEW_STATUS_ALIASES.get(raw, raw.upper())
 
 
-def _is_audited_for_computation(demand: Any) -> bool:
-    status_norm = normalize_status(str(getattr(demand, "status", "") or ""))
+def demand_allows_computation_merge(demand: Any) -> bool:
+    """与需求下推需求计算门禁一致：审核通过且处于可计算状态（已审核/已确认/已生效等）。"""
     review_norm = _norm_review_status(getattr(demand, "review_status", None))
-    return status_norm == DemandStatus.AUDITED.value and review_norm == ReviewStatus.APPROVED.value
+    if review_norm != ReviewStatus.APPROVED.value:
+        return False
+    raw = str(getattr(demand, "status", "") or "").strip()
+    if raw in LEGACY_AUDITED_VALUES:
+        return True
+    status_norm = normalize_status(raw)
+    return status_norm in (
+        DemandStatus.AUDITED.value,
+        DemandStatus.CONFIRMED.value,
+        "EFFECTIVE",
+    )
+
+
+def _is_audited_for_computation(demand: Any) -> bool:
+    return demand_allows_computation_merge(demand)
 
 
 def derive_demand_capabilities(demand: Any) -> DemandCapabilities:
